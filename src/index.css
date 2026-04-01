@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #009EDB;
+  --color-primary-dim: #007BB0;
+  --color-primary-container: #D6F1FF;
+  --color-on-primary-container: #001E2F;
+  
+  --color-secondary: #4d626c;
+  --color-secondary-container: #cfe6f2;
+  --color-on-secondary-container: #40555f;
+
+  --color-surface: #f8fafb;
+  --color-on-surface: #2a3437;
+  --color-surface-variant: #d9e4e8;
+  --color-on-surface-variant: #566164;
+
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f4f6;
+  --color-surface-container: #e8eff1;
+  --color-surface-container-high: #e1eaec;
+  --color-surface-container-highest: #d9e4e8;
+
+  --radius-DEFAULT: 1rem;
+  --radius-lg: 2rem;
+  --radius-xl: 3rem;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-body antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-headline tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-surface-container-lowest/80 backdrop-blur-xl;
+  }
+  
+  .signature-gradient {
+    background: linear-gradient(135deg, #009EDB 0%, #47befd 100%);
+  }
+}
+
