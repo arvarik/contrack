@@ -1,0 +1,8 @@
+# AI Agent Instructions
+
+You are working on **Contrack**, a high-performance, self-hosted React 19 / Express local CRM system.
+
+Please strictly read the comprehensive architecture, context, and rule specifications located at:
+`.agent/project-context.md`
+
+You **MUST** read this file using your `view_file` tool before proposing any architectural changes, dependencies, or large logic shifts.

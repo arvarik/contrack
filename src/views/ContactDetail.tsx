@@ -1,539 +1,681 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
-  Mail, MoreHorizontal, Sparkles, Cake, MapPin, Coffee, 
-  Plus, Phone, FileText, Handshake, Verified, Trash2 
+  Mail, Phone, FileText, Handshake, Verified, 
+  MapPin, Cake, Coffee, Briefcase, ArrowLeft, Sparkles, UploadCloud, File, Trash2, Palette,
+  Globe, MessageSquare, Tag, Linkedin, Facebook, Github, Twitter, Instagram, ExternalLink
 } from "lucide-react";
-import { Contact, Note, Activity, AIInsight } from "../types";
-import { api } from "../api";
+import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction } from "../api";
+import { useDropzone } from "react-dropzone";
 import { generateContactInsights } from "../services/geminiService";
-import { Modal } from "../components/Modal";
+import { motion, AnimatePresence } from "motion/react";
+import { LocalContext } from "../components/LocalContext";
+import { RichInteractionComposer } from "../components/RichInteractionComposer";
+import { AIInsight } from "../types";
+import { toast } from "sonner";
+import { cn } from "../lib/utils";
+import {
+  LABEL, LABEL_PRIMARY, SECTION_HEADING, SECTION_HEADING_SPACED,
+  CARD, CARD_TINTED, EDITABLE_INPUT, MICRO_BADGE, STATUS_BADGE_SUCCESS,
+  TAG_PILL, TIMELINE_CARD, timelineMarker, EMPTY_STATE, DANGER_BTN,
+} from "../lib/styles";
+
+// ---------------------------------------------------------------------------
+// Vibe Themes
+// ---------------------------------------------------------------------------
+const VIBE_COLORS = [
+  { id: 'brand', primary: '#009EDB', dim: '#007BB0', container: '#D6F1FF' },
+  { id: 'emerald', primary: '#10B981', dim: '#059669', container: '#D1FAE5' },
+  { id: 'amber', primary: '#F59E0B', dim: '#D97706', container: '#FEF3C7' },
+  { id: 'rose', primary: '#F43F5E', dim: '#E11D48', container: '#FFE4E6' },
+  { id: 'indigo', primary: '#6366F1', dim: '#4F46E5', container: '#E0E7FF' },
+  { id: 'pink', primary: '#EC4899', dim: '#BE185D', container: '#FCE7F3' },
+  { id: 'violet', primary: '#8B5CF6', dim: '#6D28D9', container: '#EDE9FE' },
+  { id: 'teal', primary: '#14B8A6', dim: '#0F766E', container: '#CCFBF1' }
+];
+
+// ---------------------------------------------------------------------------
+// Platform Icon Resolver
+// ---------------------------------------------------------------------------
+const PlatformIcon = ({ platform, className }: { platform: string; className?: string }) => {
+  switch (platform.toLowerCase()) {
+    case 'linkedin': return <Linkedin className={className} />;
+    case 'facebook': return <Facebook className={className} />;
+    case 'github': return <Github className={className} />;
+    case 'twitter': return <Twitter className={className} />;
+    case 'instagram': return <Instagram className={className} />;
+    default: return <Globe className={className} />;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// EditableField — Inline edit component for keyboard-first editing
+// ---------------------------------------------------------------------------
+
+const EditableField = ({ 
+  value, 
+  onSave, 
+  placeholder, 
+  className = "",
+}: { 
+  value: string | null; 
+  onSave: (val: string) => void; 
+  placeholder: string;
+  className?: string;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentVal, setCurrentVal] = useState(value || "");
+
+  useEffect(() => {
+    setCurrentVal(value || "");
+  }, [value]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (currentVal.trim() !== (value || "")) {
+      onSave(currentVal.trim());
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
+    if (e.key === 'Escape') {
+      setCurrentVal(value || "");
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        autoFocus
+        value={currentVal}
+        onChange={e => setCurrentVal(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        className={cn(EDITABLE_INPUT, className)}
+        placeholder={placeholder}
+      />
+    );
+  }
+
+  return (
+    <span 
+      onClick={() => setIsEditing(true)} 
+      className={`cursor-text hover:bg-surface-container-high py-0.5 px-2 -ml-2 rounded transition-colors ${!value ? 'text-on-surface-variant opacity-50 italic' : ''} ${className}`}
+    >
+      {value || placeholder}
+    </span>
+  );
+};
+
+
+// ---------------------------------------------------------------------------
+// ContactDetail — Right-pane master view for a single contact
+// ---------------------------------------------------------------------------
 
 export const ContactDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
-  const [contact, setContact] = useState<Contact | null>(null);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [insight, setInsight] = useState<AIInsight | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [generatingInsight, setGeneratingInsight] = useState(false);
+  const { data: contact, isLoading: contactLoading } = useContact(id);
+  const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
+  const updateContact = useUpdateContact();
+  const addAttachment = useAddAttachment();
+  const deleteContact = useDeleteContact();
+  const deleteInteraction = useDeleteInteraction();
 
-  // Modals state
-  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
-  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isEditContactModalOpen, setIsEditContactModalOpen] = useState(false);
-  const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-
-  const fetchData = async () => {
-    if (!id) return;
-    try {
-      const [contactRes, notesRes, activitiesRes] = await Promise.all([
-        api.contacts.get(id),
-        api.notes.list(id),
-        api.activities.list(id)
-      ]);
-      setContact(contactRes);
-      setNotes(notesRes);
-      setActivities(activitiesRes);
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      navigate('/');
+  const onDrop = React.useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0 && id) {
+      addAttachment.mutate(
+        { contactId: id, file: acceptedFiles[0] },
+        {
+          onSuccess: () => toast.success(`Attached "${acceptedFiles[0].name}"`),
+          onError: (err) => toast.error(`Upload failed: ${err.message}`),
+        }
+      );
     }
-  };
+  }, [id, addAttachment]);
+  
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, noClick: true, noKeyboard: true });
 
-  useEffect(() => {
-    fetchData();
-  }, [id]);
+  const [insight, setInsight] = useState<AIInsight | null>(null);
+  const [generatingInsight, setGeneratingInsight] = useState(false);
+  const [showVibePicker, setShowVibePicker] = useState(false);
 
   const handleGenerateInsight = async () => {
-    if (!contact || notes.length === 0) return;
+    if (!contact || timeline.length === 0) return;
     setGeneratingInsight(true);
     try {
-      const res = await generateContactInsights(contact, notes);
+      const res = await generateContactInsights(contact, timeline);
       setInsight(res);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      toast.error("Failed to generate AI insight");
     } finally {
       setGeneratingInsight(false);
     }
   };
 
-  const handleEditContact = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!id) return;
-    const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
-    
-    await api.contacts.update(id, {
-      name: data.name as string,
-      role: data.role as string,
-      company: data.company as string,
-      email: data.email as string,
-      location: data.location as string,
-      avatarUrl: data.avatarUrl as string,
-      isPremium: data.isPremium === 'on',
-      birthday: data.birthday as string,
-      preferences: data.preferences as string,
+  const handleDeleteContact = () => {
+    if (!id || !contact) return;
+    if (!confirm(`Permanently delete ${contact.name}? This cannot be undone.`)) return;
+    deleteContact.mutate(id, {
+      onSuccess: () => {
+        toast.success(`Deleted ${contact.name}`);
+        navigate("/");
+      },
+      onError: (err) => toast.error(`Delete failed: ${err.message}`),
     });
-    
-    setIsEditContactModalOpen(false);
-    fetchData();
   };
 
-  const handleCreateNote = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleDeleteInteraction = (interactionId: string) => {
     if (!id) return;
-    const formData = new FormData(e.currentTarget);
-    
-    if (editingNote) {
-      await api.notes.update(editingNote.id, {
-        title: formData.get('title') as string,
-        content: formData.get('content') as string
-      });
-    } else {
-      await api.notes.create(id, {
-        title: formData.get('title') as string,
-        content: formData.get('content') as string
-      });
-    }
-    
-    setIsNoteModalOpen(false);
-    setEditingNote(null);
-    fetchData();
+    deleteInteraction.mutate(
+      { id: interactionId, contactId: id },
+      {
+        onSuccess: () => toast.success("Interaction deleted"),
+        onError: (err) => toast.error(`Delete failed: ${err.message}`),
+      }
+    );
   };
 
-  const handleCreateActivity = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!id) return;
-    const formData = new FormData(e.currentTarget);
-    
-    if (editingActivity) {
-      await api.activities.update(editingActivity.id, {
-        type: formData.get('type') as any,
-        title: formData.get('title') as string,
-        duration: formData.get('duration') as string,
-      });
-    } else {
-      await api.activities.create(id, {
-        type: formData.get('type') as any,
-        title: formData.get('title') as string,
-        duration: formData.get('duration') as string,
-        date: new Date().toISOString()
-      });
-    }
-    
-    setIsActivityModalOpen(false);
-    setEditingActivity(null);
-    fetchData();
-  };
-
-  const handleDeleteContact = async () => {
-    if (!id) return;
-    await api.contacts.delete(id);
-    navigate('/');
-  };
-
-  const handleDeleteNote = async (noteId: string) => {
-    await api.notes.delete(noteId);
-    fetchData();
-  };
-
-  const handleDeleteActivity = async (activityId: string) => {
-    await api.activities.delete(activityId);
-    fetchData();
-  };
-
-  if (loading) return <div className="p-12 text-center font-headline text-2xl animate-pulse">Curating details...</div>;
+  if (contactLoading) return <div className="p-12 text-center text-on-surface-variant animate-pulse font-headline">Loading contact...</div>;
   if (!contact) return <div className="p-12 text-center">Contact not found.</div>;
 
+  const handleUpdate = (field: string, val: string) => {
+    if (!id) return;
+    updateContact.mutate({ id, data: { [field]: val } });
+  };
+
+  const handleTogglePremium = () => {
+    if (!id) return;
+    updateContact.mutate({ id, data: { isPremium: !contact.isPremium } });
+  };
+
+  const handleVibeSelect = (vibeId: string) => {
+    if (!id) return;
+    updateContact.mutate({ id, data: { themeColor: vibeId } });
+    setShowVibePicker(false);
+  };
+
+  // Resolve primary email/phone from child arrays
+  const primaryEmail = contact.emails?.find(e => e.isPrimary)?.email || contact.emails?.[0]?.email || null;
+  const primaryPhone = contact.phones?.find(p => p.isPrimary)?.phone || contact.phones?.[0]?.phone || null;
+  const additionalEmails = contact.emails?.filter(e => e.email !== primaryEmail) || [];
+  const additionalPhones = contact.phones?.filter(p => p.phone !== primaryPhone) || [];
+
+  const currentTheme = VIBE_COLORS.find(v => v.id === contact.themeColor) || VIBE_COLORS[0];
+  const themeStyles = {
+    '--color-primary': currentTheme.primary,
+    '--color-primary-dim': currentTheme.dim,
+    '--color-primary-container': currentTheme.container,
+  } as React.CSSProperties;
+
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="p-8 md:p-12 max-w-7xl mx-auto w-full"
-    >
-      {/* Hero */}
-      <section className="relative mb-16">
-        <div className="flex flex-col md:flex-row items-start md:items-end gap-8">
-          <div className="relative">
-            <div className="w-48 h-48 rounded-2xl overflow-hidden bg-surface-container-highest ring-8 ring-surface shadow-2xl">
-              <img alt={contact.name} className="w-full h-full object-cover" src={contact.avatarUrl} />
+    <div className="h-full overflow-y-auto w-full relative" style={themeStyles}>
+      {/* Mobile Back Button */}
+      <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center">
+        <Link to="/" className="flex items-center gap-2 text-primary font-bold">
+          <ArrowLeft className="w-5 h-5" /> Back
+        </Link>
+      </div>
+
+      <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-12 pb-32">
+        {/* Header Section (Inline Editable) */}
+        <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
+          <div className="relative shrink-0">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
+              <motion.img 
+                layoutId={`avatar-${contact.id}`}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                alt={contact.name} 
+                className="w-full h-full object-cover" 
+                src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`} 
+              />
             </div>
             {contact.isPremium && (
-              <div className="absolute -bottom-4 -right-4 signature-gradient text-on-primary w-12 h-12 rounded-full flex items-center justify-center shadow-lg">
-                <Verified className="w-6 h-6" />
+              <div 
+                className="absolute -bottom-2 -right-2 signature-gradient text-on-primary w-8 h-8 rounded-full flex items-center justify-center shadow-lg cursor-pointer"
+                title="Premium Client (Click to toggle)"
+                onClick={handleTogglePremium}
+              >
+                <Verified className="w-4 h-4" />
+              </div>
+            )}
+            {!contact.isPremium && (
+               <div 
+                className="absolute -bottom-2 -right-2 bg-surface-container-high text-on-surface-variant w-6 h-6 rounded-full flex items-center justify-center shadow-sm cursor-pointer hover:bg-primary hover:text-on-primary transition-colors"
+                title="Mark as Premium"
+                onClick={handleTogglePremium}
+              >
+                <Verified className="w-3 h-3" />
               </div>
             )}
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-xs font-bold uppercase tracking-widest">
-                {contact.isPremium ? "Premium Client" : "Standard Client"}
-              </span>
-              <span className="text-on-surface-variant text-sm font-label">Added {new Date(contact.addedAt).toLocaleDateString()}</span>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-1">
+              <motion.div 
+                layoutId={`name-${contact.id}`}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface truncate flex items-center gap-2"
+              >
+                <EditableField value={contact.name} onSave={(val) => handleUpdate('name', val)} placeholder="Contact Name" />
+                {contact.pronouns && <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle">({contact.pronouns})</span>}
+              </motion.div>
+              
+              <div className="relative shrink-0">
+                <button 
+                  onClick={() => setShowVibePicker(!showVibePicker)} 
+                  className={`p-2 rounded-xl transition-all ${showVibePicker ? 'bg-primary/20 text-primary' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'}`}
+                  title="Change Theme Vibe"
+                >
+                  <Palette className="w-5 h-5" />
+                </button>
+                
+                <AnimatePresence>
+                  {showVibePicker && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                      className="absolute top-12 left-0 md:left-auto md:right-0 glass-panel rounded-xl shadow-xl p-3 z-50 flex gap-2 w-[164px] flex-wrap"
+                    >
+                      {VIBE_COLORS.map(vibe => (
+                        <button 
+                          key={vibe.id} 
+                          onClick={() => handleVibeSelect(vibe.id)}
+                          style={{ backgroundColor: vibe.primary }}
+                          className={`w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm ${contact.themeColor === vibe.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest' : 'hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest'}`}
+                          title={`Vibe: ${vibe.id}`}
+                        />
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
-            <h2 className="text-6xl font-extrabold font-headline text-on-surface tracking-tighter mb-2">{contact.name}</h2>
-            <p className="text-xl text-on-surface-variant font-light tracking-wide mb-4">{contact.role} {contact.company ? `at ${contact.company}` : ''}</p>
-            
-            {contact.sources && contact.sources !== '[]' && (
-              <div className="flex gap-2 flex-wrap">
-                {JSON.parse(contact.sources).map((source: string, idx: number) => (
-                  <span key={idx} className="bg-surface-container-high text-on-surface-variant text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider">
-                    Source: {source}
+
+            {/* Headline */}
+            {contact.headline && (
+              <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
+                {contact.headline}
+              </div>
+            )}
+
+            <div className="text-lg md:text-xl font-medium text-on-surface-variant flex items-center flex-wrap gap-x-2 mb-2">
+              <Briefcase className="w-5 h-5 opacity-50 inline-block mr-1" />
+              <EditableField value={contact.role} onSave={(val) => handleUpdate('role', val)} placeholder="Role / Title" />
+              <span className="opacity-50">at</span>
+              <EditableField value={contact.company} onSave={(val) => handleUpdate('company', val)} placeholder="Company" />
+            </div>
+
+            {/* Social Links — Now with platform icons */}
+            {contact.socialLinks && contact.socialLinks.length > 0 && (
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
+                {contact.socialLinks.map((sl) => {
+                  let displayName = sl.handle || sl.platform;
+                  try { displayName = sl.handle || new URL(sl.url).hostname.replace('www.', ''); } catch(e){}
+                  return (
+                    <a key={sl.id} href={sl.url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold bg-surface-container px-2 py-1 rounded text-primary hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-1 shadow-sm">
+                      <PlatformIcon platform={sl.platform} className="w-3 h-3" /> {displayName}
+                    </a>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Tags */}
+            {contact.tags && contact.tags.length > 0 && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {contact.tags.map((t) => (
+                  <span key={t.id} className={cn(TAG_PILL, "flex items-center gap-1")}>
+                    <Tag className="w-2.5 h-2.5" /> {t.tag}
                   </span>
                 ))}
               </div>
             )}
-          </div>
-          <div className="flex gap-3">
-            <button className="px-8 py-4 rounded-full signature-gradient text-on-primary font-bold flex items-center gap-2 shadow-xl hover:scale-105 transition-transform">
-              <Mail className="w-5 h-5" />
-              Message
-            </button>
-            <button 
-              onClick={() => setIsEditContactModalOpen(true)}
-              className="p-4 rounded-full bg-surface-container-low text-primary hover:bg-surface-container-high transition-colors shadow-sm"
-            >
-              <MoreHorizontal className="w-6 h-6" />
-            </button>
-            <button 
-              onClick={() => setIsDeleteModalOpen(true)}
-              className="p-4 rounded-full bg-surface-container-low text-red-500 hover:bg-red-50 transition-colors shadow-sm"
-            >
-              <Trash2 className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
-      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-        {/* Left: AI & Facts */}
-        <div className="lg:col-span-4 space-y-12">
-          {/* AI Insight */}
-          <div className="bg-primary-container/30 rounded-2xl p-8 border border-primary-container relative overflow-hidden">
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-6 h-6 text-primary" />
-                <h3 className="text-xl font-extrabold font-headline text-on-primary-container">AI Intelligence</h3>
+            {/* Source Provenance Badges */}
+            {contact.sources && contact.sources.length > 0 && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {contact.sources.map((src) => (
+                  <span key={src.id} className="text-[10px] font-medium bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full flex items-center gap-1" title={src.connectedOn ? `Connected: ${src.connectedOn}` : undefined}>
+                    {src.platform === 'linkedin' && <Linkedin className="w-2.5 h-2.5" />}
+                    {src.platform === 'facebook' && <Facebook className="w-2.5 h-2.5" />}
+                    {!['linkedin', 'facebook'].includes(src.platform) && <ExternalLink className="w-2.5 h-2.5" />}
+                    via {src.platform}
+                    {src.connectedOn && <span className="opacity-60 ml-1">· {src.connectedOn}</span>}
+                  </span>
+                ))}
               </div>
-              {!insight && (
-                <button 
-                  onClick={handleGenerateInsight}
-                  disabled={generatingInsight || notes.length === 0}
-                  className="text-xs font-bold uppercase tracking-widest text-primary hover:underline disabled:opacity-50"
-                >
-                  {generatingInsight ? "Thinking..." : notes.length === 0 ? "Add notes first" : "Generate"}
-                </button>
+            )}
+            
+            {/* Local Context — Timezone & Weather */}
+            {contact.lat && contact.lng && (
+              <div className="mt-3">
+                <LocalContext lat={contact.lat} lng={contact.lng} />
+              </div>
+            )}
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          
+          {/* Left Column: Facts & AI */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className={cn(CARD, "space-y-4")}>
+              <h3 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h3>
+              
+              <div className="flex items-start gap-4 group">
+                <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span className={LABEL}>Location</span>
+                  <EditableField value={contact.location} onSave={(val) => handleUpdate('location', val)} placeholder="Add Location..." className="text-sm font-medium" />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 group">
+                <Mail className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className={LABEL}>Email</span>
+                  {primaryEmail ? (
+                    <span className="text-sm font-medium text-on-surface">{primaryEmail}</span>
+                  ) : (
+                    <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">Add Email...</span>
+                  )}
+                  {additionalEmails.map((e) => (
+                    <div key={e.id} className="text-sm text-on-surface-variant truncate flex items-center gap-1">
+                      <span className="opacity-50 mr-1 select-none">↳</span>
+                      {e.email}
+                      {e.label && <span className={MICRO_BADGE}>{e.label}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 group">
+                <Phone className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className={LABEL}>Phone</span>
+                  {primaryPhone ? (
+                    <span className="text-sm font-medium text-on-surface">{primaryPhone}</span>
+                  ) : (
+                    <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">Add Phone...</span>
+                  )}
+                  {additionalPhones.map((p) => (
+                    <div key={p.id} className="text-sm text-on-surface-variant truncate flex items-center gap-1">
+                      <span className="opacity-50 mr-1 select-none">↳</span>
+                      {p.phone}
+                      {p.label && <span className={MICRO_BADGE}>{p.label}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 group">
+                <Cake className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span className={LABEL}>Birthday</span>
+                  <EditableField value={contact.birthday} onSave={(val) => handleUpdate('birthday', val)} placeholder="Add Birthday..." className="text-sm font-medium" />
+                </div>
+              </div>
+
+              {/* Industry */}
+              {contact.industry && (
+                <div className="flex items-start gap-4 group">
+                  <Globe className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className={LABEL}>Industry</span>
+                    <EditableField value={contact.industry} onSave={(val) => handleUpdate('industry', val)} placeholder="Add Industry..." className="text-sm font-medium" />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-start gap-4 group">
+                <Coffee className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span className={LABEL}>Preferences</span>
+                  <EditableField value={contact.preferences} onSave={(val) => handleUpdate('preferences', val)} placeholder="Coffee, Meeting style..." className="text-sm font-medium" />
+                </div>
+              </div>
+              
+              {contact.nextFollowUpAt && (
+                 <div className="flex items-start gap-4 group mt-6 pt-4">
+                   <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                   <div className="flex-1 min-w-0 flex flex-col">
+                     <span className={LABEL_PRIMARY}>Next Follow Up</span>
+                     <span className="text-sm font-bold text-on-surface">{new Date(contact.nextFollowUpAt).toLocaleString()}</span>
+                   </div>
+                 </div>
               )}
             </div>
-            
-            <AnimatePresence mode="wait">
-              {insight ? (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-surface-container-lowest/80 backdrop-blur-md p-6 rounded-xl shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">Next Recommended Contact</p>
-                    <p className="text-2xl font-extrabold font-headline text-on-surface">{insight.nextRecommendedContact}</p>
-                    <p className="text-xs text-on-surface-variant mt-1">Based on recent project velocity.</p>
-                  </div>
-                  <div className="bg-surface-container-lowest/80 backdrop-blur-md p-6 rounded-xl shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">Summary Sentiment</p>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-5 h-5 text-yellow-500 fill-current" />
-                      <span className="font-bold text-on-surface text-lg">{insight.summarySentiment}</span>
+
+            {/* AI Insights Block */}
+            <div className={CARD_TINTED}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  <h3 className={cn(SECTION_HEADING, "text-on-primary-container")}>AI Intel</h3>
+                </div>
+                {!insight && (
+                  <button 
+                    onClick={handleGenerateInsight}
+                    disabled={generatingInsight || timeline.length === 0}
+                    className={cn(LABEL_PRIMARY, "hover:underline disabled:opacity-50")}
+                  >
+                    {generatingInsight ? "Thinking..." : "Generate"}
+                  </button>
+                )}
+              </div>
+              
+              <AnimatePresence mode="wait">
+                {insight ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                    <div>
+                      <p className={LABEL_PRIMARY}>Next Follow Up</p>
+                      <p className="text-lg font-bold text-on-surface">{insight.nextRecommendedContact}</p>
                     </div>
-                    <p className="text-sm text-on-surface-variant leading-relaxed">{insight.sentimentDescription}</p>
+                    <div>
+                       <p className={LABEL_PRIMARY}>Health</p>
+                       <p className="text-sm font-medium text-on-surface mb-1">{insight.summarySentiment}</p>
+                       <p className="text-xs text-on-surface-variant leading-relaxed">{insight.sentimentDescription}</p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <p className="text-xs text-on-surface-variant/70 italic leading-relaxed">
+                    Generate an AI briefing based on your timeline of interactions to summarize client health.
+                  </p>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Danger Zone */}
+            <button onClick={handleDeleteContact} className={DANGER_BTN}>
+              <Trash2 className="w-3.5 h-3.5" /> Delete Contact
+            </button>
+          </div>
+
+          {/* Right Column: Timeline & Composer & Backgrounds */}
+          <div {...getRootProps()} className="lg:col-span-8 relative min-h-[500px] flex flex-col gap-6">
+            <input {...getInputProps()} />
+            
+            {contact.about && (
+              <div className={cn(CARD, "relative overflow-hidden group")}>
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+                <h3 className={SECTION_HEADING_SPACED}><Sparkles className="w-4 h-4 text-primary" /> About</h3>
+                <p className="whitespace-pre-wrap text-on-surface-variant text-sm leading-relaxed max-h-32 overflow-hidden relative after:absolute after:bottom-0 after:left-0 after:w-full after:h-12 after:bg-gradient-to-t after:from-surface-container-lowest hover:max-h-full hover:after:opacity-0 transition-all">
+                  {contact.about}
+                </p>
+                <div className="text-center opacity-100 group-hover:opacity-0 text-[10px] uppercase font-bold text-primary mt-1 transition-opacity">Hover to expand</div>
+              </div>
+            )}
+
+            {((contact.experience?.length ?? 0) > 0 || (contact.education?.length ?? 0) > 0) && (
+              <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
+                {contact.experience && contact.experience.length > 0 && (
+                  <div className="p-6 last:border-0 bg-surface-container-lowest">
+                    <h3 className={cn(SECTION_HEADING_SPACED, "mb-5")}><Briefcase className="w-4 h-4" /> Experience Overview</h3>
+                    <div className="space-y-5">
+                      {contact.experience.map((exp) => (
+                        <div key={exp.id} className="flex gap-4">
+                          <div className="icon-container">
+                             <Briefcase className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-on-surface flex items-center gap-2">
+                              {exp.role}
+                              {exp.isCurrent && (
+                                <span className={STATUS_BADGE_SUCCESS}>Current</span>
+                              )}
+                            </p>
+                            <p className="text-sm text-primary font-bold">{exp.company}</p>
+                            <p className="text-xs text-on-surface-variant mb-1 font-medium">
+                              {exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : exp.isCurrent ? ' – Present' : ''}
+                              {exp.location && <span className="ml-2 opacity-60">· {exp.location}</span>}
+                            </p>
+                            {exp.description && <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 hover:line-clamp-none mt-1">{exp.description}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {contact.education && contact.education.length > 0 && (
+                  <div className="p-6">
+                    <h3 className={cn(SECTION_HEADING_SPACED, "mb-5")}><FileText className="w-4 h-4" /> Education</h3>
+                    <div className="space-y-4">
+                      {contact.education.map((edu) => (
+                        <div key={edu.id} className="flex gap-4">
+                          <div className="w-2 h-2 rounded-full ring-4 ring-primary/20 bg-primary mt-1.5 shrink-0" />
+                          <div>
+                            <p className="font-bold text-on-surface">{edu.school}</p>
+                            <p className="text-sm text-on-surface-variant font-medium">
+                              {edu.degree}
+                              {edu.fieldOfStudy && <span className="opacity-70"> · {edu.fieldOfStudy}</span>}
+                            </p>
+                            {(edu.startDate || edu.endDate) && (
+                              <p className="text-xs text-on-surface-variant opacity-70 mt-0.5">
+                                {edu.startDate}{edu.endDate ? ` – ${edu.endDate}` : ''}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <AnimatePresence>
+              {isDragActive && (
+                <motion.div 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }} 
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-50 bg-surface-container-lowest/80 backdrop-blur-sm rounded-3xl flex items-center justify-center border-4 border-dashed border-primary"
+                >
+                  <div className="text-center">
+                     <UploadCloud className="w-20 h-20 text-primary mx-auto mb-4 animate-bounce" />
+                     <p className="text-2xl font-bold font-headline text-on-surface">Drop file to attach...</p>
                   </div>
                 </motion.div>
-              ) : (
-                <div className="text-center py-12 text-on-surface-variant/50 italic">
-                  Run AI curation to unlock insights.
-                </div>
               )}
             </AnimatePresence>
-          </div>
 
-          {/* Facts */}
-          <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-surface-container-high relative group">
-            <button 
-              onClick={() => setIsEditContactModalOpen(true)}
-              className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 text-primary hover:underline text-sm font-bold transition-opacity"
-            >
-              Edit
-            </button>
-            <h3 className="text-xl font-extrabold font-headline text-on-surface mb-8">Personal Facts</h3>
-            <ul className="space-y-6">
-              {contact.birthday && (
-                <li className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-primary">
-                    <Cake className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Birthday</p>
-                    <p className="text-sm font-semibold">{contact.birthday}</p>
-                  </div>
-                </li>
-              )}
-              {contact.location && (
-                <li className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-primary">
-                    <MapPin className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Location</p>
-                    <p className="text-sm font-semibold">{contact.location}</p>
-                  </div>
-                </li>
-              )}
-              {contact.preferences && (
-                <li className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-primary">
-                    <Coffee className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Preferences</p>
-                    <p className="text-sm font-semibold">{contact.preferences}</p>
-                  </div>
-                </li>
-              )}
-              {!contact.birthday && !contact.location && !contact.preferences && (
-                 <li className="text-on-surface-variant italic text-sm">No personal facts added yet.</li>
-              )}
-            </ul>
-          </div>
-        </div>
+            <RichInteractionComposer contactId={id!} />
 
-        {/* Right: Notes & Flow */}
-        <div className="lg:col-span-8 space-y-12">
-          {/* Notes */}
-          <div className="bg-surface-container-lowest rounded-2xl p-8 shadow-sm border border-surface-container-high">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-2xl font-extrabold font-headline text-on-surface">Curated Notes</h3>
-              <button 
-                onClick={() => setIsNoteModalOpen(true)}
-                className="text-primary font-bold text-sm flex items-center gap-1 hover:underline"
-              >
-                <Plus className="w-5 h-5" />
-                Add Note
-              </button>
-            </div>
-            <div className="space-y-8">
-              {notes.length === 0 && (
-                <p className="text-on-surface-variant italic">No notes yet. Add one to start curating.</p>
-              )}
-              {notes.map(note => (
-                <div key={note.id} className="group relative bg-surface-container-low p-8 rounded-2xl transition-all hover:bg-surface-container-high">
-                  <div className="absolute top-8 right-8 flex items-center gap-4">
-                    <span className="text-xs text-on-surface-variant font-bold uppercase tracking-widest">
-                      {new Date(note.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <button 
-                      onClick={() => {
-                        setEditingNote(note);
-                        setIsNoteModalOpen(true);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 text-primary hover:underline text-sm font-bold transition-opacity"
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteNote(note.id)}
-                      className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <h4 className="font-extrabold text-xl text-on-surface mb-3">{note.title}</h4>
-                  <p className="text-on-surface-variant leading-relaxed text-lg font-light">{note.content}</p>
+            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-surface-container-high before:to-transparent">
+              {timelineLoading && <div className="text-center p-4 text-on-surface-variant animate-pulse">Loading timeline...</div>}
+              {!timelineLoading && timeline.length === 0 && (
+                <div className={EMPTY_STATE}>
+                  <p className="font-medium text-sm">No interactions logged yet.</p>
+                  <p className="text-xs mt-1">Use the composer above to log your first note, call, or meeting.</p>
                 </div>
-              ))}
-            </div>
-          </div>
+              )}
+              
+              {timeline.map((item) => {
+                let Icon = FileText;
+                let bgClass = "bg-surface-container";
+                let textClass = "text-on-surface";
+                
+                if (item.type === 'call') { Icon = Phone; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
+                if (item.type === 'meeting') { Icon = Handshake; bgClass = "bg-purple-500/10"; textClass = "text-purple-500"; }
+                if (item.type === 'email') { Icon = Mail; bgClass = "bg-green-500/10"; textClass = "text-green-500"; }
+                if (item.type === 'note') { bgClass = "bg-primary/10"; textClass = "text-primary"; }
+                if (item.type === 'message' || item.type === 'sms') { Icon = MessageSquare; bgClass = "bg-teal-500/10"; textClass = "text-teal-500"; }
+                if (item.type === 'linkedin') { Icon = Linkedin; bgClass = "bg-blue-600/10"; textClass = "text-blue-600"; }
+                if (item.type === 'facebook') { Icon = Facebook; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
+                if (item.type === 'import') { Icon = ExternalLink; bgClass = "bg-amber-500/10"; textClass = "text-amber-500"; }
 
-          {/* Activity Flow */}
-          <div className="bg-surface-container-low rounded-2xl p-8">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-xl font-extrabold font-headline text-on-surface">Activity Flow</h3>
-              <button 
-                onClick={() => {
-                  setEditingActivity(null);
-                  setIsActivityModalOpen(true);
-                }}
-                className="text-primary font-bold text-sm flex items-center gap-1 hover:underline"
-              >
-                <Plus className="w-5 h-5" />
-                Log Activity
-              </button>
-            </div>
-            <div className="space-y-12 relative">
-              {activities.length > 0 && (
-                <div className="absolute left-[23px] top-2 bottom-2 w-[2px] bg-surface-container-highest"></div>
-              )}
-              {activities.length === 0 && (
-                <p className="text-on-surface-variant italic">No activities logged.</p>
-              )}
-              {activities.map(activity => (
-                <div key={activity.id} className="flex gap-8 relative z-10 group">
-                  <div className="w-12 h-12 rounded-full signature-gradient flex items-center justify-center text-on-primary shadow-lg shrink-0">
-                    {activity.type === 'call' && <Phone className="w-5 h-5" />}
-                    {activity.type === 'proposal' && <FileText className="w-5 h-5" />}
-                    {activity.type === 'meeting' && <Handshake className="w-5 h-5" />}
-                    {activity.type === 'email' && <Mail className="w-5 h-5" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <p className="text-lg font-extrabold text-on-surface">{activity.title}</p>
-                      <div className="flex items-center gap-4">
-                        <button 
-                          onClick={() => {
-                            setEditingActivity(activity);
-                            setIsActivityModalOpen(true);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 text-primary hover:underline text-sm font-bold transition-opacity"
-                        >
-                          Edit
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteActivity(activity.id)}
-                          className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 transition-opacity"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    key={item.id} 
+                    className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
+                  >
+                    {/* Icon marker */}
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${bgClass} ${textClass} z-10 mx-auto absolute left-0 md:left-1/2 -translate-x-0`}>
+                      <Icon className="w-4 h-4" />
                     </div>
-                    <p className="text-sm text-on-surface-variant font-medium">
-                      {new Date(activity.date).toLocaleDateString()} {activity.duration ? `• ${activity.duration}` : ''}
-                    </p>
-                  </div>
-                </div>
-              ))}
+
+                    {/* Content Box */}
+                    <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card">
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="font-extrabold text-on-surface">{item.title}</h4>
+                        <div className="flex items-center gap-2">
+                          <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{new Date(item.date).toLocaleDateString()}</time>
+                          <button
+                            onClick={() => handleDeleteInteraction(item.id)}
+                            className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-red-500 p-1 rounded transition-opacity"
+                            title="Delete interaction"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {item.content && (
+                        <div 
+                          className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface"
+                          dangerouslySetInnerHTML={{ __html: item.content }} 
+                        />
+                      )}
+                      
+                      {item.fileUrl && (
+                        <div className="mt-3">
+                          {item.fileType?.startsWith('image/') ? (
+                            <img src={item.fileUrl} alt={item.fileName || 'Attachment'} className="max-w-full rounded-xl shadow-sm object-cover max-h-64" />
+                          ) : (
+                            <a href={item.fileUrl} download className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden">
+                              <File className="w-8 h-8 text-primary shrink-0 opacity-80" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-on-surface truncate">{item.fileName}</p>
+                                <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">{item.fileType?.split('/')[1] || 'FILE'}</p>
+                              </div>
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {item.duration && (
+                        <p className="text-xs text-on-surface-variant mt-3 font-medium flex items-center gap-1 opacity-70">
+                           Duration: {item.duration}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Modals */}
-      <Modal isOpen={isNoteModalOpen} onClose={() => {
-        setIsNoteModalOpen(false);
-        setEditingNote(null);
-      }} title={editingNote ? "Edit Note" : "Add Curated Note"}>
-        <form onSubmit={handleCreateNote} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Title</label>
-            <input required name="title" defaultValue={editingNote?.title} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="Project Update" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Content</label>
-            <textarea required name="content" defaultValue={editingNote?.content} rows={4} className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="Key takeaways from our discussion..."></textarea>
-          </div>
-          <div className="pt-6">
-            <button type="submit" className="w-full signature-gradient text-on-primary font-bold py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity">
-              {editingNote ? "Save Changes" : "Save Note"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal isOpen={isActivityModalOpen} onClose={() => {
-        setIsActivityModalOpen(false);
-        setEditingActivity(null);
-      }} title={editingActivity ? "Edit Activity" : "Log Activity"}>
-        <form onSubmit={handleCreateActivity} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Activity Type</label>
-            <select name="type" defaultValue={editingActivity?.type || "call"} className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all text-on-surface">
-              <option value="call">Call</option>
-              <option value="meeting">Meeting</option>
-              <option value="proposal">Proposal</option>
-              <option value="email">Email</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Title</label>
-            <input required name="title" defaultValue={editingActivity?.title} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="Q3 Planning Call" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Duration (Optional)</label>
-            <input name="duration" defaultValue={editingActivity?.duration} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="e.g. 45 mins" />
-          </div>
-          <div className="pt-6">
-            <button type="submit" className="w-full signature-gradient text-on-primary font-bold py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity">
-              {editingActivity ? "Save Changes" : "Log Activity"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Contact">
-        <div className="space-y-6">
-          <p className="text-on-surface-variant">Are you sure you want to delete <strong>{contact.name}</strong>? This will also permanently remove all associated notes and activities. This action cannot be undone.</p>
-          <div className="flex gap-4">
-            <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 bg-surface-container-high text-on-surface font-bold py-4 rounded-xl hover:bg-surface-container-highest transition-colors">
-              Cancel
-            </button>
-            <button onClick={handleDeleteContact} className="flex-1 bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-red-600 transition-colors">
-              Delete Permanently
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isEditContactModalOpen} onClose={() => setIsEditContactModalOpen(false)} title="Edit Contact">
-        <form onSubmit={handleEditContact} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Full Name *</label>
-            <input required name="name" defaultValue={contact.name} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Role</label>
-              <input name="role" defaultValue={contact.role} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Company</label>
-              <input name="company" defaultValue={contact.company} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Email</label>
-            <input name="email" defaultValue={contact.email} type="email" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Location</label>
-            <input name="location" defaultValue={contact.location} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Birthday</label>
-            <input name="birthday" defaultValue={contact.birthday} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="e.g. October 12" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Preferences</label>
-            <input name="preferences" defaultValue={contact.preferences} type="text" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="e.g. Prefers morning meetings" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Avatar URL</label>
-            <input name="avatarUrl" defaultValue={contact.avatarUrl} type="url" className="w-full bg-surface-container-low border-none rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" />
-          </div>
-          <div className="flex items-center gap-3 pt-2">
-            <input name="isPremium" defaultChecked={contact.isPremium} type="checkbox" id="isPremiumEdit" className="w-5 h-5 rounded border-surface-container-highest text-primary focus:ring-primary" />
-            <label htmlFor="isPremiumEdit" className="text-sm font-medium text-on-surface">Mark as Premium Client</label>
-          </div>
-          <div className="pt-6">
-            <button type="submit" className="w-full signature-gradient text-on-primary font-bold py-4 rounded-xl shadow-lg hover:opacity-90 transition-opacity">
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </motion.div>
+    </div>
   );
 };

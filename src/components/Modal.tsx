@@ -25,11 +25,11 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             initial={{ opacity: 0, scale: 0.95, y: 20 }} 
             animate={{ opacity: 1, scale: 1, y: 0 }} 
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl z-50 overflow-hidden border border-surface-container-high"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg glass-panel rounded-2xl shadow-2xl z-50 overflow-hidden"
           >
-            <div className="flex justify-between items-center p-6 border-b border-surface-container-high">
+            <div className="flex justify-between items-center p-6 bg-surface-container-low">
               <h2 className="text-xl font-bold font-headline">{title}</h2>
-              <button onClick={onClose} className="p-2 hover:bg-surface-container-low rounded-full transition-colors">
+              <button onClick={onClose} className="p-2 hover:bg-surface-container-high rounded-full transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

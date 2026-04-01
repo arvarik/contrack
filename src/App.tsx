@@ -1,107 +1,132 @@
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  CloudUpload, 
-  LayoutDashboard, 
-  Star, 
-  ListFilter, 
-  Settings
-} from "lucide-react";
+import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
+import { LayoutDashboard, Star, ListFilter, Settings, Search, Map, Zap } from "lucide-react";
+import { LayoutGroup } from "motion/react";
+import { Toaster } from "sonner";
 
 import { ContactList } from "./views/ContactList";
 import { ContactDetail } from "./views/ContactDetail";
+import { CommandPalette } from "./components/CommandPalette";
+import { MapView } from "./views/MapView";
+import { CleanupView } from "./views/CleanupView";
+import { navLink, SECTION_BG } from "./lib/styles";
+import { cn } from "./lib/utils";
 
-// --- Layout Components ---
+const Sidebar = () => {
+  const location = useLocation();
+  const isMap = location.pathname.startsWith('/map');
+  const isCleanup = location.pathname.startsWith('/settings');
+  const isHome = !isMap && !isCleanup && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
 
-const TopAppBar = () => (
-  <header className="bg-surface sticky top-0 z-40 w-full border-b border-surface-container-high">
-    <div className="flex justify-between items-center px-6 md:px-12 py-4 w-full">
-      <div className="flex items-center gap-6">
-        <Link to="/" className="hover:bg-surface-container-low transition-colors p-2 rounded-full">
-          <ArrowLeft className="w-6 h-6 text-primary" />
-        </Link>
-        <h1 className="text-xl font-extrabold tracking-widest text-on-surface font-headline uppercase">
-          Contrack
-        </h1>
-      </div>
-      <div className="flex items-center gap-8">
-        <nav className="hidden md:flex gap-8">
-          <Link to="/" className="text-on-surface-variant hover:text-on-surface transition-colors font-label font-medium">Contacts</Link>
-          <span className="text-primary font-semibold font-label">Detail View</span>
-          <span className="text-on-surface-variant hover:text-on-surface transition-colors font-label font-medium">Insights</span>
-        </nav>
-        <div className="flex items-center gap-4">
-          <CloudUpload className="w-6 h-6 text-primary cursor-pointer" />
-          <img 
-            alt="User profile" 
-            className="w-10 h-10 rounded-full object-cover shadow-sm ring-2 ring-surface-container-high" 
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYkSkRQOImyuy09hnQvhM4vhsFeuhlPeIri9Oqbm3mCox0yhmYh2PbJDh6xmzm-NgmdCFIGxanBiJxHAIiJedwzHCfk24vJaTZOxqBnAZF3RyCKliD_BsNfZiJw1CULWyEARykU_NMeK2F0Fb_Hzqrhwe0d2MzYFDn3MECwoaQEktbaUjbyVfzCMs_HqlazUlEkYwRbbSRG8cOC5HvE3gsZ6nDJSfgdIQdOZqeG3TeBlzH2lMX7mn64ReONWJ8Dc2tJfuCN3lnF9k" 
-          />
-        </div>
-      </div>
-    </div>
-  </header>
-);
-
-const Sidebar = () => (
-  <aside className="hidden lg:flex flex-col gap-2 p-6 bg-surface-container-low h-screen w-72 sticky top-0 border-r border-surface-container-high">
-    <div className="mb-8 px-4">
-      <span className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">Collections</span>
-    </div>
-    <nav className="flex flex-col gap-2">
-      <Link to="/" className="text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-all flex items-center gap-3">
-        <LayoutDashboard className="w-5 h-5" />
-        <span className="font-medium">All Contacts</span>
+  return (
+    <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
+      <Link to="/" className={navLink(isHome)}>
+        <LayoutDashboard className="w-6 h-6" />
       </Link>
-      <div className="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-semibold flex items-center gap-3">
-        <Star className="w-5 h-5" />
-        <span>Recent Curations</span>
-      </div>
-      <div className="text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-all flex items-center gap-3">
-        <ListFilter className="w-5 h-5" />
-        <span>Custom Lists</span>
-      </div>
-      <div className="text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-all flex items-center gap-3">
-        <Settings className="w-5 h-5" />
-        <span>AI Insights</span>
-      </div>
-    </nav>
-  </aside>
+      <Link to="/map" className={navLink(isMap)}>
+        <Map className="w-6 h-6" />
+      </Link>
+      <Link to="/settings/cleanup" className={navLink(isCleanup, "mt-auto")} title="The Singularity — Dedupe Engine">
+        <Zap className="w-6 h-6" />
+      </Link>
+    </aside>
+  );
+};
+
+const EmptyState = () => (
+  <div className="flex-1 flex flex-col items-center justify-center h-full text-on-surface-variant bg-surface relative z-10">
+    <Search className="w-12 h-12 mb-4 opacity-50 text-primary" />
+    <h2 className="text-xl font-headline font-semibold mb-2 text-on-surface">No Contact Selected</h2>
+    <p>Select a contact from the list to view details.</p>
+  </div>
 );
 
-const MobileNav = () => (
-  <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-8 pt-4 md:hidden glass-panel border-t border-surface-container-high rounded-t-xl">
-    <Link to="/" className="text-on-surface-variant p-3">
-      <LayoutDashboard className="w-6 h-6" />
-    </Link>
-    <div className="bg-primary-container text-primary rounded-2xl p-3">
-      <Star className="w-6 h-6 fill-current" />
+const ResponsiveLayout = () => {
+  const location = useLocation();
+  const matchContact = useMatch("/contact/:id");
+  const matchMapContact = useMatch("/map/contact/:id");
+  const isContactSelected = matchContact || matchMapContact;
+  const isMapActive = location.pathname.startsWith('/map');
+  const isCleanup = location.pathname.startsWith('/settings');
+
+  // Cleanup view takes the full main area
+  if (isCleanup) {
+    return (
+      <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
+        <div className="hidden md:flex">
+          <Sidebar />
+        </div>
+        <main className="flex-1 h-full overflow-hidden">
+          <Routes>
+            <Route path="/settings/cleanup" element={<CleanupView />} />
+          </Routes>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
+      <div className={`${isContactSelected && !isMapActive ? 'hidden lg:flex' : 'hidden md:flex'}`}>
+        <Sidebar />
+      </div>
+      
+      {/* Dynamic Middle/Main Panel mapping to either the List or the Map */}
+      <section className={`
+        ${isContactSelected && !isMapActive ? 'hidden lg:flex' : 'flex'}
+        ${isMapActive ? 'flex-1 z-0' : 'w-full lg:w-[350px] shrink-0 bg-surface-container-lowest z-10'}
+        h-full flex-col relative
+      `}>
+        <Routes>
+          <Route path="/map" element={<MapView />} />
+          <Route path="/map/contact/:id" element={<MapView />} />
+          <Route path="*" element={<ContactList />} />
+        </Routes>
+      </section>
+
+      {/* Right Pane: Detail View */}
+      <main className={`
+        ${isContactSelected ? 'flex' : (isMapActive ? 'hidden' : 'hidden lg:flex')}
+        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[600px] z-50 shadow-2xl bg-surface' : 'flex-1 bg-surface z-10'}
+        h-full overflow-hidden relative flex-col
+      `}>
+        <Routes>
+          <Route path="/" element={<EmptyState />} />
+          <Route path="/map" element={null} />
+          <Route path="/contact/:id" element={<ContactDetail />} />
+          <Route path="/map/contact/:id" element={<ContactDetail />} />
+        </Routes>
+      </main>
+
+      {/* Mobile Nav */}
+      {!isContactSelected && (
+        <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-3 glass-panel rounded-t-xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]">
+          <Link to="/" className={`p-3 ${!isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
+             <LayoutDashboard className="w-6 h-6" />
+          </Link>
+          <Link to="/map" className={`p-3 ${isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
+            <Map className="w-6 h-6" />
+          </Link>
+          <Link to="/settings/cleanup" className="text-on-surface-variant p-3"><Zap className="w-6 h-6" /></Link>
+        </nav>
+      )}
     </div>
-    <div className="text-on-surface-variant p-3">
-      <ListFilter className="w-6 h-6" />
-    </div>
-    <div className="text-on-surface-variant p-3">
-      <Settings className="w-6 h-6" />
-    </div>
-  </nav>
-);
+  );
+};
 
 export default function App() {
   return (
     <Router>
-      <div className="min-h-screen flex flex-col lg:flex-row">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
-          <TopAppBar />
-          <main className="flex-1 pb-24 md:pb-12">
-            <Routes>
-              <Route path="/" element={<ContactList />} />
-              <Route path="/contact/:id" element={<ContactDetail />} />
-            </Routes>
-          </main>
-          <MobileNav />
-        </div>
-      </div>
+      <LayoutGroup>
+        <ResponsiveLayout />
+        <CommandPalette />
+        <Toaster theme="dark" position="bottom-right" className="font-body" toastOptions={{
+          style: {
+            background: 'var(--color-surface-container-high)',
+            border: '1px solid var(--color-surface-container-highest)',
+            color: 'var(--color-on-surface)'
+          }
+        }} />
+      </LayoutGroup>
     </Router>
   );
 }
