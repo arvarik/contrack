@@ -153,6 +153,34 @@ Engineered for maximum optical cleanliness, the CRM follows strict Tailwind CSS 
 
 ---
 
+## ⌨️ Keyboard Shortcuts
+
+Contrack is built for speed and efficiency. Below are the global and component-specific keyboard shortcuts currently implemented:
+
+### Global
+- \`Cmd + K\` or \`Ctrl + K\`: Open/Toggle the Command Palette (Quick Actions / Semantic Search).
+
+### Navigation (Contact List)
+- \`Arrow Down\` or \`j\`: Navigate to the next contact in the list.
+- \`Arrow Up\` or \`k\`: Navigate to the previous contact in the list.
+- \`Enter\`: Quickly focus the Rich Interaction Composer (when on a contact detail page, not focused on an input).
+
+### Rich Interaction Composer
+- \`Cmd + Enter\` or \`Ctrl + Enter\`: Save and log the current interaction (Note, Call, Meeting, Email).
+
+### @Mentions Dropdown
+- \`Arrow Up\` / \`Arrow Down\`: Navigate the suggestion list.
+- \`Enter\`: Select the highlighted contact.
+- \`Escape\`: Close the mentions dropdown.
+
+### The Singularity (Cleanup View)
+- \`Right Arrow\` or \`l\`: Focus the next duplicate suggestion.
+- \`Left Arrow\` or \`h\`: Focus the previous duplicate suggestion.
+- \`m\`: Merge the currently focused contact pair.
+- \`d\`: Dismiss/ignore the currently focused contact pair.
+
+---
+
 ## 🔌 API Integration Contracts
 
 The Express backend acts as a monolithic REST interface. Below are critical path contracts. All payload requests/responses are handled as `application/json`.
