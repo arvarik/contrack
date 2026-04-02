@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
-import { LayoutDashboard, Map, Zap, Search } from "lucide-react";
+import { LayoutDashboard, Map, Zap, Search, Sparkles } from "lucide-react";
 import { LayoutGroup } from "motion/react";
 import { Toaster } from "sonner";
 
@@ -8,6 +8,7 @@ import { ContactDetail } from "./views/ContactDetail";
 import { CommandPalette } from "./components/CommandPalette";
 import { MapView } from "./views/MapView";
 import { CleanupView } from "./views/CleanupView";
+import { SearchView } from "./views/SearchView";
 import { navLink, SECTION_BG } from "./lib/styles";
 import { cn } from "./lib/utils";
 
@@ -15,7 +16,8 @@ const Sidebar = () => {
   const location = useLocation();
   const isMap = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
-  const isHome = !isMap && !isCleanup && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
+  const isSearch = location.pathname.startsWith('/search');
+  const isHome = !isMap && !isCleanup && !isSearch && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
 
   return (
     <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
@@ -33,6 +35,9 @@ const Sidebar = () => {
       </Link>
       <Link to="/map" className={navLink(isMap)}>
         <Map className="w-6 h-6" />
+      </Link>
+      <Link to="/search" className={navLink(isSearch)} title="Ask My CRM — AI Search">
+        <Sparkles className="w-6 h-6" />
       </Link>
       <Link to="/settings/cleanup" className={navLink(isCleanup, "mt-auto")} title="The Singularity — Dedupe Engine">
         <Zap className="w-6 h-6" />
@@ -56,9 +61,10 @@ const ResponsiveLayout = () => {
   const isContactSelected = matchContact || matchMapContact;
   const isMapActive = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
+  const isSearch = location.pathname.startsWith('/search');
 
-  // Cleanup view takes the full main area
-  if (isCleanup) {
+  // Full-page views (cleanup, search) take the full main area
+  if (isCleanup || isSearch) {
     return (
       <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
         <div className="hidden md:flex">
@@ -67,6 +73,7 @@ const ResponsiveLayout = () => {
         <main className="flex-1 h-full overflow-hidden">
           <Routes>
             <Route path="/settings/cleanup" element={<CleanupView />} />
+            <Route path="/search" element={<SearchView />} />
           </Routes>
         </main>
       </div>
@@ -115,6 +122,7 @@ const ResponsiveLayout = () => {
           <Link to="/map" className={`p-3 ${isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
             <Map className="w-6 h-6" />
           </Link>
+          <Link to="/search" className="text-on-surface-variant p-3"><Sparkles className="w-6 h-6" /></Link>
           <Link to="/settings/cleanup" className="text-on-surface-variant p-3"><Zap className="w-6 h-6" /></Link>
         </nav>
       )}

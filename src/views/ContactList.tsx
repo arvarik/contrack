@@ -1,14 +1,40 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Search, Plus, Briefcase, Building, Star, Clock, Users, Upload, Wand } from "lucide-react";
-import { useContacts, useCreateContact, useParseContactText } from "../api";
+import {
+  Search, Plus, Briefcase, Building, Star, Clock, Users, Upload, Wand,
+  ChevronDown, X,
+  // Icon picker icons
+  Heart, Crown, Flame, Rocket, Target, Gem, Award, Globe, Zap, Shield,
+  Coffee, Music, Camera, BookOpen, TrendingUp, Anchor, Flag, Sparkles, Sun,
+} from "lucide-react";
+import { useContacts, useCreateContact, useParseContactText, useLists, useCreateList } from "../api";
 import { Modal } from "../components/Modal";
 import { ImportModal } from "../components/ImportModal";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useCompanyLogo } from "../hooks/useCompanyLogo";
 import { HealthRingAvatar } from "../components/HealthRingAvatar";
 import { toast } from "sonner";
 import { ICON_BTN, SEARCH_INPUT, filterPill, listRow, PAGE_TITLE } from "../lib/styles";
+import { cn } from "../lib/utils";
+
+// ---------------------------------------------------------------------------
+// Icon Registry — maps string keys to Lucide components
+// ---------------------------------------------------------------------------
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  star: Star, heart: Heart, crown: Crown, flame: Flame, rocket: Rocket,
+  target: Target, gem: Gem, award: Award, briefcase: Briefcase, users: Users,
+  globe: Globe, zap: Zap, shield: Shield, coffee: Coffee, music: Music,
+  camera: Camera, 'book-open': BookOpen, 'trending-up': TrendingUp,
+  anchor: Anchor, flag: Flag, sparkles: Sparkles, sun: Sun,
+};
+
+const ICON_OPTIONS = Object.keys(ICON_MAP);
+
+const ListIcon = ({ icon, className }: { icon: string; className?: string }) => {
+  const Icon = ICON_MAP[icon] || Star;
+  return <Icon className={className} />;
+};
 
 // ---------------------------------------------------------------------------
 // ContactList — Left-pane master view for browsing and filtering contacts
@@ -16,19 +42,23 @@ import { ICON_BTN, SEARCH_INPUT, filterPill, listRow, PAGE_TITLE } from "../lib/
 
 export const ContactList = () => {
   const { data: contacts = [], isLoading } = useContacts();
+  const { data: lists = [] } = useLists();
   const { id } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterMode, setFilterMode] = useState<'all' | 'premium' | 'overdue'>('all');
+  const [filterMode, setFilterMode] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSmartPasteOpen, setIsSmartPasteOpen] = useState(false);
   const [smartPasteText, setSmartPasteText] = useState("");
   const [parsedData, setParsedData] = useState<any>(null);
-  
+  const [isCreateListOpen, setIsCreateListOpen] = useState(false);
+  const [showMoreLists, setShowMoreLists] = useState(false);
+
   const navigate = useNavigate();
   
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
+  const createList = useCreateList();
 
   const handleCreateContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -46,7 +76,6 @@ export const ContactList = () => {
         company: data.company as string,
         location: data.location as string,
         avatarUrl: (data.avatarUrl as string) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name as string)}`,
-        isPremium: data.isPremium === 'on',
         // Normalized child arrays
         emails: emailValue ? [{ email: emailValue, label: 'work', isPrimary: true }] : [],
         phones: phoneValue ? [{ phone: phoneValue, label: 'mobile', isPrimary: true }] : [],
@@ -77,15 +106,34 @@ export const ContactList = () => {
              (contact.company && contact.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
              (contact.role && contact.role.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      if (filterMode === 'premium') return matchesSearch && contact.isPremium;
       if (filterMode === 'overdue') return matchesSearch && isOverdue(contact.lastContactedAt, contact.cadenceDays);
+      if (filterMode !== 'all') {
+        // filterMode is a list ID
+        return matchesSearch && contact.lists?.some(l => l.id === filterMode);
+      }
       return matchesSearch;
     });
   }, [contacts, searchQuery, filterMode]);
 
-  /** Counts for filter badge display */
-  const premiumCount = useMemo(() => contacts.filter(c => c.isPremium).length, [contacts]);
   const overdueCount = useMemo(() => contacts.filter(c => isOverdue(c.lastContactedAt, c.cadenceDays)).length, [contacts]);
+
+  // Smart overflow: show at most 3 list pills inline, rest in dropdown
+  const MAX_INLINE_LISTS = 3;
+  const inlineLists = lists.slice(0, MAX_INLINE_LISTS);
+  const overflowLists = lists.slice(MAX_INLINE_LISTS);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  // Close more dropdown on outside click
+  useEffect(() => {
+    if (!showMoreLists) return;
+    const handler = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setShowMoreLists(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMoreLists]);
 
   // Handle Keyboard Navigation
   React.useEffect(() => {
@@ -152,6 +200,12 @@ export const ContactList = () => {
     }
   }, [id]);
 
+  // Get member count for a list
+  const listMemberCount = useCallback((listId: string) => {
+    const list = lists.find(l => l.id === listId);
+    return list?.memberCount ?? 0;
+  }, [lists]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
@@ -201,7 +255,7 @@ export const ContactList = () => {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap items-center">
           <FilterButton
             label="All"
             icon={<Users className="w-3.5 h-3.5" />}
@@ -210,19 +264,79 @@ export const ContactList = () => {
             onClick={() => setFilterMode('all')}
           />
           <FilterButton
-            label="Premium"
-            icon={<Star className="w-3.5 h-3.5" />}
-            count={premiumCount}
-            active={filterMode === 'premium'}
-            onClick={() => setFilterMode('premium')}
-          />
-          <FilterButton
             label="Overdue"
             icon={<Clock className="w-3.5 h-3.5" />}
             count={overdueCount}
             active={filterMode === 'overdue'}
             onClick={() => setFilterMode('overdue')}
           />
+
+          {/* Inline list pills */}
+          {inlineLists.map(list => (
+            <FilterButton
+              key={list.id}
+              label={list.name}
+              icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
+              count={list.memberCount ?? 0}
+              active={filterMode === list.id}
+              onClick={() => setFilterMode(filterMode === list.id ? 'all' : list.id)}
+            />
+          ))}
+
+          {/* Overflow dropdown */}
+          {overflowLists.length > 0 && (
+            <div className="relative" ref={moreRef}>
+              <button
+                onClick={() => setShowMoreLists(!showMoreLists)}
+                className={cn(
+                  filterPill(overflowLists.some(l => l.id === filterMode)),
+                  "gap-1"
+                )}
+              >
+                <ChevronDown className="w-3 h-3" />
+                More
+              </button>
+              <AnimatePresence>
+                {showMoreLists && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                    className="absolute top-full left-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[180px]"
+                  >
+                    {overflowLists.map(list => (
+                      <button
+                        key={list.id}
+                        onClick={() => {
+                          setFilterMode(filterMode === list.id ? 'all' : list.id);
+                          setShowMoreLists(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 w-full px-3 py-2 text-sm transition-colors text-left",
+                          filterMode === list.id
+                            ? "bg-primary/10 text-primary font-bold"
+                            : "text-on-surface hover:bg-surface-container-low"
+                        )}
+                      >
+                        <ListIcon icon={list.icon} className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{list.name}</span>
+                        <span className="ml-auto text-[10px] opacity-50">{list.memberCount ?? 0}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Create list button */}
+          <button
+            onClick={() => setIsCreateListOpen(true)}
+            className="p-1.5 rounded-full text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+            title="Create a new list"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -335,6 +449,22 @@ export const ContactList = () => {
         </div>
       </Modal>
 
+      {/* Create List Modal */}
+      <CreateListModal
+        isOpen={isCreateListOpen}
+        onClose={() => setIsCreateListOpen(false)}
+        onCreate={async (name, icon) => {
+          try {
+            await createList.mutateAsync({ name, icon });
+            setIsCreateListOpen(false);
+            toast.success(`Created list "${name}"`);
+          } catch (err: any) {
+            toast.error(`Failed to create list: ${err.message}`);
+          }
+        }}
+        isPending={createList.isPending}
+      />
+
       {/* Import Contacts Modal */}
       <ImportModal 
         isOpen={isImportOpen} 
@@ -342,6 +472,103 @@ export const ContactList = () => {
         onSuccess={() => toast.success("Import complete!")} 
       />
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// CreateListModal — Icon picker + name input
+// ---------------------------------------------------------------------------
+
+const CreateListModal = ({
+  isOpen,
+  onClose,
+  onCreate,
+  isPending,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreate: (name: string, icon: string) => void;
+  isPending: boolean;
+}) => {
+  const [name, setName] = useState('');
+  const [icon, setIcon] = useState('star');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onCreate(name.trim(), icon);
+    setName('');
+    setIcon('star');
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Create List">
+      <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+        {/* Icon Picker */}
+        <div>
+          <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-3">
+            Choose an Icon
+          </label>
+          <div className="grid grid-cols-7 gap-2">
+            {ICON_OPTIONS.map(key => {
+              const active = icon === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setIcon(key)}
+                  className={cn(
+                    "p-2.5 rounded-xl transition-all flex items-center justify-center",
+                    active
+                      ? "bg-primary/15 text-primary ring-2 ring-primary/30 shadow-sm scale-110"
+                      : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+                  )}
+                  title={key}
+                >
+                  <ListIcon icon={key} className="w-5 h-5" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Name Input */}
+        <div>
+          <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">
+            List Name
+          </label>
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. VIP Clients, Investors, Friends"
+            className="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none"
+          />
+        </div>
+
+        {/* Preview + Submit */}
+        <div className="flex items-center justify-between pt-2">
+          {name.trim() && (
+            <motion.div
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-2 text-sm text-primary font-bold"
+            >
+              <ListIcon icon={icon} className="w-4 h-4" />
+              {name.trim()}
+            </motion.div>
+          )}
+          <button
+            type="submit"
+            disabled={!name.trim() || isPending}
+            className="ml-auto bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm"
+          >
+            {isPending ? 'Creating...' : 'Create List'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 

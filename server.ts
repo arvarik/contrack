@@ -84,7 +84,6 @@ sqlite.exec(`
     birthday TEXT,
     preferences TEXT,
     avatarUrl TEXT,
-    isPremium INTEGER DEFAULT 0,
     addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
     updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
     cadenceDays INTEGER DEFAULT 90,
@@ -198,9 +197,66 @@ sqlite.exec(`
     contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
     PRIMARY KEY (interactionId, contactId)
   );
+
+  -- Lists (user-created contact groups)
+  CREATE TABLE IF NOT EXISTS lists (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'star',
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP)
+  );
+
+  CREATE TABLE IF NOT EXISTS list_members (
+    listId TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    PRIMARY KEY (listId, contactId)
+  );
 `);
 
 log.info("Database", "All tables verified");
+
+// ---------------------------------------------------------------------------
+// Migration: isPremium → Starred list
+// ---------------------------------------------------------------------------
+
+try {
+  // Check if isPremium column still exists
+  const colCheck = sqlite.prepare("PRAGMA table_info(contacts)").all() as { name: string }[];
+  const hasPremium = colCheck.some(c => c.name === 'isPremium');
+
+  if (hasPremium) {
+    // Ensure a "Starred" list exists
+    const starredRow = sqlite.prepare("SELECT id FROM lists WHERE name = 'Starred'").get() as { id: string } | undefined;
+    let starredId = starredRow?.id;
+    if (!starredId) {
+      starredId = crypto.randomUUID();
+      sqlite.prepare("INSERT INTO lists (id, name, icon, sortOrder) VALUES (?, 'Starred', 'star', 0)").run(starredId);
+      log.info("Migration", `Created default 'Starred' list (${starredId})`);
+    }
+
+    // Migrate premium contacts into the Starred list
+    const premiums = sqlite.prepare("SELECT id FROM contacts WHERE isPremium = 1").all() as { id: string }[];
+    if (premiums.length > 0) {
+      const insertMember = sqlite.prepare("INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)");
+      for (const p of premiums) {
+        insertMember.run(starredId, p.id);
+      }
+      log.info("Migration", `Migrated ${premiums.length} premium contact(s) into 'Starred' list`);
+    }
+
+    // Drop the column (SQLite 3.35+)
+    try {
+      sqlite.exec("ALTER TABLE contacts DROP COLUMN isPremium");
+      log.info("Migration", "Dropped isPremium column from contacts table");
+    } catch (dropErr: any) {
+      log.warn("Migration", `Could not drop isPremium column (may require SQLite 3.35+): ${dropErr.message}`);
+    }
+  }
+} catch (migErr: any) {
+  log.warn("Migration", `isPremium migration check skipped: ${migErr.message}`);
+}
 
 // ---------------------------------------------------------------------------
 // FTS5 Virtual Table & Synchronization Triggers
@@ -357,7 +413,6 @@ async function startServer() {
     for (const f of fields) {
       if (body[f] !== undefined) update[f] = body[f];
     }
-    if (body.isPremium !== undefined) update.isPremium = body.isPremium ? 1 : 0;
     return update;
   }
 
@@ -366,7 +421,6 @@ async function startServer() {
     if (!contact) return contact;
     return {
       ...contact,
-      isPremium: !!contact.isPremium,
       emails: sqlite.prepare("SELECT id, email, label, isPrimary, source FROM contact_emails WHERE contactId = ? ORDER BY isPrimary DESC").all(contact.id).map((e: any) => ({ ...e, isPrimary: !!e.isPrimary })),
       phones: sqlite.prepare("SELECT id, phone, label, isPrimary, source FROM contact_phones WHERE contactId = ? ORDER BY isPrimary DESC").all(contact.id).map((p: any) => ({ ...p, isPrimary: !!p.isPrimary })),
       socialLinks: sqlite.prepare("SELECT id, platform, url, handle, source FROM contact_social_links WHERE contactId = ?").all(contact.id),
@@ -374,6 +428,12 @@ async function startServer() {
       experience: sqlite.prepare("SELECT id, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience WHERE contactId = ?").all(contact.id).map((e: any) => ({ ...e, isCurrent: !!e.isCurrent })),
       sources: sqlite.prepare("SELECT id, platform, externalId, connectedOn, importedAt FROM contact_sources WHERE contactId = ?").all(contact.id),
       tags: sqlite.prepare("SELECT id, tag FROM contact_tags WHERE contactId = ?").all(contact.id),
+      lists: sqlite.prepare(`
+        SELECT l.id, l.name, l.icon FROM lists l
+        JOIN list_members lm ON l.id = lm.listId
+        WHERE lm.contactId = ?
+        ORDER BY l.sortOrder ASC
+      `).all(contact.id),
     };
   }
 
@@ -594,6 +654,130 @@ async function startServer() {
     }
   });
 
+  // ── Lists CRUD ──────────────────────────────────────────────────────────────
+
+  /** GET /api/lists — Fetch all lists with member counts, ordered by sortOrder */
+  app.get("/api/lists", (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const lists = sqlite.prepare(`
+        SELECT l.*, COUNT(lm.contactId) as memberCount
+        FROM lists l
+        LEFT JOIN list_members lm ON l.id = lm.listId
+        GROUP BY l.id
+        ORDER BY l.sortOrder ASC, l.createdAt ASC
+      `).all();
+      log.debug("API", `[${rid}] GET /api/lists → ${lists.length}`);
+      res.json(lists);
+    } catch (err: any) {
+      log.error("API", `[${rid}] GET /api/lists failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to fetch lists" });
+    }
+  });
+
+  /** POST /api/lists — Create a new list */
+  app.post("/api/lists", (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const { name, icon } = req.body;
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: "List name is required" });
+      }
+      // Get next sortOrder
+      const maxOrder = sqlite.prepare("SELECT MAX(sortOrder) as maxOrder FROM lists").get() as { maxOrder: number | null };
+      const sortOrder = (maxOrder?.maxOrder ?? -1) + 1;
+      const id = crypto.randomUUID();
+      sqlite.prepare("INSERT INTO lists (id, name, icon, sortOrder) VALUES (?, ?, ?, ?)").run(
+        id, name.trim(), icon || 'star', sortOrder
+      );
+      const list = sqlite.prepare("SELECT *, 0 as memberCount FROM lists WHERE id = ?").get(id);
+      log.info("API", `[${rid}] POST /api/lists → "${name.trim()}" (${id})`);
+      res.status(201).json(list);
+    } catch (err: any) {
+      log.error("API", `[${rid}] POST /api/lists failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to create list" });
+    }
+  });
+
+  /** DELETE /api/lists/:id — Delete a list (cascade removes memberships) */
+  app.delete("/api/lists/:id", (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const { id } = req.params;
+      const existing = sqlite.prepare("SELECT id, name FROM lists WHERE id = ?").get(id) as { id: string; name: string } | undefined;
+      if (!existing) {
+        log.warn("API", `[${rid}] DELETE /api/lists/${id} — not found (idempotent OK)`);
+        return res.json({ success: true, message: "List not found (already deleted)" });
+      }
+      sqlite.prepare("DELETE FROM lists WHERE id = ?").run(id);
+      log.info("API", `[${rid}] DELETE /api/lists/${id} → deleted "${existing.name}"`);
+      res.json({ success: true, message: `Deleted list "${existing.name}"` });
+    } catch (err: any) {
+      log.error("API", `[${rid}] DELETE /api/lists/${req.params.id} failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to delete list" });
+    }
+  });
+
+  /** PUT /api/lists/reorder — Reorder lists by providing an ordered array of list IDs */
+  app.put("/api/lists/reorder", (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const { orderedIds } = req.body as { orderedIds?: string[] };
+      if (!Array.isArray(orderedIds)) {
+        return res.status(400).json({ error: "orderedIds array is required" });
+      }
+      const updateStmt = sqlite.prepare("UPDATE lists SET sortOrder = ? WHERE id = ?");
+      const txn = sqlite.transaction(() => {
+        for (let i = 0; i < orderedIds.length; i++) {
+          updateStmt.run(i, orderedIds[i]);
+        }
+      });
+      txn();
+      log.info("API", `[${rid}] PUT /api/lists/reorder → ${orderedIds.length} lists reordered`);
+      res.json({ success: true });
+    } catch (err: any) {
+      log.error("API", `[${rid}] PUT /api/lists/reorder failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to reorder lists" });
+    }
+  });
+
+  /** POST /api/lists/:id/members — Add a contact to a list (idempotent) */
+  app.post("/api/lists/:id/members", (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const { id } = req.params;
+      const { contactId } = req.body;
+      if (!contactId) return res.status(400).json({ error: "contactId is required" });
+
+      const list = sqlite.prepare("SELECT id FROM lists WHERE id = ?").get(id);
+      if (!list) return res.status(404).json({ error: "List not found" });
+
+      const contact = sqlite.prepare("SELECT id FROM contacts WHERE id = ?").get(contactId);
+      if (!contact) return res.status(404).json({ error: "Contact not found" });
+
+      sqlite.prepare("INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)").run(id, contactId);
+      log.info("API", `[${rid}] POST /api/lists/${id}/members → added ${contactId}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      log.error("API", `[${rid}] POST /api/lists/${req.params.id}/members failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to add member" });
+    }
+  });
+
+  /** DELETE /api/lists/:id/members/:contactId — Remove a contact from a list (idempotent) */
+  app.delete("/api/lists/:id/members/:contactId", (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const { id, contactId } = req.params;
+      sqlite.prepare("DELETE FROM list_members WHERE listId = ? AND contactId = ?").run(id, contactId);
+      log.info("API", `[${rid}] DELETE /api/lists/${id}/members/${contactId} → removed`);
+      res.json({ success: true });
+    } catch (err: any) {
+      log.error("API", `[${rid}] DELETE /api/lists/${req.params.id}/members/${req.params.contactId} failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to remove member" });
+    }
+  });
+
   // ── Semantic RAG Search ────────────────────────────────────────────────────
   // POST /api/search/semantic
   // Accepts a natural-language query, compresses active contacts into a slim
@@ -744,7 +928,7 @@ async function startServer() {
           headline: body.headline || null, role: body.role || null,
           company: body.company || null, location: body.location || null,
           birthday: body.birthday || null, preferences: body.preferences || null,
-          avatarUrl: body.avatarUrl || null, isPremium: body.isPremium ? 1 : 0,
+          avatarUrl: body.avatarUrl || null,
           cadenceDays: body.cadenceDays ?? 90, about: body.about || null,
           pronouns: body.pronouns || null, industry: body.industry || null,
           website: body.website || null,
@@ -780,7 +964,7 @@ async function startServer() {
             company: c.company || null, location: c.location || null,
             birthday: c.birthday || null, preferences: c.preferences || null,
             avatarUrl: c.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}`,
-            isPremium: c.isPremium ? 1 : 0, cadenceDays: c.cadenceDays ?? 90,
+            cadenceDays: c.cadenceDays ?? 90,
             about: c.about || null, pronouns: c.pronouns || null,
             industry: c.industry || null, website: c.website || null,
           }).run();
@@ -1390,9 +1574,11 @@ Consider nickname variants (Bob/Robert, Bill/William, J./Julian), abbreviations,
             updates[field] = duplicate[field];
           }
         }
-        // Inherit premium status if duplicate was premium
-        if (!primary.isPremium && duplicate.isPremium) {
-          updates.isPremium = 1;
+        // Inherit list memberships from duplicate
+        const dupLists = sqlite.prepare("SELECT listId FROM list_members WHERE contactId = ?").all(duplicateId) as { listId: string }[];
+        const insertMember = sqlite.prepare("INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)");
+        for (const dl of dupLists) {
+          insertMember.run(dl.listId, primaryId);
         }
         // Use the earlier addedAt
         if (duplicate.addedAt && (!primary.addedAt || duplicate.addedAt < primary.addedAt)) {

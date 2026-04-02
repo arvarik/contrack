@@ -23,7 +23,6 @@ export const contacts = sqliteTable('contacts', {
   birthday: text('birthday'),
   preferences: text('preferences'),
   avatarUrl: text('avatarUrl'),
-  isPremium: integer('isPremium').default(0),
   addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
   updatedAt: text('updatedAt').default(sql`(CURRENT_TIMESTAMP)`),
   cadenceDays: integer('cadenceDays').default(90),
@@ -194,6 +193,35 @@ export const interactionMentions = sqliteTable('interaction_mentions', {
 }));
 
 // =============================================================================
+// Lists (User-Created Contact Groups)
+// =============================================================================
+
+/**
+ * lists — User-created named contact groups with icon and drag-to-reorder support.
+ */
+export const lists = sqliteTable('lists', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  icon: text('icon').notNull().default('star'),
+  sortOrder: integer('sortOrder').notNull().default(0),
+  createdAt: text('createdAt').default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+/**
+ * list_members — Junction table connecting lists to contacts.
+ * Composite PK ensures each contact appears in a list at most once.
+ */
+export const listMembers = sqliteTable('list_members', {
+  listId: text('listId').notNull()
+    .references(() => lists.id, { onDelete: 'cascade' }),
+  contactId: text('contactId').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.listId, t.contactId] }),
+}));
+
+// =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================
 
@@ -245,4 +273,13 @@ export const interactionsRelations = relations(interactions, ({ one, many }) => 
 export const interactionMentionsRelations = relations(interactionMentions, ({ one }) => ({
   interaction: one(interactions, { fields: [interactionMentions.interactionId], references: [interactions.id] }),
   contact: one(contacts, { fields: [interactionMentions.contactId], references: [contacts.id] }),
+}));
+
+export const listsRelations = relations(lists, ({ many }) => ({
+  members: many(listMembers),
+}));
+
+export const listMembersRelations = relations(listMembers, ({ one }) => ({
+  list: one(lists, { fields: [listMembers.listId], references: [lists.id] }),
+  contact: one(contacts, { fields: [listMembers.contactId], references: [contacts.id] }),
 }));

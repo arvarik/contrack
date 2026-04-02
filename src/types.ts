@@ -60,6 +60,15 @@ export interface ContactTag {
   tag: string;
 }
 
+export interface ContactList {
+  id: string;
+  name: string;
+  icon: string;
+  sortOrder: number;
+  createdAt: string;
+  memberCount?: number;
+}
+
 // =============================================================================
 // Primary Entity Types
 // =============================================================================
@@ -76,7 +85,6 @@ export interface Contact {
   birthday: string | null;
   preferences: string | null;
   avatarUrl: string | null;
-  isPremium: boolean;
   isGhost: boolean;
   addedAt: string;
   updatedAt: string;
@@ -100,6 +108,7 @@ export interface Contact {
   experience: ContactExperience[];
   sources: ContactSource[];
   tags: ContactTag[];
+  lists: ContactList[];
 }
 
 export interface Interaction {

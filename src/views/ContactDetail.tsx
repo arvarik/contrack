@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
-  Mail, Phone, FileText, Handshake, Verified, 
+  Mail, Phone, FileText, Handshake,
   MapPin, Cake, Coffee, Briefcase, ArrowLeft, Sparkles, UploadCloud, File, Trash2, Palette,
   Globe, MessageSquare, Tag, Linkedin, Facebook, Github, Twitter, Instagram, ExternalLink,
-  X, Plus,
+  X, Plus, Star, Heart, Crown, Flame, Rocket, Target, Gem, Award, Users, Zap, Shield,
+  Music, Camera, BookOpen, TrendingUp, Anchor, Flag, Sun, ChevronDown, ListPlus,
 } from "lucide-react";
-import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost } from "../api";
+import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost, useLists, useAddToList, useRemoveFromList } from "../api";
 import { formatDistanceToNow } from "date-fns";
 import { useDropzone } from "react-dropzone";
 import { generateContactInsights } from "../services/geminiService";
@@ -423,10 +424,7 @@ export const ContactDetail = () => {
     updateContact.mutate({ id, data: { [field]: val } });
   };
 
-  const handleTogglePremium = () => {
-    if (!id) return;
-    updateContact.mutate({ id, data: { isPremium: !contact.isPremium } });
-  };
+
 
   const handleVibeSelect = (vibeId: string) => {
     if (!id) return;
@@ -467,24 +465,6 @@ export const ContactDetail = () => {
                 src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
               />
             </div>
-            {contact.isPremium && (
-              <div 
-                className="absolute -bottom-2 -right-2 signature-gradient text-on-primary w-8 h-8 rounded-full flex items-center justify-center shadow-lg cursor-pointer"
-                title="Premium Client (Click to toggle)"
-                onClick={handleTogglePremium}
-              >
-                <Verified className="w-4 h-4" />
-              </div>
-            )}
-            {!contact.isPremium && (
-               <div 
-                className="absolute -bottom-2 -right-2 bg-surface-container-high text-on-surface-variant w-6 h-6 rounded-full flex items-center justify-center shadow-sm cursor-pointer hover:bg-primary hover:text-on-primary transition-colors"
-                title="Mark as Premium"
-                onClick={handleTogglePremium}
-              >
-                <Verified className="w-3 h-3" />
-              </div>
-            )}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -565,6 +545,9 @@ export const ContactDetail = () => {
                 ))}
               </div>
             )}
+
+            {/* Lists */}
+            <ContactListsSection contactId={contact.id} contactLists={contact.lists || []} />
 
             {/* Catch Me Up AI Briefing */}
             <div className="mt-4">
@@ -1016,6 +999,108 @@ export const ContactDetail = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Icon Registry — maps string keys to Lucide components for list icons
+// ---------------------------------------------------------------------------
+
+const LIST_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  star: Star, heart: Heart, crown: Crown, flame: Flame, rocket: Rocket,
+  target: Target, gem: Gem, award: Award, briefcase: Briefcase, users: Users,
+  globe: Globe, zap: Zap, shield: Shield, coffee: Coffee, music: Music,
+  camera: Camera, 'book-open': BookOpen, 'trending-up': TrendingUp,
+  anchor: Anchor, flag: Flag, sparkles: Sparkles, sun: Sun,
+};
+
+const DetailListIcon = ({ icon, className }: { icon: string; className?: string }) => {
+  const Icon = LIST_ICON_MAP[icon] || Star;
+  return <Icon className={className} />;
+};
+
+// ---------------------------------------------------------------------------
+// ContactListsSection — Shows list memberships + add-to-list dropdown
+// ---------------------------------------------------------------------------
+
+const ContactListsSection = ({ contactId, contactLists }: { contactId: string; contactLists: { id: string; name: string; icon: string }[] }) => {
+  const { data: allLists = [] } = useLists();
+  const addToList = useAddToList();
+  const removeFromList = useRemoveFromList();
+  const [showAdd, setShowAdd] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showAdd) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowAdd(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAdd]);
+
+  const memberOfIds = new Set(contactLists.map(l => l.id));
+  const availableLists = allLists.filter(l => !memberOfIds.has(l.id));
+
+  return (
+    <div className="flex items-center gap-2 mt-3 flex-wrap">
+      {contactLists.map(list => (
+        <span
+          key={list.id}
+          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full group/listpill transition-colors hover:bg-primary/20"
+        >
+          <DetailListIcon icon={list.icon} className="w-3 h-3" />
+          {list.name}
+          <button
+            onClick={() => removeFromList.mutate({ listId: list.id, contactId })}
+            className="ml-0.5 opacity-0 group-hover/listpill:opacity-100 hover:text-red-500 transition-opacity"
+            title="Remove from list"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+
+      {/* Add to list dropdown */}
+      {availableLists.length > 0 && (
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            className="flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-full hover:bg-primary/10 transition-colors"
+            title="Add to a list"
+          >
+            <ListPlus className="w-3.5 h-3.5" />
+          </button>
+          <AnimatePresence>
+            {showAdd && (
+              <motion.div
+                initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                className="absolute top-full left-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[160px]"
+              >
+                {availableLists.map(list => (
+                  <button
+                    key={list.id}
+                    onClick={() => {
+                      addToList.mutate({ listId: list.id, contactId });
+                      setShowAdd(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                  >
+                    <DetailListIcon icon={list.icon} className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{list.name}</span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 };

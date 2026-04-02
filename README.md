@@ -107,6 +107,9 @@ CRMs rot from data duplication. Our backend actively scans the schema utilizing 
 ### 7. Geospatial Mapping Component
 Automatically maps parsed `lat`/`lng` coordinates globally using `react-leaflet`. Contacts interact natively with coordinate data to visualize where your network density physically resides.
 
+### 8. Custom Lists & Smart Grouping
+Create unlimited, user-defined contact lists with curated icons. Lists appear as stackable filter pills in the contact sidebar, with smart overflow into a dropdown when space is constrained. Lists support drag-to-reorder via a "See All Lists" view, enabling you to pin your most-used groups at the top. Each list flows through the same idempotent junction-table architecture — contacts can belong to multiple lists simultaneously, and memberships are inherited during deduplication merges.
+
 ---
 
 ## 🛠️ Technology Stack
@@ -133,6 +136,8 @@ Key Tables:
 *   `contacts`: The primary demographic node (stores `id`, `name`, `birthday`, `cadenceDays`, `aiBriefing`, `isGhost`).
 *   `contact_emails`, `contact_phones`, `contact_social_links`: 1:N relations supporting multi-value deduplication and provenance (`source`).
 *   `contact_education`, `contact_experience`: Timeline-specific data for chronological history.
+*   `lists`: User-created named contact groups with icon, sort order, and membership counts.
+*   `list_members`: Junction table connecting contacts to lists with composite PK for idempotent add/remove.
 *   `interactions`: The overarching timeline log (calls, notes, emails, meetings).
 *   `interaction_mentions`: The physical junction table generating the explicit graph connecting `interactions` to multiple `contacts`.
 
@@ -212,6 +217,16 @@ The Express backend acts as a monolithic REST interface. Below are critical path
 | `POST` | `/api/contacts/:id/promote` | Triggers a state transition shifting a node from "Ghost" to Explicit status. |
 | `GET` | `/api/utils/unfurl` | Validates and parses external URI references via `cheerio` returning OpenGraph attributes securely. |
 | `GET` | `/api/contacts/map` | Exposes global geometry intersections clustering entities for mapping views. |
+
+### Lists Management
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/lists` | Fetch all lists with member counts, ordered by `sortOrder`. |
+| `POST` | `/api/lists` | Create a new list with `name` and `icon`. |
+| `DELETE`| `/api/lists/:id` | Delete a list (cascade removes memberships). Idempotent. |
+| `PUT` | `/api/lists/reorder` | Reorder lists by providing `orderedIds` array. |
+| `POST` | `/api/lists/:id/members` | Add a contact to a list (idempotent via `INSERT OR IGNORE`). |
+| `DELETE`| `/api/lists/:id/members/:contactId` | Remove a contact from a list. Idempotent. |
 
 ---
 

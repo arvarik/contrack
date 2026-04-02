@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Contact, Interaction, SemanticSearchResult } from './types';
+import { Contact, Interaction, SemanticSearchResult, ContactList } from './types';
 
 const API_BASE = '/api';
 
@@ -451,6 +451,114 @@ export const useSemanticSearch = () => {
       });
       if (!res.ok) throw new Error('Semantic search failed');
       return res.json();
+    },
+  });
+};
+
+// =============================================================================
+// Lists (User-Created Contact Groups)
+// =============================================================================
+
+/** Fetch all lists with member counts, ordered by sortOrder. */
+export const useLists = () => {
+  return useQuery({
+    queryKey: ['lists'],
+    queryFn: async (): Promise<ContactList[]> => {
+      const res = await fetch(`${API_BASE}/lists`);
+      if (!res.ok) throw new Error('Failed to fetch lists');
+      return res.json();
+    },
+  });
+};
+
+/** Create a new list with a name and icon. */
+export const useCreateList = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string; icon: string }): Promise<ContactList> => {
+      const res = await fetch(`${API_BASE}/lists`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to create list');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+};
+
+/** Delete a list by ID. */
+export const useDeleteList = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API_BASE}/lists/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete list');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+/** Reorder lists by providing an ordered array of IDs. */
+export const useReorderLists = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      const res = await fetch(`${API_BASE}/lists/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+      if (!res.ok) throw new Error('Failed to reorder lists');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+};
+
+/** Add a contact to a list (idempotent). */
+export const useAddToList = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ listId, contactId }: { listId: string; contactId: string }) => {
+      const res = await fetch(`${API_BASE}/lists/${listId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId }),
+      });
+      if (!res.ok) throw new Error('Failed to add to list');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+};
+
+/** Remove a contact from a list (idempotent). */
+export const useRemoveFromList = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ listId, contactId }: { listId: string; contactId: string }) => {
+      const res = await fetch(`${API_BASE}/lists/${listId}/members/${contactId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to remove from list');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
     },
   });
 };
