@@ -43,6 +43,13 @@ if (contactCount.count === 0) {
       platform: "manual", importedAt: new Date().toISOString(),
     }).run();
 
+    db.insert(schema.contactSocialLinks).values([
+      { id: crypto.randomUUID(), contactId: julianId, platform: "linkedin", url: "https://linkedin.com/in/julianthorne", handle: "julianthorne", source: "manual" },
+      { id: crypto.randomUUID(), contactId: julianId, platform: "twitter", url: "https://twitter.com/julian_designs", handle: "@julian_designs", source: "manual" },
+      { id: crypto.randomUUID(), contactId: julianId, platform: "github", url: "https://github.com/nexus-julian", handle: "nexus-julian", source: "manual" },
+      { id: crypto.randomUUID(), contactId: julianId, platform: "website", url: "https://nexus.design", handle: "nexus.design", source: "manual" }
+    ]).run();
+
     db.insert(schema.interactions).values([
       {
         id: "note-1", contactId: julianId, type: "note",

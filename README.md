@@ -218,10 +218,20 @@ The Express backend acts as a monolithic REST interface. Below are critical path
 | `GET` | `/api/utils/unfurl` | Validates and parses external URI references via `cheerio` returning OpenGraph attributes securely. |
 | `GET` | `/api/contacts/map` | Exposes global geometry intersections clustering entities for mapping views. |
 
+### AI / Model Context Protocol (MCP) Proxy Endpoints
+These high-speed projection boundaries specifically feed AI reasoning systems, bypassing thick UI data hydration layers.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/query/contacts` | Lightweight cursor-paginated fetching allowing projection (e.g. `?fields=id,name,role`). |
+| `GET` | `/api/contacts/action-items` | Yields high-urgency timelines (`nextFollowUpAt` or `cadenceDays` breached constraints). |
+| `GET` | `/api/tags` & `/api/industries` | Plucks unique global taxonomy arrays across the CRM explicitly mapping schema structures. |
+| `GET` | `/api/interactions/search` | Performs raw high-speed keyword `FTS5` text-sweeps executing strictly across log notes payload boundaries. |
+
 ### Lists Management
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/lists` | Fetch all lists with member counts, ordered by `sortOrder`. |
+| `GET` | `/api/lists/:id/contacts` | Plucks raw hydrated contact nodes natively mapped to the specified list ID `ON JOIN`. |
 | `POST` | `/api/lists` | Create a new list with `name` and `icon`. |
 | `DELETE`| `/api/lists/:id` | Delete a list (cascade removes memberships). Idempotent. |
 | `PUT` | `/api/lists/reorder` | Reorder lists by providing `orderedIds` array. |

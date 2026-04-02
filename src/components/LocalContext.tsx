@@ -43,34 +43,59 @@ const formatLocalTime = (timezone: string) => {
   const currentHour = parseInt(hourFormatter.format(new Date()), 10);
   const isDay = currentHour >= 6 && currentHour < 18;
   
+  const abbrFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    timeZoneName: 'short'
+  });
+  
+  let timeZoneName = abbrFormatter.formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value || '';
+  if (timeZoneName.startsWith('GMT')) {
+    const city = timezone.split('/').pop()?.replace(/_/g, ' ') || '';
+    timeZoneName = city ? `${city} Time` : timeZoneName;
+  }
+  
   return {
     timeString: formatter.format(new Date()),
+    timeZoneName,
     isDay
   };
 };
 
 export const LocalContext: React.FC<LocalContextProps> = ({ lat, lng }) => {
-  const [timeData, setTimeData] = useState<{ timeString: string, isDay: boolean } | null>(null);
+  const [timeData, setTimeData] = useState<{ timeString: string, timeZoneName: string, isDay: boolean } | null>(null);
+  const [tempUnit, setTempUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
   
   const timezone = React.useMemo(() => {
     if (lat === null || lng === null) return null;
     try {
       return tzlookup(lat, lng);
     } catch (e) {
-      return null; // Oceans or invalid coords
+      return null;
     }
   }, [lat, lng]);
 
   useEffect(() => {
+    const saved = localStorage.getItem('contrack_temp_unit');
+    if (saved === 'fahrenheit' || saved === 'celsius') {
+      setTempUnit(saved);
+    }
+    const handleSettingsChange = () => {
+      const updated = localStorage.getItem('contrack_temp_unit');
+      if (updated === 'fahrenheit' || updated === 'celsius') {
+        setTempUnit(updated);
+      }
+    };
+    window.addEventListener('contrack_settings_changed', handleSettingsChange);
+    return () => window.removeEventListener('contrack_settings_changed', handleSettingsChange);
+  }, []);
+
+  useEffect(() => {
     if (!timezone) return;
     
-    // Initial Tick
     setTimeData(formatLocalTime(timezone));
-    
-    // Minute-clock tick
     const interval = setInterval(() => {
       setTimeData(formatLocalTime(timezone));
-    }, 60000); // once per minute
+    }, 60000);
     
     return () => clearInterval(interval);
   }, [timezone]);
@@ -90,21 +115,24 @@ export const LocalContext: React.FC<LocalContextProps> = ({ lat, lng }) => {
 
   if (!lat || !lng || !timezone || !timeData) return null;
 
+  const tempVal = weather?.temperature ?? 0;
+  const displayTemp = tempUnit === 'fahrenheit' ? Math.round((tempVal * 9/5) + 32) : Math.round(tempVal);
+  const tempLabel = tempUnit === 'fahrenheit' ? '°F' : '°C';
+
   return (
-    <div className="flex items-center gap-3 text-sm font-medium text-on-surface-variant bg-surface-container-low px-3 py-1.5 rounded-full shadow-sm">
-      
-      {/* Timezone Context */}
-      <div className="flex items-center gap-1.5 pr-3" style={{ borderRight: 'none', marginRight: '0' }}>
+    <>
+      {/* Timezone Context Pill */}
+      <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-xl shadow-sm">
         {timeData.isDay ? (
-          <Sun className="w-3.5 h-3.5 text-amber-500" />
+          <Sun className="w-4 h-4 text-amber-500" />
         ) : (
-          <Moon className="w-3.5 h-3.5 text-indigo-400" />
+          <Moon className="w-4 h-4 text-indigo-400" />
         )}
-        <span>{timeData.timeString}</span>
+        <span>{timeData.timeString} {timeData.timeZoneName}</span>
       </div>
 
-      {/* Weather Context */}
-      <div className="flex items-center gap-1.5">
+      {/* Weather Context Pill */}
+      <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-xl shadow-sm">
         <AnimatePresence mode="wait">
           {weatherLoading ? (
             <motion.div 
@@ -113,7 +141,7 @@ export const LocalContext: React.FC<LocalContextProps> = ({ lat, lng }) => {
               animate={{ opacity: 1 }} 
               exit={{ opacity: 0 }}
             >
-              <Loader2 className="w-3.5 h-3.5 animate-spin opacity-50" />
+              <Loader2 className="w-4 h-4 animate-spin opacity-50" />
             </motion.div>
           ) : weather ? (
             <motion.div 
@@ -124,14 +152,13 @@ export const LocalContext: React.FC<LocalContextProps> = ({ lat, lng }) => {
               className="flex items-center gap-1.5"
             >
               {getWeatherIcon(weather.weathercode, timeData.isDay)}
-              <span>{Math.round(weather.temperature)}°</span>
+              <span>{displayTemp}{tempLabel}</span>
             </motion.div>
           ) : (
-            <span className="opacity-50 text-xs">No weather data</span>
+            <span className="opacity-50 text-xs">No data</span>
           )}
         </AnimatePresence>
       </div>
-
-    </div>
+    </>
   );
 };

@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { differenceInDays, parseISO } from 'date-fns';
 
 interface HealthRingAvatarProps {
   contact: any;
   size?: number;
 }
 
+const VIBE_COLORS: Record<string, string> = {
+  brand: '#009EDB',
+  emerald: '#10B981',
+  amber: '#F59E0B',
+  rose: '#F43F5E',
+  indigo: '#6366F1',
+  pink: '#EC4899',
+  violet: '#8B5CF6',
+  teal: '#14B8A6'
+};
+
 export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, size = 48 }) => {
-  const [offset, setOffset] = useState<number>(0);
   const [initialRender, setInitialRender] = useState(true);
 
   // Math Setup
@@ -15,37 +24,17 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
   const radius = (size / 2) - strokeWidth;
   const circumference = 2 * Math.PI * radius;
 
-  // Logic calculation
-  let ringColor = 'text-emerald-500'; // Default Healthy
-  let percentRemaining = 100;
-
-  if (contact.lastContactedAt) {
-    const elapsedDays = differenceInDays(new Date(), parseISO(contact.lastContactedAt));
-    const cadence = contact.cadenceDays || 90;
-    const remainingDays = Math.max(cadence - Math.max(elapsedDays, 0), 0);
-    percentRemaining = Math.max((remainingDays / cadence) * 100, 0);
-
-    if (percentRemaining === 0) {
-      ringColor = 'text-rose-500'; // Overdue 
-    } else if (percentRemaining < 40) {
-      ringColor = 'text-amber-500'; // Nearing Due
-    }
-  }
+  const hexColor = VIBE_COLORS[contact.themeColor] || VIBE_COLORS['brand'];
 
   // Animation effect
   useEffect(() => {
-    // 100% remaining = full circle (offset = 0)
-    // 0% remaining = empty circle (offset = circumference)
-    const targetOffset = circumference - (percentRemaining / 100) * circumference;
-    
     // Slight delay to allow CSS transitions to catch the initial render state
     const timeout = setTimeout(() => {
       setInitialRender(false);
-      setOffset(targetOffset);
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [percentRemaining, circumference]);
+  }, []);
 
   return (
     <div className="relative shrink-0 flex items-center justify-center" style={{ width: size, height: size }}>
@@ -60,18 +49,18 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
           className="text-surface-container-high transition-colors"
           strokeWidth={strokeWidth}
         />
-        {/* Progress Value */}
+        {/* Progress Value (Always 100% full, but colored by theme) */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
-          className={`${ringColor} transition-all duration-1000 ease-[cubic-bezier(0.25,1,0.5,1)]`}
+          stroke={hexColor}
+          className="transition-all duration-1000 ease-[cubic-bezier(0.25,1,0.5,1)]"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={initialRender ? circumference : offset}
+          strokeDashoffset={initialRender ? circumference : 0}
         />
       </svg>
       {/* Contained Image wrapper to avoid overlapping with stroke boundaries */}

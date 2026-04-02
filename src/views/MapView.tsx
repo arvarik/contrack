@@ -77,6 +77,8 @@ export const MapView = () => {
           chunkedLoading
           iconCreateFunction={createClusterCustomIcon}
           maxClusterRadius={50}
+          showCoverageOnHover={false}
+          spiderLegPolylineOptions={{ weight: 0, opacity: 0 }}
         >
           {contacts.map((contact) => (
             <Marker
@@ -88,6 +90,8 @@ export const MapView = () => {
               )}
               eventHandlers={{
                 click: () => navigate(`/map/contact/${contact.id}`),
+                mouseover: (e) => e.target.openPopup(),
+                mouseout: (e) => e.target.closePopup(),
               }}
             >
               {/* Popup clarifies which location is pinned when a contact has
@@ -108,9 +112,6 @@ export const MapView = () => {
                       📍 {contact.location}
                     </p>
                   )}
-                  <p style={{ fontSize: '10px', color: '#aaa', margin: 0, fontStyle: 'italic' }}>
-                    Click to open contact
-                  </p>
                 </div>
               </Popup>
             </Marker>

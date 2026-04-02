@@ -17,12 +17,12 @@ The CRM relies on a relational abstraction using SQLite operating in `WAL` mode.
 - **`interaction_mentions`**: A specialized junction table mapping complex Bi-Directional network relationships explicitly connecting an `.interactionId` against a foreign `.contactId` explicitly. `server.ts` routes seamlessly output `isViaName` during database scans evaluating this junction matrix.
 
 ### Database Operations:
-Never utilize `drizzle-orm` migration scripts! The SQLite definitions execute securely on boot via raw literal strings (`sqlite.exec(...)`) parsing DDL structures. If you modify `src/db/schema.ts`, you **must** also map the update exactly inside `<app-root>/server.ts` DDL configurations.
+Never utilize `drizzle-orm` migration scripts! The SQLite definitions execute securely on boot via raw literal strings (`sqlite.exec(...)`) parsing DDL structures. If you modify `src/db/schema.ts`, you **must** also map the update exactly inside `<app-root>/server/db.ts` DDL configurations.
 
-## 3. AI Integrations (Gemini Flash)
-AI tasks live under `aiService.ts`. All routines invoke `gemini-1.5-flash` passing strictly bounded JSON schemas utilizing Edge API methods:
-- **Entity Mentions**: Analyzes raw prose identifying semantic names formatting implicit "ghost" elements dynamically mapping connections into the CRM ecosystem explicitly tracking non-instantiated networks.
-- **Catch Me Up**: Reads chronological DB intersections wrapping structured executive briefs targeting imminent user meetings.
+## 3. AI Integrations & API Layer
+AI tasks traditionally live under `aiService.ts` and route through the `server/routes/mcp.ts` and `server/routes/dedupe.ts` modules. All routines invoke `gemini-1.5-flash` (or newer) passing strictly bounded JSON schemas:
+- **Entity Mentions**: Analyzes raw prose identifying semantic names formatting implicit "ghost" elements dynamically. (Triggered via `interactions.ts`)
+- **Catch Me Up**: Reads chronological DB intersections wrapping structured executive briefs.
 - **Link Unfurling**: Not technically AI, but bound dynamically behind `server.ts` utilizing `cheerio` explicitly bypassing computationally heavy Chrome Puppeteer tasks ensuring fast rich-media OG data generation securely mapped via `Tiptap` node extensions natively.
 
 ## 4. Bootstrapping Notes

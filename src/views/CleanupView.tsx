@@ -20,7 +20,7 @@ import { cn } from '../lib/utils';
 // CleanupView — The Singularity De-Duplication Review Queue
 // =============================================================================
 
-export const CleanupView = () => {
+export const CleanupView = ({ embedded = false }: { embedded?: boolean }) => {
   const [scanStarted, setScanStarted] = useState(false);
   const { data: suggestions, isLoading, error, refetch } = useDedupeSuggestions(scanStarted);
   const mergeContacts = useMergeContacts();
@@ -115,8 +115,9 @@ export const CleanupView = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-surface">
+    <div className={cn("flex flex-col overflow-hidden bg-surface", embedded ? "h-auto" : "h-full")}>
       {/* Header — no border, background shift for separation */}
+      {!embedded && (
       <header className="p-6 bg-surface-container-low shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -165,6 +166,33 @@ export const CleanupView = () => {
           </div>
         </div>
       </header>
+      )}
+
+      {embedded && (
+         <div className="flex justify-end p-4 shrink-0 bg-surface">
+           {!scanStarted ? (
+              <button
+                onClick={startScan}
+                className="btn-primary flex items-center gap-2"
+              >
+                <ScanSearch className="w-5 h-5" />
+                Run Scan
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  refetch();
+                  setCurrentIndex(0);
+                  setDismissed(new Set());
+                  setMergedIds(new Set());
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
+              >
+                <Merge className="w-4 h-4" /> Reset Scan
+              </button>
+            )}
+         </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-6">

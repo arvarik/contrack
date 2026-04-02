@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
-  Search, Plus, Briefcase, Building, Star, Clock, Users, Upload, Wand,
-  ChevronDown, X,
+  Search, Plus, Briefcase, Building, Star, Users, Upload, Wand,
+  ChevronDown, X, UserPlus, ListPlus,
   // Icon picker icons
   Heart, Crown, Flame, Rocket, Target, Gem, Award, Globe, Zap, Shield,
   Coffee, Music, Camera, BookOpen, TrendingUp, Anchor, Flag, Sparkles, Sun,
@@ -53,6 +53,7 @@ export const ContactList = () => {
   const [parsedData, setParsedData] = useState<any>(null);
   const [isCreateListOpen, setIsCreateListOpen] = useState(false);
   const [showMoreLists, setShowMoreLists] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   const navigate = useNavigate();
   
@@ -125,19 +126,12 @@ export const ContactList = () => {
     }
   };
 
-  const isOverdue = (lastContactedAt: string | null, cadenceDays: number) => {
-    if (!lastContactedAt) return true;
-    const diffDays = (Date.now() - new Date(lastContactedAt).getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays >= cadenceDays;
-  };
-
   const filteredContacts = useMemo(() => {
     return contacts.filter(contact => {
       const matchesSearch = contact.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
              (contact.company && contact.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
              (contact.role && contact.role.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      if (filterMode === 'overdue') return matchesSearch && isOverdue(contact.lastContactedAt, contact.cadenceDays);
       if (filterMode !== 'all') {
         // filterMode is a list ID
         return matchesSearch && contact.lists?.some(l => l.id === filterMode);
@@ -145,14 +139,12 @@ export const ContactList = () => {
       return matchesSearch;
     });
   }, [contacts, searchQuery, filterMode]);
-
-  const overdueCount = useMemo(() => contacts.filter(c => isOverdue(c.lastContactedAt, c.cadenceDays)).length, [contacts]);
-
-  // Smart overflow: show at most 3 list pills inline, rest in dropdown
-  const MAX_INLINE_LISTS = 3;
+  // Smart overflow: show at most 10 list pills inline, rest in dropdown
+  const MAX_INLINE_LISTS = 10;
   const inlineLists = lists.slice(0, MAX_INLINE_LISTS);
   const overflowLists = lists.slice(MAX_INLINE_LISTS);
   const moreRef = useRef<HTMLDivElement>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
   // Close more dropdown on outside click
   useEffect(() => {
@@ -165,6 +157,18 @@ export const ContactList = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showMoreLists]);
+
+  // Close add menu dropdown on outside click
+  useEffect(() => {
+    if (!showAddMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAddMenu]);
 
   // Handle Keyboard Navigation
   React.useEffect(() => {
@@ -257,13 +261,46 @@ export const ContactList = () => {
             >
               <Upload className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors"
-              title="Add Contact"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
+            <div className="relative" ref={addMenuRef}>
+              <button 
+                onClick={() => setShowAddMenu(!showAddMenu)}
+                className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors"
+                title="Add New..."
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+              <AnimatePresence>
+                {showAddMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                    className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[180px]"
+                  >
+                    <button
+                      onClick={() => {
+                        setIsModalOpen(true);
+                        setShowAddMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                    >
+                      <UserPlus className="w-4 h-4 text-primary shrink-0" />
+                      Add Contact
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsCreateListOpen(true);
+                        setShowAddMenu(false);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                    >
+                      <ListPlus className="w-4 h-4 text-primary shrink-0" />
+                      Create List
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
         
@@ -293,13 +330,6 @@ export const ContactList = () => {
             count={contacts.length}
             active={filterMode === 'all'}
             onClick={() => setFilterMode('all')}
-          />
-          <FilterButton
-            label="Overdue"
-            icon={<Clock className="w-3.5 h-3.5" />}
-            count={overdueCount}
-            active={filterMode === 'overdue'}
-            onClick={() => setFilterMode('overdue')}
           />
 
           {/* Inline list pills (draggable) */}
@@ -346,7 +376,7 @@ export const ContactList = () => {
                     initial={{ opacity: 0, y: 4, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                    className="absolute top-full left-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[180px]"
+                    className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[180px]"
                   >
                     {overflowLists.map(list => (
                       <button
@@ -373,14 +403,6 @@ export const ContactList = () => {
             </div>
           )}
 
-          {/* Create list button */}
-          <button
-            onClick={() => setIsCreateListOpen(true)}
-            className="p-1.5 rounded-full text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-            title="Create a new list"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 
@@ -397,14 +419,12 @@ export const ContactList = () => {
 
         {filteredContacts.map(contact => {
           const active = id === contact.id;
-          const overdue = isOverdue(contact.lastContactedAt, contact.cadenceDays);
 
           return (
             <ContactListItem 
               key={contact.id} 
               contact={contact} 
               active={active} 
-              overdue={overdue} 
             />
           );
         })}
@@ -643,7 +663,7 @@ const FilterButton = ({ label, icon, count, active, onClick }: {
 // ContactListItem — Single row in the contact list
 // ---------------------------------------------------------------------------
 
-const ContactListItem = ({ contact, active, overdue }: { contact: any, active: boolean, overdue: boolean | "" | 0 | null | undefined }) => {
+const ContactListItem = ({ contact, active }: { contact: any, active: boolean }) => {
   // Resolve primary email for logo hook — use first email from child array
   const primaryEmail = contact.emails?.[0]?.email || null;
   const logoUrl = useCompanyLogo(primaryEmail);

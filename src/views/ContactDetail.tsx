@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { 
-  Mail, Phone, FileText, Handshake,
-  MapPin, Cake, Coffee, Briefcase, ArrowLeft, Sparkles, UploadCloud, File, Trash2, Palette,
-  Globe, MessageSquare, Tag, Linkedin, Facebook, Github, Twitter, Instagram, ExternalLink,
-  X, Plus, Star, Heart, Crown, Flame, Rocket, Target, Gem, Award, Users, Zap, Shield,
-  Music, Camera, BookOpen, TrendingUp, Anchor, Flag, Sun, ChevronDown, ListPlus,
+  Mail, Phone, FileText, Handshake, MapPin, Cake, Briefcase, ArrowLeft, 
+  Sparkles, UploadCloud, Trash2, Globe, MessageSquare, ExternalLink, Linkedin, Facebook, Tag, X, Coffee, File
 } from "lucide-react";
-import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost, useLists, useAddToList, useRemoveFromList } from "../api";
+import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost } from "../api";
 import { formatDistanceToNow } from "date-fns";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
@@ -18,331 +15,17 @@ import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import {
   LABEL, LABEL_PRIMARY, SECTION_HEADING, SECTION_HEADING_SPACED,
-  CARD, CARD_TINTED, EDITABLE_INPUT, MICRO_BADGE, STATUS_BADGE_SUCCESS,
-  TAG_PILL, TIMELINE_CARD, timelineMarker, EMPTY_STATE, DANGER_BTN,
+  CARD, CARD_TINTED, STATUS_BADGE_SUCCESS, TAG_PILL, EMPTY_STATE,
 } from "../lib/styles";
 
-// ---------------------------------------------------------------------------
-// Vibe Themes
-// ---------------------------------------------------------------------------
-const VIBE_COLORS = [
-  { id: 'brand', primary: '#009EDB', dim: '#007BB0', container: '#D6F1FF' },
-  { id: 'emerald', primary: '#10B981', dim: '#059669', container: '#D1FAE5' },
-  { id: 'amber', primary: '#F59E0B', dim: '#D97706', container: '#FEF3C7' },
-  { id: 'rose', primary: '#F43F5E', dim: '#E11D48', container: '#FFE4E6' },
-  { id: 'indigo', primary: '#6366F1', dim: '#4F46E5', container: '#E0E7FF' },
-  { id: 'pink', primary: '#EC4899', dim: '#BE185D', container: '#FCE7F3' },
-  { id: 'violet', primary: '#8B5CF6', dim: '#6D28D9', container: '#EDE9FE' },
-  { id: 'teal', primary: '#14B8A6', dim: '#0F766E', container: '#CCFBF1' }
-];
-
-// ---------------------------------------------------------------------------
-// Platform Icon Resolver
-// ---------------------------------------------------------------------------
-const PlatformIcon = ({ platform, className }: { platform: string; className?: string }) => {
-  switch (platform.toLowerCase()) {
-    case 'linkedin': return <Linkedin className={className} />;
-    case 'facebook': return <Facebook className={className} />;
-    case 'github': return <Github className={className} />;
-    case 'twitter': return <Twitter className={className} />;
-    case 'instagram': return <Instagram className={className} />;
-    default: return <Globe className={className} />;
-  }
-};
-
-// ---------------------------------------------------------------------------
-// EditableField — Inline edit component for keyboard-first editing
-// ---------------------------------------------------------------------------
-
-const EditableField = ({ 
-  value, 
-  onSave, 
-  placeholder, 
-  className = "",
-}: { 
-  value: string | null; 
-  onSave: (val: string) => void; 
-  placeholder: string;
-  className?: string;
-}) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentVal, setCurrentVal] = useState(value || "");
-
-  useEffect(() => {
-    setCurrentVal(value || "");
-  }, [value]);
-
-  const handleBlur = () => {
-    setIsEditing(false);
-    if (currentVal.trim() !== (value || "")) {
-      onSave(currentVal.trim());
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.currentTarget.blur();
-    }
-    if (e.key === 'Escape') {
-      setCurrentVal(value || "");
-      setIsEditing(false);
-    }
-  };
-
-  if (isEditing) {
-    return (
-      <input
-        autoFocus
-        value={currentVal}
-        onChange={e => setCurrentVal(e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        className={cn(EDITABLE_INPUT, className)}
-        placeholder={placeholder}
-      />
-    );
-  }
-
-  return (
-    <span 
-      onClick={() => setIsEditing(true)} 
-      className={`cursor-text hover:bg-surface-container-high py-0.5 px-2 -ml-2 rounded transition-colors ${!value ? 'text-on-surface-variant opacity-50 italic' : ''} ${className}`}
-    >
-      {value || placeholder}
-    </span>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// BirthdayField — Native date picker with formatted display
-// ---------------------------------------------------------------------------
-
-const BirthdayField = ({
-  value,
-  onSave,
-}: {
-  value: string | null;
-  onSave: (val: string) => void;
-}) => {
-  const [isEditing, setIsEditing] = useState(false);
-
-  // Normalize stored value to YYYY-MM-DD for the input
-  const toInputValue = (v: string | null): string => {
-    if (!v) return '';
-    // If already YYYY-MM-DD, return as-is
-    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    // Try parsing other formats
-    try {
-      const d = new Date(v);
-      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    } catch {}
-    return '';
-  };
-
-  const formatDisplay = (v: string | null): string | null => {
-    if (!v) return null;
-    try {
-      const inputVal = toInputValue(v);
-      if (!inputVal) return v;
-      // Parse as local date (avoid UTC shift)
-      const [year, month, day] = inputVal.split('-').map(Number);
-      const d = new Date(year, month - 1, day);
-      return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    } catch { return v; }
-  };
-
-  // Upcoming birthday badge (within 30 days)
-  const upcomingDays = (() => {
-    const inputVal = toInputValue(value);
-    if (!inputVal) return null;
-    const [, month, day] = inputVal.split('-').map(Number);
-    const today = new Date();
-    const thisYear = today.getFullYear();
-    let bday = new Date(thisYear, month - 1, day);
-    if (bday < today) bday = new Date(thisYear + 1, month - 1, day);
-    const diff = Math.round((bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return diff <= 30 ? diff : null;
-  })();
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value; // YYYY-MM-DD
-    if (val) {
-      onSave(val);
-    }
-    setIsEditing(false);
-  };
-
-  if (isEditing) {
-    return (
-      <input
-        type="date"
-        autoFocus
-        defaultValue={toInputValue(value)}
-        onChange={handleChange}
-        onBlur={() => setIsEditing(false)}
-        className="text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none w-full"
-      />
-    );
-  }
-
-  const display = formatDisplay(value);
-
-  return (
-    <div
-      onClick={() => setIsEditing(true)}
-      className="flex items-center gap-2 cursor-text group/bday"
-    >
-      <span
-        className={`text-sm font-medium py-0.5 px-2 -ml-2 rounded transition-colors hover:bg-surface-container-high ${
-          display ? 'text-on-surface' : 'text-on-surface-variant opacity-50 italic'
-        }`}
-      >
-        {display || 'Add Birthday...'}
-      </span>
-      {upcomingDays !== null && (
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 shrink-0">
-          {upcomingDays === 0 ? '🎂 Today!' : `🎂 in ${upcomingDays}d`}
-        </span>
-      )}
-    </div>
-  );
-};
-
-
-// ---------------------------------------------------------------------------
-// MultiValueField — Chip-based editor for arrays of {value, label} items
-// Used for emails, phones, and addresses.
-// ---------------------------------------------------------------------------
-
-interface MultiValueItem {
-  id?: string;
-  value: string;
-  label: string;
-}
-
-const EMAIL_LABELS  = ['work', 'personal', 'other'] as const;
-const PHONE_LABELS  = ['mobile', 'work', 'home', 'other'] as const;
-const ADDR_LABELS   = ['home', 'work', 'other'] as const;
-
-/**
- * Shows an undo toast for 7 seconds with a shrinking timer bar.
- * If user clicks Undo, the callback is called to restore the data.
- */
-const showUndoToast = (label: string, onUndo: () => void) => {
-  toast(label, {
-    duration: 7000,
-    action: {
-      label: 'Undo',
-      onClick: onUndo,
-    },
-  });
-};
-
-const MultiValueField = ({
-  items,
-  onSave,
-  labelOptions,
-  emptyPlaceholder,
-  addMoreLabel = 'Add another',
-  inputPlaceholder,
-}: {
-  items: MultiValueItem[];
-  onSave: (items: { value: string; label: string }[]) => void;
-  labelOptions: readonly string[];
-  emptyPlaceholder: string;
-  addMoreLabel?: string;
-  inputPlaceholder: string;
-}) => {
-  const [inputValue, setInputValue] = useState('');
-  const [inputLabel, setInputLabel] = useState(labelOptions[0]);
-  const [isAdding, setIsAdding] = useState(false);
-
-  const toSavable = (arr: MultiValueItem[]) =>
-    arr.map(i => ({ value: i.value, label: i.label }));
-
-  const handleAdd = () => {
-    const trimmed = inputValue.trim();
-    if (!trimmed) { setIsAdding(false); return; }
-    onSave([...toSavable(items), { value: trimmed, label: inputLabel }]);
-    setInputValue('');
-    setInputLabel(labelOptions[0]);
-    setIsAdding(false);
-  };
-
-  const handleRemove = (idx: number) => {
-    const removed = items[idx];
-    const before = toSavable(items);
-    onSave(toSavable(items.filter((_, i) => i !== idx)));
-    showUndoToast(`Removed "${removed.value}"`, () => onSave(before));
-  };
-
-  const handleChangeLabel = (idx: number, newLabel: string) =>
-    onSave(items.map((item, i) => ({ value: item.value, label: i === idx ? newLabel : item.label })));
-
-  return (
-    <div className="flex flex-col gap-2">
-      {items.map((item, idx) => (
-        <div key={item.id ?? idx} className="flex flex-col gap-0.5 group/item">
-          <div className="flex items-center gap-1.5">
-            <select
-              value={item.label}
-              onChange={e => handleChangeLabel(idx, e.target.value)}
-              className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer"
-            >
-              {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            <button
-              onClick={() => handleRemove(idx)}
-              className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-rose-500 p-0.5 rounded transition-opacity shrink-0"
-              title="Remove"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-          <span className="text-sm font-medium text-on-surface break-all">
-            {item.value}
-          </span>
-        </div>
-      ))}
-
-      {isAdding ? (
-        <div className="flex flex-col gap-1 mt-0.5">
-          <select
-            value={inputLabel}
-            onChange={e => setInputLabel(e.target.value)}
-            className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none shrink-0 w-fit"
-          >
-            {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-          <input
-            autoFocus
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { e.preventDefault(); handleAdd(); }
-              if (e.key === 'Escape') { setIsAdding(false); setInputValue(''); }
-            }}
-            onBlur={handleAdd}
-            placeholder={inputPlaceholder}
-            className="w-full text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
-          />
-        </div>
-      ) : (
-        <button
-          onClick={() => setIsAdding(true)}
-          className="flex items-center gap-1 text-sm text-on-surface-variant opacity-50 italic text-left hover:opacity-80 transition-opacity py-0.5 group/add"
-        >
-          {items.length === 0 ? (
-            <span>{emptyPlaceholder}</span>
-          ) : (
-            <span>{addMoreLabel}</span>
-          )}
-        </button>
-      )}
-    </div>
-  );
-};
+import { PlatformIcon } from '../components/ContactDetail/PlatformIcon';
+import { EditableField } from '../components/ContactDetail/EditableField';
+import { IndustryField } from '../components/ContactDetail/IndustryField';
+import { BirthdayField } from '../components/ContactDetail/BirthdayField';
+import { MultiValueField, EMAIL_LABELS, PHONE_LABELS, ADDR_LABELS } from '../components/ContactDetail/MultiValueField';
+import { ContactActionsMenu } from '../components/ContactDetail/ContactActionsMenu';
+import { VibePickerPopover, VIBE_COLORS } from '../components/ContactDetail/VibePickerPopover';
+import { ContactListsSection } from '../components/ContactDetail/ContactListsSection';
 
 // ---------------------------------------------------------------------------
 // ContactDetail — Right-pane master view for a single contact
@@ -351,6 +34,8 @@ const MultiValueField = ({
 export const ContactDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isMapActive = location.pathname.startsWith('/map');
   
   const { data: contact, isLoading: contactLoading } = useContact(id);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
@@ -397,6 +82,17 @@ export const ContactDetail = () => {
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [generatingInsight, setGeneratingInsight] = useState(false);
   const [showVibePicker, setShowVibePicker] = useState(false);
+
+  const isBriefingValid = React.useMemo(() => {
+    if (!contact?.aiBriefing || !contact?.aiBriefingAt) return false;
+    const diff = new Date().getTime() - new Date(contact.aiBriefingAt).getTime();
+    return diff < 3 * 24 * 60 * 60 * 1000;
+  }, [contact?.aiBriefing, contact?.aiBriefingAt]);
+
+  const clearBriefing = React.useCallback(() => {
+    if (!contact) return;
+    updateContact.mutate({ id: contact.id, data: { aiBriefing: null, aiBriefingAt: null } as any });
+  }, [contact, updateContact]);
 
   const handleGenerateInsight = async () => {
     if (!contact || timeline.length === 0) return;
@@ -484,7 +180,12 @@ export const ContactDetail = () => {
         </Link>
       </div>
 
-      <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-12 pb-32">
+      <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-12 pb-32 relative">
+        {isMapActive && (
+           <button onClick={() => navigate('/map')} className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-50 shadow-sm border border-surface-container-highest transition-colors" title="Close Details">
+             <X className="w-5 h-5 text-on-surface-variant" />
+           </button>
+        )}
         {/* Header Section (Inline Editable) */}
         <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
           <div className="relative shrink-0">
@@ -510,6 +211,8 @@ export const ContactDetail = () => {
                 currentVibeId={contact.themeColor}
                 onSelect={handleVibeSelect}
               />
+              
+              <ContactActionsMenu contact={contact} onDelete={handleDeleteContact} />
             </div>
 
             {/* Headline */}
@@ -528,15 +231,23 @@ export const ContactDetail = () => {
               <ContactListsSection contactId={contact.id} contactLists={contact.lists || []} />
             </div>
 
-            {/* Social Links — Now with platform icons */}
-            {contact.socialLinks && contact.socialLinks.length > 0 && (
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                {contact.socialLinks.map((sl) => {
+            {/* Context & Links Row */}
+            {((contact.lat && contact.lng) || (contact.socialLinks && contact.socialLinks.length > 0)) && (
+              <div className="flex flex-wrap items-center gap-2 mt-4 mb-2">
+                {/* Local Context */}
+                {contact.lat && contact.lng && (
+                  <LocalContext lat={contact.lat} lng={contact.lng} />
+                )}
+                
+                {/* Social Link Pills */}
+                {contact.socialLinks?.map((sl) => {
                   let displayName = sl.handle || sl.platform;
                   try { displayName = sl.handle || new URL(sl.url).hostname.replace('www.', ''); } catch(e){}
                   return (
-                    <a key={sl.id} href={sl.url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold bg-surface-container px-2 py-1 rounded text-primary hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-1 shadow-sm">
-                      <PlatformIcon platform={sl.platform} className="w-3 h-3" /> {displayName}
+                    <a key={sl.id} href={sl.url} target="_blank" rel="noopener noreferrer" 
+                       className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-colors">
+                      <PlatformIcon platform={sl.platform} className="w-4 h-4" /> 
+                      <span>{displayName}</span>
                     </a>
                   )
                 })}
@@ -554,6 +265,21 @@ export const ContactDetail = () => {
               </div>
             )}
 
+            {/* Source Provenance Badges */}
+            {contact.sources && contact.sources.length > 0 && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {contact.sources.map((src) => (
+                  <span key={src.id} className="text-[10px] font-medium bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full flex items-center gap-1" title={src.connectedOn ? `Connected: ${src.connectedOn}` : undefined}>
+                    {src.platform === 'linkedin' && <Linkedin className="w-2.5 h-2.5" />}
+                    {src.platform === 'facebook' && <Facebook className="w-2.5 h-2.5" />}
+                    {!['linkedin', 'facebook'].includes(src.platform) && <ExternalLink className="w-2.5 h-2.5" />}
+                    via {src.platform}
+                    {src.connectedOn && <span className="opacity-60 ml-1">· {src.connectedOn}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Catch Me Up AI Briefing */}
             <div className="mt-4">
               <button 
@@ -565,17 +291,20 @@ export const ContactDetail = () => {
               </button>
               
               <AnimatePresence>
-                {contact.aiBriefing && !generateBriefing.isPending && (
+                {isBriefingValid && !generateBriefing.isPending && (
                   <motion.div 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden mt-3"
                   >
-                    <div className={cn(CARD_TINTED, "text-sm text-on-surface")}>
+                    <div className={cn(CARD_TINTED, "text-sm text-on-surface relative")}>
+                      <button onClick={clearBriefing} className="absolute top-4 right-4 p-1 rounded-full hover:bg-surface-container-highest transition-colors opacity-50 hover:opacity-100" title="Dismiss Briefing">
+                        <X className="w-4 h-4 text-on-surface" />
+                      </button>
                       <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-3 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Executive Briefing</h4>
-                      <ul className="space-y-2.5">
-                        {JSON.parse(contact.aiBriefing).map((point: string, idx: number) => (
+                      <ul className="space-y-2.5 pr-6">
+                        {JSON.parse(contact!.aiBriefing!).map((point: string, idx: number) => (
                           <li key={idx} className="flex gap-2">
                             <span className="text-on-surface-variant font-bold max-w-fit flex-shrink-0 mt-0.5">•</span> 
                             <span className="leading-relaxed">{point}</span>
@@ -607,28 +336,6 @@ export const ContactDetail = () => {
                 )}
               </AnimatePresence>
             </div>
-
-            {/* Source Provenance Badges */}
-            {contact.sources && contact.sources.length > 0 && (
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {contact.sources.map((src) => (
-                  <span key={src.id} className="text-[10px] font-medium bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full flex items-center gap-1" title={src.connectedOn ? `Connected: ${src.connectedOn}` : undefined}>
-                    {src.platform === 'linkedin' && <Linkedin className="w-2.5 h-2.5" />}
-                    {src.platform === 'facebook' && <Facebook className="w-2.5 h-2.5" />}
-                    {!['linkedin', 'facebook'].includes(src.platform) && <ExternalLink className="w-2.5 h-2.5" />}
-                    via {src.platform}
-                    {src.connectedOn && <span className="opacity-60 ml-1">· {src.connectedOn}</span>}
-                  </span>
-                ))}
-              </div>
-            )}
-            
-            {/* Local Context — Timezone & Weather */}
-            {contact.lat && contact.lng && (
-              <div className="mt-3">
-                <LocalContext lat={contact.lat} lng={contact.lng} />
-              </div>
-            )}
           </div>
         </section>
 
@@ -643,24 +350,24 @@ export const ContactDetail = () => {
                 <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <span className={LABEL}>Location</span>
-                  <MultiValueField
-                    items={(contact.addresses ?? []).map((a: any) => ({ id: a.id, value: a.address, label: a.label || 'home' }))}
-                    onSave={updated =>
-                      updateContact.mutate({ id: id!, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label, isPrimary: i === 0 })) } as any })
-                    }
-                    labelOptions={ADDR_LABELS}
-                    emptyPlaceholder="Add Location..."
-                    inputPlaceholder="San Francisco, CA"
-                  />
                   {/* Fallback: show legacy single-value location if no addresses exist */}
                   {(!contact.addresses || contact.addresses.length === 0) && contact.location && (
-                    <div className="flex flex-col">
+                    <div className="flex flex-col mb-1 group/legacy-loc">
                       <span className="text-sm font-medium text-on-surface">{contact.location}</span>
                       {contact.lat && contact.lng && (
                         <span className="text-[10px] text-on-surface-variant opacity-40 mt-0.5 italic">Pinned on map</span>
                       )}
                     </div>
                   )}
+                  <MultiValueField
+                    items={(contact.addresses ?? []).map((a: any) => ({ id: a.id, value: a.address, label: a.label || 'home' }))}
+                    onSave={updated =>
+                      updateContact.mutate({ id: id!, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label, isPrimary: i === 0 })) } as any })
+                    }
+                    labelOptions={ADDR_LABELS}
+                    emptyPlaceholder={(!contact.addresses || contact.addresses.length === 0) && contact.location ? "Add another location" : "Add Location..."}
+                    inputPlaceholder="San Francisco, CA"
+                  />
                 </div>
               </div>
 
@@ -705,15 +412,13 @@ export const ContactDetail = () => {
               </div>
 
               {/* Industry */}
-              {contact.industry && (
-                <div className="flex items-start gap-4 group">
-                  <Globe className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    <span className={LABEL}>Industry</span>
-                    <EditableField value={contact.industry} onSave={(val) => handleUpdate('industry', val)} placeholder="Add Industry..." className="text-sm font-medium" />
-                  </div>
+              <div className="flex items-start gap-4 group">
+                <Globe className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span className={LABEL}>Industry</span>
+                  <IndustryField value={contact.industry} onSave={(val) => handleUpdate('industry', val)} />
                 </div>
-              )}
+              </div>
 
               <div className="flex items-start gap-4 group">
                 <Coffee className="w-5 h-5 text-primary mt-0.5 shrink-0" />
@@ -771,10 +476,6 @@ export const ContactDetail = () => {
               </AnimatePresence>
             </div>
 
-            {/* Danger Zone */}
-            <button onClick={handleDeleteContact} className={DANGER_BTN}>
-              <Trash2 className="w-3.5 h-3.5" /> Delete Contact
-            </button>
           </div>
 
           {/* Right Column: Timeline & Composer & Backgrounds */}
@@ -1011,170 +712,6 @@ export const ContactDetail = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// Icon Registry — maps string keys to Lucide components for list icons
-// ---------------------------------------------------------------------------
-
-const LIST_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  star: Star, heart: Heart, crown: Crown, flame: Flame, rocket: Rocket,
-  target: Target, gem: Gem, award: Award, briefcase: Briefcase, users: Users,
-  globe: Globe, zap: Zap, shield: Shield, coffee: Coffee, music: Music,
-  camera: Camera, 'book-open': BookOpen, 'trending-up': TrendingUp,
-  anchor: Anchor, flag: Flag, sparkles: Sparkles, sun: Sun,
-};
-
-const DetailListIcon = ({ icon, className }: { icon: string; className?: string }) => {
-  const Icon = LIST_ICON_MAP[icon] || Star;
-  return <Icon className={className} />;
-};
-
-// ---------------------------------------------------------------------------
-// VibePickerPopover — Centered color grid with click-outside-to-close
-// ---------------------------------------------------------------------------
-
-const VibePickerPopover = ({
-  showVibePicker,
-  setShowVibePicker,
-  currentVibeId,
-  onSelect,
-}: {
-  showVibePicker: boolean;
-  setShowVibePicker: (v: boolean) => void;
-  currentVibeId: string;
-  onSelect: (id: string) => void;
-}) => {
-  const ref = React.useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showVibePicker) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setShowVibePicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showVibePicker, setShowVibePicker]);
-
-  return (
-    <div className="relative shrink-0" ref={ref}>
-      <button 
-        onClick={() => setShowVibePicker(!showVibePicker)} 
-        className={`p-2 rounded-xl transition-all ${showVibePicker ? 'bg-primary/20 text-primary' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'}`}
-        title="Change Theme Vibe"
-      >
-        <Palette className="w-5 h-5" />
-      </button>
-      
-      <AnimatePresence>
-        {showVibePicker && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-            className="absolute top-12 left-1/2 -translate-x-1/2 md:left-auto md:right-0 md:translate-x-0 glass-panel rounded-xl shadow-xl p-3 z-50 grid grid-cols-5 gap-2 w-[180px] place-items-center"
-          >
-            {VIBE_COLORS.map(vibe => (
-              <button 
-                key={vibe.id} 
-                onClick={() => onSelect(vibe.id)}
-                style={{ backgroundColor: vibe.primary }}
-                className={`w-7 h-7 rounded-full transition-transform hover:scale-110 shadow-sm ${currentVibeId === vibe.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest scale-110' : 'hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest'}`}
-                title={`Vibe: ${vibe.id}`}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// ContactListsSection — Shows list memberships + add-to-list dropdown
-// ---------------------------------------------------------------------------
-
-const ContactListsSection = ({ contactId, contactLists }: { contactId: string; contactLists: { id: string; name: string; icon: string }[] }) => {
-  const { data: allLists = [] } = useLists();
-  const addToList = useAddToList();
-  const removeFromList = useRemoveFromList();
-  const [showAdd, setShowAdd] = useState(false);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showAdd) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowAdd(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAdd]);
-
-  const memberOfIds = new Set(contactLists.map(l => l.id));
-  const availableLists = allLists.filter(l => !memberOfIds.has(l.id));
-
-  return (
-    <div className="flex items-center gap-2 mt-3 flex-wrap">
-      {contactLists.map(list => (
-        <span
-          key={list.id}
-          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full group/listpill transition-colors hover:bg-primary/20"
-        >
-          <DetailListIcon icon={list.icon} className="w-3 h-3" />
-          {list.name}
-          <button
-            onClick={() => removeFromList.mutate({ listId: list.id, contactId })}
-            className="ml-0.5 opacity-0 group-hover/listpill:opacity-100 hover:text-red-500 transition-opacity"
-            title="Remove from list"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </span>
-      ))}
-
-      {/* Add to list dropdown */}
-      {availableLists.length > 0 && (
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-full hover:bg-primary/10 transition-colors"
-            title="Add to a list"
-          >
-            <ListPlus className="w-3.5 h-3.5" />
-          </button>
-          <AnimatePresence>
-            {showAdd && (
-              <motion.div
-                initial={{ opacity: 0, y: 4, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                className="absolute top-full left-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[160px]"
-              >
-                {availableLists.map(list => (
-                  <button
-                    key={list.id}
-                    onClick={() => {
-                      addToList.mutate({ listId: list.id, contactId });
-                      setShowAdd(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
-                  >
-                    <DetailListIcon icon={list.icon} className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{list.name}</span>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
     </div>
   );
 };

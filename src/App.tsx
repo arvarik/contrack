@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
-import { LayoutDashboard, Map, Zap, Search, Sparkles } from "lucide-react";
+import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles } from "lucide-react";
 import { LayoutGroup } from "motion/react";
 import { Toaster } from "sonner";
 
@@ -7,7 +7,7 @@ import { ContactList } from "./views/ContactList";
 import { ContactDetail } from "./views/ContactDetail";
 import { CommandPalette } from "./components/CommandPalette";
 import { MapView } from "./views/MapView";
-import { CleanupView } from "./views/CleanupView";
+import { SettingsView } from "./views/SettingsView";
 import { SearchView } from "./views/SearchView";
 import { navLink, SECTION_BG } from "./lib/styles";
 import { cn } from "./lib/utils";
@@ -39,8 +39,8 @@ const Sidebar = () => {
       <Link to="/search" className={navLink(isSearch)} title="Ask My CRM — AI Search">
         <Sparkles className="w-6 h-6" />
       </Link>
-      <Link to="/settings/cleanup" className={navLink(isCleanup, "mt-auto")} title="The Singularity — Dedupe Engine">
-        <Zap className="w-6 h-6" />
+      <Link to="/settings" className={navLink(isCleanup, "mt-auto")} title="Settings">
+        <SettingsIcon className="w-6 h-6" />
       </Link>
     </aside>
   );
@@ -72,7 +72,7 @@ const ResponsiveLayout = () => {
         </div>
         <main className="flex-1 h-full overflow-hidden">
           <Routes>
-            <Route path="/settings/cleanup" element={<CleanupView />} />
+            <Route path="/settings/*" element={<SettingsView />} />
             <Route path="/search" element={<SearchView />} />
           </Routes>
         </main>
@@ -102,7 +102,7 @@ const ResponsiveLayout = () => {
       {/* Right Pane: Detail View */}
       <main className={`
         ${isContactSelected ? 'flex' : (isMapActive ? 'hidden' : 'hidden lg:flex')}
-        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[680px] lg:w-[740px] z-50 shadow-2xl bg-surface' : 'flex-1 bg-surface z-10'}
+        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] z-50 shadow-2xl bg-surface' : 'flex-1 bg-surface z-10'}
         h-full overflow-hidden relative flex-col
       `}>
         <Routes>
@@ -123,7 +123,7 @@ const ResponsiveLayout = () => {
             <Map className="w-6 h-6" />
           </Link>
           <Link to="/search" className="text-on-surface-variant p-3"><Sparkles className="w-6 h-6" /></Link>
-          <Link to="/settings/cleanup" className="text-on-surface-variant p-3"><Zap className="w-6 h-6" /></Link>
+          <Link to="/settings" className="text-on-surface-variant p-3"><SettingsIcon className="w-6 h-6" /></Link>
         </nav>
       )}
     </div>

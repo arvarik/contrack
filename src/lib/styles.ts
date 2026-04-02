@@ -178,3 +178,11 @@ export const EMPTY_STATE = "text-center p-8 bg-surface-container-low rounded-2xl
 
 /** Empty state hero — large centered content with icon + heading */
 export const EMPTY_HERO = "flex flex-col items-center justify-center h-full text-center max-w-md mx-auto";
+
+// ─── Dropdowns ───────────────────────────────────────────────────────────────
+
+/** Dropdown container — floats above other elements, scrollable, dark styled */
+export const DROPDOWN_MENU = "absolute z-50 mt-1 max-h-56 w-max min-w-full overflow-y-auto rounded-lg bg-[#242424] py-1.5 shadow-xl ring-1 ring-white/10 outline-none nice-scrollbar";
+
+/** Dropdown standard item */
+export const DROPDOWN_ITEM = "cursor-pointer px-4 py-2 text-sm font-medium text-gray-200 hover:bg-primary/20 hover:text-primary transition-colors flex items-center";
