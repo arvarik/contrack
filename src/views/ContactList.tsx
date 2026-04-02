@@ -7,7 +7,7 @@ import {
   Heart, Crown, Flame, Rocket, Target, Gem, Award, Globe, Zap, Shield,
   Coffee, Music, Camera, BookOpen, TrendingUp, Anchor, Flag, Sparkles, Sun,
 } from "lucide-react";
-import { useContacts, useCreateContact, useParseContactText, useLists, useCreateList } from "../api";
+import { useContacts, useCreateContact, useParseContactText, useLists, useCreateList, useReorderLists } from "../api";
 import { Modal } from "../components/Modal";
 import { ImportModal } from "../components/ImportModal";
 import { motion, AnimatePresence } from "motion/react";
@@ -59,6 +59,37 @@ export const ContactList = () => {
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
   const createList = useCreateList();
+  const reorderLists = useReorderLists();
+
+  // Drag-to-reorder state
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleDragStart = (idx: number) => {
+    setDragIdx(idx);
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) return;
+    setDragOverIdx(idx);
+  };
+
+  const handleDrop = (idx: number) => {
+    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setDragOverIdx(null); return; }
+    // Reorder the lists array
+    const newOrder = [...lists];
+    const [moved] = newOrder.splice(dragIdx, 1);
+    newOrder.splice(idx, 0, moved);
+    reorderLists.mutate(newOrder.map(l => l.id));
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
 
   const handleCreateContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -159,7 +190,7 @@ export const ContactList = () => {
         return;
       }
 
-      if (e.key === "c") {
+      if (e.key === "n") {
         e.preventDefault();
         setIsModalOpen(true);
         return;
@@ -271,19 +302,32 @@ export const ContactList = () => {
             onClick={() => setFilterMode('overdue')}
           />
 
-          {/* Inline list pills */}
-          {inlineLists.map(list => (
-            <FilterButton
+          {/* Inline list pills (draggable) */}
+          {inlineLists.map((list, idx) => (
+            <div
               key={list.id}
-              label={list.name}
-              icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
-              count={list.memberCount ?? 0}
-              active={filterMode === list.id}
-              onClick={() => setFilterMode(filterMode === list.id ? 'all' : list.id)}
-            />
+              draggable
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDrop={() => handleDrop(idx)}
+              onDragEnd={handleDragEnd}
+              className={cn(
+                "transition-all cursor-grab active:cursor-grabbing",
+                dragOverIdx === idx && dragIdx !== idx && "ring-2 ring-primary/40 rounded-xl",
+                dragIdx === idx && "opacity-40"
+              )}
+            >
+              <FilterButton
+                label={list.name}
+                icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
+                count={list.memberCount ?? 0}
+                active={filterMode === list.id}
+                onClick={() => setFilterMode(filterMode === list.id ? 'all' : list.id)}
+              />
+            </div>
           ))}
 
-          {/* Overflow dropdown */}
+          {/* Overflow dropdown (also draggable targets) */}
           {overflowLists.length > 0 && (
             <div className="relative" ref={moreRef}>
               <button

@@ -13,7 +13,7 @@ import {
 import { cn } from '../lib/utils';
 
 // =============================================================================
-// SearchView — Dedicated full-page "Ask My CRM" semantic search
+// SearchView — Dedicated full-page "Ask Contrack" semantic search
 // =============================================================================
 
 const EXAMPLE_QUERIES = [
@@ -213,10 +213,10 @@ export const SearchView = () => {
               <div className="p-2 bg-primary/10 rounded-xl">
                 <Sparkles className="w-6 h-6 text-primary" />
               </div>
-              Ask My CRM
+              Ask Contrack
             </h1>
             <p className="text-sm text-on-surface-variant mt-0.5">
-              Semantic AI search — powered by Gemini
+              Semantic AI search across your network
             </p>
           </div>
         </div>
@@ -293,7 +293,7 @@ export const SearchView = () => {
               >
                 <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-widest mb-4">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Asking Gemini...
+                  Searching...
                 </div>
                 <ShimmerCard delay={0} />
                 <ShimmerCard delay={0.08} />

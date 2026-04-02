@@ -176,6 +176,16 @@ sqlite.exec(`
     addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
   );
 
+  CREATE TABLE IF NOT EXISTS contact_addresses (
+    id TEXT PRIMARY KEY,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    address TEXT NOT NULL,
+    label TEXT DEFAULT 'home',
+    isPrimary INTEGER DEFAULT 0,
+    source TEXT DEFAULT 'manual',
+    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
+  );
+
   -- Interactions / timeline
   CREATE TABLE IF NOT EXISTS interactions (
     id TEXT PRIMARY KEY,
@@ -428,6 +438,7 @@ async function startServer() {
       experience: sqlite.prepare("SELECT id, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience WHERE contactId = ?").all(contact.id).map((e: any) => ({ ...e, isCurrent: !!e.isCurrent })),
       sources: sqlite.prepare("SELECT id, platform, externalId, connectedOn, importedAt FROM contact_sources WHERE contactId = ?").all(contact.id),
       tags: sqlite.prepare("SELECT id, tag FROM contact_tags WHERE contactId = ?").all(contact.id),
+      addresses: sqlite.prepare("SELECT id, address, label, isPrimary, source FROM contact_addresses WHERE contactId = ? ORDER BY isPrimary DESC").all(contact.id).map((a: any) => ({ ...a, isPrimary: !!a.isPrimary })),
       lists: sqlite.prepare(`
         SELECT l.id, l.name, l.icon FROM lists l
         JOIN list_members lm ON l.id = lm.listId
@@ -534,6 +545,19 @@ async function startServer() {
           typeof src === 'object' ? src.externalId || null : null,
           typeof src === 'object' ? src.connectedOn || null : null,
           typeof src === 'object' ? src.rawData || null : null,
+        );
+      }
+    }
+    if (Array.isArray(body.addresses)) {
+      for (let i = 0; i < body.addresses.length; i++) {
+        const a = body.addresses[i];
+        const address = (typeof a === 'string' ? a : a.address)?.trim();
+        if (!address) continue;
+        sqlite.prepare("INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, source) VALUES (?, ?, ?, ?, ?, ?)").run(
+          crypto.randomUUID(), contactId, address,
+          (typeof a === 'object' ? a.label : 'home') || 'home',
+          typeof a === 'object' ? (a.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0),
+          sourceName,
         );
       }
     }
@@ -1053,6 +1077,20 @@ async function startServer() {
             const val = (typeof tag === 'string' ? tag : tag.tag)?.trim();
             if (!val) continue;
             sqlite.prepare("INSERT INTO contact_tags (id, contactId, tag) VALUES (?, ?, ?)").run(crypto.randomUUID(), id, val);
+          }
+        }
+        if (body.addresses !== undefined && Array.isArray(body.addresses)) {
+          sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?").run(id);
+          for (let i = 0; i < body.addresses.length; i++) {
+            const a = body.addresses[i];
+            const address = (typeof a === 'string' ? a : a.address)?.trim();
+            if (!address) continue;
+            sqlite.prepare("INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, source) VALUES (?, ?, ?, ?, ?, ?)").run(
+              crypto.randomUUID(), id, address,
+              (typeof a === 'object' ? a.label : 'home') || 'home',
+              (typeof a === 'object' ? (a.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0)),
+              typeof a === 'object' ? (a.source || 'manual') : 'manual',
+            );
           }
         }
       });

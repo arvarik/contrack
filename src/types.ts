@@ -69,6 +69,13 @@ export interface ContactList {
   memberCount?: number;
 }
 
+export interface ContactAddress {
+  id: string;
+  address: string;
+  label: string;
+  isPrimary: boolean;
+}
+
 // =============================================================================
 // Primary Entity Types
 // =============================================================================
@@ -109,6 +116,7 @@ export interface Contact {
   sources: ContactSource[];
   tags: ContactTag[];
   lists: ContactList[];
+  addresses: ContactAddress[];
 }
 
 export interface Interaction {

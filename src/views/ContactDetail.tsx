@@ -10,7 +10,6 @@ import {
 import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost, useLists, useAddToList, useRemoveFromList } from "../api";
 import { formatDistanceToNow } from "date-fns";
 import { useDropzone } from "react-dropzone";
-import { generateContactInsights } from "../services/geminiService";
 import { motion, AnimatePresence } from "motion/react";
 import { LocalContext } from "../components/LocalContext";
 import { RichInteractionComposer } from "../components/RichInteractionComposer";
@@ -226,12 +225,26 @@ const EMAIL_LABELS  = ['work', 'personal', 'other'] as const;
 const PHONE_LABELS  = ['mobile', 'work', 'home', 'other'] as const;
 const ADDR_LABELS   = ['home', 'work', 'other'] as const;
 
+/**
+ * Shows an undo toast for 7 seconds with a shrinking timer bar.
+ * If user clicks Undo, the callback is called to restore the data.
+ */
+const showUndoToast = (label: string, onUndo: () => void) => {
+  toast(label, {
+    duration: 7000,
+    action: {
+      label: 'Undo',
+      onClick: onUndo,
+    },
+  });
+};
+
 const MultiValueField = ({
   items,
   onSave,
   labelOptions,
   emptyPlaceholder,
-  addMoreLabel = '+ Add another',
+  addMoreLabel = 'Add another',
   inputPlaceholder,
 }: {
   items: MultiValueItem[];
@@ -257,8 +270,12 @@ const MultiValueField = ({
     setIsAdding(false);
   };
 
-  const handleRemove = (idx: number) =>
+  const handleRemove = (idx: number) => {
+    const removed = items[idx];
+    const before = toSavable(items);
     onSave(toSavable(items.filter((_, i) => i !== idx)));
+    showUndoToast(`Removed "${removed.value}"`, () => onSave(before));
+  };
 
   const handleChangeLabel = (idx: number, newLabel: string) =>
     onSave(items.map((item, i) => ({ value: item.value, label: i === idx ? newLabel : item.label })));
@@ -266,29 +283,38 @@ const MultiValueField = ({
   return (
     <div className="flex flex-col gap-2">
       {items.map((item, idx) => (
-        <div key={item.id ?? idx} className="flex items-center gap-1.5 group/item">
-          <span className="text-sm font-medium text-on-surface break-all flex-1 min-w-0">
+        <div key={item.id ?? idx} className="flex flex-col gap-0.5 group/item">
+          <div className="flex items-center gap-1.5">
+            <select
+              value={item.label}
+              onChange={e => handleChangeLabel(idx, e.target.value)}
+              className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer"
+            >
+              {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <button
+              onClick={() => handleRemove(idx)}
+              className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-rose-500 p-0.5 rounded transition-opacity shrink-0"
+              title="Remove"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <span className="text-sm font-medium text-on-surface break-all">
             {item.value}
           </span>
-          <select
-            value={item.label}
-            onChange={e => handleChangeLabel(idx, e.target.value)}
-            className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer"
-          >
-            {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-          <button
-            onClick={() => handleRemove(idx)}
-            className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-rose-500 p-0.5 rounded transition-opacity shrink-0"
-            title="Remove"
-          >
-            <X className="w-3 h-3" />
-          </button>
         </div>
       ))}
 
       {isAdding ? (
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex flex-col gap-1 mt-0.5">
+          <select
+            value={inputLabel}
+            onChange={e => setInputLabel(e.target.value)}
+            className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none shrink-0 w-fit"
+          >
+            {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
           <input
             autoFocus
             value={inputValue}
@@ -299,15 +325,8 @@ const MultiValueField = ({
             }}
             onBlur={handleAdd}
             placeholder={inputPlaceholder}
-            className="flex-1 min-w-0 text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
+            className="w-full text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
           />
-          <select
-            value={inputLabel}
-            onChange={e => setInputLabel(e.target.value)}
-            className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none shrink-0"
-          >
-            {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
         </div>
       ) : (
         <button
@@ -317,7 +336,7 @@ const MultiValueField = ({
           {items.length === 0 ? (
             <span>{emptyPlaceholder}</span>
           ) : (
-            <><Plus className="w-3 h-3" /> <span>{addMoreLabel}</span></>
+            <span>{addMoreLabel}</span>
           )}
         </button>
       )}
@@ -383,8 +402,19 @@ export const ContactDetail = () => {
     if (!contact || timeline.length === 0) return;
     setGeneratingInsight(true);
     try {
-      const res = await generateContactInsights(contact, timeline);
-      setInsight(res);
+      const res = await fetch(`/api/contacts/${contact.id}/briefing`, { method: 'POST' });
+      const data = await res.json();
+      if (data.briefing) {
+        const points = JSON.parse(data.briefing);
+        setInsight({
+          contactId: contact.id,
+          nextRecommendedContact: points[0] || 'Follow up soon',
+          summarySentiment: points[1] || 'Healthy',
+          sentimentDescription: points.slice(2).join(' ') || 'No additional details.',
+        });
+      } else {
+        toast.error('No insight returned from AI');
+      }
     } catch (err: any) {
       console.error(err);
       toast.error("Failed to generate AI insight");
@@ -474,36 +504,12 @@ export const ContactDetail = () => {
                 {contact.pronouns && <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle">({contact.pronouns})</span>}
               </div>
               
-              <div className="relative shrink-0">
-                <button 
-                  onClick={() => setShowVibePicker(!showVibePicker)} 
-                  className={`p-2 rounded-xl transition-all ${showVibePicker ? 'bg-primary/20 text-primary' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'}`}
-                  title="Change Theme Vibe"
-                >
-                  <Palette className="w-5 h-5" />
-                </button>
-                
-                <AnimatePresence>
-                  {showVibePicker && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                      className="absolute top-12 left-0 md:left-auto md:right-0 glass-panel rounded-xl shadow-xl p-3 z-50 flex gap-2 w-[164px] flex-wrap"
-                    >
-                      {VIBE_COLORS.map(vibe => (
-                        <button 
-                          key={vibe.id} 
-                          onClick={() => handleVibeSelect(vibe.id)}
-                          style={{ backgroundColor: vibe.primary }}
-                          className={`w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm ${contact.themeColor === vibe.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest' : 'hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest'}`}
-                          title={`Vibe: ${vibe.id}`}
-                        />
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <VibePickerPopover
+                showVibePicker={showVibePicker}
+                setShowVibePicker={setShowVibePicker}
+                currentVibeId={contact.themeColor}
+                onSelect={handleVibeSelect}
+              />
             </div>
 
             {/* Headline */}
@@ -518,6 +524,8 @@ export const ContactDetail = () => {
               <EditableField value={contact.role} onSave={(val) => handleUpdate('role', val)} placeholder="Role / Title" />
               <span className="opacity-50">at</span>
               <EditableField value={contact.company} onSave={(val) => handleUpdate('company', val)} placeholder="Company" />
+              {/* Lists — inline to the right of role/company */}
+              <ContactListsSection contactId={contact.id} contactLists={contact.lists || []} />
             </div>
 
             {/* Social Links — Now with platform icons */}
@@ -545,9 +553,6 @@ export const ContactDetail = () => {
                 ))}
               </div>
             )}
-
-            {/* Lists */}
-            <ContactListsSection contactId={contact.id} contactLists={contact.lists || []} />
 
             {/* Catch Me Up AI Briefing */}
             <div className="mt-4">
@@ -636,16 +641,25 @@ export const ContactDetail = () => {
               
               <div className="flex items-start gap-4 group">
                 <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0 flex flex-col">
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <span className={LABEL}>Location</span>
-                  <EditableField
-                    value={contact.location}
-                    onSave={(val) => handleUpdate('location', val)}
-                    placeholder="Add Location..."
-                    className="text-sm font-medium break-words"
+                  <MultiValueField
+                    items={(contact.addresses ?? []).map((a: any) => ({ id: a.id, value: a.address, label: a.label || 'home' }))}
+                    onSave={updated =>
+                      updateContact.mutate({ id: id!, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label, isPrimary: i === 0 })) } as any })
+                    }
+                    labelOptions={ADDR_LABELS}
+                    emptyPlaceholder="Add Location..."
+                    inputPlaceholder="San Francisco, CA"
                   />
-                  {contact.lat && contact.lng && (
-                    <span className="text-[10px] text-on-surface-variant opacity-40 mt-0.5 italic">Pinned on map</span>
+                  {/* Fallback: show legacy single-value location if no addresses exist */}
+                  {(!contact.addresses || contact.addresses.length === 0) && contact.location && (
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-on-surface">{contact.location}</span>
+                      {contact.lat && contact.lng && (
+                        <span className="text-[10px] text-on-surface-variant opacity-40 mt-0.5 italic">Pinned on map</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -727,15 +741,13 @@ export const ContactDetail = () => {
                   <Sparkles className="w-5 h-5 text-primary" />
                   <h3 className={cn(SECTION_HEADING, "text-on-primary-container")}>AI Intel</h3>
                 </div>
-                {!insight && (
-                  <button 
-                    onClick={handleGenerateInsight}
-                    disabled={generatingInsight || timeline.length === 0}
-                    className={cn(LABEL_PRIMARY, "hover:underline disabled:opacity-50")}
-                  >
-                    {generatingInsight ? "Thinking..." : "Generate"}
-                  </button>
-                )}
+                <button 
+                  onClick={handleGenerateInsight}
+                  disabled={generatingInsight}
+                  className={cn(LABEL_PRIMARY, "hover:underline disabled:opacity-50")}
+                >
+                  {generatingInsight ? "Thinking..." : insight ? "Refresh" : "Generate"}
+                </button>
               </div>
               
               <AnimatePresence mode="wait">
@@ -1018,6 +1030,68 @@ const LIST_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>>
 const DetailListIcon = ({ icon, className }: { icon: string; className?: string }) => {
   const Icon = LIST_ICON_MAP[icon] || Star;
   return <Icon className={className} />;
+};
+
+// ---------------------------------------------------------------------------
+// VibePickerPopover — Centered color grid with click-outside-to-close
+// ---------------------------------------------------------------------------
+
+const VibePickerPopover = ({
+  showVibePicker,
+  setShowVibePicker,
+  currentVibeId,
+  onSelect,
+}: {
+  showVibePicker: boolean;
+  setShowVibePicker: (v: boolean) => void;
+  currentVibeId: string;
+  onSelect: (id: string) => void;
+}) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showVibePicker) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setShowVibePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showVibePicker, setShowVibePicker]);
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button 
+        onClick={() => setShowVibePicker(!showVibePicker)} 
+        className={`p-2 rounded-xl transition-all ${showVibePicker ? 'bg-primary/20 text-primary' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'}`}
+        title="Change Theme Vibe"
+      >
+        <Palette className="w-5 h-5" />
+      </button>
+      
+      <AnimatePresence>
+        {showVibePicker && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+            className="absolute top-12 left-1/2 -translate-x-1/2 md:left-auto md:right-0 md:translate-x-0 glass-panel rounded-xl shadow-xl p-3 z-50 grid grid-cols-5 gap-2 w-[180px] place-items-center"
+          >
+            {VIBE_COLORS.map(vibe => (
+              <button 
+                key={vibe.id} 
+                onClick={() => onSelect(vibe.id)}
+                style={{ backgroundColor: vibe.primary }}
+                className={`w-7 h-7 rounded-full transition-transform hover:scale-110 shadow-sm ${currentVibeId === vibe.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest scale-110' : 'hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest'}`}
+                title={`Vibe: ${vibe.id}`}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 };
 
 // ---------------------------------------------------------------------------
