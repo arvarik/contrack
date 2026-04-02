@@ -3,7 +3,10 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Extension } from '@tiptap/core';
-import { useAddInteraction, useUpdateContact } from '../api';
+import Mention from '@tiptap/extension-mention';
+import { LinkPreviewExtension } from './LinkPreviewExtension';
+import { useAddInteraction, useUpdateContact, useContacts } from '../api';
+import { getMentionSuggestion } from './MentionSuggestion';
 import { FileText, Phone, Handshake, Mail, CalendarClock } from 'lucide-react';
 import * as chrono from 'chrono-node';
 import { format } from 'date-fns';
@@ -13,6 +16,7 @@ import { cn } from '../lib/utils';
 
 export const RichInteractionComposer = ({ contactId }: { contactId: string }) => {
   const [type, setType] = useState<'note' | 'call' | 'meeting' | 'email'>('note');
+  const { data: allContacts = [] } = useContacts();
   const addInteraction = useAddInteraction();
   const updateContact = useUpdateContact();
   const [followUpText, setFollowUpText] = useState('');
@@ -67,6 +71,13 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
         showOnlyWhenEditable: false,
       }),
       SubmitExtension,
+      Mention.configure({
+        HTMLAttributes: {
+          class: 'bg-primary/10 text-primary font-bold px-1 py-0.5 rounded-md cursor-pointer',
+        },
+        suggestion: getMentionSuggestion(allContacts),
+      }),
+      LinkPreviewExtension,
     ],
     content: '',
     editorProps: {

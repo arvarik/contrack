@@ -3,9 +3,11 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { 
   Mail, Phone, FileText, Handshake, Verified, 
   MapPin, Cake, Coffee, Briefcase, ArrowLeft, Sparkles, UploadCloud, File, Trash2, Palette,
-  Globe, MessageSquare, Tag, Linkedin, Facebook, Github, Twitter, Instagram, ExternalLink
+  Globe, MessageSquare, Tag, Linkedin, Facebook, Github, Twitter, Instagram, ExternalLink,
+  X, Plus,
 } from "lucide-react";
-import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction } from "../api";
+import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost } from "../api";
+import { formatDistanceToNow } from "date-fns";
 import { useDropzone } from "react-dropzone";
 import { generateContactInsights } from "../services/geminiService";
 import { motion, AnimatePresence } from "motion/react";
@@ -112,6 +114,215 @@ const EditableField = ({
   );
 };
 
+// ---------------------------------------------------------------------------
+// BirthdayField — Native date picker with formatted display
+// ---------------------------------------------------------------------------
+
+const BirthdayField = ({
+  value,
+  onSave,
+}: {
+  value: string | null;
+  onSave: (val: string) => void;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Normalize stored value to YYYY-MM-DD for the input
+  const toInputValue = (v: string | null): string => {
+    if (!v) return '';
+    // If already YYYY-MM-DD, return as-is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    // Try parsing other formats
+    try {
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    } catch {}
+    return '';
+  };
+
+  const formatDisplay = (v: string | null): string | null => {
+    if (!v) return null;
+    try {
+      const inputVal = toInputValue(v);
+      if (!inputVal) return v;
+      // Parse as local date (avoid UTC shift)
+      const [year, month, day] = inputVal.split('-').map(Number);
+      const d = new Date(year, month - 1, day);
+      return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    } catch { return v; }
+  };
+
+  // Upcoming birthday badge (within 30 days)
+  const upcomingDays = (() => {
+    const inputVal = toInputValue(value);
+    if (!inputVal) return null;
+    const [, month, day] = inputVal.split('-').map(Number);
+    const today = new Date();
+    const thisYear = today.getFullYear();
+    let bday = new Date(thisYear, month - 1, day);
+    if (bday < today) bday = new Date(thisYear + 1, month - 1, day);
+    const diff = Math.round((bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return diff <= 30 ? diff : null;
+  })();
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value; // YYYY-MM-DD
+    if (val) {
+      onSave(val);
+    }
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <input
+        type="date"
+        autoFocus
+        defaultValue={toInputValue(value)}
+        onChange={handleChange}
+        onBlur={() => setIsEditing(false)}
+        className="text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none w-full"
+      />
+    );
+  }
+
+  const display = formatDisplay(value);
+
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className="flex items-center gap-2 cursor-text group/bday"
+    >
+      <span
+        className={`text-sm font-medium py-0.5 px-2 -ml-2 rounded transition-colors hover:bg-surface-container-high ${
+          display ? 'text-on-surface' : 'text-on-surface-variant opacity-50 italic'
+        }`}
+      >
+        {display || 'Add Birthday...'}
+      </span>
+      {upcomingDays !== null && (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 shrink-0">
+          {upcomingDays === 0 ? '🎂 Today!' : `🎂 in ${upcomingDays}d`}
+        </span>
+      )}
+    </div>
+  );
+};
+
+
+// ---------------------------------------------------------------------------
+// MultiValueField — Chip-based editor for arrays of {value, label} items
+// Used for emails, phones, and addresses.
+// ---------------------------------------------------------------------------
+
+interface MultiValueItem {
+  id?: string;
+  value: string;
+  label: string;
+}
+
+const EMAIL_LABELS  = ['work', 'personal', 'other'] as const;
+const PHONE_LABELS  = ['mobile', 'work', 'home', 'other'] as const;
+const ADDR_LABELS   = ['home', 'work', 'other'] as const;
+
+const MultiValueField = ({
+  items,
+  onSave,
+  labelOptions,
+  emptyPlaceholder,
+  addMoreLabel = '+ Add another',
+  inputPlaceholder,
+}: {
+  items: MultiValueItem[];
+  onSave: (items: { value: string; label: string }[]) => void;
+  labelOptions: readonly string[];
+  emptyPlaceholder: string;
+  addMoreLabel?: string;
+  inputPlaceholder: string;
+}) => {
+  const [inputValue, setInputValue] = useState('');
+  const [inputLabel, setInputLabel] = useState(labelOptions[0]);
+  const [isAdding, setIsAdding] = useState(false);
+
+  const toSavable = (arr: MultiValueItem[]) =>
+    arr.map(i => ({ value: i.value, label: i.label }));
+
+  const handleAdd = () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) { setIsAdding(false); return; }
+    onSave([...toSavable(items), { value: trimmed, label: inputLabel }]);
+    setInputValue('');
+    setInputLabel(labelOptions[0]);
+    setIsAdding(false);
+  };
+
+  const handleRemove = (idx: number) =>
+    onSave(toSavable(items.filter((_, i) => i !== idx)));
+
+  const handleChangeLabel = (idx: number, newLabel: string) =>
+    onSave(items.map((item, i) => ({ value: item.value, label: i === idx ? newLabel : item.label })));
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map((item, idx) => (
+        <div key={item.id ?? idx} className="flex items-center gap-1.5 group/item">
+          <span className="text-sm font-medium text-on-surface break-all flex-1 min-w-0">
+            {item.value}
+          </span>
+          <select
+            value={item.label}
+            onChange={e => handleChangeLabel(idx, e.target.value)}
+            className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer"
+          >
+            {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+          <button
+            onClick={() => handleRemove(idx)}
+            className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-rose-500 p-0.5 rounded transition-opacity shrink-0"
+            title="Remove"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      ))}
+
+      {isAdding ? (
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <input
+            autoFocus
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); handleAdd(); }
+              if (e.key === 'Escape') { setIsAdding(false); setInputValue(''); }
+            }}
+            onBlur={handleAdd}
+            placeholder={inputPlaceholder}
+            className="flex-1 min-w-0 text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
+          />
+          <select
+            value={inputLabel}
+            onChange={e => setInputLabel(e.target.value)}
+            className="text-[10px] uppercase tracking-widest bg-surface-container px-1.5 py-0.5 rounded font-bold text-on-surface-variant border-none focus:outline-none shrink-0"
+          >
+            {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-1 text-sm text-on-surface-variant opacity-50 italic text-left hover:opacity-80 transition-opacity py-0.5 group/add"
+        >
+          {items.length === 0 ? (
+            <span>{emptyPlaceholder}</span>
+          ) : (
+            <><Plus className="w-3 h-3" /> <span>{addMoreLabel}</span></>
+          )}
+        </button>
+      )}
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // ContactDetail — Right-pane master view for a single contact
@@ -127,20 +338,41 @@ export const ContactDetail = () => {
   const addAttachment = useAddAttachment();
   const deleteContact = useDeleteContact();
   const deleteInteraction = useDeleteInteraction();
+  const generateBriefing = useGenerateBriefing();
+  const promoteGhost = usePromoteGhost();
 
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0 && id) {
+      const isEml = acceptedFiles[0].name.toLowerCase().endsWith('.eml');
+      const toastId = isEml ? toast.loading(`Summarizing email thread with Gemini...`) : undefined;
+      
       addAttachment.mutate(
         { contactId: id, file: acceptedFiles[0] },
         {
-          onSuccess: () => toast.success(`Attached "${acceptedFiles[0].name}"`),
-          onError: (err) => toast.error(`Upload failed: ${err.message}`),
+          onSuccess: () => {
+            if (toastId) toast.dismiss(toastId);
+            toast.success(isEml ? `Email imported & summarized!` : `Attached "${acceptedFiles[0].name}"`);
+          },
+          onError: (err) => {
+            if (toastId) toast.dismiss(toastId);
+            toast.error(`Upload failed: ${err.message}`);
+          },
         }
       );
     }
   }, [id, addAttachment]);
   
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, noClick: true, noKeyboard: true });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    noClick: true,
+    noKeyboard: true,
+    accept: {
+      'message/rfc822': ['.eml'],
+      'image/*': ['.png', '.jpg', '.jpeg', '.gif'],
+      'application/pdf': ['.pdf'],
+      'text/*': ['.txt', '.csv', '.md']
+    }
+  });
 
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [generatingInsight, setGeneratingInsight] = useState(false);
@@ -202,11 +434,11 @@ export const ContactDetail = () => {
     setShowVibePicker(false);
   };
 
-  // Resolve primary email/phone from child arrays
-  const primaryEmail = contact.emails?.find(e => e.isPrimary)?.email || contact.emails?.[0]?.email || null;
-  const primaryPhone = contact.phones?.find(p => p.isPrimary)?.phone || contact.phones?.[0]?.phone || null;
-  const additionalEmails = contact.emails?.filter(e => e.email !== primaryEmail) || [];
-  const additionalPhones = contact.phones?.filter(p => p.phone !== primaryPhone) || [];
+  // Primary email/phone — used in external references (e.g. mailto links added in future)
+  const primaryEmail = contact.emails?.find(e => e.isPrimary)?.email ?? contact.emails?.[0]?.email ?? null;
+  const primaryPhone = contact.phones?.find(p => p.isPrimary)?.phone ?? contact.phones?.[0]?.phone ?? null;
+  // Suppress unused-variable warnings — kept for external consumers / future mailto/tel links
+  void primaryEmail; void primaryPhone;
 
   const currentTheme = VIBE_COLORS.find(v => v.id === contact.themeColor) || VIBE_COLORS[0];
   const themeStyles = {
@@ -229,12 +461,10 @@ export const ContactDetail = () => {
         <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
           <div className="relative shrink-0">
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
-              <motion.img 
-                layoutId={`avatar-${contact.id}`}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                alt={contact.name} 
-                className="w-full h-full object-cover" 
-                src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`} 
+              <img
+                alt={contact.name}
+                className="w-full h-full object-cover"
+                src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
               />
             </div>
             {contact.isPremium && (
@@ -259,14 +489,10 @@ export const ContactDetail = () => {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
-              <motion.div 
-                layoutId={`name-${contact.id}`}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface truncate flex items-center gap-2"
-              >
+              <div className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface truncate flex items-center gap-2">
                 <EditableField value={contact.name} onSave={(val) => handleUpdate('name', val)} placeholder="Contact Name" />
                 {contact.pronouns && <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle">({contact.pronouns})</span>}
-              </motion.div>
+              </div>
               
               <div className="relative shrink-0">
                 <button 
@@ -340,6 +566,60 @@ export const ContactDetail = () => {
               </div>
             )}
 
+            {/* Catch Me Up AI Briefing */}
+            <div className="mt-4">
+              <button 
+                onClick={() => generateBriefing.mutate(contact.id)}
+                disabled={generateBriefing.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-xl font-bold hover:opacity-90 transition-opacity text-sm shadow-sm"
+              >
+                🪄 {generateBriefing.isPending ? 'Generating...' : 'Catch Me Up'}
+              </button>
+              
+              <AnimatePresence>
+                {contact.aiBriefing && !generateBriefing.isPending && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mt-3"
+                  >
+                    <div className={cn(CARD_TINTED, "text-sm text-on-surface")}>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-3 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Executive Briefing</h4>
+                      <ul className="space-y-2.5">
+                        {JSON.parse(contact.aiBriefing).map((point: string, idx: number) => (
+                          <li key={idx} className="flex gap-2">
+                            <span className="text-on-surface-variant font-bold max-w-fit flex-shrink-0 mt-0.5">•</span> 
+                            <span className="leading-relaxed">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {contact.aiBriefingAt && (
+                        <p className="text-[10px] text-on-surface-variant mt-4 opacity-70">Generated {formatDistanceToNow(new Date(contact.aiBriefingAt), {addSuffix: true})}</p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+                {generateBriefing.isPending && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mt-3"
+                  >
+                    <div className={cn(CARD_TINTED, "text-sm space-y-4")}>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Synthesizing Context...</h4>
+                      <div className="space-y-3">
+                        <div className="h-4 bg-surface-container-highest rounded animate-pulse w-3/4"></div>
+                        <div className="h-4 bg-surface-container-highest rounded animate-pulse w-full"></div>
+                        <div className="h-4 bg-surface-container-highest rounded animate-pulse w-5/6"></div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* Source Provenance Badges */}
             {contact.sources && contact.sources.length > 0 && (
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -375,7 +655,15 @@ export const ContactDetail = () => {
                 <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col">
                   <span className={LABEL}>Location</span>
-                  <EditableField value={contact.location} onSave={(val) => handleUpdate('location', val)} placeholder="Add Location..." className="text-sm font-medium" />
+                  <EditableField
+                    value={contact.location}
+                    onSave={(val) => handleUpdate('location', val)}
+                    placeholder="Add Location..."
+                    className="text-sm font-medium break-words"
+                  />
+                  {contact.lat && contact.lng && (
+                    <span className="text-[10px] text-on-surface-variant opacity-40 mt-0.5 italic">Pinned on map</span>
+                  )}
                 </div>
               </div>
 
@@ -383,18 +671,15 @@ export const ContactDetail = () => {
                 <Mail className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <span className={LABEL}>Email</span>
-                  {primaryEmail ? (
-                    <span className="text-sm font-medium text-on-surface">{primaryEmail}</span>
-                  ) : (
-                    <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">Add Email...</span>
-                  )}
-                  {additionalEmails.map((e) => (
-                    <div key={e.id} className="text-sm text-on-surface-variant truncate flex items-center gap-1">
-                      <span className="opacity-50 mr-1 select-none">↳</span>
-                      {e.email}
-                      {e.label && <span className={MICRO_BADGE}>{e.label}</span>}
-                    </div>
-                  ))}
+                  <MultiValueField
+                    items={(contact.emails ?? []).map(e => ({ id: e.id, value: e.email, label: e.label || 'personal' }))}
+                    onSave={updated =>
+                      updateContact.mutate({ id: id!, data: { emails: updated.map((e, i) => ({ email: e.value, label: e.label, isPrimary: i === 0 })) } as any })
+                    }
+                    labelOptions={EMAIL_LABELS}
+                    emptyPlaceholder="Add Email..."
+                    inputPlaceholder="email@example.com"
+                  />
                 </div>
               </div>
 
@@ -402,18 +687,15 @@ export const ContactDetail = () => {
                 <Phone className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <span className={LABEL}>Phone</span>
-                  {primaryPhone ? (
-                    <span className="text-sm font-medium text-on-surface">{primaryPhone}</span>
-                  ) : (
-                    <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">Add Phone...</span>
-                  )}
-                  {additionalPhones.map((p) => (
-                    <div key={p.id} className="text-sm text-on-surface-variant truncate flex items-center gap-1">
-                      <span className="opacity-50 mr-1 select-none">↳</span>
-                      {p.phone}
-                      {p.label && <span className={MICRO_BADGE}>{p.label}</span>}
-                    </div>
-                  ))}
+                  <MultiValueField
+                    items={(contact.phones ?? []).map(p => ({ id: p.id, value: p.phone, label: p.label || 'mobile' }))}
+                    onSave={updated =>
+                      updateContact.mutate({ id: id!, data: { phones: updated.map((p, i) => ({ phone: p.value, label: p.label, isPrimary: i === 0 })) } as any })
+                    }
+                    labelOptions={PHONE_LABELS}
+                    emptyPlaceholder="Add Phone..."
+                    inputPlaceholder="+1 (555) 000-0000"
+                  />
                 </div>
               </div>
 
@@ -421,7 +703,7 @@ export const ContactDetail = () => {
                 <Cake className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col">
                   <span className={LABEL}>Birthday</span>
-                  <EditableField value={contact.birthday} onSave={(val) => handleUpdate('birthday', val)} placeholder="Add Birthday..." className="text-sm font-medium" />
+                  <BirthdayField value={contact.birthday} onSave={(val) => handleUpdate('birthday', val)} />
                 </div>
               </div>
 
@@ -605,7 +887,7 @@ export const ContactDetail = () => {
                 let textClass = "text-on-surface";
                 
                 if (item.type === 'call') { Icon = Phone; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
-                if (item.type === 'meeting') { Icon = Handshake; bgClass = "bg-purple-500/10"; textClass = "text-purple-500"; }
+                if (item.type === 'meeting') { Icon = Handshake; bgClass = "bg-emerald-500/10"; textClass = "text-emerald-600"; }
                 if (item.type === 'email') { Icon = Mail; bgClass = "bg-green-500/10"; textClass = "text-green-500"; }
                 if (item.type === 'note') { bgClass = "bg-primary/10"; textClass = "text-primary"; }
                 if (item.type === 'message' || item.type === 'sms') { Icon = MessageSquare; bgClass = "bg-teal-500/10"; textClass = "text-teal-500"; }
@@ -640,12 +922,70 @@ export const ContactDetail = () => {
                           </button>
                         </div>
                       </div>
+                      
+                      {item.isViaName && (
+                        <div 
+                           className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold" 
+                           onClick={() => navigate(`/contact/${item.isViaId}`)}
+                           title="Navigate to Original Interaction"
+                        >
+                           <ExternalLink className="w-3 h-3 text-primary" /> via {item.isViaName}
+                        </div>
+                      )}
+
                       {item.content && (
                         <div 
                           className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface"
                           dangerouslySetInnerHTML={{ __html: item.content }} 
                         />
                       )}
+                      
+                      {/* Ghost Mentions Extraction */}
+                      {item.mentions && (() => {
+                        try {
+                          const parsed = JSON.parse(item.mentions);
+                          if (!Array.isArray(parsed) || parsed.length === 0) return null;
+                          return (
+                            <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
+                              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1"><Sparkles className="w-3 h-3 text-primary opacity-60"/> Mentioned:</span>
+                              {parsed.map((mention: any, idx: number) => {
+                                if (mention.isGhost) {
+                                  return (
+                                    <button 
+                                      key={idx}
+                                      onClick={() => promoteGhost.mutate(mention.contactId, {
+                                        onSuccess: () => navigate(`/contact/${mention.contactId}`)
+                                      })}
+                                      title={`Promote ${mention.name} to Contact`}
+                                      className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border hover:bg-surface-container transition-all group/ghost"
+                                      style={{ borderStyle: 'dashed', borderWidth: '1px', borderColor: 'var(--color-primary)' }}
+                                    >
+                                      <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
+                                        {mention.name.charAt(0)}
+                                      </div>
+                                      <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
+                                        {mention.name}
+                                      </div>
+                                    </button>
+                                  );
+                                }
+                                return (
+                                  <Link 
+                                    key={idx}
+                                    to={`/contact/${mention.contactId}`}
+                                    className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                                  >
+                                    <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                                      {mention.name.charAt(0)}
+                                    </div>
+                                    <span className="text-xs font-semibold text-on-surface line-clamp-1">{mention.name}</span>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          );
+                        } catch(e) { return null; }
+                      })()}
                       
                       {item.fileUrl && (
                         <div className="mt-3">

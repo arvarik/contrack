@@ -8,19 +8,22 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "seed": "tsx seed.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.96.1",
+    "@tiptap/extension-mention": "^3.22.0",
     "@tiptap/extension-placeholder": "^3.22.0",
     "@tiptap/pm": "^3.22.0",
     "@tiptap/react": "^3.22.0",
     "@tiptap/starter-kit": "^3.22.0",
     "@vitejs/plugin-react": "^5.0.4",
     "better-sqlite3": "^12.8.0",
+    "cheerio": "^1.2.0",
     "chrono-node": "^2.9.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -43,6 +46,7 @@
     "react-router-dom": "^7.13.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tippy.js": "^6.3.7",
     "tz-lookup": "^6.1.25",
     "vite": "^6.2.0"
   },

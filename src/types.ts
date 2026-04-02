@@ -77,6 +77,7 @@ export interface Contact {
   preferences: string | null;
   avatarUrl: string | null;
   isPremium: boolean;
+  isGhost: boolean;
   addedAt: string;
   updatedAt: string;
   cadenceDays: number;
@@ -89,6 +90,8 @@ export interface Contact {
   website: string | null;
   lat: number | null;
   lng: number | null;
+  aiBriefing?: string | null;
+  aiBriefingAt?: string | null;
   // Relations (populated by server JOINs)
   emails: ContactEmail[];
   phones: ContactPhone[];
@@ -111,6 +114,9 @@ export interface Interaction {
   fileName?: string | null;
   fileType?: string | null;
   source?: string | null;
+  mentions?: string | null;
+  isViaName?: string | null;
+  isViaId?: string | null;
 }
 
 export interface AIInsight {
@@ -132,4 +138,28 @@ export interface DedupeSuggestion {
   confidence: number;
   reasoning: string;
   matchedField?: string;
+}
+
+// =============================================================================
+// Semantic RAG Search Types
+// =============================================================================
+
+/**
+ * A contact returned from a semantic AI search, augmented with Gemini's
+ * one-sentence explanation of why it matched the query.
+ * `aiReason` is null when the FTS5 fallback path fires instead of Gemini.
+ */
+export interface SemanticMatch extends Contact {
+  aiReason: string | null;
+}
+
+/**
+ * Full response envelope from POST /api/search/semantic.
+ * `fallback: true` signals that Gemini was unavailable and the results
+ * are plain FTS5 keyword matches with no AI reasoning.
+ */
+export interface SemanticSearchResult {
+  matches: SemanticMatch[];
+  fallback: boolean;
+  tokensUsed?: number;
 }

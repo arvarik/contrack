@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
-import { LayoutDashboard, Star, ListFilter, Settings, Search, Map, Zap } from "lucide-react";
+import { LayoutDashboard, Map, Zap, Search } from "lucide-react";
 import { LayoutGroup } from "motion/react";
 import { Toaster } from "sonner";
 
@@ -19,6 +19,15 @@ const Sidebar = () => {
 
   return (
     <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
+      {/* Contrack wordmark — rotated vertical */}
+      <div className="flex items-center justify-center mb-1" title="Contrack">
+        <span
+          className="text-[9px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
+          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.18em' }}
+        >
+          Contrack
+        </span>
+      </div>
       <Link to="/" className={navLink(isHome)}>
         <LayoutDashboard className="w-6 h-6" />
       </Link>
@@ -86,7 +95,7 @@ const ResponsiveLayout = () => {
       {/* Right Pane: Detail View */}
       <main className={`
         ${isContactSelected ? 'flex' : (isMapActive ? 'hidden' : 'hidden lg:flex')}
-        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[600px] z-50 shadow-2xl bg-surface' : 'flex-1 bg-surface z-10'}
+        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[680px] lg:w-[740px] z-50 shadow-2xl bg-surface' : 'flex-1 bg-surface z-10'}
         h-full overflow-hidden relative flex-col
       `}>
         <Routes>

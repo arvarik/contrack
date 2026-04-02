@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 
@@ -36,6 +36,9 @@ export const contacts = sqliteTable('contacts', {
   website: text('website'),
   lat: real('lat'),
   lng: real('lng'),
+  aiBriefing: text('aiBriefing'),
+  aiBriefingAt: text('aiBriefingAt'),
+  isGhost: integer('isGhost').default(0),
 });
 
 // =============================================================================
@@ -175,7 +178,20 @@ export const interactions = sqliteTable('interactions', {
   fileName: text('fileName'),
   fileType: text('fileType'),
   source: text('source'),
+  mentions: text('mentions'),
 });
+
+/**
+ * interactionMentions — Bi-directional network weaving junction table natively resolving references.
+ */
+export const interactionMentions = sqliteTable('interaction_mentions', {
+  interactionId: text('interactionId').notNull()
+    .references(() => interactions.id, { onDelete: 'cascade' }),
+  contactId: text('contactId').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.interactionId, t.contactId] }),
+}));
 
 // =============================================================================
 // Drizzle Relations (for relational query builder)
@@ -190,6 +206,7 @@ export const contactsRelations = relations(contacts, ({ many }) => ({
   sources: many(contactSources),
   tags: many(contactTags),
   interactions: many(interactions),
+  mentionedIn: many(interactionMentions),
 }));
 
 export const contactEmailsRelations = relations(contactEmails, ({ one }) => ({
@@ -220,6 +237,12 @@ export const contactTagsRelations = relations(contactTags, ({ one }) => ({
   contact: one(contacts, { fields: [contactTags.contactId], references: [contacts.id] }),
 }));
 
-export const interactionsRelations = relations(interactions, ({ one }) => ({
+export const interactionsRelations = relations(interactions, ({ one, many }) => ({
   contact: one(contacts, { fields: [interactions.contactId], references: [contacts.id] }),
+  mentions: many(interactionMentions),
+}));
+
+export const interactionMentionsRelations = relations(interactionMentions, ({ one }) => ({
+  interaction: one(interactions, { fields: [interactionMentions.interactionId], references: [interactions.id] }),
+  contact: one(contacts, { fields: [interactionMentions.contactId], references: [contacts.id] }),
 }));

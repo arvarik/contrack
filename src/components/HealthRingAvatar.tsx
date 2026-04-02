@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { motion } from 'motion/react';
 
 interface HealthRingAvatarProps {
   contact: any;
@@ -80,12 +79,10 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
         className="absolute m-auto overflow-hidden rounded-full bg-surface-container-highest flex items-center justify-center shrink-0"
         style={{ width: size - (strokeWidth * 4), height: size - (strokeWidth * 4) }}
       >
-        <motion.img 
-          layoutId={`avatar-${contact.id}`}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`} 
-          alt={contact.name} 
-          className="w-full h-full object-cover shrink-0" 
+        <img
+          src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
+          alt={contact.name}
+          className="w-full h-full object-cover shrink-0"
         />
       </div>
     </div>

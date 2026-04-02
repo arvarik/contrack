@@ -6,3 +6,14 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Database files — local only, never commit
+*.db
+*.db-shm
+*.db-wal
+
+# User-uploaded files
+uploads/
+
+# Test / scratch artifacts
+test.eml

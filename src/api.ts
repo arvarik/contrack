@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Contact, Interaction } from './types';
+import { Contact, Interaction, SemanticSearchResult } from './types';
 
 const API_BASE = '/api';
 
@@ -126,6 +126,47 @@ export const useBulkCreateContacts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+/**
+ * Mutation hook to generate the Catch-Me-Up briefing.
+ */
+export const useGenerateBriefing = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (contactId: string): Promise<string[]> => {
+      const res = await fetch(`${API_BASE}/contacts/${contactId}/briefing`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Failed to generate briefing');
+      const data = await res.json();
+      return data.points;
+    },
+    onSuccess: (_, contactId) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', contactId] });
+      queryClient.invalidateQueries({ queryKey: ['timeline', contactId] });
+    },
+  });
+};
+
+/**
+ * Mutation hook to promote a Ghost Contact.
+ */
+export const usePromoteGhost = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (contactId: string): Promise<Contact> => {
+      const res = await fetch(`${API_BASE}/contacts/${contactId}/promote`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Failed to promote ghost contact');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['timeline'] });
     },
   });
 };
@@ -383,6 +424,33 @@ export const useSeedDuplicates = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['dedupe-suggestions'] });
+    },
+  });
+};
+
+// =============================================================================
+// Semantic RAG Search
+// =============================================================================
+
+/**
+ * Mutation hook for the "Ask My CRM" semantic AI search.
+ * Sends a natural-language query to POST /api/search/semantic, which
+ * passes a compressed contact dump to Gemini and returns matched contacts
+ * with AI-generated reasons. Falls back to FTS5 on rate-limit / error.
+ *
+ * Uses useMutation (not useQuery) because each search is an explicit
+ * user gesture that must hit the network fresh — no stale caching.
+ */
+export const useSemanticSearch = () => {
+  return useMutation({
+    mutationFn: async (query: string): Promise<SemanticSearchResult> => {
+      const res = await fetch(`${API_BASE}/search/semantic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      if (!res.ok) throw new Error('Semantic search failed');
+      return res.json();
     },
   });
 };

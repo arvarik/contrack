@@ -3,10 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Sparkles, Mail, Phone,
   Building, Briefcase, MapPin, Globe, Zap, Shield, ChevronLeft,
-  ChevronRight, AlertCircle, Loader2, FlaskConical, Merge, X,
+  ChevronRight, AlertCircle, Loader2, Merge, X,
   Brain, ScanSearch, FileText, Tag,
 } from 'lucide-react';
-import { useDedupeSuggestions, useMergeContacts, useSeedDuplicates } from '../api';
+import { useDedupeSuggestions, useMergeContacts } from '../api';
 import type { Contact, DedupeSuggestion } from '../types';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -24,7 +24,6 @@ export const CleanupView = () => {
   const [scanStarted, setScanStarted] = useState(false);
   const { data: suggestions, isLoading, error, refetch } = useDedupeSuggestions(scanStarted);
   const mergeContacts = useMergeContacts();
-  const seedDuplicates = useSeedDuplicates();
   const navigate = useNavigate();
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -141,25 +140,6 @@ export const CleanupView = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Dev: Seed test data */}
-            <button
-              onClick={async () => {
-                try {
-                  await seedDuplicates.mutateAsync();
-                  toast.success('Seeded 3 edge-case duplicate pairs');
-                  if (scanStarted) refetch();
-                } catch (e: any) {
-                  toast.error(e.message);
-                }
-              }}
-              disabled={seedDuplicates.isPending}
-              className="btn-secondary flex items-center gap-2 disabled:opacity-50"
-              title="Seed test duplicates"
-            >
-              <FlaskConical className="w-4 h-4" />
-              Seed Test Data
-            </button>
-
             {!scanStarted ? (
               <button
                 onClick={startScan}

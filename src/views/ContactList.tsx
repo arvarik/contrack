@@ -362,13 +362,11 @@ const ContactListItem = ({ contact, active, overdue }: { contact: any, active: b
       <HealthRingAvatar contact={contact} size={48} />
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
-          <motion.h3 
-            layoutId={`name-${contact.id}`}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          <h3
             className={`text-sm font-semibold truncate ${active ? 'text-primary' : 'text-on-surface'}`}
           >
             {contact.name}
-          </motion.h3>
+          </h3>
         </div>
         {contact.company ? (
           <p className="text-xs text-on-surface-variant truncate font-medium flex items-center gap-1.5 mt-0.5">

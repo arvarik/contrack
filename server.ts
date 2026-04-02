@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -6,15 +7,22 @@ import Database from "better-sqlite3";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import morgan from "morgan";
 import multer from "multer";
 import fs from "fs";
+import * as cheerio from "cheerio";
 import { GoogleGenAI, Type } from "@google/genai";
 import * as schema from "./src/db/schema.ts";
-import { parseContactRecord } from "./aiService.ts";
+import { parseContactRecord, generateCatchMeUpBriefing, extractMentions, summarizeEmlEmail, semanticContactSearch, type CompressedContact } from "./aiService.ts";
 
-const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key" });
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_KEY || GEMINI_KEY === "dummy_key") {
+  console.warn("\n\x1b[33m⚠️  [WARNING] GEMINI_API_KEY is not configured inside .env!\x1b[0m");
+  console.warn("\x1b[33m   AI features (Briefings, Entity Extraction) will fail gracefully.\x1b[0m\n");
+}
+
+const genai = new GoogleGenAI({ apiKey: GEMINI_KEY || "dummy_key" });
 
 // ---------------------------------------------------------------------------
 // Path resolution
@@ -88,7 +96,10 @@ sqlite.exec(`
     industry TEXT,
     website TEXT,
     lat REAL,
-    lng REAL
+    lng REAL,
+    aiBriefing TEXT,
+    aiBriefingAt TEXT,
+    isGhost INTEGER DEFAULT 0
   );
 
   -- Normalized child tables
@@ -178,7 +189,14 @@ sqlite.exec(`
     fileUrl TEXT,
     fileName TEXT,
     fileType TEXT,
-    source TEXT
+    source TEXT,
+    mentions TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS interaction_mentions (
+    interactionId TEXT NOT NULL REFERENCES interactions(id) ON DELETE CASCADE,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    PRIMARY KEY (interactionId, contactId)
   );
 `);
 
@@ -227,64 +245,7 @@ const db = drizzle(sqlite, { schema });
 // Seed data (only if DB is empty)
 // ---------------------------------------------------------------------------
 
-const contactCount = sqlite.prepare("SELECT COUNT(*) as count FROM contacts").get() as { count: number };
-if (contactCount.count === 0) {
-  const julianId = "julian-thorne";
-
-  try {
-    db.insert(schema.contacts).values({
-      id: julianId,
-      name: "Julian Thorne",
-      firstName: "Julian",
-      lastName: "Thorne",
-      headline: "Creative Director & Brand Strategist",
-      role: "Creative Director",
-      company: "Nexus Design Labs",
-      location: "Copenhagen, Denmark",
-      birthday: "1985-05-12",
-      preferences: "Single-origin espresso",
-      avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuBHMk5ZdBFriHiUZujq7KGt4eWmlY8AJg3NkqVmmbfehPWOpZzOuCrSwtOg3QzxjCuYECSx9OHMdH91lagfdbIQie9TzqTTpYrVlnJeW5UiA2ySfWrk1L0Ynzq2Ws2bM4jeUiUM42vXHz1Frud7ePF4bFb9643_YqYsjS0mlna6yaBj5R--9S4HGEq4G5Khxxq0raILPfdJ66fLRp7NJjbSg1AiAUYKSi_Nsyts0nt5Zno78SMmxUjOCnWmFj4R7iQMV2EDrEdziE4",
-      isPremium: 1,
-      industry: "Design",
-      cadenceDays: 90,
-    }).run();
-
-    db.insert(schema.contactEmails).values({
-      id: crypto.randomUUID(), contactId: julianId,
-      email: "julian@nexus.design", label: "work", isPrimary: 1, source: "manual",
-    }).run();
-
-    db.insert(schema.contactPhones).values({
-      id: crypto.randomUUID(), contactId: julianId,
-      phone: "+1 (555) 012-3456", label: "mobile", isPrimary: 1, source: "manual",
-    }).run();
-
-    db.insert(schema.contactSources).values({
-      id: crypto.randomUUID(), contactId: julianId,
-      platform: "manual", importedAt: new Date().toISOString(),
-    }).run();
-
-    db.insert(schema.interactions).values([
-      {
-        id: "note-1", contactId: julianId, type: "note",
-        title: "Nexus Project Phase 1",
-        content: "Discussed the upcoming rebranding. Julian is particularly concerned about the mobile responsiveness of the typography. He mentioned 'Inter' as a potential base font.",
-        date: "2023-10-12T10:00:00Z",
-      },
-      {
-        id: "activity-1", contactId: julianId, type: "call",
-        title: "Follow-up Call", duration: "14 mins",
-        date: "2023-10-21T14:30:00Z",
-      },
-    ]).run();
-
-    log.info("Seed", "Inserted default seed contact: Julian Thorne");
-  } catch (e: any) {
-    log.warn("Seed", "Seed insertion skipped", { reason: e.message });
-  }
-} else {
-  log.info("Seed", `Database has ${contactCount.count} contact(s) — skipping seed`);
-}
+// (Use \`npm run seed\` to populate test data if required)
 
 // ---------------------------------------------------------------------------
 // Server bootstrap
@@ -333,9 +294,13 @@ async function startServer() {
     while (geocodeQueue.length > 0) {
       const task = geocodeQueue.shift()!;
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(task.location)}`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(task.location)}`;
         const response = await fetch(url, {
-          headers: { "User-Agent": "Contrack_CRM/1.0 (noreply@example.com)" },
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; ContrackCRM geocoder; +https://github.com/contrack)",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
         });
         const data = await response.json();
         if (data?.[0]) {
@@ -359,6 +324,21 @@ async function startServer() {
     geocodeQueue.push({ contactId, location });
     processGeocodeQueue();
   }
+
+  // Retroactively geocode existing contacts that have a location but no coordinates
+  // (runs once at startup, deferred 2s to let the server finish booting)
+  setTimeout(() => {
+    const ungeocoded = sqlite.prepare(
+      "SELECT id, location FROM contacts WHERE location IS NOT NULL AND location != '' AND (lat IS NULL OR lng IS NULL)"
+    ).all() as { id: string; location: string }[];
+
+    if (ungeocoded.length > 0) {
+      log.info("Geocode", `Queuing ${ungeocoded.length} existing contact(s) for startup geocoding`);
+      for (const c of ungeocoded) {
+        queueGeocode(c.id, c.location);
+      }
+    }
+  }, 2000);
 
   // -----------------------------------------------------------------------
   // Helpers
@@ -548,6 +528,40 @@ async function startServer() {
 
   // -- Static routes BEFORE parameterised routes to prevent shadowing ------
 
+  app.get("/api/utils/unfurl", async (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl) return res.status(400).json({ error: "Missing link URL" });
+
+      // Timeout execution natively mapping out hang states 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const htmlRes = await fetch(targetUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      const htmlText = await htmlRes.text();
+      const $ = cheerio.load(htmlText);
+
+      const title = $('meta[property="og:title"]').attr('content') || $('title').text() || targetUrl;
+      const description = $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || '';
+      let image = $('meta[property="og:image"]').attr('content') || '';
+      
+      // Map relative URL formats properly mapped 
+      if (image && image.startsWith('/')) {
+        const urlObj = new URL(targetUrl);
+        image = `${urlObj.origin}${image}`;
+      }
+
+      log.debug("API", `[${rid}] GET /api/utils/unfurl extracted ${title}`);
+      res.json({ title, description, image, url: targetUrl });
+    } catch (err: any) {
+      log.error("API", `[${rid}] /unfurl failed on ${req.query.url}: ${err.message}`);
+      res.status(500).json({ error: "Unfurl failed parsing target host", url: req.query.url });
+    }
+  });
+
   app.get("/api/contacts/map", (req, res) => {
     const rid = (req as any).requestId;
     try {
@@ -577,6 +591,116 @@ async function startServer() {
     } catch (err: any) {
       log.error("API", `[${rid}] GET /api/search failed`, { error: err.message });
       res.status(500).json({ error: "Search failed" });
+    }
+  });
+
+  // ── Semantic RAG Search ────────────────────────────────────────────────────
+  // POST /api/search/semantic
+  // Accepts a natural-language query, compresses active contacts into a slim
+  // JSON context, passes to Gemini, returns matched contacts + AI reasons.
+  // Falls back to FTS5 keyword search on any AI error (incl. 429 rate-limits).
+
+  app.post("/api/search/semantic", async (req, res) => {
+    const rid = (req as any).requestId;
+    const startTime = Date.now();
+    try {
+      const { query } = req.body as { query?: string };
+      if (!query || typeof query !== "string" || query.trim().length === 0) {
+        return res.status(400).json({ error: "query is required" });
+      }
+      if (query.trim().length > 500) {
+        return res.status(400).json({ error: "query must be ≤ 500 characters" });
+      }
+
+      // 1. Fetch lightweight contact projection (active/non-ghost only)
+      const rawContacts = sqlite.prepare(`
+        SELECT id, name, role, company, location, about, industry, preferences
+        FROM contacts
+        WHERE isGhost = 0
+      `).all() as Array<{
+        id: string; name: string; role: string | null; company: string | null;
+        location: string | null; about: string | null; industry: string | null;
+        preferences: string | null;
+      }>;
+
+      // 2. Denormalize tags → interests field per contact
+      const tagsStmt = sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?");
+
+      // 3. Build null-stripped CompressedContact array (reduces token payload ~50%)
+      const rawSize = rawContacts.length;
+      const compressed: CompressedContact[] = rawContacts.map(c => {
+        const tags = (tagsStmt.all(c.id) as { tag: string }[]).map(t => t.tag);
+        const entry: CompressedContact = { id: c.id, name: c.name };
+        if (c.role)        entry.role        = c.role;
+        if (c.company)     entry.company     = c.company;
+        if (c.location)    entry.location    = c.location;
+        if (c.about)       entry.about       = c.about;
+        if (c.industry)    entry.industry    = c.industry;
+        if (c.preferences) entry.preferences = c.preferences;
+        if (tags.length)   entry.interests   = tags.join(", ");
+        return entry;
+      });
+
+      const preBytes  = JSON.stringify(rawContacts).length;
+      const postBytes = JSON.stringify(compressed).length;
+      log.info("SemanticSearch", `[${rid}] Context: ${rawSize} contacts | ${preBytes}B → ${postBytes}B (${Math.round((1 - postBytes/preBytes) * 100)}% reduction)`);
+
+      // 4. Call Gemini semantic search
+      let aiMatches: { contact_id: string; reason: string }[] = [];
+      let fallback = false;
+
+      try {
+        aiMatches = await semanticContactSearch(query.trim(), compressed);
+      } catch (aiErr: any) {
+        // Rate-limited (429) or any other AI error → fall back to FTS5
+        log.warn("SemanticSearch", `[${rid}] Gemini failed (${aiErr?.message ?? aiErr}), falling back to FTS5`);
+        fallback = true;
+      }
+
+      // 5. Hydrate AI-matched contacts
+      if (!fallback && aiMatches.length > 0) {
+        const reasonMap = new Map(aiMatches.map(m => [m.contact_id, m.reason]));
+        const hydrated = aiMatches
+          .map(m => {
+            const row = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(m.contact_id);
+            if (!row) return null;
+            return { ...hydrateContact(row), aiReason: m.reason };
+          })
+          .filter(Boolean);
+
+        const elapsed = Date.now() - startTime;
+        log.info("SemanticSearch", `[${rid}] "${query}" → ${hydrated.length} AI matches in ${elapsed}ms`);
+        return res.json({ matches: hydrated, fallback: false });
+      }
+
+      // 6. FTS5 fallback path
+      if (fallback || aiMatches.length === 0) {
+        const safeQ = query.trim().replace(/["']/g, "");
+        let ftsResults: any[] = [];
+        if (safeQ.length > 0) {
+          try {
+            ftsResults = sqlite.prepare(`
+              SELECT c.* FROM contacts c
+              JOIN contacts_fts fts ON c.id = fts.contactId
+              WHERE contacts_fts MATCH ?
+              ORDER BY rank LIMIT 10
+            `).all(`"${safeQ}"*`);
+          } catch {
+            // FTS also failed — return empty
+            ftsResults = [];
+          }
+        }
+        const matches = ftsResults.map(r => ({ ...hydrateContact(r), aiReason: null }));
+        const elapsed = Date.now() - startTime;
+        log.info("SemanticSearch", `[${rid}] FTS5 fallback → ${matches.length} results in ${elapsed}ms`);
+        return res.json({ matches, fallback: true });
+      }
+
+      // No matches — AI returned empty array
+      return res.json({ matches: [], fallback: false });
+    } catch (err: any) {
+      log.error("SemanticSearch", `[${rid}] Unhandled error: ${err.message}`);
+      res.status(500).json({ error: "Semantic search failed" });
     }
   });
 
@@ -779,10 +903,15 @@ async function startServer() {
   app.get("/api/contacts/:id/timeline", async (req, res) => {
     const rid = (req as any).requestId;
     try {
-      const items = await db.query.interactions.findMany({
-        where: eq(schema.interactions.contactId, req.params.id),
-        orderBy: (i, { desc }) => [desc(i.date)],
-      });
+      const items = sqlite.prepare(`
+        SELECT i.*, 
+          CASE WHEN i.contactId != ? THEN original.name ELSE NULL END as isViaName,
+          CASE WHEN i.contactId != ? THEN i.contactId ELSE NULL END as isViaId
+        FROM interactions i
+        LEFT JOIN contacts original ON i.contactId = original.id
+        WHERE i.contactId = ? OR i.id IN (SELECT interactionId FROM interaction_mentions WHERE contactId = ?)
+        ORDER BY i.date DESC
+      `).all(req.params.id, req.params.id, req.params.id, req.params.id);
       res.json(items);
     } catch (err: any) {
       log.error("API", `[${rid}] GET timeline failed`, { error: err.message });
@@ -809,7 +938,54 @@ async function startServer() {
         duration: duration || null, source: source || null,
       }).returning().get();
 
-      db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: new Date().toISOString() }).where(eq(schema.contacts.id, contactId)).run();
+      if (content) {
+        const mentionRegex = /data-type="mention"\s+data-id="([^"]+)"/g;
+        const explicitMentionIds = [...content.matchAll(mentionRegex)].map(m => m[1]);
+        if (explicitMentionIds.length > 0) {
+          const insertStmt = sqlite.prepare("INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)");
+          for (const mId of explicitMentionIds) {
+            insertStmt.run(id, mId);
+          }
+        }
+      }
+
+      db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: new Date().toISOString(), aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
+
+      // Non-blocking async ghost extraction
+      if (content) {
+        setTimeout(async () => {
+          try {
+            const mentions = await extractMentions(content);
+            if (mentions && mentions.length > 0) {
+              const mappedMentions = [];
+              for (const m of mentions) {
+                let existing = db.select().from(schema.contacts).where(eq(schema.contacts.name, m.name)).get();
+                if (!existing) {
+                  const ghostId = crypto.randomUUID();
+                  const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][Math.floor(Math.random() * 5)];
+                  existing = db.insert(schema.contacts).values({
+                    id: ghostId,
+                    name: m.name,
+                    company: m.company || null,
+                    isGhost: 1,
+                    themeColor: newTheme,
+                  }).returning().get();
+                  log.info("AI Service", `Inferred ghost contact: ${m.name}`);
+                }
+                mappedMentions.push({
+                  contactId: existing.id,
+                  name: existing.name,
+                  context: m.context,
+                  isGhost: existing.isGhost === 1
+                });
+              }
+              db.update(schema.interactions).set({ mentions: JSON.stringify(mappedMentions) }).where(eq(schema.interactions.id, id)).run();
+            }
+          } catch(e: any) {
+            log.error("AI Service", "Background extraction failed", {error: e.message});
+          }
+        }, 0);
+      }
 
       log.info("API", `[${rid}] POST interaction → ${type} "${title}"`);
       res.status(201).json(result);
@@ -819,12 +995,79 @@ async function startServer() {
     }
   });
 
-  app.post("/api/contacts/:id/attachments", upload.single("attachment"), (req, res) => {
+  app.post("/api/contacts/:id/briefing", async (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const contactId = req.params.id;
+      const contact = db.select().from(schema.contacts).where(eq(schema.contacts.id, contactId)).get();
+      if (!contact) return res.status(404).json({ error: "Contact not found" });
+
+      // Fetch the most recent 15 interactions
+      const recentInteractions = db.select()
+        .from(schema.interactions)
+        .where(eq(schema.interactions.contactId, contactId))
+        .orderBy(sql`${schema.interactions.date} DESC`)
+        .limit(15)
+        .all();
+
+      const points = await generateCatchMeUpBriefing(contact, recentInteractions);
+      const now = new Date().toISOString();
+
+      // Cache it locally
+      db.update(schema.contacts).set({
+        aiBriefing: JSON.stringify(points),
+        aiBriefingAt: now,
+        updatedAt: now
+      }).where(eq(schema.contacts.id, contactId)).run();
+
+      log.info("API", `[${rid}] POST briefing generated for ${contactId}`);
+      res.json({ points });
+    } catch (err: any) {
+      log.error("API", `[${rid}] POST briefing failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to generate briefing" });
+    }
+  });
+
+  app.post("/api/contacts/:id/promote", async (req, res) => {
+    const rid = (req as any).requestId;
+    try {
+      const contactId = req.params.id;
+      const contact = db.select().from(schema.contacts).where(eq(schema.contacts.id, contactId)).get();
+      if (!contact) return res.status(404).json({ error: "Contact not found" });
+
+      const updated = db.update(schema.contacts).set({ isGhost: 0, updatedAt: new Date().toISOString() }).where(eq(schema.contacts.id, contactId)).returning().get();
+      log.info("API", `[${rid}] Promoted ghost contact: ${contact.name}`);
+      res.json(updated);
+    } catch (err: any) {
+      log.error("API", `[${rid}] POST promote failed`, { error: err.message });
+      res.status(500).json({ error: "Failed to promote contact" });
+    }
+  });
+
+  app.post("/api/contacts/:id/attachments", upload.single("attachment"), async (req, res) => {
     const rid = (req as any).requestId;
     try {
       if (!req.file) return res.status(400).json({ error: "No file" });
       const contactId = req.params.id;
       const now = new Date().toISOString();
+
+      if (req.file.originalname.toLowerCase().endsWith('.eml')) {
+        const rawEml = fs.readFileSync(req.file.path, 'utf8');
+        const summaryHtml = await summarizeEmlEmail(rawEml);
+        
+        const result = db.insert(schema.interactions).values({
+          id: crypto.randomUUID(), contactId, type: "email",
+          title: `Email Import: ${req.file.originalname.replace('.eml', '')}`, date: now,
+          content: summaryHtml,
+          fileUrl: `/uploads/${req.file.filename}`,
+          fileName: req.file.originalname, fileType: "message/rfc822",
+        }).returning().get();
+
+        db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: now, aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
+        log.info("API", `[${rid}] POST EML thread processed → "${req.file.originalname}"`);
+        return res.status(201).json(result);
+      }
+
       const result = db.insert(schema.interactions).values({
         id: crypto.randomUUID(), contactId, type: "note",
         title: `Attached File: ${req.file.originalname}`, date: now,
@@ -832,7 +1075,7 @@ async function startServer() {
         fileName: req.file.originalname, fileType: req.file.mimetype,
       }).returning().get();
 
-      db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: now }).where(eq(schema.contacts.id, contactId)).run();
+      db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: now, aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
 
       log.info("API", `[${rid}] POST attachment → "${req.file.originalname}"`);
       res.status(201).json(result);
@@ -1175,12 +1418,11 @@ Consider nickname variants (Bob/Robert, Bill/William, J./Julian), abbreviations,
   });
 
   /**
-   * POST /api/dev/seed-duplicates
-   * Seeds 3 edge-case duplicate pairs for testing the Singularity engine:
-   *   1. Exact email match:  "J. Thorne" shares julian@nexus.design with Julian Thorne
-   *   2. Same phone:         "Robert Chen" and "Bob Chen" share a phone number
-   *   3. Fuzzy name + company: "Sarah Mitchell" vs "Sara Mitchell" at the same company
+   * POST /api/dev/seed-duplicates  ⚠️  Development only
+   * Seeds 3 edge-case duplicate pairs for testing the Singularity engine.
+   * This endpoint is disabled in production (NODE_ENV=production).
    */
+  if (process.env.NODE_ENV !== 'production') {
   app.post("/api/dev/seed-duplicates", (req, res) => {
     const rid = (req as any).requestId;
     try {
@@ -1291,6 +1533,7 @@ Consider nickname variants (Bob/Robert, Bill/William, J./Julian), abbreviations,
       res.status(500).json({ error: err.message });
     }
   });
+  } // end dev-only guard
 
   // =======================================================================
   // Vite middleware (dev) / Static serving (prod)

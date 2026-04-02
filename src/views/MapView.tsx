@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapContainer, TileLayer, Marker, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, ZoomControl, Popup } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'leaflet/dist/leaflet.css';
 import { useMapContacts } from '../api';
@@ -79,16 +79,41 @@ export const MapView = () => {
           maxClusterRadius={50}
         >
           {contacts.map((contact) => (
-            <Marker 
-               key={contact.id}
-               position={[contact.lat, contact.lng]}
-               icon={createCustomIcon(contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name || '')}`)}
-               eventHandlers={{
-                 click: () => {
-                   navigate(`/map/contact/${contact.id}`);
-                 }
-               }}
-            />
+            <Marker
+              key={contact.id}
+              position={[contact.lat, contact.lng]}
+              icon={createCustomIcon(
+                contact.avatarUrl ||
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name || '')}`
+              )}
+              eventHandlers={{
+                click: () => navigate(`/map/contact/${contact.id}`),
+              }}
+            >
+              {/* Popup clarifies which location is pinned when a contact has
+                  multiple addresses — hover the pin to see before navigating */}
+              <Popup closeButton={false} offset={[0, -24]}>
+                <div
+                  style={{ fontFamily: 'Inter, sans-serif', padding: '10px 14px', minWidth: '160px', cursor: 'pointer' }}
+                  onClick={() => navigate(`/map/contact/${contact.id}`)}
+                >
+                  <p style={{ fontWeight: 800, fontSize: '14px', color: '#1a1a1a', margin: '0 0 2px' }}>
+                    {contact.name}
+                  </p>
+                  {contact.company && (
+                    <p style={{ fontSize: '12px', color: '#666', margin: '0 0 4px' }}>{contact.company}</p>
+                  )}
+                  {contact.location && (
+                    <p style={{ fontSize: '11px', color: PRIMARY_COLOR, fontWeight: 600, margin: '0 0 4px' }}>
+                      📍 {contact.location}
+                    </p>
+                  )}
+                  <p style={{ fontSize: '10px', color: '#aaa', margin: 0, fontStyle: 'italic' }}>
+                    Click to open contact
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
           ))}
         </MarkerClusterGroup>
       </MapContainer>
