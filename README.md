@@ -157,13 +157,17 @@ Engineered for maximum optical cleanliness, the CRM follows strict Tailwind CSS 
 
 Contrack is built for speed and efficiency. Below are the global and component-specific keyboard shortcuts currently implemented:
 
-### Global
+### Global & Navigation
 - \`Cmd + K\` or \`Ctrl + K\`: Open/Toggle the Command Palette (Quick Actions / Semantic Search).
+- \`/\`: Focus the active search bar (Contact List or Ask My CRM).
+- \`Escape\`: Unfocus the search bar, clear search queries, or close active modals.
 
-### Navigation (Contact List)
+### Contact List (Left Panel)
 - \`Arrow Down\` or \`j\`: Navigate to the next contact in the list.
 - \`Arrow Up\` or \`k\`: Navigate to the previous contact in the list.
-- \`Enter\`: Quickly focus the Rich Interaction Composer (when on a contact detail page, not focused on an input).
+- \`c\`: Quick-open the "New Contact" modal (when no input is focused).
+- \`v\`: Quick-open the "Magic Paste" AI extraction modal (when no input is focused).
+- \`Enter\`: Quickly focus the Rich Interaction Composer (when on a contact detail page).
 
 ### Rich Interaction Composer
 - \`Cmd + Enter\` or \`Ctrl + Enter\`: Save and log the current interaction (Note, Call, Meeting, Email).

@@ -105,6 +105,24 @@ export const ContactList = () => {
         return;
       }
 
+      if (e.key === "/") {
+        e.preventDefault();
+        document.getElementById("search-input")?.focus();
+        return;
+      }
+
+      if (e.key === "c") {
+        e.preventDefault();
+        setIsModalOpen(true);
+        return;
+      }
+
+      if (e.key === "v") {
+        e.preventDefault();
+        setIsSmartPasteOpen(true);
+        return;
+      }
+
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
         if (filteredContacts.length === 0) return;
@@ -167,10 +185,17 @@ export const ContactList = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
           <input 
+            id="search-input"
             type="text" 
-            placeholder="Search..." 
+            placeholder="Search... (/)" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearchQuery("");
+                e.currentTarget.blur();
+              }
+            }}
             className={SEARCH_INPUT}
           />
         </div>
