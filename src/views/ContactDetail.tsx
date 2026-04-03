@@ -2,15 +2,17 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { 
   Mail, Phone, FileText, Handshake, MapPin, Cake, Briefcase, ArrowLeft, 
-  Sparkles, UploadCloud, Trash2, Globe, MessageSquare, ExternalLink, Linkedin, Facebook, Tag, X, Coffee, File
+  Sparkles, UploadCloud, Trash2, Globe, MessageSquare, ExternalLink, Linkedin, Facebook, Tag, X, Coffee, File, Archive, Heart, Edit2
 } from "lucide-react";
-import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost } from "../api";
+import ReactMarkdown from 'react-markdown';
+import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost, useArchiveContact, useUnarchiveContact } from "../api";
+import { AvatarPickerModal } from "../components/AvatarPickerModal";
 import { formatDistanceToNow } from "date-fns";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
 import { LocalContext } from "../components/LocalContext";
 import { RichInteractionComposer } from "../components/RichInteractionComposer";
-import { AIInsight } from "../types";
+
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import {
@@ -45,6 +47,10 @@ export const ContactDetail = () => {
   const deleteInteraction = useDeleteInteraction();
   const generateBriefing = useGenerateBriefing();
   const promoteGhost = usePromoteGhost();
+  const archiveContact = useArchiveContact();
+  const unarchiveContact = useUnarchiveContact();
+
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0 && id) {
@@ -79,9 +85,28 @@ export const ContactDetail = () => {
     }
   });
 
-  const [insight, setInsight] = useState<AIInsight | null>(null);
-  const [generatingInsight, setGeneratingInsight] = useState(false);
+
   const [showVibePicker, setShowVibePicker] = useState(false);
+  const [activeTab, setActiveTab] = useState<'timeline' | 'dossier'>('timeline');
+  const [newInterest, setNewInterest] = useState('');
+  const [newPreference, setNewPreference] = useState('');
+  const [isEditingDossier, setIsEditingDossier] = useState(false);
+  const [dossierText, setDossierText] = useState('');
+
+  const handleAddInterest = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && newInterest.trim() && contact) {
+      e.preventDefault();
+      const updated = [...(contact.interests || []), { id: Math.random().toString(), interest: newInterest.trim(), isAiGenerated: false }];
+      updateContact.mutate({ id: id!, data: { interests: updated } as any });
+      setNewInterest('');
+    }
+  };
+
+  const handleRemoveInterest = (interestId: string) => {
+    if (!contact) return;
+    const updated = (contact.interests || []).filter((i: any) => i.id !== interestId);
+    updateContact.mutate({ id: id!, data: { interests: updated } as any });
+  };
 
   const isBriefingValid = React.useMemo(() => {
     if (!contact?.aiBriefing || !contact?.aiBriefingAt) return false;
@@ -94,30 +119,7 @@ export const ContactDetail = () => {
     updateContact.mutate({ id: contact.id, data: { aiBriefing: null, aiBriefingAt: null } as any });
   }, [contact, updateContact]);
 
-  const handleGenerateInsight = async () => {
-    if (!contact || timeline.length === 0) return;
-    setGeneratingInsight(true);
-    try {
-      const res = await fetch(`/api/contacts/${contact.id}/briefing`, { method: 'POST' });
-      const data = await res.json();
-      if (data.briefing) {
-        const points = JSON.parse(data.briefing);
-        setInsight({
-          contactId: contact.id,
-          nextRecommendedContact: points[0] || 'Follow up soon',
-          summarySentiment: points[1] || 'Healthy',
-          sentimentDescription: points.slice(2).join(' ') || 'No additional details.',
-        });
-      } else {
-        toast.error('No insight returned from AI');
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast.error("Failed to generate AI insight");
-    } finally {
-      setGeneratingInsight(false);
-    }
-  };
+
 
   const handleDeleteContact = () => {
     if (!id || !contact) return;
@@ -172,6 +174,7 @@ export const ContactDetail = () => {
   } as React.CSSProperties;
 
   return (
+    <>
     <div className="h-full overflow-y-auto w-full relative" style={themeStyles}>
       {/* Mobile Back Button */}
       <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center">
@@ -180,7 +183,7 @@ export const ContactDetail = () => {
         </Link>
       </div>
 
-      <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-12 pb-32 relative">
+      <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-12 pb-32 relative">
         {isMapActive && (
            <button onClick={() => navigate('/map')} className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-50 shadow-sm border border-surface-container-highest transition-colors" title="Close Details">
              <X className="w-5 h-5 text-on-surface-variant" />
@@ -188,14 +191,35 @@ export const ContactDetail = () => {
         )}
         {/* Header Section (Inline Editable) */}
         <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 group/avatar">
+            {/* Avatar image */}
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
               <img
                 alt={contact.name}
                 className="w-full h-full object-cover"
-                src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
+                src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
               />
             </div>
+
+            {/* Pencil edit overlay — appears on hover */}
+            <button
+              onClick={() => setIsAvatarPickerOpen(true)}
+              title="Edit Avatar"
+              className="absolute inset-0 rounded-3xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer"
+            >
+              <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                </svg>
+              </div>
+            </button>
+            {/* Archived badge — overlaid on avatar */}
+            {!!contact.isArchived && (
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap">
+                <Archive className="w-2.5 h-2.5" />
+                Archived
+              </div>
+            )}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -211,6 +235,34 @@ export const ContactDetail = () => {
                 currentVibeId={contact.themeColor}
                 onSelect={handleVibeSelect}
               />
+
+              {/* Archive toggle button */}
+              <button
+                onClick={() => {
+                  if (!id) return;
+                  if (contact.isArchived) {
+                    unarchiveContact.mutate(id, {
+                      onSuccess: () => toast.success(`${contact.name} restored to network`),
+                      onError: (err) => toast.error(`Failed: ${err.message}`),
+                    });
+                  } else {
+                    archiveContact.mutate(id, {
+                      onSuccess: () => toast.success(`${contact.name} archived`),
+                      onError: (err) => toast.error(`Failed: ${err.message}`),
+                    });
+                  }
+                }}
+                disabled={archiveContact.isPending || unarchiveContact.isPending}
+                title={contact.isArchived ? 'Unarchive Contact' : 'Archive Contact'}
+                className={cn(
+                  "p-2 rounded-xl transition-all flex items-center justify-center",
+                  contact.isArchived
+                    ? "text-amber-500 bg-amber-500/15 hover:bg-amber-500/25"
+                    : "text-on-surface-variant hover:bg-surface-container hover:text-amber-500"
+                )}
+              >
+                <Archive className="w-5 h-5" />
+              </button>
               
               <ContactActionsMenu contact={contact} onDelete={handleDeleteContact} />
             </div>
@@ -219,6 +271,16 @@ export const ContactDetail = () => {
             {contact.headline && (
               <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
                 {contact.headline}
+              </div>
+            )}
+
+            {/* aiSummary Banner */}
+            {contact.aiSummary && (
+              <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mb-3 border border-primary/20 max-w-fit">
+                <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="text-sm text-primary font-medium leading-relaxed italic">
+                  {contact.aiSummary}
+                </div>
               </div>
             )}
 
@@ -265,20 +327,6 @@ export const ContactDetail = () => {
               </div>
             )}
 
-            {/* Source Provenance Badges */}
-            {contact.sources && contact.sources.length > 0 && (
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {contact.sources.map((src) => (
-                  <span key={src.id} className="text-[10px] font-medium bg-surface-container text-on-surface-variant px-2 py-0.5 rounded-full flex items-center gap-1" title={src.connectedOn ? `Connected: ${src.connectedOn}` : undefined}>
-                    {src.platform === 'linkedin' && <Linkedin className="w-2.5 h-2.5" />}
-                    {src.platform === 'facebook' && <Facebook className="w-2.5 h-2.5" />}
-                    {!['linkedin', 'facebook'].includes(src.platform) && <ExternalLink className="w-2.5 h-2.5" />}
-                    via {src.platform}
-                    {src.connectedOn && <span className="opacity-60 ml-1">· {src.connectedOn}</span>}
-                  </span>
-                ))}
-              </div>
-            )}
 
             {/* Catch Me Up AI Briefing */}
             <div className="mt-4">
@@ -339,10 +387,10 @@ export const ContactDetail = () => {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-24 gap-10 items-start">
           
           {/* Left Column: Facts & AI */}
-          <div className="lg:col-span-4 space-y-6">
+          <div className="lg:col-span-9 space-y-6">
             <div className={cn(CARD, "space-y-4")}>
               <h3 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h3>
               
@@ -350,22 +398,16 @@ export const ContactDetail = () => {
                 <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <span className={LABEL}>Location</span>
-                  {/* Fallback: show legacy single-value location if no addresses exist */}
-                  {(!contact.addresses || contact.addresses.length === 0) && contact.location && (
-                    <div className="flex flex-col mb-1 group/legacy-loc">
-                      <span className="text-sm font-medium text-on-surface">{contact.location}</span>
-                      {contact.lat && contact.lng && (
-                        <span className="text-[10px] text-on-surface-variant opacity-40 mt-0.5 italic">Pinned on map</span>
-                      )}
-                    </div>
-                  )}
                   <MultiValueField
-                    items={(contact.addresses ?? []).map((a: any) => ({ id: a.id, value: a.address, label: a.label || 'home' }))}
+                    items={(contact.addresses && contact.addresses.length > 0) 
+                      ? contact.addresses.map((a: any) => ({ id: a.id, value: a.address, label: a.label || 'home' }))
+                      : contact.location ? [{ id: 'legacy-init', value: contact.location, label: 'home' }] : []
+                    }
                     onSave={updated =>
-                      updateContact.mutate({ id: id!, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label, isPrimary: i === 0 })) } as any })
+                      updateContact.mutate({ id: id!, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label || 'home', isPrimary: i === 0 })) } as any })
                     }
                     labelOptions={ADDR_LABELS}
-                    emptyPlaceholder={(!contact.addresses || contact.addresses.length === 0) && contact.location ? "Add another location" : "Add Location..."}
+                    emptyPlaceholder="Add Location..."
                     inputPlaceholder="San Francisco, CA"
                   />
                 </div>
@@ -424,7 +466,80 @@ export const ContactDetail = () => {
                 <Coffee className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0 flex flex-col">
                   <span className={LABEL}>Preferences</span>
-                  <EditableField value={contact.preferences} onSave={(val) => handleUpdate('preferences', val)} placeholder="Coffee, Meeting style..." className="text-sm font-medium" />
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {contact.preferences && contact.preferences.trim() ? (
+                      contact.preferences.split(',').map((s: string) => s.trim()).filter(Boolean).map((pref: string, idx: number) => (
+                        <div key={idx} className="group/pill w-fit flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full bg-surface-container text-on-surface-variant transition-all overflow-hidden">
+                          <span className="whitespace-normal break-words">{pref}</span>
+                          <button 
+                            onClick={() => {
+                              const newPrefs = contact.preferences!.split(',').map((s: string) => s.trim()).filter(Boolean);
+                              newPrefs.splice(idx, 1);
+                              handleUpdate('preferences', newPrefs.join(', '));
+                            }}
+                            className="w-4 h-4 rounded-full text-on-surface-variant/40 hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 -mr-1"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                       <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">No preferences logged</span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={newPreference}
+                    onChange={(e) => setNewPreference(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newPreference.trim()) {
+                        e.preventDefault();
+                        const current = contact.preferences ? contact.preferences.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                        current.push(newPreference.trim());
+                        handleUpdate('preferences', current.join(', '));
+                        setNewPreference('');
+                      }
+                    }}
+                    placeholder="Add Preference"
+                    className="mt-2 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Interests */}
+              <div className="flex items-start gap-4 group">
+                <Heart className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span className={LABEL}>Interests</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {contact.interests && contact.interests.length > 0 ? (
+                      contact.interests.map((interest: any) => (
+                        <div key={interest.id} className={cn(
+                          "group/pill w-fit flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full transition-all overflow-hidden",
+                          interest.isAiGenerated ? "bg-primary/10 text-primary border border-primary/20" : "bg-surface-container text-on-surface-variant border border-transparent"
+                        )}>
+                          {interest.isAiGenerated && <Sparkles className="w-3 h-3 opacity-70 shrink-0" />}
+                          <span className="whitespace-normal break-words">{interest.interest}</span>
+                          <button 
+                            onClick={() => handleRemoveInterest(interest.id)}
+                            className="w-4 h-4 rounded-full text-on-surface-variant/40 hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 -mr-1"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">No interests logged</span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={newInterest}
+                    onChange={(e) => setNewInterest(e.target.value)}
+                    onKeyDown={handleAddInterest}
+                    placeholder="Add Interest"
+                    className="mt-2 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
+                  />
                 </div>
               </div>
               
@@ -439,48 +554,85 @@ export const ContactDetail = () => {
               )}
             </div>
 
-            {/* AI Insights Block */}
-            <div className={CARD_TINTED}>
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  <h3 className={cn(SECTION_HEADING, "text-on-primary-container")}>AI Intel</h3>
-                </div>
-                <button 
-                  onClick={handleGenerateInsight}
-                  disabled={generatingInsight}
-                  className={cn(LABEL_PRIMARY, "hover:underline disabled:opacity-50")}
-                >
-                  {generatingInsight ? "Thinking..." : insight ? "Refresh" : "Generate"}
-                </button>
-              </div>
-              
-              <AnimatePresence mode="wait">
-                {insight ? (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                    <div>
-                      <p className={LABEL_PRIMARY}>Next Follow Up</p>
-                      <p className="text-lg font-bold text-on-surface">{insight.nextRecommendedContact}</p>
-                    </div>
-                    <div>
-                       <p className={LABEL_PRIMARY}>Health</p>
-                       <p className="text-sm font-medium text-on-surface mb-1">{insight.summarySentiment}</p>
-                       <p className="text-xs text-on-surface-variant leading-relaxed">{insight.sentimentDescription}</p>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <p className="text-xs text-on-surface-variant/70 italic leading-relaxed">
-                    Generate an AI briefing based on your timeline of interactions to summarize client health.
-                  </p>
-                )}
-              </AnimatePresence>
-            </div>
+
 
           </div>
 
           {/* Right Column: Timeline & Composer & Backgrounds */}
-          <div {...getRootProps()} className="lg:col-span-8 relative min-h-[500px] flex flex-col gap-6">
+          <div {...getRootProps()} className="lg:col-span-15 relative min-h-[500px] flex flex-col gap-6">
             <input {...getInputProps()} />
+
+            {/* Tab Controller */}
+            <div className="flex items-center gap-2 p-1.5 bg-surface-container-low rounded-xl border border-surface-container-highest shadow-sm relative z-20 w-fit">
+              <button 
+                onClick={() => setActiveTab('timeline')} 
+                className={cn("px-6 py-2 rounded-lg font-bold text-sm transition-all", activeTab === 'timeline' ? "bg-surface shadow-sm text-primary" : "text-on-surface-variant hover:text-on-surface")}
+              >
+                Timeline
+              </button>
+              <button 
+                onClick={() => setActiveTab('dossier')} 
+                className={cn("px-6 py-2 rounded-lg font-bold text-sm transition-all", activeTab === 'dossier' ? "bg-surface shadow-sm text-primary" : "text-on-surface-variant hover:text-on-surface")}
+              >
+                Dossier
+              </button>
+            </div>
+
+            {activeTab === 'dossier' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
+                {/* AI Dossier / aiBackground */}
+                {(contact.aiBackground || isEditingDossier) && (
+                  <div className={cn(CARD, "bg-surface-container-lowest border-primary/20 relative overflow-hidden group")}>
+                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className={cn(SECTION_HEADING_SPACED, "text-primary flex items-center gap-2")}><Sparkles className="w-4 h-4" /> AI Dossier</h3>
+                      {!isEditingDossier && (
+                        <button onClick={() => { setDossierText(contact.aiBackground || ''); setIsEditingDossier(true); }} className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-primary transition-opacity p-1 bg-surface-container-low rounded-md shadow-sm border border-surface-container-highest">
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {isEditingDossier ? (
+                      <div className="flex flex-col gap-3">
+                        <textarea 
+                          value={dossierText} 
+                          onChange={e => setDossierText(e.target.value)} 
+                          className="w-full min-h-[300px] p-4 bg-surface-container-low rounded-xl border border-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-mono text-on-surface resize-y"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2 mt-1">
+                          <button onClick={() => setIsEditingDossier(false)} className="px-4 py-1.5 rounded-full text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-colors">Cancel</button>
+                          <button onClick={() => { updateContact.mutate({ id: id!, data: { aiBackground: dossierText } as any }); setIsEditingDossier(false); }} className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-on-primary shadow shadow-primary/20 hover:shadow-md hover:shadow-primary/30 transition-all">Save Dossier</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        onDoubleClick={() => { setDossierText(contact.aiBackground || ''); setIsEditingDossier(true); }}
+                        className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-a:text-primary cursor-text"
+                        title="Double click to edit"
+                      >
+                        <ReactMarkdown>{contact.aiBackground!}</ReactMarkdown>
+                      </div>
+                    )}
+                    {!isEditingDossier && contact.aiHydratedAt && (
+                       <p className="text-[10px] text-on-surface-variant mt-4 opacity-70">
+                         Sourced via web hydration on {new Date(contact.aiHydratedAt).toLocaleDateString()}
+                       </p>
+                    )}
+                  </div>
+                )}
+            
+            {/* AI Custom Attributes */}
+            {contact.attributes && contact.attributes.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {contact.attributes.map((attr: any) => (
+                  <div key={attr.id} className="bg-surface-container-lowest rounded-xl p-4 border border-surface-container-highest shadow-sm">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-primary block mb-1">{attr.name}</span>
+                    <span className="text-sm text-on-surface leading-relaxed font-medium block">{attr.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             
             {contact.about && (
               <div className={cn(CARD, "relative overflow-hidden group")}>
@@ -549,8 +701,12 @@ export const ContactDetail = () => {
                 )}
               </div>
             )}
-            
-            <AnimatePresence>
+            </motion.div>
+          )}
+
+          {activeTab === 'timeline' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 relative">
+              <AnimatePresence>
               {isDragActive && (
                 <motion.div 
                   initial={{ opacity: 0 }} 
@@ -568,14 +724,14 @@ export const ContactDetail = () => {
 
             <RichInteractionComposer contactId={id!} />
 
+            {!timelineLoading && timeline.length === 0 && (
+              <div className={EMPTY_STATE}>
+                <p className="font-medium text-sm">No interactions logged yet.</p>
+              </div>
+            )}
+
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-surface-container-high before:to-transparent">
               {timelineLoading && <div className="text-center p-4 text-on-surface-variant animate-pulse">Loading timeline...</div>}
-              {!timelineLoading && timeline.length === 0 && (
-                <div className={EMPTY_STATE}>
-                  <p className="font-medium text-sm">No interactions logged yet.</p>
-                  <p className="text-xs mt-1">Use the composer above to log your first note, call, or meeting.</p>
-                </div>
-              )}
               
               {timeline.map((item) => {
                 let Icon = FileText;
@@ -709,9 +865,24 @@ export const ContactDetail = () => {
                 );
               })}
             </div>
+            </motion.div>
+          )}
+
           </div>
         </div>
       </div>
     </div>
+
+    {/* ── Avatar Picker Modal ───────────────────────────────────────────── */}
+    {id && (
+      <AvatarPickerModal
+        isOpen={isAvatarPickerOpen}
+        onClose={() => setIsAvatarPickerOpen(false)}
+        contactId={id}
+        contactName={contact.name}
+        currentAvatarUrl={contact.avatarUrl}
+      />
+    )}
+    </>
   );
 };

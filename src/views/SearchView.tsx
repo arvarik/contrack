@@ -51,7 +51,7 @@ const ResultCard = ({
       'group-hover:ring-2 group-hover:ring-primary/20',
     )}>
       <img
-        src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}`}
+        src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}&mouth=default,smile,serious`}
         alt=""
         className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"
       />

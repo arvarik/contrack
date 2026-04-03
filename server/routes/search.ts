@@ -3,6 +3,7 @@ import { sqlite } from "../db.ts";
 import { log } from "../logger.ts";
 import { hydrateContact } from "../helpers.ts";
 import { semanticContactSearch, type CompressedContact } from "../../aiService.ts";
+import { getCachedSearch, setCachedSearch } from "../searchCache.ts";
 
 const router = Router();
 
@@ -38,6 +39,13 @@ router.post("/semantic", async (req, res) => {
       return res.status(400).json({ error: "query must be ≤ 500 characters" });
     }
 
+    // ── Cache lookup ────────────────────────────────────────────────────
+    const cached = getCachedSearch(query);
+    if (cached) {
+      log.info("SemanticSearch", `[${rid}] Cache HIT for "${query.trim().slice(0, 60)}" (${Date.now() - startTime}ms)`);
+      return res.json({ ...cached, cached: true });
+    }
+
     const rawContacts = sqlite.prepare(`
       SELECT id, name, role, company, location, about, industry, preferences
       FROM contacts
@@ -49,10 +57,13 @@ router.post("/semantic", async (req, res) => {
     }>;
 
     const tagsStmt = sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?");
+    const interestsStmt = sqlite.prepare("SELECT interest FROM contact_interests WHERE contactId = ?");
 
     const rawSize = rawContacts.length;
     const compressed: CompressedContact[] = rawContacts.map(c => {
       const tags = (tagsStmt.all(c.id) as { tag: string }[]).map(t => t.tag);
+      const interests = (interestsStmt.all(c.id) as { interest: string }[]).map(t => t.interest);
+      
       const entry: CompressedContact = { id: c.id, name: c.name };
       if (c.role)        entry.role        = c.role;
       if (c.company)     entry.company     = c.company;
@@ -60,7 +71,7 @@ router.post("/semantic", async (req, res) => {
       if (c.about)       entry.about       = c.about;
       if (c.industry)    entry.industry    = c.industry;
       if (c.preferences) entry.preferences = c.preferences;
-      if (tags.length)   entry.interests   = tags.join(", ");
+      if (tags.length || interests.length) entry.interests = [...tags, ...interests].join(", ");
       return entry;
     });
 
@@ -90,8 +101,13 @@ router.post("/semantic", async (req, res) => {
         .filter(Boolean);
 
       const elapsed = Date.now() - startTime;
-      log.info("SemanticSearch", `[${rid}] "${query}" → ${hydrated.length} AI matches in ${elapsed}ms`);
-      return res.json({ matches: hydrated, fallback: false });
+      log.info("SemanticSearch", `[${rid}] "${query}" → ${hydrated.length} AI matches in ${elapsed}ms — caching`);
+
+      // ── Cache successful AI result ────────────────────────────────────
+      const result = { matches: hydrated, fallback: false };
+      setCachedSearch(query, result);
+
+      return res.json({ ...result, cached: false });
     }
 
     if (fallback || aiMatches.length === 0) {
@@ -111,11 +127,12 @@ router.post("/semantic", async (req, res) => {
       }
       const matches = ftsResults.map(r => ({ ...hydrateContact(r), aiReason: null }));
       const elapsed = Date.now() - startTime;
-      log.info("SemanticSearch", `[${rid}] FTS5 fallback → ${matches.length} results in ${elapsed}ms`);
-      return res.json({ matches, fallback: true });
+      log.info("SemanticSearch", `[${rid}] FTS5 fallback → ${matches.length} results in ${elapsed}ms (not cached)`);
+      // FTS5 fallback is NOT cached — stale fallback results are worse than a fresh miss
+      return res.json({ matches, fallback: true, cached: false });
     }
 
-    return res.json({ matches: [], fallback: false });
+    return res.json({ matches: [], fallback: false, cached: false });
   } catch (err: any) {
     log.error("SemanticSearch", `[${rid}] Unhandled error: ${err.message}`);
     res.status(500).json({ error: "Semantic search failed" });

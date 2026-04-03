@@ -69,7 +69,7 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
         style={{ width: size - (strokeWidth * 4), height: size - (strokeWidth * 4) }}
       >
         <img
-          src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
+          src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
           alt={contact.name}
           className="w-full h-full object-cover shrink-0"
         />

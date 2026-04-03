@@ -3,6 +3,32 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "dummy_key" });
 
+const FALLBACK_MODELS = [
+  // 1. the cheapest model with highest RPM (4K RPM / 4M TPM)
+  "gemini-3.1-flash-lite",
+  // 2. older generation lite fallback with unlimited RPD
+  "gemini-2.5-flash-lite",
+  // 3. highly capable standard model fallback (1K RPM)
+  "gemini-3-flash",
+  // 4. legacy unlimited RPD fallback
+  "gemini-2-flash",
+];
+
+async function generateWithFallbacks(options: any) {
+  let lastError: any;
+  for (const model of FALLBACK_MODELS) {
+    try {
+      const response = await ai.models.generateContent({ ...options, model });
+      return { response, model };
+    } catch (error: any) {
+      console.warn(`[AI] Model ${model} failed: ${error.message}. Trying next fallback...`);
+      lastError = error;
+    }
+  }
+  console.error("[AI] All fallback models exhausted or rate limited.");
+  throw lastError;
+}
+
 /**
  * Parses raw, unstructured text to extract contact fields accurately.
  * Returns a structured object compatible with the normalized schema —
@@ -28,8 +54,7 @@ export async function parseContactRecord(text: string) {
       throw new Error("GEMINI_API_KEY is missing from environment. Cannot run Auto-Parser.");
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const { response } = await generateWithFallbacks({
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -160,8 +185,7 @@ export async function generateCatchMeUpBriefing(contact: any, interactions: any[
     }
 
     const start = Date.now();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const { response, model } = await generateWithFallbacks({
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -180,7 +204,7 @@ export async function generateCatchMeUpBriefing(contact: any, interactions: any[
     const parsed = JSON.parse(response.text);
     
     // Robust Logging
-    console.log(`[AI Briefing] Synthesized in ${Date.now() - start}ms | Tokens: ${response.usageMetadata?.totalTokenCount || '?'}`);
+    console.log(`[AI Briefing] Synthesized in ${Date.now() - start}ms via ${model} | Tokens: ${response.usageMetadata?.totalTokenCount || '?'}`);
     
     return parsed as string[];
   } catch (error: any) {
@@ -219,8 +243,7 @@ export async function extractMentions(text: string) {
     }
 
     const start = Date.now();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const { response, model } = await generateWithFallbacks({
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -245,7 +268,7 @@ export async function extractMentions(text: string) {
     const parsed = JSON.parse(response.text);
     
     // Robust Logging
-    console.log(`[AI Mentions] Extracted ${parsed.length} ghost entities in ${Date.now() - start}ms | Tokens: ${response.usageMetadata?.totalTokenCount || '?'}`);
+    console.log(`[AI Mentions] Extracted ${parsed.length} ghost entities in ${Date.now() - start}ms via ${model} | Tokens: ${response.usageMetadata?.totalTokenCount || '?'}`);
     
     return parsed as { name: string, company?: string | null, context: string }[];
   } catch (error: any) {
@@ -280,8 +303,7 @@ export async function summarizeEmlEmail(rawEml: string) {
     }
 
     const start = Date.now();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const { response, model } = await generateWithFallbacks({
       contents: prompt,
       config: {
         responseMimeType: "text/plain",
@@ -289,7 +311,7 @@ export async function summarizeEmlEmail(rawEml: string) {
     });
 
     // Robust Logging
-    console.log(`[AI EML Digest] Synchronously digested in ${Date.now() - start}ms | Tokens: ${response.usageMetadata?.totalTokenCount || '?'}`);
+    console.log(`[AI EML Digest] Synchronously digested in ${Date.now() - start}ms via ${model} | Tokens: ${response.usageMetadata?.totalTokenCount || '?'}`);
 
     return response.text || "<p>Email could not be parsed.</p>";
   } catch (error: any) {
@@ -380,8 +402,7 @@ ${contextJson}
 
   const start = Date.now();
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const { response, model } = await generateWithFallbacks({
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -408,7 +429,7 @@ ${contextJson}
   const tokens = response.usageMetadata?.totalTokenCount ?? "?";
 
   console.log(
-    `[AI Semantic] "${query}" → ${parsed.length} matches in ${elapsed}ms | Tokens: ${tokens} | Contacts scanned: ${contacts.length}`
+    `[AI Semantic] "${query}" → ${parsed.length} matches in ${elapsed}ms via ${model} | Tokens: ${tokens} | Contacts scanned: ${contacts.length}`
   );
 
   return parsed;

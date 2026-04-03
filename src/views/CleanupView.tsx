@@ -444,7 +444,7 @@ const ContactCard = ({ contact, label, labelColor, other }: {
       {/* Avatar + Name */}
       <div className="flex items-center gap-3">
         <img
-          src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
+          src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
           alt={contact.name}
           className="w-12 h-12 rounded-full object-cover bg-surface-container-high"
         />

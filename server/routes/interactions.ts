@@ -211,8 +211,15 @@ router.post("/contacts/:id/attachments", upload.single("attachment"), async (req
 router.delete("/interactions/:id", async (req, res) => {
   const rid = (req as any).requestId;
   try {
-    const result = await db.delete(schema.interactions).where(eq(schema.interactions.id, req.params.id)).returning();
-    if (!result?.length) return res.status(404).json({ error: "Not found" });
+    const existing = db.select().from(schema.interactions).where(eq(schema.interactions.id, req.params.id)).get();
+    if (!existing) return res.status(404).json({ error: "Not found" });
+
+    if (existing.fileUrl?.startsWith("/uploads/")) {
+      const filePath = path.join(process.cwd(), existing.fileUrl);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    await db.delete(schema.interactions).where(eq(schema.interactions.id, req.params.id)).run();
     res.json({ success: true });
   } catch (err: any) {
     log.error("API", `[${rid}] DELETE interaction failed`, { error: err.message });

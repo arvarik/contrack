@@ -86,7 +86,7 @@ export const MapView = () => {
               position={[contact.lat, contact.lng]}
               icon={createCustomIcon(
                 contact.avatarUrl ||
-                `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name || '')}`
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name || '')}&mouth=default,smile,serious`
               )}
               eventHandlers={{
                 click: () => navigate(`/map/contact/${contact.id}`),

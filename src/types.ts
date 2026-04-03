@@ -93,6 +93,7 @@ export interface Contact {
   preferences: string | null;
   avatarUrl: string | null;
   isGhost: boolean;
+  isArchived: boolean;
   addedAt: string;
   updatedAt: string;
   cadenceDays: number;
@@ -107,6 +108,9 @@ export interface Contact {
   lng: number | null;
   aiBriefing?: string | null;
   aiBriefingAt?: string | null;
+  aiSummary?: string | null;
+  aiBackground?: string | null;
+  aiHydratedAt?: string | null;
   // Relations (populated by server JOINs)
   emails: ContactEmail[];
   phones: ContactPhone[];
@@ -117,6 +121,8 @@ export interface Contact {
   tags: ContactTag[];
   lists: ContactList[];
   addresses: ContactAddress[];
+  interests: { id: string; interest: string; isAiGenerated?: boolean; }[];
+  attributes: { id: string; name: string; value: string; }[];
 }
 
 export interface Interaction {
@@ -136,12 +142,7 @@ export interface Interaction {
   isViaId?: string | null;
 }
 
-export interface AIInsight {
-  contactId: string;
-  nextRecommendedContact: string;
-  summarySentiment: string;
-  sentimentDescription: string;
-}
+
 
 // =============================================================================
 // Dedupe Engine Types

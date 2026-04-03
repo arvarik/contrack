@@ -7,7 +7,8 @@ export function buildContactUpdate(body: Record<string, unknown>) {
     'name', 'firstName', 'lastName', 'headline', 'role', 'company',
     'location', 'birthday', 'preferences', 'avatarUrl', 'cadenceDays',
     'lastContactedAt', 'nextFollowUpAt', 'themeColor', 'about',
-    'pronouns', 'industry', 'website',
+    'pronouns', 'industry', 'website', 'isArchived', 'aiBriefing',
+    'aiBackground', 'aiSummary', 'aiHydratedAt',
   ] as const;
 
   const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
@@ -29,6 +30,8 @@ export function hydrateContact(contact: any): any {
     experience: sqlite.prepare("SELECT id, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience WHERE contactId = ?").all(contact.id).map((e: any) => ({ ...e, isCurrent: !!e.isCurrent })),
     sources: sqlite.prepare("SELECT id, platform, externalId, connectedOn, importedAt FROM contact_sources WHERE contactId = ?").all(contact.id),
     tags: sqlite.prepare("SELECT id, tag FROM contact_tags WHERE contactId = ?").all(contact.id),
+    interests: sqlite.prepare("SELECT id, interest FROM contact_interests WHERE contactId = ?").all(contact.id),
+    attributes: sqlite.prepare("SELECT id, name, value FROM contact_attributes WHERE contactId = ?").all(contact.id),
     addresses: sqlite.prepare("SELECT id, address, label, isPrimary, source FROM contact_addresses WHERE contactId = ? ORDER BY isPrimary DESC").all(contact.id).map((a: any) => ({ ...a, isPrimary: !!a.isPrimary })),
     lists: sqlite.prepare(`
       SELECT l.id, l.name, l.icon FROM lists l
@@ -57,8 +60,31 @@ export function extractHandleFromUrl(url: string): string | null {
   } catch { return null; }
 }
 
-/** Insert child records (emails, phones, socialLinks, education, experience, tags, sources) inside a transaction. */
-export function insertChildRecords(contactId: string, body: any, sourceName = 'manual'): void {
+/** 
+ * Type definition for inbound payload containing potential relational data
+ * to append to a given Contact profile during Creation or Hydration.
+ */
+export interface ChildRecordsPayload {
+  emails?: (string | { email: string; label?: string; isPrimary?: boolean })[];
+  phones?: (string | { phone: string; label?: string; isPrimary?: boolean })[];
+  socialLinks?: (string | { url: string; platform?: string; handle?: string })[];
+  education?: { school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; description?: string }[];
+  experience?: { company: string; role?: string; startDate?: string; endDate?: string; isCurrent?: boolean; description?: string; location?: string }[];
+  tags?: (string | { tag: string })[];
+  sources?: (string | { platform: string; externalId?: string; connectedOn?: string; rawData?: string })[];
+  interests?: (string | { interest: string; isAiGenerated?: boolean })[];
+  attributes?: { name: string; value: string }[];
+  addresses?: (string | { address: string; label?: string; isPrimary?: boolean })[];
+}
+
+/** 
+ * Inserts normalized child records (emails, phones, arrays of objects) inside an active 
+ * SQL transaction or discrete call. Idempotent where appropriate via ON CONFLICT guards.
+ * @param contactId - Foreign key UUID of the primary contact
+ * @param body - The payload containing arrays of child node objects
+ * @param sourceName - Defaults to 'manual'. Used to stamp the origin of the inserted rows.
+ */
+export function insertChildRecords(contactId: string, body: ChildRecordsPayload, sourceName = 'manual'): void {
   if (Array.isArray(body.emails)) {
     for (let i = 0; i < body.emails.length; i++) {
       const e = body.emails[i];
@@ -139,12 +165,40 @@ export function insertChildRecords(contactId: string, body: any, sourceName = 'm
       );
     }
   }
+  if (Array.isArray(body.interests)) {
+    for (const item of body.interests) {
+      const val = (typeof item === 'string' ? item : item.interest)?.trim();
+      if (!val) continue;
+      const isAi = (typeof item === 'object' && item.isAiGenerated === true) ? 1 : 0;
+      sqlite.prepare(`
+        INSERT INTO contact_interests (id, contactId, interest, isAiGenerated) 
+        VALUES (?, ?, ?, ?) 
+        ON CONFLICT(contactId, interest) DO UPDATE SET isAiGenerated = excluded.isAiGenerated
+      `).run(crypto.randomUUID(), contactId, val, isAi);
+    }
+  }
+  if (Array.isArray(body.attributes)) {
+    for (const attr of body.attributes) {
+      if (!attr?.name || !attr?.value) continue;
+      sqlite.prepare(`
+        INSERT INTO contact_attributes (id, contactId, name, value) 
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(contactId, name) DO UPDATE SET value = excluded.value
+      `).run(
+        crypto.randomUUID(), contactId, attr.name.trim(), attr.value.trim()
+      );
+    }
+  }
   if (Array.isArray(body.addresses)) {
     for (let i = 0; i < body.addresses.length; i++) {
       const a = body.addresses[i];
       const address = (typeof a === 'string' ? a : a.address)?.trim();
       if (!address) continue;
-      sqlite.prepare("INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, source) VALUES (?, ?, ?, ?, ?, ?)").run(
+      sqlite.prepare(`
+        INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, source) 
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(contactId, address) DO NOTHING
+      `).run(
         crypto.randomUUID(), contactId, address,
         (typeof a === 'object' ? a.label : 'home') || 'home',
         typeof a === 'object' ? (a.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0),

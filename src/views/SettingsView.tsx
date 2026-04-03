@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap } from 'lucide-react';
+import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive } from 'lucide-react';
 import { CleanupView } from './CleanupView';
+import { ArchivedContactsView } from './ArchivedContactsView';
 import { ICON_BTN, PAGE_TITLE, CARD, SECTION_HEADING } from '../lib/styles';
 import { cn } from '../lib/utils';
 
@@ -24,6 +25,7 @@ export const SettingsView = () => {
   };
 
   const isDedupe = location.pathname.endsWith('/dedupe');
+  const isArchived = location.pathname.endsWith('/archived');
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
@@ -39,9 +41,9 @@ export const SettingsView = () => {
             <div>
               <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
                 <div className="p-2 bg-primary/10 rounded-xl">
-                  {isDedupe ? <Zap className="w-6 h-6 text-primary" /> : <SettingsIcon className="w-6 h-6 text-primary" />}
+                  {isDedupe ? <Zap className="w-6 h-6 text-primary" /> : isArchived ? <Archive className="w-6 h-6 text-amber-500" /> : <SettingsIcon className="w-6 h-6 text-primary" />}
                 </div>
-                {isDedupe ? 'Dedupe Engine' : 'Settings'}
+                {isDedupe ? 'Dedupe Engine' : isArchived ? 'Archived Contacts' : 'Settings'}
               </h1>
             </div>
           </div>
@@ -61,6 +63,16 @@ export const SettingsView = () => {
                 </h3>
                 <p className="text-sm text-on-surface-variant">
                   Find and merge duplicate contacts, resolving conflicts automatically.
+                </p>
+              </Link>
+
+              <Link to="/settings/archived" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
+                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-amber-500 transition-colors")}>
+                  <Archive className="w-5 h-5 text-amber-500" />
+                  Archived Contacts
+                </h3>
+                <p className="text-sm text-on-surface-variant">
+                  View and restore contacts you've archived. Archived contacts are hidden from your Network and Map.
                 </p>
               </Link>
 
@@ -106,6 +118,12 @@ export const SettingsView = () => {
           <Route path="/dedupe" element={
             <div className="h-full">
               <CleanupView embedded={true} />
+            </div>
+          } />
+
+          <Route path="/archived" element={
+            <div className="overflow-y-auto h-full">
+              <ArchivedContactsView />
             </div>
           } />
         </Routes>

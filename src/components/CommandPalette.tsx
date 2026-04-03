@@ -59,7 +59,7 @@ const AIResultCard = ({ match, index, onSelect, isFallback }: AIResultCardProps)
       className="contents"
     >
       <img
-        src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}`}
+        src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}&mouth=default,smile,serious`}
         alt=""
         className="w-8 h-8 rounded-full bg-surface-container-highest object-cover shrink-0 mt-0.5"
       />
@@ -410,7 +410,7 @@ export const CommandPalette = () => {
                           className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface"
                         >
                           <img
-                            src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}`}
+                            src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
                             alt=""
                             className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
                           />

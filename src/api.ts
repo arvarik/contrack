@@ -562,3 +562,164 @@ export const useRemoveFromList = () => {
     },
   });
 };
+
+// =============================================================================
+// Archive / Unarchive
+// =============================================================================
+
+/** Fetch all archived contacts. */
+export const useArchivedContacts = () => {
+  return useQuery({
+    queryKey: ['contacts', 'archived'],
+    queryFn: async (): Promise<Contact[]> => {
+      const res = await fetch(`${API_BASE}/contacts/archived`);
+      if (!res.ok) throw new Error('Failed to fetch archived contacts');
+      return res.json();
+    },
+  });
+};
+
+/** Archive a single contact (soft-hide). */
+export const useArchiveContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API_BASE}/contacts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: 1 }),
+      });
+      if (!res.ok) throw new Error('Failed to archive contact');
+      return res.json();
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', id] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts', 'archived'] });
+    },
+  });
+};
+
+/** Un-archive a single contact (restore to network). */
+export const useUnarchiveContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${API_BASE}/contacts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: 0 }),
+      });
+      if (!res.ok) throw new Error('Failed to unarchive contact');
+      return res.json();
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', id] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts', 'archived'] });
+    },
+  });
+};
+
+// =============================================================================
+// Bulk Operations (Multi-Edit)
+// =============================================================================
+
+/** Bulk-delete multiple contacts atomically. */
+export const useBulkDeleteContacts = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]): Promise<{ success: boolean; count: number }> => {
+      const res = await fetch(`${API_BASE}/contacts/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error('Failed to bulk delete contacts');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+/** Bulk-update a set of scalar fields across multiple contacts. */
+export const useBulkUpdateContacts = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, data }: { ids: string[]; data: Partial<Contact> }): Promise<{ success: boolean; count: number }> => {
+      const res = await fetch(`${API_BASE}/contacts/bulk-update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, data }),
+      });
+      if (!res.ok) throw new Error('Failed to bulk update contacts');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+/** Bulk-add multiple contacts to a single list. */
+export const useBulkAddToList = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ listId, contactIds }: { listId: string; contactIds: string[] }): Promise<{ success: boolean; count: number }> => {
+      const res = await fetch(`${API_BASE}/lists/${listId}/members/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactIds }),
+      });
+      if (!res.ok) throw new Error('Failed to bulk add to list');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+    },
+  });
+};
+
+/** Upload a custom avatar image for a contact. Persists to disk in uploads/avatars/. */
+export const useUploadAvatar = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, file }: { contactId: string; file: File }): Promise<Contact> => {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const res = await fetch(`${API_BASE}/contacts/${contactId}/avatar`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Failed to upload avatar');
+      return res.json();
+    },
+    onSuccess: (_data, { contactId }) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contact', contactId] });
+    },
+  });
+};
+
+/** Set a contact's avatar to a dicebear URL (no file upload needed). */
+export const useSetDicebearAvatar = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, avatarUrl }: { contactId: string; avatarUrl: string }): Promise<Contact> => {
+      const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarUrl }),
+      });
+      if (!res.ok) throw new Error('Failed to set avatar');
+      return res.json();
+    },
+    onSuccess: (_data, { contactId }) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contact', contactId] });
+    },
+  });
+};

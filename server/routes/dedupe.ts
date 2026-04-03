@@ -257,6 +257,30 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
+      sqlite.prepare(`
+        UPDATE contact_interests SET contactId = ?
+        WHERE contactId = ?
+        AND LOWER(TRIM(interest)) NOT IN (
+          SELECT LOWER(TRIM(interest)) FROM contact_interests WHERE contactId = ?
+        )
+      `).run(primaryId, duplicateId, primaryId);
+
+      sqlite.prepare(`
+        UPDATE contact_attributes SET contactId = ?
+        WHERE contactId = ?
+        AND LOWER(TRIM(name)) NOT IN (
+          SELECT LOWER(TRIM(name)) FROM contact_attributes WHERE contactId = ?
+        )
+      `).run(primaryId, duplicateId, primaryId);
+
+      sqlite.prepare(`
+        UPDATE contact_addresses SET contactId = ?
+        WHERE contactId = ?
+        AND LOWER(TRIM(address)) NOT IN (
+          SELECT LOWER(TRIM(address)) FROM contact_addresses WHERE contactId = ?
+        )
+      `).run(primaryId, duplicateId, primaryId);
+
       const scalarFields = [
         'firstName', 'lastName', 'headline', 'role', 'company', 'location',
         'birthday', 'preferences', 'avatarUrl', 'about', 'pronouns',

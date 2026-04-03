@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, unique } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { relations } from 'drizzle-orm';
 
@@ -36,8 +36,12 @@ export const contacts = sqliteTable('contacts', {
   lat: real('lat'),
   lng: real('lng'),
   aiBriefing: text('aiBriefing'),
+  aiBackground: text('aiBackground'),
+  aiSummary: text('aiSummary'),
+  aiHydratedAt: text('aiHydratedAt'),
   aiBriefingAt: text('aiBriefingAt'),
   isGhost: integer('isGhost').default(0),
+  isArchived: integer('isArchived').default(0),
 });
 
 // =============================================================================
@@ -72,6 +76,22 @@ export const contactPhones = sqliteTable('contact_phones', {
   source: text('source'),
   addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
 });
+
+/**
+ * contact_addresses — Multi-value physical addresses parsed from inputs.
+ */
+export const contactAddresses = sqliteTable('contact_addresses', {
+  id: text('id').primaryKey(),
+  contactId: text('contactId').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  address: text('address').notNull(),
+  label: text('label').default('home'),
+  isPrimary: integer('isPrimary').default(0),
+  source: text('source'),
+  addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  unq: unique().on(t.contactId, t.address),
+}));
 
 /**
  * contact_social_links — Typed social/professional profile URLs.
@@ -153,6 +173,36 @@ export const contactTags = sqliteTable('contact_tags', {
   addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+/**
+ * contact_interests — Personal hobbies and interests extracted by AI
+ * Kept separate from generic CRM tags to avoid cluttering pipeline management.
+ */
+export const contactInterests = sqliteTable('contact_interests', {
+  id: text('id').primaryKey(),
+  contactId: text('contactId').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  interest: text('interest').notNull(),
+  isAiGenerated: integer('isAiGenerated', { mode: 'boolean' }).default(false),
+  addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  unq: unique().on(t.contactId, t.interest),
+}));
+
+/**
+ * contact_attributes — Flexible key-value store for domain-specific LLM extractions.
+ * e.g., { name: "Investment Philosophy", value: "Focuses on early stage AI..." }
+ */
+export const contactAttributes = sqliteTable('contact_attributes', {
+  id: text('id').primaryKey(),
+  contactId: text('contactId').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  value: text('value').notNull(),
+  addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  unq: unique().on(t.contactId, t.name),
+}));
+
 // =============================================================================
 // Interactions (Timeline)
 // =============================================================================
@@ -228,11 +278,14 @@ export const listMembers = sqliteTable('list_members', {
 export const contactsRelations = relations(contacts, ({ many }) => ({
   emails: many(contactEmails),
   phones: many(contactPhones),
+  addresses: many(contactAddresses),
   socialLinks: many(contactSocialLinks),
   education: many(contactEducation),
   experience: many(contactExperience),
   sources: many(contactSources),
   tags: many(contactTags),
+  interests: many(contactInterests),
+  attributes: many(contactAttributes),
   interactions: many(interactions),
   mentionedIn: many(interactionMentions),
 }));
@@ -243,6 +296,10 @@ export const contactEmailsRelations = relations(contactEmails, ({ one }) => ({
 
 export const contactPhonesRelations = relations(contactPhones, ({ one }) => ({
   contact: one(contacts, { fields: [contactPhones.contactId], references: [contacts.id] }),
+}));
+
+export const contactAddressesRelations = relations(contactAddresses, ({ one }) => ({
+  contact: one(contacts, { fields: [contactAddresses.contactId], references: [contacts.id] }),
 }));
 
 export const contactSocialLinksRelations = relations(contactSocialLinks, ({ one }) => ({
@@ -263,6 +320,14 @@ export const contactSourcesRelations = relations(contactSources, ({ one }) => ({
 
 export const contactTagsRelations = relations(contactTags, ({ one }) => ({
   contact: one(contacts, { fields: [contactTags.contactId], references: [contacts.id] }),
+}));
+
+export const contactInterestsRelations = relations(contactInterests, ({ one }) => ({
+  contact: one(contacts, { fields: [contactInterests.contactId], references: [contacts.id] }),
+}));
+
+export const contactAttributesRelations = relations(contactAttributes, ({ one }) => ({
+  contact: one(contacts, { fields: [contactAttributes.contactId], references: [contacts.id] }),
 }));
 
 export const interactionsRelations = relations(interactions, ({ one, many }) => ({

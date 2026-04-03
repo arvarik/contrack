@@ -39,7 +39,8 @@ sqlite.exec(`
     lng REAL,
     aiBriefing TEXT,
     aiBriefingAt TEXT,
-    isGhost INTEGER DEFAULT 0
+    isGhost INTEGER DEFAULT 0,
+    isArchived INTEGER DEFAULT 0
   );
 
   -- Normalized child tables
@@ -124,7 +125,26 @@ sqlite.exec(`
     label TEXT DEFAULT 'home',
     isPrimary INTEGER DEFAULT 0,
     source TEXT DEFAULT 'manual',
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
+    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE(contactId, address)
+  );
+
+  CREATE TABLE IF NOT EXISTS contact_interests (
+    id TEXT PRIMARY KEY,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    interest TEXT NOT NULL,
+    isAiGenerated INTEGER DEFAULT 0,
+    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE(contactId, interest)
+  );
+
+  CREATE TABLE IF NOT EXISTS contact_attributes (
+    id TEXT PRIMARY KEY,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE(contactId, name)
   );
 
   -- Interactions / timeline
@@ -167,6 +187,17 @@ sqlite.exec(`
 `);
 
 log.info("Database", "All tables verified");
+
+// Migration: isArchived column (non-destructive ADD COLUMN guard)
+try {
+  const colCheck2 = sqlite.prepare("PRAGMA table_info(contacts)").all() as { name: string }[];
+  if (!colCheck2.some(c => c.name === 'isArchived')) {
+    sqlite.exec("ALTER TABLE contacts ADD COLUMN isArchived INTEGER DEFAULT 0");
+    log.info("Migration", "Added isArchived column to contacts table");
+  }
+} catch (migErr2: any) {
+  log.warn("Migration", `isArchived migration skipped: ${migErr2.message}`);
+}
 
 // Migration: isPremium → Starred list
 try {

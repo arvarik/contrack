@@ -1,5 +1,8 @@
 import { Router } from "express";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -7,18 +10,53 @@ import { log } from "../logger.ts";
 import { hydrateContact, buildContactUpdate, insertChildRecords, detectPlatformFromUrl, extractHandleFromUrl } from "../helpers.ts";
 import { queueGeocode } from "../geocoder.ts";
 import { parseContactRecord } from "../../aiService.ts";
+import { invalidateSearchCache } from "../searchCache.ts";
+
+// Avatar-specific upload storage — separate subfolder
+const avatarDir = path.join(process.cwd(), "uploads", "avatars");
+if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
+
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, avatarDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `avatar-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+  },
+});
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for avatars
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) return cb(null, true);
+    cb(new Error('Only image files are allowed'));
+  },
+});
 
 const router = Router();
 
 router.get("/contacts/map", (req, res) => {
   const rid = (req as any).requestId;
   try {
-    const results = sqlite.prepare("SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts WHERE lat IS NOT NULL AND lng IS NOT NULL").all();
+    const results = sqlite.prepare(
+      "SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts WHERE lat IS NOT NULL AND lng IS NOT NULL AND (isArchived = 0 OR isArchived IS NULL)"
+    ).all();
     log.debug("API", `[${rid}] GET /api/contacts/map → ${results.length}`);
     res.json(results);
   } catch (err: any) {
     log.error("API", `[${rid}] GET /api/contacts/map failed`, { error: err.message });
     res.status(500).json({ error: "Failed to fetch map data" });
+  }
+});
+
+router.get("/contacts/archived", (req, res) => {
+  const rid = (req as any).requestId;
+  try {
+    const all = sqlite.prepare("SELECT * FROM contacts WHERE isArchived = 1 ORDER BY updatedAt DESC").all();
+    log.debug("API", `[${rid}] GET /api/contacts/archived → ${all.length}`);
+    res.json(all.map(hydrateContact));
+  } catch (err: any) {
+    log.error("API", `[${rid}] GET /api/contacts/archived failed`, { error: err.message });
+    res.status(500).json({ error: "Failed to fetch archived contacts" });
   }
 });
 
@@ -76,6 +114,7 @@ router.post("/contacts", (req, res) => {
       if (addressString) queueGeocode(id, addressString);
     }
 
+    invalidateSearchCache();
     log.info("API", `[${rid}] POST /api/contacts → "${body.name}" (${id})`);
     res.status(201).json(hydrateContact(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id)));
   } catch (err: any) {
@@ -101,7 +140,7 @@ router.post("/contacts/bulk", (req, res) => {
           headline: c.headline || null, role: c.role || null,
           company: c.company || null, location: c.location || null,
           birthday: c.birthday || null, preferences: c.preferences || null,
-          avatarUrl: c.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}`,
+          avatarUrl: c.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}&mouth=default,smile,serious`,
           cadenceDays: c.cadenceDays ?? 90,
           about: c.about || null, pronouns: c.pronouns || null,
           industry: c.industry || null, website: c.website || null,
@@ -112,6 +151,7 @@ router.post("/contacts/bulk", (req, res) => {
       }
     });
     txn();
+    invalidateSearchCache();
     log.info("API", `[${rid}] POST /api/contacts/bulk → ${count} imported`);
     res.status(201).json({ success: true, count });
   } catch (err: any) {
@@ -134,6 +174,57 @@ router.post("/parse-contact", async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Bulk Operations — MUST be before /:id routes to avoid param collision
+// ---------------------------------------------------------------------------
+
+router.post("/contacts/bulk-delete", (req, res) => {
+  const rid = (req as any).requestId;
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0)
+      return res.status(400).json({ error: "ids array required" });
+
+    const deleteFn = sqlite.transaction(() => {
+      const stmt = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
+      for (const id of ids) stmt.run(id);
+    });
+    deleteFn();
+    invalidateSearchCache();
+    log.info("API", `[${rid}] POST /api/contacts/bulk-delete → ${ids.length} deleted`);
+    res.json({ success: true, count: ids.length });
+  } catch (err: any) {
+    log.error("API", `[${rid}] POST /api/contacts/bulk-delete failed`, { error: err.message });
+    res.status(500).json({ error: "Failed to bulk delete" });
+  }
+});
+
+router.put("/contacts/bulk-update", (req, res) => {
+  const rid = (req as any).requestId;
+  try {
+    const { ids, data } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0)
+      return res.status(400).json({ error: "ids array required" });
+    if (!data || typeof data !== 'object')
+      return res.status(400).json({ error: "data object required" });
+
+    const update = buildContactUpdate(data);
+    const updateFn = sqlite.transaction(() => {
+      const setClauses = Object.keys(update).map(k => `${k} = ?`).join(', ');
+      const values = Object.values(update);
+      const stmt = sqlite.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`);
+      for (const id of ids) stmt.run(...values, id);
+    });
+    updateFn();
+    invalidateSearchCache();
+    log.info("API", `[${rid}] PUT /api/contacts/bulk-update → ${ids.length} updated`);
+    res.json({ success: true, count: ids.length });
+  } catch (err: any) {
+    log.error("API", `[${rid}] PUT /api/contacts/bulk-update failed`, { error: err.message });
+    res.status(500).json({ error: "Failed to bulk update" });
+  }
+});
+
 router.put("/contacts/:id", (req, res) => {
   const rid = (req as any).requestId;
   try {
@@ -143,67 +234,25 @@ router.put("/contacts/:id", (req, res) => {
     const txn = sqlite.transaction(() => {
       db.update(schema.contacts).set(buildContactUpdate(body)).where(eq(schema.contacts.id, id)).run();
 
-      if (body.emails !== undefined && Array.isArray(body.emails)) {
-        sqlite.prepare("DELETE FROM contact_emails WHERE contactId = ?").run(id);
-        for (let i = 0; i < body.emails.length; i++) {
-          const e = body.emails[i];
-          const email = (typeof e === 'string' ? e : e.email)?.trim();
-          if (!email) continue;
-          sqlite.prepare("INSERT INTO contact_emails (id, contactId, email, label, isPrimary, source) VALUES (?, ?, ?, ?, ?, ?)").run(
-            crypto.randomUUID(), id, email,
-            (typeof e === 'object' ? e.label : 'personal') || 'personal',
-            (typeof e === 'object' ? (e.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0)),
-            typeof e === 'object' ? (e.source || 'manual') : 'manual',
-          );
-        }
-      }
-      if (body.phones !== undefined && Array.isArray(body.phones)) {
-        sqlite.prepare("DELETE FROM contact_phones WHERE contactId = ?").run(id);
-        for (let i = 0; i < body.phones.length; i++) {
-          const p = body.phones[i];
-          const phone = (typeof p === 'string' ? p : p.phone)?.trim();
-          if (!phone) continue;
-          sqlite.prepare("INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, source) VALUES (?, ?, ?, ?, ?, ?)").run(
-            crypto.randomUUID(), id, phone,
-            (typeof p === 'object' ? p.label : 'mobile') || 'mobile',
-            (typeof p === 'object' ? (p.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0)),
-            typeof p === 'object' ? (p.source || 'manual') : 'manual',
-          );
-        }
-      }
-      if (body.socialLinks !== undefined && Array.isArray(body.socialLinks)) {
-        sqlite.prepare("DELETE FROM contact_social_links WHERE contactId = ?").run(id);
-        // Top-level imports used
-        for (const sl of body.socialLinks) {
-          const url = (typeof sl === 'string' ? sl : sl.url)?.trim();
-          if (!url) continue;
-          const platform = typeof sl === 'object' && sl.platform ? sl.platform : detectPlatformFromUrl(url);
-          sqlite.prepare("INSERT INTO contact_social_links (id, contactId, platform, url, handle, source) VALUES (?, ?, ?, ?, ?, ?)").run(
-            crypto.randomUUID(), id, platform, url,
-            typeof sl === 'object' ? sl.handle || extractHandleFromUrl(url) : extractHandleFromUrl(url), 'manual',
-          );
-        }
-      }
-      if (body.tags !== undefined && Array.isArray(body.tags)) {
-        sqlite.prepare("DELETE FROM contact_tags WHERE contactId = ?").run(id);
-        for (const tag of body.tags) {
-          const val = (typeof tag === 'string' ? tag : tag.tag)?.trim();
-          if (!val) continue;
-          sqlite.prepare("INSERT INTO contact_tags (id, contactId, tag) VALUES (?, ?, ?)").run(crypto.randomUUID(), id, val);
-        }
-      }
-      if (body.addresses !== undefined && Array.isArray(body.addresses)) {
-        sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?").run(id);
-        for (let i = 0; i < body.addresses.length; i++) {
-          const a = body.addresses[i];
-          const address = (typeof a === 'string' ? a : a.address)?.trim();
-          if (!address) continue;
-          sqlite.prepare("INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, source) VALUES (?, ?, ?, ?, ?, ?)").run(
-            crypto.randomUUID(), id, address,
-            (typeof a === 'object' ? a.label : 'home') || 'home',
-            (typeof a === 'object' ? (a.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0)),
-            typeof a === 'object' ? (a.source || 'manual') : 'manual',
-          );
+      // For every known array relation, if it is explicitly passed in the body,
+      // treat it as a "Full Replacement" operation. Wipe the olds, and insert the news.
+      const childMappings: [keyof typeof body, string][] = [
+        ['emails', 'contact_emails'],
+        ['phones', 'contact_phones'],
+        ['socialLinks', 'contact_social_links'],
+        ['tags', 'contact_tags'],
+        ['interests', 'contact_interests'],
+        ['addresses', 'contact_addresses'],
+        ['attributes', 'contact_attributes'],
+        ['education', 'contact_education'],
+        ['experience', 'contact_experience'],
+        ['sources', 'contact_sources'],
+      ];
+
+      for (const [bodyKey, tableName] of childMappings) {
+        if (body[bodyKey] !== undefined && Array.isArray(body[bodyKey])) {
+          sqlite.prepare(`DELETE FROM ${tableName} WHERE contactId = ?`).run(id);
+          insertChildRecords(id, { [bodyKey]: body[bodyKey] });
         }
       }
     });
@@ -221,6 +270,7 @@ router.put("/contacts/:id", (req, res) => {
       if (addressString) queueGeocode(id, addressString);
     }
 
+    invalidateSearchCache();
     log.info("API", `[${rid}] PUT /api/contacts/${id} → updated`);
     res.json(updated);
   } catch (err: any) {
@@ -234,11 +284,50 @@ router.delete("/contacts/:id", async (req, res) => {
   try {
     const result = await db.delete(schema.contacts).where(eq(schema.contacts.id, req.params.id)).returning();
     if (!result?.length) return res.status(404).json({ error: "Not found" });
+    invalidateSearchCache();
     log.info("API", `[${rid}] DELETE /api/contacts/${req.params.id}`);
     res.json({ success: true });
   } catch (err: any) {
     log.error("API", `[${rid}] DELETE failed`, { error: err.message });
     res.status(500).json({ error: "Failed to delete contact" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Avatar Upload — persists image to disk, updates avatarUrl in DB
+// Must come after DELETE /:id to avoid 'avatar' being matched as :id
+// ---------------------------------------------------------------------------
+
+router.post("/contacts/:id/avatar", uploadAvatar.single("avatar"), (req, res) => {
+  const rid = (req as any).requestId;
+  try {
+    if (!req.file) return res.status(400).json({ error: "No image file provided" });
+    const { id } = req.params;
+
+    // Build the public URL served by express.static
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+    // Delete old uploaded avatar if it was a local file (not a dicebear URL)
+    const existing = sqlite.prepare("SELECT avatarUrl FROM contacts WHERE id = ?").get(id) as any;
+    if (existing?.avatarUrl?.startsWith('/uploads/avatars/')) {
+      const oldPath = path.join(process.cwd(), existing.avatarUrl);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    db.update(schema.contacts)
+      .set({ avatarUrl, updatedAt: new Date().toISOString() })
+      .where(eq(schema.contacts.id, id))
+      .run();
+
+    const updated = hydrateContact(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
+    if (!updated) return res.status(404).json({ error: "Contact not found" });
+
+    invalidateSearchCache();
+    log.info("API", `[${rid}] POST /api/contacts/${id}/avatar → ${avatarUrl}`);
+    res.json(updated);
+  } catch (err: any) {
+    log.error("API", `[${rid}] POST /api/contacts/:id/avatar failed`, { error: err.message });
+    res.status(500).json({ error: "Failed to upload avatar" });
   }
 });
 

@@ -139,4 +139,28 @@ router.delete("/:id/members/:contactId", (req, res) => {
   }
 });
 
+router.post("/:id/members/bulk", (req, res) => {
+  const rid = (req as any).requestId;
+  try {
+    const { id } = req.params;
+    const { contactIds } = req.body;
+    if (!Array.isArray(contactIds) || contactIds.length === 0)
+      return res.status(400).json({ error: "contactIds array required" });
+
+    const list = sqlite.prepare("SELECT id FROM lists WHERE id = ?").get(id);
+    if (!list) return res.status(404).json({ error: "List not found" });
+
+    const insertFn = sqlite.transaction(() => {
+      const stmt = sqlite.prepare("INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)");
+      for (const contactId of contactIds) stmt.run(id, contactId);
+    });
+    insertFn();
+    log.info("API", `[${rid}] POST /api/lists/${id}/members/bulk → added ${contactIds.length}`);
+    res.json({ success: true, count: contactIds.length });
+  } catch (err: any) {
+    log.error("API", `[${rid}] POST /api/lists/${req.params.id}/members/bulk failed`, { error: err.message });
+    res.status(500).json({ error: "Failed to bulk add members" });
+  }
+});
+
 export const listsRouter = router;
