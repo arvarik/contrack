@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Archive, ArchiveRestore, User, Square, CheckSquare, CheckCheck, Trash2,
 } from 'lucide-react';
@@ -10,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { CARD, SECTION_HEADING, EMPTY_STATE, ICON_BTN } from '../lib/styles';
 import { cn } from '../lib/utils';
+import { FloatingContactCard } from '../components/FloatingContactCard';
 
 // ---------------------------------------------------------------------------
 // ArchivedContactsView — lists archived contacts with individual + bulk restore
@@ -25,6 +25,7 @@ export const ArchivedContactsView = () => {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleteConfirm, setIsBulkDeleteConfirm] = useState(false);
+  const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
 
   const enterSelectMode = () => { setIsSelectMode(true); setSelectedIds(new Set()); };
   const exitSelectMode = () => { setIsSelectMode(false); setSelectedIds(new Set()); };
@@ -185,13 +186,15 @@ export const ArchivedContactsView = () => {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <Link
-                      to={`/contact/${contact.id}`}
-                      onClick={e => isSelectMode && e.preventDefault()}
-                      className="font-semibold text-sm text-on-surface hover:text-primary transition-colors truncate block"
+                    <button
+                      onClick={e => {
+                        if (isSelectMode) { e.preventDefault(); return; }
+                        setFloatingContactId(contact.id);
+                      }}
+                      className="font-semibold text-sm text-on-surface hover:text-primary transition-colors truncate block text-left"
                     >
                       {contact.name}
-                    </Link>
+                    </button>
                     {(contact.role || contact.company) && (
                       <p className="text-xs text-on-surface-variant mt-0.5 truncate">
                         {[contact.role, contact.company].filter(Boolean).join(' at ')}
@@ -296,6 +299,13 @@ export const ArchivedContactsView = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Floating Contact Card overlay */}
+      <FloatingContactCard
+        contactId={floatingContactId}
+        isOpen={!!floatingContactId}
+        onClose={() => setFloatingContactId(null)}
+      />
     </div>
   );
 };

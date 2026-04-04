@@ -1,26 +1,102 @@
 import { Router } from "express";
+import { AppError } from "../utils/AppError.ts";
+import { asyncHandler } from "../utils/asyncHandler.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import { GoogleGenAI, Type } from "@google/genai";
 import { log } from "../logger.ts";
-import { hydrateContact, nameSimilarity, normalizePhone } from "../helpers.ts";
+import { contactRepo } from "../repositories/contactRepository.ts";
+import { nameSimilarity, normalizePhone } from "../utils/nlp.ts";
 
-const genai = new GoogleGenAI({});
+// Use the same API key as the rest of the application (from env)
+const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+// Ordered fallback list — cheapest/fastest first, more capable models as backup
+const DEDUPE_AI_MODELS = [
+  "gemini-2.5-flash-lite", // cheapest, highest RPM
+  "gemini-2.5-flash",      // mid-tier fallback
+  "gemini-2.0-flash",      // legacy fallback (deprecated June 2026)
+];
+
+/** Evaluate ALL fuzzy candidates in a single batched Gemini call with model fallback */
+async function evaluateBatchWithAI(
+  candidates: { idx: number; a: any; b: any; sim: number; sameCompany: boolean }[],
+  rid: string
+): Promise<{ idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[]> {
+  if (candidates.length === 0) return [];
+
+  // Build a single prompt with all candidate pairs
+  const pairDescriptions = candidates.map((c, i) => {
+    return `Pair ${c.idx}:
+  Contact A: "${c.a.name}" | Company: ${c.a.company || '(none)'} | Role: ${c.a.role || '(none)'} | Location: ${c.a.location || '(none)'} | Emails: ${c.a._emails || '(none)'} | Phones: ${c.a._phones || '(none)'}
+  Contact B: "${c.b.name}" | Company: ${c.b.company || '(none)'} | Role: ${c.b.role || '(none)'} | Location: ${c.b.location || '(none)'} | Emails: ${c.b._emails || '(none)'} | Phones: ${c.b._phones || '(none)'}
+  Signal: Name similarity = ${(c.sim * 100).toFixed(0)}%${c.sameCompany ? ', same company' : ''}`;
+  }).join('\n\n');
+
+  const prompt = `You are a contact de-duplication expert. For each pair below, determine if they represent the SAME real-world person.
+
+Consider: common nickname variants (Bob/Robert, Bill/William, Mike/Michael), abbreviations, typos, and professional context (same company, role, location). Be CONSERVATIVE — only flag duplicates when genuinely confident.
+
+${pairDescriptions}
+
+For each pair, return your assessment. If there is clearly insufficient evidence, mark isDuplicate as false.`;
+
+  for (const model of DEDUPE_AI_MODELS) {
+    try {
+      const response = await genai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                idx: { type: Type.NUMBER },
+                isDuplicate: { type: Type.BOOLEAN },
+                confidence: { type: Type.NUMBER },
+                reasoning: { type: Type.STRING },
+              },
+              required: ["idx", "isDuplicate", "confidence", "reasoning"],
+            },
+          },
+        },
+      });
+      const text = response.text;
+      if (!text) continue;
+      const results = JSON.parse(text) as { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[];
+      log.info("Dedupe", `[${rid}] AI batch evaluated ${results.length} pairs via ${model}`);
+      return results;
+    } catch (err: any) {
+      log.warn("Dedupe", `[${rid}] Model ${model} batch failed: ${err.message}. Trying next...`);
+    }
+  }
+  log.error("Dedupe", `[${rid}] All AI models exhausted for batch evaluation`);
+  return [];
+}
+
 const router = Router();
 
 // =======================================================================
 // Dedupe API: The Singularity
 // =======================================================================
 
-router.get("/dedupe/suggestions", async (req, res) => {
+router.get("/dedupe/suggestions", asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
-  try {
-    const allContacts = sqlite.prepare("SELECT * FROM contacts").all() as any[];
+  // Filter out ghosts and archived contacts — they shouldn't be in the dedupe pool
+    const allContacts = sqlite.prepare(
+      "SELECT * FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)"
+    ).all() as any[];
     if (allContacts.length < 2) {
       log.debug("Dedupe", `[${rid}] Not enough contacts to dedupe`);
       return res.json([]);
     }
+
+    // Build O(1) lookup map
+    const contactMap = new Map<string, any>();
+    for (const c of allContacts) contactMap.set(c.id, c);
 
     const suggestions: any[] = [];
     const seenPairs = new Set<string>();
@@ -37,13 +113,15 @@ router.get("/dedupe/suggestions", async (req, res) => {
     `).all() as any[];
 
     for (const m of emailDupes) {
+      // Skip if either contact is ghost/archived (not in contactMap)
+      if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
       const pk = pairKey(m.id1, m.id2);
       if (seenPairs.has(pk)) continue;
       seenPairs.add(pk);
       suggestions.push({
         id: pk,
-        contactA: hydrateContact(allContacts.find((c: any) => c.id === m.id1)),
-        contactB: hydrateContact(allContacts.find((c: any) => c.id === m.id2)),
+        contactA: contactRepo.hydrate(contactMap.get(m.id1)),
+        contactB: contactRepo.hydrate(contactMap.get(m.id2)),
         matchType: 'email',
         confidence: 0.98,
         reasoning: `Both contacts share the email address: ${m.matchedField}`,
@@ -55,6 +133,7 @@ router.get("/dedupe/suggestions", async (req, res) => {
     const allPhones = sqlite.prepare("SELECT contactId, phone FROM contact_phones").all() as any[];
     const phoneMap = new Map<string, string[]>();
     for (const p of allPhones) {
+      if (!contactMap.has(p.contactId)) continue; // skip ghosts/archived
       const norm = normalizePhone(p.phone);
       if (norm.length < 7) continue;
       if (!phoneMap.has(norm)) phoneMap.set(norm, []);
@@ -71,8 +150,8 @@ router.get("/dedupe/suggestions", async (req, res) => {
           const origPhone = allPhones.find(p => p.contactId === unique[i] && normalizePhone(p.phone) === normPhone)?.phone || normPhone;
           suggestions.push({
             id: pk,
-            contactA: hydrateContact(allContacts.find((c: any) => c.id === unique[i])),
-            contactB: hydrateContact(allContacts.find((c: any) => c.id === unique[j])),
+            contactA: contactRepo.hydrate(contactMap.get(unique[i])),
+            contactB: contactRepo.hydrate(contactMap.get(unique[j])),
             matchType: 'phone',
             confidence: 0.95,
             reasoning: `Both contacts share the phone number: ${origPhone}`,
@@ -82,8 +161,9 @@ router.get("/dedupe/suggestions", async (req, res) => {
       }
     }
 
-    // ----- Pass 2: Fuzzy name/company matching → AI evaluation -----
-    const fuzzyCandidates: { a: any; b: any; sim: number; sameCompany: boolean }[] = [];
+    // ----- Pass 2: Fuzzy name/company matching → batched AI evaluation -----
+    const fuzzyCandidates: { idx: number; a: any; b: any; sim: number; sameCompany: boolean }[] = [];
+    let candidateIdx = 0;
     for (let i = 0; i < allContacts.length; i++) {
       for (let j = i + 1; j < allContacts.length; j++) {
         const a = allContacts[i];
@@ -96,95 +176,61 @@ router.get("/dedupe/suggestions", async (req, res) => {
           a.company.toLowerCase().trim() === b.company.toLowerCase().trim());
 
         if (sim >= 0.70 || (sim >= 0.45 && sameCompany)) {
-          fuzzyCandidates.push({ a, b, sim, sameCompany });
+          fuzzyCandidates.push({ idx: candidateIdx++, a, b, sim, sameCompany });
         }
       }
     }
 
     fuzzyCandidates.sort((x, y) => y.sim - x.sim);
-    const aiCandidates = fuzzyCandidates.slice(0, 15);
 
-    if (process.env.GEMINI_API_KEY && aiCandidates.length > 0) {
-      log.info("Dedupe", `[${rid}] AI pass: evaluating ${aiCandidates.length} fuzzy candidates`);
+    if (process.env.GEMINI_API_KEY && fuzzyCandidates.length > 0) {
+      log.info("Dedupe", `[${rid}] AI pass: batch-evaluating ${fuzzyCandidates.length} fuzzy candidates`);
 
-      for (const candidate of aiCandidates) {
-        try {
-          const aHydrated = hydrateContact(candidate.a);
-          const bHydrated = hydrateContact(candidate.b);
+      // Pre-hydrate emails/phones for the AI prompt (lightweight — only email/phone strings)
+      for (const c of fuzzyCandidates) {
+        const aEmails = sqlite.prepare("SELECT email FROM contact_emails WHERE contactId = ?").all(c.a.id) as any[];
+        const bEmails = sqlite.prepare("SELECT email FROM contact_emails WHERE contactId = ?").all(c.b.id) as any[];
+        const aPhones = sqlite.prepare("SELECT phone FROM contact_phones WHERE contactId = ?").all(c.a.id) as any[];
+        const bPhones = sqlite.prepare("SELECT phone FROM contact_phones WHERE contactId = ?").all(c.b.id) as any[];
+        c.a._emails = aEmails.map((e: any) => e.email).join(', ') || undefined;
+        c.b._emails = bEmails.map((e: any) => e.email).join(', ') || undefined;
+        c.a._phones = aPhones.map((p: any) => p.phone).join(', ') || undefined;
+        c.b._phones = bPhones.map((p: any) => p.phone).join(', ') || undefined;
+      }
 
-          const prompt = `You are a contact de-duplication expert. Determine if these two CRM records represent the SAME real-world person.
+      // Single batched AI call — no arbitrary cap, all candidates evaluated
+      const aiResults = await evaluateBatchWithAI(fuzzyCandidates, rid);
 
-Contact A:
-  Name: ${candidate.a.name}
-  Company: ${candidate.a.company || '(none)'}
-  Role: ${candidate.a.role || '(none)'}
-  Headline: ${candidate.a.headline || '(none)'}
-  Location: ${candidate.a.location || '(none)'}
-  Emails: ${aHydrated.emails?.map((e: any) => e.email).join(', ') || '(none)'}
-  Phones: ${aHydrated.phones?.map((p: any) => p.phone).join(', ') || '(none)'}
+      for (const result of aiResults) {
+        const candidate = fuzzyCandidates.find(c => c.idx === result.idx);
+        if (!candidate) continue;
 
-Contact B:
-  Name: ${candidate.b.name}
-  Company: ${candidate.b.company || '(none)'}
-  Role: ${candidate.b.role || '(none)'}
-  Headline: ${candidate.b.headline || '(none)'}
-  Location: ${candidate.b.location || '(none)'}
-  Emails: ${bHydrated.emails?.map((e: any) => e.email).join(', ') || '(none)'}
-  Phones: ${bHydrated.phones?.map((p: any) => p.phone).join(', ') || '(none)'}
-
-Flagged because: Name similarity = ${(candidate.sim * 100).toFixed(0)}%${candidate.sameCompany ? ', same company' : ''}
-
-Consider nickname variants (Bob/Robert, Bill/William, J./Julian), abbreviations, and professional context. Be conservative — only confirm duplicates you are confident about.`;
-
-          const response = await genai.models.generateContent({
-            model: "gemini-2.0-flash",
-            contents: prompt,
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  isDuplicate: { type: Type.BOOLEAN },
-                  confidence: { type: Type.NUMBER },
-                  reasoning: { type: Type.STRING },
-                },
-                required: ["isDuplicate", "confidence", "reasoning"],
-              },
-            },
+        if (result.isDuplicate && result.confidence >= 0.6) {
+          const pk = pairKey(candidate.a.id, candidate.b.id);
+          seenPairs.add(pk);
+          suggestions.push({
+            id: pk,
+            contactA: contactRepo.hydrate(candidate.a),
+            contactB: contactRepo.hydrate(candidate.b),
+            matchType: 'ai',
+            confidence: result.confidence,
+            reasoning: result.reasoning,
           });
-
-          const text = response.text;
-          if (!text) continue;
-          const parsed = JSON.parse(text);
-
-          if (parsed.isDuplicate && parsed.confidence >= 0.6) {
-            const pk = pairKey(candidate.a.id, candidate.b.id);
-            seenPairs.add(pk);
-            suggestions.push({
-              id: pk,
-              contactA: aHydrated,
-              contactB: bHydrated,
-              matchType: 'ai',
-              confidence: parsed.confidence,
-              reasoning: parsed.reasoning,
-            });
-            log.info("Dedupe", `[${rid}] AI confirmed: "${candidate.a.name}" ≈ "${candidate.b.name}" (${(parsed.confidence * 100).toFixed(0)}%)`);
-          } else {
-            log.debug("Dedupe", `[${rid}] AI rejected: "${candidate.a.name}" ≠ "${candidate.b.name}"`);
-          }
-        } catch (aiErr: any) {
-          log.warn("Dedupe", `[${rid}] AI evaluation failed for pair`, { error: aiErr.message });
+          log.info("Dedupe", `[${rid}] AI confirmed: "${candidate.a.name}" ≈ "${candidate.b.name}" (${(result.confidence * 100).toFixed(0)}%)`);
+        } else {
+          log.debug("Dedupe", `[${rid}] AI rejected: "${candidate.a.name}" ≠ "${candidate.b.name}"`);
         }
       }
-    } else if (aiCandidates.length > 0) {
-      log.info("Dedupe", `[${rid}] Skipping AI pass (no GEMINI_API_KEY). ${aiCandidates.length} fuzzy candidates unresolved.`);
-      for (const candidate of aiCandidates) {
+    } else if (fuzzyCandidates.length > 0) {
+      log.info("Dedupe", `[${rid}] Skipping AI pass (no GEMINI_API_KEY). ${fuzzyCandidates.length} fuzzy candidates unresolved.`);
+      // Fallback: surface high-similarity pairs without AI confirmation
+      for (const candidate of fuzzyCandidates) {
         if (candidate.sim >= 0.80) {
           const pk = pairKey(candidate.a.id, candidate.b.id);
           suggestions.push({
             id: pk,
-            contactA: hydrateContact(candidate.a),
-            contactB: hydrateContact(candidate.b),
+            contactA: contactRepo.hydrate(candidate.a),
+            contactB: contactRepo.hydrate(candidate.b),
             matchType: 'ai',
             confidence: candidate.sim * 0.7,
             reasoning: `High name similarity (${(candidate.sim * 100).toFixed(0)}%)${candidate.sameCompany ? ' and same company' : ''}. AI evaluation unavailable — set GEMINI_API_KEY for smarter matching.`,
@@ -193,33 +239,52 @@ Consider nickname variants (Bob/Robert, Bill/William, J./Julian), abbreviations,
       }
     }
 
-    suggestions.sort((a: any, b: any) => b.confidence - a.confidence);
-    log.info("Dedupe", `[${rid}] GET /api/dedupe/suggestions → ${suggestions.length} suggestions`);
-    res.json(suggestions);
-  } catch (err: any) {
-    log.error("Dedupe", `[${rid}] Suggestion engine failed`, { error: err.message });
-    res.status(500).json({ error: "De-duplication engine failed" });
-  }
-});
+  suggestions.sort((a: any, b: any) => b.confidence - a.confidence);
+  log.info("Dedupe", `[${rid}] GET /api/dedupe/suggestions → ${suggestions.length} suggestions`);
+  res.json(suggestions);
+}));
 
-router.post("/contacts/merge", (req, res) => {
+router.post("/contacts/merge", asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
-  try {
-    const { primaryId, duplicateId } = req.body;
-    if (!primaryId || !duplicateId) return res.status(400).json({ error: "primaryId and duplicateId are required" });
-    if (primaryId === duplicateId) return res.status(400).json({ error: "Cannot merge a contact with itself" });
+  const { primaryId, duplicateId } = req.body;
+  if (!primaryId || !duplicateId) throw new AppError("primaryId and duplicateId are required", 400);
+  if (primaryId === duplicateId) throw new AppError("Cannot merge a contact with itself", 400);
 
-    const primary = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId) as any;
-    const duplicate = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(duplicateId) as any;
-    if (!primary) return res.status(404).json({ error: `Primary contact ${primaryId} not found` });
-    if (!duplicate) return res.status(404).json({ error: `Duplicate contact ${duplicateId} not found` });
+  const primary = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId) as any;
+  const duplicate = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(duplicateId) as any;
+  if (!primary) throw new AppError(`Primary contact ${primaryId} not found`, 404);
+  if (!duplicate) throw new AppError(`Duplicate contact ${duplicateId} not found`, 404);
 
     log.info("Merge", `[${rid}] Merging "${duplicate.name}" → "${primary.name}"`);
 
     const mergeTxn = sqlite.transaction(() => {
-      const movedInteractions = sqlite.prepare("UPDATE interactions SET contactId = ? WHERE contactId = ?").run(primaryId, duplicateId);
+      // ── Interactions ──────────────────────────────────────────────────────
+      // Re-parent all timeline entries from duplicate → primary
+      const movedInteractions = sqlite.prepare(
+        "UPDATE interactions SET contactId = ? WHERE contactId = ?"
+      ).run(primaryId, duplicateId);
       log.debug("Merge", `  Moved ${movedInteractions.changes} interactions`);
 
+      // ── Interaction Mentions (Network Graph Integrity) ────────────────────
+      // CRITICAL: Re-parent any "mention" edges that pointed AT the duplicate
+      // to now point at the primary. Without this, the cascade-delete of the
+      // duplicate would silently destroy bi-directional network graph edges.
+      // We only move rows where the primary is NOT already a mention on the
+      // same interaction (composite PK guard).
+      const movedMentions = sqlite.prepare(`
+        UPDATE interaction_mentions SET contactId = ?
+        WHERE contactId = ?
+        AND interactionId NOT IN (
+          SELECT interactionId FROM interaction_mentions WHERE contactId = ?
+        )
+      `).run(primaryId, duplicateId, primaryId);
+      log.debug("Merge", `  Remapped ${movedMentions.changes} interaction_mentions`);
+      // Any remaining duplicate mentions (where a mention collision would violate the PK)
+      // are safe to discard — the primary is already a mention on that interaction.
+      sqlite.prepare("DELETE FROM interaction_mentions WHERE contactId = ?").run(duplicateId);
+
+      // ── Emails ────────────────────────────────────────────────────────────
+      // Move unique emails (case-insensitive dedup)
       sqlite.prepare(`
         UPDATE contact_emails SET contactId = ?
         WHERE contactId = ?
@@ -228,15 +293,26 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
-      const primaryPhones = sqlite.prepare("SELECT phone FROM contact_phones WHERE contactId = ?").all(primaryId) as any[];
-      const primaryPhoneNorms = new Set(primaryPhones.map(p => normalizePhone(p.phone)));
-      const dupePhones = sqlite.prepare("SELECT id, phone FROM contact_phones WHERE contactId = ?").all(duplicateId) as any[];
+      // ── Phones ────────────────────────────────────────────────────────────
+      // Move unique phones (normalized dedup to handle +1 vs local format)
+      const primaryPhones = sqlite.prepare(
+        "SELECT phone FROM contact_phones WHERE contactId = ?"
+      ).all(primaryId) as any[];
+      const primaryPhoneNorms = new Set(primaryPhones.map((p: any) => normalizePhone(p.phone)));
+      const dupePhones = sqlite.prepare(
+        "SELECT id, phone FROM contact_phones WHERE contactId = ?"
+      ).all(duplicateId) as any[];
+      let movedPhones = 0;
       for (const dp of dupePhones) {
         if (!primaryPhoneNorms.has(normalizePhone(dp.phone))) {
           sqlite.prepare("UPDATE contact_phones SET contactId = ? WHERE id = ?").run(primaryId, dp.id);
+          movedPhones++;
         }
       }
+      log.debug("Merge", `  Moved ${movedPhones} unique phones`);
 
+      // ── Social Links ──────────────────────────────────────────────────────
+      // Move unique social links (platform+url dedup)
       sqlite.prepare(`
         UPDATE contact_social_links SET contactId = ?
         WHERE contactId = ?
@@ -245,10 +321,70 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
-      sqlite.prepare("UPDATE contact_education SET contactId = ? WHERE contactId = ?").run(primaryId, duplicateId);
-      sqlite.prepare("UPDATE contact_experience SET contactId = ? WHERE contactId = ?").run(primaryId, duplicateId);
-      sqlite.prepare("UPDATE contact_sources SET contactId = ? WHERE contactId = ?").run(primaryId, duplicateId);
+      // ── Education ─────────────────────────────────────────────────────────
+      // Dedup on (school + degree) — only move rows the primary doesn't already have
+      const primaryEdu = sqlite.prepare(
+        "SELECT school, degree FROM contact_education WHERE contactId = ?"
+      ).all(primaryId) as any[];
+      const primaryEduKeys = new Set(primaryEdu.map((e: any) =>
+        `${(e.school || '').toLowerCase().trim()}::${(e.degree || '').toLowerCase().trim()}`
+      ));
+      const dupeEdu = sqlite.prepare(
+        "SELECT id, school, degree FROM contact_education WHERE contactId = ?"
+      ).all(duplicateId) as any[];
+      let movedEdu = 0;
+      for (const edu of dupeEdu) {
+        const key = `${(edu.school || '').toLowerCase().trim()}::${(edu.degree || '').toLowerCase().trim()}`;
+        if (!primaryEduKeys.has(key)) {
+          sqlite.prepare("UPDATE contact_education SET contactId = ? WHERE id = ?").run(primaryId, edu.id);
+          movedEdu++;
+        }
+      }
+      log.debug("Merge", `  Moved ${movedEdu} unique education entries (skipped ${dupeEdu.length - movedEdu} duplicates)`);
 
+      // ── Experience ─────────────────────────────────────────────────────────
+      // Dedup on (company + role) — only move rows the primary doesn't already have
+      const primaryExp = sqlite.prepare(
+        "SELECT company, role FROM contact_experience WHERE contactId = ?"
+      ).all(primaryId) as any[];
+      const primaryExpKeys = new Set(primaryExp.map((e: any) =>
+        `${(e.company || '').toLowerCase().trim()}::${(e.role || '').toLowerCase().trim()}`
+      ));
+      const dupeExp = sqlite.prepare(
+        "SELECT id, company, role FROM contact_experience WHERE contactId = ?"
+      ).all(duplicateId) as any[];
+      let movedExp = 0;
+      for (const exp of dupeExp) {
+        const key = `${(exp.company || '').toLowerCase().trim()}::${(exp.role || '').toLowerCase().trim()}`;
+        if (!primaryExpKeys.has(key)) {
+          sqlite.prepare("UPDATE contact_experience SET contactId = ? WHERE id = ?").run(primaryId, exp.id);
+          movedExp++;
+        }
+      }
+      log.debug("Merge", `  Moved ${movedExp} unique experience entries (skipped ${dupeExp.length - movedExp} duplicates)`);
+
+      // ── Sources ────────────────────────────────────────────────────────────
+      // Dedup on (platform + externalId) — only move provenance rows the primary doesn't already have
+      const primarySrc = sqlite.prepare(
+        "SELECT platform, externalId FROM contact_sources WHERE contactId = ?"
+      ).all(primaryId) as any[];
+      const primarySrcKeys = new Set(primarySrc.map((s: any) =>
+        `${(s.platform || '').toLowerCase().trim()}::${(s.externalId || '').toLowerCase().trim()}`
+      ));
+      const dupeSrc = sqlite.prepare(
+        "SELECT id, platform, externalId FROM contact_sources WHERE contactId = ?"
+      ).all(duplicateId) as any[];
+      let movedSrc = 0;
+      for (const src of dupeSrc) {
+        const key = `${(src.platform || '').toLowerCase().trim()}::${(src.externalId || '').toLowerCase().trim()}`;
+        if (!primarySrcKeys.has(key)) {
+          sqlite.prepare("UPDATE contact_sources SET contactId = ? WHERE id = ?").run(primaryId, src.id);
+          movedSrc++;
+        }
+      }
+      log.debug("Merge", `  Moved ${movedSrc} unique source entries (skipped ${dupeSrc.length - movedSrc} duplicates)`);
+
+      // ── Tags ──────────────────────────────────────────────────────────────
       sqlite.prepare(`
         UPDATE contact_tags SET contactId = ?
         WHERE contactId = ?
@@ -257,6 +393,8 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
+      // ── Interests ─────────────────────────────────────────────────────────
+      // contact_interests has UNIQUE(contactId, interest) — skip duplicates
       sqlite.prepare(`
         UPDATE contact_interests SET contactId = ?
         WHERE contactId = ?
@@ -265,6 +403,8 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
+      // ── Attributes ────────────────────────────────────────────────────────
+      // contact_attributes has UNIQUE(contactId, name) — skip duplicates
       sqlite.prepare(`
         UPDATE contact_attributes SET contactId = ?
         WHERE contactId = ?
@@ -273,6 +413,8 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
+      // ── Addresses ─────────────────────────────────────────────────────────
+      // contact_addresses has UNIQUE(contactId, address) — skip duplicates
       sqlite.prepare(`
         UPDATE contact_addresses SET contactId = ?
         WHERE contactId = ?
@@ -281,10 +423,12 @@ router.post("/contacts/merge", (req, res) => {
         )
       `).run(primaryId, duplicateId, primaryId);
 
+      // ── Scalar field fill-forward ─────────────────────────────────────────
+      // Only fill fields that are null/empty on the primary from the duplicate
       const scalarFields = [
         'firstName', 'lastName', 'headline', 'role', 'company', 'location',
         'birthday', 'preferences', 'avatarUrl', 'about', 'pronouns',
-        'industry', 'website',
+        'industry', 'website', 'lat', 'lng',
       ];
       const updates: Record<string, any> = { updatedAt: new Date().toISOString() };
       for (const field of scalarFields) {
@@ -292,34 +436,43 @@ router.post("/contacts/merge", (req, res) => {
           updates[field] = duplicate[field];
         }
       }
-      const dupLists = sqlite.prepare("SELECT listId FROM list_members WHERE contactId = ?").all(duplicateId) as { listId: string }[];
-      const insertMember = sqlite.prepare("INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)");
+
+      // ── List memberships ──────────────────────────────────────────────────
+      const dupLists = sqlite.prepare(
+        "SELECT listId FROM list_members WHERE contactId = ?"
+      ).all(duplicateId) as { listId: string }[];
+      const insertMember = sqlite.prepare(
+        "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)"
+      );
       for (const dl of dupLists) {
         insertMember.run(dl.listId, primaryId);
       }
+
+      // Preserve earliest addedAt (oldest relationship wins)
       if (duplicate.addedAt && (!primary.addedAt || duplicate.addedAt < primary.addedAt)) {
         updates.addedAt = duplicate.addedAt;
       }
 
       db.update(schema.contacts).set(updates).where(eq(schema.contacts.id, primaryId)).run();
+
+      // ── Delete duplicate ───────────────────────────────────────────────────
+      // All unique child records have been migrated above. Any remaining child
+      // rows still pointing at the duplicate (e.g. duplicate emails, phones,
+      // or tags that matched existing primary records) are cleaned up by the
+      // ON DELETE CASCADE foreign key constraint on each child table.
       sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(duplicateId);
       log.info("Merge", `[${rid}] Merge complete. Deleted duplicate "${duplicate.name}" (${duplicateId})`);
     });
 
-    mergeTxn();
-    const merged = hydrateContact(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId));
-    res.json({ success: true, contact: merged });
-  } catch (err: any) {
-    log.error("Merge", `[${rid}] Merge failed — transaction rolled back`, { error: err.message });
-    res.status(500).json({ error: "Merge failed. No changes were made." });
-  }
-});
+  mergeTxn();
+  const merged = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId));
+  res.json({ success: true, contact: merged });
+}));
 
 if (process.env.NODE_ENV !== 'production') {
-  router.post("/dev/seed-duplicates", (req, res) => {
+  router.post("/dev/seed-duplicates", asyncHandler(async (req, res) => {
     const rid = (req as any).requestId;
-    try {
-      const contact1Id = crypto.randomUUID();
+    const contact1Id = crypto.randomUUID();
       const contact2Id = crypto.randomUUID();
       
       const insertContact = sqlite.prepare("INSERT INTO contacts (id, name, company, role, themeColor) VALUES (?, ?, ?, ?, ?)");
@@ -332,13 +485,9 @@ if (process.env.NODE_ENV !== 'production') {
       const insertPhone = sqlite.prepare("INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, ?, 1)");
       insertPhone.run(crypto.randomUUID(), contact2Id, "555-0199");
       
-      log.info("Dedupe", `[${rid}] Seeded duplicate pair: Jonathan Smith / John Smith`);
-      res.json({ success: true, message: "Seeded 1 duplicate pair" });
-    } catch (err: any) {
-      log.error("Dedupe", `[${rid}] Seed duplicates failed`, { error: err.message });
-      res.status(500).json({ error: "Failed to seed duplicates" });
-    }
-  });
+    log.info("Dedupe", `[${rid}] Seeded duplicate pair: Jonathan Smith / John Smith`);
+    res.json({ success: true, message: "Seeded 1 duplicate pair" });
+  }));
 }
 
 export const dedupeRouter = router;

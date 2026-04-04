@@ -5,13 +5,16 @@ import {
   Sparkles, UploadCloud, Trash2, Globe, MessageSquare, ExternalLink, Linkedin, Facebook, Tag, X, Coffee, File, Archive, Heart, Edit2
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
-import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useGenerateBriefing, usePromoteGhost, useArchiveContact, useUnarchiveContact } from "../api";
+import { useContact, useTimeline, useUpdateContact, useAddAttachment, useDeleteContact, useDeleteInteraction, useUpdateInteraction, useGenerateBriefing, usePromoteGhost, useArchiveContact, useUnarchiveContact } from "../api";
 import { AvatarPickerModal } from "../components/AvatarPickerModal";
 import { formatDistanceToNow } from "date-fns";
+import { parseBriefingPoints } from "../utils/safeParse";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "motion/react";
+import DOMPurify from "dompurify";
 import { LocalContext } from "../components/LocalContext";
 import { RichInteractionComposer } from "../components/RichInteractionComposer";
+import { SkeletonText } from "../components/AnimatedSkeleton";
 
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
@@ -38,6 +41,13 @@ export const ContactDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isMapActive = location.pathname.startsWith('/map');
+  const isOverlayActive = isMapActive || location.pathname.startsWith('/settings/archived');
+  
+  const handleClose = () => {
+    if (location.pathname.startsWith('/settings/archived')) navigate('/settings/archived');
+    else if (isMapActive) navigate('/map');
+    else navigate('/');
+  };
   
   const { data: contact, isLoading: contactLoading } = useContact(id);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
@@ -45,31 +55,37 @@ export const ContactDetail = () => {
   const addAttachment = useAddAttachment();
   const deleteContact = useDeleteContact();
   const deleteInteraction = useDeleteInteraction();
+  const updateInteraction = useUpdateInteraction();
   const generateBriefing = useGenerateBriefing();
   const promoteGhost = usePromoteGhost();
   const archiveContact = useArchiveContact();
   const unarchiveContact = useUnarchiveContact();
 
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
+  const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [editingContent, setEditingContent] = useState('');
 
   const onDrop = React.useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0 && id) {
-      const isEml = acceptedFiles[0].name.toLowerCase().endsWith('.eml');
-      const toastId = isEml ? toast.loading(`Summarizing email thread with Gemini...`) : undefined;
-      
-      addAttachment.mutate(
-        { contactId: id, file: acceptedFiles[0] },
-        {
-          onSuccess: () => {
-            if (toastId) toast.dismiss(toastId);
-            toast.success(isEml ? `Email imported & summarized!` : `Attached "${acceptedFiles[0].name}"`);
-          },
-          onError: (err) => {
-            if (toastId) toast.dismiss(toastId);
-            toast.error(`Upload failed: ${err.message}`);
-          },
-        }
-      );
+      acceptedFiles.forEach(file => {
+        const isEml = file.name.toLowerCase().endsWith('.eml');
+        const toastId = toast.loading(isEml ? `Summarizing email thread with Gemini...` : `Uploading "${file.name}"...`);
+        
+        addAttachment.mutate(
+          { contactId: id, file },
+          {
+            onSuccess: () => {
+              toast.dismiss(toastId);
+              toast.success(isEml ? `Email imported & summarized!` : `Attached "${file.name}"`);
+            },
+            onError: (err) => {
+              toast.dismiss(toastId);
+              toast.error(`Upload failed: ${err.message}`);
+            },
+          }
+        );
+      });
     }
   }, [id, addAttachment]);
   
@@ -175,17 +191,19 @@ export const ContactDetail = () => {
 
   return (
     <>
-    <div className="h-full overflow-y-auto w-full relative" style={themeStyles}>
+    <div className="h-full flex flex-col overflow-hidden w-full relative" style={themeStyles}>
       {/* Mobile Back Button */}
-      <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center">
-        <Link to="/" className="flex items-center gap-2 text-primary font-bold">
+      <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center shrink-0">
+        <button onClick={handleClose} className="flex items-center gap-2 text-primary font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors">
           <ArrowLeft className="w-5 h-5" /> Back
-        </Link>
+        </button>
       </div>
 
-      <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-12 pb-32 relative">
-        {isMapActive && (
-           <button onClick={() => navigate('/map')} className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-50 shadow-sm border border-surface-container-highest transition-colors" title="Close Details">
+      {/* Scrollable on mobile, flex-col on desktop */}
+      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden lg:flex lg:flex-col">
+      <div className="p-6 md:p-8 lg:px-10 lg:pt-8 lg:pb-6 max-w-6xl mx-auto w-full relative lg:shrink-0">
+        {isOverlayActive && (
+           <button onClick={handleClose} className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-50 shadow-sm border border-surface-container-highest transition-colors" title="Close Details">
              <X className="w-5 h-5 text-on-surface-variant" />
            </button>
         )}
@@ -193,7 +211,9 @@ export const ContactDetail = () => {
         <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
           <div className="relative shrink-0 group/avatar">
             {/* Avatar image */}
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
+            <div 
+              className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl"
+            >
               <img
                 alt={contact.name}
                 className="w-full h-full object-cover"
@@ -224,9 +244,9 @@ export const ContactDetail = () => {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
-              <div className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface truncate flex items-center gap-2">
+              <div className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 pt-1">
                 <EditableField value={contact.name} onSave={(val) => handleUpdate('name', val)} placeholder="Contact Name" />
-                {contact.pronouns && <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle">({contact.pronouns})</span>}
+                {contact.pronouns && <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle pb-1">({contact.pronouns})</span>}
               </div>
               
               <VibePickerPopover
@@ -285,7 +305,7 @@ export const ContactDetail = () => {
             )}
 
             <div className="text-lg md:text-xl font-medium text-on-surface-variant flex items-center flex-wrap gap-x-2 mb-2">
-              <Briefcase className="w-5 h-5 opacity-50 inline-block mr-1" />
+              <Briefcase className="w-5 h-5 opacity-50 inline-block" />
               <EditableField value={contact.role} onSave={(val) => handleUpdate('role', val)} placeholder="Role / Title" />
               <span className="opacity-50">at</span>
               <EditableField value={contact.company} onSave={(val) => handleUpdate('company', val)} placeholder="Company" />
@@ -352,7 +372,7 @@ export const ContactDetail = () => {
                       </button>
                       <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-3 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Executive Briefing</h4>
                       <ul className="space-y-2.5 pr-6">
-                        {JSON.parse(contact!.aiBriefing!).map((point: string, idx: number) => (
+                        {parseBriefingPoints(contact!.aiBriefing).map((point: string, idx: number) => (
                           <li key={idx} className="flex gap-2">
                             <span className="text-on-surface-variant font-bold max-w-fit flex-shrink-0 mt-0.5">•</span> 
                             <span className="leading-relaxed">{point}</span>
@@ -374,11 +394,7 @@ export const ContactDetail = () => {
                   >
                     <div className={cn(CARD_TINTED, "text-sm space-y-4")}>
                       <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Synthesizing Context...</h4>
-                      <div className="space-y-3">
-                        <div className="h-4 bg-surface-container-highest rounded animate-pulse w-3/4"></div>
-                        <div className="h-4 bg-surface-container-highest rounded animate-pulse w-full"></div>
-                        <div className="h-4 bg-surface-container-highest rounded animate-pulse w-5/6"></div>
-                      </div>
+                      <SkeletonText lines={3} className="h-4" />
                     </div>
                   </motion.div>
                 )}
@@ -386,11 +402,13 @@ export const ContactDetail = () => {
             </div>
           </div>
         </section>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-24 gap-10 items-start">
+        <div className="lg:flex-1 lg:min-h-0 max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10">
+        <div className="grid grid-cols-1 lg:grid-cols-24 gap-6 lg:gap-8 items-start lg:h-full pb-32 lg:pb-0 mt-8 lg:mt-0">
           
           {/* Left Column: Facts & AI */}
-          <div className="lg:col-span-9 space-y-6">
+          <div className="lg:col-span-9 space-y-6 lg:overflow-y-auto lg:h-full lg:pb-8 scrollbar-hide">
             <div className={cn(CARD, "space-y-4")}>
               <h3 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h3>
               
@@ -518,7 +536,7 @@ export const ContactDetail = () => {
                           "group/pill w-fit flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full transition-all overflow-hidden",
                           interest.isAiGenerated ? "bg-primary/10 text-primary border border-primary/20" : "bg-surface-container text-on-surface-variant border border-transparent"
                         )}>
-                          {interest.isAiGenerated && <Sparkles className="w-3 h-3 opacity-70 shrink-0" />}
+                          {!!interest.isAiGenerated && <Sparkles className="w-3 h-3 opacity-70 shrink-0" />}
                           <span className="whitespace-normal break-words">{interest.interest}</span>
                           <button 
                             onClick={() => handleRemoveInterest(interest.id)}
@@ -559,7 +577,7 @@ export const ContactDetail = () => {
           </div>
 
           {/* Right Column: Timeline & Composer & Backgrounds */}
-          <div {...getRootProps()} className="lg:col-span-15 relative min-h-[500px] flex flex-col gap-6">
+          <div {...getRootProps()} className="lg:col-span-15 relative min-h-[300px] flex flex-col gap-6 lg:overflow-y-auto lg:h-full lg:pb-8 scrollbar-hide">
             <input {...getInputProps()} />
 
             {/* Tab Controller */}
@@ -762,8 +780,37 @@ export const ContactDetail = () => {
                     {/* Content Box */}
                     <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card">
                       <div className="flex justify-between items-center mb-2">
-                        <h4 className="font-extrabold text-on-surface">{item.title}</h4>
-                        <div className="flex items-center gap-2">
+                        {editingInteractionId === item.id ? (
+                          <input
+                            value={editingTitle}
+                            onChange={e => setEditingTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editingTitle.trim() && editingTitle !== item.title) {
+                                updateInteraction.mutate({ id: item.id, contactId: id!, data: { title: editingTitle.trim(), content: editingContent } });
+                              }
+                              setEditingInteractionId(null);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              if (e.key === 'Escape') setEditingInteractionId(null);
+                            }}
+                            autoFocus
+                            className="font-extrabold text-on-surface bg-transparent border-b-2 border-primary focus:outline-none flex-1 mr-2"
+                          />
+                        ) : (
+                          <h4
+                            className="font-extrabold text-on-surface cursor-text"
+                            onDoubleClick={() => {
+                              setEditingInteractionId(item.id);
+                              setEditingTitle(item.title);
+                              setEditingContent(item.content || '');
+                            }}
+                            title="Double-click to edit"
+                          >
+                            {item.title}
+                          </h4>
+                        )}
+                        <div className="flex items-center gap-2 shrink-0">
                           <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{new Date(item.date).toLocaleDateString()}</time>
                           <button
                             onClick={() => handleDeleteInteraction(item.id)}
@@ -785,12 +832,32 @@ export const ContactDetail = () => {
                         </div>
                       )}
 
-                      {item.content && (
-                        <div 
-                          className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface"
-                          dangerouslySetInnerHTML={{ __html: item.content }} 
+                      {editingInteractionId === item.id ? (
+                        <textarea
+                          value={editingContent}
+                          onChange={e => setEditingContent(e.target.value)}
+                          onBlur={() => {
+                            updateInteraction.mutate({ id: item.id, contactId: id!, data: { title: editingTitle.trim() || item.title, content: editingContent } });
+                            setEditingInteractionId(null);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Escape') setEditingInteractionId(null);
+                          }}
+                          className="w-full min-h-[60px] p-2 bg-surface-container-low rounded-lg border border-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm text-on-surface-variant resize-y"
+                          placeholder="Add content..."
                         />
-                      )}
+                      ) : item.content ? (
+                        <div 
+                          className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface cursor-text"
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.content) }}
+                          onDoubleClick={() => {
+                            setEditingInteractionId(item.id);
+                            setEditingTitle(item.title);
+                            setEditingContent(item.content || '');
+                          }}
+                          title="Double-click to edit"
+                        />
+                      ) : null}
                       
                       {/* Ghost Mentions Extraction */}
                       {item.mentions && (() => {
@@ -869,6 +936,7 @@ export const ContactDetail = () => {
           )}
 
           </div>
+        </div>
         </div>
       </div>
     </div>

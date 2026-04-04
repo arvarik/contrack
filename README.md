@@ -260,7 +260,7 @@ cp .env.example .env
 ```
 *Note: Ensure you edit the `.env` file to include your `GEMINI_API_KEY` and `APP_URL`.*
 
-**Database Note:** Contrack deliberately ignores Drizzle CLI migrations for bootstrapping. The database auto-heals and reconstructs DDL mapping strings synchronously over `sqlite.exec()` during runtime initialization, preventing schema drift on fresh installs.
+**Database Note:** Contrack uses **Drizzle Kit migrations** for schema management. On first boot, the server applies all pending migrations from the `./drizzle/` directory automatically. For existing databases (pre-migration era), a backward-compatibility guard ensures safe bootstrapping. After modifying `src/db/schema.ts`, run `npm run db:generate` to create a tracked migration file.
 
 To hydrate synthetic testing entities:
 ```bash
@@ -303,6 +303,7 @@ When preparing the monolith for VPS instances (AWS, Hetzner, Railway):
 - `npm run build`: Compiles production localized bounds using Vite.
 - `npm run preview`: Test local prod build.
 - `npm run seed`: Clears the DB and repopulates synthetic, pseudo-realistic demo data.
+- `npm run db:generate`: Generates a new Drizzle Kit migration file after schema changes.
 - `npm run lint`: Validates strictly typed configurations inside typescript without emitting traces.
 - `npm run clean`: Purges `dist/` caching bundles.
 

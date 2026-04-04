@@ -1,18 +1,20 @@
 import { Router } from "express";
+import { AppError } from "../utils/AppError.ts";
+import { asyncHandler } from "../utils/asyncHandler.ts";
 import * as cheerio from "cheerio";
 import { log } from "../logger.ts";
 
 const router = Router();
 
-router.get("/unfurl", async (req, res) => {
+router.get("/unfurl", asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
+  const targetUrl = req.query.url as string;
+  if (!targetUrl) throw new AppError("Missing link URL", 400);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+
   try {
-    const targetUrl = req.query.url as string;
-    if (!targetUrl) return res.status(400).json({ error: "Missing link URL" });
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-
     const htmlRes = await fetch(targetUrl, { signal: controller.signal });
     clearTimeout(timeoutId);
     
@@ -31,9 +33,8 @@ router.get("/unfurl", async (req, res) => {
     log.debug("API", `[${rid}] GET /api/utils/unfurl extracted ${title}`);
     res.json({ title, description, image, url: targetUrl });
   } catch (err: any) {
-    log.error("API", `[${rid}] /unfurl failed on ${req.query.url}`, { error: err.message });
-    res.status(500).json({ error: "Unfurl failed parsing target host", url: req.query.url });
+    throw new AppError(`Unfurl failed parsing target host: ${targetUrl}`, 500);
   }
-});
+}));
 
 export const utilsRouter = router;

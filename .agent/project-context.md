@@ -17,13 +17,15 @@ The CRM relies on a relational abstraction using SQLite operating in `WAL` mode.
 - **`interaction_mentions`**: A specialized junction table mapping complex Bi-Directional network relationships explicitly connecting an `.interactionId` against a foreign `.contactId` explicitly. `server.ts` routes seamlessly output `isViaName` during database scans evaluating this junction matrix.
 
 ### Database Operations:
-Never utilize `drizzle-orm` migration scripts! The SQLite definitions execute securely on boot via raw literal strings (`sqlite.exec(...)`) parsing DDL structures. If you modify `src/db/schema.ts`, you **must** also map the update exactly inside `<app-root>/server/db.ts` DDL configurations.
+Schema changes are managed via **Drizzle Kit migrations**. After modifying `src/db/schema.ts`, run `npm run db:generate` to create a new tracked migration file. The server applies pending migrations automatically on startup via `drizzle-orm/better-sqlite3/migrator`. FTS5 virtual tables are maintained separately in `server/db.ts` since Drizzle ORM does not manage virtual tables.
 
 ## 3. AI Integrations & API Layer
-AI tasks traditionally live under `aiService.ts` and route through the `server/routes/mcp.ts` and `server/routes/dedupe.ts` modules. All routines invoke `gemini-1.5-flash` (or newer) passing strictly bounded JSON schemas:
-- **Entity Mentions**: Analyzes raw prose identifying semantic names formatting implicit "ghost" elements dynamically. (Triggered via `interactions.ts`)
-- **Catch Me Up**: Reads chronological DB intersections wrapping structured executive briefs.
-- **Link Unfurling**: Not technically AI, but bound dynamically behind `server.ts` utilizing `cheerio` explicitly bypassing computationally heavy Chrome Puppeteer tasks ensuring fast rich-media OG data generation securely mapped via `Tiptap` node extensions natively.
+AI operations live under the `server/ai/` module using a **provider adapter pattern**:
+- **`server/ai/types.ts`**: Provider-agnostic type definitions shared across the AI layer.
+- **`server/ai/provider.ts`**: Abstract `AIProvider` interface that all adapters implement.
+- **`server/ai/adapters/gemini.ts`**: Concrete Gemini adapter — the **only file** that imports `@google/genai`.
+- **`server/ai/aiService.ts`**: Business-logic facade exposing 5 functions (`parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `semanticContactSearch`). Programs against the abstract provider interface, never against SDK internals.
+Routes import from `server/ai/aiService.ts`. To add a new LLM provider, create an adapter in `server/ai/adapters/` and register it in the `resolveProvider()` switch in `aiService.ts`.
 
 ## 4. Bootstrapping Notes
 - Node routes automatically inject Request UUID logging ensuring trace capabilities across terminal layers.

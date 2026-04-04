@@ -63,7 +63,7 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
           strokeDashoffset={initialRender ? circumference : 0}
         />
       </svg>
-      {/* Contained Image wrapper to avoid overlapping with stroke boundaries */}
+      {/* Avatar image */}
       <div 
         className="absolute m-auto overflow-hidden rounded-full bg-surface-container-highest flex items-center justify-center shrink-0"
         style={{ width: size - (strokeWidth * 4), height: size - (strokeWidth * 4) }}
@@ -77,3 +77,4 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
     </div>
   );
 };
+

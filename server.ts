@@ -18,6 +18,8 @@ import { interactionsRouter } from "./server/routes/interactions.ts";
 import { dedupeRouter } from "./server/routes/dedupe.ts";
 import { mcpRouter } from "./server/routes/mcp.ts";
 
+import { AppError } from "./server/utils/AppError.ts";
+
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_KEY || GEMINI_KEY === "dummy_key") {
   console.warn("\n\x1b[33m⚠️  [WARNING] GEMINI_API_KEY is not configured inside .env!\x1b[0m");
@@ -65,8 +67,43 @@ async function startServer() {
   }
 
   app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    log.error("Unhandled", `[${(req as any).requestId}] ${err.message}`);
-    res.status(500).json({ error: "Internal Server Error" });
+    const isProd = process.env.NODE_ENV === "production";
+    const requestId = (req as any).requestId;
+    
+    let statusCode = 500;
+    let message = "Internal Server Error";
+    let isOperational = false;
+
+    if (err instanceof AppError) {
+      statusCode = err.statusCode;
+      message = err.message;
+      isOperational = err.isOperational;
+    } else if (err.type === "entity.parse.failed") {
+      statusCode = 400;
+      message = "Invalid JSON payload format";
+      isOperational = true;
+    } else if (err.code === "SQLITE_CONSTRAINT") {
+      statusCode = 400;
+      message = "Database constraint violation";
+      isOperational = true;
+    } else if (err.code === "SQLITE_BUSY") {
+      statusCode = 503;
+      message = "Database is currently busy, please try again later";
+      isOperational = true;
+    }
+
+    if (!isOperational && statusCode === 500) {
+      // Log full stack trace for generic errors
+      log.error("Unhandled", `[${requestId}] ${err.stack || err.message}`);
+    } else {
+      // Log operational error appropriately
+      log.error("Operational", `[${requestId}] ${statusCode} - ${message}`);
+    }
+
+    res.status(statusCode).json({
+      error: message,
+      ...(isProd ? {} : { stack: err.stack })
+    });
   });
 
   app.listen(PORT, "0.0.0.0", () => {

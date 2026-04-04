@@ -15,7 +15,7 @@ export const useContacts = () => {
   return useQuery({
     queryKey: ['contacts'],
     queryFn: async (): Promise<Contact[]> => {
-      const res = await fetch(`${API_BASE}/contacts`);
+      const res = await fetch(`${API_BASE}/contacts?view=slim`);
       if (!res.ok) throw new Error('Failed to fetch contacts');
       return res.json();
     }
@@ -246,7 +246,22 @@ export const useDeleteContact = () => {
       if (!res.ok) throw new Error('Failed to delete contact');
       return res.json();
     },
-    onSuccess: (_data, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.filter(c => c.id !== id)
+      );
+
+      return { previousContacts };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousContacts) {
+        queryClient.setQueryData(['contacts'], context.previousContacts);
+      }
+    },
+    onSettled: (_data, _error, id) => {
       queryClient.removeQueries({ queryKey: ['contacts', id] });
       queryClient.removeQueries({ queryKey: ['timeline', id] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -320,6 +335,42 @@ export const useDeleteInteraction = () => {
       
       queryClient.setQueryData<Interaction[]>(['timeline', contactId], old =>
         old?.filter(item => item.id !== id)
+      );
+
+      return { previousTimeline };
+    },
+    onError: (_err, { contactId }, context) => {
+      if (context?.previousTimeline) {
+        queryClient.setQueryData(['timeline', contactId], context.previousTimeline);
+      }
+    },
+    onSettled: (_data, _error, { contactId }) => {
+      queryClient.invalidateQueries({ queryKey: ['timeline', contactId] });
+    },
+  });
+};
+
+/**
+ * Mutation hook to update an interaction's title or content.
+ */
+export const useUpdateInteraction = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, contactId, data }: { id: string; contactId: string; data: { title?: string; content?: string } }): Promise<Interaction> => {
+      const res = await fetch(`${API_BASE}/interactions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update interaction');
+      return res.json();
+    },
+    onMutate: async ({ id, contactId, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['timeline', contactId] });
+      const previousTimeline = queryClient.getQueryData<Interaction[]>(['timeline', contactId]);
+
+      queryClient.setQueryData<Interaction[]>(['timeline', contactId], old =>
+        old?.map(item => item.id === id ? { ...item, ...data } : item)
       );
 
       return { previousTimeline };
@@ -538,7 +589,38 @@ export const useAddToList = () => {
       if (!res.ok) throw new Error('Failed to add to list');
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async ({ listId, contactId }) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      await queryClient.cancelQueries({ queryKey: ['contacts', contactId] });
+      
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      const previousContact = queryClient.getQueryData<Contact>(['contacts', contactId]);
+      
+      // We don't have full list info, just optimistic assume the ID
+      const tentativeList = { id: listId, name: '...', icon: 'list', sortOrder: 0, createdAt: new Date().toISOString() };
+
+      if (previousContact) {
+         queryClient.setQueryData<Contact>(['contacts', contactId], {
+           ...previousContact,
+           lists: [...(previousContact.lists || []), tentativeList]
+         });
+      }
+
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.map(c => c.id === contactId 
+          ? { ...c, lists: [...(c.lists || []), tentativeList] }
+          : c
+        )
+      );
+
+      return { previousContacts, previousContact };
+    },
+    onError: (_err, { contactId }, context) => {
+      if (context?.previousContacts) queryClient.setQueryData(['contacts'], context.previousContacts);
+      if (context?.previousContact) queryClient.setQueryData(['contacts', contactId], context.previousContact);
+    },
+    onSettled: (_data, _error, { contactId }) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', contactId] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     },
@@ -556,7 +638,35 @@ export const useRemoveFromList = () => {
       if (!res.ok) throw new Error('Failed to remove from list');
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async ({ listId, contactId }) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      await queryClient.cancelQueries({ queryKey: ['contacts', contactId] });
+      
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      const previousContact = queryClient.getQueryData<Contact>(['contacts', contactId]);
+      
+      if (previousContact) {
+         queryClient.setQueryData<Contact>(['contacts', contactId], {
+           ...previousContact,
+           lists: (previousContact.lists || []).filter(l => l.id !== listId)
+         });
+      }
+
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.map(c => c.id === contactId 
+          ? { ...c, lists: (c.lists || []).filter(l => l.id !== listId) }
+          : c
+        )
+      );
+
+      return { previousContacts, previousContact };
+    },
+    onError: (_err, { contactId }, context) => {
+      if (context?.previousContacts) queryClient.setQueryData(['contacts'], context.previousContacts);
+      if (context?.previousContact) queryClient.setQueryData(['contacts', contactId], context.previousContact);
+    },
+    onSettled: (_data, _error, { contactId }) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', contactId] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['lists'] });
     },
@@ -592,7 +702,28 @@ export const useArchiveContact = () => {
       if (!res.ok) throw new Error('Failed to archive contact');
       return res.json();
     },
-    onSuccess: (_data, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      await queryClient.cancelQueries({ queryKey: ['contacts', id] });
+      
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      const previousContact = queryClient.getQueryData<Contact>(['contacts', id]);
+      
+      if (previousContact) {
+         queryClient.setQueryData<Contact>(['contacts', id], { ...previousContact, isArchived: true });
+      }
+
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.map(c => c.id === id ? { ...c, isArchived: true } : c)
+      );
+
+      return { previousContacts, previousContact };
+    },
+    onError: (_err, id, context) => {
+      if (context?.previousContacts) queryClient.setQueryData(['contacts'], context.previousContacts);
+      if (context?.previousContact) queryClient.setQueryData(['contacts', id], context.previousContact);
+    },
+    onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ['contacts', id] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['contacts', 'archived'] });
@@ -613,7 +744,28 @@ export const useUnarchiveContact = () => {
       if (!res.ok) throw new Error('Failed to unarchive contact');
       return res.json();
     },
-    onSuccess: (_data, id) => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      await queryClient.cancelQueries({ queryKey: ['contacts', id] });
+      
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      const previousContact = queryClient.getQueryData<Contact>(['contacts', id]);
+      
+      if (previousContact) {
+         queryClient.setQueryData<Contact>(['contacts', id], { ...previousContact, isArchived: false });
+      }
+
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.map(c => c.id === id ? { ...c, isArchived: false } : c)
+      );
+
+      return { previousContacts, previousContact };
+    },
+    onError: (_err, id, context) => {
+      if (context?.previousContacts) queryClient.setQueryData(['contacts'], context.previousContacts);
+      if (context?.previousContact) queryClient.setQueryData(['contacts', id], context.previousContact);
+    },
+    onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ['contacts', id] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['contacts', 'archived'] });
@@ -638,7 +790,21 @@ export const useBulkDeleteContacts = () => {
       if (!res.ok) throw new Error('Failed to bulk delete contacts');
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      
+      const idsSet = new Set(ids);
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.filter(c => !idsSet.has(c.id))
+      );
+
+      return { previousContacts };
+    },
+    onError: (_err, _ids, context) => {
+      if (context?.previousContacts) queryClient.setQueryData(['contacts'], context.previousContacts);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
     },
   });
@@ -657,7 +823,21 @@ export const useBulkUpdateContacts = () => {
       if (!res.ok) throw new Error('Failed to bulk update contacts');
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async ({ ids, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      const previousContacts = queryClient.getQueryData<Contact[]>(['contacts']);
+      
+      const idsSet = new Set(ids);
+      queryClient.setQueryData<Contact[]>(['contacts'], old => 
+        old?.map(c => idsSet.has(c.id) ? { ...c, ...data } : c)
+      );
+
+      return { previousContacts };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousContacts) queryClient.setQueryData(['contacts'], context.previousContacts);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
     },
   });

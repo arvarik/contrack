@@ -17,6 +17,7 @@ import { Modal } from "../components/Modal";
 import { ImportModal } from "../components/ImportModal";
 import { BulkEditFieldModal } from "../components/BulkEditFieldModal";
 import { VIBE_COLORS } from "../components/ContactDetail/VibePickerPopover";
+import { SkeletonText, AnimatedSkeleton } from "../components/AnimatedSkeleton";
 import { motion, AnimatePresence } from "motion/react";
 import { useCompanyLogo } from "../hooks/useCompanyLogo";
 import { HealthRingAvatar } from "../components/HealthRingAvatar";
@@ -527,7 +528,7 @@ export const ContactList = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: 'spring', damping: 22, stiffness: 300 }}
-            className="fixed md:absolute bottom-24 md:bottom-0 left-0 right-0 z-[60] md:z-40 px-3 pb-2 md:pb-4"
+            className="absolute bottom-24 md:bottom-0 left-0 right-0 z-40 px-3 pb-2 md:pb-4"
           >
             <div className="glass-panel rounded-2xl shadow-2xl px-3 py-2.5 flex items-center justify-between gap-1">
               {/* Selected count */}
@@ -735,17 +736,38 @@ export const ContactList = () => {
       {/* ── Add from Text Modal ───────────────────────────────────────────── */}
       <Modal isOpen={isSmartPasteOpen} onClose={() => setIsSmartPasteOpen(false)} title="Add from Text">
         <div className="space-y-4 pt-2">
-          <p className="text-sm text-on-surface-variant leading-relaxed">
-            Paste anything — an email signature, a LinkedIn bio, a text snippet, or rough notes — and AI will pull out the contact details for you.
-          </p>
-          <textarea
-            autoFocus
-            value={smartPasteText}
-            onChange={(e) => setSmartPasteText(e.target.value)}
-            rows={5}
-            className="w-full bg-surface-container border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary font-mono text-on-surface resize-none focus:outline-none"
-            placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• A forwarded email signature`}
-          />
+          {parseContactText.isPending ? (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 pt-2">
+              <div className="flex items-center gap-2 text-primary text-sm font-bold pb-2">
+                <Sparkles className="w-4 h-4" /> Extracting details with AI...
+              </div>
+              <div className="space-y-4">
+                <AnimatedSkeleton className="h-10 w-full rounded-lg" delay={0} />
+                <div className="grid grid-cols-2 gap-4">
+                  <AnimatedSkeleton className="h-10 rounded-lg" delay={0.1} />
+                  <AnimatedSkeleton className="h-10 rounded-lg" delay={0.2} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <AnimatedSkeleton className="h-10 rounded-lg" delay={0.3} />
+                  <AnimatedSkeleton className="h-10 rounded-lg" delay={0.4} />
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <>
+              <p className="text-sm text-on-surface-variant leading-relaxed">
+                Paste anything — an email signature, a LinkedIn bio, a text snippet, or rough notes — and AI will pull out the contact details for you.
+              </p>
+              <textarea
+                autoFocus
+                value={smartPasteText}
+                onChange={(e) => setSmartPasteText(e.target.value)}
+                rows={5}
+                className="w-full bg-surface-container border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary font-mono text-on-surface resize-none focus:outline-none"
+                placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• A forwarded email signature`}
+              />
+            </>
+          )}
           <div className="flex justify-end pt-2">
             <button
               onClick={async () => {

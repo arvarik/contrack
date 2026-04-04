@@ -1,8 +1,12 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "../src/db/schema.ts";
-import crypto from "crypto";
 import { log } from "./logger.ts";
+
+// =============================================================================
+// 1. Open SQLite Connection
+// =============================================================================
 
 const DB_PATH = "curator.db";
 export const sqlite = new Database(DB_PATH);
@@ -11,238 +15,43 @@ sqlite.pragma("foreign_keys = ON");
 
 log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`);
 
-sqlite.exec(`
-  -- Core contacts table (all scalar fields)
-  CREATE TABLE IF NOT EXISTS contacts (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    firstName TEXT,
-    lastName TEXT,
-    headline TEXT,
-    role TEXT,
-    company TEXT,
-    location TEXT,
-    birthday TEXT,
-    preferences TEXT,
-    avatarUrl TEXT,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    cadenceDays INTEGER DEFAULT 90,
-    lastContactedAt TEXT,
-    nextFollowUpAt TEXT,
-    themeColor TEXT DEFAULT 'brand',
-    about TEXT,
-    pronouns TEXT,
-    industry TEXT,
-    website TEXT,
-    lat REAL,
-    lng REAL,
-    aiBriefing TEXT,
-    aiBriefingAt TEXT,
-    isGhost INTEGER DEFAULT 0,
-    isArchived INTEGER DEFAULT 0
-  );
+export const db = drizzle(sqlite, { schema });
 
-  -- Normalized child tables
-  CREATE TABLE IF NOT EXISTS contact_emails (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    label TEXT DEFAULT 'personal',
-    isPrimary INTEGER DEFAULT 0,
-    source TEXT,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
+// =============================================================================
+// 2. Run Drizzle Migrations
+// =============================================================================
+// Sequential, tracked migrations from the ./drizzle directory.
+// Drizzle maintains a `__drizzle_migrations` meta-table to track which
+// migrations have already been applied — guaranteeing idempotency.
+// =============================================================================
 
-  CREATE TABLE IF NOT EXISTS contact_phones (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    phone TEXT NOT NULL,
-    label TEXT DEFAULT 'mobile',
-    isPrimary INTEGER DEFAULT 0,
-    source TEXT,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
+migrate(db, { migrationsFolder: "./drizzle" });
+log.info("Database", "Drizzle migrations applied successfully");
 
-  CREATE TABLE IF NOT EXISTS contact_social_links (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    platform TEXT NOT NULL,
-    url TEXT NOT NULL,
-    handle TEXT,
-    source TEXT,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
+// =============================================================================
+// 3. FTS5 Full-Text Search Index
+// =============================================================================
+// FTS5 virtual tables are NOT managed by Drizzle ORM, so we maintain them
+// here with explicit DDL. The index is rebuilt on every startup to ensure
+// consistency with the current data.
+// =============================================================================
 
-  CREATE TABLE IF NOT EXISTS contact_education (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    school TEXT NOT NULL,
-    degree TEXT,
-    fieldOfStudy TEXT,
-    startDate TEXT,
-    endDate TEXT,
-    description TEXT,
-    source TEXT,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
-
-  CREATE TABLE IF NOT EXISTS contact_experience (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    company TEXT NOT NULL,
-    role TEXT,
-    startDate TEXT,
-    endDate TEXT,
-    isCurrent INTEGER DEFAULT 0,
-    description TEXT,
-    location TEXT,
-    source TEXT,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
-
-  CREATE TABLE IF NOT EXISTS contact_sources (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    platform TEXT NOT NULL,
-    externalId TEXT,
-    connectedOn TEXT,
-    importedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    rawData TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS contact_tags (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    tag TEXT NOT NULL,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
-
-  CREATE TABLE IF NOT EXISTS contact_addresses (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    address TEXT NOT NULL,
-    label TEXT DEFAULT 'home',
-    isPrimary INTEGER DEFAULT 0,
-    source TEXT DEFAULT 'manual',
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    UNIQUE(contactId, address)
-  );
-
-  CREATE TABLE IF NOT EXISTS contact_interests (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    interest TEXT NOT NULL,
-    isAiGenerated INTEGER DEFAULT 0,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    UNIQUE(contactId, interest)
-  );
-
-  CREATE TABLE IF NOT EXISTS contact_attributes (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    value TEXT NOT NULL,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    UNIQUE(contactId, name)
-  );
-
-  -- Interactions / timeline
-  CREATE TABLE IF NOT EXISTS interactions (
-    id TEXT PRIMARY KEY,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT,
-    date TEXT DEFAULT (CURRENT_TIMESTAMP),
-    duration TEXT,
-    fileUrl TEXT,
-    fileName TEXT,
-    fileType TEXT,
-    source TEXT,
-    mentions TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS interaction_mentions (
-    interactionId TEXT NOT NULL REFERENCES interactions(id) ON DELETE CASCADE,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    PRIMARY KEY (interactionId, contactId)
-  );
-
-  -- Lists (user-created contact groups)
-  CREATE TABLE IF NOT EXISTS lists (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    icon TEXT NOT NULL DEFAULT 'star',
-    sortOrder INTEGER NOT NULL DEFAULT 0,
-    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP)
-  );
-
-  CREATE TABLE IF NOT EXISTS list_members (
-    listId TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
-    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-    addedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (listId, contactId)
-  );
-`);
-
-log.info("Database", "All tables verified");
-
-// Migration: isArchived column (non-destructive ADD COLUMN guard)
-try {
-  const colCheck2 = sqlite.prepare("PRAGMA table_info(contacts)").all() as { name: string }[];
-  if (!colCheck2.some(c => c.name === 'isArchived')) {
-    sqlite.exec("ALTER TABLE contacts ADD COLUMN isArchived INTEGER DEFAULT 0");
-    log.info("Migration", "Added isArchived column to contacts table");
-  }
-} catch (migErr2: any) {
-  log.warn("Migration", `isArchived migration skipped: ${migErr2.message}`);
-}
-
-// Migration: isPremium → Starred list
-try {
-  const colCheck = sqlite.prepare("PRAGMA table_info(contacts)").all() as { name: string }[];
-  if (colCheck.some(c => c.name === 'isPremium')) {
-    const starredRow = sqlite.prepare("SELECT id FROM lists WHERE name = 'Starred'").get() as { id: string } | undefined;
-    let starredId = starredRow?.id;
-    if (!starredId) {
-      starredId = crypto.randomUUID();
-      sqlite.prepare("INSERT INTO lists (id, name, icon, sortOrder) VALUES (?, 'Starred', 'star', 0)").run(starredId);
-      log.info("Migration", `Created default 'Starred' list (${starredId})`);
-    }
-
-    const premiums = sqlite.prepare("SELECT id FROM contacts WHERE isPremium = 1").all() as { id: string }[];
-    if (premiums.length > 0) {
-      const insertMember = sqlite.prepare("INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)");
-      for (const p of premiums) {
-        insertMember.run(starredId, p.id);
-      }
-      log.info("Migration", `Migrated ${premiums.length} premium contact(s) into 'Starred' list`);
-    }
-
-    try {
-      sqlite.exec("ALTER TABLE contacts DROP COLUMN isPremium");
-      log.info("Migration", "Dropped isPremium column from contacts table");
-    } catch (dropErr: any) {
-      log.warn("Migration", `Could not drop isPremium column: ${dropErr.message}`);
-    }
-  }
-} catch (migErr: any) {
-  log.warn("Migration", `isPremium migration check skipped: ${migErr.message}`);
-}
-
-// FTS5 Virtual Table
 try { sqlite.exec(`DROP TABLE IF EXISTS contacts_fts`); } catch { /* may not exist */ }
 
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
-    contactId UNINDEXED, name, company, role, headline, location, about, industry
+    contactId UNINDEXED, name, company, role, headline, location, about, industry, extras
   );
 
   DROP TRIGGER IF EXISTS contacts_ai;
   CREATE TRIGGER contacts_ai AFTER INSERT ON contacts BEGIN
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry)
-    VALUES (new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry);
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    VALUES (
+      new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = new.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = new.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = new.id), '')
+    );
   END;
 
   DROP TRIGGER IF EXISTS contacts_ad;
@@ -253,16 +62,128 @@ sqlite.exec(`
   DROP TRIGGER IF EXISTS contacts_au;
   CREATE TRIGGER contacts_au AFTER UPDATE ON contacts BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.id;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry)
-    VALUES (new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry);
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    VALUES (
+      new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = new.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = new.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = new.id), '')
+    );
   END;
 
-  -- Backfill FTS for any contacts not yet indexed
-  INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry)
-  SELECT id, name, company, role, headline, location, about, industry FROM contacts
-  WHERE id NOT IN (SELECT contactId FROM contacts_fts);
+  -- Child-table triggers: refresh FTS when tags, interests, or emails change
+  DROP TRIGGER IF EXISTS fts_tags_ai;
+  CREATE TRIGGER fts_tags_ai AFTER INSERT ON contact_tags BEGIN
+    DELETE FROM contacts_fts WHERE contactId = new.contactId;
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+    FROM contacts c WHERE c.id = new.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS fts_tags_ad;
+  CREATE TRIGGER fts_tags_ad AFTER DELETE ON contact_tags BEGIN
+    DELETE FROM contacts_fts WHERE contactId = old.contactId;
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+    FROM contacts c WHERE c.id = old.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS fts_interests_ai;
+  CREATE TRIGGER fts_interests_ai AFTER INSERT ON contact_interests BEGIN
+    DELETE FROM contacts_fts WHERE contactId = new.contactId;
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+    FROM contacts c WHERE c.id = new.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS fts_interests_ad;
+  CREATE TRIGGER fts_interests_ad AFTER DELETE ON contact_interests BEGIN
+    DELETE FROM contacts_fts WHERE contactId = old.contactId;
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+    FROM contacts c WHERE c.id = old.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS fts_emails_ai;
+  CREATE TRIGGER fts_emails_ai AFTER INSERT ON contact_emails BEGIN
+    DELETE FROM contacts_fts WHERE contactId = new.contactId;
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+    FROM contacts c WHERE c.id = new.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS fts_emails_ad;
+  CREATE TRIGGER fts_emails_ad AFTER DELETE ON contact_emails BEGIN
+    DELETE FROM contacts_fts WHERE contactId = old.contactId;
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+      COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+      COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+    FROM contacts c WHERE c.id = old.contactId;
+  END;
+
+  -- Backfill FTS for any contacts not yet indexed (including extras from child tables)
+  INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+  SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+    COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+    COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+    COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '')
+  FROM contacts c
+  WHERE c.id NOT IN (SELECT contactId FROM contacts_fts);
 `);
 
 log.info("Database", "FTS5 search index ready");
 
-export const db = drizzle(sqlite, { schema });
+// =============================================================================
+// 4. Auto-stamp updatedAt on every contacts mutation
+// =============================================================================
+// Guarantees updatedAt is always current regardless of which code path
+// (geocoder, archive toggle, bulk update, etc.) mutates the row.
+// Uses AFTER UPDATE to avoid recursion — the trigger itself runs after
+// the original UPDATE, and the SET updatedAt is a no-op if already current.
+// =============================================================================
+
+sqlite.exec(`
+  DROP TRIGGER IF EXISTS contacts_auto_updated_at;
+  CREATE TRIGGER contacts_auto_updated_at AFTER UPDATE ON contacts
+  FOR EACH ROW
+  WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
+  BEGIN
+    UPDATE contacts SET updatedAt = datetime('now') WHERE id = NEW.id;
+  END;
+`);
+
+// =============================================================================
+// 5. Auto-stamp updatedAt on every interactions mutation
+// =============================================================================
+// Same pattern as contacts — guarantees updatedAt is always current even when
+// background processes (mention extraction, EML import re-parent, etc.) update rows.
+// =============================================================================
+
+sqlite.exec(`
+  DROP TRIGGER IF EXISTS interactions_auto_updated_at;
+  CREATE TRIGGER interactions_auto_updated_at AFTER UPDATE ON interactions
+  FOR EACH ROW
+  WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
+  BEGIN
+    UPDATE interactions SET updatedAt = datetime('now') WHERE id = NEW.id;
+  END;
+`);
+
+log.info("Database", "updatedAt triggers installed (contacts + interactions)");

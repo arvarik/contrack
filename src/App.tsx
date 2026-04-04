@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
 import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles } from "lucide-react";
-import { LayoutGroup } from "motion/react";
+import { LayoutGroup, AnimatePresence } from "motion/react";
 import { Toaster } from "sonner";
 
 import { ContactList } from "./views/ContactList";
@@ -70,11 +70,13 @@ const ResponsiveLayout = () => {
         <div className="hidden md:flex">
           <Sidebar />
         </div>
-        <main className="flex-1 h-full overflow-hidden">
-          <Routes>
-            <Route path="/settings/*" element={<SettingsView />} />
-            <Route path="/search" element={<SearchView />} />
-          </Routes>
+        <main className="flex-1 h-full overflow-hidden relative flex">
+          <div className="flex-1 h-full overflow-hidden">
+            <Routes>
+              <Route path="/settings/*" element={<SettingsView />} />
+              <Route path="/search" element={<SearchView />} />
+            </Routes>
+          </div>
         </main>
       </div>
     );
@@ -102,15 +104,17 @@ const ResponsiveLayout = () => {
       {/* Right Pane: Detail View */}
       <main className={`
         ${isContactSelected ? 'flex' : (isMapActive ? 'hidden' : 'hidden lg:flex')}
-        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] z-50 shadow-2xl bg-surface' : 'flex-1 bg-surface z-10'}
+        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-50 shadow-2xl bg-surface overflow-hidden' : 'flex-1 bg-surface z-10'}
         h-full overflow-hidden relative flex-col
       `}>
-        <Routes>
-          <Route path="/" element={<EmptyState />} />
-          <Route path="/map" element={null} />
-          <Route path="/contact/:id" element={<ContactDetail />} />
-          <Route path="/map/contact/:id" element={<ContactDetail />} />
-        </Routes>
+        <AnimatePresence>
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<EmptyState />} />
+            <Route path="/map" element={null} />
+            <Route path="/contact/:id" element={<ContactDetail />} />
+            <Route path="/map/contact/:id" element={<ContactDetail />} />
+          </Routes>
+        </AnimatePresence>
       </main>
 
       {/* Mobile Nav */}

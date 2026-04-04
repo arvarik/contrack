@@ -29,11 +29,11 @@ export const SettingsView = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
-      <header className="p-6 bg-surface-container-low shrink-0 border-b border-surface-container-highest">
+      <header className="p-6 bg-surface-container-low shrink-0">
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => isDedupe ? navigate('/settings') : navigate('/')} 
+              onClick={() => (isDedupe || isArchived) ? navigate('/settings') : navigate('/')} 
               className={ICON_BTN}
             >
               <ChevronLeft className="w-5 h-5" />
@@ -50,7 +50,7 @@ export const SettingsView = () => {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={cn("flex-1", isDedupe ? "overflow-hidden" : "overflow-y-auto")}>
         <Routes>
           <Route path="/" element={
             <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-6">
@@ -62,7 +62,7 @@ export const SettingsView = () => {
                   Dedupe Engine
                 </h3>
                 <p className="text-sm text-on-surface-variant">
-                  Find and merge duplicate contacts, resolving conflicts automatically.
+                  Find and merge duplicate contacts using AI-powered detection, or manually select contacts to merge.
                 </p>
               </Link>
 
@@ -116,7 +116,7 @@ export const SettingsView = () => {
           } />
           
           <Route path="/dedupe" element={
-            <div className="h-full">
+            <div className="h-full overflow-hidden">
               <CleanupView embedded={true} />
             </div>
           } />

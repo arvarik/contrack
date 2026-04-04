@@ -216,9 +216,7 @@ export const interactions = sqliteTable('interactions', {
   contactId: text('contactId')
     .notNull()
     .references(() => contacts.id, { onDelete: 'cascade' }),
-  type: text('type', {
-    enum: ['note', 'call', 'meeting', 'email', 'message', 'sms', 'import', 'linkedin', 'facebook'],
-  }).notNull(),
+  type: text('type').notNull(),
   title: text('title').notNull(),
   content: text('content'),
   date: text('date').default(sql`(CURRENT_TIMESTAMP)`),
@@ -228,6 +226,7 @@ export const interactions = sqliteTable('interactions', {
   fileType: text('fileType'),
   source: text('source'),
   mentions: text('mentions'),
+  updatedAt: text('updatedAt').default(sql`(CURRENT_TIMESTAMP)`),
 });
 
 /**

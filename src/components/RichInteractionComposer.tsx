@@ -67,7 +67,7 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: 'Write your notes or slash commands here... (Cmd+Enter to save)',
+        placeholder: 'Write something...',
         showOnlyWhenEditable: false,
       }),
       SubmitExtension,
@@ -90,7 +90,7 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
   // Reconfigure placeholder when type shifts
   React.useEffect(() => {
     if (editor) {
-      editor.extensionManager.extensions.find(e => e.name === 'placeholder')!.options.placeholder = `Log a ${type}... (Cmd+Enter to save, Markdown supported)`;
+      editor.extensionManager.extensions.find(e => e.name === 'placeholder')!.options.placeholder = `Log a ${type}...`;
       editor.view.dispatch(editor.state.tr);
     }
   }, [type, editor]);

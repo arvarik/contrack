@@ -1,5 +1,5 @@
 import { sqlite } from "./server/db.js";
-import { insertChildRecords } from "./server/helpers.js";
+import { contactRepo } from "./server/repositories/contactRepository.js";
 import crypto from "crypto";
 
 const contactId = crypto.randomUUID();
@@ -42,5 +42,5 @@ const payload = {
   ]
 };
 
-insertChildRecords(contactId, payload, "AI Hydration Script");
+contactRepo.insertChildRecords(contactId, payload, "AI Hydration Script");
 console.log("Seeded Sean Pais! Contact ID:", contactId);

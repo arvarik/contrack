@@ -1,16 +1,17 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, Search, Briefcase, Building, MapPin, Globe, Tag,
-  ArrowRight, Loader2, AlertTriangle, ChevronLeft,
+  ArrowRight, Loader2, AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSemanticSearch } from '../api';
 import type { SemanticMatch } from '../types';
 import {
-  PAGE_TITLE, SECTION_BG, TAG_PILL, CARD, ICON_BTN,
+  PAGE_TITLE, SECTION_BG, TAG_PILL, CARD,
 } from '../lib/styles';
 import { cn } from '../lib/utils';
+import { FloatingContactCard } from '../components/FloatingContactCard';
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -148,6 +149,7 @@ export const SearchView = () => {
   const [query, setQuery] = useState('');
   const semanticSearch = useSemanticSearch();
   const prevQueryRef = useRef('');
+  const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
 
   // Focus input on mount
   useEffect(() => {
@@ -205,9 +207,6 @@ export const SearchView = () => {
       {/* Header */}
       <header className={cn(SECTION_BG, 'p-6 shrink-0')}>
         <div className="flex items-center gap-4">
-          <Link to="/" className={ICON_BTN}>
-            <ChevronLeft className="w-5 h-5" />
-          </Link>
           <div>
             <h1 className={cn(PAGE_TITLE, 'flex items-center gap-3')}>
               <div className="p-2 bg-primary/10 rounded-xl">
@@ -338,7 +337,7 @@ export const SearchView = () => {
                       match={match}
                       index={i}
                       isFallback={isFallback}
-                      onClick={() => navigate(`/contact/${match.id}`)}
+                      onClick={() => setFloatingContactId(match.id)}
                     />
                   ))}
                 </div>
@@ -381,6 +380,14 @@ export const SearchView = () => {
           )}
         </div>
       </div>
+
+      {/* Floating Contact Card overlay */}
+      <FloatingContactCard
+        contactId={floatingContactId}
+        isOpen={!!floatingContactId}
+        onClose={() => setFloatingContactId(null)}
+        showNetworkButton
+      />
     </div>
   );
 };

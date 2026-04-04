@@ -151,6 +151,19 @@
   .icon-container {
     @apply w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center shrink-0 shadow-xs;
   }
+
+  /* ── Swipe Card Overlays (Dedupe Tinder-style) ─────────────────── */
+  .swipe-approve-overlay {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.03) 100%);
+  }
+  .swipe-reject-overlay {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(244, 63, 94, 0.03) 100%);
+  }
+  .card-stack-behind {
+    transform: scale(0.96) translateY(10px);
+    opacity: 0.6;
+    pointer-events: none;
+  }
 }
 
 /* =====================================================================

@@ -123,12 +123,14 @@ export interface Contact {
   addresses: ContactAddress[];
   interests: { id: string; interest: string; isAiGenerated?: boolean; }[];
   attributes: { id: string; name: string; value: string; }[];
+  interactionCount?: number;
 }
 
+/** Well-known types: note, call, meeting, email, message, sms, import, linkedin, facebook */
 export interface Interaction {
   id: string;
   contactId: string;
-  type: 'note' | 'call' | 'meeting' | 'email' | 'message' | 'sms' | 'import' | 'linkedin' | 'facebook';
+  type: string;
   title: string;
   content: string | null;
   date: string;
@@ -140,6 +142,7 @@ export interface Interaction {
   mentions?: string | null;
   isViaName?: string | null;
   isViaId?: string | null;
+  updatedAt?: string | null;
 }
 
 

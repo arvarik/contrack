@@ -55,9 +55,15 @@ export const EditableField = ({
   return (
     <span 
       onClick={() => setIsEditing(true)} 
-      className={`cursor-text hover:bg-surface-container-high py-0.5 px-2 -ml-2 rounded transition-colors ${!value ? 'text-on-surface-variant opacity-50 italic' : ''} ${className}`}
+      className={cn(
+        "relative cursor-text group inline-block",
+        !value && "text-on-surface-variant opacity-50 italic",
+        className
+      )}
     >
-      {value || placeholder}
+      {/* Absolute hover background layer completely decoupled from flex flow */}
+      <span className="absolute -inset-x-2 -top-1 -bottom-1.5 rounded bg-transparent group-hover:bg-surface-container-high transition-colors -z-10 pointer-events-none" />
+      <span className="relative pointer-events-none">{value || placeholder}</span>
     </span>
   );
 };
