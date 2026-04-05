@@ -9,7 +9,7 @@ const LinkPreviewComponent = ({ node, updateAttributes }: any) => {
 
   useEffect(() => {
     if (loading && url) {
-      fetch(`/api/utils/unfurl?url=${encodeURIComponent(url)}`)
+      fetch(`/api/link-preview/unfurl?url=${encodeURIComponent(url)}`)
         .then(res => res.json())
         .then(data => {
           if (data.error) {

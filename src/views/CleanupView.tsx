@@ -14,9 +14,7 @@ import {
   EMPTY_HERO, TAB_CONTAINER, tabItem,
 } from '../lib/styles';
 import { cn } from '../lib/utils';
-import { SwipeCard } from '../components/dedupe/SwipeCard';
-import { EngineInfoCard } from '../components/dedupe/ContactCompare';
-import { ManualMerge } from '../components/dedupe/ManualMerge';
+import { SwipeCard, EngineInfoCard, ManualMerge } from '../components/dedupe';
 
 // =============================================================================
 // CleanupView — The Singularity De-Duplication Engine

@@ -4,7 +4,8 @@ import {
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, useAnimation, AnimatePresence } from 'motion/react';
 import type { Contact, DedupeSuggestion } from '../../types';
-import { ContactCard, MatchBadge } from './ContactCompare';
+import { ContactCard } from './shared/ContactCard';
+import { MatchBadge } from './shared/MatchBadge';
 import { cn } from '../../lib/utils';
 
 // =============================================================================

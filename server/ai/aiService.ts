@@ -23,7 +23,7 @@ import type {
   SemanticMatchResult,
 } from "./types.ts";
 import { GeminiAdapter } from "./adapters/gemini.ts";
-import { log } from "../logger.ts";
+import { log } from "../utils/logger.ts";
 
 // Re-export domain types for consumers
 export type { ParsedContact, MentionEntity, CompressedContact, SemanticMatchResult };

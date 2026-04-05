@@ -3,7 +3,7 @@ import { Search, Users, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Contact } from '../../types';
 import { useContacts } from '../../api';
-import { ContactMiniCard } from './ContactCompare';
+import { ContactMiniCard } from './shared/ContactMiniCard';
 import { SEARCH_INPUT } from '../../lib/styles';
 import { cn } from '../../lib/utils';
 

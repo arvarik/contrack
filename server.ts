@@ -7,10 +7,11 @@ import crypto from "crypto";
 import morgan from "morgan";
 import fs from "fs";
 
-import { log } from "./server/logger.ts";
-import { startRetroactiveGeocoding } from "./server/geocoder.ts";
+import { log } from "./server/utils/logger.ts";
+import { searchCacheSize } from "./server/utils/searchCache.ts";
+import { startRetroactiveGeocoding } from "./server/services/geocodingService.ts";
 
-import { utilsRouter } from "./server/routes/utils.ts";
+import { linkPreviewRouter } from "./server/routes/linkPreview.ts";
 import { searchRouter } from "./server/routes/search.ts";
 import { listsRouter } from "./server/routes/lists.ts";
 import { contactsRouter } from "./server/routes/contacts.ts";
@@ -49,7 +50,7 @@ async function startServer() {
 
   app.use("/uploads", express.static(uploadDir));
 
-  app.use("/api/utils", utilsRouter);
+  app.use("/api/link-preview", linkPreviewRouter); // Using renamed router
   app.use("/api/search", searchRouter);
   app.use("/api/lists", listsRouter);
   app.use("/api", contactsRouter);

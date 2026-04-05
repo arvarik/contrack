@@ -9,7 +9,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AIProvider } from "../provider.ts";
 import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode } from "../types.ts";
-import { log } from "../../logger.ts";
+import { log } from "../../utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Model Fallback Chain

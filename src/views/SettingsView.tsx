@@ -89,12 +89,12 @@ export const SettingsView = () => {
                     <p className="text-sm text-on-surface-variant">Choose how weather is displayed</p>
                   </div>
                   
-                  <div className="flex bg-surface-container rounded-lg p-1">
+                  <div className="flex bg-surface-container rounded-full p-1 shadow-inner h-9">
                     <button
                       onClick={() => handleUnitChange('celsius')}
                       className={cn(
-                        "px-4 py-1.5 rounded-md text-sm font-bold transition-all",
-                        tempUnit === 'celsius' ? "bg-surface shadow text-primary" : "text-on-surface-variant hover:text-on-surface"
+                        "w-12 h-full rounded-full text-xs font-bold transition-all flex items-center justify-center",
+                        tempUnit === 'celsius' ? "bg-surface shadow-sm text-primary" : "text-on-surface-variant hover:text-on-surface"
                       )}
                     >
                       °C
@@ -102,8 +102,8 @@ export const SettingsView = () => {
                     <button
                       onClick={() => handleUnitChange('fahrenheit')}
                       className={cn(
-                        "px-4 py-1.5 rounded-md text-sm font-bold transition-all",
-                        tempUnit === 'fahrenheit' ? "bg-surface shadow text-primary" : "text-on-surface-variant hover:text-on-surface"
+                        "w-12 h-full rounded-full text-xs font-bold transition-all flex items-center justify-center",
+                        tempUnit === 'fahrenheit' ? "bg-surface shadow-sm text-primary" : "text-on-surface-variant hover:text-on-surface"
                       )}
                     >
                       °F

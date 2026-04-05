@@ -1,7 +1,7 @@
-import { db, sqlite } from "./db.ts";
-import * as schema from "../src/db/schema.ts";
+import { db, sqlite } from "../db.ts";
+import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
-import { log } from "./logger.ts";
+import { log } from "../utils/logger.ts";
 
 export const geocodeQueue: { contactId: string; location: string }[] = [];
 let isGeocoding = false;
