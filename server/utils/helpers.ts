@@ -21,7 +21,10 @@ export function buildContactUpdate(body: Record<string, unknown>) {
 
   const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   for (const f of fields) {
-    if (body[f] !== undefined) update[f] = body[f];
+    if (body[f] !== undefined) {
+      // SQLite can't bind JS booleans — coerce to 0/1
+      update[f] = typeof body[f] === 'boolean' ? (body[f] ? 1 : 0) : body[f];
+    }
   }
   return update;
 }

@@ -187,7 +187,7 @@ export const useArchiveContact = () => {
       const res = await fetch(`${API_BASE}/contacts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived: 1 }),
+        body: JSON.stringify({ isArchived: true }),
       });
       if (!res.ok) throw new Error('Failed to archive contact');
       return res.json();
@@ -228,7 +228,7 @@ export const useUnarchiveContact = () => {
       const res = await fetch(`${API_BASE}/contacts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived: 0 }),
+        body: JSON.stringify({ isArchived: false }),
       });
       if (!res.ok) throw new Error('Failed to unarchive contact');
       return res.json();
