@@ -1,3 +1,13 @@
+/**
+ * Shared Frontend Type Definitions.
+ *
+ * These interfaces define the JSON shapes consumed by React components and
+ * React Query hooks. They mirror the server's `HydratedContact` shape from
+ * `server/repositories/types.ts` — if you modify one, verify the other.
+ *
+ * @see {@link file://server/repositories/types.ts} — Server-side counterpart
+ */
+
 // =============================================================================
 // Normalized Child Entity Types
 // =============================================================================

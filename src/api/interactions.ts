@@ -1,3 +1,12 @@
+/**
+ * Interaction API Hooks — React Query hooks for timeline and interaction operations.
+ *
+ * Provides `useTimeline`, `useAddInteraction`, `useDeleteInteraction`,
+ * `useAddAttachment`, `useGenerateBriefing`, and `usePromoteGhost` with
+ * optimistic updates for a responsive timeline UI.
+ *
+ * @module api/interactions
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Interaction, Contact } from '../types';
 

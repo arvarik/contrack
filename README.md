@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="https://via.placeholder.com/150x150.png?text=Contrack+Logo" alt="Contrack Logo" width="120" height="120"/>
   <h1>🤝 Contrack CRM</h1>
   <p><b>The Personal AI Relational Engine for High-Leverage Individuals</b></p>
   
@@ -249,7 +248,7 @@ These high-speed projection boundaries specifically feed AI reasoning systems, b
 
 ### 1. Developer Bootstrap
 ```bash
-git clone https://github.com/my-acc/contrack.git
+git clone https://github.com/arvarik/contrack.git
 cd contrack
 
 # Install modern dependencies

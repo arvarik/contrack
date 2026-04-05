@@ -4,6 +4,9 @@
 // These types are inferred from the Drizzle schema to guarantee compile-time
 // correctness. They describe the shapes returned by ContactRepository methods
 // and the expected shape of inbound child record payloads.
+//
+// IMPORTANT: The frontend mirrors these shapes in `src/types.ts`.
+// If you modify anything here, verify the frontend counterpart stays in sync.
 // =============================================================================
 
 import type * as schema from "../../src/db/schema.ts";

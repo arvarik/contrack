@@ -1,3 +1,7 @@
+/**
+ * Search API Hooks — React Query hooks for FTS5 keyword and Gemini semantic search.
+ * @module api/search
+ */
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Contact, SemanticSearchResult } from '../types';
 

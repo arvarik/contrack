@@ -1,3 +1,9 @@
+/**
+ * MapView — Leaflet-based geospatial explorer for contacts.
+ *
+ * Renders geocoded contacts on a world map with clustered avatar markers.
+ * Clicking a marker navigates to the contact detail overlay within the map context.
+ */
 import React from 'react';
 import { MapContainer, TileLayer, Marker, ZoomControl, Popup } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';

@@ -1,0 +1,304 @@
+/**
+ * TimelineTab — The "Timeline" tab content showing the Rich Interaction
+ * Composer, file drop zone, and the chronological list of interactions
+ * with inline editing, mentions display, and file attachments.
+ *
+ * Extracted from ContactProfile to keep each section focused and readable.
+ */
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Mail, Phone, FileText, Handshake, Sparkles, UploadCloud, Trash2,
+  MessageSquare, ExternalLink, Linkedin, Facebook, File,
+} from "lucide-react";
+import DOMPurify from "dompurify";
+import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
+
+import type { Interaction } from "../../../types";
+import { cn } from "../../../lib/utils";
+import { EMPTY_STATE } from "../../../lib/styles";
+import { RichInteractionComposer } from "../../../components/RichInteractionComposer";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Props
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface TimelineTabProps {
+  contactId: string;
+  timeline: Interaction[];
+  timelineLoading: boolean;
+  isDragActive: boolean;
+  getRootProps: () => any;
+  getInputProps: () => any;
+
+  // Mutations passed from parent
+  deleteInteraction: { mutate: (args: { id: string; contactId: string }, opts?: any) => void };
+  updateInteraction: { mutate: (args: { id: string; contactId: string; data: any }) => void };
+  promoteGhost: { mutate: (id: string, opts?: any) => void };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Returns the icon component and color classes for a given interaction type. */
+function getInteractionStyle(type: string) {
+  let Icon = FileText;
+  let bgClass = "bg-surface-container";
+  let textClass = "text-on-surface";
+
+  if (type === 'call') { Icon = Phone; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
+  if (type === 'meeting') { Icon = Handshake; bgClass = "bg-emerald-500/10"; textClass = "text-emerald-600"; }
+  if (type === 'email') { Icon = Mail; bgClass = "bg-green-500/10"; textClass = "text-green-500"; }
+  if (type === 'note') { bgClass = "bg-primary/10"; textClass = "text-primary"; }
+  if (type === 'message' || type === 'sms') { Icon = MessageSquare; bgClass = "bg-teal-500/10"; textClass = "text-teal-500"; }
+  if (type === 'linkedin') { Icon = Linkedin; bgClass = "bg-blue-600/10"; textClass = "text-blue-600"; }
+  if (type === 'facebook') { Icon = Facebook; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
+  if (type === 'import') { Icon = ExternalLink; bgClass = "bg-amber-500/10"; textClass = "text-amber-500"; }
+
+  return { Icon, bgClass, textClass };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Component
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const TimelineTab: React.FC<TimelineTabProps> = ({
+  contactId,
+  timeline,
+  timelineLoading,
+  isDragActive,
+  getRootProps,
+  getInputProps,
+  deleteInteraction,
+  updateInteraction,
+  promoteGhost,
+}) => {
+  const navigate = useNavigate();
+
+  const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [editingContent, setEditingContent] = useState('');
+
+  const handleDeleteInteraction = (interactionId: string) => {
+    deleteInteraction.mutate(
+      { id: interactionId, contactId },
+      {
+        onSuccess: () => toast.success("Interaction deleted"),
+        onError: (err: Error) => toast.error(`Delete failed: ${err.message}`),
+      }
+    );
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 relative" {...getRootProps()}>
+      <input {...getInputProps()} />
+
+      {/* Drop Zone Overlay */}
+      <AnimatePresence>
+        {isDragActive && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 bg-surface-container-lowest/80 backdrop-blur-sm rounded-3xl flex items-center justify-center border-4 border-dashed border-primary"
+          >
+            <div className="text-center">
+              <UploadCloud className="w-20 h-20 text-primary mx-auto mb-4 animate-bounce" />
+              <p className="text-2xl font-bold font-headline text-on-surface">Drop file to attach...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <RichInteractionComposer contactId={contactId} />
+
+      {/* Empty State */}
+      {!timelineLoading && timeline.length === 0 && (
+        <div className={EMPTY_STATE}>
+          <p className="font-medium text-sm">No interactions logged yet.</p>
+        </div>
+      )}
+
+      {/* Timeline */}
+      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-surface-container-high before:to-transparent">
+        {timelineLoading && <div className="text-center p-4 text-on-surface-variant animate-pulse">Loading timeline...</div>}
+        
+        {timeline.map((item: any) => {
+          const { Icon, bgClass, textClass } = getInteractionStyle(item.type);
+
+          return (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={item.id} 
+              className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
+            >
+              {/* Icon marker */}
+              <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${bgClass} ${textClass} z-10 mx-auto absolute left-0 md:left-1/2 -translate-x-0`}>
+                <Icon className="w-4 h-4" />
+              </div>
+
+              {/* Content Box */}
+              <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card">
+                <div className="flex justify-between items-center mb-2">
+                  {editingInteractionId === item.id ? (
+                    <input
+                      value={editingTitle}
+                      onChange={e => setEditingTitle(e.target.value)}
+                      onBlur={() => {
+                        if (editingTitle.trim() && editingTitle !== item.title) {
+                          updateInteraction.mutate({ id: item.id, contactId, data: { title: editingTitle.trim(), content: editingContent } });
+                        }
+                        setEditingInteractionId(null);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        if (e.key === 'Escape') setEditingInteractionId(null);
+                      }}
+                      autoFocus
+                      className="font-extrabold text-on-surface bg-transparent border-b-2 border-primary focus:outline-none flex-1 mr-2"
+                    />
+                  ) : (
+                    <h4
+                      className="font-extrabold text-on-surface cursor-text"
+                      onDoubleClick={() => {
+                        setEditingInteractionId(item.id);
+                        setEditingTitle(item.title);
+                        setEditingContent(item.content || '');
+                      }}
+                      title="Double-click to edit"
+                    >
+                      {item.title}
+                    </h4>
+                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{new Date(item.date).toLocaleDateString()}</time>
+                    <button
+                      onClick={() => handleDeleteInteraction(item.id)}
+                      className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-red-500 p-1 rounded transition-opacity"
+                      title="Delete interaction"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Via mention badge */}
+                {item.isViaName && (
+                  <div 
+                    className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold" 
+                    onClick={() => navigate(`/contact/${item.isViaId}`)}
+                    title="Navigate to Original Interaction"
+                  >
+                    <ExternalLink className="w-3 h-3 text-primary" /> via {item.isViaName}
+                  </div>
+                )}
+
+                {/* Content (editable) */}
+                {editingInteractionId === item.id ? (
+                  <textarea
+                    value={editingContent}
+                    onChange={e => setEditingContent(e.target.value)}
+                    onBlur={() => {
+                      updateInteraction.mutate({ id: item.id, contactId, data: { title: editingTitle.trim() || item.title, content: editingContent } });
+                      setEditingInteractionId(null);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Escape') setEditingInteractionId(null);
+                    }}
+                    className="w-full min-h-[60px] p-2 bg-surface-container-low rounded-lg border border-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm text-on-surface-variant resize-y"
+                    placeholder="Add content..."
+                  />
+                ) : item.content ? (
+                  <div 
+                    className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface cursor-text"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.content) }}
+                    onDoubleClick={() => {
+                      setEditingInteractionId(item.id);
+                      setEditingTitle(item.title);
+                      setEditingContent(item.content || '');
+                    }}
+                    title="Double-click to edit"
+                  />
+                ) : null}
+                
+                {/* Ghost Mentions */}
+                {item.mentions && (() => {
+                  try {
+                    const parsed = JSON.parse(item.mentions);
+                    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+                    return (
+                      <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
+                        <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1"><Sparkles className="w-3 h-3 text-primary opacity-60"/> Mentioned:</span>
+                        {parsed.map((mention: any, idx: number) => {
+                          if (mention.isGhost) {
+                            return (
+                              <button 
+                                key={idx}
+                                onClick={() => promoteGhost.mutate(mention.contactId, {
+                                  onSuccess: () => navigate(`/contact/${mention.contactId}`)
+                                })}
+                                title={`Promote ${mention.name} to Contact`}
+                                className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border hover:bg-surface-container transition-all group/ghost"
+                                style={{ borderStyle: 'dashed', borderWidth: '1px', borderColor: 'var(--color-primary)' }}
+                              >
+                                <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
+                                  {mention.name.charAt(0)}
+                                </div>
+                                <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
+                                  {mention.name}
+                                </div>
+                              </button>
+                            );
+                          }
+                          return (
+                            <Link 
+                              key={idx}
+                              to={`/contact/${mention.contactId}`}
+                              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                            >
+                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                                {mention.name.charAt(0)}
+                              </div>
+                              <span className="text-xs font-semibold text-on-surface line-clamp-1">{mention.name}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    );
+                  } catch { return null; }
+                })()}
+                
+                {/* File Attachment */}
+                {item.fileUrl && (
+                  <div className="mt-3">
+                    {item.fileType?.startsWith('image/') ? (
+                      <img src={item.fileUrl} alt={item.fileName || 'Attachment'} className="max-w-full rounded-xl shadow-sm object-cover max-h-64" />
+                    ) : (
+                      <a href={item.fileUrl} download className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden">
+                        <File className="w-8 h-8 text-primary shrink-0 opacity-80" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-on-surface truncate">{item.fileName}</p>
+                          <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">{item.fileType?.split('/')[1] || 'FILE'}</p>
+                        </div>
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Duration */}
+                {item.duration && (
+                  <p className="text-xs text-on-surface-variant mt-3 font-medium flex items-center gap-1 opacity-70">
+                     Duration: {item.duration}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+};

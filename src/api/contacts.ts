@@ -1,3 +1,11 @@
+/**
+ * Contact API Hooks — React Query hooks for all contact CRUD operations.
+ *
+ * Provides `useContacts`, `useContact`, `useCreateContact`, `useUpdateContact`,
+ * `useDeleteContact`, and bulk operations with optimistic cache updates.
+ *
+ * @module api/contacts
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Contact } from '../types';
 

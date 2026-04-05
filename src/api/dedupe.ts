@@ -1,3 +1,11 @@
+/**
+ * Deduplication API Hooks — React Query hooks for the duplicate detection engine.
+ *
+ * Provides `useDedupeSuggestions` for fetching AI/algorithmic duplicate pairs
+ * and `useMergeContacts` for executing single-transaction merges.
+ *
+ * @module api/dedupe
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { DedupeSuggestion } from '../types';
 

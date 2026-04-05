@@ -1,8 +1,32 @@
 {
-  "name": "react-example",
+  "name": "contrack",
+  "version": "1.0.0",
+  "description": "A local-first, AI-powered personal CRM for high-leverage individuals. Built with React 19, Express, SQLite, and Gemini.",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
+  "license": "MIT",
+  "author": "Arvind Arik",
+  "keywords": [
+    "crm",
+    "contacts",
+    "ai",
+    "gemini",
+    "local-first",
+    "sqlite",
+    "react",
+    "personal-crm"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arvarik/contrack.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arvarik/contrack/issues"
+  },
+  "homepage": "https://github.com/arvarik/contrack#readme",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
@@ -22,7 +46,6 @@
     "@tiptap/pm": "^3.22.0",
     "@tiptap/react": "^3.22.0",
     "@tiptap/starter-kit": "^3.22.0",
-    "@vitejs/plugin-react": "^5.0.4",
     "better-sqlite3": "^12.8.0",
     "cheerio": "^1.2.0",
     "chrono-node": "^2.9.0",
@@ -52,7 +75,6 @@
     "tailwind-merge": "^3.5.0",
     "tippy.js": "^6.3.7",
     "tz-lookup": "^6.1.25",
-    "vite": "^6.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -65,9 +87,8 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^22.14.0",
     "@types/papaparse": "^5.5.2",
-    "@types/react-router-dom": "^5.3.3",
     "@types/tz-lookup": "^6.1.2",
-    "autoprefixer": "^10.4.21",
+    "@vitejs/plugin-react": "^5.0.4",
     "drizzle-kit": "^0.31.10",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

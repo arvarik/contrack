@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pencil, ChevronDown } from 'lucide-react';
-import { Modal } from './Modal';
+import { Modal } from './ui/Modal';
 import { cn } from '../lib/utils';
 import { LABEL } from '../lib/styles';
 

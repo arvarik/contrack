@@ -1,3 +1,14 @@
+/**
+ * Database Initialization — SQLite connection, Drizzle ORM, FTS5, and triggers.
+ *
+ * This file is the single source of truth for database setup. It:
+ * 1. Opens the SQLite connection in WAL mode with foreign keys enforced
+ * 2. Runs Drizzle Kit migrations from `./drizzle/`
+ * 3. Creates and backfills the FTS5 full-text search index with triggers
+ * 4. Installs `updatedAt` auto-stamp triggers for contacts and interactions
+ *
+ * @module server/db
+ */
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";

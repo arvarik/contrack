@@ -1,59 +1,27 @@
+/**
+ * App — Application root and responsive routing layout.
+ *
+ * Contains the `ResponsiveLayout` component that manages the three-panel
+ * layout (sidebar → contact list / map → detail view) and adapts between
+ * mobile, tablet, and desktop breakpoints. Also provides the global
+ * CommandPalette overlay and Sonner toast provider.
+ */
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
 import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles } from "lucide-react";
 import { LayoutGroup, AnimatePresence } from "motion/react";
 import { Toaster } from "sonner";
 
-import { ContactList } from "./views/ContactList";
-import { ContactDetail } from "./views/ContactDetail";
-import { CommandPalette } from "./components/CommandPalette";
+import { ContactList } from "./views/contact-list";
+import { ContactDetail } from "./views/contact-detail";
+import { CommandPalette } from './components/command-palette';
 import { MapView } from "./views/MapView";
 import { SettingsView } from "./views/SettingsView";
 import { SearchView } from "./views/SearchView";
 import { navLink, SECTION_BG } from "./lib/styles";
 import { cn } from "./lib/utils";
 
-const Sidebar = () => {
-  const location = useLocation();
-  const isMap = location.pathname.startsWith('/map');
-  const isCleanup = location.pathname.startsWith('/settings');
-  const isSearch = location.pathname.startsWith('/search');
-  const isHome = !isMap && !isCleanup && !isSearch && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
-
-  return (
-    <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
-      {/* Contrack wordmark — rotated vertical */}
-      <div className="flex items-center justify-center mb-1" title="Contrack">
-        <span
-          className="text-[9px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.18em' }}
-        >
-          Contrack
-        </span>
-      </div>
-      <Link to="/" className={navLink(isHome)}>
-        <LayoutDashboard className="w-6 h-6" />
-      </Link>
-      <Link to="/map" className={navLink(isMap)}>
-        <Map className="w-6 h-6" />
-      </Link>
-      <Link to="/search" className={navLink(isSearch)} title="Ask My CRM — AI Search">
-        <Sparkles className="w-6 h-6" />
-      </Link>
-      <Link to="/settings" className={navLink(isCleanup, "mt-auto")} title="Settings">
-        <SettingsIcon className="w-6 h-6" />
-      </Link>
-    </aside>
-  );
-};
-
-const EmptyState = () => (
-  <div className="flex-1 flex flex-col items-center justify-center h-full text-on-surface-variant bg-surface relative z-10">
-    <Search className="w-12 h-12 mb-4 opacity-50 text-primary" />
-    <h2 className="text-xl font-headline font-semibold mb-2 text-on-surface">No Contact Selected</h2>
-    <p>Select a contact from the list to view details.</p>
-  </div>
-);
-
+import { Sidebar } from "./components/layout/Sidebar";
+import { EmptyState } from "./components/layout/EmptyState";
 const ResponsiveLayout = () => {
   const location = useLocation();
   const matchContact = useMatch("/contact/:id");

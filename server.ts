@@ -1,3 +1,10 @@
+/**
+ * server.ts — Express application entry point.
+ *
+ * Boots the HTTP server with all API routers, Vite dev middleware (or static
+ * serving in production), request ID tracing, Morgan logging, centralized
+ * error handling via AppError, and background geocoding on startup.
+ */
 import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";

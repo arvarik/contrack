@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
-import { ContactProfile } from './ContactDetail/ContactProfile';
+import { ContactProfile } from "../views/contact-detail/components/ContactProfile";
 
 interface FloatingContactCardProps {
   contactId: string | null;

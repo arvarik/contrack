@@ -1,7 +1,13 @@
+/**
+ * SettingsView — Application settings hub.
+ *
+ * Contains nested routes for the Dedupe Engine and Archived Contacts views,
+ * plus inline preference cards (e.g., temperature unit toggle).
+ */
 import React, { useState, useEffect } from 'react';
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive } from 'lucide-react';
-import { CleanupView } from './CleanupView';
+import { DedupeView } from './dedupe';
 import { ArchivedContactsView } from './ArchivedContactsView';
 import { ICON_BTN, PAGE_TITLE, CARD, SECTION_HEADING } from '../lib/styles';
 import { cn } from '../lib/utils';
@@ -116,8 +122,8 @@ export const SettingsView = () => {
           } />
           
           <Route path="/dedupe" element={
-            <div className="h-full overflow-hidden">
-              <CleanupView embedded={true} />
+            <div className="absolute inset-0 z-50 bg-surface">
+              <DedupeView embedded />
             </div>
           } />
 

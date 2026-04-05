@@ -1,3 +1,12 @@
+/**
+ * List Management API Hooks — React Query hooks for contact lists.
+ *
+ * Provides `useLists`, `useCreateList`, `useDeleteList`, `useReorderLists`,
+ * `useAddToList`, `useRemoveFromList`, and `useBulkAddToList` with optimistic
+ * cache updates for instant UI feedback when managing list memberships.
+ *
+ * @module api/lists
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Contact, ContactList } from '../types';
 

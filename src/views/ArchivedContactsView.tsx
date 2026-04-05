@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useArchivedContacts, useUnarchiveContact, useBulkUpdateContacts, useBulkDeleteContacts } from '../api';
 import { HealthRingAvatar } from '../components/HealthRingAvatar';
-import { Modal } from '../components/Modal';
+import { Modal } from '../components/ui/Modal';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { CARD, SECTION_HEADING, EMPTY_STATE, ICON_BTN } from '../lib/styles';

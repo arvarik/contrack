@@ -1,9 +1,12 @@
+# Dependencies
 node_modules/
+
+# Build output
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+
+# Environment variables
 .env*
 !.env.example
 
@@ -14,6 +17,17 @@ coverage/
 
 # User-uploaded files
 uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE config
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursorrules
 
 # Test / scratch artifacts
 test.eml
