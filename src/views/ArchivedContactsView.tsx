@@ -147,12 +147,14 @@ export const ArchivedContactsView = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
                   transition={{ delay: i * 0.03 }}
-                  onClick={() => isSelectMode && toggleSelect(contact.id)}
+                  onClick={() => {
+                    if (isSelectMode) { toggleSelect(contact.id); return; }
+                    setFloatingContactId(contact.id);
+                  }}
                   className={cn(
-                    "flex items-center gap-4 px-6 py-4 transition-colors group",
-                    isSelectMode ? "cursor-pointer select-none" : "hover:bg-surface-container-low",
+                    "flex items-center gap-4 px-6 py-4 transition-colors group cursor-pointer",
                     isSelectMode && isSelected && "bg-primary/8 ring-inset ring-2 ring-primary/30",
-                    !isSelected && isSelectMode && "hover:bg-surface-container-low",
+                    "hover:bg-surface-container-low",
                   )}
                 >
                   {/* Checkbox */}
@@ -186,15 +188,9 @@ export const ArchivedContactsView = () => {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <button
-                      onClick={e => {
-                        if (isSelectMode) { e.preventDefault(); return; }
-                        setFloatingContactId(contact.id);
-                      }}
-                      className="font-semibold text-sm text-on-surface hover:text-primary transition-colors truncate block text-left"
-                    >
+                    <span className="font-semibold text-sm text-on-surface group-hover:text-primary transition-colors truncate block text-left">
                       {contact.name}
-                    </button>
+                    </span>
                     {(contact.role || contact.company) && (
                       <p className="text-xs text-on-surface-variant mt-0.5 truncate">
                         {[contact.role, contact.company].filter(Boolean).join(' at ')}
@@ -212,7 +208,7 @@ export const ArchivedContactsView = () => {
                   {/* Individual restore button (hidden in select mode) */}
                   {!isSelectMode && (
                     <button
-                      onClick={() => handleUnarchive(contact.id, contact.name)}
+                      onClick={(e) => { e.stopPropagation(); handleUnarchive(contact.id, contact.name); }}
                       disabled={unarchive.isPending}
                       title="Restore to Network"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 transition-colors opacity-0 group-hover:opacity-100 shrink-0 disabled:opacity-50"

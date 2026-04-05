@@ -72,16 +72,6 @@ export const SettingsView = () => {
                 </p>
               </Link>
 
-              <Link to="/settings/archived" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
-                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-amber-500 transition-colors")}>
-                  <Archive className="w-5 h-5 text-amber-500" />
-                  Archived Contacts
-                </h3>
-                <p className="text-sm text-on-surface-variant">
-                  View and restore contacts you've archived. Archived contacts are hidden from your Network and Map.
-                </p>
-              </Link>
-
               {/* Inline Preference Cards */}
               <section className={CARD}>
                 <h3 className={cn(SECTION_HEADING, "mb-6 flex items-center gap-2")}>
@@ -117,6 +107,16 @@ export const SettingsView = () => {
                   </div>
                 </div>
               </section>
+
+              <Link to="/settings/archived" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
+                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-amber-500 transition-colors")}>
+                  <Archive className="w-5 h-5 text-amber-500" />
+                  Archived Contacts
+                </h3>
+                <p className="text-sm text-on-surface-variant">
+                  View and restore contacts you've archived. Archived contacts are hidden from your Network and Map.
+                </p>
+              </Link>
               
             </div>
           } />
