@@ -154,6 +154,7 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
           archiveContact={archiveContact}
           unarchiveContact={unarchiveContact}
           updateContact={updateContact}
+          promoteGhost={promoteGhost}
         />
 
         {/* ── Two-Column Layout ───────────────────────────────────────── */}

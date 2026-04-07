@@ -6,7 +6,7 @@
  */
 import React, { useState } from "react";
 import {
-  MapPin, Mail, Phone, Cake, Globe, Coffee, Heart, Sparkles, X,
+  MapPin, Mail, Phone, Cake, Globe, Coffee, Heart, Sparkles, X, Activity,
 } from "lucide-react";
 
 import type { Contact } from "../../../types";
@@ -214,11 +214,11 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
         </div>
       </div>
       
-      {/* Follow-Up */}
-      {contact.nextFollowUpAt && (
-         <div className="flex items-start gap-4 group mt-6 pt-4">
-           <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-           <div className="flex-1 min-w-0 flex flex-col">
+       {/* Follow-Up */}
+       {contact.nextFollowUpAt && (
+          <div className="flex items-start gap-4 group mt-6 pt-4">
+            <Activity className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0 flex flex-col">
              <span className={LABEL_PRIMARY}>Next Follow Up</span>
              <span className="text-sm font-bold text-on-surface">{new Date(contact.nextFollowUpAt).toLocaleString()}</span>
            </div>

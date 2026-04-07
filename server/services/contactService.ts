@@ -190,9 +190,11 @@ export const contactService = {
              c.themeColor, c.isGhost, c.isArchived, c.addedAt, c.updatedAt,
              c.role, c.headline, c.location, c.industry, c.pronouns,
              c.cadenceDays, c.lastContactedAt, c.nextFollowUpAt,
-             c.lat, c.lng,
+             c.lat, c.lng, c.relationshipScore,
              GROUP_CONCAT(DISTINCT t.tag) as _tags,
-             (SELECT COUNT(*) FROM interactions WHERE contactId = c.id) as interactionCount
+             (SELECT COUNT(*) FROM interactions WHERE contactId = c.id) as interactionCount,
+             (SELECT GROUP_CONCAT(e.email) FROM contact_emails e WHERE e.contactId = c.id) as _allEmails,
+             (SELECT GROUP_CONCAT(p.phone) FROM contact_phones p WHERE p.contactId = c.id) as _allPhones
       FROM contacts c
       LEFT JOIN contact_tags t ON c.id = t.contactId
       WHERE (c.isArchived = 0 OR c.isArchived IS NULL)
@@ -213,14 +215,16 @@ export const contactService = {
       listsByContact.get(lr.contactId)!.push({ id: lr.id, name: lr.name, icon: lr.icon, sortOrder: lr.sortOrder });
     }
 
-    return rows.map(({ _tags, ...r }) => ({
+    return rows.map(({ _tags, _allEmails, _allPhones, ...r }) => ({
       ...r,
       isGhost: !!r.isGhost,
       isArchived: !!r.isArchived,
       tags: _tags ? _tags.split(',').map((tag: string) => ({ id: tag, tag })) : [],
       lists: listsByContact.get(r.id) || [],
       interactionCount: r.interactionCount ?? 0,
-      emails: [], phones: [], socialLinks: [], education: [], experience: [],
+      emails: _allEmails ? _allEmails.split(',').map((e: string) => ({ email: e })) : [],
+      phones: _allPhones ? _allPhones.split(',').map((p: string) => ({ phone: p })) : [],
+      socialLinks: [], education: [], experience: [],
       sources: [], addresses: [], interests: [], attributes: [],
     }));
   },

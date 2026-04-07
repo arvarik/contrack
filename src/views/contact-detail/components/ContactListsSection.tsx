@@ -43,7 +43,7 @@ export const ContactListsSection = ({ contactId, contactLists }: { contactId: st
   const availableLists = allLists.filter(l => !memberOfIds.has(l.id));
 
   return (
-    <div className="flex items-center gap-2 mt-3 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       {contactLists.map(list => (
         <span
           key={list.id}
@@ -53,10 +53,10 @@ export const ContactListsSection = ({ contactId, contactLists }: { contactId: st
           {list.name}
           <button
             onClick={() => removeFromList.mutate({ listId: list.id, contactId })}
-            className="ml-0.5 opacity-0 group-hover/listpill:opacity-100 hover:text-red-500 transition-opacity"
+            className="w-0 overflow-hidden opacity-0 group-hover/listpill:w-3 group-hover/listpill:ml-0.5 group-hover/listpill:opacity-100 hover:text-red-500 transition-all duration-300 flex items-center"
             title="Remove from list"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3 h-3 shrink-0" />
           </button>
         </span>
       ))}

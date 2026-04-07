@@ -1,13 +1,5 @@
-/**
- * App — Application root and responsive routing layout.
- *
- * Contains the `ResponsiveLayout` component that manages the three-panel
- * layout (sidebar → contact list / map → detail view) and adapts between
- * mobile, tablet, and desktop breakpoints. Also provides the global
- * CommandPalette overlay and Sonner toast provider.
- */
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
-import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles } from "lucide-react";
+import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles, Activity } from "lucide-react";
 import { LayoutGroup, AnimatePresence } from "motion/react";
 import { Toaster } from "sonner";
 
@@ -17,11 +9,14 @@ import { CommandPalette } from './components/command-palette';
 import { MapView } from "./views/MapView";
 import { SettingsView } from "./views/SettingsView";
 import { SearchView } from "./views/SearchView";
+import { DashboardView } from "./views/DashboardView";
 import { navLink, SECTION_BG } from "./lib/styles";
 import { cn } from "./lib/utils";
 
 import { Sidebar } from "./components/layout/Sidebar";
 import { EmptyState } from "./components/layout/EmptyState";
+import { useUrgentActionItemCount } from "./api";
+
 const ResponsiveLayout = () => {
   const location = useLocation();
   const matchContact = useMatch("/contact/:id");
@@ -30,12 +25,42 @@ const ResponsiveLayout = () => {
   const isMapActive = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
   const isSearch = location.pathname.startsWith('/search');
+  const isPulse = location.pathname.startsWith('/pulse');
 
-  // Full-page views (cleanup, search) take the full main area
-  if (isCleanup || isSearch) {
+  const { data: badge } = useUrgentActionItemCount();
+  const urgentCount = badge?.count || 0;
+
+  const mobileNav = (
+    <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-3 glass-panel rounded-t-xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]">
+      <Link to="/" className={`p-3 ${(!isMapActive && !isPulse && !isCleanup && !isSearch) ? 'text-primary' : 'text-on-surface-variant'}`}>
+         <LayoutDashboard className="w-6 h-6" />
+      </Link>
+      <Link to="/pulse" className={`p-3 relative ${isPulse ? 'text-primary' : 'text-on-surface-variant'}`}>
+        <Activity className="w-6 h-6" />
+        {urgentCount > 0 && (
+          <span className="absolute top-3 right-3 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+          </span>
+        )}
+      </Link>
+      <Link to="/map" className={`p-3 ${isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
+        <Map className="w-6 h-6" />
+      </Link>
+      <Link to="/search" className={`p-3 ${isSearch ? 'text-primary' : 'text-on-surface-variant'}`}>
+        <Sparkles className="w-6 h-6" />
+      </Link>
+      <Link to="/settings" className={`p-3 ${isCleanup ? 'text-primary' : 'text-on-surface-variant'}`}>
+        <SettingsIcon className="w-6 h-6" />
+      </Link>
+    </nav>
+  );
+
+  // Full-page views (cleanup, search, pulse) take the full main area
+  if (isCleanup || isSearch || isPulse) {
     return (
       <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
-        <div className="hidden md:flex">
+        <div className="hidden md:flex shrink-0">
           <Sidebar />
         </div>
         <main className="flex-1 h-full overflow-hidden relative flex">
@@ -43,9 +68,11 @@ const ResponsiveLayout = () => {
             <Routes>
               <Route path="/settings/*" element={<SettingsView />} />
               <Route path="/search" element={<SearchView />} />
+              <Route path="/pulse" element={<DashboardView />} />
             </Routes>
           </div>
         </main>
+        {mobileNav}
       </div>
     );
   }
@@ -86,18 +113,7 @@ const ResponsiveLayout = () => {
       </main>
 
       {/* Mobile Nav */}
-      {!isContactSelected && (
-        <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-3 glass-panel rounded-t-xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]">
-          <Link to="/" className={`p-3 ${!isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
-             <LayoutDashboard className="w-6 h-6" />
-          </Link>
-          <Link to="/map" className={`p-3 ${isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
-            <Map className="w-6 h-6" />
-          </Link>
-          <Link to="/search" className="text-on-surface-variant p-3"><Sparkles className="w-6 h-6" /></Link>
-          <Link to="/settings" className="text-on-surface-variant p-3"><SettingsIcon className="w-6 h-6" /></Link>
-        </nav>
-      )}
+      {!isContactSelected && mobileNav}
     </div>
   );
 };

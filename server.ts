@@ -15,7 +15,6 @@ import morgan from "morgan";
 import fs from "fs";
 
 import { log } from "./server/utils/logger.ts";
-import { searchCacheSize } from "./server/utils/searchCache.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocodingService.ts";
 
 import { linkPreviewRouter } from "./server/routes/linkPreview.ts";
@@ -25,6 +24,9 @@ import { contactsRouter } from "./server/routes/contacts.ts";
 import { interactionsRouter } from "./server/routes/interactions.ts";
 import { dedupeRouter } from "./server/routes/dedupe.ts";
 import { mcpRouter } from "./server/routes/mcp.ts";
+import { actionItemsRouter } from "./server/routes/actionItems.ts";
+import { dashboardRouter } from "./server/routes/dashboard.ts";
+import { relationshipService } from "./server/services/relationshipService.ts";
 
 import { AppError } from "./server/utils/AppError.ts";
 
@@ -64,6 +66,8 @@ async function startServer() {
   app.use("/api", interactionsRouter);
   app.use("/api", mcpRouter);
   app.use("/api", dedupeRouter);
+  app.use("/api", actionItemsRouter);
+  app.use("/api", dashboardRouter);
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
@@ -122,6 +126,10 @@ async function startServer() {
   });
 
   startRetroactiveGeocoding();
+
+  // Relationship scoring: full recompute on startup, then hourly sweep
+  relationshipService.recomputeAll();
+  setInterval(() => relationshipService.recomputeAll(), 60 * 60 * 1000);
 }
 
 startServer();

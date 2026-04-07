@@ -1,14 +1,19 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Map, Settings as SettingsIcon, Sparkles } from "lucide-react";
+import { LayoutDashboard, Map, Settings as SettingsIcon, Sparkles, Activity } from "lucide-react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { useUrgentActionItemCount } from "../../api";
 
 export const Sidebar = () => {
   const location = useLocation();
   const isMap = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
   const isSearch = location.pathname.startsWith('/search');
-  const isHome = !isMap && !isCleanup && !isSearch && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
+  const isPulse = location.pathname.startsWith('/pulse');
+  const isHome = !isMap && !isCleanup && !isSearch && !isPulse && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
+
+  const { data: badge } = useUrgentActionItemCount();
+  const urgentCount = badge?.count || 0;
 
   return (
     <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
@@ -21,10 +26,19 @@ export const Sidebar = () => {
           Contrack
         </span>
       </div>
-      <Link to="/" className={navLink(isHome)}>
+      <Link to="/" className={navLink(isHome)} title="Contacts">
         <LayoutDashboard className="w-6 h-6" />
       </Link>
-      <Link to="/map" className={navLink(isMap)}>
+      <Link to="/pulse" className={navLink(isPulse, "relative")} title="Relationship Pulse">
+        <Activity className="w-6 h-6" />
+        {urgentCount > 0 && (
+          <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+          </span>
+        )}
+      </Link>
+      <Link to="/map" className={navLink(isMap)} title="Map">
         <Map className="w-6 h-6" />
       </Link>
       <Link to="/search" className={navLink(isSearch)} title="Ask My CRM — AI Search">

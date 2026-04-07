@@ -145,20 +145,56 @@ export const ContactList = () => {
     }
   };
 
-  // Exclude archived contacts from the network view
+  // Exclude archived contacts from the network view and apply smart search
   const filteredContacts = useMemo(() => {
-    return contacts.filter(contact => {
-      if (contact.isArchived) return false;
+    let result = contacts.filter(contact => !contact.isArchived);
 
-      const matchesSearch = contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (contact.company && contact.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (contact.role && contact.role.toLowerCase().includes(searchQuery.toLowerCase()));
+    // 1. Apply List Filter
+    if (filterMode !== 'all') {
+      result = result.filter(contact => contact.lists?.some(l => l.id === filterMode));
+    }
 
-      if (filterMode !== 'all') {
-        return matchesSearch && contact.lists?.some(l => l.id === filterMode);
-      }
-      return matchesSearch;
-    });
+    // 2. Apply Smart Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const normalizePhone = (p: string) => p.replace(/\D/g, '');
+      const cleanPhoneQuery = normalizePhone(q);
+      
+      const scorableContacts = result.map(contact => {
+        let score = 0;
+        
+        // --- High Priority (Name) ---
+        const nameMatch = contact.name.toLowerCase();
+        if (nameMatch === q) { score += 100; }
+        else if (nameMatch.startsWith(q)) { score += 50; }
+        else if (nameMatch.includes(q)) { score += 30; }
+
+        // --- Medium Priority (Company, Role, Location, Industry) ---
+        if (contact.company && contact.company.toLowerCase().includes(q)) score += 10;
+        if (contact.role && contact.role.toLowerCase().includes(q)) score += 10;
+        if (contact.location && contact.location.toLowerCase().includes(q)) score += 10;
+        if (contact.industry && contact.industry.toLowerCase().includes(q)) score += 10;
+
+        // --- Details match (Tags, Emails, Phones) ---
+        if (contact.tags && contact.tags.some(t => t.tag.toLowerCase().includes(q))) score += 10;
+        if (contact.emails && contact.emails.some(e => e.email.toLowerCase().includes(q))) score += 10;
+        
+        // Phone numbers (normalized)
+        if (cleanPhoneQuery && contact.phones && contact.phones.some(p => normalizePhone(p.phone).includes(cleanPhoneQuery))) {
+           score += 10;
+        }
+
+        return { contact, score };
+      });
+
+      // Filter out zero scores and sort by descending score (name first)
+      result = scorableContacts
+        .filter(c => c.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(c => c.contact);
+    }
+
+    return result;
   }, [contacts, searchQuery, filterMode]);
 
   // Smart overflow: show at most 10 list pills inline, rest in dropdown

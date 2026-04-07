@@ -8,8 +8,9 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Briefcase, ArrowLeft, Sparkles, Archive, Tag, X, ArrowUpRight,
+  CalendarClock
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, isPast, isToday } from "date-fns";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 
@@ -45,6 +46,7 @@ export interface ProfileHeaderProps {
   archiveContact: { mutate: (id: string, opts?: any) => void; isPending: boolean };
   unarchiveContact: { mutate: (id: string, opts?: any) => void; isPending: boolean };
   updateContact: { mutate: (args: { id: string; data: any }) => void };
+  promoteGhost: { mutate: (id: string, opts?: any) => void; isPending: boolean };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -62,6 +64,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   archiveContact,
   unarchiveContact,
   updateContact,
+  promoteGhost,
 }) => {
   const navigate = useNavigate();
   const [showVibePicker, setShowVibePicker] = useState(false);
@@ -92,6 +95,20 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         </div>
       )}
 
+      {/* URGENCY BANNER */}
+      {contact.nextFollowUpAt && (isPast(new Date(contact.nextFollowUpAt)) || isToday(new Date(contact.nextFollowUpAt))) && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full bg-error/10 border-b border-error/20 px-6 py-3 flex items-center justify-center gap-2 shadow-sm"
+        >
+          <CalendarClock className="w-4 h-4 text-error shrink-0" />
+          <span className="text-sm font-bold text-error truncate">
+            Pending Follow-Up Alert
+          </span>
+        </motion.div>
+      )}
+
       <div className="p-6 md:p-8 lg:px-10 lg:pt-8 lg:pb-6 max-w-6xl mx-auto w-full relative lg:shrink-0">
         <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
           {/* Avatar */}
@@ -120,6 +137,15 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 Archived
               </div>
             )}
+            {contact.isGhost ? (
+              <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">
+                <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
+                  <strong className="block text-primary mb-0.5">Ghost Profile</strong>
+                  Created automatically from a mention. Waiting to be populated.
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Identity */}
@@ -136,6 +162,21 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 currentVibeId={contact.themeColor}
                 onSelect={handleVibeSelect}
               />
+
+              {!!contact.isGhost && (
+                <button
+                  onClick={() => {
+                    promoteGhost.mutate(contact.id, {
+                      onSuccess: () => toast.success(`${contact.name} promoted to network!`)
+                    });
+                  }}
+                  disabled={promoteGhost.isPending}
+                  className="px-3 py-1.5 rounded-xl bg-primary text-white font-bold text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-1.5 ml-2"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {promoteGhost.isPending ? 'Promoting...' : 'Promote to Contact'}
+                </button>
+              )}
 
               <button
                 onClick={() => {

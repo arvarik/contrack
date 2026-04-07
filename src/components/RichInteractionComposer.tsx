@@ -20,28 +20,54 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
   const addInteraction = useAddInteraction();
   const updateContact = useUpdateContact();
   const [followUpText, setFollowUpText] = useState('');
+  const [hasContent, setHasContent] = useState(false);
   const parsedDate = chrono.parseDate(followUpText);
 
   const handleSave = async (htmlContent: string) => {
-    if (!htmlContent.trim() || htmlContent === '<p></p>') return;
+    const isEditorEmpty = !htmlContent.trim() || htmlContent === '<p></p>';
+    if (isEditorEmpty && !followUpText.trim()) return;
 
     try {
+      const payload: any = {
+        type,
+        title: type === 'note' ? (isEditorEmpty ? 'Action Scheduled' : 'Quick Note') : `Logged ${type}`,
+        content: isEditorEmpty ? null : htmlContent,
+        date: new Date().toISOString()
+      };
+
+      if (parsedDate) {
+        const chronoResult = chrono.parse(followUpText)[0];
+        let actionItemTitle = "Follow up";
+        
+        if (chronoResult && chronoResult.text) {
+          let titleText = followUpText.replace(chronoResult.text, '').trim();
+          
+          let previous;
+          do {
+            previous = titleText;
+            titleText = titleText.replace(/^(on|at|by|in|for|with|the|to)\s+/i, '').trim();
+            titleText = titleText.replace(/\s+(on|at|by|in|for|with|the|to)$/i, '').trim();
+          } while (titleText !== previous);
+          
+          if (titleText.length > 0) {
+            // Capitalize first letter
+            actionItemTitle = titleText.charAt(0).toUpperCase() + titleText.slice(1);
+          }
+        }
+        
+        payload.actionItem = {
+          title: actionItemTitle,
+          dueAt: parsedDate.toISOString()
+        };
+      }
+
       await addInteraction.mutateAsync({
         contactId,
-        data: {
-          type,
-          title: type === 'note' ? 'Quick Note' : `Logged ${type}`,
-          content: htmlContent,
-          date: new Date().toISOString()
-        }
+        data: payload
       });
 
       if (parsedDate) {
-        await updateContact.mutateAsync({
-          id: contactId,
-          data: { nextFollowUpAt: parsedDate.toISOString() }
-        });
-        toast.success("Follow-up logic scheduled!");
+        toast.success("Follow-up scheduled!");
       }
       
       setFollowUpText('');
@@ -80,6 +106,9 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
       LinkPreviewExtension,
     ],
     content: '',
+    onUpdate: ({ editor }) => {
+      setHasContent(!editor.isEmpty);
+    },
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[80px] text-on-surface break-words prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1',
@@ -141,10 +170,11 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
             if (editor) {
               handleSave(editor.getHTML());
               editor.commands.clearContent();
+              setHasContent(false);
             }
           }}
-          disabled={!editor || editor.isEmpty || addInteraction.isPending}
-          className="btn-primary px-7 py-2.5 shadow-sm text-sm"
+          disabled={(!hasContent && !followUpText.trim()) || addInteraction.isPending}
+          className="bg-primary text-on-primary hover:bg-primary/90 font-bold rounded-full px-7 py-2.5 shadow-sm text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Save
         </button>

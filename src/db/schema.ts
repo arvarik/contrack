@@ -42,6 +42,7 @@ export const contacts = sqliteTable('contacts', {
   aiBriefingAt: text('aiBriefingAt'),
   isGhost: integer('isGhost').default(0),
   isArchived: integer('isArchived').default(0),
+  relationshipScore: integer('relationshipScore').default(50),
 });
 
 // =============================================================================
@@ -242,6 +243,29 @@ export const interactionMentions = sqliteTable('interaction_mentions', {
 }));
 
 // =============================================================================
+// Action Items (Proactive Follow-Up Tasks)
+// =============================================================================
+
+/**
+ * action_items — First-class follow-up tasks linked to contacts.
+ * Replaces the single `nextFollowUpAt` date field with a full entity that
+ * supports multiple items per contact, descriptive titles, and completion tracking.
+ * SQL triggers keep `contacts.nextFollowUpAt` in sync as a denormalized cache.
+ */
+export const actionItems = sqliteTable('action_items', {
+  id: text('id').primaryKey(),
+  contactId: text('contactId').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  interactionId: text('interactionId')
+    .references(() => interactions.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  dueAt: text('dueAt').notNull(),
+  completedAt: text('completedAt'),
+  createdAt: text('createdAt').default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text('updatedAt').default(sql`(CURRENT_TIMESTAMP)`),
+});
+
+// =============================================================================
 // Lists (User-Created Contact Groups)
 // =============================================================================
 
@@ -287,6 +311,7 @@ export const contactsRelations = relations(contacts, ({ many }) => ({
   attributes: many(contactAttributes),
   interactions: many(interactions),
   mentionedIn: many(interactionMentions),
+  actionItems: many(actionItems),
 }));
 
 export const contactEmailsRelations = relations(contactEmails, ({ one }) => ({
@@ -337,6 +362,10 @@ export const interactionsRelations = relations(interactions, ({ one, many }) => 
 export const interactionMentionsRelations = relations(interactionMentions, ({ one }) => ({
   interaction: one(interactions, { fields: [interactionMentions.interactionId], references: [interactions.id] }),
   contact: one(contacts, { fields: [interactionMentions.contactId], references: [contacts.id] }),
+}));
+
+export const actionItemsRelations = relations(actionItems, ({ one }) => ({
+  contact: one(contacts, { fields: [actionItems.contactId], references: [contacts.id] }),
 }));
 
 export const listsRelations = relations(lists, ({ many }) => ({

@@ -7,18 +7,36 @@ import * as schema from "../../src/db/schema.ts";
 import { eq, sql } from "drizzle-orm";
 import { log } from "../utils/logger.ts";
 import { extractMentions, generateCatchMeUpBriefing, summarizeEmlEmail } from "../ai/aiService.ts";
+import { relationshipService } from "./relationshipService.ts";
 
 export const interactionService = {
   getTimeline(contactId: string) {
-    return sqlite.prepare(`
+    const raw = sqlite.prepare(`
       SELECT i.*, 
         CASE WHEN i.contactId != ? THEN original.name ELSE NULL END as isViaName,
-        CASE WHEN i.contactId != ? THEN i.contactId ELSE NULL END as isViaId
+        CASE WHEN i.contactId != ? THEN i.contactId ELSE NULL END as isViaId,
+        (
+          SELECT json_group_array(json_object('id', a.id, 'title', a.title, 'dueAt', a.dueAt, 'completedAt', a.completedAt)) 
+          FROM action_items a WHERE a.interactionId = i.id
+        ) as actionItemsRaw
       FROM interactions i
       LEFT JOIN contacts original ON i.contactId = original.id
       WHERE i.contactId = ? OR i.id IN (SELECT interactionId FROM interaction_mentions WHERE contactId = ?)
       ORDER BY i.date DESC
-    `).all(contactId, contactId, contactId, contactId);
+    `).all(contactId, contactId, contactId, contactId) as any[];
+
+    return raw.map(row => {
+      let actionItems = [];
+      if (row.actionItemsRaw) {
+        try {
+          const parsed = JSON.parse(row.actionItemsRaw);
+          // sqlite json_group_array returns '[{}]' even if null sometimes or '[null]'
+          actionItems = parsed.filter((p: any) => p && p.id);
+        } catch { }
+      }
+      delete row.actionItemsRaw;
+      return { ...row, actionItems };
+    });
   },
 
   createInteraction(contactId: string, body: any) {
@@ -26,25 +44,37 @@ export const interactionService = {
     const id = crypto.randomUUID();
     const now = date || new Date().toISOString();
 
-    const result = db.insert(schema.interactions).values({
-      id, contactId, type, title,
-      content: content || null, date: now,
-      duration: duration || null, source: source || null,
-    }).returning().get();
+    const result = sqlite.transaction(() => {
+      const res = db.insert(schema.interactions).values({
+        id, contactId, type, title,
+        content: content || null, date: now,
+        duration: duration || null, source: source || null,
+      }).returning().get();
 
-    if (content) {
-      const mentionRegex = /data-type="mention"\s+data-id="([^"]+)"/g;
-      const explicitMentionIds = [...content.matchAll(mentionRegex)].map(m => m[1]);
-      if (explicitMentionIds.length > 0) {
-        const insertStmt = sqlite.prepare("INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)");
-        for (const mId of explicitMentionIds) {
-          insertStmt.run(id, mId);
+      if (content) {
+        const mentionRegex = /data-type="mention"\\s+data-id="([^"]+)"/g;
+        const explicitMentionIds = [...content.matchAll(mentionRegex)].map(m => m[1]);
+        if (explicitMentionIds.length > 0) {
+          const insertStmt = sqlite.prepare("INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)");
+          for (const mId of explicitMentionIds) {
+            insertStmt.run(id, mId);
+          }
         }
       }
-    }
 
-    db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: new Date().toISOString(), aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
+      db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: new Date().toISOString(), aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
 
+      // Atomically create an action item if provided alongside the interaction
+      if (body.actionItem && body.actionItem.title && body.actionItem.dueAt) {
+        sqlite.prepare(`
+          INSERT INTO action_items (id, contactId, interactionId, title, dueAt)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(crypto.randomUUID(), contactId, id, body.actionItem.title, body.actionItem.dueAt);
+        log.info("Interactions", `Created action item "${body.actionItem.title}" alongside interaction`);
+      }
+      
+      return res;
+    })();
     // Safely wrapped async background extraction
     if (content) {
       setTimeout(() => {
@@ -82,6 +112,9 @@ export const interactionService = {
         })().catch(err => log.error("AI Service", "Unhandled ghost extraction crash", {error: err.message}));
       }, 0);
     }
+
+    // Immediately recompute relationship score for this contact
+    relationshipService.computeScore(contactId);
 
     return result;
   },
@@ -145,6 +178,7 @@ export const interactionService = {
       }).returning().get();
 
       db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: now, aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
+      relationshipService.computeScore(contactId);
       return result;
     }
 
@@ -156,6 +190,7 @@ export const interactionService = {
     }).returning().get();
 
     db.update(schema.contacts).set({ lastContactedAt: now, updatedAt: now, aiBriefing: null, aiBriefingAt: null }).where(eq(schema.contacts.id, contactId)).run();
+    relationshipService.computeScore(contactId);
     return result;
   },
 
@@ -172,11 +207,14 @@ export const interactionService = {
 
     updates.updatedAt = new Date().toISOString();
 
-    return db.update(schema.interactions)
+    const updated = db.update(schema.interactions)
       .set(updates)
       .where(eq(schema.interactions.id, id))
       .returning()
       .get();
+      
+    relationshipService.computeScore(existing.contactId);
+    return updated;
   },
 
   deleteInteraction(id: string) {
@@ -189,6 +227,7 @@ export const interactionService = {
     }
 
     db.delete(schema.interactions).where(eq(schema.interactions.id, id)).run();
+    relationshipService.computeScore(existing.contactId);
     return true;
   },
 

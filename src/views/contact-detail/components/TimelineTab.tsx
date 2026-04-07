@@ -9,7 +9,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Mail, Phone, FileText, Handshake, Sparkles, UploadCloud, Trash2,
-  MessageSquare, ExternalLink, Linkedin, Facebook, File,
+  MessageSquare, ExternalLink, Linkedin, Facebook, File, CalendarCheck
 } from "lucide-react";
 import DOMPurify from "dompurify";
 import { motion, AnimatePresence } from "motion/react";
@@ -19,6 +19,8 @@ import type { Interaction } from "../../../types";
 import { cn } from "../../../lib/utils";
 import { EMPTY_STATE } from "../../../lib/styles";
 import { RichInteractionComposer } from "../../../components/RichInteractionComposer";
+import { InteractionDetailModal } from "./InteractionDetailModal";
+import { useCompleteActionItem } from "../../../api";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -76,10 +78,8 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
   promoteGhost,
 }) => {
   const navigate = useNavigate();
-
-  const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
-  const [editingContent, setEditingContent] = useState('');
+  const [selectedInteraction, setSelectedInteraction] = useState<Interaction | null>(null);
+  const completeActionItem = useCompleteActionItem();
 
   const handleDeleteInteraction = (interactionId: string) => {
     deleteInteraction.mutate(
@@ -141,42 +141,21 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
               </div>
 
               {/* Content Box */}
-              <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card">
+              <div 
+                className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer"
+                onClick={() => setSelectedInteraction(item)}
+              >
                 <div className="flex justify-between items-center mb-2">
-                  {editingInteractionId === item.id ? (
-                    <input
-                      value={editingTitle}
-                      onChange={e => setEditingTitle(e.target.value)}
-                      onBlur={() => {
-                        if (editingTitle.trim() && editingTitle !== item.title) {
-                          updateInteraction.mutate({ id: item.id, contactId, data: { title: editingTitle.trim(), content: editingContent } });
-                        }
-                        setEditingInteractionId(null);
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                        if (e.key === 'Escape') setEditingInteractionId(null);
-                      }}
-                      autoFocus
-                      className="font-extrabold text-on-surface bg-transparent border-b-2 border-primary focus:outline-none flex-1 mr-2"
-                    />
-                  ) : (
-                    <h4
-                      className="font-extrabold text-on-surface cursor-text"
-                      onDoubleClick={() => {
-                        setEditingInteractionId(item.id);
-                        setEditingTitle(item.title);
-                        setEditingContent(item.content || '');
-                      }}
-                      title="Double-click to edit"
-                    >
-                      {item.title}
-                    </h4>
-                  )}
+                  <h4 className="font-extrabold text-on-surface">
+                    {item.title}
+                  </h4>
                   <div className="flex items-center gap-2 shrink-0">
                     <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{new Date(item.date).toLocaleDateString()}</time>
                     <button
-                      onClick={() => handleDeleteInteraction(item.id)}
+                      onClick={(e) => {
+                         e.stopPropagation();
+                         handleDeleteInteraction(item.id);
+                      }}
                       className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-red-500 p-1 rounded transition-opacity"
                       title="Delete interaction"
                     >
@@ -189,38 +168,20 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                 {item.isViaName && (
                   <div 
                     className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold" 
-                    onClick={() => navigate(`/contact/${item.isViaId}`)}
+                    onClick={(e) => {
+                       e.stopPropagation();
+                       navigate(`/contact/${item.isViaId}`);
+                    }}
                     title="Navigate to Original Interaction"
                   >
                     <ExternalLink className="w-3 h-3 text-primary" /> via {item.isViaName}
                   </div>
                 )}
 
-                {/* Content (editable) */}
-                {editingInteractionId === item.id ? (
-                  <textarea
-                    value={editingContent}
-                    onChange={e => setEditingContent(e.target.value)}
-                    onBlur={() => {
-                      updateInteraction.mutate({ id: item.id, contactId, data: { title: editingTitle.trim() || item.title, content: editingContent } });
-                      setEditingInteractionId(null);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Escape') setEditingInteractionId(null);
-                    }}
-                    className="w-full min-h-[60px] p-2 bg-surface-container-low rounded-lg border border-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm text-on-surface-variant resize-y"
-                    placeholder="Add content..."
-                  />
-                ) : item.content ? (
+                {item.content ? (
                   <div 
-                    className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface cursor-text"
+                    className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.content) }}
-                    onDoubleClick={() => {
-                      setEditingInteractionId(item.id);
-                      setEditingTitle(item.title);
-                      setEditingContent(item.content || '');
-                    }}
-                    title="Double-click to edit"
                   />
                 ) : null}
                 
@@ -237,9 +198,12 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                             return (
                               <button 
                                 key={idx}
-                                onClick={() => promoteGhost.mutate(mention.contactId, {
-                                  onSuccess: () => navigate(`/contact/${mention.contactId}`)
-                                })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  promoteGhost.mutate(mention.contactId, {
+                                    onSuccess: () => navigate(`/contact/${mention.contactId}`)
+                                  });
+                                }}
                                 title={`Promote ${mention.name} to Contact`}
                                 className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border hover:bg-surface-container transition-all group/ghost"
                                 style={{ borderStyle: 'dashed', borderWidth: '1px', borderColor: 'var(--color-primary)' }}
@@ -257,6 +221,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                             <Link 
                               key={idx}
                               to={`/contact/${mention.contactId}`}
+                              onClick={(e) => e.stopPropagation()}
                               className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
                             >
                               <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
@@ -277,7 +242,12 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                     {item.fileType?.startsWith('image/') ? (
                       <img src={item.fileUrl} alt={item.fileName || 'Attachment'} className="max-w-full rounded-xl shadow-sm object-cover max-h-64" />
                     ) : (
-                      <a href={item.fileUrl} download className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden">
+                      <a 
+                        href={item.fileUrl} 
+                        download 
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden"
+                      >
                         <File className="w-8 h-8 text-primary shrink-0 opacity-80" />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-on-surface truncate">{item.fileName}</p>
@@ -288,6 +258,29 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                   </div>
                 )}
 
+                {/* Follow-up */}
+                {item.actionItems && item.actionItems.length > 0 && (
+                  <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center border-t border-surface-container/50">
+                    <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
+                      Follow Up:
+                    </span>
+                    {item.actionItems.map((action: any) => (
+                      <div
+                        key={action.id}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all text-xs font-semibold select-none",
+                          action.completedAt 
+                            ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60" 
+                            : "bg-surface-container-lowest text-on-surface border-surface-container-high shadow-sm"
+                        )}
+                      >
+                        {action.completedAt && <CalendarCheck className="w-3 h-3 text-on-surface-variant opacity-60" />}
+                        {action.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
                 {/* Duration */}
                 {item.duration && (
                   <p className="text-xs text-on-surface-variant mt-3 font-medium flex items-center gap-1 opacity-70">
@@ -299,6 +292,14 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
           );
         })}
       </div>
+
+      <InteractionDetailModal 
+        isOpen={!!selectedInteraction} 
+        onClose={() => setSelectedInteraction(null)}
+        interaction={selectedInteraction}
+        onCompleteActionItem={(id) => completeActionItem.mutate(id)}
+        onUpdateInteraction={(id, data) => updateInteraction.mutate({ id, contactId, data })}
+      />
     </motion.div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 interface HealthRingAvatarProps {
   contact: any;
@@ -17,50 +17,28 @@ const VIBE_COLORS: Record<string, string> = {
 };
 
 export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, size = 48 }) => {
-  const [initialRender, setInitialRender] = useState(true);
-
   // Math Setup
   const strokeWidth = 3.5;
   const radius = (size / 2) - strokeWidth;
   const circumference = 2 * Math.PI * radius;
 
-  const hexColor = VIBE_COLORS[contact.themeColor] || VIBE_COLORS['brand'];
-
-  // Animation effect
-  useEffect(() => {
-    // Slight delay to allow CSS transitions to catch the initial render state
-    const timeout = setTimeout(() => {
-      setInitialRender(false);
-    }, 50);
-
-    return () => clearTimeout(timeout);
-  }, []);
+  // Use contact theme color or default brand color
+  const ringColor = contact.themeColor && VIBE_COLORS[contact.themeColor] ? VIBE_COLORS[contact.themeColor] : VIBE_COLORS.brand;
 
   return (
     <div className="relative shrink-0 flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="absolute inset-0 -rotate-90 pointer-events-none drop-shadow-sm">
-        {/* Track Line */}
+        {/* Full solid ring */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
-          className="text-surface-container-high transition-colors"
-          strokeWidth={strokeWidth}
-        />
-        {/* Progress Value (Always 100% full, but colored by theme) */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={hexColor}
-          className="transition-all duration-1000 ease-[cubic-bezier(0.25,1,0.5,1)]"
+          stroke={ringColor}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={initialRender ? circumference : 0}
+          strokeDashoffset={0}
         />
       </svg>
       {/* Avatar image */}

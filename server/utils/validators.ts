@@ -154,7 +154,23 @@ export const interactionCreateSchema = z.object({
   duration: z.number().nullable().optional(),
   isViaId: z.string().nullable().optional(),
   isViaName: z.string().nullable().optional(),
+  actionItem: z.object({
+    title: z.string().min(1, "Action item title is required"),
+    dueAt: z.string().min(1, "Action item due date is required"),
+  }).optional(),
 }).passthrough();
+
+/** Payload for POST /contacts/:id/action-items */
+export const actionItemCreateSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  dueAt: z.string().min(1, "Due date is required"),
+});
+
+/** Payload for PATCH /action-items/:id (snooze / edit) */
+export const actionItemUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  dueAt: z.string().min(1).optional(),
+});
 
 /** Payload for POST /lists */
 export const listCreateSchema = z.object({

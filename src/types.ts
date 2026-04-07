@@ -134,6 +134,7 @@ export interface Contact {
   interests: { id: string; interest: string; isAiGenerated?: boolean; }[];
   attributes: { id: string; name: string; value: string; }[];
   interactionCount?: number;
+  relationshipScore?: number;
 }
 
 /** Well-known types: note, call, meeting, email, message, sms, import, linkedin, facebook */
@@ -153,6 +154,27 @@ export interface Interaction {
   isViaName?: string | null;
   isViaId?: string | null;
   updatedAt?: string | null;
+  actionItems?: {
+    id: string;
+    title: string;
+    dueAt: string;
+    completedAt: string | null;
+  }[];
+}
+
+export interface ActionItem {
+  id: string;
+  contactId: string;
+  title: string;
+  dueAt: string;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Joined from contacts (only on global list endpoints)
+  contactName?: string;
+  contactCompany?: string | null;
+  contactAvatarUrl?: string | null;
+  contactThemeColor?: string;
 }
 
 

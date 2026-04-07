@@ -14,6 +14,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "../src/db/schema.ts";
 import { log } from "./utils/logger.ts";
+import crypto from "crypto";
 
 // =============================================================================
 // 1. Open SQLite Connection
@@ -195,6 +196,105 @@ sqlite.exec(`
   BEGIN
     UPDATE interactions SET updatedAt = datetime('now') WHERE id = NEW.id;
   END;
+
+  DROP TRIGGER IF EXISTS action_items_auto_updated_at;
+  CREATE TRIGGER action_items_auto_updated_at AFTER UPDATE ON action_items
+  FOR EACH ROW
+  WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
+  BEGIN
+    UPDATE action_items SET updatedAt = datetime('now') WHERE id = NEW.id;
+  END;
 `);
 
-log.info("Database", "updatedAt triggers installed (contacts + interactions)");
+log.info("Database", "updatedAt triggers installed (contacts, interactions, action_items)");
+
+// =============================================================================
+// 6. Action Items Table + Sync Triggers
+// =============================================================================
+// Creates the action_items table via raw DDL (Drizzle schema defines it for
+// type-safety, but since we have no prod migrations, we ensure it exists here).
+// Three triggers keep contacts.nextFollowUpAt in sync as a denormalized cache
+// set to MIN(dueAt) of pending (non-completed) action items.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS action_items (
+    id TEXT PRIMARY KEY,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    interactionId TEXT REFERENCES interactions(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    dueAt TEXT NOT NULL,
+    completedAt TEXT,
+    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updatedAt TEXT DEFAULT (CURRENT_TIMESTAMP)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_action_items_contact ON action_items(contactId);
+  CREATE INDEX IF NOT EXISTS idx_action_items_due ON action_items(dueAt) WHERE completedAt IS NULL;
+`);
+
+sqlite.exec(`
+  DROP TRIGGER IF EXISTS action_items_sync_insert;
+  CREATE TRIGGER action_items_sync_insert AFTER INSERT ON action_items BEGIN
+    UPDATE contacts SET nextFollowUpAt = (
+      SELECT MIN(dueAt) FROM action_items
+      WHERE contactId = NEW.contactId AND completedAt IS NULL
+    ) WHERE id = NEW.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS action_items_sync_update;
+  CREATE TRIGGER action_items_sync_update AFTER UPDATE ON action_items BEGIN
+    UPDATE contacts SET nextFollowUpAt = (
+      SELECT MIN(dueAt) FROM action_items
+      WHERE contactId = NEW.contactId AND completedAt IS NULL
+    ) WHERE id = NEW.contactId;
+  END;
+
+  DROP TRIGGER IF EXISTS action_items_sync_delete;
+  CREATE TRIGGER action_items_sync_delete AFTER DELETE ON action_items BEGIN
+    UPDATE contacts SET nextFollowUpAt = (
+      SELECT MIN(dueAt) FROM action_items
+      WHERE contactId = OLD.contactId AND completedAt IS NULL
+    ) WHERE id = OLD.contactId;
+  END;
+`);
+
+log.info("Database", "action_items table + sync triggers installed");
+
+// =============================================================================
+// 7. Ensure relationshipScore column exists on contacts
+// =============================================================================
+
+try {
+  sqlite.exec(`ALTER TABLE contacts ADD COLUMN relationshipScore INTEGER DEFAULT 50`);
+  log.info("Database", "Added relationshipScore column to contacts");
+} catch {
+  // Column already exists — expected on subsequent runs
+}
+
+// =============================================================================
+// 8. Backfill: Migrate existing nextFollowUpAt → action_items
+// =============================================================================
+// One-time migration: for contacts with nextFollowUpAt set but no action_items
+// rows, create a default "Follow up" action item so the trigger system takes over.
+// =============================================================================
+
+const orphanedFollowUps = sqlite.prepare(`
+  SELECT id, nextFollowUpAt FROM contacts
+  WHERE nextFollowUpAt IS NOT NULL
+    AND id NOT IN (SELECT DISTINCT contactId FROM action_items WHERE completedAt IS NULL)
+`).all() as { id: string; nextFollowUpAt: string }[];
+
+if (orphanedFollowUps.length > 0) {
+  const insertStmt = sqlite.prepare(`
+    INSERT INTO action_items (id, contactId, title, dueAt)
+    VALUES (?, ?, 'Follow up', ?)
+  `);
+  const txn = sqlite.transaction(() => {
+    for (const c of orphanedFollowUps) {
+      insertStmt.run(crypto.randomUUID(), c.id, c.nextFollowUpAt);
+    }
+  });
+  txn();
+  log.info("Database", `Backfilled ${orphanedFollowUps.length} action_items from legacy nextFollowUpAt`);
+}

@@ -426,3 +426,80 @@ ${contextJson}
 
   return parsed;
 }
+
+// =============================================================================
+// 6. generateDailyInsight
+// =============================================================================
+
+export interface DailyInsight {
+  text: string;
+  category: string;
+  generatedAt: string;
+}
+
+/**
+ * Generates a single actionable insight about the user's CRM network.
+ * Falls back gracefully to null if no API key is provided.
+ */
+export async function generateDailyInsight(stats: {
+  totalContacts: number;
+  industryDistribution: Record<string, number>;
+  atRiskNames: string[];
+  newContactsCount: number;
+  topRelationships: string[];
+  bottomRelationships: string[];
+}): Promise<DailyInsight | null> {
+  if (isMockMode()) {
+    log.warn("AIService", "Using mock Daily Insight due to missing GEMINI_API_KEY");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return null; // The frontend will gracefully hide the insight card
+  }
+
+  const prompt = `
+    You are a CRM intelligence analyst. Based on the following network statistics,
+    generate a single actionable insight (1-2 sentences max) that helps the user
+    be a better relationship-builder. Be specific and reference actual patterns.
+
+    Stats:
+    - Total contacts: ${stats.totalContacts}
+    - Industry distribution: ${JSON.stringify(stats.industryDistribution)}
+    - Contacts not reached in 60+ days: ${stats.atRiskNames.join(", ") || "None"}
+    - New contacts this month: ${stats.newContactsCount}
+    - Most active relationships: ${stats.topRelationships.join(", ") || "None"}
+    - Least active relationships: ${stats.bottomRelationships.join(", ") || "None"}
+  `;
+
+  try {
+    const result = await provider.generate({
+      prompt,
+      responseFormat: "json",
+      jsonSchema: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          category: { type: "string" },
+        },
+        required: ["text", "category"],
+      },
+    });
+
+    if (!result.text) {
+      return null;
+    }
+
+    const parsed = JSON.parse(result.text);
+    log.info(
+      "AIService",
+      `generateDailyInsight → generated in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`
+    );
+
+    return {
+      text: parsed.text,
+      category: parsed.category,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    log.error("AIService", "Daily insight generation failed", { error: error.message });
+    return null;
+  }
+}
