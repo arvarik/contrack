@@ -86,10 +86,9 @@ router.post("/contacts/bulk", validateBody(contactBulkCreateSchema), asyncHandle
   res.status(201).json({ success: true, count });
 }));
 
-router.post("/parse-contact", asyncHandler(async (req, res) => {
+router.post("/parse-contact", validateBody(z.object({ text: z.string().min(1, "text is required") })), asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
   const { text } = req.body;
-  if (!text) throw new AppError("Text is required", 400);
   const parsed = await parseContactRecord(text);
   log.info("API", `[${rid}] POST /api/parse-contact → parsed "${parsed.name}"`);
   res.json(parsed);

@@ -1,74 +1,62 @@
+import crypto from "crypto";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
-import { GoogleGenAI, Type } from "@google/genai";
 import { log } from "../utils/logger.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { nameSimilarity, normalizePhone } from "../utils/nlp.ts";
+import { ai } from "../ai/index.ts";
 
-const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
-const DEDUPE_AI_MODELS = [
-  "gemini-2.5-flash-lite", // cheapest, highest RPM
-  "gemini-2.5-flash",      // mid-tier fallback
-  "gemini-2.0-flash",      // legacy fallback (deprecated June 2026)
-];
-
-/** Evaluate ALL fuzzy candidates in a single batched Gemini call with model fallback */
+/** Evaluate ALL fuzzy candidates in a single batched AI call */
 async function evaluateBatchWithAI(
   candidates: { idx: number; a: any; b: any; sim: number; sameCompany: boolean }[],
   rid: string
 ): Promise<{ idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[]> {
   if (candidates.length === 0) return [];
 
-  const pairDescriptions = candidates.map((c, i) => {
+  const pairDescriptions = candidates.map((c) => {
     return `Pair ${c.idx}:
   Contact A: "${c.a.name}" | Company: ${c.a.company || '(none)'} | Role: ${c.a.role || '(none)'} | Location: ${c.a.location || '(none)'} | Emails: ${c.a._emails || '(none)'} | Phones: ${c.a._phones || '(none)'}
   Contact B: "${c.b.name}" | Company: ${c.b.company || '(none)'} | Role: ${c.b.role || '(none)'} | Location: ${c.b.location || '(none)'} | Emails: ${c.b._emails || '(none)'} | Phones: ${c.b._phones || '(none)'}
   Signal: Name similarity = ${(c.sim * 100).toFixed(0)}%${c.sameCompany ? ', same company' : ''}`;
   }).join('\n\n');
 
-  const prompt = `You are a contact de-duplication expert. For each pair below, determine if they represent the SAME real-world person.
+  try {
+    const result = await ai.generate({
+      systemPrompt: `You are a contact de-duplication expert for a personal CRM.
+        You determine if two contact records represent the same real-world person.
+        You are conservative — only flag as duplicate when genuinely confident.`,
+      prompt: `For each pair below, determine if they represent the SAME real-world person.
 
 Consider: common nickname variants (Bob/Robert, Bill/William, Mike/Michael), abbreviations, typos, and professional context (same company, role, location). Be CONSERVATIVE — only flag duplicates when genuinely confident.
 
 ${pairDescriptions}
 
-For each pair, return your assessment. If there is clearly insufficient evidence, mark isDuplicate as false.`;
-
-  for (const model of DEDUPE_AI_MODELS) {
-    try {
-      const response = await genai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                idx: { type: Type.NUMBER },
-                isDuplicate: { type: Type.BOOLEAN },
-                confidence: { type: Type.NUMBER },
-                reasoning: { type: Type.STRING },
-              },
-              required: ["idx", "isDuplicate", "confidence", "reasoning"],
-            },
+For each pair, return your assessment. If there is clearly insufficient evidence, mark isDuplicate as false.`,
+      responseFormat: "json",
+      jsonSchema: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            idx: { type: "number" },
+            isDuplicate: { type: "boolean" },
+            confidence: { type: "number" },
+            reasoning: { type: "string" },
           },
+          required: ["idx", "isDuplicate", "confidence", "reasoning"],
         },
-      });
-      const text = response.text;
-      if (!text) continue;
-      const results = JSON.parse(text) as { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[];
-      log.info("DedupeService", `[${rid}] AI batch evaluated ${results.length} pairs via ${model}`);
-      return results;
-    } catch (err: any) {
-      log.warn("DedupeService", `[${rid}] Model ${model} batch failed: ${err.message}. Trying next...`);
-    }
+      },
+    });
+
+    if (!result.text?.trim()) return [];
+    const results = JSON.parse(result.text) as { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[];
+    log.info("DedupeService", `[${rid}] AI batch evaluated ${results.length} pairs via ${result.model} in ${result.latencyMs}ms`);
+    return results;
+  } catch (err: any) {
+    log.error("DedupeService", `[${rid}] AI batch evaluation failed: ${err.message}`);
+    return [];
   }
-  log.error("DedupeService", `[${rid}] All AI models exhausted for batch evaluation`);
-  return [];
 }
 
 export const dedupeService = {
@@ -168,7 +156,7 @@ export const dedupeService = {
 
     fuzzyCandidates.sort((x, y) => y.sim - x.sim);
 
-    if (process.env.GEMINI_API_KEY && fuzzyCandidates.length > 0) {
+    if (ai.isConfigured && fuzzyCandidates.length > 0) {
       for (const c of fuzzyCandidates) {
         const aEmails = sqlite.prepare("SELECT email FROM contact_emails WHERE contactId = ?").all(c.a.id) as any[];
         const bEmails = sqlite.prepare("SELECT email FROM contact_emails WHERE contactId = ?").all(c.b.id) as any[];
@@ -347,16 +335,20 @@ export const dedupeService = {
     return contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId));
   },
 
+  /** @internal Dev-only seed utility. Throws in production. */
   seedDuplicates() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('seedDuplicates() is a dev-only utility and cannot run in production');
+    }
     const contact1Id = crypto.randomUUID();
     const contact2Id = crypto.randomUUID();
-    
+
     const insertContact = sqlite.prepare("INSERT INTO contacts (id, name, company, role, themeColor) VALUES (?, ?, ?, ?, ?)");
     const insertEmail = sqlite.prepare("INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, 1)");
-    
+
     insertContact.run(contact1Id, "Jonathan Smith", "Acme Corp", "VP Sales", "brand");
     insertEmail.run(crypto.randomUUID(), contact1Id, "jsmith@acmecorp.com");
-    
+
     insertContact.run(contact2Id, "John Smith", "Acme Corporation", "Vice President of Sales", "indigo");
     const insertPhone = sqlite.prepare("INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, ?, 1)");
     insertPhone.run(crypto.randomUUID(), contact2Id, "555-0199");

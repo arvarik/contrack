@@ -1,8 +1,8 @@
 # AI Search — Comprehensive Design & Implementation Specification
 
-> **Version:** 3.0 — Principal Engineering Review (Revised)  
-> **Status:** Design Phase — Awaiting Approval  
-> **Last Updated:** April 5, 2026
+> **Version:** 4.0 — Expert AI/LLM Review (API Compatibility + Resilience Pass)  
+> **Status:** Design Phase — Revised & Approved  
+> **Last Updated:** April 7, 2026
 
 ---
 
@@ -34,7 +34,7 @@ Contrack CRM stores contacts imported from LinkedIn, Google Contacts, vCards, an
 | 4 | Async progress overlay (Google Drive-style) | `position:fixed` bottom-right panel with per-job status |
 | 5 | Prompt from template using known data | `promptTemplate.ts` serializes contact → grounded search prompt |
 | 6 | Schema-compliant structured output | JSON schema matching `contactUpdateSchema` + child records |
-| 7 | Isolated, extensible engine code | `AISearchStrategy` interface, `SinglePassStrategy` for v1 |
+| 7 | Isolated, extensible engine code | `AISearchStrategy` interface, `TwoPassStrategy` for v1 |
 | 8 | Per-contact error tracking | Red `AlertCircle` icon on failed contacts in picker |
 
 ---
@@ -71,8 +71,9 @@ Every invocation costs tokens. The UI always shows a confirmation, clear progres
 │                         │                                │
 │                    ConfirmModal ──▶ POST /api/ai-search  │
 │                         │                                │
-│                  ProgressOverlay ◀── GET /status (poll)  │
+│                  ProgressOverlay ◀── SSE /ai-search/stream│
 │                  (fixed bottom-right, portal at root)    │
+│                  (GET /status poll as SSE fallback)      │
 │                                                          │
 ├─────────────────────── SERVER ──────────────────────────┤
 │                                                          │
@@ -81,18 +82,22 @@ Every invocation costs tokens. The UI always shows a confirmation, clear progres
 │       ▼                                                  │
 │  services/aiSearch/                                      │
 │  ├── index.ts          ← Public facade                   │
-│  ├── jobQueue.ts       ← In-memory batch + job tracking  │
-│  ├── promptTemplate.ts ← Contact → search prompt         │
-│  ├── mergeEngine.ts    ← Additive merge into DB          │
+│  ├── jobQueue.ts       ← In-memory + EventEmitter        │
+│  ├── promptTemplate.ts ← Contact → research prompt       │
+│  ├── mergeEngine.ts    ← Zod-validated, additive merge   │
 │  └── strategies/                                         │
 │      ├── index.ts      ← Strategy registry               │
-│      └── singlePass.ts ← V1: Gemini + Google Search      │
+│      └── twoPass.ts   ← V1: Two-pass Gemini execution    │
 │              │                                           │
+│         [Pass 1] googleSearch tool → raw grounded text   │
+│              │  (no responseSchema — API incompatible)   │
 │              ▼                                           │
-│       ai/adapters/gemini.ts  (+ googleSearch tool)       │
+│         [Pass 2] responseSchema → structured JSON        │
+│              │  (grounding disabled — schema enforced)   │
+│              ▼                                           │
+│      validateSearchResult() [Zod strict schema]          │
 │              │                                           │
-│              ▼                                           │
-│       contactService.updateContact() + insertChildRecords│
+│      mergeEngine.mergeSearchResult()                     │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -141,9 +146,14 @@ interface AISearchBatch {
 interface AISearchResult {
   /** Partial update payload keyed by contact field/child table */
   data: Record<string, unknown>;
-  models: string[];              // Which models contributed
+  /** All model IDs used (two-pass = [groundingModel, extractionModel]) */
+  models: string[];
+  /** Sum of token counts across all passes */
   tokenCount?: number;
+  /** Wall-clock total across all passes */
   latencyMs: number;
+  /** Grounding citations from Pass 1 groundingMetadata — for provenance */
+  citations?: Array<{ title: string; uri: string }>;
 }
 ```
 
@@ -151,23 +161,58 @@ interface AISearchResult {
 
 ## 6. AI Search Engine — Server Implementation
 
-### 6.1 — File: `server/services/aiSearch/strategies/singlePass.ts`
+### 6.1 — File: `server/services/aiSearch/strategies/twoPass.ts`
 
-The V1 strategy calls Gemini with `googleSearch` grounding enabled.
+The V1 strategy uses a **two-pass Gemini execution** to work around a hard API constraint.
 
-**Critical implementation detail**: The `@google/genai` SDK (`^1.29.0` in `package.json`, currently resolving to v1.48.0) supports search grounding via the `tools` config option:
+> **⚠️ Critical API Incompatibility**: The Gemini API does **not** allow using
+> `responseSchema` (structured JSON output) and `tools: [{ googleSearch: {} }]`
+> (grounding) in the same request. Combining them throws a `400 Invalid Argument`
+> error. This is a confirmed limitation as of April 2026. The two-pass architecture
+> below is the canonical workaround.
 
+**Pass 1 — Grounding Pass** (web search, text output):
 ```typescript
-// How the Gemini adapter will pass grounding through:
-const response = await this.client.models.generateContent({
-  model: 'gemini-2.5-flash',  // Must use a grounding-capable model
-  contents: prompt,
+// Pass 1: Google Search grounding, text output only
+const pass1 = await this.client.models.generateContent({
+  model: 'gemini-2.5-flash',   // ← Must support googleSearch tool
+  contents: researchPrompt,
   config: {
-    responseMimeType: 'application/json',
-    responseSchema: translatedSchema,
-    tools: [{ googleSearch: {} }],  // ← Enables search grounding
+    responseMimeType: 'text/plain',  // ← NO responseSchema here
+    tools: [{ googleSearch: {} }],   // ← Grounding enabled
   },
 });
+const groundedText = pass1.text ?? '';
+const citations = pass1.candidates?.[0]?.groundingMetadata?.groundingChunks
+  ?.map((c: any) => ({ title: c.web?.title, uri: c.web?.uri }))
+  .filter((c: any) => c.uri) ?? [];
+```
+
+**Pass 2 — Extraction Pass** (schema enforcement, no grounding):
+```typescript
+// Pass 2: Structured extraction from the grounded text
+const extractionPrompt = `
+  Below is research text about a specific professional contact.
+  Extract the information into the JSON schema provided.
+  Only extract fields explicitly mentioned in the text.
+  Return null for any field not clearly stated.
+
+  Research text:
+  ---
+  ${groundedText}
+  ---
+`;
+
+const pass2 = await this.client.models.generateContent({
+  model: 'gemini-2.5-flash-lite',   // Cheaper — pure formatting task
+  contents: extractionPrompt,
+  config: {
+    responseMimeType: 'application/json',
+    responseSchema: translatedContactSchema,  // ← Schema enforced here
+    // No tools — grounding already done in Pass 1
+  },
+});
+const structuredData = JSON.parse(pass2.text ?? '{}');
 ```
 
 **Required change to `AIGenerateOptions`** in `server/ai/types.ts`:
@@ -188,26 +233,39 @@ export interface AIGenerateOptions {
 
 **Required change to `GeminiAdapter.generate()`** in `server/ai/adapters/gemini.ts`:
 ```typescript
-// Add after line 98 (after responseMimeType is set):
+// When grounding is enabled, responseSchema MUST NOT be set (API incompatible).
+// The TwoPassStrategy handles schema enforcement in its own separate Pass 2 call.
 if (options.enableSearchGrounding) {
   config.tools = [{ googleSearch: {} }];
+  config.responseMimeType = 'text/plain';
+  delete config.responseSchema;
 }
 ```
 
-**Model selection for grounding**: Not all models support grounding. The `SinglePassStrategy` must **not** use the standard `FALLBACK_MODELS` chain in the shared `GeminiAdapter.generate()` (which includes lite models that lack grounding). Instead, the strategy should instantiate a **dedicated** generate call with its own grounding-capable model list:
+**Model lists** — the `TwoPassStrategy` maintains its own lists, separate from the shared
+`FALLBACK_MODELS` chain (which contains outdated model IDs that need auditing):
 
 ```typescript
-// These must be verified against the current Gemini API docs before implementation.
-// Only models that support the googleSearch tool should be listed here.
+// ✅ FALLBACK_MODELS in server/ai/adapters/gemini.ts has been corrected to use
+// only verified stable 2.5-family models (gemini-2.5-flash-lite, gemini-2.5-flash, gemini-2.5-pro).
+
+// Pass 1: Must support googleSearch tool — verified stable models only
 const GROUNDING_MODELS = [
-  'gemini-2.5-flash',       // Best grounding support, good capacity
-  'gemini-2.0-flash',       // Fallback with grounding support
+  'gemini-2.5-flash',       // Verified grounding-capable; best price-performance
+  'gemini-2.5-pro',         // Fallback: most capable, lower RPM
+];
+
+// Pass 2: Any schema-capable model (cheaper models are fine here)
+const EXTRACTION_MODELS = [
+  'gemini-2.5-flash-lite',  // Cheapest — pure formatting task
+  'gemini-2.5-flash',       // Fallback
+  'gemini-2.5-pro',         // Last resort
 ];
 ```
 
-> **Important**: The `SinglePassStrategy` calls the GeminiAdapter directly with an
-> explicit model override — it does NOT go through the standard `aiService.ts` facade,
-> which uses the general-purpose fallback chain containing lite models without grounding.
+> **Note**: The `TwoPassStrategy` calls the GeminiAdapter directly with explicit model
+> overrides — it does NOT go through the standard `aiService.ts` facade,
+> which uses the general-purpose fallback chain.
 
 ### 6.2 — File: `server/services/aiSearch/promptTemplate.ts`
 
@@ -252,6 +310,22 @@ export function buildSearchPrompt(contact: HydratedContact): string {
     ).join('\n')}`);
   }
 
+  // Build disambiguation search hints to anchor the model to the right person.
+  // Common names (e.g. "David Kim") are ambiguous without company/role context.
+  const searchHints: string[] = [];
+  if (contact.name && contact.company) {
+    searchHints.push(`  - "${contact.name} ${contact.company}"`);
+  }
+  if (contact.name && contact.role) {
+    searchHints.push(`  - "${contact.name} ${contact.role}"`);
+  }
+  if (contact.name && contact.location) {
+    searchHints.push(`  - "${contact.name} ${contact.location}"`);
+  }
+  const searchHintsBlock = searchHints.length > 0
+    ? `\n## Suggested Search Queries\nStart with these targeted queries to identify the correct person:\n${searchHints.join('\n')}`
+    : '';
+
   return `
 You are a professional researcher. Your task is to find accurate, publicly 
 available information about the person described below.
@@ -265,10 +339,17 @@ CRITICAL RULES:
 5. For interests, only include publicly stated interests or hobbies.
 6. Mark all interests as isAiGenerated: true.
 7. For experience entries, set isCurrent: true only for current roles.
+8. IDENTITY VALIDATION: You MUST confirm this is the correct person (matching
+   name AND company/role/location) before returning any data. If you find
+   multiple people with this name and cannot determine which is correct,
+   return null for all ambiguous fields.
+9. CONFIDENCE THRESHOLD: Only return data you are at least 80% confident 
+   about. For uncertain fields, return null rather than a best guess.
 
 ## What We Already Know
 
 ${known.join('\n')}
+${searchHintsBlock}
 
 ## What To Search For
 
@@ -288,8 +369,8 @@ The merge engine applies AI Search results to the database. It is **strictly add
 
 > **Critical**: All mutations are wrapped in a single SQLite transaction to:
 > 1. Ensure atomicity (partial merge never persists)
-> 2. Batch FTS5 trigger fires (child table inserts each trigger an FTS rebuild —
->    without a transaction wrapper, N child inserts = N full FTS rebuilds)
+> 2. Batch FTS5 trigger fires within one commit (reduces WAL sync overhead; note that
+>    child-table triggers still fire N times within the transaction — see FTS note below)
 > 3. Guarantee `aiHydratedAt` is always stamped on success
 
 ```typescript
@@ -338,6 +419,18 @@ export function mergeSearchResult(
   const txn = sqlite.transaction(() => {
     // Apply scalar updates via direct UPDATE (skip hydration overhead)
     if (Object.keys(scalarUpdate).length > 0) {
+      // SECURITY: Validate field names against an explicit allowlist before
+      // interpolating into SQL. The scalarFields const array already bounds this,
+      // but this guard is defense-in-depth against future regressions.
+      const ALLOWED_SCALAR_FIELDS = new Set([
+        'headline', 'about', 'industry', 'website',
+        'location', 'pronouns', 'birthday',
+      ]);
+      for (const key of Object.keys(scalarUpdate)) {
+        if (!ALLOWED_SCALAR_FIELDS.has(key)) {
+          throw new Error(`mergeEngine: disallowed field "${key}" in scalar update`);
+        }
+      }
       const setClauses = Object.keys(scalarUpdate).map(k => `${k} = ?`).join(', ');
       const values = Object.values(scalarUpdate);
       sqlite.prepare(
@@ -369,32 +462,54 @@ export function mergeSearchResult(
 > statements to fully join all child tables. The merge engine discards this return value,
 > so the hydration is pure waste. Direct SQL avoids ~12 unnecessary queries per contact.
 
-**Deduplication rules for child arrays:**
-
 | Array | Duplicate Key | Strategy |
 |---|---|---|
 | `emails` | `email` (case-insensitive) | Skip if exists |
 | `phones` | `phone` (normalized) | Skip if exists |
-| `socialLinks` | `url` OR `platform+handle` | Skip if either matches |
+| `socialLinks` | `url` (normalized) | Skip if exists |
 | `education` | `school + degree` | Skip if both match |
-| `experience` | `company + role` | Skip if both match |
+| `experience` | `company + role + startDate year` | Skip if all three match (prevents false positives for repeat employers) |
 | `tags` | `tag` (exact) | Skip if exists |
 | `interests` | `interest` (exact) | Upsert via `ON CONFLICT` |
 | `attributes` | `name` (exact) | Upsert via `ON CONFLICT` |
+
+> **FTS Trigger Note**: Child-table triggers (`fts_tags_ai`, `fts_interests_ai`, etc.)
+> still fire N times within the transaction — one per inserted row. The transaction
+> reduces WAL sync overhead but does not collapse FTS rebuilds. For high-volume merges
+> (contacts with many tags/interests), consider a manual FTS refresh at the end of the
+> transaction instead of relying on per-row triggers.
 
 ### 6.4 — File: `server/services/aiSearch/jobQueue.ts`
 
 In-memory queue managing batch lifecycle:
 
 ```typescript
-class AISearchJobQueue {
+import { EventEmitter } from 'events';
+
+class AISearchJobQueue extends EventEmitter {
   private batches = new Map<string, AISearchBatch>();
-  private processing = false;  // Concurrency guard
-  
-  isProcessing(): boolean { return this.processing; }
-  
+  private processing = false;
+  private lastBatchCompletedAt: Date | null = null;
+
+  /** 5-minute cooldown between batch starts to prevent token abuse */
+  private readonly COOLDOWN_MS = 5 * 60 * 1000;
+
+  canStartBatch(): { allowed: boolean; reason?: string } {
+    if (this.processing) {
+      return { allowed: false, reason: 'A batch is already in progress.' };
+    }
+    if (this.lastBatchCompletedAt) {
+      const elapsed = Date.now() - this.lastBatchCompletedAt.getTime();
+      if (elapsed < this.COOLDOWN_MS) {
+        const waitSec = Math.ceil((this.COOLDOWN_MS - elapsed) / 1000);
+        return { allowed: false, reason: `Please wait ${waitSec}s before starting another batch.` };
+      }
+    }
+    return { allowed: true };
+  }
+
   createBatch(contacts: Array<{id: string, name: string}>, strategy: string): AISearchBatch;
-  
+
   async processBatch(batchId: string): Promise<void> {
     if (this.processing) {
       throw new Error('An AI Search batch is already in progress');
@@ -402,19 +517,22 @@ class AISearchJobQueue {
     this.processing = true;
     
     try {
-      // Sequential processing — one contact at a time
-      // For each job:
-      //   1. Set status → 'searching'
+      // Sequential processing — one contact at a time. For each job:
+      //   1. Set status → 'searching'  → emit(batchId, batch)
       //   2. Fetch full HydratedContact from contactService.getContactById()
-      //   3. Build prompt via buildSearchPrompt(contact)  
-      //   4. Execute strategy.execute(contact, prompt)
-      //   5. Set status → 'merging'
+      //   3. Build prompt via buildSearchPrompt(contact)
+      //   4. Execute strategy.execute(contact, prompt)  [two-pass internally]
+      //   5. Set status → 'merging'    → emit(batchId, batch)
       //   6. Run mergeEngine.mergeSearchResult(contactId, contact, result.data)
-      //   7. Set status → 'success' + fieldsUpdated count
-      //   CATCH: Set status → 'error' + error.message
-      //   The batch continues processing remaining jobs regardless of errors
+      //   7. Set status → 'success' + fieldsUpdated → emit(batchId, batch)
+      //   CATCH: Set status → 'error' + error.message → emit(batchId, batch)
+      //   The batch continues processing remaining jobs regardless of individual errors
     } finally {
       this.processing = false;
+      this.lastBatchCompletedAt = new Date();
+      // Final emit signals SSE clients to close
+      const batch = this.batches.get(batchId);
+      if (batch) this.emit(batchId, batch);
     }
   }
   
@@ -426,19 +544,21 @@ class AISearchJobQueue {
 }
 ```
 
-**Concurrency**: V1 is strictly sequential (1 contact at a time) to avoid rate limits. The `processBatch` method can be upgraded to use `p-limit(2)` in the future. A **concurrency guard** (`this.processing` flag) prevents overlapping batches — the API route returns HTTP 429 if a batch is already running.
+**Concurrency**: V1 is strictly sequential (1 contact at a time) to avoid rate limits. The `processBatch` method can be upgraded to use `p-limit(2)` in the future. The `canStartBatch()` guard enforces both the concurrency lock and the 5-minute inter-batch cooldown — the API route returns HTTP 429 with a human-readable reason if either condition is not met.
+
+**Rate limiting**: Additionally, add `express-rate-limit` on the `POST /api/ai-search` endpoint to prevent repeated batch submissions (e.g., `max: 5` per hour) as a second layer of defense independent of the in-memory cooldown.
 
 ### 6.5 — File: `server/services/aiSearch/strategies/index.ts`
 
 ```typescript
 const STRATEGIES: Record<string, () => AISearchStrategy> = {
-  'single-pass': () => new SinglePassStrategy(),
+  'two-pass': () => new TwoPassStrategy(),
   // Future strategies plug in here:
   // 'consensus':  () => new ConsensusStrategy(),
   // 'judge':      () => new JudgeStrategy(),
 };
 
-export function getStrategy(name: string = 'single-pass'): AISearchStrategy {
+export function getStrategy(name: string = 'two-pass'): AISearchStrategy {
   const factory = STRATEGIES[name];
   if (!factory) throw new Error(`Unknown strategy: ${name}`);
   return factory();
@@ -449,11 +569,45 @@ export function getStrategy(name: string = 'single-pass'): AISearchStrategy {
 
 ## 7. Output JSON Schema
 
-The schema sent to Gemini must match the `contactUpdateSchema` shape so results can pass directly through the existing `updateContact` and `insertChildRecords` codepaths.
+The schema sent to Gemini (for Pass 2) must match the `contactUpdateSchema` shape so results can pass directly through the existing `updateContact` and `insertChildRecords` codepaths.
 
 See `server/utils/validators.ts` — the `contactUpdateSchema` is `contactCreateSchema.partial()`. The AI Search output schema mirrors this but excludes fields the LLM should never set (name, id, avatarUrl, themeColor, cadenceDays, lat, lng, isGhost, isArchived).
 
 The full JSON schema object for the Gemini `responseSchema` config is defined in `promptTemplate.ts` and covers: `headline`, `about`, `industry`, `website`, `location`, `pronouns`, `birthday`, plus child arrays for `emails`, `phones`, `socialLinks`, `education`, `experience`, `tags`, `interests`, `attributes`.
+
+**Zod validation before merge**: The `TwoPassStrategy` validates Pass 2 output through a Zod schema with `.strict()` before it reaches `mergeEngine`. This rejects unexpected fields the LLM might hallucinate (e.g., `id`, `isArchived`) and enforces correct array shapes:
+
+```typescript
+import { z } from 'zod';
+
+const aiSearchOutputSchema = z.object({
+  headline: z.string().nullish(),
+  about: z.string().nullish(),
+  industry: z.string().nullish(),
+  website: z.string().url().nullish(),
+  location: z.string().nullish(),
+  pronouns: z.string().nullish(),
+  birthday: z.string().nullish(),
+  emails: z.array(z.object({
+    email: z.string().email(),
+    label: z.string().optional(),
+  })).optional(),
+  phones: z.array(z.object({
+    phone: z.string(),
+    label: z.string().optional(),
+  })).optional(),
+  socialLinks: z.array(z.object({
+    platform: z.string(),
+    url: z.string().url(),
+  })).optional(),
+  // ... education, experience, tags, interests, attributes follow same pattern
+}).strict(); // ← Rejects any field not in this allowlist
+
+const validated = aiSearchOutputSchema.safeParse(rawParsed);
+if (!validated.success) {
+  throw new Error(`AI output schema validation failed: ${validated.error.message}`);
+}
+```
 
 ---
 
@@ -464,24 +618,29 @@ The full JSON schema object for the Gemini `responseSchema` config is defined in
 ```typescript
 import { z } from 'zod';
 import { validateBody } from '../utils/validators.ts';
+import rateLimit from 'express-rate-limit';
 
 // Validation schema — caps batch size at 100 to prevent accidental mega-batches
 const aiSearchBodySchema = z.object({
   contactIds: z.array(z.string().uuid()).min(1).max(100),
-  strategy: z.string().optional().default('single-pass'),
+  strategy: z.string().optional().default('two-pass'),
+});
+
+// Rate limiter: max 5 batch starts per hour per IP
+const aiSearchLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5,
+  message: { error: 'Too many AI Search requests. Please wait before starting another batch.' }
 });
 
 // POST /api/ai-search — Start a new batch
 // Body: { contactIds: string[], strategy?: string }
 // Response: { batchId: string, jobCount: number }
-router.post('/ai-search', validateBody(aiSearchBodySchema), asyncHandler(async (req, res) => {
+router.post('/ai-search', aiSearchLimiter, validateBody(aiSearchBodySchema), asyncHandler(async (req, res) => {
   const { contactIds, strategy } = req.body;
   
-  // Concurrency guard — reject if a batch is already running
-  if (jobQueue.isProcessing()) {
-    return res.status(429).json({ 
-      error: 'An AI Search batch is already in progress. Please wait for it to complete.' 
-    });
+  // Canary guard — checks both in-progress lock and cooldown
+  const check = jobQueue.canStartBatch();
+  if (!check.allowed) {
+    return res.status(429).json({ error: check.reason });
   }
   
   // Fetch contact names for the job queue UI display
@@ -492,10 +651,40 @@ router.post('/ai-search', validateBody(aiSearchBodySchema), asyncHandler(async (
 
 // GET /api/ai-search/status?batchId=<uuid>
 // Response: AISearchBatch (with all jobs and their statuses)
+// (Kept for polling fallback — prefer SSE stream endpoint below)
 router.get('/ai-search/status', asyncHandler(async (req, res) => {
   const batchId = req.query.batchId as string;
   // Return batch state, or 404 if not found
 }));
+
+// GET /api/ai-search/stream?batchId=<uuid>
+// Response: text/event-stream — pushes AISearchBatch state on every job status change
+// Preferred over polling: eliminates ~1500 unnecessary requests for a 100-contact batch
+router.get('/ai-search/stream', (req, res) => {
+  const batchId = req.query.batchId as string;
+  if (!batchId) return res.status(400).json({ error: 'batchId required' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Send current state immediately
+  const batch = jobQueue.getBatch(batchId);
+  if (!batch) return res.status(404).end();
+  res.write(`data: ${JSON.stringify(batch)}\n\n`);
+  if (batch.status === 'complete') return res.end();
+
+  // Subscribe to live updates from the job queue EventEmitter
+  const handler = (updatedBatch: AISearchBatch) => {
+    res.write(`data: ${JSON.stringify(updatedBatch)}\n\n`);
+    if (updatedBatch.status === 'complete' || updatedBatch.status === 'cancelled') {
+      res.end();
+    }
+  };
+
+  jobQueue.on(batchId, handler);
+  req.on('close', () => jobQueue.off(batchId, handler));
+});
 ```
 
 **Registration in `server.ts`:**
@@ -525,16 +714,53 @@ export const useStartAISearch = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contactIds }),
       });
-      if (!res.ok) throw new Error('Failed to start AI Search');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Failed to start AI Search');
+      }
       return res.json() as Promise<{ batchId: string; jobCount: number }>;
     },
   });
 };
 
-/** Poll batch progress. Enabled only when batchId is set. */
-export const useAISearchStatus = (batchId: string | null) => {
+/**
+ * SSE-based batch status hook. Connects to the stream endpoint for real-time
+ * updates without polling. Falls back to adaptive polling if SSE is unavailable.
+ */
+export const useAISearchStatus = (
+  batchId: string | null,
+  onUpdate: (batch: AISearchBatch) => void,
+) => {
   const queryClient = useQueryClient();
-  
+
+  useEffect(() => {
+    if (!batchId) return;
+
+    // Prefer SSE for real-time updates (no polling overhead)
+    const source = new EventSource(`${API_BASE}/ai-search/stream?batchId=${batchId}`);
+
+    source.onmessage = (event) => {
+      const batch: AISearchBatch = JSON.parse(event.data);
+      onUpdate(batch);
+      if (batch.status === 'complete') {
+        // Invalidate contacts cache so updated data appears everywhere
+        queryClient.invalidateQueries({ queryKey: ['contacts'] });
+        source.close();
+      }
+    };
+
+    source.onerror = () => {
+      // SSE failed — fall back to adaptive polling
+      source.close();
+    };
+
+    return () => source.close();
+  }, [batchId, queryClient, onUpdate]);
+};
+
+/** Polling fallback: only used when SSE is unavailable */
+export const useAISearchStatusPoll = (batchId: string | null) => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['ai-search-status', batchId],
     queryFn: async () => {
@@ -544,14 +770,18 @@ export const useAISearchStatus = (batchId: string | null) => {
     },
     enabled: !!batchId,
     refetchInterval: (query) => {
-      // Stop polling when batch is complete
       const data = query.state.data;
-      if (data?.status === 'complete') {
-        // Invalidate contacts cache so updated data appears everywhere
-        queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      if (!data || data.status === 'complete') {
+        if (data?.status === 'complete') {
+          queryClient.invalidateQueries({ queryKey: ['contacts'] });
+        }
         return false;
       }
-      return 2000; // Poll every 2 seconds while processing
+      // Adaptive: fast when active, slower when idle between contacts
+      const active = data.jobs.filter(
+        (j: AISearchJob) => j.status === 'searching' || j.status === 'merging'
+      ).length;
+      return active > 0 ? 1000 : 3000;
     },
   });
 };
@@ -777,7 +1007,7 @@ Users can retry failed contacts by selecting them again and starting a new batch
 
 ### 11.5 — Rate Limit Handling
 
-The `SinglePassStrategy` uses its own grounding-capable model list (not the standard fallback chain). If all grounding models are rate-limited, the error surfaces as a per-job failure. A future improvement could add exponential backoff.
+The `TwoPassStrategy` uses its own grounding-capable model list for Pass 1 and a schema-capable model list for Pass 2. If all grounding models are rate-limited, the error surfaces as a per-job failure. A future improvement could add exponential backoff with jitter between retry attempts.
 
 ---
 
@@ -788,14 +1018,14 @@ The `SinglePassStrategy` uses its own grounding-capable model list (not the stan
 | File | Purpose |
 |---|---|
 | `server/services/aiSearch/types.ts` | Type definitions |
-| `server/services/aiSearch/promptTemplate.ts` | Prompt builder + output schema |
-| `server/services/aiSearch/strategies/singlePass.ts` | V1 strategy |
+| `server/services/aiSearch/promptTemplate.ts` | Prompt builder + output Zod schema |
+| `server/services/aiSearch/strategies/twoPass.ts` | V1 two-pass strategy (grounding + extraction) |
 | `server/services/aiSearch/strategies/index.ts` | Strategy registry |
-| `server/services/aiSearch/mergeEngine.ts` | Additive merge logic |
-| `server/services/aiSearch/jobQueue.ts` | In-memory batch queue |
+| `server/services/aiSearch/mergeEngine.ts` | Additive merge logic with allowlist guard |
+| `server/services/aiSearch/jobQueue.ts` | In-memory batch queue + EventEmitter |
 | `server/services/aiSearch/index.ts` | Public facade |
-| `server/routes/aiSearch.ts` | API endpoints |
-| `src/api/aiSearch.ts` | React Query hooks |
+| `server/routes/aiSearch.ts` | API endpoints (POST, GET status, GET SSE stream) |
+| `src/api/aiSearch.ts` | SSE hook + polling fallback hook |
 | `src/contexts/AISearchContext.tsx` | Global context + overlay portal |
 | `src/views/ai-search/AISearchView.tsx` | Main settings sub-view |
 | `src/views/ai-search/index.ts` | Barrel export |
@@ -807,7 +1037,7 @@ The `SinglePassStrategy` uses its own grounding-capable model list (not the stan
 | File | Change |
 |---|---|
 | `server/ai/types.ts` | Add `enableSearchGrounding` flag to `AIGenerateOptions` |
-| `server/ai/adapters/gemini.ts` | Map `enableSearchGrounding` → `tools: [{ googleSearch: {} }]` |
+| `server/ai/adapters/gemini.ts` | Map `enableSearchGrounding` → `tools` + clear `responseSchema` (API constraint) |
 | `server.ts` | Register `aiSearchRouter` |
 | `src/views/SettingsView.tsx` | Add AI Search card + route + header |
 | `src/api/index.ts` | Re-export `./aiSearch` |
@@ -821,16 +1051,17 @@ The `SinglePassStrategy` uses its own grounding-capable model list (not the stan
 ### Phase 1: Server Engine (no frontend impact)
 - [ ] `server/services/aiSearch/types.ts`
 - [ ] `server/ai/types.ts` — add `enableSearchGrounding` to `AIGenerateOptions`
-- [ ] `server/ai/adapters/gemini.ts` — map flag to `tools` in config
-- [ ] `server/services/aiSearch/promptTemplate.ts`
-- [ ] `server/services/aiSearch/strategies/singlePass.ts`
+- [ ] `server/ai/adapters/gemini.ts` — map flag to `tools`; **clear `responseSchema`** when grounding enabled
+- [x] ~~**Prerequisite**: Audit and fix `FALLBACK_MODELS` in gemini.ts (invalid model IDs)~~ ✅ Fixed — now uses `gemini-2.5-flash-lite/flash/pro`
+- [ ] `server/services/aiSearch/promptTemplate.ts` — with disambiguation hints + identity validation rules
+- [ ] `server/services/aiSearch/strategies/twoPass.ts` — two-pass grounding + extraction
 - [ ] `server/services/aiSearch/strategies/index.ts`
-- [ ] `server/services/aiSearch/mergeEngine.ts` — with transaction + cache invalidation
-- [ ] `server/services/aiSearch/jobQueue.ts` — with concurrency guard
+- [ ] `server/services/aiSearch/mergeEngine.ts` — with transaction + allowlist guard + cache invalidation
+- [ ] `server/services/aiSearch/jobQueue.ts` — with EventEmitter + cooldown + concurrency guard
 - [ ] `server/services/aiSearch/index.ts`
 
 ### Phase 2: API Routes
-- [ ] `server/routes/aiSearch.ts` — POST + GET endpoints with Zod validation
+- [ ] `server/routes/aiSearch.ts` — POST + GET status + GET SSE stream endpoints; rate-limit middleware
 - [ ] `server.ts` — register router
 
 ### Phase 3: Frontend Hooks & Context
@@ -848,14 +1079,18 @@ The `SinglePassStrategy` uses its own grounding-capable model list (not the stan
 - [ ] `src/App.tsx` — wrap with provider
 
 ### Phase 5: Testing
-- [ ] Test single contact search (success path)
+- [ ] Test single contact search (success path) — verify both passes succeed
 - [ ] Test batch with 3+ contacts
 - [ ] Verify additive merge: existing data untouched
-- [ ] Test error handling: simulate LLM failure
-- [ ] Verify progress overlay updates live
+- [ ] Test error handling: simulate LLM failure on Pass 1; simulate Zod validation failure on Pass 2
+- [ ] Verify identity disambiguation: common name contact correctly matched vs null-returned
+- [ ] Verify Zod `.strict()` rejects AI output with injected fields (e.g. `isArchived`)
+- [ ] Verify progress overlay receives SSE updates live without polling
+- [ ] Verify SSE connection closes cleanly on batch completion
 - [ ] Verify sparkle badge on hydrated contacts
 - [ ] Verify error badge on failed contacts
-- [ ] Verify concurrency guard (submit batch while one is running)
+- [ ] Verify cooldown (submit batch within 5min of last completion → 429)
+- [ ] Verify express-rate-limit (>5 POST requests in 1hr → 429)
 - [ ] Verify FTS index updated after merge
 - [ ] Verify search cache invalidated after merge
 - [ ] Full regression — no impact on existing features
@@ -876,10 +1111,13 @@ The architecture is designed so these can be added without refactoring:
 | User review before merge | New status `'pending-review'` + review UI |
 | Cost tracking dashboard | Accumulate `tokenCount` from job results |
 | Batch queueing (FIFO) | Replace 429 rejection with enqueue in `jobQueue` |
+| Source attribution / citations | Wire Pass 1 `groundingMetadata` into child record `sourceUrl` |
+| Per-field confidence gating | Add `confidence` field to schema; merge only >0.7 |
+| Selective re-hydration | Re-search only fields older than N days |
 
 ---
 
-## Appendix: Review Changelog (v2.0 → v3.0)
+## Appendix A: Review Changelog (v2.0 → v3.0)
 
 | # | Finding | Severity | Fix Applied |
 |---|---|---|---|
@@ -897,3 +1135,25 @@ The architecture is designed so these can be added without refactoring:
 | 12 | Settings card placement description was ambiguous | 🔵 | Clarified: "second card, after Dedupe Engine" |
 | 13 | `endsWith('/ai-search')` fragile for sub-routes | 🔵 | Changed to `includes('/ai-search')` |
 | 14 | Batch status missing `cancelled` state | 🔵 | Added `'cancelled'` to union type |
+
+---
+
+## Appendix B: Review Changelog (v3.0 → v4.0)
+
+| # | Finding | Severity | Fix Applied |
+|---|---|---|---|
+| 1 | `googleSearch` + `responseSchema` in same request → `400 Invalid Argument` API error | 🔴 | Replaced `singlePass.ts` with `twoPass.ts`; Pass 1 = grounding/text, Pass 2 = schema/JSON |
+| 2 | `FALLBACK_MODELS` in live `gemini.ts` contains non-existent model IDs | 🔴 | Added explicit prerequisite step to audit/correct model list before deployment |
+| 3 | Dynamic SQL field names in merge engine → injection risk on future edits | 🔴 | Added `ALLOWED_SCALAR_FIELDS` allowlist guard with runtime assertion |
+| 4 | Prompt missing identity disambiguation hints and confidence threshold | 🟡 | Added `Suggested Search Queries` block + rules 8 (identity validation) + 9 (80% confidence) |
+| 5 | FTS trigger amplification behavior mischaracterized | 🟡 | Corrected note: triggers fire per-row within transaction; WAL sync saved but not trigger count |
+| 6 | 2s polling → ~1500 requests for 100-contact batch | 🟡 | Added SSE stream endpoint; polling demoted to fallback with adaptive interval |
+| 7 | No cooldown between batches; no HTTP rate limiting | 🟡 | Added `COOLDOWN_MS` guard + `canStartBatch()`; `express-rate-limit` on POST route |
+| 8 | Experience dedup false positives for repeat employers; `socialLinks.handle` schema mismatch | 🟡 | Dedup key updated to `company + role + startDate year`; `socialLinks` dedup simplified to `url` |
+| 9 | No Zod validation of AI output before merge → malformed data silently corrupts records | 🟡 | Added `aiSearchOutputSchema.strict()` Zod parse in `TwoPassStrategy` before `mergeEngine` |
+| 10 | `AISearchResult.citations` not captured from `groundingMetadata` | 🔵 | Added `citations` field to `AISearchResult`; populated from Pass 1 `groundingChunks` |
+| 11 | `EventEmitter` not included in `jobQueue` — SSE had no push mechanism | 🔵 | `AISearchJobQueue` now `extends EventEmitter`; emits `batchId` events on job state changes |
+| 12 | `useAISearchStatus` signature change (added `onUpdate` callback for SSE) | 🔵 | Renamed poll-only hook to `useAISearchStatusPoll`; SSE hook is primary |
+| 13 | Strategy registry default referenced `single-pass` (now `two-pass`) | 🔵 | Updated default in registry and Zod body schema |
+| 14 | Future extensibility table missing citation/confidence/selective re-hydration hooks | 🔵 | Added 3 new entries to Section 14 |
+

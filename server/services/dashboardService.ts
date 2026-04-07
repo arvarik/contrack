@@ -7,6 +7,17 @@ import type { ActionItem } from "../../src/types.ts";
 
 let cachedInsight: DailyInsight | null = null;
 
+/**
+ * Discard the cached Daily Insight. Call this any time contact data is mutated
+ * so the next dashboard/insight request regenerates with fresh CRM data.
+ */
+export function invalidateDailyInsight(): void {
+  if (cachedInsight) {
+    log.debug("Dashboard", "Daily Insight cache invalidated by contact mutation");
+    cachedInsight = null;
+  }
+}
+
 export const dashboardService = {
   getDashboardPayload() {
     const startMs = Date.now();

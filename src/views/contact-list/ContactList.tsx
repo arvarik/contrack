@@ -179,9 +179,15 @@ export const ContactList = () => {
         if (contact.tags && contact.tags.some(t => t.tag.toLowerCase().includes(q))) score += 10;
         if (contact.emails && contact.emails.some(e => e.email.toLowerCase().includes(q))) score += 10;
         
-        // Phone numbers (normalized)
-        if (cleanPhoneQuery && contact.phones && contact.phones.some(p => normalizePhone(p.phone).includes(cleanPhoneQuery))) {
-           score += 10;
+        // Phone numbers — normalize both the query and stored numbers to digits only,
+        // then check in both directions to handle country code mismatches
+        // (e.g. query "+15551234567" should match stored "(555) 123-4567")
+        if (cleanPhoneQuery && contact.phones) {
+          const phoneMatch = contact.phones.some(p => {
+            const normalized = normalizePhone(p.phone);
+            return normalized.includes(cleanPhoneQuery) || cleanPhoneQuery.includes(normalized);
+          });
+          if (phoneMatch) score += 10;
         }
 
         return { contact, score };
@@ -328,9 +334,34 @@ export const ContactList = () => {
       c.phones?.[0]?.phone || '',
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
     const csv = [header, ...rows].join('\n');
-    navigator.clipboard.writeText(csv);
-    toast.success(`Copied ${selected.length} contact${selected.length !== 1 ? 's' : ''} as CSV`);
-    exitSelectMode();
+
+    const copyToClipboard = (text: string): Promise<void> => {
+      // Try modern async Clipboard API first
+      if (navigator.clipboard?.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      // Fallback: legacy execCommand approach (works in all browsers)
+      return new Promise((resolve, reject) => {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(el);
+        ok ? resolve() : reject(new Error('execCommand copy failed'));
+      });
+    };
+
+    copyToClipboard(csv)
+      .then(() => {
+        toast.success(`Copied ${selected.length} contact${selected.length !== 1 ? 's' : ''} as CSV`);
+        exitSelectMode();
+      })
+      .catch(() => {
+        toast.error('Clipboard access denied — please allow clipboard permissions and try again.');
+      });
   };
 
   const selectedCount = selectedIds.size;

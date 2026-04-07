@@ -11,8 +11,17 @@
  * expressed in standard JSON Schema vocabulary (no provider-specific enums).
  */
 export interface AIGenerateOptions {
-  /** The full prompt string to send to the model. */
+  /** The full task prompt string to send to the model. */
   prompt: string;
+
+  /**
+   * Optional system-level instruction that sets the model's persona or
+   * behavioral constraints. Kept separate from the user-facing `prompt`
+   * because providers that support distinct system turns (e.g. OpenAI, Anthropic)
+   * respond better when persona and task are separated.
+   * Adapters that don't support a native system turn prepend this to `prompt`.
+   */
+  systemPrompt?: string;
 
   /**
    * A plain JSON Schema object describing the expected response structure.
@@ -25,6 +34,16 @@ export interface AIGenerateOptions {
 
   /** Whether the model should return structured JSON or free-form text. */
   responseFormat: "json" | "text";
+
+  /**
+   * When true, instructs the adapter to enable live web search grounding
+   * (where supported). Each adapter translates this to its native mechanism.
+   *
+   * ⚠️ Gemini API constraint: `enableSearchGrounding` is incompatible with
+   * `responseFormat: 'json'` / `jsonSchema`. Use a two-pass strategy
+   * (grounded text retrieval → separate structured extraction call).
+   */
+  enableSearchGrounding?: boolean;
 }
 
 /**
@@ -59,6 +78,12 @@ export interface JsonSchemaNode {
   required?: string[];
   nullable?: boolean;
   description?: string;
+  /**
+   * Constrains the value to a fixed set of string constants.
+   * Translates to Gemini's `enum` field, OpenAI's `enum`, etc.
+   * Example: `{ type: "string", enum: ["work", "personal", "other"] }`
+   */
+  enum?: string[];
 }
 
 // =============================================================================

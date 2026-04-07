@@ -24,13 +24,9 @@ router.post("/contacts/merge", asyncHandler(async (req, res) => {
     throw new AppError("Cannot merge a contact with itself", 400);
   }
 
-  try {
-    const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
-    log.info("API", `[${rid}] POST /api/contacts/merge → merged ${duplicateId} into ${primaryId}`);
-    res.json({ success: true, contact: merged });
-  } catch (err: any) {
-    throw new AppError(err.message, 400);
-  }
+  const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
+  log.info("API", `[${rid}] POST /api/contacts/merge → merged ${duplicateId} into ${primaryId}`);
+  res.json({ success: true, contact: merged });
 }));
 
 if (process.env.NODE_ENV !== 'production') {

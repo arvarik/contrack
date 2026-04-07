@@ -3,7 +3,8 @@ import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import { log } from "../utils/logger.ts";
 
-export const geocodeQueue: { contactId: string; location: string }[] = [];
+// Private — use queueGeocode() for the only public write path
+const geocodeQueue: { contactId: string; location: string }[] = [];
 let isGeocoding = false;
 
 export async function processGeocodeQueue(): Promise<void> {

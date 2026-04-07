@@ -17,13 +17,16 @@ import { log } from "../../utils/logger.ts";
 // Ordered by cost-efficiency and rate-limit headroom. The adapter tries each
 // model in sequence until one succeeds, providing resilience against
 // per-model rate limits or transient failures.
+//
+// Model IDs verified against the Gemini API docs (April 2026).
+// Only STABLE (non-Preview) models are listed here. Preview models require
+// explicit allowlisting from Google and have unstable availability.
 // ---------------------------------------------------------------------------
 
 const FALLBACK_MODELS = [
-  "gemini-3.1-flash-lite",   // cheapest, highest RPM (4K RPM / 4M TPM)
-  "gemini-2.5-flash-lite",   // older lite fallback with unlimited RPD
-  "gemini-3-flash",          // highly capable standard model (1K RPM)
-  "gemini-2-flash",          // legacy unlimited RPD fallback
+  "gemini-2.5-flash-lite",  // Fastest & cheapest in the 2.5 family; highest RPM
+  "gemini-2.5-flash",       // Best price-performance; low-latency, reasoning-capable
+  "gemini-2.5-pro",         // Most capable; lower RPM, use as last resort
 ];
 
 // ---------------------------------------------------------------------------
@@ -47,9 +50,9 @@ function translateSchema(node: JsonSchemaNode): any {
     type: typeMap[node.type] ?? Type.STRING,
   };
 
-  if (node.nullable) {
-    result.nullable = true;
-  }
+  if (node.nullable) result.nullable = true;
+  if (node.description) result.description = node.description;
+  if (node.enum) result.enum = node.enum;
 
   if (node.properties) {
     result.properties = {};
@@ -58,15 +61,37 @@ function translateSchema(node: JsonSchemaNode): any {
     }
   }
 
-  if (node.items) {
-    result.items = translateSchema(node.items);
-  }
-
-  if (node.required) {
-    result.required = node.required;
-  }
+  if (node.items) result.items = translateSchema(node.items);
+  if (node.required) result.required = node.required;
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Returns true if the error looks like a transient rate-limit or quota error. */
+function isRetryableError(error: any): boolean {
+  const msg = (error?.message ?? "").toLowerCase();
+  return (
+    msg.includes("429") ||
+    msg.includes("rate limit") ||
+    msg.includes("quota") ||
+    msg.includes("resource exhausted") ||
+    msg.includes("503") ||
+    msg.includes("unavailable")
+  );
+}
+
+/**
+ * Builds the effective prompt by prepending a systemPrompt when provided.
+ * Gemini's generateContent API (non-Chat mode) does not have a dedicated
+ * system turn in the same request structure, so we prepend it clearly.
+ */
+function buildContents(options: AIGenerateOptions): string {
+  if (!options.systemPrompt) return options.prompt;
+  return `[SYSTEM]\n${options.systemPrompt}\n\n[USER]\n${options.prompt}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +114,13 @@ export class GeminiAdapter implements AIProvider {
       try {
         const config: any = {};
 
-        if (options.responseFormat === "json") {
+        if (options.enableSearchGrounding) {
+          // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
+          // responseSchema. Must use text output for grounded retrieval.
+          // The TwoPassStrategy in aiSearch handles schema extraction separately.
+          config.tools = [{ googleSearch: {} }];
+          config.responseMimeType = "text/plain";
+        } else if (options.responseFormat === "json") {
           config.responseMimeType = "application/json";
           if (options.jsonSchema) {
             config.responseSchema = translateSchema(options.jsonSchema);
@@ -100,7 +131,7 @@ export class GeminiAdapter implements AIProvider {
 
         const response = await this.client.models.generateContent({
           model,
-          contents: options.prompt,
+          contents: buildContents(options),
           config,
         });
 
@@ -108,10 +139,18 @@ export class GeminiAdapter implements AIProvider {
         const tokenCount = response.usageMetadata?.totalTokenCount;
         const latencyMs = Date.now() - startMs;
 
+        log.debug("GeminiAdapter", `${model} → ${tokenCount ?? "?"} tokens in ${latencyMs}ms`);
         return { text, model, tokenCount, latencyMs };
+
       } catch (error: any) {
-        log.warn("GeminiAdapter", `Model ${model} failed: ${error.message}. Trying next fallback...`);
         lastError = error;
+        if (isRetryableError(error)) {
+          log.warn("GeminiAdapter", `Model ${model} rate-limited/unavailable: ${error.message}. Trying next fallback...`);
+        } else {
+          // Hard error (bad request, auth, etc.) — no point trying other models
+          log.error("GeminiAdapter", `Model ${model} hard error: ${error.message}`);
+          throw error;
+        }
       }
     }
 

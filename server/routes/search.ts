@@ -9,9 +9,10 @@ const router = Router();
 router.get("/", asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
   const q = req.query.q as string;
-  
+
   if (!q) return res.json([]);
-  
+  if (q.length > 500) throw new AppError("q must be ≤ 500 characters", 400);
+
   const results = searchService.searchFts(q);
   log.debug("API", `[${rid}] GET /api/search?q="${q.replace(/["']/g, "")}" → ${results.length}`);
   res.json(results);

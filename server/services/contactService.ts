@@ -7,36 +7,67 @@ import { eq } from "drizzle-orm";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { queueGeocode } from "./geocodingService.ts";
 import { invalidateSearchCache } from "../utils/searchCache.ts";
+import { invalidateDailyInsight } from "./dashboardService.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a contact body to the contacts-table insert values.
+ * Centralised here so createContact + bulkCreateContacts stay DRY.
+ * Any field not listed here will never reach the database.
+ */
+function buildInsertValues(body: any, id: string) {
+  return {
+    id,
+    name: body.name,
+    firstName: body.firstName || null,
+    lastName: body.lastName || null,
+    headline: body.headline || null,
+    role: body.role || null,
+    company: body.company || null,
+    location: body.location || null,
+    birthday: body.birthday || null,
+    preferences: body.preferences || null,
+    avatarUrl: body.avatarUrl || null,
+    cadenceDays: body.cadenceDays ?? 90,
+    about: body.about || null,
+    pronouns: body.pronouns || null,
+    industry: body.industry || null,
+    website: body.website || null,
+  };
+}
+
+/** Invalidate all caches that depend on contact data. */
+function invalidateAllCaches() {
+  invalidateSearchCache();
+  invalidateDailyInsight();
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
 
 export const contactService = {
   createContact(body: any, source: string = 'manual') {
     const id = crypto.randomUUID();
     const txn = sqlite.transaction(() => {
-      db.insert(schema.contacts).values({
-        id, name: body.name,
-        firstName: body.firstName || null, lastName: body.lastName || null,
-        headline: body.headline || null, role: body.role || null,
-        company: body.company || null, location: body.location || null,
-        birthday: body.birthday || null, preferences: body.preferences || null,
-        avatarUrl: body.avatarUrl || null,
-        cadenceDays: body.cadenceDays ?? 90, about: body.about || null,
-        pronouns: body.pronouns || null, industry: body.industry || null,
-        website: body.website || null,
-      }).run();
+      db.insert(schema.contacts).values(buildInsertValues(body, id)).run();
       contactRepo.insertChildRecords(id, body, source);
     });
     txn();
 
     if (body.location) {
       queueGeocode(id, body.location);
-    } else if (body.addresses !== undefined && Array.isArray(body.addresses) && body.addresses.length > 0) {
+    } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
       const primaryAddress = body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
       const addressString = typeof primaryAddress === 'string' ? primaryAddress : primaryAddress.address;
       if (addressString) queueGeocode(id, addressString);
     }
 
-    invalidateSearchCache();
+    invalidateAllCaches();
     return contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
   },
 
@@ -45,24 +76,19 @@ export const contactService = {
     const txn = sqlite.transaction(() => {
       for (const c of validContacts) {
         const id = crypto.randomUUID();
-        db.insert(schema.contacts).values({
-          id, name: c.name,
-          firstName: c.firstName || null, lastName: c.lastName || null,
-          headline: c.headline || null, role: c.role || null,
-          company: c.company || null, location: c.location || null,
-          birthday: c.birthday || null, preferences: c.preferences || null,
-          avatarUrl: c.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}&mouth=default,smile,serious`,
-          cadenceDays: c.cadenceDays ?? 90,
-          about: c.about || null, pronouns: c.pronouns || null,
-          industry: c.industry || null, website: c.website || null,
-        }).run();
+        const values = buildInsertValues(c, id);
+        // Bulk imports always get a dicebear avatar if one isn't supplied
+        if (!values.avatarUrl) {
+          values.avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}&mouth=default,smile,serious`;
+        }
+        db.insert(schema.contacts).values(values).run();
         contactRepo.insertChildRecords(id, c, c._sourcePlatform || 'manual');
         if (c.location) queueGeocode(id, c.location);
         count++;
       }
     });
     txn();
-    invalidateSearchCache();
+    invalidateAllCaches();
     return count;
   },
 
@@ -72,12 +98,15 @@ export const contactService = {
       for (const id of ids) stmt.run(id);
     });
     deleteFn();
-    invalidateSearchCache();
+    invalidateAllCaches();
     return ids.length;
   },
 
   bulkUpdateContacts(ids: string[], data: any) {
     const update = buildContactUpdate(data);
+    // Safety: buildContactUpdate returns only keys from a hardcoded whitelist
+    // (see utils/helpers.ts). Interpolating those key names into SQL is safe
+    // because no user-supplied string reaches the SET clause — only column names.
     const updateFn = sqlite.transaction(() => {
       const setClauses = Object.keys(update).map(k => `${k} = ?`).join(', ');
       const values = Object.values(update);
@@ -85,7 +114,7 @@ export const contactService = {
       for (const id of ids) stmt.run(...values, id);
     });
     updateFn();
-    invalidateSearchCache();
+    invalidateAllCaches();
     return ids.length;
   },
 
@@ -117,16 +146,16 @@ export const contactService = {
 
     const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
     if (!updated) return null;
-    
+
     if (body.location) {
       queueGeocode(id, body.location);
-    } else if (body.addresses !== undefined && Array.isArray(body.addresses) && body.addresses.length > 0) {
+    } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
       const primaryAddress = body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
       const addressString = typeof primaryAddress === 'string' ? primaryAddress : primaryAddress.address;
       if (addressString) queueGeocode(id, addressString);
     }
 
-    invalidateSearchCache();
+    invalidateAllCaches();
     return updated;
   },
 
@@ -141,20 +170,20 @@ export const contactService = {
     const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
     if (!updated) return null;
 
-    invalidateSearchCache();
+    invalidateAllCaches();
     return updated;
   },
 
   deleteContact(id: string) {
     const result = db.delete(schema.contacts).where(eq(schema.contacts.id, id)).returning().get();
     if (!result) return false;
-    invalidateSearchCache();
+    invalidateAllCaches();
     return true;
   },
 
   updateAvatar(id: string, fileFilename: string, fileOriginalName: string) {
     const avatarUrl = `/uploads/avatars/${fileFilename}`;
-    
+
     const existing = sqlite.prepare("SELECT avatarUrl FROM contacts WHERE id = ?").get(id) as any;
     if (existing?.avatarUrl?.startsWith('/uploads/avatars/')) {
       const oldPath = path.join(process.cwd(), existing.avatarUrl);
@@ -169,7 +198,7 @@ export const contactService = {
     const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
     if (!updated) return null;
 
-    invalidateSearchCache();
+    invalidateAllCaches();
     return updated;
   },
 
@@ -208,7 +237,7 @@ export const contactService = {
       JOIN lists l ON l.id = lm.listId
       ORDER BY l.sortOrder ASC
     `).all() as any[];
-    
+
     const listsByContact = new Map<string, any[]>();
     for (const lr of listRows) {
       if (!listsByContact.has(lr.contactId)) listsByContact.set(lr.contactId, []);

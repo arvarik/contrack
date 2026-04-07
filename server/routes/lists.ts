@@ -53,14 +53,9 @@ router.delete("/:id", asyncHandler(async (req, res) => {
 
 router.post("/:id/members", validateBody(z.object({ contactId: z.string() })), asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
-  
-  try {
-    listService.addMember(req.params.id, req.body.contactId);
-    log.info("API", `[${rid}] POST /api/lists/${req.params.id}/members → added ${req.body.contactId}`);
-    res.json({ success: true });
-  } catch (err: any) {
-    throw new AppError(err.message, 404);
-  }
+  listService.addMember(req.params.id, req.body.contactId);
+  log.info("API", `[${rid}] POST /api/lists/${req.params.id}/members → added ${req.body.contactId}`);
+  res.json({ success: true });
 }));
 
 router.delete("/:id/members/:contactId", asyncHandler(async (req, res) => {
@@ -72,14 +67,9 @@ router.delete("/:id/members/:contactId", asyncHandler(async (req, res) => {
 
 router.post("/:id/members/bulk", validateBody(z.object({ contactIds: z.array(z.string()).min(1) })), asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
-  
-  try {
-    const count = listService.bulkAddMembers(req.params.id, req.body.contactIds);
-    log.info("API", `[${rid}] POST /api/lists/${req.params.id}/members/bulk → added ${count}`);
-    res.json({ success: true, count });
-  } catch (err: any) {
-    throw new AppError(err.message, 404);
-  }
+  const count = listService.bulkAddMembers(req.params.id, req.body.contactIds);
+  log.info("API", `[${rid}] POST /api/lists/${req.params.id}/members/bulk → added ${count}`);
+  res.json({ success: true, count });
 }));
 
 export const listsRouter = router;

@@ -9,6 +9,51 @@ import { log } from "../utils/logger.ts";
 import { extractMentions, generateCatchMeUpBriefing, summarizeEmlEmail } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
 
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Background ghost-contact extraction from an interaction note.
+ * Runs asynchronously via setTimeout(0) so it never blocks the HTTP response.
+ * Errors are caught and logged — they must never surface to the caller.
+ */
+async function runMentionExtraction(interactionId: string, contactId: string, content: string): Promise<void> {
+  try {
+    const mentions = await extractMentions(content);
+    if (!mentions || mentions.length === 0) return;
+
+    const mappedMentions = [];
+    for (const m of mentions) {
+      let existing = db.select().from(schema.contacts).where(eq(schema.contacts.name, m.name)).get();
+      if (!existing) {
+        const ghostId = crypto.randomUUID();
+        const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][Math.floor(Math.random() * 5)];
+        existing = db.insert(schema.contacts).values({
+          id: ghostId,
+          name: m.name,
+          company: m.company || null,
+          isGhost: 1,
+          themeColor: newTheme,
+        }).returning().get();
+        log.info("AI Service", `Inferred ghost contact: ${m.name}`);
+      }
+      mappedMentions.push({
+        contactId: existing.id,
+        name: existing.name,
+        context: m.context,
+        isGhost: existing.isGhost === 1
+      });
+    }
+    db.update(schema.interactions)
+      .set({ mentions: JSON.stringify(mappedMentions) })
+      .where(eq(schema.interactions.id, interactionId))
+      .run();
+  } catch (e: any) {
+    log.error("AI Service", `Background mention extraction failed for interaction ${interactionId}`, { error: e.message });
+  }
+}
+
 export const interactionService = {
   getTimeline(contactId: string) {
     const raw = sqlite.prepare(`
@@ -75,42 +120,9 @@ export const interactionService = {
       
       return res;
     })();
-    // Safely wrapped async background extraction
+    // Schedule background ghost-contact extraction — never blocks the response
     if (content) {
-      setTimeout(() => {
-        (async () => {
-          try {
-            const mentions = await extractMentions(content);
-            if (mentions && mentions.length > 0) {
-              const mappedMentions = [];
-              for (const m of mentions) {
-                let existing = db.select().from(schema.contacts).where(eq(schema.contacts.name, m.name)).get();
-                if (!existing) {
-                  const ghostId = crypto.randomUUID();
-                  const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][Math.floor(Math.random() * 5)];
-                  existing = db.insert(schema.contacts).values({
-                    id: ghostId,
-                    name: m.name,
-                    company: m.company || null,
-                    isGhost: 1,
-                    themeColor: newTheme,
-                  }).returning().get();
-                  log.info("AI Service", `Inferred ghost contact: ${m.name}`);
-                }
-                mappedMentions.push({
-                  contactId: existing.id,
-                  name: existing.name,
-                  context: m.context,
-                  isGhost: existing.isGhost === 1
-                });
-              }
-              db.update(schema.interactions).set({ mentions: JSON.stringify(mappedMentions) }).where(eq(schema.interactions.id, id)).run();
-            }
-          } catch(e: any) {
-            log.error("AI Service", "Background extraction failed", {error: e.message});
-          }
-        })().catch(err => log.error("AI Service", "Unhandled ghost extraction crash", {error: err.message}));
-      }, 0);
+      setTimeout(() => { runMentionExtraction(id, contactId, content); }, 0);
     }
 
     // Immediately recompute relationship score for this contact
@@ -194,6 +206,14 @@ export const interactionService = {
     return result;
   },
 
+  /**
+   * Update an interaction's title and/or content.
+   *
+   * Only `title` and `content` are accepted — this is intentional.
+   * Fields like `type`, `date`, and `contactId` are immutable after creation
+   * to preserve audit-trail integrity. Any other keys in `body` are silently
+   * ignored to prevent accidental data corruption.
+   */
   updateInteraction(id: string, body: any) {
     const existing = db.select().from(schema.interactions).where(eq(schema.interactions.id, id)).get();
     if (!existing) return null;
