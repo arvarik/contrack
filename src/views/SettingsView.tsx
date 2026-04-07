@@ -1,21 +1,31 @@
 /**
  * SettingsView — Application settings hub.
  *
- * Contains nested routes for the Dedupe Engine and Archived Contacts views,
- * plus inline preference cards (e.g., temperature unit toggle).
+ * Contains nested routes for the Dedupe Engine, List Manager, and Archived
+ * Contacts views, plus inline preference cards (e.g., temperature unit toggle).
  */
 import React, { useState, useEffect } from 'react';
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive } from 'lucide-react';
+import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive, List } from 'lucide-react';
 import { DedupeView } from './dedupe';
 import { ArchivedContactsView } from './ArchivedContactsView';
+import { ListManagerView } from './lists';
 import { ICON_BTN, PAGE_TITLE, CARD, SECTION_HEADING } from '../lib/styles';
 import { cn } from '../lib/utils';
+import { usePageTitle } from '../hooks/usePageTitle';
+import {
+  useRecentContactsLimit,
+  MIN_RECENT_LIMIT,
+  MAX_RECENT_LIMIT,
+} from '../hooks/useRecentContacts';
 
 export const SettingsView = () => {
   const [tempUnit, setTempUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
   const location = useLocation();
   const navigate = useNavigate();
+
+  usePageTitle('Settings');
+  const { limit: recentLimit, setLimit: setRecentLimit } = useRecentContactsLimit();
 
   useEffect(() => {
     const saved = localStorage.getItem('contrack_temp_unit');
@@ -32,14 +42,31 @@ export const SettingsView = () => {
 
   const isDedupe = location.pathname.endsWith('/dedupe');
   const isArchived = location.pathname.endsWith('/archived');
+  const isLists = location.pathname.endsWith('/lists');
+
+  const getTitle = () => {
+    if (isDedupe) return 'Dedupe Engine';
+    if (isArchived) return 'Archived Contacts';
+    if (isLists) return 'List Management';
+    return 'Settings';
+  };
+
+  const getIcon = () => {
+    if (isDedupe) return <Zap className="w-6 h-6 text-primary" />;
+    if (isArchived) return <Archive className="w-6 h-6 text-amber-500" />;
+    if (isLists) return <List className="w-6 h-6 text-primary" />;
+    return <SettingsIcon className="w-6 h-6 text-primary" />;
+  };
+
+  const isSubpage = isDedupe || isArchived || isLists;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
       <header className="p-6 bg-surface-container-low shrink-0">
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => (isDedupe || isArchived) ? navigate('/settings') : navigate('/')} 
+            <button
+              onClick={() => isSubpage ? navigate('/settings') : navigate('/')}
               className={ICON_BTN}
             >
               <ChevronLeft className="w-5 h-5" />
@@ -47,21 +74,21 @@ export const SettingsView = () => {
             <div>
               <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
                 <div className="p-2 bg-primary/10 rounded-xl">
-                  {isDedupe ? <Zap className="w-6 h-6 text-primary" /> : isArchived ? <Archive className="w-6 h-6 text-amber-500" /> : <SettingsIcon className="w-6 h-6 text-primary" />}
+                  {getIcon()}
                 </div>
-                {isDedupe ? 'Dedupe Engine' : isArchived ? 'Archived Contacts' : 'Settings'}
+                {getTitle()}
               </h1>
             </div>
           </div>
         </div>
       </header>
 
-      <div className={cn("flex-1", isDedupe ? "overflow-hidden" : "overflow-y-auto")}>
+      <div className={cn("flex-1", (isDedupe || isLists) ? "overflow-hidden" : "overflow-y-auto")}>
         <Routes>
           <Route path="/" element={
-            <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-6">
-              
-              {/* Internal Routing Cards */}
+            <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-4">
+
+              {/* Dedupe Engine */}
               <Link to="/settings/dedupe" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
                 <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors")}>
                   <Zap className="w-5 h-5 text-primary" />
@@ -72,19 +99,31 @@ export const SettingsView = () => {
                 </p>
               </Link>
 
-              {/* Inline Preference Cards */}
+              {/* List Management */}
+              <Link to="/settings/lists" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
+                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors")}>
+                  <List className="w-5 h-5 text-primary" />
+                  List Management
+                </h3>
+                <p className="text-sm text-on-surface-variant">
+                  Reorder, rename, and delete your contact lists. Manage which contacts belong to each list.
+                </p>
+              </Link>
+
+              {/* Display Preferences */}
               <section className={CARD}>
                 <h3 className={cn(SECTION_HEADING, "mb-6 flex items-center gap-2")}>
                   <Thermometer className="w-5 h-5 text-primary" />
                   Display Preferences
                 </h3>
-                
-                <div className="flex items-center justify-between">
+
+                {/* Temperature unit */}
+                <div className="flex items-center justify-between py-3 border-b border-surface-container-high">
                   <div>
                     <h4 className="font-bold">Temperature Unit</h4>
                     <p className="text-sm text-on-surface-variant">Choose how weather is displayed</p>
                   </div>
-                  
+
                   <div className="flex bg-surface-container rounded-full p-1 shadow-inner h-9">
                     <button
                       onClick={() => handleUnitChange('celsius')}
@@ -106,8 +145,49 @@ export const SettingsView = () => {
                     </button>
                   </div>
                 </div>
+
+                {/* Recent contacts count */}
+                <div className="flex items-center justify-between pt-3">
+                  <div>
+                    <h4 className="font-bold">Recent Contacts</h4>
+                    <p className="text-sm text-on-surface-variant">
+                      Number of recently visited contacts shown at the top of your Network
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-4 shrink-0">
+                    <button
+                      onClick={() => setRecentLimit(recentLimit - 1)}
+                      disabled={recentLimit <= MIN_RECENT_LIMIT}
+                      aria-label="Decrease recent contacts"
+                      className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
+                        "bg-surface-container hover:bg-surface-container-high",
+                        "disabled:opacity-30 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      −
+                    </button>
+                    <span className="w-6 text-center font-extrabold text-on-surface tabular-nums">
+                      {recentLimit}
+                    </span>
+                    <button
+                      onClick={() => setRecentLimit(recentLimit + 1)}
+                      disabled={recentLimit >= MAX_RECENT_LIMIT}
+                      aria-label="Increase recent contacts"
+                      className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
+                        "bg-surface-container hover:bg-surface-container-high",
+                        "disabled:opacity-30 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </section>
 
+              {/* Archived Contacts */}
               <Link to="/settings/archived" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
                 <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-amber-500 transition-colors")}>
                   <Archive className="w-5 h-5 text-amber-500" />
@@ -117,13 +197,19 @@ export const SettingsView = () => {
                   View and restore contacts you've archived. Archived contacts are hidden from your Network and Map.
                 </p>
               </Link>
-              
+
             </div>
           } />
-          
+
           <Route path="/dedupe" element={
             <div className="absolute inset-0 z-50 bg-surface">
               <DedupeView embedded />
+            </div>
+          } />
+
+          <Route path="/lists" element={
+            <div className="h-full overflow-hidden">
+              <ListManagerView />
             </div>
           } />
 

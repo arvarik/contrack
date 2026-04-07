@@ -12,6 +12,7 @@ import {
 } from '../lib/styles';
 import { cn } from '../lib/utils';
 import { FloatingContactCard } from '../components/FloatingContactCard';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -26,7 +27,21 @@ const EXAMPLE_QUERIES = [
   'Find people interested in AI or machine learning',
 ];
 
-// ─── Result Card ─────────────────────────────────────────────────────────────
+// ─── Result Card ──────────────────────────────────────────────────────────────
+//
+// Animation strategy: CSS `result-card-enter` with `animation-delay` instead of
+// Framer Motion per-card stagger.
+//
+// Why: CSS opacity animations are always GPU-composited and never trigger layout
+// recalculation. The old approach used `motion.button` (inline element) with a
+// `y: 16 → 0` transform staggered per-card. Inline elements can't use the same
+// GPU compositing path as block/flex elements for transforms, causing subpixel
+// reflow after each card paints — visible as jitter.
+//
+// The nested `motion.div` for `aiReason` inside a staggered parent also created
+// cascading animation phases which compounded the jitter. We removed it entirely;
+// the aiReason text is just rendered normally (the card's own opacity fade is
+// sufficient visual hierarchy).
 
 const ResultCard = ({
   match,
@@ -39,21 +54,23 @@ const ResultCard = ({
   isFallback: boolean;
   onClick: () => void;
 }) => (
-  <motion.button
-    initial={{ opacity: 0, y: 16 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: index * 0.05, duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
-    onClick={onClick}
-    className="w-full text-left group"
+  <div
+    className="result-card-enter"
+    style={{ animationDelay: `${index * 45}ms` }}
   >
-    <div className={cn(
-      CARD,
-      'flex items-start gap-4 hover:shadow-md hover:scale-[1.005] transition-all duration-200 cursor-pointer',
-      'group-hover:ring-2 group-hover:ring-primary/20',
-    )}>
+    <button
+      onClick={onClick}
+      className={cn(
+        CARD,
+        'w-full text-left flex items-start gap-4 group',
+        'hover:shadow-md hover:scale-[1.005] transition-[shadow,transform] duration-200 cursor-pointer',
+        'hover:ring-2 hover:ring-primary/20',
+      )}
+    >
       <img
         src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}&mouth=default,smile,serious`}
         alt=""
+        loading="lazy"
         className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"
       />
       <div className="flex-1 min-w-0 flex flex-col gap-1">
@@ -67,7 +84,7 @@ const ResultCard = ({
           )}
         </div>
 
-        {/* Role / Company / Location */}
+        {/* Role / Company / Location / Industry */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
           {match.role && (
             <span className="flex items-center gap-1">
@@ -91,17 +108,12 @@ const ResultCard = ({
           )}
         </div>
 
-        {/* AI Reason */}
+        {/* AI Reason — plain render, no nested motion element */}
         {match.aiReason && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 + 0.15 }}
-            className="flex items-start gap-1.5 mt-1"
-          >
+          <div className="flex items-start gap-1.5 mt-1">
             <Sparkles className="w-3.5 h-3.5 text-primary/60 shrink-0 mt-0.5" />
             <span className="text-sm text-primary/80 italic leading-snug">{match.aiReason}</span>
-          </motion.div>
+          </div>
         )}
 
         {/* Tags */}
@@ -119,18 +131,16 @@ const ResultCard = ({
 
       {/* Arrow */}
       <ArrowRight className="w-4 h-4 text-on-surface-variant opacity-0 group-hover:opacity-60 transition-opacity shrink-0 mt-2" />
-    </div>
-  </motion.button>
+    </button>
+  </div>
 );
 
-// ─── Shimmer Skeleton ────────────────────────────────────────────────────────
+// ─── Shimmer Skeleton ─────────────────────────────────────────────────────────
 
 const ShimmerCard = ({ delay = 0 }: { delay?: number }) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    transition={{ delay }}
-    className={cn(CARD, 'flex items-start gap-4')}
+  <div
+    className={cn(CARD, 'flex items-start gap-4 result-card-enter')}
+    style={{ animationDelay: `${delay * 1000}ms` }}
   >
     <div className="w-12 h-12 rounded-full bg-primary/10 animate-pulse shrink-0" />
     <div className="flex-1 space-y-2.5 py-1">
@@ -138,10 +148,10 @@ const ShimmerCard = ({ delay = 0 }: { delay?: number }) => (
       <div className="h-3 bg-surface-container-high rounded-full animate-pulse w-3/5" />
       <div className="h-3 bg-surface-container rounded-full animate-pulse w-4/5" />
     </div>
-  </motion.div>
+  </div>
 );
 
-// ─── Main SearchView Component ───────────────────────────────────────────────
+// ─── Main SearchView Component ────────────────────────────────────────────────
 
 export const SearchView = () => {
   const navigate = useNavigate();
@@ -150,6 +160,8 @@ export const SearchView = () => {
   const semanticSearch = useSemanticSearch();
   const prevQueryRef = useRef('');
   const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
+
+  usePageTitle('AI Search');
 
   // Focus input on mount
   useEffect(() => {
@@ -252,7 +264,7 @@ export const SearchView = () => {
             </div>
           </div>
 
-          {/* Example queries (shown when no search has been done) */}
+          {/* Example queries — only shown before first search */}
           {!hasSearched && !isLoading && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -281,13 +293,23 @@ export const SearchView = () => {
             </motion.div>
           )}
 
-          {/* Loading shimmer */}
-          <AnimatePresence>
-            {isLoading && (
+          {/*
+            Single AnimatePresence with mode="popLayout" switches between shimmer and results.
+
+            mode="popLayout": when shimmer exits, Framer immediately removes it from
+            document flow (position: absolute) so the incoming results section takes its
+            natural height from frame 1 — no double-stacking, no layout jump.
+
+            All three states (loading, results, empty/error) share the same keyed slot.
+          */}
+          <AnimatePresence mode="popLayout">
+            {isLoading ? (
               <motion.div
+                key="shimmer"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
                 className="space-y-3"
               >
                 <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-widest mb-4">
@@ -298,17 +320,13 @@ export const SearchView = () => {
                 <ShimmerCard delay={0.08} />
                 <ShimmerCard delay={0.16} />
               </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Results */}
-          <AnimatePresence mode="wait">
-            {!isLoading && results.length > 0 && (
+            ) : results.length > 0 ? (
               <motion.div
                 key="results"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ duration: 0.22 }}
                 className="space-y-3"
               >
                 {/* Results header */}
@@ -329,7 +347,7 @@ export const SearchView = () => {
                   )}
                 </div>
 
-                {/* Result cards */}
+                {/* Cards — CSS stagger, no per-card Framer Motion */}
                 <div className="space-y-2">
                   {results.map((match, i) => (
                     <ResultCard
@@ -342,7 +360,7 @@ export const SearchView = () => {
                   ))}
                 </div>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
 
           {/* No results */}

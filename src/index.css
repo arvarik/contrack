@@ -178,6 +178,34 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /** Fade-in for transient confirmations (e.g. EditableField save ✓) */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.7); }
+    to   { opacity: 1; transform: scale(1);   }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.15s ease-out forwards;
+  }
+
+  /**
+   * result-card-enter — GPU-composited opacity-only entrance for search result cards.
+   *
+   * Intentionally uses ONLY opacity (not translateY) so the browser keeps
+   * all cards in a composited layer and never triggers layout recalculation
+   * between frames. This eliminates the subpixel reflow jitter caused by the
+   * old approach (motion.button with staggered y: 16 → 0 transforms).
+   *
+   * animation-delay is set inline via style={{ animationDelay }} per card index.
+   * fill-mode: both ensures the card starts fully transparent before its delay fires.
+   */
+  @keyframes resultCardIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .result-card-enter {
+    animation: resultCardIn 0.22s ease-out both;
+  }
 }
 
 /* Tiptap Customizations */

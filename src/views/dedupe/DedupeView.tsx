@@ -153,7 +153,16 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   return (
     <div className={cn("flex flex-col overflow-hidden bg-surface", embedded ? "h-full" : "h-full")}>
       {/* Tab Bar */}
-      <div className="shrink-0 p-4 pb-0 bg-surface">
+      <div className="shrink-0 p-4 pb-0 bg-surface flex items-center gap-3">
+        {embedded && (
+          <Link
+            to="/settings"
+            className="p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
+            title="Back to Settings"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
+        )}
         <div className={cn(TAB_CONTAINER, "w-fit")}>
           <button
             onClick={() => setActiveTab('auto')}

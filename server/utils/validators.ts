@@ -175,9 +175,15 @@ export const actionItemUpdateSchema = z.object({
 
 /** Payload for POST /lists */
 export const listCreateSchema = z.object({
-  name: z.string().min(1, "List name is required"),
-  icon: z.string().nullable().optional(),
-  sortOrder: z.number().nullable().optional(),
+  name: z.string().min(1, 'List name is required').max(60),
+  icon: z.string().optional(),
+});
+
+export const listUpdateSchema = z.object({
+  name: z.string().min(1).max(60).optional(),
+  icon: z.string().optional(),
+}).refine(d => d.name !== undefined || d.icon !== undefined, {
+  message: 'At least one of name or icon is required',
 });
 
 export const validateBody = (schema: z.ZodTypeAny) => {

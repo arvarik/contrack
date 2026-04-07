@@ -1,7 +1,17 @@
-import React, { useState } from "react";
+/**
+ * ContactListItem — A single row in the contact list.
+ *
+ * Performance:
+ * - Wrapped in React.memo with a structural comparator to prevent cascade
+ *   rerenders when unrelated ContactList state (flashId, contextMenu, etc.) changes.
+ * - Prefetches the contact detail query on pointer enter (100ms debounce) so
+ *   by the time the user clicks, the detail pane loads instantly from cache.
+ */
+import React, { useState, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { CheckCheck, Building, Briefcase, CalendarClock, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { HealthRingAvatar } from "../../components/HealthRingAvatar";
 import { useCompanyLogo } from "../../hooks/useCompanyLogo";
 import { listRow } from "../../lib/styles";
@@ -10,22 +20,34 @@ import { Contact } from "../../types";
 
 import { isPast, isToday } from "date-fns";
 
-export const ContactListItem = ({
-  contact,
-  active,
-  isSelectMode,
-  isSelected,
-  onToggleSelect,
-}: {
+const API_BASE = "/api";
+
+// ---------------------------------------------------------------------------
+// ContactListItem — memoized row component
+// ---------------------------------------------------------------------------
+
+interface ContactListItemProps {
   contact: Contact;
   active: boolean;
   isSelectMode: boolean;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
-}) => {
+}
+
+const ContactListItemInner = ({
+  contact,
+  active,
+  isSelectMode,
+  isSelected,
+  onToggleSelect,
+}: ContactListItemProps) => {
   const primaryEmail = contact.emails?.[0]?.email || null;
   const logoUrl = useCompanyLogo(primaryEmail);
   const [imgError, setImgError] = useState(false);
+  const queryClient = useQueryClient();
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Computed values ────────────────────────────────────────────────────────
 
   let urgentColor = "";
   if (contact.nextFollowUpAt) {
@@ -37,10 +59,30 @@ export const ContactListItem = ({
     }
   }
 
-  const score = contact.relationshipScore != null ? contact.relationshipScore : 100;
-  let dotColor = "bg-emerald-500 border border-emerald-700/20";
-  if (score < 40) dotColor = "bg-error border border-white/20";
-  else if (score < 70) dotColor = "bg-amber-500 border border-amber-700/20";
+  // ── Hover prefetch ─────────────────────────────────────────────────────────
+  // Prefetch the full contact detail after 100ms hover so clicking is instant.
+
+  const handlePointerEnter = useCallback(() => {
+    if (isSelectMode || active) return; // already loaded or irrelevant in select mode
+    prefetchTimer.current = setTimeout(() => {
+      queryClient.prefetchQuery({
+        queryKey: ["contacts", contact.id],
+        queryFn: () =>
+          fetch(`${API_BASE}/contacts/${contact.id}`).then((r) => {
+            if (!r.ok) throw new Error("Failed to prefetch contact");
+            return r.json();
+          }),
+        // Re-use the global staleTime so we don't over-fetch
+        staleTime: 30_000,
+      });
+    }, 100);
+  }, [contact.id, isSelectMode, active, queryClient]);
+
+  const handlePointerLeave = useCallback(() => {
+    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+  }, []);
+
+  // ── Click handler (select mode) ────────────────────────────────────────────
 
   const handleClick = (e: React.MouseEvent) => {
     if (isSelectMode) {
@@ -52,8 +94,10 @@ export const ContactListItem = ({
   return (
     <Link
       id={`contact-row-${contact.id}`}
-      to={isSelectMode ? '#' : `/contact/${contact.id}`}
+      to={isSelectMode ? "#" : `/contact/${contact.id}`}
       onClick={handleClick}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
       className={cn(
         listRow(active && !isSelectMode),
         isSelectMode && "cursor-pointer select-none",
@@ -82,20 +126,26 @@ export const ContactListItem = ({
       </AnimatePresence>
 
       <HealthRingAvatar contact={contact} size={48} />
+
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className={`text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? 'text-primary' : 'text-on-surface'}`}>
+            <h3 className={`text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}>
               {contact.name}
             </h3>
-            {contact.isGhost ? <span title="Ghost Contact" className="shrink-0 flex"><Sparkles className="w-3.5 h-3.5 text-primary opacity-80" /></span> : null}
+            {contact.isGhost ? (
+              <span title="Ghost Contact" className="shrink-0 flex">
+                <Sparkles className="w-3.5 h-3.5 text-primary opacity-80" />
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1.5 shrink-0 pl-2">
-             {contact.nextFollowUpAt && (
-                <CalendarClock className={cn("w-3.5 h-3.5", urgentColor)} />
-             )}
+            {contact.nextFollowUpAt && (
+              <CalendarClock className={cn("w-3.5 h-3.5", urgentColor)} />
+            )}
           </div>
         </div>
+
         {contact.company ? (
           <p className="text-xs text-on-surface-variant truncate font-medium flex items-center gap-1.5 mt-0.5">
             {logoUrl && !imgError ? (
@@ -103,6 +153,7 @@ export const ContactListItem = ({
                 src={logoUrl}
                 alt={`${contact.company} logo`}
                 onError={() => setImgError(true)}
+                loading="lazy"
                 className="w-4 h-4 rounded-full object-contain bg-surface-container-highest"
               />
             ) : (
@@ -120,3 +171,26 @@ export const ContactListItem = ({
     </Link>
   );
 };
+
+/**
+ * Custom memo comparator — only re-render when props that affect display change.
+ * This prevents cascade rerenders when ContactList state (flashId, contextMenu,
+ * drag state, etc.) changes without touching this contact's data.
+ */
+const areEqual = (prev: ContactListItemProps, next: ContactListItemProps): boolean => {
+  return (
+    prev.contact.id === next.contact.id &&
+    prev.contact.updatedAt === next.contact.updatedAt &&
+    prev.contact.name === next.contact.name &&
+    prev.contact.company === next.contact.company &&
+    prev.contact.avatarUrl === next.contact.avatarUrl &&
+    prev.contact.nextFollowUpAt === next.contact.nextFollowUpAt &&
+    prev.contact.relationshipScore === next.contact.relationshipScore &&
+    prev.contact.themeColor === next.contact.themeColor &&
+    prev.active === next.active &&
+    prev.isSelectMode === next.isSelectMode &&
+    prev.isSelected === next.isSelected
+  );
+};
+
+export const ContactListItem = React.memo(ContactListItemInner, areEqual);

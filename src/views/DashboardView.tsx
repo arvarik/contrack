@@ -15,6 +15,7 @@ import { PAGE_TITLE, EMPTY_STATE, EMPTY_HERO, CARD_COMPACT } from "../lib/styles
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { format, addDays } from "date-fns";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const CompletedActionsBar = () => {
   const { data: completedItems = [] } = useCompletedActionItems();
@@ -82,6 +83,8 @@ export const DashboardView = () => {
   const completeAction = useCompleteActionItem();
   const updateAction = useUpdateActionItem();
   const navigate = useNavigate();
+
+  usePageTitle('Relationship Pulse');
 
   const prevHasItemsRef = useRef<boolean | null>(null);
 

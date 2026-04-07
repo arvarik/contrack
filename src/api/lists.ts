@@ -56,6 +56,37 @@ export const useDeleteList = () => {
   });
 };
 
+export const useUpdateList = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; icon?: string } }) => {
+      const res = await fetch(`${API_BASE}/lists/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update list');
+      return res.json() as Promise<ContactList>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+export const useListContacts = (listId: string | null) => {
+  return useQuery({
+    queryKey: ['list-contacts', listId],
+    queryFn: async (): Promise<Contact[]> => {
+      const res = await fetch(`${API_BASE}/lists/${listId}/contacts`);
+      if (!res.ok) throw new Error('Failed to fetch list contacts');
+      return res.json();
+    },
+    enabled: !!listId,
+  });
+};
+
 export const useReorderLists = () => {
   const queryClient = useQueryClient();
   return useMutation({

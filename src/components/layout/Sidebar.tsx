@@ -1,8 +1,62 @@
+/**
+ * Sidebar — Vertical icon nav with styled tooltips.
+ *
+ * Each nav item wraps with a custom Tooltip that appears to the right
+ * of the icon after a 250ms hover delay — replacing the ugly native
+ * browser `title` tooltip with a polished in-app version.
+ */
 import { Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Map, Settings as SettingsIcon, Sparkles, Activity } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount } from "../../api";
+
+// ---------------------------------------------------------------------------
+// SidebarTooltip — styled right-side tooltip with delay
+// ---------------------------------------------------------------------------
+
+const SidebarTooltip = ({ label, children }: { label: string; children: React.ReactNode }) => {
+  const [visible, setVisible] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = useCallback(() => {
+    timerRef.current = setTimeout(() => setVisible(true), 250);
+  }, []);
+
+  const hide = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setVisible(false);
+  }, []);
+
+  return (
+    <div className="relative flex items-center" onMouseEnter={show} onMouseLeave={hide}>
+      {children}
+      <AnimatePresence>
+        {visible && (
+          <motion.div
+            initial={{ opacity: 0, x: -6, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -4, scale: 0.95 }}
+            transition={{ duration: 0.12 }}
+            className="absolute left-full ml-3 z-50 pointer-events-none"
+          >
+            <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
+              {label}
+            </div>
+            {/* Caret */}
+            <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-0 h-0 border-t-4 border-b-4 border-r-4 border-t-transparent border-b-transparent border-r-surface-container-highest" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
 
 export const Sidebar = () => {
   const location = useLocation();
@@ -26,27 +80,42 @@ export const Sidebar = () => {
           Contrack
         </span>
       </div>
-      <Link to="/" className={navLink(isHome)} title="Contacts">
-        <LayoutDashboard className="w-6 h-6" />
-      </Link>
-      <Link to="/pulse" className={navLink(isPulse, "relative")} title="Relationship Pulse">
-        <Activity className="w-6 h-6" />
-        {urgentCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
-          </span>
-        )}
-      </Link>
-      <Link to="/map" className={navLink(isMap)} title="Map">
-        <Map className="w-6 h-6" />
-      </Link>
-      <Link to="/search" className={navLink(isSearch)} title="Ask My CRM — AI Search">
-        <Sparkles className="w-6 h-6" />
-      </Link>
-      <Link to="/settings" className={navLink(isCleanup, "mt-auto")} title="Settings">
-        <SettingsIcon className="w-6 h-6" />
-      </Link>
+
+      <SidebarTooltip label="Network">
+        <Link to="/" className={navLink(isHome)}>
+          <LayoutDashboard className="w-6 h-6" />
+        </Link>
+      </SidebarTooltip>
+
+      <SidebarTooltip label="Relationship Pulse">
+        <Link to="/pulse" className={navLink(isPulse, "relative")}>
+          <Activity className="w-6 h-6" />
+          {urgentCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+            </span>
+          )}
+        </Link>
+      </SidebarTooltip>
+
+      <SidebarTooltip label="Map">
+        <Link to="/map" className={navLink(isMap)}>
+          <Map className="w-6 h-6" />
+        </Link>
+      </SidebarTooltip>
+
+      <SidebarTooltip label="AI Search">
+        <Link to="/search" className={navLink(isSearch)}>
+          <Sparkles className="w-6 h-6" />
+        </Link>
+      </SidebarTooltip>
+
+      <SidebarTooltip label="Settings">
+        <Link to="/settings" className={navLink(isCleanup, "mt-auto")}>
+          <SettingsIcon className="w-6 h-6" />
+        </Link>
+      </SidebarTooltip>
     </aside>
   );
 };

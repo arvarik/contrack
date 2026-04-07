@@ -55,6 +55,8 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
   const complete = useCompleteActionItem();
   const [showSnooze, setShowSnooze] = useState(false);
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  /** Local "completing" flag drives the strikethrough animation before the row exits */
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const colors = {
     urgent: "text-error border-error/20 bg-error/5 hover:bg-error/10 hover:border-error/40",
@@ -68,28 +70,44 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
     upcoming: "border-on-surface-variant/30 text-on-surface-variant hover:bg-primary hover:text-on-primary hover:border-primary",
   };
 
+  const handleComplete = () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
+    // Delay the actual mutation so the strikethrough animation plays first (300ms)
+    setTimeout(() => {
+      complete.mutate(item.id);
+    }, 300);
+  };
+
   return (
     <div className={cn(
       "w-full rounded-xl border p-4 flex items-center gap-4 transition-all duration-300 group shadow-sm relative",
       colors[theme as keyof typeof colors],
-      isActive && "ring-2 ring-primary border-primary ring-offset-2 ring-offset-surface scale-[1.01] z-10"
+      isActive && "ring-2 ring-primary border-primary ring-offset-2 ring-offset-surface scale-[1.01] z-10",
+      isCompleting && "opacity-50 scale-[0.98]"
     )}>
       {/* Checkbox */}
-      <button 
-        onClick={() => complete.mutate(item.id)}
-        disabled={complete.isPending}
+      <button
+        onClick={handleComplete}
+        disabled={isCompleting || complete.isPending}
         className={cn(
-          "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+          "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200",
           checkColors[theme as keyof typeof checkColors],
-          complete.isPending && "opacity-50 scale-90"
+          isCompleting && "bg-emerald-500 border-emerald-500 text-white scale-110"
         )}
       >
-        <Check className={cn("w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity", complete.isPending && "opacity-100")} />
+        <Check className={cn(
+          "w-3.5 h-3.5 transition-opacity",
+          isCompleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        )} />
       </button>
 
       {/* Content */}
       <div className="flex flex-col flex-1 min-w-0">
-        <span className="font-bold text-on-surface truncate pr-2">
+        <span className={cn(
+          "font-bold text-on-surface truncate pr-2 transition-all duration-300",
+          isCompleting && "line-through opacity-40"
+        )}>
           {item.title}
         </span>
         <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -105,7 +123,7 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
 
       {/* Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-        <button 
+        <button
           onClick={(e) => {
             setTriggerRect(e.currentTarget.getBoundingClientRect());
             setShowSnooze(true);

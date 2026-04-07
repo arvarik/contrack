@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { listService } from "../services/listService.ts";
-import { validateBody, listCreateSchema } from "../utils/validators.ts";
+import { validateBody, listCreateSchema, listUpdateSchema } from "../utils/validators.ts";
 import { z } from "zod";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
@@ -29,6 +29,14 @@ router.put("/reorder", validateBody(z.object({ orderedIds: z.array(z.string()) }
   const count = listService.reorderLists(req.body.orderedIds);
   log.info("API", `[${rid}] PUT /api/lists/reorder → ${count} lists reordered`);
   res.json({ success: true });
+}));
+
+router.patch("/:id", validateBody(listUpdateSchema), asyncHandler(async (req, res) => {
+  const rid = (req as any).requestId;
+  const updated = listService.updateList(req.params.id, req.body);
+  if (!updated) throw new AppError("List not found", 404);
+  log.info("API", `[${rid}] PATCH /api/lists/${req.params.id}`);
+  res.json(updated);
 }));
 
 router.get("/:id/contacts", asyncHandler(async (req, res) => {

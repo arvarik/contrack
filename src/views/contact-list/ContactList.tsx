@@ -1,22 +1,30 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search, Plus, Users, Upload, ChevronDown, UserPlus, ListPlus,
-  CheckSquare, Square, FileText, Sparkles, Trash2,
+  CheckSquare, Square, FileText, Sparkles, Trash2, Archive, Copy, Clock,
 } from "lucide-react";
 import {
   useContacts, useCreateContact, useParseContactText, useLists,
   useCreateList, useReorderLists, useBulkDeleteContacts,
-  useBulkUpdateContacts, useBulkAddToList,
+  useBulkUpdateContacts, useBulkAddToList, useArchiveContact,
 } from "../../api";
 import { Modal } from "../../components/ui/Modal";
 import { ImportModal } from "../../components/ImportModal";
 import { BulkEditFieldModal } from "../../components/BulkEditFieldModal";
 import { SkeletonText, AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
+import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { ICON_BTN, SEARCH_INPUT, filterPill, PAGE_TITLE } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { usePageTitle } from "../../hooks/usePageTitle";
+import { useScrollRestoration } from "../../hooks/useScrollRestoration";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
+import { PullIndicator } from "../../components/ui/PullIndicator";
+import { useRecentContacts } from "../../hooks/useRecentContacts";
+import { useRecentContactsLimit } from "../../hooks/useRecentContacts";
+import { useLongPress } from "../../hooks/useLongPress";
 
 import { ContactListItem } from "./ContactListItem";
 import { BulkActionToolbar } from "./BulkActionToolbar";
@@ -41,15 +49,106 @@ const FilterButton = ({ label, icon, count, active, onClick }: {
 );
 
 // ---------------------------------------------------------------------------
+// ContactRowWrapper — attaches context menu + long-press + recordVisit to a row
+// ---------------------------------------------------------------------------
+
+interface ContactRowWrapperProps {
+  contactId: string;
+  isFlashing: boolean;
+  contextItems: Parameters<ReturnType<typeof useContextMenu>['handleContextMenu']>[1];
+  handleContextMenu: ReturnType<typeof useContextMenu>['handleContextMenu'];
+  recordVisit: (id: string) => void;
+  navigate: (path: string) => void;
+  children: React.ReactNode;
+}
+
+const ContactRowWrapper = ({
+  contactId,
+  isFlashing,
+  contextItems,
+  handleContextMenu,
+  recordVisit,
+  navigate,
+  children,
+}: ContactRowWrapperProps) => {
+  const longPress = useLongPress(({ clientX, clientY }) => {
+    // Create a synthetic mouse event so handleContextMenu can position correctly
+    const syntheticEvent = {
+      preventDefault: () => {},
+      clientX,
+      clientY,
+    } as unknown as React.MouseEvent;
+    handleContextMenu(syntheticEvent, contextItems);
+  });
+
+  return (
+    <div
+      onContextMenu={(e) => handleContextMenu(e, contextItems)}
+      onClick={() => recordVisit(contactId)}
+      {...longPress}
+      className={cn(
+        "rounded-xl transition-all duration-300",
+        isFlashing && "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,158,219,0.2)]"
+      )}
+    >
+      {children}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // ContactList — Left-pane master view for browsing and filtering contacts
 // ---------------------------------------------------------------------------
 
 export const ContactList = () => {
-  const { data: contacts = [], isLoading } = useContacts();
+  const { data: contacts = [], isLoading, refetch } = useContacts();
   const { data: lists = [] } = useLists();
   const { id } = useParams();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterMode, setFilterMode] = useState<string>('all');
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL-persisted state: both filter and search survive back-navigation
+  const filterMode = searchParams.get('list') ?? 'all';
+  const searchQuery = searchParams.get('q') ?? '';
+
+  const setFilterMode = (mode: string) => {
+    const q = searchParams.get('q');
+    const params: Record<string, string> = {};
+    if (mode !== 'all') params.list = mode;
+    if (q) params.q = q;
+    setSearchParams(params, { replace: true });
+  };
+
+  const setSearchQuery = (val: string) => {
+    const list = searchParams.get('list');
+    const params: Record<string, string> = {};
+    if (list) params.list = list;
+    if (val) params.q = val;
+    setSearchParams(params, { replace: true });
+  };
+
+  // UX hooks
+  usePageTitle('Network');
+  const scrollRef = useScrollRestoration<HTMLDivElement>('contact-list');
+  const { containerRef: pullRef, isPulling, pullProgress, isRefreshing, pullDistance } = usePullToRefresh(
+    async () => { await refetch(); },
+    { disabled: typeof window !== 'undefined' && window.innerWidth >= 768 }
+  );
+  const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
+  const archiveContact = useArchiveContact();
+  const { recentIds, recordVisit } = useRecentContacts();
+  const { limit: recentLimit } = useRecentContactsLimit();
+
+
+  // Visual flash: highlight a newly created contact for 2s
+  const [flashId, setFlashId] = useState<string | null>(null);
+
+  // Merge containerRefs — both pullRef and scrollRef point to the same element
+  const listScrollRef = useCallback((el: HTMLDivElement | null) => {
+    (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    (pullRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+  }, [scrollRef, pullRef]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSmartPasteOpen, setIsSmartPasteOpen] = useState(false);
@@ -70,7 +169,6 @@ export const ContactList = () => {
   const bulkUpdate = useBulkUpdateContacts();
   const bulkAddToList = useBulkAddToList();
 
-  const navigate = useNavigate();
 
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
@@ -124,7 +222,7 @@ export const ContactList = () => {
     const emailValue = data.email as string;
     const phoneValue = data.phone as string;
     try {
-      await createContact.mutateAsync({
+      const newContact = await createContact.mutateAsync({
         name: data.name as string,
         role: data.role as string,
         company: data.company as string,
@@ -140,6 +238,11 @@ export const ContactList = () => {
       setParsedData(null);
       setSmartPasteText("");
       toast.success(`Created "${data.name}"`);
+      // Visual flash: highlight the new row for 2 seconds
+      if (newContact?.id) {
+        setFlashId(newContact.id);
+        setTimeout(() => setFlashId(null), 2000);
+      }
     } catch (err: any) {
       toast.error(`Failed to create contact: ${err.message}`);
     }
@@ -459,106 +562,227 @@ export const ContactList = () => {
             }}
             className={SEARCH_INPUT}
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
         </div>
 
-        {/* Filter tabs — hidden in select mode to reduce noise */}
-        {!isSelectMode && (
-          <div className="flex gap-1.5 flex-wrap items-center">
-            <FilterButton
-              label="All"
-              icon={<Users className="w-3.5 h-3.5" />}
-              count={contacts.filter(c => !c.isArchived).length}
-              active={filterMode === 'all'}
-              onClick={() => setFilterMode('all')}
-            />
-            {inlineLists.map((list, idx) => (
-              <div
-                key={list.id}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDrop={() => handleDrop(idx)}
-                onDragEnd={handleDragEnd}
-                className={cn(
-                  "transition-all cursor-grab active:cursor-grabbing",
-                  dragOverIdx === idx && dragIdx !== idx && "ring-2 ring-primary/40 rounded-xl",
-                  dragIdx === idx && "opacity-40"
-                )}
-              >
-                <FilterButton
-                  label={list.name}
-                  icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
-                  count={list.memberCount ?? 0}
-                  active={filterMode === list.id}
-                  onClick={() => setFilterMode(filterMode === list.id ? 'all' : list.id)}
-                />
-              </div>
-            ))}
-            {overflowLists.length > 0 && (
-              <div className="relative" ref={moreRef}>
-                <button
-                  onClick={() => setShowMoreLists(!showMoreLists)}
-                  className={cn(filterPill(overflowLists.some(l => l.id === filterMode)), "gap-1")}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                  More
-                </button>
-                <AnimatePresence>
-                  {showMoreLists && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                      className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[180px]"
-                    >
-                      {overflowLists.map(list => (
-                        <button
-                          key={list.id}
-                          onClick={() => { setFilterMode(filterMode === list.id ? 'all' : list.id); setShowMoreLists(false); }}
-                          className={cn(
-                            "flex items-center gap-2 w-full px-3 py-2 text-sm transition-colors text-left",
-                            filterMode === list.id
-                              ? "bg-primary/10 text-primary font-bold"
-                              : "text-on-surface hover:bg-surface-container-low"
-                          )}
-                        >
-                          <ListIcon icon={list.icon} className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{list.name}</span>
-                          <span className="ml-auto text-[10px] opacity-50">{list.memberCount ?? 0}</span>
-                        </button>
-                      ))}
-                    </motion.div>
+        {/* Filter tabs — horizontal scroll row, hidden in select mode */}
+        {!isSelectMode && lists.length > 0 && (
+          <div className="relative">
+            {/* Gradient fade-out to signal more pills to the right */}
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
+            <div
+              id="filter-pills-row"
+              className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5"
+            >
+              <FilterButton
+                label="All"
+                icon={<Users className="w-3.5 h-3.5" />}
+                count={contacts.filter(c => !c.isArchived).length}
+                active={filterMode === 'all'}
+                onClick={() => setFilterMode('all')}
+              />
+              {lists.map((list, idx) => (
+                <div
+                  key={list.id}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={() => handleDrop(idx)}
+                  onDragEnd={handleDragEnd}
+                  className={cn(
+                    "transition-all cursor-grab active:cursor-grabbing shrink-0",
+                    dragOverIdx === idx && dragIdx !== idx && "ring-2 ring-primary/40 rounded-xl",
+                    dragIdx === idx && "opacity-40"
                   )}
-                </AnimatePresence>
-              </div>
-            )}
+                >
+                  <FilterButton
+                    label={list.name}
+                    icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
+                    count={list.memberCount ?? 0}
+                    active={filterMode === list.id}
+                    onClick={() => setFilterMode(filterMode === list.id ? 'all' : list.id)}
+                  />
+                </div>
+              ))}
+              {/* Right padding so last pill isn't clipped by gradient */}
+              <div className="shrink-0 w-6" aria-hidden />
+            </div>
           </div>
         )}
       </div>
 
       {/* Contact list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 scrollbar-hide">
+      <div
+        ref={listScrollRef}
+        className="flex-1 overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 scrollbar-hide"
+      >
+        {/* Pull-to-refresh indicator — mobile only */}
+        <PullIndicator
+          isPulling={isPulling}
+          isRefreshing={isRefreshing}
+          progress={pullProgress}
+          pullDistance={pullDistance}
+        />
+
         {isLoading && (
           <div className="flex justify-center p-8"><div className="animate-pulse w-6 h-6 rounded-full bg-primary/20" /></div>
         )}
-        {!isLoading && filteredContacts.length === 0 && (
-          <div className="text-center p-8 text-on-surface-variant">
-            <p className="text-sm font-medium">No contacts match your filters.</p>
+
+        {/* Empty state: 0 contacts total (onboarding) */}
+        {!isLoading && contacts.filter(c => !c.isArchived).length === 0 && (
+          <div className="flex flex-col items-center justify-center h-64 text-center gap-4 p-6">
+            <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
+              <Users className="w-8 h-8 text-primary/60" />
+            </div>
+            <div>
+              <p className="font-bold text-base">Your network is empty</p>
+              <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-[200px] mx-auto">
+                Add your first contact to get started
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 w-full max-w-[200px]">
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Contact  <kbd className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">N</kbd>
+              </button>
+              <button
+                onClick={() => setIsSmartPasteOpen(true)}
+                className="btn-secondary flex items-center justify-center gap-2 text-sm py-2.5"
+              >
+                <Sparkles className="w-4 h-4" />
+                Smart Paste  <kbd className="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">V</kbd>
+              </button>
+            </div>
           </div>
         )}
+
+        {/* Empty state: search/filter has no results */}
+        {!isLoading && contacts.filter(c => !c.isArchived).length > 0 && filteredContacts.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
+            <Search className="w-8 h-8 text-on-surface-variant/30" />
+            <div>
+              <p className="font-bold text-sm">
+                {searchQuery ? `No results for "${searchQuery}"` : 'No contacts in this list'}
+              </p>
+              {searchQuery && (
+                <p className="text-xs text-on-surface-variant mt-1">Try the AI search for deeper results</p>
+              )}
+            </div>
+            {searchQuery && (
+              <button
+                onClick={() => navigate(`/search?q=${encodeURIComponent(searchQuery)}`)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Search with AI
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Recent contacts strip ──────────────────────────────────────────
+           Only shown when no search/filter is active AND we have visit history.
+           Uses the same contacts array (already loaded) — zero extra fetches.
+        */}
+        {!isLoading && !searchQuery && filterMode === 'all' && recentIds.length > 0 && (
+          (() => {
+            const recentContacts = recentIds
+              .map(rid => contacts.find(c => c.id === rid && !c.isArchived))
+              .filter(Boolean)
+              .slice(0, recentLimit) as typeof contacts;  // honour user preference
+            if (recentContacts.length === 0) return null;
+            return (
+              <div className="mb-3">
+                <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                  <Clock className="w-3 h-3 text-on-surface-variant/50" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">Recent</span>
+                </div>
+                <div className="space-y-1">
+                  {recentContacts.map(contact => (
+                    <ContactListItem
+                      key={`recent-${contact.id}`}
+                      contact={contact}
+                      active={id === contact.id}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(contact.id)}
+                      onToggleSelect={toggleSelect}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
+              </div>
+            );
+          })()
+        )}
+
         {filteredContacts.map(contact => {
           const active = id === contact.id;
+          const isFlashing = flashId === contact.id;
+
+          // Build context menu items for this contact
+          const contextItems = [
+            {
+              id: 'view',
+              label: 'View Contact',
+              icon: <UserPlus className="w-3.5 h-3.5" />,
+              onClick: () => navigate(`/contact/${contact.id}`),
+            },
+            {
+              id: 'copy-email',
+              label: contact.emails?.[0]?.email ? `Copy Email` : 'No email',
+              icon: <Copy className="w-3.5 h-3.5" />,
+              disabled: !contact.emails?.[0]?.email,
+              onClick: () => {
+                navigator.clipboard.writeText(contact.emails![0].email);
+                toast.success('Email copied');
+              },
+            },
+            { id: 'sep1', label: '', separator: true as const },
+            {
+              id: 'archive',
+              label: 'Archive',
+              icon: <Archive className="w-3.5 h-3.5" />,
+              onClick: async () => {
+                await archiveContact.mutateAsync(contact.id);
+                toast.success(`Archived "${contact.name}"`);
+              },
+            },
+          ];
+
           return (
-            <ContactListItem
+            <ContactRowWrapper
               key={contact.id}
-              contact={contact}
-              active={active}
-              isSelectMode={isSelectMode}
-              isSelected={selectedIds.has(contact.id)}
-              onToggleSelect={toggleSelect}
-            />
+              contactId={contact.id}
+              isFlashing={isFlashing}
+              contextItems={contextItems}
+              handleContextMenu={handleContextMenu}
+              recordVisit={recordVisit}
+              navigate={navigate}
+            >
+              <ContactListItem
+                contact={contact}
+                active={active}
+                isSelectMode={isSelectMode}
+                isSelected={selectedIds.has(contact.id)}
+                onToggleSelect={toggleSelect}
+              />
+            </ContactRowWrapper>
           );
         })}
+
+        {/* Context menu — portal-rendered, shared across all rows */}
+        <ContextMenu {...contextMenu} onClose={closeContextMenu} />
       </div>
 
       <AnimatePresence>

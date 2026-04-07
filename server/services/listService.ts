@@ -25,6 +25,28 @@ export const listService = {
     return sqlite.prepare("SELECT *, 0 as memberCount FROM lists WHERE id = ?").get(id);
   },
 
+  updateList(id: string, data: { name?: string; icon?: string }) {
+    const existing = sqlite.prepare("SELECT id FROM lists WHERE id = ?").get(id);
+    if (!existing) return null;
+
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    if (data.name !== undefined) { setClauses.push("name = ?"); values.push(data.name.trim()); }
+    if (data.icon !== undefined) { setClauses.push("icon = ?"); values.push(data.icon); }
+    if (setClauses.length === 0) return existing;
+
+    values.push(id);
+    sqlite.prepare(`UPDATE lists SET ${setClauses.join(", ")} WHERE id = ?`).run(...values);
+
+    return sqlite.prepare(`
+      SELECT l.*, COUNT(lm.contactId) as memberCount
+      FROM lists l
+      LEFT JOIN list_members lm ON l.id = lm.listId
+      WHERE l.id = ?
+      GROUP BY l.id
+    `).get(id);
+  },
+
   reorderLists(orderedIds: string[]) {
     const updateStmt = sqlite.prepare("UPDATE lists SET sortOrder = ? WHERE id = ?");
     const txn = sqlite.transaction(() => {

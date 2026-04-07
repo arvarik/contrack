@@ -16,6 +16,7 @@ import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { cn } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
+import { usePageTitle } from "../../../hooks/usePageTitle";
 
 import {
   useContact, useTimeline, useUpdateContact, useAddAttachment,
@@ -50,6 +51,9 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
   // ── Data queries ──────────────────────────────────────────────────────
   const { data: contact, isLoading: contactLoading } = useContact(id);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
+
+  // Dynamic page title — updates as contact data loads
+  usePageTitle(contact?.name ?? null);
 
   // ── Mutations ─────────────────────────────────────────────────────────
   const updateContact = useUpdateContact();
