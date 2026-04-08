@@ -19,8 +19,6 @@ import { cn } from "../../../lib/utils";
 import {
   LABEL, CARD_TINTED, TAG_PILL, SECTION_HEADING_SPACED,
 } from "../../../lib/styles";
-import { parseBriefingPoints } from "../../../lib/safeParse";
-import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
 import { LocalTimeWeather } from "../../../components/LocalTimeWeather";
 
 import { EditableField } from "./EditableField";
@@ -69,16 +67,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   const navigate = useNavigate();
   const [showVibePicker, setShowVibePicker] = useState(false);
 
-  const isBriefingValid = React.useMemo(() => {
-    if (!contact.aiBriefing || !contact.aiBriefingAt) return false;
-    const diff = Date.now() - new Date(contact.aiBriefingAt).getTime();
-    return diff < 3 * 24 * 60 * 60 * 1000; // 3 days
-  }, [contact.aiBriefing, contact.aiBriefingAt]);
-
-  const clearBriefing = React.useCallback(() => {
-    updateContact.mutate({ id: contact.id, data: { aiBriefing: null, aiBriefingAt: null } as any });
-  }, [contact.id, updateContact]);
-
   const handleVibeSelect = (vibeId: string) => {
     updateContact.mutate({ id: contact.id, data: { themeColor: vibeId } });
     setShowVibePicker(false);
@@ -110,7 +98,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       )}
 
       <div className="p-6 md:p-8 lg:px-10 lg:pt-8 lg:pb-6 max-w-6xl mx-auto w-full relative lg:shrink-0">
-        <section className="flex flex-col md:flex-row items-start md:items-center gap-6">
+        <section className="flex flex-col md:flex-row items-start gap-6">
           {/* Avatar */}
           <div className="relative shrink-0 group/avatar">
             <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
@@ -262,16 +250,9 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
 
             {/* Actions Row */}
-            <div className="mt-4 flex items-center gap-3 flex-wrap">
-              <button 
-                onClick={() => generateBriefing.mutate(contact.id)}
-                disabled={generateBriefing.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-xl font-bold hover:opacity-90 transition-opacity text-sm shadow-sm"
-              >
-                🪄 {generateBriefing.isPending ? 'Generating...' : 'Catch Me Up'}
-              </button>
-
-              {showNetworkButton && (
+            {/* Actions Row */}
+            {showNetworkButton && (
+              <div className="mt-4 flex items-center gap-3 flex-wrap">
                 <button
                   onClick={() => {
                     if (onClose) onClose();
@@ -282,51 +263,8 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                   <ArrowUpRight className="w-4 h-4" />
                   Open in Network
                 </button>
-              )}
-              
-              {/* Briefing Display */}
-              <AnimatePresence>
-                {isBriefingValid && !generateBriefing.isPending && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden mt-3 w-full"
-                  >
-                    <div className={cn(CARD_TINTED, "text-sm text-on-surface relative")}>
-                      <button onClick={clearBriefing} className="absolute top-4 right-4 p-1 rounded-full hover:bg-surface-container-highest transition-colors opacity-50 hover:opacity-100" title="Dismiss Briefing">
-                        <X className="w-4 h-4 text-on-surface" />
-                      </button>
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-3 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Executive Briefing</h4>
-                      <ul className="space-y-2.5 pr-6">
-                        {parseBriefingPoints(contact.aiBriefing!).map((point: string, idx: number) => (
-                          <li key={idx} className="flex gap-2">
-                            <span className="text-on-surface-variant font-bold max-w-fit flex-shrink-0 mt-0.5">•</span> 
-                            <span className="leading-relaxed">{point}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      {contact.aiBriefingAt && (
-                        <p className="text-[10px] text-on-surface-variant mt-4 opacity-70">Generated {formatDistanceToNow(new Date(contact.aiBriefingAt), {addSuffix: true})}</p>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-                {generateBriefing.isPending && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden mt-3 w-full"
-                  >
-                    <div className={cn(CARD_TINTED, "text-sm space-y-4")}>
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5"/> Synthesizing Context...</h4>
-                      <SkeletonText lines={3} className="h-4" />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+              </div>
+            )}
           </div>
         </section>
       </div>

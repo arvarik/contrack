@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   Search, Plus, Users, Upload, ChevronDown, UserPlus, ListPlus,
   CheckSquare, Square, FileText, Sparkles, Trash2, Archive, Copy, Clock,
@@ -105,6 +105,7 @@ export const ContactList = () => {
   const { data: lists = [] } = useLists();
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // URL-persisted state: both filter and search survive back-navigation
@@ -356,18 +357,18 @@ export const ContactList = () => {
         if (filteredContacts.length === 0) return;
         const currentIndex = filteredContacts.findIndex(c => c.id === id);
         const nextIndex = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, filteredContacts.length - 1);
-        navigate(`/contact/${filteredContacts[nextIndex].id}`);
+        navigate(`/contact/${filteredContacts[nextIndex].id}${location.search}`);
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
         if (filteredContacts.length === 0) return;
         const currentIndex = filteredContacts.findIndex(c => c.id === id);
         const prevIndex = currentIndex === -1 ? 0 : Math.max(currentIndex - 1, 0);
-        navigate(`/contact/${filteredContacts[prevIndex].id}`);
+        navigate(`/contact/${filteredContacts[prevIndex].id}${location.search}`);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [id, filteredContacts, navigate, isSelectMode]);
+  }, [id, filteredContacts, navigate, isSelectMode, location.search]);
 
   // Auto-scroll active item into view
   React.useEffect(() => {

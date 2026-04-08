@@ -136,7 +136,7 @@ export const tabItem = (active: boolean) =>
 export const filterPill = (active: boolean) =>
   cn(
     "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
-    active ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "text-on-surface-variant hover:bg-surface-container-high",
+    active ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30" : "text-on-surface-variant hover:bg-surface-container-high",
   );
 
 // ─── List Items ──────────────────────────────────────────────────────────────

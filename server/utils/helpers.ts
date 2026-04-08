@@ -15,7 +15,7 @@ export function buildContactUpdate(body: Record<string, unknown>) {
     'name', 'firstName', 'lastName', 'headline', 'role', 'company',
     'location', 'birthday', 'preferences', 'avatarUrl', 'cadenceDays',
     'lastContactedAt', 'nextFollowUpAt', 'themeColor', 'about',
-    'pronouns', 'industry', 'website', 'isArchived', 'aiBriefing',
+    'pronouns', 'industry', 'website', 'isArchived', 'aiBriefing', 'aiBriefingAt',
     'aiBackground', 'aiSummary', 'aiHydratedAt',
   ] as const;
 

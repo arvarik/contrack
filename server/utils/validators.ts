@@ -130,6 +130,8 @@ export const contactCreateSchema = z.object({
   about: z.string().nullable().optional(),
   aiSummary: z.string().nullable().optional(),
   aiBackground: z.string().nullable().optional(),
+  aiBriefing: z.string().nullable().optional(),
+  aiBriefingAt: z.string().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
   themeColor: z.string().nullable().optional(),
   preferences: z.string().nullable().optional(),

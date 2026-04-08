@@ -151,7 +151,7 @@ export const SettingsView = () => {
                   <div>
                     <h4 className="font-bold">Recent Contacts</h4>
                     <p className="text-sm text-on-surface-variant">
-                      Number of recently visited contacts shown at the top of your Network
+                      Number of recently visited contacts shown at the top of your Network. Set to 0 to hide.
                     </p>
                   </div>
 

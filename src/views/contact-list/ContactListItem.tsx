@@ -8,7 +8,7 @@
  *   by the time the user clicks, the detail pane loads instantly from cache.
  */
 import React, { useState, useRef, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { CheckCheck, Building, Briefcase, CalendarClock, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +45,7 @@ const ContactListItemInner = ({
   const logoUrl = useCompanyLogo(primaryEmail);
   const [imgError, setImgError] = useState(false);
   const queryClient = useQueryClient();
+  const location = useLocation();
   const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Computed values ────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ const ContactListItemInner = ({
   return (
     <Link
       id={`contact-row-${contact.id}`}
-      to={isSelectMode ? "#" : `/contact/${contact.id}`}
+      to={isSelectMode ? "#" : `/contact/${contact.id}${location.search}`}
       onClick={handleClick}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}

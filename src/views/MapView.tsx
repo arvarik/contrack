@@ -5,12 +5,25 @@
  * Clicking a marker navigates to the contact detail overlay within the map context.
  */
 import React from 'react';
-import { MapContainer, TileLayer, Marker, ZoomControl, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, ZoomControl, Popup, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'leaflet/dist/leaflet.css';
 import { useMapContacts } from '../api';
 import L from 'leaflet';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const MapClickHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  useMapEvents({
+    click: () => {
+      if (location.pathname.startsWith('/map/contact/')) {
+        navigate('/map');
+      }
+    }
+  });
+  return null;
+};
 
 // ---------------------------------------------------------------------------
 // Map icon factories — uses the app's primary blue (#009EDB) for consistency
@@ -73,6 +86,7 @@ export const MapView = () => {
         style={{ height: '100%', width: '100%', background: '#f0f4f6' }}
         zoomControl={false}
       >
+        <MapClickHandler />
         <ZoomControl position="bottomright" />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -104,17 +118,17 @@ export const MapView = () => {
                   multiple addresses — hover the pin to see before navigating */}
               <Popup closeButton={false} offset={[0, -24]}>
                 <div
-                  style={{ fontFamily: 'Inter, sans-serif', padding: '10px 14px', minWidth: '160px', cursor: 'pointer' }}
+                  style={{ fontFamily: 'Inter, sans-serif', padding: '4px 8px', cursor: 'pointer' }}
                   onClick={() => navigate(`/map/contact/${contact.id}`)}
                 >
                   <p style={{ fontWeight: 800, fontSize: '14px', color: '#1a1a1a', margin: '0 0 2px' }}>
                     {contact.name}
                   </p>
                   {contact.company && (
-                    <p style={{ fontSize: '12px', color: '#666', margin: '0 0 4px' }}>{contact.company}</p>
+                    <p style={{ fontSize: '12px', color: '#666', margin: '0 0 2px' }}>{contact.company}</p>
                   )}
                   {contact.location && (
-                    <p style={{ fontSize: '11px', color: PRIMARY_COLOR, fontWeight: 600, margin: '0 0 4px' }}>
+                    <p style={{ fontSize: '11px', color: PRIMARY_COLOR, fontWeight: 600, margin: '0' }}>
                       📍 {contact.location}
                     </p>
                   )}

@@ -28,6 +28,7 @@ import { AvatarPickerModal } from "../../../components/AvatarPickerModal";
 import { ProfileHeader } from "./ProfileHeader";
 import { DetailsCard } from "./DetailsCard";
 import { DossierTab } from "./DossierTab";
+import { CatchMeUpFab } from "./CatchMeUpFab";
 import { TimelineTab } from "./TimelineTab";
 import { VIBE_COLORS } from "./VibePickerPopover";
 
@@ -144,7 +145,7 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
   return (
     <>
     <div className="h-full flex flex-col overflow-hidden w-full relative bg-surface md:bg-transparent" style={themeStyles}>
-      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden lg:flex lg:flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto">
 
         {/* ── Profile Header ──────────────────────────────────────────── */}
         <ProfileHeader
@@ -162,11 +163,11 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
         />
 
         {/* ── Two-Column Layout ───────────────────────────────────────── */}
-        <div className="lg:flex-1 lg:min-h-0 max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10">
-          <div className="grid grid-cols-1 lg:grid-cols-24 gap-6 lg:gap-8 items-start lg:h-full pb-32 lg:pb-0 mt-8 lg:mt-0">
+        <div className="max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10">
+          <div className="grid grid-cols-1 lg:grid-cols-24 gap-6 lg:gap-8 items-start pb-32 lg:pb-0 mt-8 lg:mt-0 relative">
             
             {/* Left Column: Facts */}
-            <div className="lg:col-span-9 space-y-6 lg:overflow-y-auto lg:h-full lg:pb-8 scrollbar-hide">
+            <div className="lg:col-span-9 space-y-6 lg:sticky lg:top-8 lg:pb-8">
               <DetailsCard
                 contact={contact}
                 contactId={id}
@@ -176,7 +177,7 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
             </div>
 
             {/* Right Column: Timeline / Dossier */}
-            <div className="lg:col-span-15 relative min-h-[300px] flex flex-col gap-6 lg:overflow-y-auto lg:h-full lg:pb-8 scrollbar-hide">
+            <div className="lg:col-span-15 relative min-h-[300px] flex flex-col gap-6 lg:pb-32">
               
               {/* Tab Switcher */}
               <div className="flex items-center gap-2 p-1.5 bg-surface-container-low rounded-xl border border-surface-container-highest shadow-sm relative z-20 w-fit">
@@ -231,6 +232,9 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
         currentAvatarUrl={contact.avatarUrl}
       />
     )}
+
+    {/* ── Catch Me Up FAB ────────────────────────────────────────────── */}
+    <CatchMeUpFab contact={contact} generateBriefing={generateBriefing} />
     </>
   );
 };

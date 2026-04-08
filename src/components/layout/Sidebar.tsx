@@ -17,7 +17,7 @@ import { useUrgentActionItemCount } from "../../api";
 // SidebarTooltip — styled right-side tooltip with delay
 // ---------------------------------------------------------------------------
 
-const SidebarTooltip = ({ label, children }: { label: string; children: React.ReactNode }) => {
+const SidebarTooltip = ({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) => {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -31,7 +31,7 @@ const SidebarTooltip = ({ label, children }: { label: string; children: React.Re
   }, []);
 
   return (
-    <div className="relative flex items-center" onMouseEnter={show} onMouseLeave={hide}>
+    <div className={cn("relative flex items-center", className)} onMouseEnter={show} onMouseLeave={hide}>
       {children}
       <AnimatePresence>
         {visible && (
@@ -111,8 +111,11 @@ export const Sidebar = () => {
         </Link>
       </SidebarTooltip>
 
+      {/* spacer to push following items down */}
+      <div className="flex-1" />
+
       <SidebarTooltip label="Settings">
-        <Link to="/settings" className={navLink(isCleanup, "mt-auto")}>
+        <Link to="/settings" className={navLink(isCleanup)}>
           <SettingsIcon className="w-6 h-6" />
         </Link>
       </SidebarTooltip>

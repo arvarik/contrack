@@ -27,7 +27,7 @@ const MAX_STORED = 10;
 export const DEFAULT_RECENT_LIMIT = 3;
 
 /** Min/max for the user-configurable limit */
-export const MIN_RECENT_LIMIT = 1;
+export const MIN_RECENT_LIMIT = 0;
 export const MAX_RECENT_LIMIT = 10;
 
 const readFromStorage = (): string[] => {

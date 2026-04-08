@@ -176,9 +176,9 @@ export const DashboardView = () => {
                 onClick={() => setIsCompositionOpen(true)}
               />
               <MetricCard 
-                label="Interaction Velocity" 
+                label="Interactions" 
                 value={dashboard.metrics.totalInteractions30d} 
-                subValue="30d touchpoints"
+                subValue="interactions last month"
                 icon={ActivitySquare}
                 delay={0.2}
                 onClick={() => setIsVelocityOpen(true)}

@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
 import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles, Activity } from "lucide-react";
-import { LayoutGroup, AnimatePresence } from "motion/react";
+import { LayoutGroup, AnimatePresence, motion } from "motion/react";
 import { Toaster } from "sonner";
 import { useState, useEffect } from "react";
 
@@ -103,21 +103,37 @@ const ResponsiveLayout = () => {
         </Routes>
       </section>
 
-      {/* Right Pane: Detail View */}
-      <main className={`
-        ${isContactSelected ? 'flex' : (isMapActive ? 'hidden' : 'hidden lg:flex')}
-        ${isMapActive && isContactSelected ? 'absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-50 shadow-2xl bg-surface overflow-hidden' : 'flex-1 bg-surface z-10'}
-        h-full overflow-hidden relative flex-col
-      `}>
-        <AnimatePresence>
+      {/* Right Pane: Standard Detail View */}
+      {!isMapActive && (
+        <main className={`
+          ${isContactSelected ? 'flex' : 'hidden lg:flex'}
+          flex-1 bg-surface z-10 h-full overflow-hidden relative flex-col
+        `}>
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<EmptyState />} />
-            <Route path="/map" element={null} />
             <Route path="/contact/:id" element={<ContactDetail />} />
-            <Route path="/map/contact/:id" element={<ContactDetail />} />
           </Routes>
+        </main>
+      )}
+
+      {/* Map Overlay Detail View */}
+      {isMapActive && (
+        <AnimatePresence>
+          {isContactSelected && (
+            <motion.main
+              initial={{ x: "100%", opacity: 0.5 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "100%", opacity: 0 }}
+              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
+            >
+              <Routes location={location} key={location.pathname}>
+                <Route path="/map/contact/:id" element={<ContactDetail />} />
+              </Routes>
+            </motion.main>
+          )}
         </AnimatePresence>
-      </main>
+      )}
 
       {/* Mobile Nav */}
       {!isContactSelected && mobileNav}
