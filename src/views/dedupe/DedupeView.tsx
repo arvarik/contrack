@@ -5,7 +5,7 @@ import {
   CheckCircle2, Sparkles, Zap, Shield, ChevronLeft,
   ChevronRight, AlertCircle, Loader2, ScanSearch,
   Brain, Undo2, HandMetal, List, Layers,
-  Database, Cpu, GitMerge,
+  Database, Cpu, GitMerge, History, X,
 } from 'lucide-react';
 import { useMergeCluster } from '../../api';
 import type { DedupeScanMode, DedupeCluster } from '../../types';
@@ -15,8 +15,9 @@ import {
   EMPTY_HERO, TAB_CONTAINER, tabItem,
 } from '../../lib/styles';
 import { cn } from '../../lib/utils';
-import { ClusterSwipeCard, ClusterList, ManualMerge } from './components';
+import { ClusterSwipeCard, ClusterList, ManualMerge, ActivityFeed } from './components';
 import { useDedupe } from '../../contexts/DedupeContext';
+import { useDedupeSettings } from '../../hooks/useDedupeSettings';
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
@@ -28,10 +29,12 @@ type ResultView = 'swipe' | 'list';
 export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   const [activeTab, setActiveTab] = useState<DedupeTab>('auto');
   const [resultView, setResultView] = useState<ResultView>('swipe');
-  const [selectedMode, setSelectedMode] = useState<DedupeScanMode>('both');
+  const [showActivity, setShowActivity] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<DedupeScanMode>('deep');
 
   const { scan, clusters, isScanning, isStarting, startScan, reset, removeCluster } = useDedupe();
   const mergeCluster = useMergeCluster();
+  const { autoMergeThreshold } = useDedupeSettings();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -160,7 +163,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
 
   // Start scan handler
   const handleStartScan = () => {
-    startScan(selectedMode);
+    startScan(selectedMode, autoMergeThreshold);
   };
 
   const handleNewScan = () => {
@@ -175,22 +178,22 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   // Scan mode options
   const scanModes: { mode: DedupeScanMode; icon: React.ReactNode; title: string; desc: string }[] = [
     {
-      mode: 'deterministic',
+      mode: 'quick',
       icon: <Shield className="w-5 h-5 text-emerald-500" />,
-      title: 'Deterministic Only',
-      desc: 'Exact email & phone matches. Fast, no AI needed.',
+      title: 'Quick Scan',
+      desc: 'Finds contacts with the same email, phone, or name.',
     },
     {
-      mode: 'ai',
+      mode: 'deep',
       icon: <Sparkles className="w-5 h-5 text-primary" />,
-      title: 'AI Only',
-      desc: 'Fuzzy name analysis via Gemini.',
+      title: 'Smart Scan',
+      desc: 'Uses AI to catch duplicates that aren\u2019t obvious.',
     },
     {
-      mode: 'both',
+      mode: 'full',
       icon: <Zap className="w-5 h-5 text-amber-500" />,
-      title: 'Both (Recommended)',
-      desc: 'Two-pass scan: exact matches first, then AI analysis.',
+      title: 'Full Scan',
+      desc: 'Reanalyzes your entire network from scratch.',
     },
   ];
 
@@ -215,6 +218,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
             <Zap className="w-4 h-4" />
             Auto Scan
           </button>
+
           <button
             onClick={() => setActiveTab('manual')}
             className={cn(tabItem(activeTab === 'manual'), "flex items-center gap-2")}
@@ -223,6 +227,16 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
             Manual Merge
           </button>
         </div>
+
+        {/* Merge Activity button — top right */}
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowActivity(true)}
+          className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
+        >
+          <History className="w-4 h-4" />
+          Merge Activity
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -292,7 +306,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                 {/* Progress track */}
                 <div className="h-1 bg-surface-container-high rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full signature-gradient rounded-full"
+                    className="h-full bg-primary rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${((totalProcessed + currentIndex + 1) / clusters.length) * 100}%` }}
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
@@ -623,6 +637,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
               )}
             </div>
           </motion.div>
+
         ) : (
           <motion.div
             key="manual"
@@ -633,6 +648,46 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
           >
             <ManualMerge />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Merge Activity Slide-out Panel */}
+      <AnimatePresence>
+        {showActivity && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/20 z-40"
+              onClick={() => setShowActivity(false)}
+            />
+            {/* Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 h-full w-full max-w-md bg-surface z-50 shadow-2xl flex flex-col overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-6 py-4 shrink-0">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-on-surface-variant" />
+                  <h2 className="text-lg font-headline font-bold">Merge Activity</h2>
+                </div>
+                <button
+                  onClick={() => setShowActivity(false)}
+                  className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 pb-8 nice-scrollbar">
+                <ActivityFeed />
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

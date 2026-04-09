@@ -27,6 +27,18 @@ sqlite.pragma("foreign_keys = ON");
 
 log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`);
 
+// =============================================================================
+// 1b. Load sqlite-vec Extension
+// =============================================================================
+// Must be loaded BEFORE any DDL that creates vec0 virtual tables.
+// sqlite-vec adds native vector similarity search directly to SQLite.
+// =============================================================================
+
+import * as sqliteVec from "sqlite-vec";
+sqliteVec.load(sqlite);
+const { vec_version } = sqlite.prepare("SELECT vec_version() AS vec_version").get() as { vec_version: string };
+log.info("Database", `sqlite-vec loaded (version ${vec_version})`);
+
 export const db = drizzle(sqlite, { schema });
 
 // =============================================================================
@@ -332,3 +344,121 @@ if (orphanedFollowUps.length > 0) {
   txn();
   log.info("Database", `Backfilled ${orphanedFollowUps.length} action_items from legacy nextFollowUpAt`);
 }
+
+// =============================================================================
+// 9. Deduplication Engine Schema
+// =============================================================================
+// Adds columns for soft-merge + phonetic indexing, plus three new tables for
+// the persistent suggestion system. All statements are idempotent.
+// =============================================================================
+
+// 9a. Soft-merge column: canonicalId points to the primary contact for merged dupes.
+// NULL = active contact. Non-null = this contact has been subsumed.
+try {
+  sqlite.exec(`ALTER TABLE contacts ADD COLUMN canonicalId TEXT`);
+  log.info("Database", "Added canonicalId column to contacts");
+} catch {
+  // Column already exists — expected on subsequent runs
+}
+
+// 9b. Phonetic blocking index: Double Metaphone hash for O(1) phonetic lookups.
+try {
+  sqlite.exec(`ALTER TABLE contacts ADD COLUMN phoneticHash TEXT`);
+  log.info("Database", "Added phoneticHash column to contacts");
+} catch {
+  // Column already exists — expected on subsequent runs
+}
+sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_contacts_phonetic ON contacts(phoneticHash)`);
+
+// 9c. Persistent suggestion storage
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS dedupe_suggestions (
+    id TEXT PRIMARY KEY,
+    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    matchType TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    reasoning TEXT NOT NULL,
+    matchedField TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    reviewedAt TEXT,
+    reviewedBy TEXT,
+    UNIQUE(contactIdA, contactIdB)
+  );
+  CREATE INDEX IF NOT EXISTS idx_dedupe_status ON dedupe_suggestions(status);
+  CREATE INDEX IF NOT EXISTS idx_dedupe_confidence ON dedupe_suggestions(confidence DESC);
+`);
+
+// 9d. Never-merge exclusions
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS dedupe_exclusions (
+    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    PRIMARY KEY (contactIdA, contactIdB)
+  );
+`);
+
+// 9e. Merge audit log
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS dedupe_merge_log (
+    id TEXT PRIMARY KEY,
+    primaryId TEXT NOT NULL,
+    duplicateId TEXT NOT NULL,
+    mergedBy TEXT NOT NULL,
+    mergeType TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    reasoning TEXT NOT NULL,
+    mergedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    undoneAt TEXT,
+    duplicateSnapshot TEXT
+  );
+`);
+
+log.info("Database", "Dedupe schema ready (suggestions, exclusions, merge_log)");
+
+// 9f. Contact embedding vector storage (requires sqlite-vec loaded above)
+sqlite.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS contact_embeddings USING vec0(
+    contactId TEXT PRIMARY KEY,
+    embedding FLOAT[768]
+  );
+`);
+
+log.info("Database", "contact_embeddings vec0 table ready (768-dim)");
+
+// 9g. Embedding metadata: tracks when each contact was last embedded
+//     Used for staleness detection — if contact.updatedAt > embeddedAt, re-embed
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS dedupe_embedding_meta (
+    contactId TEXT PRIMARY KEY,
+    embeddedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
+`);
+
+// =============================================================================
+// 10. Phonetic Hash Backfill
+// =============================================================================
+// One-time idempotent backfill: compute Double Metaphone for all contacts
+// that don't yet have a phoneticHash. On subsequent runs this is a no-op.
+// =============================================================================
+
+import { doubleMetaphone } from "./utils/nlp/index.ts";
+
+const contactsMissingHash = sqlite.prepare(`
+  SELECT id, name FROM contacts WHERE phoneticHash IS NULL AND name IS NOT NULL
+`).all() as { id: string; name: string }[];
+
+if (contactsMissingHash.length > 0) {
+  const updateStmt = sqlite.prepare(`UPDATE contacts SET phoneticHash = ? WHERE id = ?`);
+  const backfillTxn = sqlite.transaction(() => {
+    for (const c of contactsMissingHash) {
+      const { primary } = doubleMetaphone(c.name);
+      updateStmt.run(primary, c.id);
+    }
+  });
+  backfillTxn();
+  log.info("Database", `Backfilled phoneticHash for ${contactsMissingHash.length} contacts`);
+}
+

@@ -5,12 +5,46 @@ import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import { contactRepo } from "../repositories/contactRepository.ts";
-import { queueGeocode } from "./geocodingService.ts";
+import { queueGeocode } from "./geocoding/index.ts";
 import { processBase64Avatar, isBase64DataUri } from "../utils/avatarProcessor.ts";
 import { invalidateSearchCache } from "../utils/searchCache.ts";
 import { invalidateDailyInsight } from "./dashboardService.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
+import { generateAndStoreEmbedding, generateAndStoreBulkEmbeddings } from "./dedupe/embeddings.ts";
+import { doubleMetaphone } from "../utils/nlp/index.ts";
+import { log } from "../utils/logger.ts";
+import { dedupeService, dedupeQueue } from "./dedupe/index.ts";
+
+// ---------------------------------------------------------------------------
+// Incremental Dedupe — Debounce Map
+// ---------------------------------------------------------------------------
+
+/** Pending timers for incremental dedupe checks. */
+const _dedupeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Debounce window for incremental checks (ms). */
+const DEDUPE_DEBOUNCE_MS = 5_000;
+
+/**
+ * Schedule a debounced incremental dedupe check for a contact.
+ * If called multiple times for the same contact within 5s, only the last fires.
+ */
+function scheduleIncrementalDedupe(contactId: string) {
+  // Clear any pending timer
+  const existing = _dedupeTimers.get(contactId);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    _dedupeTimers.delete(contactId);
+    const rid = crypto.randomUUID().slice(0, 8);
+    dedupeService.incrementalDedupeCheck(contactId, rid).catch(err =>
+      log.warn("ContactService", `Incremental dedupe for ${contactId} failed: ${err.message}`)
+    );
+  }, DEDUPE_DEBOUNCE_MS);
+
+  _dedupeTimers.set(contactId, timer);
+}
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -39,6 +73,7 @@ function buildInsertValues(body: any, id: string) {
     pronouns: body.pronouns || null,
     industry: body.industry || null,
     website: body.website || null,
+    phoneticHash: body.name ? doubleMetaphone(body.name).primary : null,
   };
 }
 
@@ -76,6 +111,14 @@ export const contactService = {
       if (addressString) queueGeocode(id, addressString);
     }
 
+    // Fire-and-forget: generate embedding in the background
+    generateAndStoreEmbedding(id).catch(err =>
+      log.warn("ContactService", `Background embedding for ${id} failed: ${err.message}`)
+    );
+
+    // Fire-and-forget: incremental dedupe check (debounced)
+    scheduleIncrementalDedupe(id);
+
     invalidateAllCaches();
     return contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
   },
@@ -83,7 +126,7 @@ export const contactService = {
   async bulkCreateContacts(
     validContacts: any[],
     onProgress?: (processed: number, total: number, phase: string) => void,
-  ) {
+  ): Promise<{ count: number; createdIds: string[] }> {
     const total = validContacts.length;
 
     // Phase 1: Process base64 data-URI avatars (from VCF imports) into optimized files
@@ -99,6 +142,7 @@ export const contactService = {
 
     // Phase 2: Insert all contacts into SQLite in a single transaction
     let count = 0;
+    const createdIds: string[] = [];
     const txn = sqlite.transaction(() => {
       for (const c of validContacts) {
         const id = crypto.randomUUID();
@@ -112,13 +156,15 @@ export const contactService = {
         db.insert(schema.contacts).values(values).run();
         contactRepo.insertChildRecords(id, c, c._sourcePlatform || 'manual');
         if (c.location) queueGeocode(id, c.location);
+        createdIds.push(id);
         count++;
       }
     });
     txn();
     onProgress?.(total, total, 'Complete');
+
     invalidateAllCaches();
-    return count;
+    return { count, createdIds };
   },
 
   bulkDeleteContacts(ids: string[]) {
@@ -148,8 +194,14 @@ export const contactService = {
   },
 
   updateContact(id: string, body: any) {
+    // Recompute phoneticHash if name changed
+    const updateData = buildContactUpdate(body);
+    if (body.name) {
+      (updateData as any).phoneticHash = doubleMetaphone(body.name).primary;
+    }
+
     const txn = sqlite.transaction(() => {
-      db.update(schema.contacts).set(buildContactUpdate(body)).where(eq(schema.contacts.id, id)).run();
+      db.update(schema.contacts).set(updateData).where(eq(schema.contacts.id, id)).run();
 
       const childMappings: [keyof typeof body, string][] = [
         ['emails', 'contact_emails'],
@@ -182,6 +234,20 @@ export const contactService = {
       const primaryAddress = body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
       const addressString = typeof primaryAddress === 'string' ? primaryAddress : primaryAddress.address;
       if (addressString) queueGeocode(id, addressString);
+    }
+
+    // Fire-and-forget: recompute embedding if key fields changed
+    const embeddingFields = ['name', 'company', 'role', 'location', 'industry', 'headline'];
+    if (embeddingFields.some(f => body[f] !== undefined)) {
+      generateAndStoreEmbedding(id).catch(err =>
+        log.warn("ContactService", `Background embedding update for ${id} failed: ${err.message}`)
+      );
+    }
+
+    // Fire-and-forget: incremental dedupe if identity fields changed
+    const dedupeFields = ['name', 'firstName', 'lastName', 'company', 'role', 'location'];
+    if (dedupeFields.some(f => body[f] !== undefined)) {
+      scheduleIncrementalDedupe(id);
     }
 
     invalidateAllCaches();

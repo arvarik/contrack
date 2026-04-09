@@ -192,7 +192,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
             <button
               onClick={handleButtonMerge}
               disabled={isMerging}
-              className="group flex items-center gap-3 px-6 py-3 signature-gradient text-white rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
+              className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
             >
               <div className="text-right">
                 <div className="text-sm font-bold">

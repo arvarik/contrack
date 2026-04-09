@@ -11,7 +11,7 @@ import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { useUrgentActionItemCount } from "../../api";
+import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -69,6 +69,9 @@ export const Sidebar = () => {
   const { data: badge } = useUrgentActionItemCount();
   const urgentCount = badge?.count || 0;
 
+  const { data: dedupeCount } = useDedupeCount();
+  const pendingSuggestions = dedupeCount?.count || 0;
+
   return (
     <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
       {/* Contrack wordmark — rotated vertical */}
@@ -90,10 +93,17 @@ export const Sidebar = () => {
       <SidebarTooltip label="Relationship Pulse">
         <Link to="/pulse" className={navLink(isPulse, "relative")}>
           <Activity className="w-6 h-6" />
+          {/* Urgent action items — red dot (top-right) */}
           {urgentCount > 0 && (
             <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+            </span>
+          )}
+          {/* Pending suggestions — blue dot (top-right, offset left of urgent dot) */}
+          {pendingSuggestions > 0 && (
+            <span className={cn("absolute top-1.5 flex h-2 w-2", urgentCount > 0 ? "right-4" : "right-1.5")}>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
           )}
         </Link>

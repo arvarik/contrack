@@ -19,6 +19,7 @@ import {
   MIN_RECENT_LIMIT,
   MAX_RECENT_LIMIT,
 } from '../hooks/useRecentContacts';
+import { useDedupeSettings } from '../hooks/useDedupeSettings';
 
 export const SettingsView = () => {
   const [tempUnit, setTempUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
@@ -27,6 +28,7 @@ export const SettingsView = () => {
 
   usePageTitle('Settings');
   const { limit: recentLimit, setLimit: setRecentLimit } = useRecentContactsLimit();
+  const { autoMergeThreshold, setAutoMergeThreshold } = useDedupeSettings();
 
   useEffect(() => {
     const saved = localStorage.getItem('contrack_temp_unit');
@@ -190,6 +192,51 @@ export const SettingsView = () => {
                       onClick={() => setRecentLimit(recentLimit + 1)}
                       disabled={recentLimit >= MAX_RECENT_LIMIT}
                       aria-label="Increase recent contacts"
+                      className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
+                        "bg-surface-container hover:bg-surface-container-high",
+                        "disabled:opacity-30 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Auto-merge threshold */}
+                <div className="flex items-center justify-between pt-3">
+                  <div>
+                    <h4 className="font-bold">Auto-Merge Threshold</h4>
+                    <p className="text-sm text-on-surface-variant">
+                      Confidence level required to auto-merge duplicates.{' '}
+                      {autoMergeThreshold >= 0.97
+                        ? 'Conservative — only near-certain matches merge automatically.'
+                        : autoMergeThreshold >= 0.93
+                          ? 'Balanced — high-confidence matches are auto-merged.'
+                          : 'Aggressive — more matches are auto-merged, review fewer manually.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-4 shrink-0">
+                    <button
+                      onClick={() => setAutoMergeThreshold(autoMergeThreshold - 0.01)}
+                      disabled={autoMergeThreshold <= 0.85}
+                      aria-label="Decrease auto-merge threshold"
+                      className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
+                        "bg-surface-container hover:bg-surface-container-high",
+                        "disabled:opacity-30 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      −
+                    </button>
+                    <span className="w-10 text-center font-extrabold text-on-surface tabular-nums text-sm">
+                      {(autoMergeThreshold * 100).toFixed(0)}%
+                    </span>
+                    <button
+                      onClick={() => setAutoMergeThreshold(autoMergeThreshold + 0.01)}
+                      disabled={autoMergeThreshold >= 0.99}
+                      aria-label="Increase auto-merge threshold"
                       className={cn(
                         "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
                         "bg-surface-container hover:bg-surface-container-high",

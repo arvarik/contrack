@@ -222,7 +222,7 @@ export interface DedupeSuggestion {
 export interface ClusterPair {
   contactIdA: string;
   contactIdB: string;
-  matchType: 'email' | 'phone' | 'ai';
+  matchType: 'email' | 'phone' | 'name' | 'name_company' | 'nickname' | 'cross_source' | 'fuzzy' | 'ai';
   confidence: number;
   reasoning: string;
   matchedField?: string;
@@ -239,10 +239,12 @@ export interface DedupeCluster {
   size: number;
   hasWeakLink: boolean;
   minConfidence: number;
+  /** True for clusters with >10 contacts — requires explicit confirmation before merge */
+  requiresConfirmation: boolean;
 }
 
-export type DedupeScanMode = 'deterministic' | 'ai' | 'both';
-export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'clustering' | 'complete' | 'error';
+export type DedupeScanMode = 'deterministic' | 'ai' | 'both' | 'quick' | 'deep' | 'full';
+export type DedupeScanPhase = 'starting' | 'normalizing' | 'deterministic' | 'blocking' | 'scoring' | 'ai' | 'clustering' | 'persisting' | 'complete' | 'error';
 
 export interface DedupeScanProgress {
   scanId: string;
@@ -254,9 +256,15 @@ export interface DedupeScanProgress {
   deterministicFound: number;
   aiCandidatesFound: number;
   aiEvaluated: number;
-  suggestions: DedupeSuggestion[];    // Deprecated — always empty
+  blockingCandidates: number;
+  scoringAutoMerge: number;
+  scoringAiQueue: number;
+  scoringDiscarded: number;
+  suggestions: DedupeSuggestion[];    // Deprecated — kept for backward compat only
   clustersFound: number;
   totalPairs: number;
+  autoMerged: number;
+  pendingSuggestions: number;
   clusters: DedupeCluster[];
   error?: string;
   startedAt: string;

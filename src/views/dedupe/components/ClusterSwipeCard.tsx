@@ -27,6 +27,7 @@ export const ClusterSwipeCard = ({
 }: ClusterSwipeCardProps) => {
   const [selectedPrimaryId, setSelectedPrimaryId] = useState(cluster.suggestedPrimaryId);
   const [showEvidence, setShowEvidence] = useState(false);
+  const [largeClusterConfirmed, setLargeClusterConfirmed] = useState(false);
 
   const x = useMotionValue(0);
   const controls = useAnimation();
@@ -54,6 +55,11 @@ export const ClusterSwipeCard = ({
     const velocityThreshold = 500;
 
     if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+      // Block swipe-merge for large clusters that haven't been confirmed
+      if (cluster.requiresConfirmation && !largeClusterConfirmed) {
+        controls.start({ x: 0, rotate: 0, transition: { type: 'spring', stiffness: 500, damping: 30 } });
+        return;
+      }
       controls.start({
         x: 600, opacity: 0, rotate: 15,
         transition: { duration: 0.4, ease: 'easeOut' },
@@ -73,12 +79,13 @@ export const ClusterSwipeCard = ({
 
   const handleButtonMerge = useCallback(async () => {
     if (isMerging) return;
+    if (cluster.requiresConfirmation && !largeClusterConfirmed) return;
     await controls.start({
       x: 600, opacity: 0, rotate: 15,
       transition: { duration: 0.35, ease: 'easeOut' },
     });
     onMerge(selectedPrimaryId, duplicateIds);
-  }, [controls, onMerge, selectedPrimaryId, duplicateIds, isMerging]);
+  }, [controls, onMerge, selectedPrimaryId, duplicateIds, isMerging, cluster.requiresConfirmation, largeClusterConfirmed]);
 
   const handleButtonDismiss = useCallback(async () => {
     await controls.start({
@@ -272,11 +279,37 @@ export const ClusterSwipeCard = ({
               </div>
             </button>
 
+            {/* Large cluster confirmation warning */}
+            {cluster.requiresConfirmation && (
+              <div className="w-full">
+                <div className="flex items-start gap-3 p-3 bg-amber-500/10 rounded-xl mb-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-amber-600">Large cluster warning</p>
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      This cluster contains {cluster.size} contacts. Merging this many records is irreversible. Please double-check before proceeding.
+                    </p>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={largeClusterConfirmed}
+                    onChange={(e) => setLargeClusterConfirmed(e.target.checked)}
+                    className="w-4 h-4 rounded accent-primary"
+                  />
+                  <span className="text-sm font-bold text-on-surface">
+                    I confirm these {cluster.size} contacts should be merged
+                  </span>
+                </label>
+              </div>
+            )}
+
             <button
               onClick={handleButtonMerge}
-              disabled={isMerging}
+              disabled={isMerging || (cluster.requiresConfirmation && !largeClusterConfirmed)}
               aria-label={`Merge ${cluster.size} contacts into one`}
-              className="group flex items-center gap-3 px-6 py-3 signature-gradient text-white rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 w-full sm:w-auto justify-center"
+              className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 w-full sm:w-auto justify-center"
             >
               <div className="text-right">
                 <div className="text-sm font-bold">

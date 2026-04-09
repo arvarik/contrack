@@ -65,6 +65,18 @@ const COOLDOWN_MS = 5 * 60 * 1000;
 /** Completed batches older than 30 minutes are garbage collected */
 const GC_TTL_MS = 30 * 60 * 1000;
 
+/** Delay between sequential jobs to avoid Gemini grounding API rate limits */
+const INTER_JOB_DELAY_MS = 1_500;
+
+/** Max retries for retryable errors (rate_limit, network) per job */
+const MAX_RETRIES = 3;
+
+/** Initial backoff delay for retries (doubles each attempt: 2s → 4s → 8s) */
+const INITIAL_BACKOFF_MS = 2_000;
+
+/** Non-blocking sleep for inter-job delay and exponential backoff */
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
 class AISearchJobQueue extends EventEmitter {
   private batches = new Map<string, AISearchBatch>();
   private processing = false;
@@ -142,56 +154,88 @@ class AISearchJobQueue extends EventEmitter {
     log.info('AISearchQueue', `Processing batch ${batchId} with strategy: ${strategy.name}`);
 
     try {
-      for (const job of batch.jobs) {
+      for (let jobIdx = 0; jobIdx < batch.jobs.length; jobIdx++) {
+        const job = batch.jobs[jobIdx];
         const jobStartMs = Date.now();
 
-        try {
-          // 1. Set status → 'searching'
-          job.status = 'searching';
-          job.startedAt = new Date().toISOString();
-          this.emit(batchId, batch);
+        // Inter-job delay to prevent Gemini grounding API rate limiting.
+        // The first job runs immediately; subsequent jobs wait 1.5s.
+        if (jobIdx > 0) {
+          await sleep(INTER_JOB_DELAY_MS);
+        }
 
-          // 2. Fetch full HydratedContact
-          const contact = contactService.getContactById(job.contactId);
-          if (!contact) {
-            throw new Error(`Contact ${job.contactId} not found`);
+        // Retry loop: retryable errors (rate_limit, network) get up to MAX_RETRIES
+        let lastError: any = null;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            if (attempt > 0) {
+              // Exponential backoff: 2s → 4s → 8s
+              const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
+              log.info('AISearchQueue', `Job ${job.id} (${job.contactName}): retry ${attempt}/${MAX_RETRIES} after ${backoffMs}ms backoff`);
+              job.status = 'searching'; // Reset status for retry
+              this.emit(batchId, batch);
+              await sleep(backoffMs);
+            }
+
+            // 1. Set status → 'searching'
+            job.status = 'searching';
+            job.startedAt = job.startedAt ?? new Date().toISOString();
+            this.emit(batchId, batch);
+
+            // 2. Fetch full HydratedContact
+            const contact = contactService.getContactById(job.contactId);
+            if (!contact) {
+              throw new Error(`Contact ${job.contactId} not found`);
+            }
+
+            // 3. Build prompt
+            const prompt = buildSearchPrompt(contact);
+
+            // 4. Execute strategy (two-pass internally)
+            const result = await strategy.execute(contact, prompt, adapter);
+
+            // 5. Set status → 'merging'
+            job.status = 'merging';
+            this.emit(batchId, batch);
+
+            // 6. Run merge engine
+            const fieldsUpdated = mergeSearchResult(job.contactId, contact, result.data as any);
+
+            // 7. Set status → 'success'
+            job.status = 'success';
+            job.fieldsUpdated = fieldsUpdated;
+            job.completedAt = new Date().toISOString();
+            job.latencyMs = Date.now() - jobStartMs;
+
+            // Accumulate token usage
+            batch.totalTokens += result.tokenCount ?? 0;
+
+            log.info('AISearchQueue', `Job ${job.id} (${job.contactName}): success — ${fieldsUpdated} field(s) merged in ${job.latencyMs}ms`);
+            this.emit(batchId, batch);
+            lastError = null;
+            break; // Success — exit retry loop
+
+          } catch (err: any) {
+            lastError = err;
+            const errorType = classifyError(err);
+            const isRetryable = errorType === 'rate_limit' || errorType === 'network';
+
+            if (!isRetryable || attempt === MAX_RETRIES) {
+              // Non-retryable error or exhausted retries — mark as failed
+              job.status = 'error';
+              job.error = err.message || 'Unknown error';
+              job.errorType = errorType;
+              job.completedAt = new Date().toISOString();
+              job.latencyMs = Date.now() - jobStartMs;
+
+              log.error('AISearchQueue', `Job ${job.id} (${job.contactName}): ${errorType} — ${err.message}${attempt > 0 ? ` (after ${attempt} retries)` : ''}`);
+              this.emit(batchId, batch);
+              break; // Exit retry loop
+            }
+
+            // Retryable error — will loop and try again
+            log.warn('AISearchQueue', `Job ${job.id} (${job.contactName}): ${errorType} — ${err.message} (will retry)`);
           }
-
-          // 3. Build prompt
-          const prompt = buildSearchPrompt(contact);
-
-          // 4. Execute strategy (two-pass internally)
-          const result = await strategy.execute(contact, prompt, adapter);
-
-          // 5. Set status → 'merging'
-          job.status = 'merging';
-          this.emit(batchId, batch);
-
-          // 6. Run merge engine
-          const fieldsUpdated = mergeSearchResult(job.contactId, contact, result.data as any);
-
-          // 7. Set status → 'success'
-          job.status = 'success';
-          job.fieldsUpdated = fieldsUpdated;
-          job.completedAt = new Date().toISOString();
-          job.latencyMs = Date.now() - jobStartMs;
-
-          // Accumulate token usage
-          batch.totalTokens += result.tokenCount ?? 0;
-
-          log.info('AISearchQueue', `Job ${job.id} (${job.contactName}): success — ${fieldsUpdated} field(s) merged in ${job.latencyMs}ms`);
-          this.emit(batchId, batch);
-
-        } catch (err: any) {
-          // Per-job failure — batch continues
-          job.status = 'error';
-          job.error = err.message || 'Unknown error';
-          job.errorType = classifyError(err);
-          job.completedAt = new Date().toISOString();
-          job.latencyMs = Date.now() - jobStartMs;
-
-          log.error('AISearchQueue', `Job ${job.id} (${job.contactName}): ${job.errorType} — ${err.message}`);
-          this.emit(batchId, batch);
         }
       }
     } finally {

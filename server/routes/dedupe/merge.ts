@@ -1,0 +1,133 @@
+import { Router } from "express";
+import { AppError } from "../../utils/AppError.ts";
+import { asyncHandler } from "../../utils/asyncHandler.ts";
+import { log } from "../../utils/logger.ts";
+import { dedupeService } from "../../services/dedupe/index.ts";
+
+export function registerMergeRoutes(router: Router) {
+  router.post("/contacts/merge", asyncHandler(async (req, res) => {
+    const rid = (req as any).requestId;
+    const { primaryId, duplicateId } = req.body;
+
+    if (!primaryId || !duplicateId) {
+      throw new AppError("primaryId and duplicateId are required", 400);
+    }
+    if (primaryId === duplicateId) {
+      throw new AppError("Cannot merge a contact with itself", 400);
+    }
+
+    const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
+    log.info("API", `[${rid}] POST /api/contacts/merge → merged ${duplicateId} into ${primaryId}`);
+    res.json({ success: true, contact: merged });
+  }));
+
+  router.post("/contacts/merge-batch", asyncHandler(async (req, res) => {
+    const rid = (req as any).requestId;
+    const { merges } = req.body;
+
+    if (!Array.isArray(merges) || merges.length === 0) {
+      throw new AppError("merges array is required and must not be empty", 400);
+    }
+
+    if (merges.length > 250) {
+      throw new AppError("Maximum 250 merges per batch", 400);
+    }
+
+    const results: { primaryId: string; duplicateId: string; success: boolean; error?: string }[] = [];
+
+    for (const { primaryId, duplicateId } of merges) {
+      if (!primaryId || !duplicateId || primaryId === duplicateId) {
+        results.push({ primaryId, duplicateId, success: false, error: "Invalid merge pair" });
+        continue;
+      }
+      try {
+        dedupeService.mergeContacts(primaryId, duplicateId, rid);
+        results.push({ primaryId, duplicateId, success: true });
+      } catch (err: any) {
+        results.push({ primaryId, duplicateId, success: false, error: err.message });
+      }
+    }
+
+    const succeeded = results.filter(r => r.success).length;
+    log.info("API", `[${rid}] POST /api/contacts/merge-batch → ${succeeded}/${merges.length} merged`);
+    res.json({ results, succeeded, total: merges.length });
+  }));
+
+  router.post("/contacts/merge-cluster", asyncHandler(async (req, res) => {
+    const rid = (req as any).requestId;
+    const { primaryId, duplicateIds } = req.body;
+
+    if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+      throw new AppError("primaryId and duplicateIds[] are required", 400);
+    }
+    if (duplicateIds.includes(primaryId)) {
+      throw new AppError("primaryId cannot appear in duplicateIds", 400);
+    }
+    if (duplicateIds.length > 10) {
+      throw new AppError("Maximum 10 duplicates per cluster merge", 400);
+    }
+
+    let merged = 0;
+    let failed = 0;
+    let lastResult: any = null;
+
+    for (const dupId of duplicateIds) {
+      try {
+        lastResult = dedupeService.mergeContacts(primaryId, dupId, rid);
+        merged++;
+      } catch (err: any) {
+        log.warn("API", `[${rid}] Cluster merge: skipping ${dupId}: ${err.message}`);
+        failed++;
+      }
+    }
+
+    log.info("API", `[${rid}] POST /api/contacts/merge-cluster → merged ${merged}/${duplicateIds.length} into ${primaryId}`);
+    res.json({ success: merged > 0, merged, failed, contact: lastResult });
+  }));
+
+  router.post("/contacts/merge-clusters", asyncHandler(async (req, res) => {
+    const rid = (req as any).requestId;
+    const { clusters } = req.body;
+
+    if (!Array.isArray(clusters) || clusters.length === 0) {
+      throw new AppError("clusters array is required and must not be empty", 400);
+    }
+
+    const totalOps = clusters.reduce((sum: number, c: any) => sum + (c.duplicateIds?.length ?? 0), 0);
+    if (totalOps > 250) {
+      throw new AppError("Maximum 250 total merge operations per batch", 400);
+    }
+
+    const results: { primaryId: string; merged: number; failed: number }[] = [];
+    let totalMerged = 0;
+    let totalFailed = 0;
+
+    for (const { primaryId, duplicateIds } of clusters) {
+      if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+        results.push({ primaryId: primaryId ?? 'unknown', merged: 0, failed: duplicateIds?.length ?? 0 });
+        totalFailed += duplicateIds?.length ?? 0;
+        continue;
+      }
+
+      let merged = 0;
+      let failed = 0;
+
+      for (const dupId of duplicateIds) {
+        try {
+          dedupeService.mergeContacts(primaryId, dupId, rid);
+          merged++;
+        } catch (err: any) {
+          log.warn("API", `[${rid}] Bulk cluster merge: skipping ${dupId}: ${err.message}`);
+          failed++;
+        }
+      }
+
+      results.push({ primaryId, merged, failed });
+      totalMerged += merged;
+      totalFailed += failed;
+    }
+
+    log.info("API", `[${rid}] POST /api/contacts/merge-clusters → ${totalMerged} merged, ${totalFailed} failed across ${clusters.length} clusters`);
+    res.json({ results, totalMerged, totalFailed });
+  }));
+}

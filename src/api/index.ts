@@ -10,3 +10,4 @@ export * from './search';
 export * from './actionItems';
 export * from './dashboard';
 export * from './aiSearch';
+export * from './suggestions';

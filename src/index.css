@@ -14,7 +14,7 @@
    * Surface Hierarchy: physical stack of fine paper.
    * No‑Line Rule: boundaries through bg‑color shifts, never 1px borders.
    * Glass & Gradient Rule: glassmorphism for floating UI, signature
-   *   gradient for primary CTAs and hero sections.
+   *   gradient reserved only for branding (e.g. sidebar logo text).
    * =================================================================== */
 
   /* ── Primary Palette ────────────────────────────────────────────── */
@@ -78,7 +78,8 @@
     -webkit-backdrop-filter: blur(20px);
   }
 
-  /* ── Signature Gradient (primary CTAs, hero sections) ───────────── */
+  /* ── Signature Gradient (BRANDING ONLY — sidebar logo text) ─────── */
+  /* For buttons use bg-primary text-on-primary instead.               */
   .signature-gradient {
     background: linear-gradient(135deg, var(--color-primary-dim) 0%, var(--color-primary-container) 100%);
   }
@@ -98,9 +99,9 @@
            focus:ring-2 focus:ring-primary/40 transition-all;
   }
 
-  /* ── Button — primary CTA with signature gradient ──────────────── */
+  /* ── Button — primary CTA with solid primary color ─────────────── */
   .btn-primary {
-    background: linear-gradient(135deg, var(--color-primary-dim) 0%, var(--color-primary-container) 100%);
+    background-color: var(--color-primary);
     color: var(--color-on-primary);
     font-weight: 700;
     font-size: 0.875rem;

@@ -3,7 +3,7 @@
 // =============================================================================
 // This file is intentionally minimal. Domain logic has been extracted to:
 //   - server/repositories/contactRepository.ts  (hydration + child persistence)
-//   - server/utils/nlp.ts                       (name similarity, nicknames, etc.)
+//   - server/utils/nlp/index.ts                       (name similarity, nicknames, etc.)
 //
 // URL utilities (detectPlatformFromUrl, extractHandleFromUrl) live in
 // contactRepository.ts — the sole consumer.

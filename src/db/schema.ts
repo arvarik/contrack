@@ -43,6 +43,9 @@ export const contacts = sqliteTable('contacts', {
   isGhost: integer('isGhost').default(0),
   isArchived: integer('isArchived').default(0),
   relationshipScore: integer('relationshipScore').default(50),
+  // Dedupe infrastructure (Phase 1)
+  canonicalId: text('canonicalId'),  // Soft merge: points to primary contact's id. NULL = active contact.
+  phoneticHash: text('phoneticHash'),  // Double Metaphone encoding for phonetic blocking.
 });
 
 // =============================================================================
@@ -246,6 +249,65 @@ export const interactionMentions = sqliteTable('interaction_mentions', {
 }));
 
 // =============================================================================
+// Deduplication Engine Infrastructure
+// =============================================================================
+
+/**
+ * dedupe_suggestions — Persistent match suggestions produced by the dedupe engine.
+ * Each row represents a detected pair of contacts that may be duplicates.
+ * Status tracks the lifecycle: pending → merged / dismissed / auto_merged.
+ */
+export const dedupeSuggestions = sqliteTable('dedupe_suggestions', {
+  id: text('id').primaryKey(),
+  contactIdA: text('contactIdA').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  contactIdB: text('contactIdB').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  matchType: text('matchType').notNull(),           // 'email' | 'phone' | 'name' | 'nickname' | 'embedding' | 'ai'
+  confidence: real('confidence').notNull(),
+  reasoning: text('reasoning').notNull(),
+  matchedField: text('matchedField'),
+  status: text('status').notNull().default('pending'),  // 'pending' | 'merged' | 'dismissed' | 'auto_merged'
+  createdAt: text('createdAt').default(sql`(CURRENT_TIMESTAMP)`),
+  reviewedAt: text('reviewedAt'),
+  reviewedBy: text('reviewedBy'),                    // 'user' | 'auto'
+}, (t) => ({
+  unq: unique().on(t.contactIdA, t.contactIdB),
+}));
+
+/**
+ * dedupe_exclusions — User-dismissed contact pairs that should never be
+ * re-suggested as duplicates. Acts as a permanent negative constraint.
+ */
+export const dedupeExclusions = sqliteTable('dedupe_exclusions', {
+  contactIdA: text('contactIdA').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  contactIdB: text('contactIdB').notNull()
+    .references(() => contacts.id, { onDelete: 'cascade' }),
+  createdAt: text('createdAt').default(sql`(CURRENT_TIMESTAMP)`),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.contactIdA, t.contactIdB] }),
+}));
+
+/**
+ * dedupe_merge_log — Audit trail for all merge operations (both user-initiated
+ * hard merges and auto-triggered soft merges). Enables undo for soft merges
+ * and forensic analysis of merge decisions.
+ */
+export const dedupeMergeLog = sqliteTable('dedupe_merge_log', {
+  id: text('id').primaryKey(),
+  primaryId: text('primaryId').notNull(),
+  duplicateId: text('duplicateId').notNull(),
+  mergedBy: text('mergedBy').notNull(),             // 'user' | 'auto'
+  mergeType: text('mergeType').notNull(),            // 'soft' | 'hard'
+  confidence: real('confidence').notNull(),
+  reasoning: text('reasoning').notNull(),
+  mergedAt: text('mergedAt').default(sql`(CURRENT_TIMESTAMP)`),
+  undoneAt: text('undoneAt'),
+  duplicateSnapshot: text('duplicateSnapshot'),      // JSON blob for hard deletes
+});
+
+// =============================================================================
 // Action Items (Proactive Follow-Up Tasks)
 // =============================================================================
 
@@ -301,7 +363,7 @@ export const listMembers = sqliteTable('list_members', {
 // Drizzle Relations (for relational query builder)
 // =============================================================================
 
-export const contactsRelations = relations(contacts, ({ many }) => ({
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
   emails: many(contactEmails),
   phones: many(contactPhones),
   addresses: many(contactAddresses),
@@ -315,6 +377,22 @@ export const contactsRelations = relations(contacts, ({ many }) => ({
   interactions: many(interactions),
   mentionedIn: many(interactionMentions),
   actionItems: many(actionItems),
+  canonical: one(contacts, { fields: [contacts.canonicalId], references: [contacts.id] }),
+  dedupeSuggestionsA: many(dedupeSuggestions),
+}));
+
+export const dedupeSuggestionsRelations = relations(dedupeSuggestions, ({ one }) => ({
+  contactA: one(contacts, { fields: [dedupeSuggestions.contactIdA], references: [contacts.id] }),
+  contactB: one(contacts, { fields: [dedupeSuggestions.contactIdB], references: [contacts.id] }),
+}));
+
+export const dedupeExclusionsRelations = relations(dedupeExclusions, ({ one }) => ({
+  contactA: one(contacts, { fields: [dedupeExclusions.contactIdA], references: [contacts.id] }),
+  contactB: one(contacts, { fields: [dedupeExclusions.contactIdB], references: [contacts.id] }),
+}));
+
+export const dedupeMergeLogRelations = relations(dedupeMergeLog, ({ one }) => ({
+  primary: one(contacts, { fields: [dedupeMergeLog.primaryId], references: [contacts.id] }),
 }));
 
 export const contactEmailsRelations = relations(contactEmails, ({ one }) => ({

@@ -179,6 +179,9 @@ function JobRow({ job }: { job: AISearchJob }) {
         {job.status === 'success' && job.fieldsUpdated > 0 && (
           <span className="ml-1 opacity-60">+{job.fieldsUpdated}</span>
         )}
+        {job.status === 'success' && job.fieldsUpdated === 0 && (
+          <span className="ml-1 opacity-40">✓ Up to date</span>
+        )}
         {job.status === 'error' && (
           <span className="text-rose-500 font-bold" title={job.error}>Error</span>
         )}

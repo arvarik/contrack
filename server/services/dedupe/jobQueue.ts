@@ -12,60 +12,16 @@
 
 import { EventEmitter } from "events";
 import crypto from "crypto";
-import { log } from "../utils/logger.ts";
+import { log } from "../../utils/logger.ts";
+import type { 
+  DedupeScanMode, 
+  DedupeScanPhase, 
+  DedupeScanProgress, 
+  DedupeCluster, 
+  ClusterPair 
+} from "./types.ts";
 
-// =============================================================================
-// Types
-// =============================================================================
 
-export type DedupeScanMode = 'deterministic' | 'ai' | 'both';
-export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'clustering' | 'complete' | 'error';
-
-export interface DedupeScanProgress {
-  scanId: string;
-  mode: DedupeScanMode;
-  phase: DedupeScanPhase;
-  phaseName: string;
-  contactsScanned: number;
-  totalContacts: number;
-  deterministicFound: number;
-  aiCandidatesFound: number;
-  aiEvaluated: number;
-  suggestions: any[];        // Deprecated — always empty, kept for backward compat
-  clustersFound: number;
-  totalPairs: number;
-  clusters: DedupeCluster[];
-  error?: string;
-  startedAt: string;
-  completedAt?: string;
-}
-
-// =============================================================================
-// Cluster Types
-// =============================================================================
-
-/** A single piece of evidence connecting two contacts within a cluster. */
-export interface ClusterPair {
-  contactIdA: string;
-  contactIdB: string;
-  matchType: 'email' | 'phone' | 'ai';
-  confidence: number;
-  reasoning: string;
-  matchedField?: string;
-}
-
-/** A group of contacts that the engine believes represent the same person. */
-export interface DedupeCluster {
-  id: string;
-  contacts: any[];           // HydratedContact[] serialized to JSON
-  suggestedPrimaryId: string;
-  pairs: ClusterPair[];
-  aggregateConfidence: number;
-  summary: string;
-  size: number;
-  hasWeakLink: boolean;
-  minConfidence: number;
-}
 
 // =============================================================================
 // Job Queue
@@ -101,9 +57,14 @@ class DedupeJobQueue extends EventEmitter {
       deterministicFound: 0,
       aiCandidatesFound: 0,
       aiEvaluated: 0,
-      suggestions: [],
+      blockingCandidates: 0,
+      scoringAutoMerge: 0,
+      scoringAiQueue: 0,
+      scoringDiscarded: 0,
       clustersFound: 0,
       totalPairs: 0,
+      autoMerged: 0,
+      pendingSuggestions: 0,
       clusters: [],
       startedAt: new Date().toISOString(),
     };
@@ -155,7 +116,6 @@ class DedupeJobQueue extends EventEmitter {
     scan.phaseName = 'Scan complete';
     scan.clusters = clusters;
     scan.clustersFound = clusters.length;
-    scan.suggestions = []; // Deprecated — backward compat
     scan.completedAt = new Date().toISOString();
     this.processing = false;
     this.emit(scanId, scan);

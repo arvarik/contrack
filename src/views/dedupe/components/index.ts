@@ -5,6 +5,8 @@ export * from './ClusterList';
 export * from './MergePreview';
 export * from './ContactPicker';
 export * from './SuggestionList';
+export * from './SuggestionReviewQueue';
+export * from './ActivityFeed';
 export * from './shared/ContactCard';
 export * from './shared/ContactMiniCard';
 export * from './shared/EngineInfoCard';

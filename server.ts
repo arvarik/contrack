@@ -15,14 +15,14 @@ import morgan from "morgan";
 import fs from "fs";
 
 import { log } from "./server/utils/logger.ts";
-import { startRetroactiveGeocoding } from "./server/services/geocodingService.ts";
+import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
 
 import { linkPreviewRouter } from "./server/routes/linkPreview.ts";
 import { searchRouter } from "./server/routes/search.ts";
 import { listsRouter } from "./server/routes/lists.ts";
 import { contactsRouter } from "./server/routes/contacts.ts";
 import { interactionsRouter } from "./server/routes/interactions.ts";
-import { dedupeRouter } from "./server/routes/dedupe.ts";
+import { dedupeRouter } from "./server/routes/dedupe/index.ts";
 import { mcpRouter } from "./server/routes/mcp.ts";
 import { actionItemsRouter } from "./server/routes/actionItems.ts";
 import { dashboardRouter } from "./server/routes/dashboard.ts";

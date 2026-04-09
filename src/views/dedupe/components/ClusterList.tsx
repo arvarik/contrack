@@ -148,7 +148,7 @@ export const ClusterList = ({ clusters, onRemoveCluster }: ClusterListProps) => 
           <button
             onClick={handleBulkMerge}
             disabled={mergeClusters.isPending}
-            className="flex items-center gap-2 px-5 py-2 signature-gradient text-white rounded-full text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
           >
             {mergeClusters.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />

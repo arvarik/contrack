@@ -63,30 +63,43 @@ export class TwoPassStrategy implements AISearchStrategy {
     let pass1Error: Error | null = null;
 
     for (const model of GROUNDING_MODELS) {
-      try {
-        log.info('TwoPassStrategy', `Pass 1 (grounding) → ${model}`);
-        const pass1Result = await adapter.generate({
-          prompt,
-          responseFormat: 'text',
-          enableSearchGrounding: true,
-          model,
-        });
+      // Each model gets 2 attempts — grounding occasionally returns empty
+      // text even for valid queries (search tool didn't engage).
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (attempt > 0) {
+            log.info('TwoPassStrategy', `Pass 1 (grounding) → ${model} — retry after empty result`);
+            await new Promise(r => setTimeout(r, 1_500));
+          } else {
+            log.info('TwoPassStrategy', `Pass 1 (grounding) → ${model}`);
+          }
 
-        groundedText = pass1Result.text;
-        modelsUsed.push(pass1Result.model);
-        totalTokens += pass1Result.tokenCount ?? 0;
+          const pass1Result = await adapter.generate({
+            prompt,
+            responseFormat: 'text',
+            enableSearchGrounding: true,
+            model,
+          });
 
-        // Extract citations from raw response metadata if available
-        // (The adapter normalizes the response, but citations come from
-        // the raw Gemini response's groundingMetadata — we extract what
-        // the adapter provides via the text for now)
-        log.info('TwoPassStrategy', `Pass 1 complete via ${pass1Result.model} in ${pass1Result.latencyMs}ms (${pass1Result.tokenCount ?? '?'} tokens)`);
-        pass1Error = null;
-        break; // Success — no need to try next model
-      } catch (err: any) {
-        pass1Error = err;
-        log.warn('TwoPassStrategy', `Pass 1 failed on ${model}: ${err.message}`);
+          groundedText = pass1Result.text;
+          modelsUsed.push(pass1Result.model);
+          totalTokens += pass1Result.tokenCount ?? 0;
+
+          log.info('TwoPassStrategy', `Pass 1 complete via ${pass1Result.model} in ${pass1Result.latencyMs}ms (${pass1Result.tokenCount ?? '?'} tokens)`);
+
+          if (groundedText.trim()) {
+            pass1Error = null;
+            break; // Got non-empty text — success
+          }
+          // Empty text — retry this model
+          log.warn('TwoPassStrategy', `Pass 1 returned empty text from ${model} (attempt ${attempt + 1})`);
+        } catch (err: any) {
+          pass1Error = err;
+          log.warn('TwoPassStrategy', `Pass 1 failed on ${model}: ${err.message}`);
+          break; // Hard error — try next model
+        }
       }
+      if (groundedText.trim()) break; // Success — no need to try next model
     }
 
     if (pass1Error || !groundedText.trim()) {

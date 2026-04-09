@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { isTypingTarget } from "../lib/keyboard";
-import { useDashboard, useDailyInsight, useCompletedActionItems, useCompleteActionItem, useUpdateActionItem } from "../api";
-import { useNavigate } from 'react-router-dom';
+import { useDashboard, useDailyInsight, useCompletedActionItems, useCompleteActionItem, useUpdateActionItem, useDedupeCount } from "../api";
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { DashboardSkeleton } from "./dashboard/DashboardSkeleton";
 import { MetricCard } from "./dashboard/MetricCard";
@@ -11,12 +11,15 @@ import { NetworkHealthPanel } from "./dashboard/NetworkHealthPanel";
 import { NetworkCompositionModal } from "./dashboard/NetworkCompositionModal";
 import { InteractionVelocityModal } from "./dashboard/InteractionVelocityModal";
 import { NetworkGrowthModal } from "./dashboard/NetworkGrowthModal";
-import { Users, HeartPulse, ActivitySquare, UserPlus, PartyPopper, ChevronDown, ChevronUp, CheckCircle2, Keyboard } from "lucide-react";
-import { PAGE_TITLE, EMPTY_STATE, EMPTY_HERO, CARD_COMPACT } from "../lib/styles";
+import { Users, HeartPulse, ActivitySquare, UserPlus, PartyPopper, ChevronDown, ChevronUp, CheckCircle2, Keyboard, Inbox, LayoutDashboard } from "lucide-react";
+import { PAGE_TITLE, EMPTY_STATE, EMPTY_HERO, CARD_COMPACT, TAB_CONTAINER, tabItem } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { format, addDays } from "date-fns";
 import { usePageTitle } from "../hooks/usePageTitle";
+import { SuggestionReviewQueue } from "./dedupe/components";
+
+type PulseTab = 'pulse' | 'suggestions';
 
 const CompletedActionsBar = () => {
   const { data: completedItems = [] } = useCompletedActionItems();
@@ -86,6 +89,12 @@ export const DashboardView = () => {
   const navigate = useNavigate();
 
   usePageTitle('Relationship Pulse');
+
+  const { data: dedupeCount } = useDedupeCount();
+  const pendingSuggestions = dedupeCount?.count ?? 0;
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'suggestions' ? 'suggestions' : 'pulse';
+  const [activeTab, setActiveTab] = useState<PulseTab>(initialTab);
 
   const prevHasItemsRef = useRef<boolean | null>(null);
 
@@ -158,12 +167,34 @@ export const DashboardView = () => {
           <div>
             <h1 className={PAGE_TITLE}>Pulse</h1>
           </div>
+          {/* Tabs */}
+          <div className={cn(TAB_CONTAINER, "w-fit")}>
+            <button
+              onClick={() => setActiveTab('pulse')}
+              className={cn(tabItem(activeTab === 'pulse'), "flex items-center gap-2")}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Network
+            </button>
+            <button
+              onClick={() => setActiveTab('suggestions')}
+              className={cn(tabItem(activeTab === 'suggestions'), "flex items-center gap-2 relative")}
+            >
+              <Inbox className="w-4 h-4" />
+              Suggestions
+              {pendingSuggestions > 0 && (
+                <span className="ml-1.5 flex h-2 w-2">
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+              )}
+            </button>
+          </div>
         </motion.div>
 
         {/* Loading State */}
-        {isDashboardLoading || !dashboard ? (
+        {activeTab === 'pulse' && (isDashboardLoading || !dashboard) ? (
           <DashboardSkeleton />
-        ) : (
+        ) : activeTab === 'pulse' && dashboard ? (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             
             {/* Top KPI Row */}
@@ -228,7 +259,24 @@ export const DashboardView = () => {
             </div>
             
           </div>
-        )}
+        ) : activeTab === 'suggestions' ? (
+          /* Suggestions Tab Content */
+          <div className="max-w-4xl mx-auto space-y-10 w-full">
+            {/* Merge Suggestions — primary section */}
+            <section>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-primary/10 rounded-xl">
+                  <Inbox className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-headline font-bold text-on-surface">Merge Suggestions</h2>
+                  <p className="text-xs text-on-surface-variant">Contacts that may be the same person</p>
+                </div>
+              </div>
+              <SuggestionReviewQueue />
+            </section>
+          </div>
+        ) : null}
       </div>
 
       {dashboard && (

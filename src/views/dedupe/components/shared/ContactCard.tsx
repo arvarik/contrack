@@ -39,8 +39,8 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
 
   return (
     <div className={cn(
-      CARD_COMPACT, "space-y-3 relative transition-all",
-      isPrimary && "ring-2 ring-emerald-500/50 shadow-md"
+      CARD_COMPACT, "space-y-3 relative transition-all overflow-hidden min-w-0",
+      isPrimary && "ring-2 ring-inset ring-emerald-500/50 shadow-md"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between">
