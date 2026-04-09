@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   CheckCircle2, Sparkles, Zap, Shield, ChevronLeft,
   ChevronRight, AlertCircle, Loader2, ScanSearch,
-  Brain, Undo2, Merge, Users, HandMetal,
+  Brain, Undo2, Merge, Users, HandMetal, List, Layers,
+  Database, Cpu,
 } from 'lucide-react';
-import { useDedupeSuggestions, useMergeContacts } from '../../api';
-import type { DedupeSuggestion } from '../../types';
+import { useMergeContacts } from '../../api';
+import type { DedupeScanMode, DedupeSuggestion } from '../../types';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -14,18 +15,22 @@ import {
   EMPTY_HERO, TAB_CONTAINER, tabItem,
 } from '../../lib/styles';
 import { cn } from '../../lib/utils';
-import { SwipeCard, EngineInfoCard, ManualMerge } from './components';
+import { SwipeCard, EngineInfoCard, ManualMerge, SuggestionList } from './components';
+import { useDedupe } from '../../contexts/DedupeContext';
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine
 // =============================================================================
 
 type DedupeTab = 'auto' | 'manual';
+type ResultView = 'swipe' | 'list';
 
 export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   const [activeTab, setActiveTab] = useState<DedupeTab>('auto');
-  const [scanStarted, setScanStarted] = useState(false);
-  const { data: suggestions, isLoading, error, refetch } = useDedupeSuggestions(scanStarted);
+  const [resultView, setResultView] = useState<ResultView>('swipe');
+  const [selectedMode, setSelectedMode] = useState<DedupeScanMode>('both');
+
+  const { scan, suggestions, isScanning, isStarting, startScan, reset, removeSuggestion } = useDedupe();
   const mergeContacts = useMergeContacts();
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -33,9 +38,9 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   const [mergedIds, setMergedIds] = useState<Set<string>>(new Set());
   const [dismissHistory, setDismissHistory] = useState<string[]>([]);
 
-  // Filter out dismissed and already-merged suggestions
+  // Filter out dismissed and already-merged suggestions for swipe view
   const activeSuggestions = useMemo(() => {
-    return (suggestions ?? []).filter(s => !dismissed.has(s.id) && !mergedIds.has(s.id));
+    return suggestions.filter(s => !dismissed.has(s.id) && !mergedIds.has(s.id));
   }, [suggestions, dismissed, mergedIds]);
 
   const currentSuggestion = activeSuggestions[currentIndex] ?? null;
@@ -43,12 +48,28 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   const totalActive = activeSuggestions.length;
   const totalProcessed = dismissed.size + mergedIds.size;
 
+  // Determine the current phase of the UI
+  const scanComplete = scan?.phase === 'complete';
+  const scanError = scan?.phase === 'error';
+  const hasResults = scanComplete && suggestions.length > 0;
+  const preScan = !scan && !isStarting;
+
   // Clamp index when list shrinks
   useEffect(() => {
     if (currentIndex >= totalActive && totalActive > 0) {
       setCurrentIndex(totalActive - 1);
     }
   }, [totalActive, currentIndex]);
+
+  // Reset local state when a new scan starts
+  useEffect(() => {
+    if (isScanning) {
+      setCurrentIndex(0);
+      setDismissed(new Set());
+      setMergedIds(new Set());
+      setDismissHistory([]);
+    }
+  }, [isScanning]);
 
   // Handle dismiss (keep separate)
   const handleDismiss = useCallback(() => {
@@ -77,11 +98,12 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     try {
       await mergeContacts.mutateAsync({ primaryId, duplicateId });
       setMergedIds(prev => new Set(prev).add(currentSuggestion.id));
+      removeSuggestion(currentSuggestion.id);
       toast.success(`Merged successfully`);
     } catch (err: any) {
       toast.error(`Merge failed: ${err.message}`);
     }
-  }, [currentSuggestion, mergeContacts]);
+  }, [currentSuggestion, mergeContacts, removeSuggestion]);
 
   // Navigate between suggestions
   const goNext = useCallback(() => {
@@ -92,9 +114,9 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     if (currentIndex > 0) setCurrentIndex(i => i - 1);
   }, [currentIndex]);
 
-  // Keyboard shortcuts (only active on auto tab)
+  // Keyboard shortcuts (only active on auto tab, swipe view)
   useEffect(() => {
-    if (activeTab !== 'auto') return;
+    if (activeTab !== 'auto' || resultView !== 'swipe' || !hasResults) return;
     const handler = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
@@ -131,24 +153,43 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeTab, handleDismiss, handleMerge, handleUndoDismiss, goNext, goPrev, currentSuggestion]);
+  }, [activeTab, resultView, hasResults, handleDismiss, handleMerge, handleUndoDismiss, goNext, goPrev, currentSuggestion]);
 
-  // Start scan
-  const startScan = () => {
-    setScanStarted(true);
+  // Start scan handler
+  const handleStartScan = () => {
+    startScan(selectedMode);
+  };
+
+  const handleNewScan = () => {
+    reset();
     setCurrentIndex(0);
     setDismissed(new Set());
     setMergedIds(new Set());
     setDismissHistory([]);
+    setResultView('swipe');
   };
 
-  const resetScan = () => {
-    refetch();
-    setCurrentIndex(0);
-    setDismissed(new Set());
-    setMergedIds(new Set());
-    setDismissHistory([]);
-  };
+  // Scan mode options
+  const scanModes: { mode: DedupeScanMode; icon: React.ReactNode; title: string; desc: string }[] = [
+    {
+      mode: 'deterministic',
+      icon: <Shield className="w-5 h-5 text-emerald-500" />,
+      title: 'Deterministic Only',
+      desc: 'Exact email & phone matches. Fast, no AI needed.',
+    },
+    {
+      mode: 'ai',
+      icon: <Sparkles className="w-5 h-5 text-primary" />,
+      title: 'AI Only',
+      desc: 'Fuzzy name analysis via Gemini.',
+    },
+    {
+      mode: 'both',
+      icon: <Zap className="w-5 h-5 text-amber-500" />,
+      title: 'Both (Recommended)',
+      desc: 'Two-pass scan: exact matches first, then AI analysis.',
+    },
+  ];
 
   return (
     <div className={cn("flex flex-col overflow-hidden bg-surface", embedded ? "h-full" : "h-full")}>
@@ -191,8 +232,8 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
             exit={{ opacity: 0, x: -10 }}
             className="flex-1 flex flex-col overflow-hidden min-h-0"
           >
-            {/* Auto scan header bar */}
-            {scanStarted && !isLoading && totalActive > 0 && (
+            {/* Results header (swipe view) */}
+            {hasResults && resultView === 'swipe' && totalActive > 0 && (
               <div className="shrink-0 px-6 pt-4">
                 {/* Stats bar */}
                 <div className="flex items-center justify-between mb-3">
@@ -242,13 +283,6 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={resetScan}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors ml-1"
-                    >
-                      <ScanSearch className="w-3.5 h-3.5" />
-                      Re-Scan
-                    </button>
                   </div>
                 </div>
 
@@ -264,10 +298,41 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
               </div>
             )}
 
+            {/* Results view switcher */}
+            {hasResults && (
+              <div className="shrink-0 px-6 pt-3 flex items-center justify-between">
+                <div className={cn(TAB_CONTAINER, "w-fit")}>
+                  <button
+                    onClick={() => setResultView('swipe')}
+                    className={cn(tabItem(resultView === 'swipe'), "flex items-center gap-1.5 text-xs")}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    Swipe
+                  </button>
+                  <button
+                    onClick={() => setResultView('list')}
+                    className={cn(tabItem(resultView === 'list'), "flex items-center gap-1.5 text-xs")}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    List
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleNewScan}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
+                  >
+                    <ScanSearch className="w-3.5 h-3.5" />
+                    New Scan
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {/* Pre-scan state */}
-              {!scanStarted && (
+            <div className="flex-1 overflow-y-auto p-6 pb-24 lg:pb-6">
+              {/* ═══ Phase 1: Pre-scan — mode selector ═══ */}
+              {preScan && (
                 <div className={EMPTY_HERO}>
                   <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
@@ -277,61 +342,179 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                   >
                     <Brain className="w-16 h-16 text-primary" />
                   </motion.div>
-                  <h2 className="text-xl font-headline font-bold mb-3">Ready to clean your network</h2>
+                  <h2 className="text-xl font-headline font-bold mb-3">Network Dedupe Engine</h2>
                   <p className="text-on-surface-variant text-sm leading-relaxed mb-6">
-                    The Singularity scans your contacts for duplicates using a two-pass engine:
-                    exact email & phone matching, then AI-powered fuzzy name analysis.
+                    Clean your network by merging duplicate contacts
                   </p>
-                  <div className="grid grid-cols-2 gap-3 w-full text-left mb-8">
-                    <EngineInfoCard
-                      icon={<Shield className="w-5 h-5 text-emerald-500" />}
-                      title="Pass 1: Deterministic"
-                      desc="Exact email & phone matches"
-                    />
-                    <EngineInfoCard
-                      icon={<Sparkles className="w-5 h-5 text-primary" />}
-                      title="Pass 2: AI Analysis"
-                      desc="Fuzzy names via Gemini"
-                    />
+
+                  {/* Scan mode selector */}
+                  <div className="w-full space-y-2 mb-8">
+                    {scanModes.map(({ mode, icon, title, desc }) => (
+                      <button
+                        key={mode}
+                        onClick={() => setSelectedMode(mode)}
+                        className={cn(
+                          "w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all",
+                          selectedMode === mode
+                            ? "bg-primary/8 ring-2 ring-primary/40 shadow-sm"
+                            : "bg-surface-container-lowest shadow-sm hover:bg-surface-container-low"
+                        )}
+                      >
+                        <div className={cn(
+                          "shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+                          selectedMode === mode ? "bg-primary/15" : "bg-surface-container-low"
+                        )}>
+                          {icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-on-surface">{title}</div>
+                          <div className="text-xs text-on-surface-variant">{desc}</div>
+                        </div>
+                        <div className={cn(
+                          "w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-all",
+                          selectedMode === mode
+                            ? "bg-primary"
+                            : "bg-surface-container-high"
+                        )}>
+                          {selectedMode === mode && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="w-2 h-2 bg-white rounded-full"
+                            />
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
+
                   <button
-                    onClick={startScan}
-                    className="btn-primary flex items-center gap-2 px-8 py-3"
+                    onClick={handleStartScan}
+                    disabled={isStarting}
+                    className="btn-primary flex items-center gap-2 px-8 py-3 disabled:opacity-50"
                   >
-                    <ScanSearch className="w-5 h-5" />
+                    {isStarting ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <ScanSearch className="w-5 h-5" />
+                    )}
                     Begin Scan
                   </button>
                 </div>
               )}
 
-              {/* Loading */}
-              {scanStarted && isLoading && (
+              {/* ═══ Phase 2: Scanning — progress card ═══ */}
+              {isScanning && scan && (
                 <div className="flex flex-col items-center justify-center h-full">
                   <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full max-w-md"
                   >
-                    <Loader2 className="w-12 h-12 text-primary mb-4" />
+                    <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
+                      {/* Header */}
+                      <div className="px-5 py-4 bg-surface-container-low flex items-center gap-3">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                        >
+                          <Cpu className="w-5 h-5 text-primary" />
+                        </motion.div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold text-on-surface">Dedupe Scan</div>
+                          <div className="text-[11px] text-on-surface-variant capitalize">{scan.mode} mode</div>
+                        </div>
+                        <span className="text-xs text-on-surface-variant tabular-nums">
+                          {scan.contactsScanned}/{scan.totalContacts || '…'}
+                        </span>
+                      </div>
+
+                      {/* Progress bar */}
+                      <div className="h-1.5 bg-surface-container-high">
+                        <motion.div
+                          className="h-full bg-gradient-to-r from-primary-dim to-primary-container"
+                          animate={{
+                            width: scan.totalContacts > 0
+                              ? `${(scan.contactsScanned / scan.totalContacts) * 100}%`
+                              : '0%',
+                          }}
+                          transition={{ duration: 0.4, ease: 'easeOut' }}
+                        />
+                      </div>
+
+                      {/* Phase details */}
+                      <div className="p-5 space-y-4">
+                        {/* Current phase */}
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="w-4 h-4 text-primary animate-spin shrink-0" />
+                          <span className="text-sm text-on-surface font-medium">
+                            {scan.phaseName}
+                          </span>
+                        </div>
+
+                        {/* Phase pipeline */}
+                        <div className="space-y-2">
+                          {(scan.mode === 'deterministic' || scan.mode === 'both') && (
+                            <PhaseRow
+                              icon={<Shield className="w-3.5 h-3.5" />}
+                              label="Deterministic Pass"
+                              status={
+                                scan.phase === 'starting' ? 'pending' :
+                                scan.phase === 'deterministic' ? 'active' : 'done'
+                              }
+                              detail={scan.deterministicFound > 0 ? `${scan.deterministicFound} found` : undefined}
+                            />
+                          )}
+                          {(scan.mode === 'ai' || scan.mode === 'both') && (
+                            <PhaseRow
+                              icon={<Sparkles className="w-3.5 h-3.5" />}
+                              label="AI Analysis"
+                              status={
+                                scan.phase === 'starting' || scan.phase === 'deterministic' ? 'pending' :
+                                scan.phase === 'ai' ? 'active' : 'done'
+                              }
+                              detail={scan.aiCandidatesFound > 0 ? `${scan.aiCandidatesFound} found` : undefined}
+                            />
+                          )}
+                        </div>
+
+                        {/* Findings so far */}
+                        {(scan.deterministicFound > 0 || scan.aiCandidatesFound > 0) && (
+                          <div className="text-xs text-on-surface-variant bg-surface-container-low rounded-xl px-3 py-2 flex items-center gap-2">
+                            <Database className="w-3.5 h-3.5 text-primary" />
+                            <span>
+                              <span className="font-bold text-on-surface">
+                                {scan.deterministicFound + scan.aiCandidatesFound}
+                              </span>
+                              {' '}potential duplicate{scan.deterministicFound + scan.aiCandidatesFound !== 1 ? 's' : ''} found so far
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Help text */}
+                    <p className="text-xs text-on-surface-variant/60 text-center mt-4">
+                      You can navigate away — the scan will continue in the background
+                    </p>
                   </motion.div>
-                  <p className="text-on-surface-variant font-bold">Scanning contacts for duplicates...</p>
-                  <p className="text-xs text-on-surface-variant/70 mt-1">This may take a moment if AI analysis is enabled</p>
                 </div>
               )}
 
-              {/* Error */}
-              {error && (
+              {/* ═══ Phase 3: Scan error ═══ */}
+              {scanError && scan && (
                 <div className="flex flex-col items-center justify-center h-full">
                   <AlertCircle className="w-12 h-12 text-rose-500 mb-4" />
                   <p className="text-rose-500 font-bold">Scan failed</p>
-                  <p className="text-sm text-on-surface-variant mt-1">{(error as Error).message}</p>
-                  <button onClick={resetScan} className="mt-4 btn-secondary">
+                  <p className="text-sm text-on-surface-variant mt-1">{scan.error}</p>
+                  <button onClick={handleNewScan} className="mt-4 btn-secondary">
                     Try Again
                   </button>
                 </div>
               )}
 
-              {/* All clean */}
-              {scanStarted && !isLoading && !error && totalActive === 0 && (
+              {/* ═══ Phase 3: All clean (no results) ═══ */}
+              {scanComplete && suggestions.length === 0 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -346,41 +529,82 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     <CheckCircle2 className="w-16 h-16 text-emerald-500" />
                   </motion.div>
                   <h2 className="text-xl font-headline font-bold mb-2">All clean!</h2>
-                  <p className="text-on-surface-variant text-sm mb-2">
-                    {mergedIds.size > 0
-                      ? `Merged ${mergedIds.size} duplicate${mergedIds.size > 1 ? 's' : ''}. Your network is pristine.`
-                      : 'No duplicate contacts detected. Your network is pristine.'}
+                  <p className="text-on-surface-variant text-sm mb-4">
+                    No duplicate contacts detected. Your network is pristine.
                   </p>
-                  {dismissed.size > 0 && (
-                    <p className="text-xs text-on-surface-variant/60 mb-4">
-                      ({dismissed.size} pair{dismissed.size > 1 ? 's' : ''} kept separate)
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={resetScan}
-                      className="px-6 py-2.5 bg-primary/10 text-primary font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
-                    >
-                      Scan Again
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleNewScan}
+                    className="px-6 py-2.5 bg-primary/10 text-primary font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
+                  >
+                    Scan Again
+                  </button>
                 </motion.div>
               )}
 
-              {/* Active suggestion — SwipeCard */}
-              {scanStarted && !isLoading && currentSuggestion && (
-                <div className="max-w-5xl mx-auto">
-                  <AnimatePresence mode="wait">
-                    <SwipeCard
-                      key={currentSuggestion.id}
-                      suggestion={currentSuggestion}
-                      onMerge={handleMerge}
-                      onDismiss={handleDismiss}
-                      isMerging={mergeContacts.isPending}
-                      nextSuggestion={nextSuggestion}
-                    />
-                  </AnimatePresence>
-                </div>
+              {/* ═══ Phase 3: Results — Swipe view ═══ */}
+              {hasResults && resultView === 'swipe' && (
+                <>
+                  {/* All processed in swipe view */}
+                  {totalActive === 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex flex-col items-center justify-center h-full text-center"
+                    >
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.1 }}
+                        className="p-6 bg-emerald-500/10 rounded-3xl mb-6"
+                      >
+                        <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                      </motion.div>
+                      <h2 className="text-xl font-headline font-bold mb-2">All reviewed!</h2>
+                      <p className="text-on-surface-variant text-sm mb-2">
+                        {mergedIds.size > 0
+                          ? `Merged ${mergedIds.size} duplicate${mergedIds.size > 1 ? 's' : ''}. Your network is pristine.`
+                          : 'All suggestions have been reviewed.'}
+                      </p>
+                      {dismissed.size > 0 && (
+                        <p className="text-xs text-on-surface-variant/60 mb-4">
+                          ({dismissed.size} pair{dismissed.size > 1 ? 's' : ''} kept separate)
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleNewScan}
+                          className="px-6 py-2.5 bg-primary/10 text-primary font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
+                        >
+                          New Scan
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Active swipe card */}
+                  {currentSuggestion && (
+                    <div className="max-w-5xl mx-auto">
+                      <AnimatePresence mode="wait">
+                        <SwipeCard
+                          key={currentSuggestion.id}
+                          suggestion={currentSuggestion}
+                          onMerge={handleMerge}
+                          onDismiss={handleDismiss}
+                          isMerging={mergeContacts.isPending}
+                          nextSuggestion={nextSuggestion}
+                        />
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ═══ Phase 3: Results — List view ═══ */}
+              {hasResults && resultView === 'list' && (
+                <SuggestionList
+                  suggestions={suggestions}
+                  onRemoveSuggestion={removeSuggestion}
+                />
               )}
             </div>
           </motion.div>
@@ -399,3 +623,50 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     </div>
   );
 };
+
+// =============================================================================
+// PhaseRow — Individual phase step in the progress card
+// =============================================================================
+
+function PhaseRow({
+  icon,
+  label,
+  status,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  status: 'pending' | 'active' | 'done';
+  detail?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <div className={cn(
+        "shrink-0 transition-colors",
+        status === 'done' ? 'text-emerald-500' :
+        status === 'active' ? 'text-primary' :
+        'text-on-surface-variant/30'
+      )}>
+        {status === 'done' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+         status === 'active' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+         icon}
+      </div>
+      <span className={cn(
+        "flex-1",
+        status === 'done' ? 'text-on-surface' :
+        status === 'active' ? 'text-on-surface font-medium' :
+        'text-on-surface-variant/40'
+      )}>
+        {label}
+      </span>
+      {detail && (
+        <span className={cn(
+          "text-xs tabular-nums",
+          status === 'done' ? 'text-emerald-500' : 'text-primary'
+        )}>
+          {detail}
+        </span>
+      )}
+    </div>
+  );
+}

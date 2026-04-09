@@ -10,6 +10,7 @@ import { KBD, KBD_SM, SECTION_BG } from '../../lib/styles';
 import type { SemanticMatch } from '../../types';
 import { getMode, EXAMPLE_QUERIES } from './utils';
 import { AIShimmerRow, AIResultCard } from './AiComponents';
+import { fallbackAvatarUrl } from '../../lib/avatar';
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -318,7 +319,7 @@ export const CommandPalette = () => {
                           className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface"
                         >
                           <img
-                            src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
+                            src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
                             alt=""
                             className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
                           />

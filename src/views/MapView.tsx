@@ -11,6 +11,7 @@ import 'leaflet/dist/leaflet.css';
 import { useMapContacts } from '../api';
 import L from 'leaflet';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { fallbackAvatarUrl } from '../lib/avatar';
 
 const MapClickHandler = () => {
   const navigate = useNavigate();
@@ -106,7 +107,7 @@ export const MapView = () => {
               position={[contact.lat, contact.lng]}
               icon={createCustomIcon(
                 contact.avatarUrl ||
-                `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name || '')}&mouth=default,smile,serious`
+                fallbackAvatarUrl(contact.name || '')
               )}
               eventHandlers={{
                 click: () => navigate(`/map/contact/${contact.id}`),

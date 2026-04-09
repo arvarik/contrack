@@ -193,6 +193,25 @@ export interface DedupeSuggestion {
   matchedField?: string;
 }
 
+export type DedupeScanMode = 'deterministic' | 'ai' | 'both';
+export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'complete' | 'error';
+
+export interface DedupeScanProgress {
+  scanId: string;
+  mode: DedupeScanMode;
+  phase: DedupeScanPhase;
+  phaseName: string;
+  contactsScanned: number;
+  totalContacts: number;
+  deterministicFound: number;
+  aiCandidatesFound: number;
+  aiEvaluated: number;
+  suggestions: DedupeSuggestion[];
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
 // =============================================================================
 // Semantic RAG Search Types
 // =============================================================================
@@ -216,3 +235,42 @@ export interface SemanticSearchResult {
   fallback: boolean;
   tokensUsed?: number;
 }
+
+// =============================================================================
+// AI Search Types
+// =============================================================================
+
+/** Status lifecycle: queued → searching → merging → success | error */
+export type AISearchJobStatus = 'queued' | 'searching' | 'merging' | 'success' | 'error';
+
+/** Error classification for contextual UI messages. */
+export type AISearchErrorType =
+  | 'rate_limit'
+  | 'validation'
+  | 'network'
+  | 'auth'
+  | 'ambiguous'
+  | 'unknown';
+
+export interface AISearchJob {
+  id: string;
+  contactId: string;
+  contactName: string;
+  status: AISearchJobStatus;
+  error?: string;
+  errorType?: AISearchErrorType;
+  fieldsUpdated: number;
+  startedAt?: string;
+  completedAt?: string;
+  latencyMs?: number;
+}
+
+export interface AISearchBatch {
+  id: string;
+  strategy: string;
+  jobs: AISearchJob[];
+  createdAt: string;
+  status: 'processing' | 'complete' | 'cancelled';
+  totalTokens: number;
+}
+

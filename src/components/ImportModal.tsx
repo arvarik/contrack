@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react';
 import { Modal } from './ui/Modal';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import Papa from 'papaparse';
 import { parseVCard, parseLinkedInCSV, parseGoogleCSV, parseFacebookJSON, parseGenericCSV } from '../lib/importers';
-import { useBulkCreateContacts } from '../api';
+import { useQueryClient } from '@tanstack/react-query';
 import { Contact } from '../types';
 import { TAB_CONTAINER, tabItem, SECTION_BG } from '../lib/styles';
 import { cn } from '../lib/utils';
+import { motion } from 'motion/react';
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -16,13 +17,77 @@ interface ImportModalProps {
 
 type ImportTab = 'apple' | 'linkedin' | 'facebook' | 'google';
 
+interface ImportProgress {
+  processed: number;
+  total: number;
+  phase: string;
+}
+
+/**
+ * Bulk-create contacts via SSE for progress tracking.
+ * Falls back to standard JSON POST for small batches (< 20 contacts).
+ */
+async function bulkImportWithProgress(
+  contacts: Partial<Contact>[],
+  onProgress: (p: ImportProgress) => void,
+): Promise<number> {
+  const useStream = contacts.length >= 20;
+
+  const res = await fetch('/api/contacts/bulk', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(useStream ? { Accept: 'text/event-stream' } : {}),
+    },
+    body: JSON.stringify(contacts),
+  });
+
+  if (!res.ok) throw new Error('Failed to import contacts');
+
+  if (useStream && res.body) {
+    // Parse SSE stream
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalCount = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              finalCount = data.count;
+            } else {
+              onProgress(data);
+            }
+          } catch {}
+        }
+      }
+    }
+    return finalCount;
+  } else {
+    // Standard JSON response
+    const data = await res.json();
+    return data.count;
+  }
+}
+
 export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) => {
   const [activeTab, setActiveTab] = useState<ImportTab>('apple');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const bulkCreate = useBulkCreateContacts();
+  const queryClient = useQueryClient();
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -31,6 +96,7 @@ export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) =>
     setIsUploading(true);
     setError(null);
     setSuccessCount(null);
+    setProgress(null);
 
     try {
       const text = await file.text();
@@ -60,8 +126,14 @@ export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) =>
         throw new Error('No valid contacts found in the file.');
       }
 
-      const result = await bulkCreate.mutateAsync(newContacts);
-      setSuccessCount(result.count);
+      // Set initial progress
+      setProgress({ processed: 0, total: newContacts.length, phase: 'Parsing file' });
+
+      const count = await bulkImportWithProgress(newContacts, setProgress);
+      setSuccessCount(count);
+      setProgress(null);
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+
       setTimeout(() => {
         onSuccess();
         onClose();
@@ -97,6 +169,10 @@ export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) =>
       default: return '.csv, .vcf, .json';
     }
   };
+
+  const progressPct = progress
+    ? Math.round((progress.processed / Math.max(progress.total, 1)) * 100)
+    : 0;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Import Contacts">
@@ -156,8 +232,11 @@ export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) =>
       </div>
 
       <div 
-        className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center hover:bg-surface-container-high transition-colors cursor-pointer"
-        onClick={() => fileInputRef.current?.click()}
+        className={cn(
+          "bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors",
+          !isUploading && successCount === null && "hover:bg-surface-container-high cursor-pointer"
+        )}
+        onClick={() => !isUploading && successCount === null && fileInputRef.current?.click()}
       >
         <input 
           type="file" 
@@ -167,7 +246,31 @@ export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) =>
           onChange={handleFileChange}
         />
         
-        {isUploading ? (
+        {isUploading && progress ? (
+          /* ── Progress state ─────────────────────────────────────────── */
+          <div className="w-full max-w-xs flex flex-col items-center gap-4">
+            <div className="relative">
+              <Loader2 className="w-10 h-10 text-primary animate-spin" />
+            </div>
+            <div className="w-full space-y-2">
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-on-surface-variant">{progress.phase}</span>
+                <span className="text-primary tabular-nums">{progress.processed}/{progress.total}</span>
+              </div>
+              {/* Progress bar — matches dedupe scan pattern */}
+              <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-primary-dim to-primary-container rounded-full"
+                  animate={{ width: `${progressPct}%` }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                />
+              </div>
+              <p className="text-[11px] text-on-surface-variant">
+                {progressPct}% complete
+              </p>
+            </div>
+          </div>
+        ) : isUploading ? (
           <div className="animate-pulse flex flex-col items-center">
             <UploadCloud className="w-10 h-10 text-primary mb-4" />
             <p className="font-bold text-on-surface">Processing file...</p>

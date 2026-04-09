@@ -1,1 +1,0 @@
-ALTER TABLE `action_items` ADD `interactionId` text REFERENCES interactions(id);

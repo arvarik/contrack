@@ -43,6 +43,26 @@ function extractHandleFromUrl(url: string): string | null {
   } catch { return null; }
 }
 
+/**
+ * Check if a URL matches a known-dead service pattern.
+ * These services are permanently shut down — every link is guaranteed broken.
+ * Using a blocklist (not HTTP checks) keeps import instant and offline-capable.
+ */
+const DEAD_URL_PATTERNS = [
+  'profiles.google.com',      // Google Profiles — shut down 2012
+  'google.com/profiles/',     // Google Profiles alt URL format (from VCF exports)
+  'plus.google.com',          // Google+ — shut down April 2019
+  'plus.url.google.com',      // Google+ URL shortener
+  'orkut.com',                // Orkut — shut down September 2014
+  'orkut.google.com',         // Orkut alt domain
+  'vine.co',                  // Vine — shut down January 2017
+] as const;
+
+function isDeadLinkPattern(url: string): boolean {
+  const lower = url.toLowerCase();
+  return DEAD_URL_PATTERNS.some(pattern => lower.includes(pattern));
+}
+
 // =============================================================================
 // Prepared Statements for Hydration
 // =============================================================================
@@ -53,10 +73,10 @@ function extractHandleFromUrl(url: string): string | null {
 
 const stmts = {
   emails: sqlite.prepare(
-    "SELECT id, email, label, isPrimary, source FROM contact_emails WHERE contactId = ? ORDER BY isPrimary DESC"
+    "SELECT id, email, label, isPrimary, sortOrder, source FROM contact_emails WHERE contactId = ? ORDER BY sortOrder ASC"
   ),
   phones: sqlite.prepare(
-    "SELECT id, phone, label, isPrimary, source FROM contact_phones WHERE contactId = ? ORDER BY isPrimary DESC"
+    "SELECT id, phone, label, isPrimary, sortOrder, source FROM contact_phones WHERE contactId = ? ORDER BY sortOrder ASC"
   ),
   socialLinks: sqlite.prepare(
     "SELECT id, platform, url, handle, source FROM contact_social_links WHERE contactId = ?"
@@ -80,7 +100,7 @@ const stmts = {
     "SELECT id, name, value FROM contact_attributes WHERE contactId = ?"
   ),
   addresses: sqlite.prepare(
-    "SELECT id, address, label, isPrimary, source FROM contact_addresses WHERE contactId = ? ORDER BY isPrimary DESC"
+    "SELECT id, address, label, isPrimary, sortOrder, source FROM contact_addresses WHERE contactId = ? ORDER BY sortOrder ASC"
   ),
   lists: sqlite.prepare(
     `SELECT l.id, l.name, l.icon FROM lists l
@@ -179,6 +199,7 @@ export const contactRepo = {
           email,
           label: (typeof e === 'object' ? e.label : 'personal') || 'personal',
           isPrimary: typeof e === 'object' ? (e.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0),
+          sortOrder: i,
           source: sourceName,
         }).run();
       }
@@ -196,6 +217,7 @@ export const contactRepo = {
           phone,
           label: (typeof p === 'object' ? p.label : 'mobile') || 'mobile',
           isPrimary: typeof p === 'object' ? (p.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0),
+          sortOrder: i,
           source: sourceName,
         }).run();
       }
@@ -206,6 +228,7 @@ export const contactRepo = {
       for (const sl of body.socialLinks) {
         const url = (typeof sl === 'string' ? sl : sl.url)?.trim();
         if (!url) continue;
+        if (isDeadLinkPattern(url)) continue; // Skip known-dead URLs
         const platform = typeof sl === 'object' && sl.platform ? sl.platform : detectPlatformFromUrl(url);
         db.insert(schema.contactSocialLinks).values({
           id: crypto.randomUUID(),
@@ -317,13 +340,14 @@ export const contactRepo = {
         const address = (typeof a === 'string' ? a : a.address)?.trim();
         if (!address) continue;
         sqlite.prepare(`
-          INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, source) 
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(contactId, address) DO NOTHING
+          INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source) 
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(contactId, address) DO UPDATE SET label = excluded.label, isPrimary = excluded.isPrimary, sortOrder = excluded.sortOrder
         `).run(
           crypto.randomUUID(), contactId, address,
           (typeof a === 'object' ? a.label : 'home') || 'home',
           typeof a === 'object' ? (a.isPrimary ? 1 : 0) : (i === 0 ? 1 : 0),
+          i,
           sourceName,
         );
       }

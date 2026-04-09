@@ -60,6 +60,7 @@ export const contactEmails = sqliteTable('contact_emails', {
   email: text('email').notNull(),
   label: text('label').default('personal'),
   isPrimary: integer('isPrimary').default(0),
+  sortOrder: integer('sortOrder').default(0),
   source: text('source'),
   addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
 });
@@ -74,6 +75,7 @@ export const contactPhones = sqliteTable('contact_phones', {
   phone: text('phone').notNull(),
   label: text('label').default('mobile'),
   isPrimary: integer('isPrimary').default(0),
+  sortOrder: integer('sortOrder').default(0),
   source: text('source'),
   addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
 });
@@ -88,6 +90,7 @@ export const contactAddresses = sqliteTable('contact_addresses', {
   address: text('address').notNull(),
   label: text('label').default('home'),
   isPrimary: integer('isPrimary').default(0),
+  sortOrder: integer('sortOrder').default(0),
   source: text('source'),
   addedAt: text('addedAt').default(sql`(CURRENT_TIMESTAMP)`),
 }, (t) => ({

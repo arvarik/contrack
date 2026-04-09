@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useRef, useEffect, useCallback, useDeferredValue } from "react";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   Search, Plus, Users, Upload, ChevronDown, UserPlus, ListPlus,
   CheckSquare, Square, FileText, Sparkles, Trash2, Archive, Copy, Clock,
+  ArrowDownAZ, ArrowUpAZ, CalendarArrowDown, CalendarArrowUp,
 } from "lucide-react";
 import {
   useContacts, useCreateContact, useParseContactText, useLists,
@@ -29,6 +30,7 @@ import { useLongPress } from "../../hooks/useLongPress";
 import { ContactListItem } from "./ContactListItem";
 import { BulkActionToolbar } from "./BulkActionToolbar";
 import { CreateListModal, ListIcon } from "./CreateListModal";
+import { fallbackAvatarUrl } from '../../lib/avatar';
 
 // ---------------------------------------------------------------------------
 // FilterButton — Pill-style filter tab for the contact list header
@@ -110,21 +112,47 @@ export const ContactList = () => {
 
   // URL-persisted state: both filter and search survive back-navigation
   const filterMode = searchParams.get('list') ?? 'all';
-  const searchQuery = searchParams.get('q') ?? '';
+
+  // ── Search input: local state + debounced URL sync ──────────────────────
+  // The input is controlled by fast local state to prevent character-dropping.
+  // URL params are updated after a 200ms debounce for permalink persistence.
+  // The expensive contact filter uses useDeferredValue so it never blocks typing.
+  const [inputValue, setInputValue] = useState(() => searchParams.get('q') ?? '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync URL → local state when user navigates back/forward
+  useEffect(() => {
+    const urlQ = searchParams.get('q') ?? '';
+    // Only sync if the URL was changed externally (back/forward nav),
+    // not by our own debounced setSearchParams.
+    setInputValue(prev => prev === urlQ ? prev : urlQ);
+  }, [searchParams]);
+
+  // Debounce local state → URL params (200ms)
+  const syncQueryToUrl = useCallback((val: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        if (val) next.set('q', val); else next.delete('q');
+        return next;
+      }, { replace: true });
+    }, 200);
+  }, [setSearchParams]);
+
+  const setSearchQuery = useCallback((val: string) => {
+    setInputValue(val);       // Instant — no lag
+    syncQueryToUrl(val);      // Debounced — URL persistence
+  }, [syncQueryToUrl]);
+
+  // The actual query used for filtering — deferred so heavy filter work
+  // doesn't block the input's render cycle on a 400+ contact list.
+  const searchQuery = useDeferredValue(inputValue);
 
   const setFilterMode = (mode: string) => {
-    const q = searchParams.get('q');
     const params: Record<string, string> = {};
     if (mode !== 'all') params.list = mode;
-    if (q) params.q = q;
-    setSearchParams(params, { replace: true });
-  };
-
-  const setSearchQuery = (val: string) => {
-    const list = searchParams.get('list');
-    const params: Record<string, string> = {};
-    if (list) params.list = list;
-    if (val) params.q = val;
+    if (inputValue) params.q = inputValue;
     setSearchParams(params, { replace: true });
   };
 
@@ -158,6 +186,19 @@ export const ContactList = () => {
   const [isCreateListOpen, setIsCreateListOpen] = useState(false);
   const [showMoreLists, setShowMoreLists] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+
+  // ── Sort state ──────────────────────────────────────────────────────────
+  type SortField = 'name' | 'date';
+  type SortDir = 'asc' | 'desc';
+  const [sortBy, setSortBy] = useState<SortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const cycleSortMode = useCallback(() => {
+    if (sortBy === 'name' && sortDir === 'asc') { setSortDir('desc'); }
+    else if (sortBy === 'name' && sortDir === 'desc') { setSortBy('date'); setSortDir('desc'); }
+    else if (sortBy === 'date' && sortDir === 'desc') { setSortDir('asc'); }
+    else { setSortBy('name'); setSortDir('asc'); }
+  }, [sortBy, sortDir]);
 
   // ── Multi-select state ──────────────────────────────────────────────────
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -228,7 +269,7 @@ export const ContactList = () => {
         role: data.role as string,
         company: data.company as string,
         location: data.location as string,
-        avatarUrl: (data.avatarUrl as string) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name as string)}&mouth=default,smile,serious`,
+        avatarUrl: (data.avatarUrl as string) || fallbackAvatarUrl(data.name as string),
         emails: emailValue ? [{ email: emailValue, label: 'work', isPrimary: true }] : [],
         phones: phoneValue ? [{ phone: phoneValue, label: 'mobile', isPrimary: true }] : [],
         ...(parsedData?.socialLinks ? { socialLinks: parsedData.socialLinks } : {}),
@@ -304,8 +345,24 @@ export const ContactList = () => {
         .map(c => c.contact);
     }
 
+    // 3. Apply Sort (only when not actively searching — search has its own score sort)
+    if (!searchQuery.trim()) {
+      result.sort((a, b) => {
+        let cmp = 0;
+        if (sortBy === 'name') {
+          cmp = (a.name || '').localeCompare(b.name || '');
+        } else {
+          // Date added — newer first by default (desc)
+          const da = new Date(a.addedAt || 0).getTime();
+          const db = new Date(b.addedAt || 0).getTime();
+          cmp = da - db;
+        }
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+
     return result;
-  }, [contacts, searchQuery, filterMode]);
+  }, [contacts, searchQuery, filterMode, sortBy, sortDir]);
 
   // Smart overflow: show at most 10 list pills inline, rest in dropdown
   const MAX_INLINE_LISTS = 10;
@@ -507,18 +564,18 @@ export const ContactList = () => {
                         initial={{ opacity: 0, y: 4, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                        className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[190px]"
+                        className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 overflow-hidden min-w-[190px]"
                       >
                         <button
                           onClick={() => { setIsModalOpen(true); setShowAddMenu(false); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <UserPlus className="w-4 h-4 text-primary shrink-0" />
                           Add Contact
                         </button>
                         <button
                           onClick={() => { setIsSmartPasteOpen(true); setShowAddMenu(false); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <FileText className="w-4 h-4 text-primary shrink-0" />
                           Add from Text
@@ -526,7 +583,7 @@ export const ContactList = () => {
                         </button>
                         <button
                           onClick={() => { setIsCreateListOpen(true); setShowAddMenu(false); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <ListPlus className="w-4 h-4 text-primary shrink-0" />
                           Create List
@@ -550,32 +607,48 @@ export const ContactList = () => {
           </div>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-          <input
-            id="search-input"
-            type="text"
-            placeholder={isSelectMode ? `${selectedCount} selected — search to filter` : "Search... (/)"}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") { setSearchQuery(""); e.currentTarget.blur(); }
-            }}
-            className={SEARCH_INPUT}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          )}
+        <div className="flex gap-1.5 items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
+            <input
+              id="search-input"
+              type="text"
+              placeholder={isSelectMode ? `${selectedCount} selected — search to filter` : "Search... (/)"}
+              value={inputValue}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") { setSearchQuery(""); e.currentTarget.blur(); }
+              }}
+              className={SEARCH_INPUT}
+            />
+            {inputValue && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {/* Sort toggle */}
+          <button
+            onClick={cycleSortMode}
+            className={cn(
+              "p-2 rounded-xl transition-all shrink-0 flex items-center justify-center group relative",
+              "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
+            )}
+            title={`Sort: ${sortBy === 'name' ? 'Name' : 'Date Added'} ${sortDir === 'asc' ? '↑' : '↓'}`}
+          >
+            {sortBy === 'name' 
+              ? (sortDir === 'asc' ? <ArrowDownAZ className="w-4 h-4" /> : <ArrowUpAZ className="w-4 h-4" />)
+              : (sortDir === 'desc' ? <CalendarArrowDown className="w-4 h-4" /> : <CalendarArrowUp className="w-4 h-4" />)
+            }
+          </button>
         </div>
 
         {/* Filter tabs — horizontal scroll row, hidden in select mode */}
-        {!isSelectMode && lists.length > 0 && (
+        {!isSelectMode && (
           <div className="relative">
             {/* Gradient fade-out to signal more pills to the right */}
             <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />

@@ -26,6 +26,7 @@ import { dedupeRouter } from "./server/routes/dedupe.ts";
 import { mcpRouter } from "./server/routes/mcp.ts";
 import { actionItemsRouter } from "./server/routes/actionItems.ts";
 import { dashboardRouter } from "./server/routes/dashboard.ts";
+import { aiSearchRouter } from "./server/routes/aiSearch.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
 
 import { AppError } from "./server/utils/AppError.ts";
@@ -68,6 +69,7 @@ async function startServer() {
   app.use("/api", dedupeRouter);
   app.use("/api", actionItemsRouter);
   app.use("/api", dashboardRouter);
+  app.use("/api", aiSearchRouter);
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });

@@ -6,9 +6,11 @@ import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { queueGeocode } from "./geocodingService.ts";
+import { processBase64Avatar, isBase64DataUri } from "../utils/avatarProcessor.ts";
 import { invalidateSearchCache } from "../utils/searchCache.ts";
 import { invalidateDailyInsight } from "./dashboardService.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
+import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -53,8 +55,15 @@ function invalidateAllCaches() {
 export const contactService = {
   createContact(body: any, source: string = 'manual') {
     const id = crypto.randomUUID();
+    const values = buildInsertValues(body, id);
+
+    // Smart avatar: if no avatar was provided, generate a gender-aware one
+    if (!values.avatarUrl && body.name) {
+      values.avatarUrl = buildSmartAvatarUrl(body.name);
+    }
+
     const txn = sqlite.transaction(() => {
-      db.insert(schema.contacts).values(buildInsertValues(body, id)).run();
+      db.insert(schema.contacts).values(values).run();
       contactRepo.insertChildRecords(id, body, source);
     });
     txn();
@@ -71,16 +80,35 @@ export const contactService = {
     return contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
   },
 
-  bulkCreateContacts(validContacts: any[]) {
+  async bulkCreateContacts(
+    validContacts: any[],
+    onProgress?: (processed: number, total: number, phase: string) => void,
+  ) {
+    const total = validContacts.length;
+
+    // Phase 1: Process base64 data-URI avatars (from VCF imports) into optimized files
+    // This runs before the SQLite transaction since sharp is async
+    for (let i = 0; i < validContacts.length; i++) {
+      const c = validContacts[i];
+      if (isBase64DataUri(c.avatarUrl)) {
+        const fileUrl = await processBase64Avatar(c.avatarUrl);
+        c.avatarUrl = fileUrl; // null if processing failed; smart avatar fallback below
+      }
+      onProgress?.(i + 1, total, 'Processing images');
+    }
+
+    // Phase 2: Insert all contacts into SQLite in a single transaction
     let count = 0;
     const txn = sqlite.transaction(() => {
       for (const c of validContacts) {
         const id = crypto.randomUUID();
         const values = buildInsertValues(c, id);
-        // Bulk imports always get a dicebear avatar if one isn't supplied
-        if (!values.avatarUrl) {
-          values.avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}&mouth=default,smile,serious`;
+
+        // Smart avatar: gender-aware DiceBear URL if no avatar was provided
+        if (!values.avatarUrl && c.name) {
+          values.avatarUrl = buildSmartAvatarUrl(c.name);
         }
+
         db.insert(schema.contacts).values(values).run();
         contactRepo.insertChildRecords(id, c, c._sourcePlatform || 'manual');
         if (c.location) queueGeocode(id, c.location);
@@ -88,6 +116,7 @@ export const contactService = {
       }
     });
     txn();
+    onProgress?.(total, total, 'Complete');
     invalidateAllCaches();
     return count;
   },
@@ -219,11 +248,12 @@ export const contactService = {
              c.themeColor, c.isGhost, c.isArchived, c.addedAt, c.updatedAt,
              c.role, c.headline, c.location, c.industry, c.pronouns,
              c.cadenceDays, c.lastContactedAt, c.nextFollowUpAt,
-             c.lat, c.lng, c.relationshipScore,
+             c.lat, c.lng, c.relationshipScore, c.aiHydratedAt,
              GROUP_CONCAT(DISTINCT t.tag) as _tags,
              (SELECT COUNT(*) FROM interactions WHERE contactId = c.id) as interactionCount,
              (SELECT GROUP_CONCAT(e.email) FROM contact_emails e WHERE e.contactId = c.id) as _allEmails,
-             (SELECT GROUP_CONCAT(p.phone) FROM contact_phones p WHERE p.contactId = c.id) as _allPhones
+             (SELECT GROUP_CONCAT(p.phone) FROM contact_phones p WHERE p.contactId = c.id) as _allPhones,
+             (SELECT COUNT(*) FROM contact_social_links sl WHERE sl.contactId = c.id) as socialLinkCount
       FROM contacts c
       LEFT JOIN contact_tags t ON c.id = t.contactId
       WHERE (c.isArchived = 0 OR c.isArchived IS NULL)

@@ -6,6 +6,7 @@ import { useContacts } from '../../../api';
 import { ContactMiniCard } from './shared/ContactMiniCard';
 import { SEARCH_INPUT } from '../../../lib/styles';
 import { cn } from '../../../lib/utils';
+import { fallbackAvatarUrl } from '../../../lib/avatar';
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
@@ -71,7 +72,7 @@ export const ContactPicker = ({ selected, onSelectionChange, maxSelection = 3 }:
                 className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full"
               >
                 <img
-                  src={c.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}&mouth=default,smile,serious`}
+                  src={c.avatarUrl || fallbackAvatarUrl(c.name)}
                   alt={c.name}
                   className="w-5 h-5 rounded-full object-cover"
                 />

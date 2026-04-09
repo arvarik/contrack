@@ -3,6 +3,7 @@ import { Command } from 'cmdk';
 import { motion } from 'motion/react';
 import { Briefcase, Building, Sparkles } from 'lucide-react';
 import type { SemanticMatch } from '../../types';
+import { fallbackAvatarUrl } from '../../lib/avatar';
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
@@ -41,7 +42,7 @@ export const AIResultCard = ({ match, index, onSelect, isFallback }: AIResultCar
       className="contents"
     >
       <img
-        src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}&mouth=default,smile,serious`}
+        src={match.avatarUrl || fallbackAvatarUrl(match.name)}
         alt=""
         className="w-8 h-8 rounded-full bg-surface-container-highest object-cover shrink-0 mt-0.5"
       />

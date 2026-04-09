@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { Ghost, HeartPulse, Sparkles, Clock } from "lucide-react";
 import { motion } from "motion/react";
 import { FloatingContactCard } from "../../components/FloatingContactCard";
+import { fallbackAvatarUrl } from '../../lib/avatar';
 
 interface NetworkHealthProps {
   payload: DashboardPayload;
@@ -13,7 +14,7 @@ interface NetworkHealthProps {
 }
 
 const Avatar = ({ url, name, color, size = "w-10 h-10" }: { url?: string | null, name: string, color: string, size?: string }) => {
-  const src = url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}&mouth=default,smile,serious`;
+  const src = url || fallbackAvatarUrl(name);
   return <img src={src} alt={name} className={cn("rounded-full object-cover shadow-sm bg-surface-container-highest", size)} />;
 };
 
@@ -107,7 +108,7 @@ export const NetworkHealthPanel = ({ payload, delay = 0 }: NetworkHealthProps) =
                   className="relative z-10 hover:z-20 transform hover:scale-110 transition-transform focus:outline-none"
                 >
                     <img
-                      src={c.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.name)}&mouth=default,smile,serious`}
+                      src={c.avatarUrl || fallbackAvatarUrl(c.name)}
                       alt={c.name}
                       className="w-10 h-10 rounded-full border-2 border-surface-container-lowest object-cover shadow-sm bg-surface-container-highest"
                     />

@@ -110,7 +110,11 @@ export class GeminiAdapter implements AIProvider {
     const startMs = Date.now();
     let lastError: Error | null = null;
 
-    for (const model of FALLBACK_MODELS) {
+    // When a specific model is requested (e.g., by TwoPassStrategy),
+    // use only that model instead of the full fallback chain.
+    const models = options.model ? [options.model] : FALLBACK_MODELS;
+
+    for (const model of models) {
       try {
         const config: any = {};
 

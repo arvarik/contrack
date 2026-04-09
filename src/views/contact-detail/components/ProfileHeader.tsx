@@ -4,11 +4,11 @@
  *
  * Extracted from ContactProfile to keep each section under ~250 lines.
  */
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Briefcase, ArrowLeft, Sparkles, Archive, Tag, X, ArrowUpRight,
-  CalendarClock
+  CalendarClock, MoreVertical, Copy, Trash2
 } from "lucide-react";
 import { formatDistanceToNow, isPast, isToday } from "date-fns";
 import { motion, AnimatePresence } from "motion/react";
@@ -22,10 +22,12 @@ import {
 import { LocalTimeWeather } from "../../../components/LocalTimeWeather";
 
 import { EditableField } from "./EditableField";
-import { PlatformIcon } from "./PlatformIcon";
+import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
 import { VibePickerPopover, VIBE_COLORS } from "./VibePickerPopover";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactListsSection } from "./ContactListsSection";
+import { CatchMeUpFab } from "./CatchMeUpFab";
+import { fallbackAvatarUrl } from '../../../lib/avatar';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -46,6 +48,96 @@ export interface ProfileHeaderProps {
   updateContact: { mutate: (args: { id: string; data: any }) => void };
   promoteGhost: { mutate: (id: string, opts?: any) => void; isPending: boolean };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SocialLinkPill — Individual link pill with hover action menu
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SocialLinkPill: React.FC<{
+  sl: { id: string; platform: string; url: string; handle?: string };
+  displayName: string;
+  platformColor: string;
+  isKnown: boolean;
+  onDelete: () => void;
+}> = ({ sl, displayName, platformColor, isKnown, onDelete }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
+  return (
+    <div className="relative group/pill flex" ref={menuRef}>
+      <a
+        href={sl.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high pl-3 pr-1.5 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
+      >
+        <PlatformIcon
+          platform={sl.platform}
+          url={sl.url}
+          className={cn("w-4 h-4", platformColor)}
+          useFavicon={!isKnown}
+        />
+        <span className="text-on-surface-variant group-hover/pill:text-on-surface transition-colors">
+          {displayName}
+        </span>
+        {/* Spacer for the action button that appears on hover */}
+        <span className="w-0 group-hover/pill:w-5 transition-all duration-200 overflow-hidden shrink-0" />
+      </a>
+
+      {/* Action trigger — fades in on hover */}
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(v => !v); }}
+        className={cn(
+          "absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-lg transition-all duration-200",
+          "text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-container-highest",
+          menuOpen ? "opacity-100" : "opacity-0 group-hover/pill:opacity-100",
+        )}
+        aria-label="Link actions"
+      >
+        <MoreVertical className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Dropdown menu */}
+      {menuOpen && (
+        <div className="absolute right-0 top-full mt-1 z-50 glass-panel rounded-xl shadow-xl overflow-hidden min-w-[140px] animate-in fade-in slide-in-from-top-1 duration-150">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              navigator.clipboard.writeText(sl.url);
+              toast.success('Link copied');
+              setMenuOpen(false);
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+          >
+            <Copy className="w-3.5 h-3.5 text-primary" />
+            Copy link
+          </button>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onDelete();
+              setMenuOpen(false);
+            }}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-rose-500 hover:bg-rose-500/8 transition-colors text-left"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete link
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
@@ -105,7 +197,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               <img
                 alt={contact.name}
                 className="w-full h-full object-cover"
-                src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
+                src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
               />
             </div>
             <button
@@ -216,25 +308,71 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               <span className="opacity-50">at</span>
               <EditableField value={contact.company} onSave={(val) => onUpdate('company', val)} placeholder="Company" />
               <ContactListsSection contactId={contact.id} contactLists={contact.lists || []} />
+              <CatchMeUpFab contact={contact} generateBriefing={generateBriefing} />
             </div>
 
             {/* Social Links */}
-            {((contact.lat && contact.lng) || (contact.socialLinks && contact.socialLinks.length > 0)) && (
+            {((contact.lat && contact.lng) || (contact.socialLinks && contact.socialLinks.length > 0) || contact.website) && (
               <div className="flex flex-wrap items-center gap-2 mt-4 mb-2">
                 {contact.lat && contact.lng && (
                   <LocalTimeWeather lat={contact.lat} lng={contact.lng} />
                 )}
                 {contact.socialLinks?.map((sl) => {
+                  const platformKey = sl.platform?.toLowerCase() || 'other';
+                  const platformColor = PLATFORM_COLORS[platformKey] || 'text-on-surface-variant';
+                  const isKnown = hasKnownIcon(platformKey);
+
+                  // Build display name: prefer handle, then platform label, then hostname
                   let displayName = sl.handle || sl.platform;
-                  try { displayName = sl.handle || new URL(sl.url).hostname.replace('www.', ''); } catch {}
+                  if (!sl.handle && sl.url) {
+                    try { displayName = new URL(sl.url).hostname.replace('www.', ''); } catch {}
+                  }
+                  // Capitalize platform name for known ones
+                  if (!sl.handle && isKnown) {
+                    displayName = sl.platform.charAt(0).toUpperCase() + sl.platform.slice(1);
+                  }
+
                   return (
-                    <a key={sl.id} href={sl.url} target="_blank" rel="noopener noreferrer" 
-                       className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-colors">
-                      <PlatformIcon platform={sl.platform} className="w-4 h-4" /> 
-                      <span>{displayName}</span>
-                    </a>
+                    <SocialLinkPill
+                      key={sl.id}
+                      sl={sl}
+                      displayName={displayName}
+                      platformColor={platformColor}
+                      isKnown={isKnown}
+                      onDelete={() => {
+                        const before = contact.socialLinks || [];
+                        const after = before.filter(s => s.id !== sl.id);
+                        updateContact.mutate({ id: contact.id, data: { socialLinks: after.map(s => ({ platform: s.platform, url: s.url, handle: s.handle })) } });
+                        toast('Link removed', {
+                          duration: 7000,
+                          action: {
+                            label: 'Undo',
+                            onClick: () => updateContact.mutate({ id: contact.id, data: { socialLinks: before.map(s => ({ platform: s.platform, url: s.url, handle: s.handle })) } }),
+                          },
+                        });
+                      }}
+                    />
                   );
                 })}
+                {/* Show website if not already in social links */}
+                {contact.website && !contact.socialLinks?.some(sl => sl.url === contact.website) && (
+                  <a
+                    href={contact.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
+                  >
+                    <PlatformIcon
+                      platform="website"
+                      url={contact.website}
+                      className="w-4 h-4 text-on-surface-variant"
+                      useFavicon
+                    />
+                    <span className="text-on-surface-variant group-hover:text-on-surface transition-colors">
+                      {(() => { try { return new URL(contact.website).hostname.replace('www.', ''); } catch { return 'Website'; } })()}
+                    </span>
+                  </a>
+                )}
               </div>
             )}
 

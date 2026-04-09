@@ -44,6 +44,16 @@ export interface AIGenerateOptions {
    * (grounded text retrieval → separate structured extraction call).
    */
   enableSearchGrounding?: boolean;
+
+  /**
+   * Override the default model selection for this specific call.
+   * Used by strategies that need to target specific models for each pass
+   * (e.g., TwoPassStrategy uses grounding-capable models for Pass 1 and
+   * cheaper models for Pass 2). When set, the adapter skips its fallback
+   * chain and uses this model directly (with retryable-error fallback to
+   * the next model the strategy provides on retry).
+   */
+  model?: string;
 }
 
 /**

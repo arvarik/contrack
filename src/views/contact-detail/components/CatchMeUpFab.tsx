@@ -38,10 +38,10 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
           }
         }}
         disabled={generateBriefing.isPending}
-        className="fixed bottom-6 right-6 z-50 rounded-full bg-primary text-on-primary p-3.5 shadow-2xl hover:opacity-95 hover:scale-[1.03] active:scale-95 transition-all flex items-center justify-center group"
+        className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center shrink-0"
         title="Catch Me Up"
       >
-        <Sparkles className="w-5 h-5" />
+        <Sparkles className="w-4 h-4" />
       </button>
 
       <AnimatePresence>

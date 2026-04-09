@@ -26,7 +26,19 @@ const SEEDS = [
 ];
 
 function dicebearUrl(style: DicebearStyle, seed: string) {
-  return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(seed)}&mouth=default,smile,serious&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+  const base = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
+  const bg = `&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+
+  // Only pass style-specific params — unsupported params cause broken SVGs
+  switch (style) {
+    case 'avataaars':
+      return `${base}&mouth=default,smile,serious&skinColor=f8d25c${bg}`;
+    case 'lorelei':
+    case 'bottts':
+      return `${base}${bg}`;
+    default:
+      return `${base}${bg}`;
+  }
 }
 
 // ---------------------------------------------------------------------------

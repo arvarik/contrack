@@ -1,9 +1,23 @@
+CREATE TABLE `action_items` (
+	`id` text PRIMARY KEY NOT NULL,
+	`contactId` text NOT NULL,
+	`interactionId` text,
+	`title` text NOT NULL,
+	`dueAt` text NOT NULL,
+	`completedAt` text,
+	`createdAt` text DEFAULT (CURRENT_TIMESTAMP),
+	`updatedAt` text DEFAULT (CURRENT_TIMESTAMP),
+	FOREIGN KEY (`contactId`) REFERENCES `contacts`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`interactionId`) REFERENCES `interactions`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
 CREATE TABLE `contact_addresses` (
 	`id` text PRIMARY KEY NOT NULL,
 	`contactId` text NOT NULL,
 	`address` text NOT NULL,
 	`label` text DEFAULT 'home',
 	`isPrimary` integer DEFAULT 0,
+	`sortOrder` integer DEFAULT 0,
 	`source` text,
 	`addedAt` text DEFAULT (CURRENT_TIMESTAMP),
 	FOREIGN KEY (`contactId`) REFERENCES `contacts`(`id`) ON UPDATE no action ON DELETE cascade
@@ -40,6 +54,7 @@ CREATE TABLE `contact_emails` (
 	`email` text NOT NULL,
 	`label` text DEFAULT 'personal',
 	`isPrimary` integer DEFAULT 0,
+	`sortOrder` integer DEFAULT 0,
 	`source` text,
 	`addedAt` text DEFAULT (CURRENT_TIMESTAMP),
 	FOREIGN KEY (`contactId`) REFERENCES `contacts`(`id`) ON UPDATE no action ON DELETE cascade
@@ -76,6 +91,7 @@ CREATE TABLE `contact_phones` (
 	`phone` text NOT NULL,
 	`label` text DEFAULT 'mobile',
 	`isPrimary` integer DEFAULT 0,
+	`sortOrder` integer DEFAULT 0,
 	`source` text,
 	`addedAt` text DEFAULT (CURRENT_TIMESTAMP),
 	FOREIGN KEY (`contactId`) REFERENCES `contacts`(`id`) ON UPDATE no action ON DELETE cascade
@@ -141,7 +157,8 @@ CREATE TABLE `contacts` (
 	`aiHydratedAt` text,
 	`aiBriefingAt` text,
 	`isGhost` integer DEFAULT 0,
-	`isArchived` integer DEFAULT 0
+	`isArchived` integer DEFAULT 0,
+	`relationshipScore` integer DEFAULT 50
 );
 --> statement-breakpoint
 CREATE TABLE `interaction_mentions` (
@@ -165,6 +182,7 @@ CREATE TABLE `interactions` (
 	`fileType` text,
 	`source` text,
 	`mentions` text,
+	`updatedAt` text DEFAULT (CURRENT_TIMESTAMP),
 	FOREIGN KEY (`contactId`) REFERENCES `contacts`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint

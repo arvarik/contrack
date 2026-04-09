@@ -81,9 +81,30 @@ router.post("/contacts", validateBody(contactCreateSchema), asyncHandler(async (
 
 router.post("/contacts/bulk", validateBody(contactBulkCreateSchema), asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
-  const count = contactService.bulkCreateContacts(req.body);
-  log.info("API", `[${rid}] POST /api/contacts/bulk → ${count} imported`);
-  res.status(201).json({ success: true, count });
+  const wantsStream = req.headers.accept?.includes("text/event-stream");
+
+  if (wantsStream) {
+    // SSE mode — stream progress events during large imports
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const count = await contactService.bulkCreateContacts(req.body, (processed, total, phase) => {
+      res.write(`data: ${JSON.stringify({ processed, total, phase })}\n\n`);
+    });
+
+    // Final event with the result
+    res.write(`data: ${JSON.stringify({ done: true, count })}\n\n`);
+    log.info("API", `[${rid}] POST /api/contacts/bulk (SSE) → ${count} imported`);
+    res.end();
+  } else {
+    // Standard JSON mode — for small imports or non-streaming clients
+    const count = await contactService.bulkCreateContacts(req.body);
+    log.info("API", `[${rid}] POST /api/contacts/bulk → ${count} imported`);
+    res.status(201).json({ success: true, count });
+  }
 }));
 
 router.post("/parse-contact", validateBody(z.object({ text: z.string().min(1, "text is required") })), asyncHandler(async (req, res) => {

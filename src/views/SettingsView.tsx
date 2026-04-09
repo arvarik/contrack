@@ -1,15 +1,16 @@
 /**
  * SettingsView — Application settings hub.
  *
- * Contains nested routes for the Dedupe Engine, List Manager, and Archived
- * Contacts views, plus inline preference cards (e.g., temperature unit toggle).
+ * Contains nested routes for the Dedupe Engine, AI Search, List Manager,
+ * and Archived Contacts views, plus inline preference cards.
  */
 import React, { useState, useEffect } from 'react';
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive, List } from 'lucide-react';
+import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive, List, Sparkles } from 'lucide-react';
 import { DedupeView } from './dedupe';
 import { ArchivedContactsView } from './ArchivedContactsView';
 import { ListManagerView } from './lists';
+import { AISearchView } from './ai-search';
 import { ICON_BTN, PAGE_TITLE, CARD, SECTION_HEADING } from '../lib/styles';
 import { cn } from '../lib/utils';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -43,9 +44,11 @@ export const SettingsView = () => {
   const isDedupe = location.pathname.endsWith('/dedupe');
   const isArchived = location.pathname.endsWith('/archived');
   const isLists = location.pathname.endsWith('/lists');
+  const isAISearch = location.pathname.includes('/ai-search');
 
   const getTitle = () => {
     if (isDedupe) return 'Dedupe Engine';
+    if (isAISearch) return 'AI Search';
     if (isArchived) return 'Archived Contacts';
     if (isLists) return 'List Management';
     return 'Settings';
@@ -53,12 +56,13 @@ export const SettingsView = () => {
 
   const getIcon = () => {
     if (isDedupe) return <Zap className="w-6 h-6 text-primary" />;
+    if (isAISearch) return <Sparkles className="w-6 h-6 text-primary" />;
     if (isArchived) return <Archive className="w-6 h-6 text-amber-500" />;
     if (isLists) return <List className="w-6 h-6 text-primary" />;
     return <SettingsIcon className="w-6 h-6 text-primary" />;
   };
 
-  const isSubpage = isDedupe || isArchived || isLists;
+  const isSubpage = isDedupe || isArchived || isLists || isAISearch;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
@@ -96,6 +100,17 @@ export const SettingsView = () => {
                 </h3>
                 <p className="text-sm text-on-surface-variant">
                   Find and merge duplicate contacts using AI-powered detection, or manually select contacts to merge.
+                </p>
+              </Link>
+
+              {/* AI Search */}
+              <Link to="/settings/ai-search" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
+                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors")}>
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  AI Search
+                </h3>
+                <p className="text-sm text-on-surface-variant">
+                  Automatically research and enrich contact profiles using AI-powered internet search.
                 </p>
               </Link>
 
@@ -216,6 +231,12 @@ export const SettingsView = () => {
           <Route path="/archived" element={
             <div className="overflow-y-auto h-full">
               <ArchivedContactsView />
+            </div>
+          } />
+
+          <Route path="/ai-search" element={
+            <div className="overflow-y-auto h-full">
+              <AISearchView />
             </div>
           } />
         </Routes>

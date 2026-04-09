@@ -131,9 +131,9 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
         </motion.div>
 
         {/* Card content */}
-        <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-6 space-y-5 relative z-0">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-3 relative z-0">
           {/* Reasoning */}
-          <div className="bg-surface-container-low rounded-xl p-4 flex items-start gap-3">
+          <div className="bg-surface-container-low rounded-xl p-3 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-on-surface leading-relaxed">{suggestion.reasoning}</p>
@@ -142,7 +142,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
           </div>
 
           {/* Side-by-side contact cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 relative">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 relative">
             <ContactCard
               contact={primary}
               label="Primary (Keeper)"
@@ -180,7 +180,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
           <div className="flex items-center justify-center gap-4">
             <button
               onClick={handleButtonDismiss}
-              className="group flex items-center gap-3 px-8 py-3.5 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-rose-600"
+              className="group flex items-center gap-3 px-6 py-3 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-rose-600"
             >
               <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <div className="text-left">
@@ -192,7 +192,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
             <button
               onClick={handleButtonMerge}
               disabled={isMerging}
-              className="group flex items-center gap-3 px-8 py-3.5 signature-gradient text-white rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
+              className="group flex items-center gap-3 px-6 py-3 signature-gradient text-white rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
             >
               <div className="text-right">
                 <div className="text-sm font-bold">

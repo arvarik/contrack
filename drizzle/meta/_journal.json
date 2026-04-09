@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1775233790498,
-      "tag": "0000_safe_machine_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1775257477058,
-      "tag": "0001_nifty_switch",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1775573954686,
-      "tag": "0002_eager_giant_girl",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1775580864833,
-      "tag": "0003_kind_vance_astro",
+      "when": 1775690197662,
+      "tag": "0000_soft_silver_sable",
       "breakpoints": true
     }
   ]

@@ -13,6 +13,7 @@ import {
 import { cn } from '../lib/utils';
 import { FloatingContactCard } from '../components/FloatingContactCard';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { fallbackAvatarUrl } from '../lib/avatar';
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -68,7 +69,7 @@ const ResultCard = ({
       )}
     >
       <img
-        src={match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.name)}&mouth=default,smile,serious`}
+        src={match.avatarUrl || fallbackAvatarUrl(match.name)}
         alt=""
         loading="lazy"
         className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"

@@ -1,1 +1,0 @@
-ALTER TABLE `interactions` ADD `updatedAt` text DEFAULT (CURRENT_TIMESTAMP);

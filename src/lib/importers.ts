@@ -15,8 +15,71 @@ import Papa from 'papaparse';
 import { Contact } from '../types';
 
 // ===========================================================================
+// Social Profile Helpers
+// ===========================================================================
+
+/**
+ * Known social platform URL templates. Used to:
+ * 1. Resolve incomplete URLs (e.g., GitHub "x-apple:arvarik" → "https://github.com/arvarik")
+ * 2. Extract handles from full URLs for display
+ */
+const SOCIAL_PLATFORM_URLS: Record<string, string> = {
+  linkedin: 'https://www.linkedin.com/in/{handle}',
+  twitter: 'https://twitter.com/{handle}',
+  github: 'https://github.com/{handle}',
+  facebook: 'https://www.facebook.com/{handle}',
+  instagram: 'https://www.instagram.com/{handle}',
+  youtube: 'https://www.youtube.com/@{handle}',
+  tiktok: 'https://www.tiktok.com/@{handle}',
+  mastodon: 'https://mastodon.social/@{handle}',
+  threads: 'https://www.threads.net/@{handle}',
+};
+
+/**
+ * Resolve a social profile entry into a proper URL and handle.
+ * Apple Contacts sometimes stores profiles as:
+ * - Full URL: "http://www.linkedin.com/in/arvarik"
+ * - Apple-prefixed handle: "x-apple:arvarik"
+ * - Just a handle: "arvarik"
+ */
+function resolveSocialProfile(platform: string, rawUrl: string): { url: string; handle: string | null } {
+  const platformKey = platform.toLowerCase();
+  let url = rawUrl.trim();
+  let handle: string | null = null;
+
+  // Strip "x-apple:" prefix (Apple Contacts uses this for non-URL social handles)
+  if (url.startsWith('x-apple:')) {
+    url = url.replace('x-apple:', '');
+  }
+
+  // If it's already a valid URL, extract the handle from it
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const parsed = new URL(url);
+      // Extract handle from path (e.g., /in/arvarik → arvarik)
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+      handle = pathParts[pathParts.length - 1] || null;
+    } catch { /* not a valid URL, treat as handle */ }
+    return { url, handle };
+  }
+
+  // It's a bare handle — construct the full URL from our templates
+  handle = url;
+  const template = SOCIAL_PLATFORM_URLS[platformKey];
+  if (template) {
+    url = template.replace('{handle}', handle);
+  } else {
+    // Unknown platform, keep as-is but note it's not a URL
+    url = handle;
+  }
+
+  return { url, handle };
+}
+
+// ===========================================================================
 // Apple Contacts (vCard) Parser
-// Handles multi-value TEL/EMAIL entries with labels
+// Handles multi-value TEL/EMAIL entries with labels, addresses, social
+// profiles (including x-apple: handle format), and grouped item properties.
 // ===========================================================================
 export const parseVCard = (vcardData: string, sourcePlatform: string): Partial<Contact>[] => {
   const contacts: Partial<Contact>[] = [];
@@ -32,47 +95,176 @@ export const parseVCard = (vcardData: string, sourcePlatform: string): Partial<C
     const titleMatch = card.match(/^TITLE:(.*)$/m);
     const bdayMatch = card.match(/^BDAY:(.*)$/m);
     const noteMatch = card.match(/^NOTE:(.*)$/m);
-    const urlMatch = card.match(/^URL:(.*)$/m);
 
-    // Extract ALL emails with labels
-    const emailRegex = /^EMAIL(?:;TYPE=([^:;]+))?[^:]*:(.*)$/gm;
+    // Extract ALL emails — handles both standard and Apple grouped properties:
+    //   EMAIL;type=INTERNET;type=HOME:email@example.com
+    //   item1.EMAIL;type=INTERNET:email@example.com
+    const emailRegex = /^(?:item\d+\.)?EMAIL(?:[;][^:]*)*:(.+)$/gmi;
     const emails: any[] = [];
     let emailMatch;
     while ((emailMatch = emailRegex.exec(card)) !== null) {
-      const label = (emailMatch[1] || 'personal').toLowerCase().replace('pref,', '').replace(',pref', '').trim();
+      const fullLine = emailMatch[0];
+      const emailValue = emailMatch[1].trim();
+      if (!emailValue) continue;
+
+      // Parse label from type parameters
+      let label = 'personal';
+      const typeMatch = fullLine.match(/type=(\w+)/gi);
+      if (typeMatch) {
+        const types = typeMatch.map(t => t.replace(/type=/i, '').toLowerCase());
+        // Find the meaningful type (skip 'internet', 'pref')
+        const meaningful = types.find(t => !['internet', 'pref'].includes(t));
+        if (meaningful) label = meaningful;
+      }
+
+      // Skip duplicate emails
+      if (emails.some(e => e.email.toLowerCase() === emailValue.toLowerCase())) continue;
+
       emails.push({
-        email: emailMatch[2].trim(),
-        label: label === 'internet' ? 'personal' : label,
+        email: emailValue,
+        label,
         isPrimary: emails.length === 0,
       });
     }
 
-    // Extract ALL phone numbers with labels
-    const phoneRegex = /^TEL(?:;TYPE=([^:;]+))?[^:]*:(.*)$/gm;
+    // Extract ALL phone numbers — handles Apple format:
+    //   TEL;type=IPHONE;type=CELL;type=VOICE;type=pref:(732) 423-3295
+    const phoneRegex = /^(?:item\d+\.)?TEL(?:[;][^:]*)*:(.+)$/gmi;
     const phones: any[] = [];
     let phoneMatch;
     while ((phoneMatch = phoneRegex.exec(card)) !== null) {
-      const label = (phoneMatch[1] || 'mobile').toLowerCase().replace('pref,', '').replace(',pref', '').replace('voice,', '').replace(',voice', '').trim();
+      const fullLine = phoneMatch[0];
+      const phoneValue = phoneMatch[1].trim();
+      if (!phoneValue) continue;
+
+      let label = 'mobile';
+      const typeMatch = fullLine.match(/type=(\w+)/gi);
+      if (typeMatch) {
+        const types = typeMatch.map(t => t.replace(/type=/i, '').toLowerCase());
+        const meaningful = types.find(t => !['voice', 'pref', 'iphone'].includes(t));
+        if (meaningful) label = meaningful;
+      }
+
       phones.push({
-        phone: phoneMatch[2].trim(),
-        label: label || 'mobile',
+        phone: phoneValue,
+        label,
         isPrimary: phones.length === 0,
       });
     }
 
-    // Extract social profile URLs
-    const socialRegex = /^X-SOCIALPROFILE(?:;TYPE=([^:;]+))?[^:]*:(.*)$/gm;
-    const socialLinks: any[] = [];
-    let socialMatch;
-    while ((socialMatch = socialRegex.exec(card)) !== null) {
-      socialLinks.push({
-        platform: (socialMatch[1] || 'other').toLowerCase(),
-        url: socialMatch[2].trim(),
+    // Extract ALL addresses (ADR) — handles:
+    //   ADR;type=WORK:;;222 2nd St;San Francisco;CA;94105;United States
+    //   item3.ADR;type=pref:;;15 Kinglet Dr S;Cranbury;NJ;08512;United States
+    //   item4.ADR;type=HOME:;;1 Brady St\nApt A-625;San Francisco;CA;94103;United States
+    const adrRegex = /^(?:item\d+\.)?ADR(?:[;][^:]*)*:(.+)$/gmi;
+    const addresses: any[] = [];
+    let adrMatch;
+    while ((adrMatch = adrRegex.exec(card)) !== null) {
+      const fullLine = adrMatch[0];
+      const adrValue = adrMatch[1].trim();
+      if (!adrValue) continue;
+
+      // ADR format: PO Box;Extended;Street;City;State;Zip;Country
+      const parts = adrValue.split(';');
+      const street = (parts[2] || '').replace(/\\n/g, ', ').trim();
+      const city = (parts[3] || '').trim();
+      const state = (parts[4] || '').trim();
+      const zip = (parts[5] || '').trim();
+      const country = (parts[6] || '').trim();
+
+      // Compose a readable address, skipping empty parts
+      const addressParts = [street, city, [state, zip].filter(Boolean).join(' '), country].filter(Boolean);
+      const addressStr = addressParts.join(', ');
+      if (!addressStr) continue;
+
+      // Parse label
+      let label = 'home';
+      const typeMatch = fullLine.match(/type=(\w+)/gi);
+      if (typeMatch) {
+        const types = typeMatch.map(t => t.replace(/type=/i, '').toLowerCase());
+        const meaningful = types.find(t => !['pref'].includes(t));
+        if (meaningful) label = meaningful;
+      }
+
+      // Also check for X-ABLabel on the same item group
+      const itemPrefix = fullLine.match(/^(item\d+)\./i);
+      if (itemPrefix) {
+        const labelMatch = card.match(new RegExp(`^${itemPrefix[1]}\\.X-ABLabel:(.+)$`, 'mi'));
+        if (labelMatch) {
+          const customLabel = labelMatch[1].replace(/_\$!<|>!\$_/g, '').trim().toLowerCase();
+          if (customLabel && customLabel !== 'other') label = customLabel;
+        }
+      }
+
+      addresses.push({
+        address: addressStr,
+        label,
+        isPrimary: addresses.length === 0,
       });
     }
 
-    if (urlMatch) {
-      socialLinks.push({ platform: 'website', url: urlMatch[1].trim() });
+    // Extract social profile URLs — handles:
+    //   X-SOCIALPROFILE;type=linkedin:http://www.linkedin.com/in/arvarik
+    //   X-SOCIALPROFILE;type=GitHub:x-apple:arvarik
+    const socialRegex = /^X-SOCIALPROFILE(?:;[^:]*)*:(.+)$/gmi;
+    const socialLinks: any[] = [];
+    let socialMatch;
+    while ((socialMatch = socialRegex.exec(card)) !== null) {
+      const fullLine = socialMatch[0];
+      const rawUrl = socialMatch[1].trim();
+
+      // Extract platform from type= parameter
+      let platform = 'other';
+      const typeMatch = fullLine.match(/type=([^;:]+)/i);
+      if (typeMatch) platform = typeMatch[1].toLowerCase();
+
+      const resolved = resolveSocialProfile(platform, rawUrl);
+      socialLinks.push({
+        platform,
+        url: resolved.url,
+        handle: resolved.handle,
+      });
+    }
+
+    // Extract URLs — handles both standard and Apple grouped properties:
+    //   URL:https://example.com
+    //   item5.URL;type=pref:https://www.arvarik.com
+    const urlRegex = /^(?:item\d+\.)?URL(?:[;][^:]*)*:(.+)$/gmi;
+    let urlMatch;
+    while ((urlMatch = urlRegex.exec(card)) !== null) {
+      const url = urlMatch[1].trim();
+      if (!url) continue;
+
+      // Check the X-ABLabel for this item group to determine if it's a homepage
+      const fullLine = urlMatch[0];
+      const itemPrefix = fullLine.match(/^(item\d+)\./i);
+      let label = 'website';
+      if (itemPrefix) {
+        const labelMatch = card.match(new RegExp(`^${itemPrefix[1]}\\.X-ABLabel:(.+)$`, 'mi'));
+        if (labelMatch) {
+          const customLabel = labelMatch[1].replace(/_\$!<|>!\$_/g, '').trim().toLowerCase();
+          if (customLabel) label = customLabel;
+        }
+      }
+
+      // Don't add duplicate URLs that are already in social links
+      if (!socialLinks.some(sl => sl.url.toLowerCase() === url.toLowerCase())) {
+        socialLinks.push({
+          platform: label === 'homepage' ? 'website' : label,
+          url,
+          handle: null,
+        });
+      }
+    }
+
+    // Extract PHOTO as base64 data URL
+    let avatarUrl: string | null = null;
+    // Match multi-line PHOTO property (base64 data continues on indented lines)
+    const photoMatch = card.match(/^PHOTO;ENCODING=b;TYPE=(\w+):(.+(?:\r?\n[ \t]+.+)*)/mi);
+    if (photoMatch) {
+      const mimeType = photoMatch[1].toLowerCase();
+      const base64Data = photoMatch[2].replace(/\r?\n[ \t]+/g, '').trim();
+      avatarUrl = `data:image/${mimeType};base64,${base64Data}`;
     }
 
     // Parse structured name for firstName/lastName
@@ -84,6 +276,17 @@ export const parseVCard = (vcardData: string, sourcePlatform: string): Partial<C
       firstName = nMatch[2].trim() || null;
     }
 
+    // Build location from the primary address
+    let location: string | null = null;
+    if (addresses.length > 0) {
+      const primary = addresses.find((a: any) => a.isPrimary) || addresses[0];
+      location = primary.address;
+    }
+
+    // Extract website from social links (prefer homepage-labeled URL)
+    const websiteLink = socialLinks.find(sl => sl.platform === 'website' || sl.platform === 'homepage');
+    const website = websiteLink?.url || null;
+
     contacts.push({
       name: nameMatch[1].trim(),
       firstName,
@@ -92,8 +295,12 @@ export const parseVCard = (vcardData: string, sourcePlatform: string): Partial<C
       role: titleMatch ? titleMatch[1].trim() : null,
       birthday: bdayMatch ? bdayMatch[1].trim() : null,
       about: noteMatch ? noteMatch[1].trim() : null,
+      location,
+      website,
+      avatarUrl,
       emails,
       phones,
+      addresses,
       socialLinks,
       sources: [{ platform: sourcePlatform }],
       _sourcePlatform: sourcePlatform,

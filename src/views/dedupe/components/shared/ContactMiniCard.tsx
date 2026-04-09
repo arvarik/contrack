@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Contact } from '../../../../types';
 import { cn } from '../../../../lib/utils';
+import { fallbackAvatarUrl } from '../../../../lib/avatar';
 
 // =============================================================================
 // ContactMiniCard — Compact contact card for the picker
@@ -27,14 +28,16 @@ export const ContactMiniCard = ({ contact, selected, onToggle, disabled }: Conta
     )}
   >
     <img
-      src={contact.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(contact.name)}&mouth=default,smile,serious`}
+      src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
       alt={contact.name}
       className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"
     />
     <div className="min-w-0 flex-1">
       <div className="text-sm font-bold truncate">{contact.name}</div>
       <div className="text-xs text-on-surface-variant truncate">
-        {[contact.role, contact.company].filter(Boolean).join(' · ') || contact.emails?.[0]?.email || 'No details'}
+        {[contact.role, contact.company].filter(Boolean).join(' · ') ||
+          [contact.emails?.[0]?.email, contact.phones?.[0]?.phone].filter(Boolean).join(' · ') ||
+          'No details'}
       </div>
     </div>
     <div className={cn(

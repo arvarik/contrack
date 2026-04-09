@@ -28,7 +28,6 @@ import { AvatarPickerModal } from "../../../components/AvatarPickerModal";
 import { ProfileHeader } from "./ProfileHeader";
 import { DetailsCard } from "./DetailsCard";
 import { DossierTab } from "./DossierTab";
-import { CatchMeUpFab } from "./CatchMeUpFab";
 import { TimelineTab } from "./TimelineTab";
 import { VIBE_COLORS } from "./VibePickerPopover";
 
@@ -233,8 +232,6 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
       />
     )}
 
-    {/* ── Catch Me Up FAB ────────────────────────────────────────────── */}
-    <CatchMeUpFab contact={contact} generateBriefing={generateBriefing} />
     </>
   );
 };

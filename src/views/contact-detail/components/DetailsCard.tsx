@@ -76,6 +76,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
             labelOptions={ADDR_LABELS}
             emptyPlaceholder="Add Location..."
             inputPlaceholder="San Francisco, CA"
+            isAddress
           />
         </div>
       </div>

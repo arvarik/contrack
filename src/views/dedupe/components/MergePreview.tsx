@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import type { Contact } from '../../../types';
 import { cn } from '../../../lib/utils';
 import { CARD, TAG_PILL } from '../../../lib/styles';
+import { fallbackAvatarUrl } from '../../../lib/avatar';
 
 // =============================================================================
 // MergePreview — Shows what the merged contact will look like
@@ -101,7 +102,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
           <div key={dup.id} className="flex items-center gap-2">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low rounded-full">
               <img
-                src={dup.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(dup.name)}&mouth=default,smile,serious`}
+                src={dup.avatarUrl || fallbackAvatarUrl(dup.name)}
                 alt={dup.name}
                 className="w-5 h-5 rounded-full object-cover"
               />
@@ -112,7 +113,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
         ))}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-full ring-2 ring-emerald-500/30">
           <img
-            src={primary.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(primary.name)}&mouth=default,smile,serious`}
+            src={primary.avatarUrl || fallbackAvatarUrl(primary.name)}
             alt={primary.name}
             className="w-5 h-5 rounded-full object-cover"
           />
@@ -131,7 +132,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
         {/* Avatar + Name */}
         <div className="flex items-center gap-4">
           <img
-            src={preview.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(preview.name)}&mouth=default,smile,serious`}
+            src={preview.avatarUrl || fallbackAvatarUrl(preview.name)}
             alt={preview.name}
             className="w-14 h-14 rounded-full object-cover bg-surface-container-high ring-2 ring-emerald-500/30"
           />

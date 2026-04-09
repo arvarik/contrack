@@ -18,6 +18,8 @@ import { cn } from "./lib/utils";
 import { Sidebar } from "./components/layout/Sidebar";
 import { EmptyState } from "./components/layout/EmptyState";
 import { useUrgentActionItemCount } from "./api";
+import { AISearchProvider } from "./contexts/AISearchContext";
+import { DedupeProvider } from "./contexts/DedupeContext";
 
 const ResponsiveLayout = () => {
   const location = useLocation();
@@ -164,7 +166,11 @@ export default function App() {
   return (
     <Router>
       <LayoutGroup>
-        <ResponsiveLayout />
+        <AISearchProvider>
+          <DedupeProvider>
+            <ResponsiveLayout />
+          </DedupeProvider>
+        </AISearchProvider>
         <CommandPalette />
         <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         <Toaster theme="dark" position="bottom-right" className="font-body" toastOptions={{
