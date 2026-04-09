@@ -18,7 +18,7 @@ export const DashboardSkeleton = () => {
       {/* Top KPI Row */}
       <div className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-6">
         {[1, 2, 3].map(i => (
-          <div key={i} className="bg-surface-container-lowest rounded-2xl border border-surface-container p-5 flex flex-col items-center justify-center h-32 relative overflow-hidden">
+          <div key={i} className="bg-surface-container-lowest rounded-2xl shadow-sm p-5 flex flex-col items-center justify-center h-32 relative overflow-hidden">
             <SkeletonText width="w-20" className="h-8 mb-2" />
             <SkeletonText width="w-32" className="h-3" />
             <SkeletonBox className="absolute bottom-[-10px] right-[-10px] w-20 h-20 opacity-20" />
@@ -28,7 +28,7 @@ export const DashboardSkeleton = () => {
 
       {/* AI Insight */}
       <div className="col-span-full">
-        <SkeletonBox className="h-[120px] bg-primary/5 border border-primary/20 w-full flex flex-col p-6">
+        <SkeletonBox className="h-[120px] bg-primary/5 w-full flex flex-col p-6">
            <SkeletonText width="w-24" className="h-5 bg-primary/20 mb-4" />
            <SkeletonText width="w-3/4" className="mb-2" />
            <SkeletonText width="w-1/2" />
@@ -41,7 +41,7 @@ export const DashboardSkeleton = () => {
           <div key={section} className="flex flex-col gap-3">
              <SkeletonText width="w-24" className="h-4 mb-2" />
              {[1, 2].map(card => (
-               <div key={card} className="w-full rounded-xl border border-surface-container bg-surface-container-lowest p-4 flex items-center gap-4 animate-pulse">
+               <div key={card} className="w-full rounded-xl bg-surface-container-lowest shadow-sm p-4 flex items-center gap-4 animate-pulse">
                  <div className="w-6 h-6 rounded-full bg-surface-container-highest shrink-0" />
                  <div className="flex flex-col flex-1 gap-2">
                    <SkeletonText width="w-48" />

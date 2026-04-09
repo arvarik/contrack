@@ -6,6 +6,8 @@
  * - `useDedupeStream` — SSE hook for real-time scan progress
  * - `useMergeContacts` — Merge a single pair
  * - `useMergeBatch` — Bulk merge multiple pairs (list view)
+ * - `useMergeCluster` — Merge an entire cluster into one contact
+ * - `useMergeClusters` — Bulk merge multiple clusters
  * - `useSeedDuplicates` — Dev-only seed utility
  *
  * @module api/dedupe
@@ -38,12 +40,38 @@ export const useStartDedupeScan = () => {
 };
 
 // =============================================================================
+// Active scan discovery (for state recovery after refresh)
+// =============================================================================
+
+/**
+ * Check if the server has an in-progress scan.
+ * Returns the scan progress if active, or null if idle.
+ */
+export async function fetchActiveScan(): Promise<DedupeScanProgress | null> {
+  try {
+    const res = await fetch(`${API_BASE}/dedupe/active`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.active && data.scan) return data.scan as DedupeScanProgress;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// =============================================================================
 // SSE-based scan progress hook
 // =============================================================================
+
+/** Max SSE reconnection attempts before giving up */
+const SSE_MAX_RETRIES = 3;
+/** Delay between SSE reconnection attempts (ms) */
+const SSE_RETRY_DELAY_MS = 2000;
 
 /**
  * Connects to the SSE stream endpoint for real-time dedupe scan progress.
  * Calls onUpdate for every state change. Automatically closes on completion.
+ * Includes retry logic for transient disconnects during long AI batch processing.
  */
 export const useDedupeStream = (
   scanId: string | null,
@@ -56,27 +84,47 @@ export const useDedupeStream = (
   useEffect(() => {
     if (!scanId) return;
 
-    const source = new EventSource(`${API_BASE}/dedupe/stream?scanId=${scanId}`);
+    let retries = 0;
+    let source: EventSource | null = null;
+    let closed = false;
 
-    source.onmessage = (event) => {
-      try {
-        const scan: DedupeScanProgress = JSON.parse(event.data);
-        onUpdateRef.current(scan);
-        if (scan.phase === 'complete' || scan.phase === 'error') {
-          // Invalidate contacts cache so merged data appears everywhere
-          queryClient.invalidateQueries({ queryKey: ['contacts'] });
-          source.close();
+    function connect() {
+      if (closed) return;
+
+      source = new EventSource(`${API_BASE}/dedupe/stream?scanId=${scanId}`);
+
+      source.onmessage = (event) => {
+        try {
+          const scan: DedupeScanProgress = JSON.parse(event.data);
+          retries = 0; // Reset retry count on successful message
+          onUpdateRef.current(scan);
+          if (scan.phase === 'complete' || scan.phase === 'error') {
+            // Invalidate contacts cache so merged data appears everywhere
+            queryClient.invalidateQueries({ queryKey: ['contacts'] });
+            source?.close();
+            closed = true;
+          }
+        } catch {
+          // Ignore parse errors on individual events
         }
-      } catch {
-        // Ignore parse errors on individual events
-      }
-    };
+      };
 
-    source.onerror = () => {
-      source.close();
-    };
+      source.onerror = () => {
+        source?.close();
+        // Retry on transient errors (e.g., SSE timeout during long AI batch)
+        if (!closed && retries < SSE_MAX_RETRIES) {
+          retries++;
+          setTimeout(connect, SSE_RETRY_DELAY_MS);
+        }
+      };
+    }
 
-    return () => source.close();
+    connect();
+
+    return () => {
+      closed = true;
+      source?.close();
+    };
   }, [scanId, queryClient]);
 };
 
@@ -122,6 +170,69 @@ export const useMergeBatch = () => {
         results: { primaryId: string; duplicateId: string; success: boolean; error?: string }[];
         succeeded: number;
         total: number;
+      }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+// =============================================================================
+// Cluster merge mutations
+// =============================================================================
+
+/**
+ * Merge all duplicate contacts in a cluster into a single primary contact.
+ * The server merges each duplicate sequentially and isolates per-duplicate errors.
+ */
+export const useMergeCluster = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ primaryId, duplicateIds }: { primaryId: string; duplicateIds: string[] }) => {
+      const res = await fetch(`${API_BASE}/contacts/merge-cluster`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryId, duplicateIds }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Cluster merge failed');
+      }
+      return res.json() as Promise<{
+        success: boolean;
+        merged: number;
+        failed: number;
+        contact: any;
+      }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+  });
+};
+
+/**
+ * Bulk merge multiple clusters in a single request.
+ * Each cluster specifies a primaryId and an array of duplicateIds.
+ */
+export const useMergeClusters = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (clusters: { primaryId: string; duplicateIds: string[] }[]) => {
+      const res = await fetch(`${API_BASE}/contacts/merge-clusters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clusters }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Batch cluster merge failed');
+      }
+      return res.json() as Promise<{
+        results: { primaryId: string; merged: number; failed: number }[];
+        totalMerged: number;
+        totalFailed: number;
       }>;
     },
     onSuccess: () => {

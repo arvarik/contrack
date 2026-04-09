@@ -1,5 +1,7 @@
 export * from './ManualMerge';
 export * from './SwipeCard';
+export * from './ClusterSwipeCard';
+export * from './ClusterList';
 export * from './MergePreview';
 export * from './ContactPicker';
 export * from './SuggestionList';
@@ -8,4 +10,3 @@ export * from './shared/ContactMiniCard';
 export * from './shared/EngineInfoCard';
 export * from './shared/FieldRow';
 export * from './shared/MatchBadge';
-

@@ -40,6 +40,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
         disabled={generateBriefing.isPending}
         className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center shrink-0"
         title="Catch Me Up"
+        aria-label="Generate AI briefing"
       >
         <Sparkles className="w-4 h-4" />
       </button>
@@ -58,11 +59,12 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-xl bg-surface-container-lowest border border-surface-container shadow-2xl rounded-[2rem] p-6 md:p-8 overflow-hidden"
+              className="relative w-full max-w-xl bg-surface-container-lowest shadow-2xl rounded-[2rem] p-6 md:p-8 overflow-hidden"
             >
               <button 
                 onClick={() => setIsOpen(false)} 
                 className="absolute top-5 right-5 p-2 rounded-full hover:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+                aria-label="Close briefing"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -89,13 +91,14 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
                       </li>
                     ))}
                   </ul>
-                  <div className="flex items-center justify-between mt-8 pt-4 border-t border-surface-container">
+                  <div className="flex items-center justify-between mt-8 pt-4 bg-surface-container-low -mx-6 md:-mx-8 px-6 md:px-8 -mb-6 md:-mb-8 pb-6 md:pb-8 rounded-b-[2rem]">
                     <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50 font-bold">
                       {contact.aiBriefingAt && `Generated ${formatDistanceToNow(new Date(contact.aiBriefingAt), {addSuffix: true})}`}
                     </p>
                     <button 
                       onClick={() => generateBriefing.mutate(contact.id)}
-                      className="text-xs font-bold text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors border border-primary/20 hover:border-primary/40 shadow-sm"
+                      className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                      aria-label="Regenerate briefing"
                     >
                       Regenerate
                     </button>

@@ -32,13 +32,13 @@ export function AISearchView() {
 
     // Data filter
     if (dataFilter === 'has_links') {
-      list = list.filter(c => ((c as any).socialLinkCount ?? c.socialLinks?.length ?? 0) > 0);
+      list = list.filter(c => (c.socialLinkCount ?? c.socialLinks?.length ?? 0) > 0);
     } else if (dataFilter === 'has_email') {
       list = list.filter(c => c.emails && c.emails.length > 0);
     } else if (dataFilter === 'no_data') {
       list = list.filter(c =>
         (!c.emails || c.emails.length === 0) &&
-        ((c as any).socialLinkCount ?? c.socialLinks?.length ?? 0) === 0
+        (c.socialLinkCount ?? c.socialLinks?.length ?? 0) === 0
       );
     }
 

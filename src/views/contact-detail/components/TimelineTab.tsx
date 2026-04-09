@@ -35,9 +35,9 @@ export interface TimelineTabProps {
   getInputProps: () => any;
 
   // Mutations passed from parent
-  deleteInteraction: { mutate: (args: { id: string; contactId: string }, opts?: any) => void };
-  updateInteraction: { mutate: (args: { id: string; contactId: string; data: any }) => void };
-  promoteGhost: { mutate: (id: string, opts?: any) => void };
+  deleteInteraction: { mutate: (args: { id: string; contactId: string }, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void };
+  updateInteraction: { mutate: (args: { id: string; contactId: string; data: Partial<Interaction> }) => void };
+  promoteGhost: { mutate: (id: string, opts?: { onSuccess?: () => void }) => void };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -60,6 +60,21 @@ function getInteractionStyle(type: string) {
   if (type === 'import') { Icon = ExternalLink; bgClass = "bg-amber-500/10"; textClass = "text-amber-500"; }
 
   return { Icon, bgClass, textClass };
+}
+
+interface ParsedMention { contactId: string; name: string; isGhost?: boolean; }
+
+/** Safely parse the JSON mentions string. Returns null if empty/invalid. */
+function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    return parsed;
+  } catch (err) {
+    console.warn('[TimelineTab] Failed to parse mentions JSON:', err);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -92,7 +107,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 relative" {...getRootProps()}>
+    <div className="flex flex-col gap-6 relative timeline-enter" {...getRootProps()}>
       <input {...getInputProps()} />
 
       {/* Drop Zone Overlay */}
@@ -125,15 +140,14 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
       <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-surface-container-high before:to-transparent">
         {timelineLoading && <div className="text-center p-4 text-on-surface-variant animate-pulse">Loading timeline...</div>}
         
-        {timeline.map((item: any) => {
+        {timeline.map((item: Interaction, index: number) => {
           const { Icon, bgClass, textClass } = getInteractionStyle(item.type);
 
           return (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+            <div 
               key={item.id} 
-              className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active"
+              className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active timeline-entry"
+              style={{ animationDelay: `${index * 40}ms` }}
             >
               {/* Icon marker */}
               <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${bgClass} ${textClass} z-10 mx-auto absolute left-0 md:left-1/2 -translate-x-0`}>
@@ -158,6 +172,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                       }}
                       className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-red-500 p-1 rounded transition-opacity"
                       title="Delete interaction"
+                      aria-label="Delete interaction"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -186,54 +201,51 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                 ) : null}
                 
                 {/* Ghost Mentions */}
-                {item.mentions && (() => {
-                  try {
-                    const parsed = JSON.parse(item.mentions);
-                    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-                    return (
-                      <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
-                        <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1"><Sparkles className="w-3 h-3 text-primary opacity-60"/> Mentioned:</span>
-                        {parsed.map((mention: any, idx: number) => {
-                          if (mention.isGhost) {
-                            return (
-                              <button 
-                                key={idx}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  promoteGhost.mutate(mention.contactId, {
-                                    onSuccess: () => navigate(`/contact/${mention.contactId}`)
-                                  });
-                                }}
-                                title={`Promote ${mention.name} to Contact`}
-                                className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border hover:bg-surface-container transition-all group/ghost"
-                                style={{ borderStyle: 'dashed', borderWidth: '1px', borderColor: 'var(--color-primary)' }}
-                              >
-                                <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
-                                  {mention.name.charAt(0)}
-                                </div>
-                                <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
-                                  {mention.name}
-                                </div>
-                              </button>
-                            );
-                          }
+                {(() => {
+                  const mentions = parseMentions(item.mentions);
+                  if (!mentions) return null;
+                  return (
+                    <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
+                      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1"><Sparkles className="w-3 h-3 text-primary opacity-60"/> Mentioned:</span>
+                      {mentions.map((mention: { contactId: string; name: string; isGhost?: boolean }, idx: number) => {
+                        if (mention.isGhost) {
                           return (
-                            <Link 
+                            <button 
                               key={idx}
-                              to={`/contact/${mention.contactId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                promoteGhost.mutate(mention.contactId, {
+                                  onSuccess: () => navigate(`/contact/${mention.contactId}`)
+                                });
+                              }}
+                              title={`Promote ${mention.name} to Contact`}
+                              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
                             >
-                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                              <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
                                 {mention.name.charAt(0)}
                               </div>
-                              <span className="text-xs font-semibold text-on-surface line-clamp-1">{mention.name}</span>
-                            </Link>
+                              <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
+                                {mention.name}
+                              </div>
+                            </button>
                           );
-                        })}
-                      </div>
-                    );
-                  } catch { return null; }
+                        }
+                        return (
+                          <Link 
+                            key={idx}
+                            to={`/contact/${mention.contactId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                          >
+                            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                              {mention.name.charAt(0)}
+                            </div>
+                            <span className="text-xs font-semibold text-on-surface line-clamp-1">{mention.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  );
                 })()}
                 
                 {/* File Attachment */}
@@ -264,7 +276,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                     <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
                       Follow Up:
                     </span>
-                    {item.actionItems.map((action: any) => (
+                    {item.actionItems.map((action: NonNullable<Interaction['actionItems']>[number]) => (
                       <div
                         key={action.id}
                         className={cn(
@@ -288,7 +300,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
                   </p>
                 )}
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
@@ -300,6 +312,6 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
         onCompleteActionItem={(id) => completeActionItem.mutate(id)}
         onUpdateInteraction={(id, data) => updateInteraction.mutate({ id, contactId, data })}
       />
-    </motion.div>
+    </div>
   );
 };

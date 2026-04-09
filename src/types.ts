@@ -135,7 +135,29 @@ export interface Contact {
   attributes: { id: string; name: string; value: string; }[];
   interactionCount?: number;
   relationshipScore?: number;
+  /** Computed by API — number of social links (available in slim view) */
+  socialLinkCount?: number;
 }
+
+/**
+ * Mutation payload type for contact updates.
+ *
+ * Intentionally looser than `Partial<Contact>` because the server accepts
+ * partial child entities (e.g., emails without `id`, addresses without
+ * `source`), which TypeScript's strict Partial<ContactEmail>[] rejects.
+ */
+export type ContactUpdateData = Partial<Omit<Contact,
+  'emails' | 'phones' | 'addresses' | 'socialLinks' | 'interests' | 'attributes' |
+  'education' | 'experience' | 'sources' | 'tags' | 'lists'
+>> & {
+  emails?: Partial<ContactEmail>[];
+  phones?: Partial<ContactPhone>[];
+  addresses?: Partial<ContactAddress>[];
+  socialLinks?: Partial<ContactSocialLink>[];
+  interests?: { id?: string; interest: string; isAiGenerated?: boolean }[];
+  attributes?: { id?: string; name: string; value: string }[];
+  tags?: Partial<ContactTag>[];
+};
 
 /** Well-known types: note, call, meeting, email, message, sms, import, linkedin, facebook */
 export interface Interaction {
@@ -160,6 +182,8 @@ export interface Interaction {
     dueAt: string;
     completedAt: string | null;
   }[];
+  /** Write-only — accepted by POST to create a linked action item */
+  actionItem?: { title: string; dueAt: string };
 }
 
 export interface ActionItem {
@@ -183,6 +207,7 @@ export interface ActionItem {
 // Dedupe Engine Types
 // =============================================================================
 
+/** @deprecated Pairwise suggestion — kept for backward compat during Phase 3 migration. */
 export interface DedupeSuggestion {
   id: string;
   contactA: Contact;
@@ -193,8 +218,31 @@ export interface DedupeSuggestion {
   matchedField?: string;
 }
 
+/** A single piece of evidence connecting two contacts within a cluster. */
+export interface ClusterPair {
+  contactIdA: string;
+  contactIdB: string;
+  matchType: 'email' | 'phone' | 'ai';
+  confidence: number;
+  reasoning: string;
+  matchedField?: string;
+}
+
+/** A group of contacts that the engine believes represent the same person. */
+export interface DedupeCluster {
+  id: string;
+  contacts: Contact[];
+  suggestedPrimaryId: string;
+  pairs: ClusterPair[];
+  aggregateConfidence: number;
+  summary: string;
+  size: number;
+  hasWeakLink: boolean;
+  minConfidence: number;
+}
+
 export type DedupeScanMode = 'deterministic' | 'ai' | 'both';
-export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'complete' | 'error';
+export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'clustering' | 'complete' | 'error';
 
 export interface DedupeScanProgress {
   scanId: string;
@@ -206,7 +254,10 @@ export interface DedupeScanProgress {
   deterministicFound: number;
   aiCandidatesFound: number;
   aiEvaluated: number;
-  suggestions: DedupeSuggestion[];
+  suggestions: DedupeSuggestion[];    // Deprecated — always empty
+  clustersFound: number;
+  totalPairs: number;
+  clusters: DedupeCluster[];
   error?: string;
   startedAt: string;
   completedAt?: string;

@@ -1,10 +1,11 @@
 import React from "react";
-import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
 import { X, PieChart, MapPin, Briefcase } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { motion } from "motion/react";
 import { DashboardPayload } from "../../api";
 import { cn } from "../../lib/utils";
 import { SECTION_HEADING } from "../../lib/styles";
+import { Modal } from "../../components/ui/Modal";
 
 interface NetworkCompositionModalProps {
   isOpen: boolean;
@@ -12,14 +13,17 @@ interface NetworkCompositionModalProps {
   composition: DashboardPayload;
 }
 
+/** e.g. { industry: 'Tech', count: 12 } or { location: 'NYC', count: 8 } */
+type CompositionEntry = { [key: string]: string | number; count: number };
+
 const CompositionColumn = ({ 
   title, 
   icon: Icon, 
   data 
 }: { 
   title: string; 
-  icon: any; 
-  data: { [key: string]: any, count: number }[]; 
+  icon: LucideIcon; 
+  data: CompositionEntry[]; 
 }) => {
   if (!data || data.length === 0) return null;
 
@@ -27,7 +31,7 @@ const CompositionColumn = ({
   const totalCount = data.reduce((acc, d) => acc + d.count, 0);
 
   // Derive label by looking for the string property that isn't count
-  const renderItem = (item: any, index: number) => {
+  const renderItem = (item: CompositionEntry, index: number) => {
     const labelKey = Object.keys(item).find(k => k !== 'count')!;
     const labelResult = item[labelKey];
     const widthPercentage = (item.count / maxCount) * 100;
@@ -69,54 +73,32 @@ const CompositionColumn = ({
 };
 
 export const NetworkCompositionModal = ({ isOpen, onClose, composition }: NetworkCompositionModalProps) => {
-  return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div 
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            className="fixed inset-0 z-50 bg-black/40"
-            onClick={onClose}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-surface-container-lowest border border-surface-container shadow-2xl rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col pointer-events-auto overflow-hidden"
-            >
-              {/* Header */}
-              <div className="px-6 py-5 border-b border-surface-container flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-primary/10">
-                    <PieChart className="w-5 h-5 text-primary" />
-                  </div>
-                  <h2 className="text-xl font-bold text-on-surface">Network Composition</h2>
-                </div>
-                <button 
-                  onClick={onClose}
-                  className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="p-6 sm:p-8 overflow-y-auto nice-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8">
-                  <CompositionColumn title="Industry" icon={PieChart} data={composition.industryComposition} />
-                  <CompositionColumn title="Location" icon={MapPin} data={composition.locationComposition} />
-                  <CompositionColumn title="Role" icon={Briefcase} data={composition.roleComposition} />
-                </div>
-              </div>
-            </motion.div>
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} size="2xl">
+      {/* Header */}
+      <div className="px-6 py-5 bg-surface-container-low flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-primary/10">
+            <PieChart className="w-5 h-5 text-primary" />
           </div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body
+          <h2 className="text-xl font-bold text-on-surface">Network Composition</h2>
+        </div>
+        <button 
+          onClick={onClose}
+          className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="p-6 sm:p-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8">
+          <CompositionColumn title="Industry" icon={PieChart} data={composition.industryComposition} />
+          <CompositionColumn title="Location" icon={MapPin} data={composition.locationComposition} />
+          <CompositionColumn title="Role" icon={Briefcase} data={composition.roleComposition} />
+        </div>
+      </div>
+    </Modal>
   );
 };

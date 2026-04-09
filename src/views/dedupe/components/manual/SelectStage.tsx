@@ -22,7 +22,7 @@ export const SelectStage = ({ selected, onSelectionChange, onNext }: SelectStage
       <div className="mb-4">
         <h3 className="text-sm font-bold text-on-surface mb-1">Select contacts to merge</h3>
         <p className="text-xs text-on-surface-variant">
-          Choose 2-3 contacts you want to merge. All their data will be combined.
+          Choose 2–5 contacts you want to merge. All their data will be combined.
         </p>
       </div>
 
@@ -30,7 +30,7 @@ export const SelectStage = ({ selected, onSelectionChange, onNext }: SelectStage
         <ContactPicker
           selected={selected}
           onSelectionChange={onSelectionChange}
-          maxSelection={3}
+          maxSelection={5}
         />
       </div>
 

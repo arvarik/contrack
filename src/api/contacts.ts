@@ -7,7 +7,7 @@
  * @module api/contacts
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Contact } from '../types';
+import { Contact, ContactUpdateData } from '../types';
 
 const API_BASE = '/api';
 
@@ -19,6 +19,41 @@ export const useContacts = () => {
       if (!res.ok) throw new Error('Failed to fetch contacts');
       return res.json();
     }
+  });
+};
+
+/**
+ * Slim contact projection for secondary consumers that only need
+ * name + avatar fields (mentions, command palette, etc.).
+ *
+ * Shares the same query key/cache as `useContacts()` but uses
+ * TanStack Query's `select` to project a stable, minimal shape.
+ * This prevents re-renders when unrelated contact fields change.
+ */
+export interface ContactSlim {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  themeColor: string;
+  isGhost: boolean;
+}
+
+export const useContactNames = () => {
+  return useQuery({
+    queryKey: ['contacts'],
+    queryFn: async (): Promise<Contact[]> => {
+      const res = await fetch(`${API_BASE}/contacts?view=slim`);
+      if (!res.ok) throw new Error('Failed to fetch contacts');
+      return res.json();
+    },
+    select: (contacts): ContactSlim[] =>
+      contacts.map(c => ({
+        id: c.id,
+        name: c.name,
+        avatarUrl: c.avatarUrl,
+        themeColor: c.themeColor,
+        isGhost: c.isGhost,
+      })),
   });
 };
 
@@ -59,7 +94,7 @@ export const useArchivedContacts = () => {
 export const useCreateContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: Partial<Contact>): Promise<Contact> => {
+    mutationFn: async (data: ContactUpdateData): Promise<Contact> => {
       const res = await fetch(`${API_BASE}/contacts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,7 +144,7 @@ export const useParseContactText = () => {
 export const useUpdateContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Contact> }): Promise<Contact> => {
+    mutationFn: async ({ id, data }: { id: string; data: ContactUpdateData }): Promise<Contact> => {
       const res = await fetch(`${API_BASE}/contacts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -128,11 +163,11 @@ export const useUpdateContact = () => {
         queryClient.setQueryData<Contact>(['contacts', id], {
           ...previousContact,
           ...data,
-        });
+        } as Contact);
       }
 
       queryClient.setQueryData<Contact[]>(['contacts'], old => 
-        old?.map(c => c.id === id ? { ...c, ...data } : c)
+        old?.map(c => c.id === id ? { ...c, ...data } as Contact : c)
       );
 
       return { previousContact };
@@ -297,7 +332,7 @@ export const useBulkDeleteContacts = () => {
 export const useBulkUpdateContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ ids, data }: { ids: string[]; data: Partial<Contact> }): Promise<{ success: boolean; count: number }> => {
+    mutationFn: async ({ ids, data }: { ids: string[]; data: ContactUpdateData }): Promise<{ success: boolean; count: number }> => {
       const res = await fetch(`${API_BASE}/contacts/bulk-update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -312,7 +347,7 @@ export const useBulkUpdateContacts = () => {
       
       const idsSet = new Set(ids);
       queryClient.setQueryData<Contact[]>(['contacts'], old => 
-        old?.map(c => idsSet.has(c.id) ? { ...c, ...data } : c)
+        old?.map(c => idsSet.has(c.id) ? { ...c, ...data } as Contact : c)
       );
 
       return { previousContacts };

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { isTypingTarget } from '../lib/keyboard';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, Search, Briefcase, Building, MapPin, Globe, Tag,
@@ -189,12 +190,7 @@ export const SearchView = () => {
   // Global keydown for focusing search
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
-      ) {
-        return;
-      }
+      if (isTypingTarget(e)) return;
       if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();

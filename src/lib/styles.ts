@@ -181,8 +181,22 @@ export const EMPTY_HERO = "flex flex-col items-center justify-center h-full text
 
 // ─── Dropdowns ───────────────────────────────────────────────────────────────
 
-/** Dropdown container — floats above other elements, scrollable, dark styled */
-export const DROPDOWN_MENU = "absolute z-50 mt-1 max-h-56 w-max min-w-full overflow-y-auto rounded-lg bg-[#242424] py-1.5 shadow-xl ring-1 ring-white/10 outline-none nice-scrollbar";
+/** Dropdown container — floats above other elements, scrollable, glass-panel styled */
+export const DROPDOWN_MENU = "absolute z-50 mt-1 max-h-56 w-max min-w-full overflow-y-auto rounded-xl glass-panel py-1.5 shadow-xl outline-none nice-scrollbar";
 
 /** Dropdown standard item */
-export const DROPDOWN_ITEM = "cursor-pointer px-4 py-2 text-sm font-medium text-gray-200 hover:bg-primary/20 hover:text-primary transition-colors flex items-center";
+export const DROPDOWN_ITEM = "cursor-pointer px-4 py-2 text-sm font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors flex items-center";
+
+// ─── Form Inputs ─────────────────────────────────────────────────────────────
+
+/** Standard modal form label */
+export const FORM_LABEL = "block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5";
+
+/** Standard modal form input */
+export const FORM_INPUT = "w-full rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none bg-surface-container text-on-surface transition-shadow";
+
+/** AI pre-fill glow — returns additional classes when a field was auto-populated */
+export const formInputHighlight = (hasValue: boolean) =>
+  hasValue
+    ? "bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse"
+    : "";

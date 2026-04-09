@@ -5,8 +5,10 @@
 // GET  /api/dedupe/stream   — SSE stream for real-time progress
 // GET  /api/dedupe/status   — Polling fallback
 // POST /api/contacts/merge  — Merge two contacts (single)
-// POST /api/contacts/merge-batch — Merge multiple pairs (bulk)
-// POST /api/dev/seed-duplicates  — Dev-only seed utility
+// POST /api/contacts/merge-batch    — Merge multiple pairs (bulk)
+// POST /api/contacts/merge-cluster  — Merge an entire cluster into one contact
+// POST /api/contacts/merge-clusters — Bulk merge multiple clusters
+// POST /api/dev/seed-duplicates     — Dev-only seed utility
 // =============================================================================
 
 import { Router } from "express";
@@ -98,6 +100,18 @@ router.get("/dedupe/stream", (req, res) => {
 });
 
 // =============================================================================
+// GET /dedupe/active — Discover currently active scan (for state recovery)
+// =============================================================================
+
+router.get("/dedupe/active", asyncHandler(async (_req, res) => {
+  const activeScan = dedupeQueue.getActiveScan();
+  if (!activeScan) {
+    return res.json({ active: false });
+  }
+  res.json({ active: true, scan: activeScan });
+}));
+
+// =============================================================================
 // GET /dedupe/status — Polling fallback
 // =============================================================================
 
@@ -169,6 +183,92 @@ router.post("/contacts/merge-batch", asyncHandler(async (req, res) => {
   const succeeded = results.filter(r => r.success).length;
   log.info("API", `[${rid}] POST /api/contacts/merge-batch → ${succeeded}/${merges.length} merged`);
   res.json({ results, succeeded, total: merges.length });
+}));
+
+// =============================================================================
+// POST /contacts/merge-cluster — Merge an entire cluster into one contact
+// =============================================================================
+
+router.post("/contacts/merge-cluster", asyncHandler(async (req, res) => {
+  const rid = (req as any).requestId;
+  const { primaryId, duplicateIds } = req.body;
+
+  if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+    throw new AppError("primaryId and duplicateIds[] are required", 400);
+  }
+  if (duplicateIds.includes(primaryId)) {
+    throw new AppError("primaryId cannot appear in duplicateIds", 400);
+  }
+  if (duplicateIds.length > 10) {
+    throw new AppError("Maximum 10 duplicates per cluster merge", 400);
+  }
+
+  let merged = 0;
+  let failed = 0;
+  let lastResult: any = null;
+
+  for (const dupId of duplicateIds) {
+    try {
+      lastResult = dedupeService.mergeContacts(primaryId, dupId, rid);
+      merged++;
+    } catch (err: any) {
+      log.warn("API", `[${rid}] Cluster merge: skipping ${dupId}: ${err.message}`);
+      failed++;
+    }
+  }
+
+  log.info("API", `[${rid}] POST /api/contacts/merge-cluster → merged ${merged}/${duplicateIds.length} into ${primaryId}`);
+  res.json({ success: merged > 0, merged, failed, contact: lastResult });
+}));
+
+// =============================================================================
+// POST /contacts/merge-clusters — Bulk merge multiple clusters
+// =============================================================================
+
+router.post("/contacts/merge-clusters", asyncHandler(async (req, res) => {
+  const rid = (req as any).requestId;
+  const { clusters } = req.body;
+
+  if (!Array.isArray(clusters) || clusters.length === 0) {
+    throw new AppError("clusters array is required and must not be empty", 400);
+  }
+
+  const totalOps = clusters.reduce((sum: number, c: any) => sum + (c.duplicateIds?.length ?? 0), 0);
+  if (totalOps > 50) {
+    throw new AppError("Maximum 50 total merge operations per batch", 400);
+  }
+
+  const results: { primaryId: string; merged: number; failed: number }[] = [];
+  let totalMerged = 0;
+  let totalFailed = 0;
+
+  for (const { primaryId, duplicateIds } of clusters) {
+    if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+      results.push({ primaryId: primaryId ?? 'unknown', merged: 0, failed: duplicateIds?.length ?? 0 });
+      totalFailed += duplicateIds?.length ?? 0;
+      continue;
+    }
+
+    let merged = 0;
+    let failed = 0;
+
+    for (const dupId of duplicateIds) {
+      try {
+        dedupeService.mergeContacts(primaryId, dupId, rid);
+        merged++;
+      } catch (err: any) {
+        log.warn("API", `[${rid}] Bulk cluster merge: skipping ${dupId}: ${err.message}`);
+        failed++;
+      }
+    }
+
+    results.push({ primaryId, merged, failed });
+    totalMerged += merged;
+    totalFailed += failed;
+  }
+
+  log.info("API", `[${rid}] POST /api/contacts/merge-clusters → ${totalMerged} merged, ${totalFailed} failed across ${clusters.length} clusters`);
+  res.json({ results, totalMerged, totalFailed });
 }));
 
 // =============================================================================

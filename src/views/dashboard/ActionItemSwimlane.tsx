@@ -32,10 +32,10 @@ const SnoozeDropdown = ({ item, onClose, triggerRect }: { item: ActionItem, onCl
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div 
-        className={cn("absolute z-50 mt-1 w-36 overflow-hidden rounded-lg bg-surface-container-highest py-1 shadow-xl ring-1 ring-white/10 outline-none")}
+        className={cn("absolute z-50 mt-1 w-36 overflow-hidden rounded-xl glass-panel py-1 shadow-xl outline-none")}
         style={{ top, left: Math.max(10, left) }}
       >
-        <div className="px-3 py-1.5 border-b border-white/5 text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">Snooze</div>
+        <div className="px-3 py-1.5 bg-surface-container-high text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">Snooze</div>
         <button onClick={() => handleSnooze(1)} className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors">
           <Clock className="w-3 h-3 mr-2 opacity-80" /> Tomorrow
         </button>

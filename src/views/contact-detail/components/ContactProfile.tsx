@@ -11,6 +11,7 @@
  * - {@link TimelineTab}   — Interaction composer, timeline entries
  */
 import React, { useState, useCallback } from "react";
+import { Modal } from "../../../components/ui/Modal";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
@@ -112,11 +113,19 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
     updateContact.mutate({ id, data: { [field]: val } });
   };
 
+  // Delete confirmation — uses <Modal> instead of native confirm()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleDeleteContact = () => {
     if (!id || !contact) return;
-    if (!confirm(`Permanently delete ${contact.name}? This cannot be undone.`)) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (!id || !contact) return;
     deleteContact.mutate(id, {
       onSuccess: () => {
+        setShowDeleteConfirm(false);
         toast.success(`Deleted ${contact.name}`);
         navigate("/");
         if (onClose) onClose();
@@ -230,6 +239,38 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
         contactName={contact.name}
         currentAvatarUrl={contact.avatarUrl}
       />
+    )}
+
+    {/* ── Delete Confirmation Modal ─────────────────────────────────────── */}
+    {contact && (
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Contact"
+      >
+        <div className="space-y-6">
+          <p className="text-on-surface-variant text-sm leading-relaxed">
+            Permanently delete <span className="font-bold text-on-surface">{contact.name}</span>?
+            This action cannot be undone — all interactions, notes, and attachments
+            will be lost.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              disabled={deleteContact.isPending}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold bg-error text-white hover:bg-error/90 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+            >
+              {deleteContact.isPending ? 'Deleting…' : 'Delete Forever'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     )}
 
     </>

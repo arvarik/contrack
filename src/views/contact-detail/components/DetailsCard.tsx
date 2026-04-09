@@ -9,7 +9,7 @@ import {
   MapPin, Mail, Phone, Cake, Globe, Coffee, Heart, Sparkles, X, Activity,
 } from "lucide-react";
 
-import type { Contact } from "../../../types";
+import type { Contact, ContactUpdateData, ContactAddress } from "../../../types";
 import { cn } from "../../../lib/utils";
 import { LABEL, LABEL_PRIMARY, CARD, SECTION_HEADING } from "../../../lib/styles";
 
@@ -26,7 +26,7 @@ export interface DetailsCardProps {
   contact: Contact;
   contactId: string;
   onUpdate: (field: string, val: string) => void;
-  updateContact: { mutate: (args: { id: string; data: any }) => void };
+  updateContact: { mutate: (args: { id: string; data: ContactUpdateData }) => void };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -46,14 +46,14 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
     if (e.key === 'Enter' && newInterest.trim()) {
       e.preventDefault();
       const updated = [...(contact.interests || []), { id: Math.random().toString(), interest: newInterest.trim(), isAiGenerated: false }];
-      updateContact.mutate({ id: contactId, data: { interests: updated } as any });
+      updateContact.mutate({ id: contactId, data: { interests: updated } });
       setNewInterest('');
     }
   };
 
   const handleRemoveInterest = (interestId: string) => {
-    const updated = (contact.interests || []).filter((i: any) => i.id !== interestId);
-    updateContact.mutate({ id: contactId, data: { interests: updated } as any });
+    const updated = (contact.interests || []).filter((i: { id: string }) => i.id !== interestId);
+    updateContact.mutate({ id: contactId, data: { interests: updated } });
   };
 
   return (
@@ -67,11 +67,11 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
           <span className={LABEL}>Location</span>
           <MultiValueField
             items={(contact.addresses && contact.addresses.length > 0) 
-              ? contact.addresses.map((a: any) => ({ id: a.id, value: a.address, label: a.label || 'home' }))
+              ? contact.addresses.map((a: ContactAddress) => ({ id: a.id, value: a.address, label: a.label || 'home' }))
               : contact.location ? [{ id: 'legacy-init', value: contact.location, label: 'home' }] : []
             }
             onSave={updated =>
-              updateContact.mutate({ id: contactId, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label || 'home', isPrimary: i === 0 })) } as any })
+              updateContact.mutate({ id: contactId, data: { addresses: updated.map((a, i) => ({ address: a.value, label: a.label || 'home', isPrimary: i === 0 })) } })
             }
             labelOptions={ADDR_LABELS}
             emptyPlaceholder="Add Location..."
@@ -89,7 +89,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
           <MultiValueField
             items={(contact.emails ?? []).map(e => ({ id: e.id, value: e.email, label: e.label || 'personal' }))}
             onSave={updated =>
-              updateContact.mutate({ id: contactId, data: { emails: updated.map((e, i) => ({ email: e.value, label: e.label, isPrimary: i === 0 })) } as any })
+              updateContact.mutate({ id: contactId, data: { emails: updated.map((e, i) => ({ email: e.value, label: e.label, isPrimary: i === 0 })) } })
             }
             labelOptions={EMAIL_LABELS}
             emptyPlaceholder="Add Email..."
@@ -106,7 +106,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
           <MultiValueField
             items={(contact.phones ?? []).map(p => ({ id: p.id, value: p.phone, label: p.label || 'mobile' }))}
             onSave={updated =>
-              updateContact.mutate({ id: contactId, data: { phones: updated.map((p, i) => ({ phone: p.value, label: p.label, isPrimary: i === 0 })) } as any })
+              updateContact.mutate({ id: contactId, data: { phones: updated.map((p, i) => ({ phone: p.value, label: p.label, isPrimary: i === 0 })) } })
             }
             labelOptions={PHONE_LABELS}
             emptyPlaceholder="Add Phone..."
@@ -185,7 +185,7 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
           <span className={LABEL}>Interests</span>
           <div className="flex flex-wrap gap-1.5 mt-1">
             {contact.interests && contact.interests.length > 0 ? (
-              contact.interests.map((interest: any) => (
+              contact.interests.map((interest: { id: string; interest: string; isAiGenerated?: boolean }) => (
                 <div key={interest.id} className={cn(
                   "group/pill w-fit flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full transition-all overflow-hidden",
                   interest.isAiGenerated ? "bg-primary/10 text-primary border border-primary/20" : "bg-surface-container text-on-surface-variant border border-transparent"

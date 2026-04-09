@@ -1,8 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
 import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles, Activity } from "lucide-react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
+import { isTypingTarget } from "./lib/keyboard";
 import { Toaster } from "sonner";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 
 import { ContactList } from "./views/contact-list";
 import { ContactDetail } from "./views/contact-detail";
@@ -17,9 +18,15 @@ import { cn } from "./lib/utils";
 
 import { Sidebar } from "./components/layout/Sidebar";
 import { EmptyState } from "./components/layout/EmptyState";
+import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
 import { useUrgentActionItemCount } from "./api";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
+
+// Dev-only: lazy import so the showcase is not in the prod bundle
+const ComponentShowcase = import.meta.env.DEV
+  ? React.lazy(() => import('./views/dev/ComponentShowcase').then(m => ({ default: m.ComponentShowcase })))
+  : null;
 
 const ResponsiveLayout = () => {
   const location = useLocation();
@@ -65,8 +72,10 @@ const ResponsiveLayout = () => {
     </nav>
   );
 
-  // Full-page views (cleanup, search, pulse) take the full main area
-  if (isCleanup || isSearch || isPulse) {
+  const isDev = import.meta.env.DEV && location.pathname.startsWith('/dev');
+
+  // Full-page views (cleanup, search, pulse, dev) take the full main area
+  if (isCleanup || isSearch || isPulse || isDev) {
     return (
       <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
         <div className="hidden md:flex shrink-0">
@@ -75,9 +84,12 @@ const ResponsiveLayout = () => {
         <main className="flex-1 h-full overflow-hidden relative flex">
           <div className="flex-1 h-full overflow-hidden">
             <Routes>
-              <Route path="/settings/*" element={<SettingsView />} />
-              <Route path="/search" element={<SearchView />} />
-              <Route path="/pulse" element={<DashboardView />} />
+              <Route path="/settings/*" element={<RouteErrorBoundary viewName="Settings"><SettingsView /></RouteErrorBoundary>} />
+              <Route path="/search" element={<RouteErrorBoundary viewName="Search"><SearchView /></RouteErrorBoundary>} />
+              <Route path="/pulse" element={<RouteErrorBoundary viewName="Dashboard"><DashboardView /></RouteErrorBoundary>} />
+              {ComponentShowcase && (
+                <Route path="/dev" element={<Suspense fallback={<div className="p-12 text-center text-on-surface-variant animate-pulse">Loading showcase...</div>}><ComponentShowcase /></Suspense>} />
+              )}
             </Routes>
           </div>
         </main>
@@ -113,7 +125,7 @@ const ResponsiveLayout = () => {
         `}>
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<EmptyState />} />
-            <Route path="/contact/:id" element={<ContactDetail />} />
+            <Route path="/contact/:id" element={<RouteErrorBoundary viewName="ContactDetail"><ContactDetail /></RouteErrorBoundary>} />
           </Routes>
         </main>
       )}
@@ -130,7 +142,7 @@ const ResponsiveLayout = () => {
               className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
             >
               <Routes location={location} key={location.pathname}>
-                <Route path="/map/contact/:id" element={<ContactDetail />} />
+                <Route path="/map/contact/:id" element={<RouteErrorBoundary viewName="ContactDetail"><ContactDetail /></RouteErrorBoundary>} />
               </Routes>
             </motion.main>
           )}
@@ -149,12 +161,8 @@ export default function App() {
   // Global '?' key → open keyboard shortcuts modal
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isTyping =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable;
-      if (e.key === '?' && !isTyping && !e.metaKey && !e.ctrlKey) {
+      if (isTypingTarget(e)) return;
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setShortcutsOpen(prev => !prev);
       }
@@ -173,11 +181,10 @@ export default function App() {
         </AISearchProvider>
         <CommandPalette />
         <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-        <Toaster theme="dark" position="bottom-right" className="font-body" toastOptions={{
+        <Toaster theme="light" position="bottom-right" className="font-body" toastOptions={{
+          className: 'glass-panel shadow-lg !border-none',
           style: {
-            background: 'var(--color-surface-container-high)',
-            border: '1px solid var(--color-surface-container-highest)',
-            color: 'var(--color-on-surface)'
+            color: 'var(--color-on-surface)',
           }
         }} />
       </LayoutGroup>

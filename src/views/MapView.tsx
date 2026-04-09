@@ -27,11 +27,11 @@ const MapClickHandler = () => {
 };
 
 // ---------------------------------------------------------------------------
-// Map icon factories — uses the app's primary blue (#009EDB) for consistency
+// Map icon factories — uses CSS variable tokens for design system consistency
 // ---------------------------------------------------------------------------
 
-const PRIMARY_COLOR = '#009EDB';
-const SURFACE_BG = '#f8fafb';
+const PRIMARY_COLOR = 'var(--color-primary)';
+const SURFACE_BG = 'var(--color-surface-container-lowest)';
 
 /**
  * Creates a Leaflet DivIcon with the contact's avatar photo.
@@ -84,7 +84,7 @@ export const MapView = () => {
         center={[20, 0]} 
         zoom={2} 
         scrollWheelZoom={true} 
-        style={{ height: '100%', width: '100%', background: '#f0f4f6' }}
+        style={{ height: '100%', width: '100%', background: 'var(--color-surface-container-low)' }}
         zoomControl={false}
       >
         <MapClickHandler />
@@ -119,17 +119,17 @@ export const MapView = () => {
                   multiple addresses — hover the pin to see before navigating */}
               <Popup closeButton={false} offset={[0, -24]}>
                 <div
-                  style={{ fontFamily: 'Inter, sans-serif', padding: '4px 8px', cursor: 'pointer' }}
+                  style={{ fontFamily: 'var(--font-body)', padding: '4px 8px', cursor: 'pointer' }}
                   onClick={() => navigate(`/map/contact/${contact.id}`)}
                 >
-                  <p style={{ fontWeight: 800, fontSize: '14px', color: '#1a1a1a', margin: '0 0 2px' }}>
+                  <p style={{ fontWeight: 800, fontSize: '14px', color: 'var(--color-on-surface)', margin: '0 0 2px' }}>
                     {contact.name}
                   </p>
                   {contact.company && (
-                    <p style={{ fontSize: '12px', color: '#666', margin: '0 0 2px' }}>{contact.company}</p>
+                    <p style={{ fontSize: '12px', color: 'var(--color-on-surface-variant)', margin: '0 0 2px' }}>{contact.company}</p>
                   )}
                   {contact.location && (
-                    <p style={{ fontSize: '11px', color: PRIMARY_COLOR, fontWeight: 600, margin: '0' }}>
+                    <p style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, margin: '0' }}>
                       📍 {contact.location}
                     </p>
                   )}

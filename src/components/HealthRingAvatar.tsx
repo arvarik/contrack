@@ -8,7 +8,11 @@ import { cn } from '../lib/utils';
 import { fallbackAvatarUrl } from '../lib/avatar';
 
 interface HealthRingAvatarProps {
-  contact: any;
+  contact: {
+    name: string;
+    avatarUrl?: string | null;
+    themeColor?: string;
+  };
   size?: number;
 }
 

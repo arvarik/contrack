@@ -35,14 +35,14 @@ const LinkPreviewComponent = ({ node, updateAttributes }: any) => {
         href={url} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="block border border-surface-container-highest rounded-2xl overflow-hidden bg-surface-container-lowest hover:border-primary/50 transition-colors cursor-pointer flex flex-col sm:flex-row group"
+        className="block rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col sm:flex-row group"
       >
         {image ? (
-          <div className="sm:w-48 h-32 sm:h-auto shrink-0 border-b sm:border-b-0 sm:border-r border-surface-container-highest overflow-hidden relative">
+          <div className="sm:w-48 h-32 sm:h-auto shrink-0 overflow-hidden relative">
             <img src={image} alt={title || 'Link preview'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
           </div>
         ) : (
-          <div className="sm:w-48 h-24 sm:h-auto shrink-0 border-b sm:border-b-0 sm:border-r border-surface-container-highest bg-surface-container flex items-center justify-center">
+          <div className="sm:w-48 h-24 sm:h-auto shrink-0 bg-surface-container flex items-center justify-center">
             {loading ? <Loader2 className="w-6 h-6 animate-spin text-primary" /> : <ImageIcon className="w-6 h-6 text-on-surface-variant opacity-50" />}
           </div>
         )}
@@ -96,9 +96,9 @@ export const LinkPreviewExtension = Node.create({
         href: HTMLAttributes.url, 
         target: "_blank", 
         rel: "noopener noreferrer",
-        class: "not-prose block border border-surface-container-highest rounded-2xl overflow-hidden bg-surface-container-lowest hover:border-primary/50 transition-colors cursor-pointer flex flex-col sm:flex-row group my-4" 
+        class: "not-prose block rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col sm:flex-row group my-4" 
       },
-        ['div', { class: "sm:w-48 h-32 sm:h-auto shrink-0 border-b sm:border-b-0 sm:border-r border-surface-container-highest overflow-hidden relative bg-surface-container flex items-center justify-center" },
+        ['div', { class: "sm:w-48 h-32 sm:h-auto shrink-0 overflow-hidden relative bg-surface-container flex items-center justify-center" },
           HTMLAttributes.image 
             ? ['img', { src: HTMLAttributes.image, class: "w-full h-full object-cover" }] 
             : ['span', { class: "text-[10px] uppercase font-bold text-on-surface-variant/50" }, "LINK"]

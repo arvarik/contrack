@@ -155,7 +155,8 @@ const ContactListItemInner = ({
                 alt={`${contact.company} logo`}
                 onError={() => setImgError(true)}
                 loading="lazy"
-                className="w-4 h-4 rounded-full object-contain bg-surface-container-highest"
+                decoding="async"
+                className="w-4 h-4 rounded-full object-scale-down bg-transparent"
               />
             ) : (
               <Building className="w-3.5 h-3.5 opacity-60" />

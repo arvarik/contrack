@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { isTypingTarget } from "../lib/keyboard";
 import { useDashboard, useDailyInsight, useCompletedActionItems, useCompleteActionItem, useUpdateActionItem } from "../api";
 import { useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
@@ -109,8 +110,7 @@ export const DashboardView = () => {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ignore shortcuts if user is typing
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (isTypingTarget(e)) return;
       if (!firstActionItem) return;
       // Guard against double-firing while a mutation is in-flight
       if (completeAction.isPending || updateAction.isPending) return;

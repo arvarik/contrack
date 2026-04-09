@@ -5,7 +5,8 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Extension } from '@tiptap/core';
 import Mention from '@tiptap/extension-mention';
 import { LinkPreviewExtension } from './LinkPreviewExtension';
-import { useAddInteraction, useUpdateContact, useContacts } from '../api';
+import { useAddInteraction, useUpdateContact, useContactNames } from '../api';
+import type { Interaction } from '../types';
 import { getMentionSuggestion } from './MentionSuggestion';
 import { FileText, Phone, Handshake, Mail, CalendarClock } from 'lucide-react';
 import * as chrono from 'chrono-node';
@@ -16,7 +17,7 @@ import { cn } from '../lib/utils';
 
 export const RichInteractionComposer = ({ contactId }: { contactId: string }) => {
   const [type, setType] = useState<'note' | 'call' | 'meeting' | 'email'>('note');
-  const { data: allContacts = [] } = useContacts();
+  const { data: allContacts = [] } = useContactNames();
   const addInteraction = useAddInteraction();
   const updateContact = useUpdateContact();
   const [followUpText, setFollowUpText] = useState('');
@@ -28,7 +29,7 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
     if (isEditorEmpty && !followUpText.trim()) return;
 
     try {
-      const payload: any = {
+      const payload: Partial<Interaction> = {
         type,
         title: type === 'note' ? (isEditorEmpty ? 'Action Scheduled' : 'Quick Note') : `Logged ${type}`,
         content: isEditorEmpty ? null : htmlContent,
@@ -131,7 +132,7 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
   }, [type, editor]);
 
   return (
-    <div className={cn(COMPOSER, "p-0 overflow-hidden flex flex-col border border-surface-container-highest/20")}>
+    <div className={cn(COMPOSER, "p-0 overflow-hidden flex flex-col shadow-md")}>
       {/* Editor area */}
       <div className="p-5 flex-1 relative">
         <EditorContent editor={editor} className="w-full custom-tiptap" />
@@ -139,7 +140,7 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
         {/* Next action field smoothly integrated into the editor card */}
         <div className="mt-4 group flex items-center relative">
           <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-surface-container to-transparent -top-3 opacity-50" />
-          <div className="flex flex-1 items-center px-3 py-2.5 bg-surface-container-lowest border border-surface-container rounded-xl shadow-sm hover:border-primary/30 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+          <div className="flex flex-1 items-center px-3 py-2.5 bg-surface-container-lowest rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
             <CalendarClock className="w-4 h-4 text-primary/80 mr-2.5 shrink-0" />
             <input 
               value={followUpText}
@@ -157,8 +158,8 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
       </div>
       
       {/* Action Bar */}
-      <div className="bg-surface-container-low/40 px-5 py-3 border-t border-surface-container flex items-center justify-between">
-        <div className="flex gap-1.5 bg-surface-container-lowest p-1 rounded-xl shadow-sm border border-surface-container/30">
+      <div className="bg-surface-container-low/40 px-5 py-3 flex items-center justify-between">
+        <div className="flex gap-1.5 bg-surface-container-lowest p-1 rounded-xl shadow-sm">
           <button onClick={() => setType('note')} className={iconToggle(type === 'note')} title="Note"><FileText className="w-4 h-4" /></button>
           <button onClick={() => setType('call')} className={iconToggle(type === 'call')} title="Call"><Phone className="w-4 h-4" /></button>
           <button onClick={() => setType('meeting')} className={iconToggle(type === 'meeting')} title="Meeting"><Handshake className="w-4 h-4" /></button>

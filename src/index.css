@@ -206,6 +206,24 @@
   .result-card-enter {
     animation: resultCardIn 0.22s ease-out both;
   }
+
+  /**
+   * timeline-enter — Container-level fade-in for the entire timeline section.
+   * timeline-entry — Per-entry staggered entrance using opacity + translateY.
+   *
+   * Uses CSS animations instead of motion.div so entries only animate on mount,
+   * not when new interactions are added to the list.
+   */
+  @keyframes timelineEntryIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .timeline-enter {
+    animation: resultCardIn 0.3s ease-out both;
+  }
+  .timeline-entry {
+    animation: timelineEntryIn 0.35s ease-out both;
+  }
 }
 
 /* Tiptap Customizations */

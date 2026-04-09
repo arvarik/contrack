@@ -20,7 +20,7 @@ export const ContactDetail = () => {
   return (
     <div className="h-full w-full relative bg-surface md:bg-transparent">
       {isOverlayActive && (
-        <button onClick={handleClose} className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-[100] shadow-sm border border-surface-container-highest transition-colors" title="Close Details">
+        <button onClick={handleClose} className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-[100] shadow-sm transition-colors" title="Close Details" aria-label="Close contact details">
           <X className="w-5 h-5 text-on-surface-variant" />
         </button>
       )}

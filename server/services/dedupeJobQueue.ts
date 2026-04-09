@@ -19,7 +19,7 @@ import { log } from "../utils/logger.ts";
 // =============================================================================
 
 export type DedupeScanMode = 'deterministic' | 'ai' | 'both';
-export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'complete' | 'error';
+export type DedupeScanPhase = 'starting' | 'deterministic' | 'ai' | 'clustering' | 'complete' | 'error';
 
 export interface DedupeScanProgress {
   scanId: string;
@@ -31,10 +31,40 @@ export interface DedupeScanProgress {
   deterministicFound: number;
   aiCandidatesFound: number;
   aiEvaluated: number;
-  suggestions: any[];        // Full DedupeSuggestion[] once complete
+  suggestions: any[];        // Deprecated — always empty, kept for backward compat
+  clustersFound: number;
+  totalPairs: number;
+  clusters: DedupeCluster[];
   error?: string;
   startedAt: string;
   completedAt?: string;
+}
+
+// =============================================================================
+// Cluster Types
+// =============================================================================
+
+/** A single piece of evidence connecting two contacts within a cluster. */
+export interface ClusterPair {
+  contactIdA: string;
+  contactIdB: string;
+  matchType: 'email' | 'phone' | 'ai';
+  confidence: number;
+  reasoning: string;
+  matchedField?: string;
+}
+
+/** A group of contacts that the engine believes represent the same person. */
+export interface DedupeCluster {
+  id: string;
+  contacts: any[];           // HydratedContact[] serialized to JSON
+  suggestedPrimaryId: string;
+  pairs: ClusterPair[];
+  aggregateConfidence: number;
+  summary: string;
+  size: number;
+  hasWeakLink: boolean;
+  minConfidence: number;
 }
 
 // =============================================================================
@@ -72,6 +102,9 @@ class DedupeJobQueue extends EventEmitter {
       aiCandidatesFound: 0,
       aiEvaluated: 0,
       suggestions: [],
+      clustersFound: 0,
+      totalPairs: 0,
+      clusters: [],
       startedAt: new Date().toISOString(),
     };
 
@@ -83,6 +116,17 @@ class DedupeJobQueue extends EventEmitter {
   /** Get a scan by ID, or null if not found. */
   getScan(scanId: string): DedupeScanProgress | null {
     return this.scans.get(scanId) ?? null;
+  }
+
+  /** Get the currently active (in-progress) scan, or null if idle. */
+  getActiveScan(): DedupeScanProgress | null {
+    if (!this.processing) return null;
+    for (const scan of this.scans.values()) {
+      if (scan.phase !== 'complete' && scan.phase !== 'error') {
+        return scan;
+      }
+    }
+    return null;
   }
 
   /** Whether a scan is currently being processed. */
@@ -103,17 +147,19 @@ class DedupeJobQueue extends EventEmitter {
     this.emit(scanId, scan);
   }
 
-  /** Mark scan as complete with final suggestions. */
-  complete(scanId: string, suggestions: any[]): void {
+  /** Mark scan as complete with final clusters. */
+  complete(scanId: string, clusters: DedupeCluster[]): void {
     const scan = this.scans.get(scanId);
     if (!scan) return;
     scan.phase = 'complete';
     scan.phaseName = 'Scan complete';
-    scan.suggestions = suggestions;
+    scan.clusters = clusters;
+    scan.clustersFound = clusters.length;
+    scan.suggestions = []; // Deprecated — backward compat
     scan.completedAt = new Date().toISOString();
     this.processing = false;
     this.emit(scanId, scan);
-    log.info('DedupeQueue', `Scan ${scanId} complete — ${suggestions.length} suggestion(s)`);
+    log.info('DedupeQueue', `Scan ${scanId} complete — ${clusters.length} cluster(s)`);
   }
 
   /** Mark scan as failed. */

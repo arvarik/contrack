@@ -43,6 +43,8 @@ export const VibePickerPopover = ({
         onClick={() => setShowVibePicker(!showVibePicker)} 
         className={`p-2 rounded-xl transition-all ${showVibePicker ? 'bg-primary/20 text-primary' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary'}`}
         title="Change Theme Vibe"
+        aria-label="Change theme color"
+        aria-pressed={showVibePicker}
       >
         <Palette className="w-5 h-5" />
       </button>
@@ -54,6 +56,8 @@ export const VibePickerPopover = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 10 }}
             className="absolute top-12 left-1/2 -translate-x-1/2 md:left-auto md:right-0 md:translate-x-0 glass-panel rounded-xl shadow-xl p-3 z-50 grid grid-cols-5 gap-2 w-[180px] place-items-center"
+            role="radiogroup"
+            aria-label="Theme color options"
           >
             {VIBE_COLORS.map(vibe => (
                <button 
@@ -61,7 +65,10 @@ export const VibePickerPopover = ({
                 onClick={() => onSelect(vibe.id)}
                 style={{ backgroundColor: vibe.primary }}
                 className={`w-7 h-7 rounded-full transition-transform hover:scale-110 shadow-sm ${currentVibeId === vibe.id ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest scale-110' : 'hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest'}`}
-                title={`Vibe: ${vibe.id}`}
+                aria-label={`Set theme to ${vibe.id}`}
+                aria-pressed={currentVibeId === vibe.id}
+                role="radio"
+                aria-checked={currentVibeId === vibe.id}
               />
             ))}
           </motion.div>

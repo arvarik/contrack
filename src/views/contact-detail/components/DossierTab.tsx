@@ -5,11 +5,11 @@
  * Extracted from ContactProfile to keep each section focused and readable.
  */
 import React, { useState } from "react";
-import { Briefcase, FileText, Sparkles, Edit2 } from "lucide-react";
+import { Briefcase, ChevronDown, FileText, Sparkles, Edit2 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { motion } from "motion/react";
 
-import type { Contact } from "../../../types";
+import type { Contact, ContactUpdateData, ContactExperience, ContactEducation } from "../../../types";
 import { cn } from "../../../lib/utils";
 import {
   CARD, SECTION_HEADING_SPACED, STATUS_BADGE_SUCCESS,
@@ -22,7 +22,7 @@ import {
 export interface DossierTabProps {
   contact: Contact;
   contactId: string;
-  updateContact: { mutate: (args: { id: string; data: any }) => void };
+  updateContact: { mutate: (args: { id: string; data: ContactUpdateData }) => void };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -41,12 +41,12 @@ export const DossierTab: React.FC<DossierTabProps> = ({
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
       {/* AI Dossier */}
       {(contact.aiBackground || isEditingDossier) && (
-        <div className={cn(CARD, "bg-surface-container-lowest border-primary/20 relative overflow-hidden group")}>
+        <div className={cn(CARD, "bg-surface-container-lowest relative overflow-hidden group")}>
           <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
           <div className="flex justify-between items-center mb-4">
             <h3 className={cn(SECTION_HEADING_SPACED, "text-primary flex items-center gap-2")}><Sparkles className="w-4 h-4" /> AI Dossier</h3>
             {!isEditingDossier && (
-              <button onClick={() => { setDossierText(contact.aiBackground || ''); setIsEditingDossier(true); }} className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-primary transition-opacity p-1 bg-surface-container-low rounded-md shadow-sm border border-surface-container-highest">
+              <button onClick={() => { setDossierText(contact.aiBackground || ''); setIsEditingDossier(true); }} className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-primary transition-opacity p-1 bg-surface-container-low rounded-md shadow-sm" aria-label="Edit dossier">
                 <Edit2 className="w-3.5 h-3.5" />
               </button>
             )}
@@ -61,7 +61,7 @@ export const DossierTab: React.FC<DossierTabProps> = ({
               />
               <div className="flex justify-end gap-2 mt-1">
                 <button onClick={() => setIsEditingDossier(false)} className="px-4 py-1.5 rounded-full text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-colors">Cancel</button>
-                <button onClick={() => { updateContact.mutate({ id: contactId, data: { aiBackground: dossierText } as any }); setIsEditingDossier(false); }} className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-on-primary shadow shadow-primary/20 hover:shadow-md hover:shadow-primary/30 transition-all">Save Dossier</button>
+                <button onClick={() => { updateContact.mutate({ id: contactId, data: { aiBackground: dossierText } }); setIsEditingDossier(false); }} className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-on-primary shadow shadow-primary/20 hover:shadow-md hover:shadow-primary/30 transition-all">Save Dossier</button>
               </div>
             </div>
           ) : (
@@ -84,8 +84,8 @@ export const DossierTab: React.FC<DossierTabProps> = ({
       {/* AI Custom Attributes */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {contact.attributes.map((attr: any) => (
-            <div key={attr.id} className="bg-surface-container-lowest rounded-xl p-4 border border-surface-container-highest shadow-sm">
+          {contact.attributes.map((attr: { id: string; name: string; value: string }) => (
+            <div key={attr.id} className="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
               <span className="text-[10px] font-bold uppercase tracking-widest text-primary block mb-1">{attr.name}</span>
               <span className="text-sm text-on-surface leading-relaxed font-medium block">{attr.value}</span>
             </div>
@@ -93,16 +93,8 @@ export const DossierTab: React.FC<DossierTabProps> = ({
         </div>
       )}
       
-      {/* About */}
       {contact.about && (
-        <div className={cn(CARD, "relative overflow-hidden group")}>
-          <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-          <h3 className={SECTION_HEADING_SPACED}><Sparkles className="w-4 h-4 text-primary" /> About</h3>
-          <p className="whitespace-pre-wrap text-on-surface-variant text-sm leading-relaxed max-h-32 overflow-hidden relative after:absolute after:bottom-0 after:left-0 after:w-full after:h-12 after:bg-gradient-to-t after:from-surface-container-lowest hover:max-h-full hover:after:opacity-0 transition-all">
-            {contact.about}
-          </p>
-          <div className="text-center opacity-100 group-hover:opacity-0 text-[10px] uppercase font-bold text-primary mt-1 transition-opacity">Hover to expand</div>
-        </div>
+        <AboutSection about={contact.about} />
       )}
 
       {/* Experience & Education */}
@@ -112,7 +104,7 @@ export const DossierTab: React.FC<DossierTabProps> = ({
             <div className="p-6 last:border-0 bg-surface-container-lowest">
               <h3 className={cn(SECTION_HEADING_SPACED, "mb-5")}><Briefcase className="w-4 h-4" /> Experience Overview</h3>
               <div className="space-y-5">
-                {contact.experience.map((exp: any) => (
+                {contact.experience.map((exp: ContactExperience) => (
                   <div key={exp.id} className="flex gap-4">
                     <div className="icon-container">
                        <Briefcase className="w-4 h-4 text-primary" />
@@ -140,7 +132,7 @@ export const DossierTab: React.FC<DossierTabProps> = ({
             <div className="p-6">
               <h3 className={cn(SECTION_HEADING_SPACED, "mb-5")}><FileText className="w-4 h-4" /> Education</h3>
               <div className="space-y-4">
-                {contact.education.map((edu: any) => (
+                {contact.education.map((edu: ContactEducation) => (
                   <div key={edu.id} className="flex gap-4">
                     <div className="w-2 h-2 rounded-full ring-4 ring-primary/20 bg-primary mt-1.5 shrink-0" />
                     <div>
@@ -165,3 +157,37 @@ export const DossierTab: React.FC<DossierTabProps> = ({
     </motion.div>
   );
 };
+
+// ─── AboutSection — click-to-expand replaces hover pattern ───────────────────
+
+function AboutSection({ about }: { about: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncation = about.length > 280;
+
+  return (
+    <div className={cn(CARD, "relative overflow-hidden")}>
+      <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+      <h3 className={SECTION_HEADING_SPACED}><Sparkles className="w-4 h-4 text-primary" /> About</h3>
+      <div className="relative">
+        <p className={cn(
+          "whitespace-pre-wrap text-on-surface-variant text-sm leading-relaxed transition-all duration-300",
+          !expanded && needsTruncation && "max-h-32 overflow-hidden"
+        )}>
+          {about}
+        </p>
+        {!expanded && needsTruncation && (
+          <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-surface-container-lowest to-transparent pointer-events-none" />
+        )}
+      </div>
+      {needsTruncation && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-2 text-[11px] uppercase font-bold text-primary flex items-center gap-1 hover:underline transition-colors"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+          <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-300", expanded && "rotate-180")} />
+        </button>
+      )}
+    </div>
+  );
+}

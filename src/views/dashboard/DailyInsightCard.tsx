@@ -17,7 +17,7 @@ export const DailyInsightCard = ({ insight, isLoading, delay = 0 }: DailyInsight
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: "easeOut" }}
-      className={cn(CARD_TINTED, "col-span-full group border border-primary/10")}
+      className={cn(CARD_TINTED, "col-span-full group")}
     >
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-primary" />

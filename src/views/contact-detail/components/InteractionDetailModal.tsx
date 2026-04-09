@@ -1,8 +1,10 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import DOMPurify from "dompurify";
 import { motion, AnimatePresence } from "motion/react";
 import { X, CalendarCheck, FileText, Calendar, Mail, Phone, Handshake, ActivitySquare } from "lucide-react";
 import { Interaction } from "../../../types";
+import type { LucideIcon } from "lucide-react";
 import { format } from "date-fns";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
@@ -12,10 +14,10 @@ interface InteractionDetailModalProps {
   onClose: () => void;
   interaction: Interaction | null;
   onCompleteActionItem: (id: string) => void;
-  onUpdateInteraction: (id: string, data: any) => void;
+  onUpdateInteraction: (id: string, data: Partial<Interaction>) => void;
 }
 
-const TYPE_ICONS: Record<string, any> = {
+const TYPE_ICONS: Record<string, LucideIcon> = {
   note: FileText,
   call: Phone,
   meeting: Handshake,
@@ -59,10 +61,10 @@ export const InteractionDetailModal = ({ isOpen, onClose, interaction, onComplet
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-surface-container-lowest border border-surface-container shadow-2xl rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col pointer-events-auto overflow-hidden"
+              className="bg-surface-container-lowest shadow-2xl rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col pointer-events-auto overflow-hidden"
             >
               {/* Header */}
-              <div className="px-6 py-5 border-b border-surface-container flex items-center justify-between">
+              <div className="px-6 py-5 bg-surface-container-low flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-primary/10">
                     <Icon className="w-5 h-5 text-primary" />
@@ -128,7 +130,7 @@ export const InteractionDetailModal = ({ isOpen, onClose, interaction, onComplet
                     interaction.content && interaction.content !== '<p></p>' ? (
                       <div 
                         className="prose prose-sm max-w-none text-on-surface prose-p:my-2 prose-headings:my-3 break-words prose-a:text-primary" 
-                        dangerouslySetInnerHTML={{ __html: interaction.content }} 
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(interaction.content || '') }} 
                       />
                     ) : (
                       <span className="text-sm italic opacity-50">No notes provided.</span>

@@ -14,7 +14,7 @@ import { formatDistanceToNow, isPast, isToday } from "date-fns";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 
-import type { Contact } from "../../../types";
+import type { Contact, ContactUpdateData } from "../../../types";
 import { cn } from "../../../lib/utils";
 import {
   LABEL, CARD_TINTED, TAG_PILL, SECTION_HEADING_SPACED,
@@ -43,10 +43,10 @@ export interface ProfileHeaderProps {
 
   // Mutations passed from parent
   generateBriefing: { mutate: (id: string) => void; isPending: boolean };
-  archiveContact: { mutate: (id: string, opts?: any) => void; isPending: boolean };
-  unarchiveContact: { mutate: (id: string, opts?: any) => void; isPending: boolean };
-  updateContact: { mutate: (args: { id: string; data: any }) => void };
-  promoteGhost: { mutate: (id: string, opts?: any) => void; isPending: boolean };
+  archiveContact: { mutate: (id: string, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void; isPending: boolean };
+  unarchiveContact: { mutate: (id: string, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void; isPending: boolean };
+  updateContact: { mutate: (args: { id: string; data: ContactUpdateData }) => void };
+  promoteGhost: { mutate: (id: string, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void; isPending: boolean };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -180,7 +180,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full bg-error/10 border-b border-error/20 px-6 py-3 flex items-center justify-center gap-2 shadow-sm"
+          className="w-full bg-error/15 px-6 py-3 flex items-center justify-center gap-2 shadow-sm"
         >
           <CalendarClock className="w-4 h-4 text-error shrink-0" />
           <span className="text-sm font-bold text-error truncate">
@@ -274,6 +274,8 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 }}
                 disabled={archiveContact.isPending || unarchiveContact.isPending}
                 title={contact.isArchived ? 'Unarchive Contact' : 'Archive Contact'}
+                aria-label={contact.isArchived ? 'Unarchive contact' : 'Archive contact'}
+                aria-pressed={!!contact.isArchived}
                 className={cn(
                   "p-2 rounded-xl transition-all flex items-center justify-center",
                   contact.isArchived
@@ -294,7 +296,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
 
             {contact.aiSummary && (
-              <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mb-3 border border-primary/20 max-w-fit">
+              <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mb-3 max-w-fit">
                 <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                 <div className="text-sm text-primary font-medium leading-relaxed italic">
                   {contact.aiSummary}

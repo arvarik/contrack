@@ -1,4 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect, useCallback, useDeferredValue } from "react";
+import { isTypingTarget } from "../../lib/keyboard";
+import { useClickOutside } from "../../hooks/useClickOutside";
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   Search, Plus, Users, Upload, ChevronDown, UserPlus, ListPlus,
@@ -10,6 +12,7 @@ import {
   useCreateList, useReorderLists, useBulkDeleteContacts,
   useBulkUpdateContacts, useBulkAddToList, useArchiveContact,
 } from "../../api";
+import type { ContactUpdateData } from "../../types";
 import { Modal } from "../../components/ui/Modal";
 import { ImportModal } from "../../components/ImportModal";
 import { BulkEditFieldModal } from "../../components/BulkEditFieldModal";
@@ -17,7 +20,7 @@ import { SkeletonText, AnimatedSkeleton } from "../../components/ui/AnimatedSkel
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { ICON_BTN, SEARCH_INPUT, filterPill, PAGE_TITLE } from "../../lib/styles";
+import { ICON_BTN, SEARCH_INPUT, filterPill, PAGE_TITLE, FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
@@ -43,7 +46,7 @@ const FilterButton = ({ label, icon, count, active, onClick }: {
   active: boolean;
   onClick: () => void;
 }) => (
-  <button onClick={onClick} className={filterPill(active)}>
+  <button onClick={onClick} className={filterPill(active)} aria-label={`Filter: ${label} (${count})`} aria-pressed={active}>
     {icon}
     {label}
     <span className={`ml-0.5 text-[10px] ${active ? 'text-primary/70' : 'opacity-50'}`}>{count}</span>
@@ -275,7 +278,7 @@ export const ContactList = () => {
         ...(parsedData?.socialLinks ? { socialLinks: parsedData.socialLinks } : {}),
         ...(parsedData?.education ? { education: parsedData.education } : {}),
         ...(parsedData?.experience ? { experience: parsedData.experience } : {}),
-      } as any);
+      });
       setIsModalOpen(false);
       setParsedData(null);
       setSmartPasteText("");
@@ -371,32 +374,13 @@ export const ContactList = () => {
   const moreRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!showMoreLists) return;
-    const handler = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMoreLists(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showMoreLists]);
-
-  useEffect(() => {
-    if (!showAddMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) setShowAddMenu(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAddMenu]);
+  useClickOutside(moreRef, () => setShowMoreLists(false), showMoreLists);
+  useClickOutside(addMenuRef, () => setShowAddMenu(false), showAddMenu);
 
   // Handle Keyboard Navigation
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA" ||
-        (document.activeElement as HTMLElement)?.isContentEditable
-      ) return;
+      if (isTypingTarget(e)) return;
 
       if (e.key === "Escape" && isSelectMode) { exitSelectMode(); return; }
       if (e.key === "Enter") {
@@ -450,7 +434,7 @@ export const ContactList = () => {
 
   const handleBulkArchive = () => {
     const ids = Array.from(selectedIds);
-    bulkUpdate.mutate({ ids, data: { isArchived: true } as any }, {
+    bulkUpdate.mutate({ ids, data: { isArchived: true } }, {
       onSuccess: ({ count }) => {
         toast.success(`Archived ${count} contact${count !== 1 ? 's' : ''}`);
         exitSelectMode();
@@ -474,7 +458,7 @@ export const ContactList = () => {
   // ── Bulk colour change ─────────────────────────────────────────────────
   const handleBulkColorChange = (vibeId: string) => {
     const ids = Array.from(selectedIds);
-    bulkUpdate.mutate({ ids, data: { themeColor: vibeId } as any }, {
+    bulkUpdate.mutate({ ids, data: { themeColor: vibeId } }, {
       onSuccess: ({ count }) => {
         toast.success(`Updated color for ${count} contact${count !== 1 ? 's' : ''}`);
         exitSelectMode();
@@ -547,7 +531,7 @@ export const ContactList = () => {
 
             {!isSelectMode && (
               <>
-                <button onClick={() => setIsImportOpen(true)} className={ICON_BTN} title="Import Contacts">
+                <button onClick={() => setIsImportOpen(true)} className={ICON_BTN} title="Import Contacts" aria-label="Import contacts">
                   <Upload className="w-5 h-5" />
                 </button>
                 <div className="relative" ref={addMenuRef}>
@@ -555,6 +539,8 @@ export const ContactList = () => {
                     onClick={() => setShowAddMenu(!showAddMenu)}
                     className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors"
                     title="Add New..."
+                    aria-label="Add new contact or list"
+                    aria-expanded={showAddMenu}
                   >
                     <Plus className="w-5 h-5" />
                   </button>
@@ -639,6 +625,7 @@ export const ContactList = () => {
               "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
             )}
             title={`Sort: ${sortBy === 'name' ? 'Name' : 'Date Added'} ${sortDir === 'asc' ? '↑' : '↓'}`}
+            aria-label={`Sort by ${sortBy === 'name' ? 'name' : 'date added'}, ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
           >
             {sortBy === 'name' 
               ? (sortDir === 'asc' ? <ArrowDownAZ className="w-4 h-4" /> : <ArrowUpAZ className="w-4 h-4" />)
@@ -707,7 +694,17 @@ export const ContactList = () => {
         />
 
         {isLoading && (
-          <div className="flex justify-center p-8"><div className="animate-pulse w-6 h-6 rounded-full bg-primary/20" /></div>
+          <div className="px-2 py-3 space-y-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl animate-pulse" style={{ animationDelay: `${i * 60}ms` }}>
+                <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
+                  <div className="h-3 bg-surface-container rounded-full w-2/5" />
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Empty state: 0 contacts total (onboarding) */}
@@ -931,7 +928,7 @@ export const ContactList = () => {
         selectedCount={selectedCount}
         onApply={(field, value) => {
           const ids = Array.from(selectedIds);
-          bulkUpdate.mutate({ ids, data: { [field]: value } as any }, {
+          bulkUpdate.mutate({ ids, data: { [field]: value } as ContactUpdateData }, {
             onSuccess: ({ count }) => {
               toast.success(`Updated ${count} contact${count !== 1 ? 's' : ''}`);
               setIsBulkEditOpen(false);
@@ -947,35 +944,35 @@ export const ContactList = () => {
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setParsedData(null); }} title="New Contact">
         <form onSubmit={handleCreateContact} className="space-y-4 pt-2">
           <div>
-            <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Full Name *</label>
-            <input required name="name" type="text" defaultValue={parsedData?.name || ''} className={`w-full border-none rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary ${parsedData?.name ? 'bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse' : 'bg-surface-container'}`} placeholder="Jane Doe" />
+            <label className={FORM_LABEL}>Full Name *</label>
+            <input required name="name" type="text" defaultValue={parsedData?.name || ''} className={cn(FORM_INPUT, formInputHighlight(!!parsedData?.name))} placeholder="Jane Doe" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Role</label>
-              <input name="role" type="text" defaultValue={parsedData?.role || ''} className={`w-full border-none rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary ${parsedData?.role ? 'bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse' : 'bg-surface-container'}`} placeholder="CEO" />
+              <label className={FORM_LABEL}>Role</label>
+              <input name="role" type="text" defaultValue={parsedData?.role || ''} className={cn(FORM_INPUT, formInputHighlight(!!parsedData?.role))} placeholder="CEO" />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Company</label>
-              <input name="company" type="text" defaultValue={parsedData?.company || ''} className={`w-full border-none rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary ${parsedData?.company ? 'bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse' : 'bg-surface-container'}`} placeholder="Acme Corp" />
+              <label className={FORM_LABEL}>Company</label>
+              <input name="company" type="text" defaultValue={parsedData?.company || ''} className={cn(FORM_INPUT, formInputHighlight(!!parsedData?.company))} placeholder="Acme Corp" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Email</label>
-              <input name="email" type="email" defaultValue={parsedData?.emails?.[0]?.email || parsedData?.email || ''} className={`w-full border-none rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary ${(parsedData?.emails?.[0]?.email || parsedData?.email) ? 'bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse' : 'bg-surface-container'}`} placeholder="jane@example.com" />
+              <label className={FORM_LABEL}>Email</label>
+              <input name="email" type="email" defaultValue={parsedData?.emails?.[0]?.email || parsedData?.email || ''} className={cn(FORM_INPUT, formInputHighlight(!!(parsedData?.emails?.[0]?.email || parsedData?.email)))} placeholder="jane@example.com" />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Phone</label>
-              <input name="phone" type="tel" defaultValue={parsedData?.phones?.[0]?.phone || parsedData?.phone || ''} className={`w-full border-none rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary ${(parsedData?.phones?.[0]?.phone || parsedData?.phone) ? 'bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse' : 'bg-surface-container'}`} placeholder="+1 (555) 000-0000" />
+              <label className={FORM_LABEL}>Phone</label>
+              <input name="phone" type="tel" defaultValue={parsedData?.phones?.[0]?.phone || parsedData?.phone || ''} className={cn(FORM_INPUT, formInputHighlight(!!(parsedData?.phones?.[0]?.phone || parsedData?.phone)))} placeholder="+1 (555) 000-0000" />
             </div>
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Location</label>
-            <input name="location" type="text" defaultValue={parsedData?.location || ''} className={`w-full border-none rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-primary ${parsedData?.location ? 'bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse' : 'bg-surface-container'}`} placeholder="San Francisco, CA" />
+            <label className={FORM_LABEL}>Location</label>
+            <input name="location" type="text" defaultValue={parsedData?.location || ''} className={cn(FORM_INPUT, formInputHighlight(!!parsedData?.location))} placeholder="San Francisco, CA" />
           </div>
           <div className="pt-4">
-            <button type="submit" disabled={createContact.isPending} className="w-full bg-primary text-on-primary font-bold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-surface-container-low">
+            <button type="submit" disabled={createContact.isPending} className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm shadow-sm">
               {createContact.isPending ? 'Saving...' : 'Save Contact'}
             </button>
           </div>

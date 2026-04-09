@@ -52,7 +52,7 @@ export const ArchivedContactsView = () => {
   // ── Bulk restore ──────────────────────────────────────────────────────
   const handleBulkRestore = () => {
     const ids = Array.from(selectedIds);
-    bulkUpdate.mutate({ ids, data: { isArchived: false } as any }, {
+    bulkUpdate.mutate({ ids, data: { isArchived: false } }, {
       onSuccess: ({ count }) => {
         toast.success(`Restored ${count} contact${count !== 1 ? 's' : ''} to network`);
         exitSelectMode();

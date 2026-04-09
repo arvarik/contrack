@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { Command } from 'cmdk';
 import { useNavigate } from 'react-router-dom';
-import { useSearchContacts, useCreateContact, useContacts, useAddInteraction, useSemanticSearch } from '../../api';
+import { useSearchContacts, useCreateContact, useContactNames, useAddInteraction, useSemanticSearch } from '../../api';
 import { useDebounce } from '../../hooks/useDebounce';
 import { Search, UserPlus, Briefcase, Building, Zap, MessageSquare, Phone, Calendar, Mail, Sparkles, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,7 +27,7 @@ export const CommandPalette = () => {
   const { data: ftsResults = [], isLoading: ftsLoading } = useSearchContacts(
     mode === 'normal' ? debouncedSearch : ''
   );
-  const { data: allContacts = [] } = useContacts();
+  const { data: allContacts = [] } = useContactNames();
   const createContact = useCreateContact();
   const addInteraction = useAddInteraction();
   const semanticSearch = useSemanticSearch();

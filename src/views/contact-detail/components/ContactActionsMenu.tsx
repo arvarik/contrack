@@ -3,8 +3,9 @@ import { MoreVertical, Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
 import { DROPDOWN_MENU, DROPDOWN_ITEM } from '../../../lib/styles';
+import type { Contact, ContactEmail, ContactPhone, ContactAddress } from '../../../types';
 
-export const ContactActionsMenu = ({ contact, onDelete }: { contact: any, onDelete: () => void }) => {
+export const ContactActionsMenu = ({ contact, onDelete }: { contact: Contact, onDelete: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -20,8 +21,8 @@ export const ContactActionsMenu = ({ contact, onDelete }: { contact: any, onDele
     const textChunks = [
       `Name: ${contact.name}`
     ];
-    if (contact.emails?.length) textChunks.push(`Email: ${contact.emails.map((e: any) => e.email).join(', ')}`);
-    if (contact.phones?.length) textChunks.push(`Phone: ${contact.phones.map((p: any) => p.phone).join(', ')}`);
+    if (contact.emails?.length) textChunks.push(`Email: ${contact.emails.map((e: ContactEmail) => e.email).join(', ')}`);
+    if (contact.phones?.length) textChunks.push(`Phone: ${contact.phones.map((p: ContactPhone) => p.phone).join(', ')}`);
 
     navigator.clipboard.writeText(textChunks.join('\n'));
     toast.success('Basic details copied');
@@ -34,11 +35,11 @@ export const ContactActionsMenu = ({ contact, onDelete }: { contact: any, onDele
     ];
     if (contact.role) textChunks.push(`Role: ${contact.role}`);
     if (contact.company) textChunks.push(`Company: ${contact.company}`);
-    if (contact.emails?.length) textChunks.push(`Email: ${contact.emails.map((e: any) => e.email).join(', ')}`);
-    if (contact.phones?.length) textChunks.push(`Phone: ${contact.phones.map((p: any) => p.phone).join(', ')}`);
+    if (contact.emails?.length) textChunks.push(`Email: ${contact.emails.map((e: ContactEmail) => e.email).join(', ')}`);
+    if (contact.phones?.length) textChunks.push(`Phone: ${contact.phones.map((p: ContactPhone) => p.phone).join(', ')}`);
     if (contact.birthday) textChunks.push(`Birthday: ${contact.birthday}`);
     if (contact.addresses?.length) {
-      textChunks.push(`Location: ${contact.addresses.map((a: any) => a.address).join(' | ')}`);
+      textChunks.push(`Location: ${contact.addresses.map((a: ContactAddress) => a.address).join(' | ')}`);
     } else if (contact.location) {
       textChunks.push(`Location: ${contact.location}`);
     }
@@ -50,7 +51,7 @@ export const ContactActionsMenu = ({ contact, onDelete }: { contact: any, onDele
 
   return (
     <div className="relative inline-block ml-1" ref={containerRef}>
-      <button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center justify-center">
+      <button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center justify-center" aria-label="Contact actions" aria-expanded={isOpen}>
         <MoreVertical className="w-5 h-5" />
       </button>
       {isOpen && (

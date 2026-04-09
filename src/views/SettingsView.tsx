@@ -133,7 +133,7 @@ export const SettingsView = () => {
                 </h3>
 
                 {/* Temperature unit */}
-                <div className="flex items-center justify-between py-3 border-b border-surface-container-high">
+                <div className="flex items-center justify-between py-3">
                   <div>
                     <h4 className="font-bold">Temperature Unit</h4>
                     <p className="text-sm text-on-surface-variant">Choose how weather is displayed</p>
