@@ -16,16 +16,17 @@
 ## 📖 Table of Contents
 - [Philosophy & Vision](#-philosophy--vision)
 - [System Architecture](#-system-architecture)
-- [Key Capabilities & Engineering Specs](#-key-capabilities--engineering-specs)
+- [Key Capabilities](#-key-capabilities--engineering-specs)
 - [Technology Stack](#-technology-stack)
 - [Database Overview](#-database-overview)
 - [UI/UX Architecture](#-uiux-architecture-the-no-line-hierarchy)
-- [API Integration Contracts](#-api-integration-contracts)
-- [Zero-Friction Deployment](#-zero-friction-deployment)
+- [API Reference](#-api-reference)
+- [Getting Started](#-getting-started)
 - [Environment Variables](#-environment-variables)
 - [Available Scripts](#-available-scripts)
+- [Keyboard Shortcuts](#-keyboard-shortcuts)
 - [Roadmap](#-roadmap)
-- [Contribution & Maintenance Standards](#-contribution--maintenance-standards)
+- [Contributing](#-contributing)
 - [License](#-license)
 
 ---
@@ -34,80 +35,87 @@
 
 Contrack isn't just an address book; it is a **Personal AI Relational Engine**. Engineered for creative directors, freelancers, and executives, Contrack intelligently weaves context, deduplicates massive datasets locally, and autonomously uncovers hidden network connections. 
 
-By combining the blazing speed of local-first SQLite architecture with the analytical power of modern Edge LLMs (`gemini-1.5-flash`), Contrack ensures your professional network is tracked seamlessly without the heavy cognitive load of manual data entry. **You write the notes—the AI builds the relational graph.**
+By combining the blazing speed of local-first SQLite architecture with the analytical power of modern Edge LLMs (Gemini 2.5 Flash / 3.1), Contrack ensures your professional network is tracked seamlessly without the heavy cognitive load of manual data entry. **You write the notes—the AI builds the relational graph.**
 
-Gone are the days of manually typing out structured `First Name`, `Last Name`, `Company` forms. Paste raw unstructured text, drag in an email export, or just brain-dump your meeting notes into the timeline. Contrack parses the chaotic unstructured inputs into highly robust, strictly-typed Drizzle ORM models under the hood.
+Gone are the days of manually typing out structured `First Name`, `Last Name`, `Company` forms. Paste raw unstructured text, drag in an email export, or just brain-dump your meeting notes into the timeline. Contrack parses chaotic unstructured inputs into highly structured, strictly-typed data models under the hood.
 
 ---
 
 ## ⚡ System Architecture
 
-Contrack uses a highly durable, localized architecture designed for zero-latency lookups and frictionless deployments. Every architectural decision prioritizes local data ownership, blistering execution times, and maximum robustness.
-
 ```mermaid
 graph TD
-    %% Frontend Layer
-    subgraph Frontend [UI Layer - React 19 / Vite]
-        R[(React Query v5)] --> C[Tailwind v4 'No-Line' UI]
-        C --> T[Tiptap Editor + Cheerio Previews]
-        T --> Map[React Leaflet Geospatial]
+    subgraph Frontend ["UI Layer — React 19 / Vite"]
+        RQ["React Query v5"] --> TW["Tailwind v4 'No-Line' UI"]
+        TW --> TT["Tiptap Editor + Cheerio Previews"]
+        TT --> Map["React Leaflet Geospatial"]
     end
 
-    %% Backend Layer
-    subgraph Backend [Edge Node.js Express]
-        E(Express Router)
-        E --> M[Multer Media Uploads]
-        E --> GenAI[@google/genai Service Layer]
+    subgraph Backend ["Node.js Express Server"]
+        EX["Express Router"] --> SVC["Service Layer"]
+        SVC --> AI["AI Service + Smart Router"]
+        SVC --> SRCH["Ask Contrack v3 Spotlight"]
+        SVC --> DDP["Dedupe Engine"]
+        SVC --> REL["Relationship Scoring"]
     end
 
-    %% Storage Layer
-    subgraph Storage [Persistence - Local]
-        SQL[(SQLite3 WAL Mode)]
-        D[Drizzle ORM] --> SQL
-        FTS[FTS5 Search Index]
-        SQL --- FTS
+    subgraph Storage ["Persistence — Local-First"]
+        SQL[("SQLite3 WAL Mode")]
+        DZ["Drizzle ORM"] --> SQL
+        FTS["FTS5 Search Index"] --- SQL
+        VEC["sqlite-vec Embeddings"] --- SQL
     end
 
-    %% AI Layer
-    subgraph Cloud [External AI]
-        GEMINI[Google Gemini 1.5 Flash]
+    subgraph AILayer ["AI Infrastructure"]
+        SR["Smart Router"] --> GM["Gemini 2.5 / 3.1"]
+        SR --> QT["Quota Tracker + Parallel Queue"]
+        LE["Transformers.js Local"] --> VEC
     end
 
-    %% Connections
-    Frontend <==>|JSON REST + UUID Tracing| Backend
-    GenAI <==>|Strict JSON Schema bounds| GEMINI
-    Backend <==>|Drizzle ORM DDL| Storage
+    Frontend <===>|"JSON REST + UUID Tracing"| Backend
+    AI <===>|"Smart Router model selection"| AILayer
+    Backend <===>|"Drizzle ORM"| Storage
 ```
 
 ---
 
 ## 🚀 Key Capabilities & Engineering Specs
 
-Contrack replaces traditional CRM chores through background asynchronous processing and optimized data structures.
+### 1. "Ask Contrack" AI Search (v3 Spotlight)
+A local-first hybrid retrieval-augmented generation (RAG) pipeline that finds anyone in your network in under 50ms. Combines FTS5 keyword search with local vector KNN (Transformers.js, 384-dim `all-MiniLM-L6-v2`) via Reciprocal Rank Fusion. Results stream progressively: Phase 1 (instant retrieval) appears in <15ms, Phase 2 (AI-enriched reasons) streams via NDJSON ~500ms later.
 
-### 1. "Catch-Me-Up" AI Briefing
-Walking into a high-stakes meeting? The `generateCatchMeUpBriefing` pipeline feeds up to 3 years of scattered meeting notes, emails, and timeline logs into Gemini. It utilizes strict JSON bounding to enforce a highly compressed, 3-bullet executive summary (Wins, Projects, Open Loops), granting immediate context parsing without hallucination drift.
+### 2. Intelligent Deduplication Engine
+A multi-pass, cluster-based deduplication system that finds and merges duplicate contacts using phonetic matching (Double Metaphone), Levenshtein distance, Jaccard similarity, E.164 phone normalization, and 768-dim Gemini embeddings. Features configurable auto-merge thresholds (Conservative / Default / Aggressive) and a swipeable review UI for manual decisions.
 
-### 2. Bi-Directional Network Weaving (Implicit Graph Tracking)
-Type `@someone` in any interaction payload via the **Tiptap Rich Interaction Composer**. The system's asynchronous AI parser sweeps the text payload, identifying proper nouns and executing exact-match queries against the CRM. It generates an unbreakable bi-directional connection inside the `interaction_mentions` junction table, instantly mapping nodes together ("who knows who").
+### 3. Relationship Pulse Dashboard
+A proactive intelligence engine that surfaces relationship health through automated scoring (frequency, recency, depth weighted), action item swimlanes, daily AI insights, and network composition analytics. Scores recompute on startup and hourly via background sweeps.
 
-### 3. "Ghost" Entity Extraction
-A critical data-harvesting innovation. The AI passively observes your notes. If it identifies organizational entities or human names not present in the DB, it silently registers them as "Ghost" nodes (`isGhost = 1`). When you eventually interact with them, their profile effortlessly upgrades to a formal node, pre-hydrated with historical mentions mapping back to when they were first spoken of.
+### 4. "Catch-Me-Up" AI Briefing
+Walking into a meeting? The briefing pipeline feeds up to 3 years of timeline data into Gemini, producing a structured 3-bullet executive summary (Wins, Projects, Open Loops) with strict JSON bounding to prevent hallucination.
 
-### 4. Zero-Chromium Native Link Unfurling
-Instead of relying on heavy Puppeteer sub-processes that drain local memory, Contrack utilizes `cheerio` HTML parsers. When URLs are pasted into the interface, the backend intercepts the fetch, parses OpenGraph (`og:title`, `og:image`, `og:description`) headers rapidly, and caches the localized payload injected natively back into the timeline UI.
+### 5. Bi-Directional Network Weaving
+Type `@someone` in any interaction via the **Tiptap Rich Interaction Composer**. The system's async AI parser identifies names and executes exact-match queries, generating bi-directional connections in the `interaction_mentions` junction table.
 
-### 5. `.eml` Digestion & Data Polymorphism
-Drag raw `.eml` exports into the UI. The Express backend rips the MIME structure apart while Gemini 1.5 strips noisy HTML signatures and redundant email reply-chains. The result is a clean, markdown-formatted conversational thread injected synchronously into the timeline, entirely bypassing cluttered email UI paradigms.
+### 6. "Ghost" Entity Extraction
+The AI passively observes notes, silently registering unrecognized entities as Ghost nodes (`isGhost = 1`). When you eventually interact with them, their profile upgrades to a formal node, pre-hydrated with historical mentions.
 
-### 6. Levenshtein-Bounded Deduplication
-CRMs rot from data duplication. Our backend actively scans the schema utilizing Levenshtein-distance string algorithms and E.164 phone normalization checks. It exposes highly probable "clones" to the `/api/dedupe/suggestions` endpoint, empowering 1-click timeline merges that execute within single SQL transactions to prevent data partition failures.
+### 7. AI Search Enrichment (Web Grounding)
+Background batch processor that hydrates contact profiles with internet-sourced data via Gemini's search grounding. Uses a two-pass strategy (discover → merge) with persistent progress tracking and a dedicated settings UI.
 
-### 7. Geospatial Mapping Component
-Automatically maps parsed `lat`/`lng` coordinates globally using `react-leaflet`. Contacts interact natively with coordinate data to visualize where your network density physically resides.
+### 8. Doc2Query Write-Time Enrichment
+When contacts are created or updated, an async background job generates synthetic search terms (e.g., "fintech, payments, developer" for a Stripe engineer) using Gemini Lite, stored in a `searchExpansion` column indexed by FTS5.
 
-### 8. Custom Lists & Smart Grouping
-Create unlimited, user-defined contact lists with curated icons. Lists appear as stackable filter pills in the contact sidebar, with smart overflow into a dropdown when space is constrained. Lists support drag-to-reorder via a "See All Lists" view, enabling you to pin your most-used groups at the top. Each list flows through the same idempotent junction-table architecture — contacts can belong to multiple lists simultaneously, and memberships are inherited during deduplication merges.
+### 9. Smart AI Router
+All AI calls are routed through a `SmartRouter` that selects the optimal Gemini model (Lite, Flash, or Pro) based on the use case, manages quota tracking per model, and handles automatic retry with fallback to lower-tier models on rate limits.
+
+### 10. Custom Lists & Smart Grouping
+Create unlimited, user-defined contact lists with curated icons, drag-to-reorder, bulk member management, and membership inheritance during deduplication merges.
+
+### 11. Geospatial Mapping
+Automatically geocodes contact addresses (via Mapbox or Nominatim fallback) and renders an interactive cluster map using React Leaflet.
+
+### 12. Zero-Chromium Link Unfurling
+Uses `cheerio` HTML parsers for lightweight OpenGraph extraction (`og:title`, `og:image`, `og:description`) without Puppeteer or headless browsers.
 
 ---
 
@@ -115,220 +123,245 @@ Create unlimited, user-defined contact lists with curated icons. Lists appear as
 
 | Domain | Technology | Justification |
 |---|---|---|
-| **Frontend Framework** | `React 19` + `Vite 6` | Cutting edge concurrent rendering and instantaneous HMR. |
-| **Data Fetching** | `@tanstack/react-query v5` | Declarative cache invalidation, SSR support, and query deduplication. |
-| **Styling** | `Tailwind CSS v4` | Predictable utility classes bounded by our strict "No-Line" UI hierarchy. |
-| **Rich Text Engine** | `Tiptap` + `@tiptap/pm` | Block-based headless component yielding total aesthetic control overriding standard PM boundaries. |
-| **Backend Server** | `Node 22` + `Express` | Stable, unyielding async handling for edge capabilities. |
-| **Database** | `Better-SQLite3` + `Drizzle ORM`| Write-Ahead Logging (WAL) synchronous performance without the Postgres overhead. Full-Text Search (FTS5). |
-| **AI Inference** | `@google/genai` (Gemini 1.5 Flash) | Superior high-context-window ingestion for unstructured text summarization and JSON extraction. |
-| **Animation** | `Motion` | Micro-interactions and fluid layout transitions. |
-| **Mapping** | `Leaflet` + `React-Leaflet` | Client-side map cluster rendering. |
+| **Frontend Framework** | `React 19` + `Vite 6` | Concurrent rendering, instant HMR. |
+| **Data Fetching** | `@tanstack/react-query v5` | Declarative cache invalidation, query deduplication. |
+| **Styling** | `Tailwind CSS v4` | Utility classes with strict "No-Line" design system tokens. |
+| **Rich Text** | `Tiptap` + `@tiptap/pm` | Block-based headless editor with @mention support. |
+| **Animation** | `Motion (Framer)` | Micro-interactions, layout transitions, staggered entry. |
+| **Backend** | `Node.js 22` + `Express` + `tsx` | TypeScript-first, zero-transpile dev server. |
+| **Database** | `Better-SQLite3` + `Drizzle ORM` | WAL-mode, FTS5 full-text search, synchronous perf. |
+| **Vector Search** | `sqlite-vec` + `Transformers.js` | Local 384-dim embeddings for <5ms semantic search. |
+| **AI** | `@google/genai` (Gemini 2.5/3.1) | Smart Router with model-class routing (Lite/Flash/Pro). |
+| **Mapping** | `Leaflet` + `React-Leaflet` | Client-side cluster rendering with geocoded coordinates. |
+| **Testing** | `Vitest` | Fast unit and integration tests (72 tests, <500ms). |
 
 ---
 
 ## 🗄️ Database Overview
 
-Contrack employs a highly normalized, cleanly segregated Drizzle schema running on top of localized SQLite. Operations enforce `ON DELETE CASCADE` down to the metal.
+Contrack uses a highly normalized Drizzle ORM schema on SQLite with WAL mode. Key tables:
 
-Key Tables:
-*   `contacts`: The primary demographic node (stores `id`, `name`, `birthday`, `cadenceDays`, `aiBriefing`, `isGhost`).
-*   `contact_emails`, `contact_phones`, `contact_social_links`: 1:N relations supporting multi-value deduplication and provenance (`source`).
-*   `contact_education`, `contact_experience`: Timeline-specific data for chronological history.
-*   `lists`: User-created named contact groups with icon, sort order, and membership counts.
-*   `list_members`: Junction table connecting contacts to lists with composite PK for idempotent add/remove.
-*   `interactions`: The overarching timeline log (calls, notes, emails, meetings).
-*   `interaction_mentions`: The physical junction table generating the explicit graph connecting `interactions` to multiple `contacts`.
+| Table | Purpose |
+|---|---|
+| `contacts` | Primary entity — demographics, AI briefings, `isGhost`, `canonicalId`, `searchExpansion` |
+| `contact_emails`, `contact_phones` | 1:N multi-value fields with deduplication support |
+| `contact_tags`, `contact_interests` | Tagging and interest taxonomy |
+| `contact_education`, `contact_experience` | Chronological career/education history |
+| `contact_social_links`, `contact_sources` | Social profiles and import provenance |
+| `contact_addresses` | Multi-value addresses with geocoding |
+| `interactions` | Timeline events (calls, notes, emails, meetings) |
+| `interaction_mentions` | Junction table for bi-directional @mention graph |
+| `lists`, `list_members` | User-created contact groups with sort order |
+| `action_items` | Follow-up tasks with due dates and completion tracking |
+| `contacts_fts` | FTS5 virtual table — full-text search index |
+| `contact_embeddings` | `vec0` — 768-dim Gemini embeddings for deduplication |
+| `search_embeddings` | `vec0` — 384-dim local embeddings for Ask Contrack search |
+| `dedupe_suggestions` | Pending deduplication clusters |
+| `dedupe_exclusions` | User-dismissed pairs (never suggest again) |
+| `merge_log` | Audit trail for merge operations (supports undo) |
+| `embedding_metadata` | Tracks embedding staleness per contact |
 
-*Refer to `src/db/schema.ts` for raw typescript DDL modeling.*
+Schema definition: `src/db/schema.ts`. Virtual tables and triggers: `server/db.ts`.
 
 ---
 
 ## 🎨 UI/UX Architecture: The "No-Line" Hierarchy
 
-Engineered for maximum optical cleanliness, the CRM follows strict Tailwind CSS v4 token constraints documented in `workflows/design-system.md`.
+The CRM follows strict Tailwind CSS v4 design tokens (see `.agent/workflows/design-system.md`):
 
-- **Zero Borders Rule**: Standard 1px `border-gray-200` sections are explicitly banned. Containment is represented exclusively through surface background shifts:
-  - `surface` (Base layer)
-  - `surface-container-low` (Secondary sections)
-  - `surface-container-lowest` (Cards and high-focus nodes)
-- **Glassmorphism & Z-Depth**: Modals and dropdowns utilize backdrop blurs layered on opaque backgrounds to enforce optical priority without heavy drop-shadows.
-- **Micro-Animations**: Uses `motion` to stagger elements, fade inputs, and transition states smoothly to elevate the UI far above traditional data-entry screens.
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-Contrack is built for speed and efficiency. Below are the global and component-specific keyboard shortcuts currently implemented:
-
-### Global & Navigation
-- \`Cmd + K\` or \`Ctrl + K\`: Open/Toggle the Command Palette (Quick Actions / Semantic Search).
-- \`/\`: Focus the active search bar (Contact List or Ask My CRM).
-- \`Escape\`: Unfocus the search bar, clear search queries, or close active modals.
-
-### Contact List (Left Panel)
-- \`Arrow Down\` or \`j\`: Navigate to the next contact in the list.
-- \`Arrow Up\` or \`k\`: Navigate to the previous contact in the list.
-- \`c\`: Quick-open the "New Contact" modal (when no input is focused).
-- \`v\`: Quick-open the "Magic Paste" AI extraction modal (when no input is focused).
-- \`Enter\`: Quickly focus the Rich Interaction Composer (when on a contact detail page).
-
-### Rich Interaction Composer
-- \`Cmd + Enter\` or \`Ctrl + Enter\`: Save and log the current interaction (Note, Call, Meeting, Email).
-
-### @Mentions Dropdown
-- \`Arrow Up\` / \`Arrow Down\`: Navigate the suggestion list.
-- \`Enter\`: Select the highlighted contact.
-- \`Escape\`: Close the mentions dropdown.
-
-### The Singularity (Cleanup View)
-- \`Right Arrow\` or \`l\`: Focus the next duplicate suggestion.
-- \`Left Arrow\` or \`h\`: Focus the previous duplicate suggestion.
-- \`m\`: Merge the currently focused contact pair.
-- \`d\`: Dismiss/ignore the currently focused contact pair.
+- **Zero Borders Rule**: No `border-gray-200`. Containment is expressed through surface shifts:
+  - `surface` → Base layer
+  - `surface-container-low` → Secondary sections
+  - `surface-container-lowest` → Cards, modals, high-focus
+- **Glassmorphism & Z-Depth**: Modals use backdrop blurs on opaque backgrounds.
+- **Micro-Animations**: `motion` for staggered entry, fade transitions, and layout animation.
+- **Progressive Disclosure**: Two-phase search results, enriching indicators, and skeleton loaders.
 
 ---
 
-## 🔌 API Integration Contracts
+## 🔌 API Reference
 
-The Express backend acts as a monolithic REST interface. Below are critical path contracts. All payload requests/responses are handled as `application/json`.
+All endpoints are prefixed with `/api`. Payloads are `application/json` unless noted.
 
-### Entity Hydration & Mutation
+### Contacts
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/contacts` | Fetch global rolodex. Supports `?q=` leveraging FTS5 indexing. |
-| `GET` | `/api/contacts/:id` | Deep-fetch a specific node. Hydrates all child arrays (phones, emails, experiences). |
-| `POST` | `/api/contacts` | Ingest explicit nodes. |
-| `PUT` | `/api/contacts/:id` | Idempotent updates for nested schemas. |
-| `DELETE`| `/api/contacts/:id` | Executes physical cascade drops. |
-| `POST` | `/api/parse-contact` | Natively parses unstructured text arrays via AI, returning structured Drizzle models. |
+| `GET` | `/contacts` | Fetch all contacts. `?q=` for FTS5 search, `?view=slim` for lightweight. |
+| `GET` | `/contacts/:id` | Hydrate a single contact with all child arrays. |
+| `POST` | `/contacts` | Create a contact. |
+| `PUT` | `/contacts/:id` | Full update with nested child arrays. |
+| `PATCH` | `/contacts/:id` | Partial scalar update. |
+| `DELETE` | `/contacts/:id` | Cascade delete (including vec0 embeddings). |
+| `POST` | `/contacts/bulk` | Bulk create from import. |
+| `POST` | `/contacts/bulk-delete` | Bulk delete by ID array. |
+| `PUT` | `/contacts/bulk-update` | Bulk update shared fields. |
+| `POST` | `/parse-contact` | AI-parse unstructured text into structured contact. |
 
-### Temporal Event Topology
+### Timeline & Interactions
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/contacts/:id/timeline` | Fetch chronological multi-cast views overlapping `interactions` and `interaction_mentions`. |
-| `POST` | `/api/contacts/:id/interactions`| Append logs, triggering async `extractMentions` sweeps natively. |
+| `GET` | `/contacts/:id/timeline` | Fetch chronological timeline with @mention links. |
+| `POST` | `/contacts/:id/interactions` | Log interaction, triggers async mention extraction. |
+| `PATCH` | `/interactions/:id` | Edit an interaction. |
+| `DELETE` | `/interactions/:id` | Remove an interaction. |
+| `POST` | `/contacts/:id/briefing` | Generate AI Catch-Me-Up briefing. |
+| `POST` | `/contacts/:id/promote` | Promote Ghost → explicit contact. |
 
-### Media, Automation, & Geographic Intersections
+### Ask Contrack (Search)
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/contacts/:id/briefing` | Engages Gemini boundary for 3-bullet Catch-Me-Up payload generation. |
-| `POST` | `/api/contacts/:id/promote` | Triggers a state transition shifting a node from "Ghost" to Explicit status. |
-| `GET` | `/api/utils/unfurl` | Validates and parses external URI references via `cheerio` returning OpenGraph attributes securely. |
-| `GET` | `/api/contacts/map` | Exposes global geometry intersections clustering entities for mapping views. |
+| `GET` | `/search?q=` | FTS5 keyword search (sidebar). |
+| `POST` | `/search/semantic` | v3 hybrid search. `Accept: application/x-ndjson` for streaming. |
 
-### AI / Model Context Protocol (MCP) Proxy Endpoints
-These high-speed projection boundaries specifically feed AI reasoning systems, bypassing thick UI data hydration layers.
+### Deduplication
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/query/contacts` | Lightweight cursor-paginated fetching allowing projection (e.g. `?fields=id,name,role`). |
-| `GET` | `/api/contacts/action-items` | Yields high-urgency timelines (`nextFollowUpAt` or `cadenceDays` breached constraints). |
-| `GET` | `/api/tags` & `/api/industries` | Plucks unique global taxonomy arrays across the CRM explicitly mapping schema structures. |
-| `GET` | `/api/interactions/search` | Performs raw high-speed keyword `FTS5` text-sweeps executing strictly across log notes payload boundaries. |
+| `POST` | `/dedupe/scan` | Trigger a full dedupe scan. |
+| `GET` | `/dedupe/suggestions` | Fetch pending clusters. |
+| `GET` | `/dedupe/suggestions/count` | Count of pending suggestions. |
+| `POST` | `/dedupe/suggestions/:id/merge` | Merge a suggestion cluster. |
+| `POST` | `/dedupe/suggestions/:id/dismiss` | Dismiss a suggestion. |
+| `POST` | `/contacts/merge` | Manual 2-contact merge. |
+| `POST` | `/contacts/merge-cluster` | Merge an N-contact cluster. |
+| `GET` | `/dedupe/merge-log` | Audit trail of past merges. |
+| `POST` | `/dedupe/merge-log/:id/undo` | Undo a merge. |
 
-### Lists Management
+### Action Items & Dashboard
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/lists` | Fetch all lists with member counts, ordered by `sortOrder`. |
-| `GET` | `/api/lists/:id/contacts` | Plucks raw hydrated contact nodes natively mapped to the specified list ID `ON JOIN`. |
-| `POST` | `/api/lists` | Create a new list with `name` and `icon`. |
-| `DELETE`| `/api/lists/:id` | Delete a list (cascade removes memberships). Idempotent. |
-| `PUT` | `/api/lists/reorder` | Reorder lists by providing `orderedIds` array. |
-| `POST` | `/api/lists/:id/members` | Add a contact to a list (idempotent via `INSERT OR IGNORE`). |
-| `DELETE`| `/api/lists/:id/members/:contactId` | Remove a contact from a list. Idempotent. |
+| `GET` | `/action-items` | Fetch pending action items. |
+| `POST` | `/contacts/:id/action-items` | Create an action item. |
+| `PATCH` | `/action-items/:id/complete` | Mark an action item complete. |
+| `GET` | `/dashboard` | Relationship Pulse Dashboard metrics. |
+| `GET` | `/dashboard/insight` | AI-generated daily insight. |
+
+### Lists
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/lists` | Fetch all lists with member counts. |
+| `POST` | `/lists` | Create a list. |
+| `PUT` | `/lists/reorder` | Reorder via `orderedIds` array. |
+| `POST` | `/lists/:id/members` | Add a contact to a list. |
+| `POST` | `/lists/:id/members/bulk` | Bulk add contacts. |
+
+### Utilities
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/utils/unfurl` | OpenGraph link preview extraction. |
+| `GET` | `/contacts/map` | Geocoded contacts for map view. |
+| `GET` | `/ai/diagnostics` | AI model routing and quota diagnostics. |
 
 ---
 
-## 🚀 Zero-Friction Deployment
+## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 22+ (Mandatory for optimal SQLite native driver hooks)
-- A valid Gemini Edge token (`GEMINI_API_KEY` from Google AI Studio)
+- Node.js 22+
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
 - Git
 
-### 1. Developer Bootstrap
+### Quick Start
 ```bash
 git clone https://github.com/arvarik/contrack.git
 cd contrack
-
-# Install modern dependencies
 npm install
-
-# Setup environment
 cp .env.example .env
+# Edit .env to add your GEMINI_API_KEY
+npm run dev
 ```
-*Note: Ensure you edit the `.env` file to include your `GEMINI_API_KEY` and `APP_URL`.*
 
-**Database Note:** Contrack uses **Drizzle Kit migrations** for schema management. On first boot, the server applies all pending migrations from the `./drizzle/` directory automatically. For existing databases (pre-migration era), a backward-compatibility guard ensures safe bootstrapping. After modifying `src/db/schema.ts`, run `npm run db:generate` to create a tracked migration file.
+Navigate to `http://localhost:3000`. The server auto-applies database migrations, loads the local embedding model, and backfills search embeddings on first boot.
 
-To hydrate synthetic testing entities:
+### Seed Data
 ```bash
 npm run seed
 ```
 
-### 2. Local Execution
+### Production
 ```bash
-npm run dev
+npm run build
+NODE_ENV=production npx tsx server.ts
 ```
-Navigate to `http://localhost:3000`. Hot Module Replacement (HMR) protects client state while the isolated backend tracks modifications seamlessly via `tsx`.
 
-### 3. Production Hardening
-When preparing the monolith for VPS instances (AWS, Hetzner, Railway):
-1. **Compile Application Bounds**:
-   ```bash
-   npm run build
-   ```
-2. **Execute Node Binary**:
-   ```bash
-   NODE_ENV=production npx tsx server.ts
-   ```
-*Warning:* When deploying via Docker, heavily restrict the configuration to ensure mapping an absolute path volume to the SQLite `.db` matrix. Ephemeral containers will instantly destroy the WAL files on reboot without a hard-linked persistent volume.
+> **Docker note:** Mount a persistent volume for the SQLite `.db` file. Ephemeral containers will destroy data on restart.
 
 ---
 
 ## 🔐 Environment Variables
 
-| Variable | Description | Requirement |
+| Variable | Description | Default |
 |---|---|---|
-| `GEMINI_API_KEY` | Required for all Gemini AI operations (summaries, text parses). | **Required** |
-| `APP_URL` | The domain/URL where the app is hosted (e.g. `http://localhost:3000`). | Optional/Local |
-| `PORT` | Listening port for Express. Defaults to `3000`. | Optional |
+| `GEMINI_API_KEY` | Required for all AI operations. | — |
+| `APP_URL` | Host URL for self-referential links. | `http://localhost:3000` |
+| `PORT` | Express listening port. | `3000` |
+| `MAPBOX_API_KEY` | Optional. Enables Mapbox geocoding (higher accuracy than Nominatim). | — |
+| `AI_PROVIDER` | LLM provider adapter. | `gemini` |
+| `AI_TIER` | `FREE` (conservative routing) or `PAID` (full model access). | `FREE` |
 
 ---
 
 ## 💻 Available Scripts
 
-- `npm run dev`: Boots Vite UI + TSX Express backend concurrently.
-- `npm run build`: Compiles production localized bounds using Vite.
-- `npm run preview`: Test local prod build.
-- `npm run seed`: Clears the DB and repopulates synthetic, pseudo-realistic demo data.
-- `npm run db:generate`: Generates a new Drizzle Kit migration file after schema changes.
-- `npm run lint`: Validates strictly typed configurations inside typescript without emitting traces.
-- `npm run clean`: Purges `dist/` caching bundles.
+| Script | Description |
+|---|---|
+| `npm run dev` | Start Vite + Express dev server with HMR. |
+| `npm run build` | Compile production bundle via Vite. |
+| `npm run preview` | Preview production build locally. |
+| `npm run seed` | Clear DB and repopulate with demo data. |
+| `npm run lint` | TypeScript type-check (`tsc --noEmit`). |
+| `npm test` | Run Vitest test suite (72 tests). |
+| `npm run db:generate` | Generate a Drizzle Kit migration after schema changes. |
+| `npm run clean` | Purge `dist/` build cache. |
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+### Global
+| Shortcut | Action |
+|---|---|
+| `Cmd+K` / `Ctrl+K` | Toggle Command Palette |
+| `/` | Focus active search bar |
+| `Escape` | Unfocus / close modals |
+
+### Contact List
+| Shortcut | Action |
+|---|---|
+| `↓` or `j` | Next contact |
+| `↑` or `k` | Previous contact |
+| `c` | New Contact modal |
+| `v` | Magic Paste (AI extraction) |
+| `Enter` | Focus interaction composer |
+
+### Rich Interaction Composer
+| Shortcut | Action |
+|---|---|
+| `Cmd+Enter` | Save interaction |
+
+### @Mentions
+| Shortcut | Action |
+|---|---|
+| `↑ / ↓` | Navigate suggestions |
+| `Enter` | Select contact |
+| `Escape` | Close dropdown |
 
 ---
 
 ## 🗺️ Roadmap
-- [ ] End-to-End Encryption (E2EE) for at-rest SQL databases.
-- [ ] Calendar CalDAV sync ingestion to natively hydrate meetings without clicking.
-- [ ] iOS/Android PWA optimized layout.
-- [ ] Enhanced Network Visualization (Canvas/d3 graph rendering).
+- [ ] End-to-End Encryption (E2EE) for at-rest databases
+- [ ] Calendar CalDAV sync for automatic meeting hydration
+- [ ] iOS/Android PWA optimized layout
+- [ ] Enhanced Network Visualization (Canvas/d3 graph rendering)
+- [ ] Multi-provider AI support (OpenAI, Anthropic, Ollama)
 
 ---
 
-## 🤝 Contribution & Maintenance Standards
+## 🤝 Contributing
 
-As a principal-grade open-source system, Contrack adheres to rigid operational standards:
-
-- **Local-First Speed**: Network round-trips to managed DBs are eliminated. Avoid submitting PRs that push database calls over HTTP boundaries.
-- **No `any` Typings**: Ensure all UI props, API responses, and Express payloads define strict TypeScript interfaces.
-- **Fetch Purity**: New frontend data requirements must extend React Query hooks. Raw `useEffect` loops are globally banned for remote fetch.
-- **Styling constraints**: Leverage existing Tailwind layout combinations. Do not invent manual margins/paddings or colors outside the `surface` palettes. *(See `workflows/design-system.md`)*.
-
-Contributions should be made via Pull Requests. Please add or modify tests for any new features to maintain data integrity.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development standards, code style, and PR process.
 
 ---
 
 ## 📜 License
 
-This project is open-sourced under the [MIT License](https://opensource.org/licenses/MIT). You are free to utilize, morph, and deploy instances of Contrack per your specific workflow demands.
+This project is open-sourced under the [MIT License](https://opensource.org/licenses/MIT).

@@ -181,6 +181,21 @@ export async function generateSingleEmbedding(text: string): Promise<Float32Arra
   return l2Normalize(response.embeddings[0].values);
 }
 
+/**
+ * Generate an embedding for a search query.
+ *
+ * Uses `task: retrieval` prefix instead of `task: clustering` used for
+ * contact embeddings. Gemini's embedding model is prompt-aware:
+ * - `clustering` optimizes for document↔document similarity (good for dedupe)
+ * - `retrieval`  optimizes for query↔document matching (good for search)
+ *
+ * Using the correct task prefix significantly improves recall in search.
+ */
+export async function generateQueryEmbedding(queryText: string): Promise<Float32Array> {
+  const text = `task: retrieval | query: ${queryText}`;
+  return generateSingleEmbedding(text);
+}
+
 // =============================================================================
 // Storage: sqlite-vec Operations
 // =============================================================================

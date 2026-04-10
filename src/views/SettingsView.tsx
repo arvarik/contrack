@@ -28,7 +28,7 @@ export const SettingsView = () => {
 
   usePageTitle('Settings');
   const { limit: recentLimit, setLimit: setRecentLimit } = useRecentContactsLimit();
-  const { autoMergeThreshold, setAutoMergeThreshold } = useDedupeSettings();
+  const { preset, setPreset } = useDedupeSettings();
 
   useEffect(() => {
     const saved = localStorage.getItem('contrack_temp_unit');
@@ -94,16 +94,55 @@ export const SettingsView = () => {
           <Route path="/" element={
             <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-4">
 
-              {/* Dedupe Engine */}
-              <Link to="/settings/dedupe" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
-                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors")}>
-                  <Zap className="w-5 h-5 text-primary" />
-                  Dedupe Engine
-                </h3>
-                <p className="text-sm text-on-surface-variant">
-                  Find and merge duplicate contacts using AI-powered detection, or manually select contacts to merge.
-                </p>
-              </Link>
+              {/* Dedupe Engine — clickable nav + inline settings */}
+              <div className={CARD}>
+                {/* ── Clickable top: navigates to dedupe view ─────────── */}
+                <Link
+                  to="/settings/dedupe"
+                  className="block hover:opacity-80 transition-opacity group cursor-pointer"
+                >
+                  <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors")}>
+                    <Zap className="w-5 h-5 text-primary" />
+                    Dedupe Engine
+                  </h3>
+                  <p className="text-sm text-on-surface-variant">
+                    Find and merge duplicate contacts using AI-powered detection, or manually select contacts to merge.
+                  </p>
+                </Link>
+
+                {/* ── Visual separator (background shift, no border) ──── */}
+                <div className="mt-4 -mx-6 -mb-6 bg-surface-container-low rounded-b-2xl px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm">Auto-Merge Sensitivity</h4>
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        {preset === 'aggressive'
+                          ? 'More auto-merges, fewer manual reviews.'
+                          : preset === 'conservative'
+                            ? 'Only near-certain matches merge automatically.'
+                            : 'Balanced — high-confidence matches auto-merge.'}
+                      </p>
+                    </div>
+
+                    <div className="flex bg-surface-container rounded-full p-1 shadow-inner h-9 ml-4 shrink-0">
+                      {(['conservative', 'default', 'aggressive'] as const).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setPreset(p)}
+                          className={cn(
+                            "px-3 h-full rounded-full text-xs font-bold transition-all flex items-center justify-center whitespace-nowrap",
+                            preset === p
+                              ? "bg-surface shadow-sm text-primary"
+                              : "text-on-surface-variant hover:text-on-surface"
+                          )}
+                        >
+                          {p === 'aggressive' ? 'Aggressive' : p === 'conservative' ? 'Conservative' : 'Default'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* AI Search */}
               <Link to="/settings/ai-search" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
@@ -192,51 +231,6 @@ export const SettingsView = () => {
                       onClick={() => setRecentLimit(recentLimit + 1)}
                       disabled={recentLimit >= MAX_RECENT_LIMIT}
                       aria-label="Increase recent contacts"
-                      className={cn(
-                        "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
-                        "bg-surface-container hover:bg-surface-container-high",
-                        "disabled:opacity-30 disabled:cursor-not-allowed"
-                      )}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                {/* Auto-merge threshold */}
-                <div className="flex items-center justify-between pt-3">
-                  <div>
-                    <h4 className="font-bold">Auto-Merge Threshold</h4>
-                    <p className="text-sm text-on-surface-variant">
-                      Confidence level required to auto-merge duplicates.{' '}
-                      {autoMergeThreshold >= 0.97
-                        ? 'Conservative — only near-certain matches merge automatically.'
-                        : autoMergeThreshold >= 0.93
-                          ? 'Balanced — high-confidence matches are auto-merged.'
-                          : 'Aggressive — more matches are auto-merged, review fewer manually.'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 ml-4 shrink-0">
-                    <button
-                      onClick={() => setAutoMergeThreshold(autoMergeThreshold - 0.01)}
-                      disabled={autoMergeThreshold <= 0.85}
-                      aria-label="Decrease auto-merge threshold"
-                      className={cn(
-                        "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
-                        "bg-surface-container hover:bg-surface-container-high",
-                        "disabled:opacity-30 disabled:cursor-not-allowed"
-                      )}
-                    >
-                      −
-                    </button>
-                    <span className="w-10 text-center font-extrabold text-on-surface tabular-nums text-sm">
-                      {(autoMergeThreshold * 100).toFixed(0)}%
-                    </span>
-                    <button
-                      onClick={() => setAutoMergeThreshold(autoMergeThreshold + 0.01)}
-                      disabled={autoMergeThreshold >= 0.99}
-                      aria-label="Increase auto-merge threshold"
                       className={cn(
                         "w-8 h-8 rounded-xl flex items-center justify-center text-base font-bold transition-all",
                         "bg-surface-container hover:bg-surface-container-high",

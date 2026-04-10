@@ -38,6 +38,8 @@ export interface RawContactRow {
   location?: string | null;
   industry?: string | null;
   headline?: string | null;
+  about?: string | null;
+  preferences?: string | null;
 }
 
 /**
@@ -148,8 +150,17 @@ export function contactToEmbeddingString(contact: NormalizedContact, raw: RawCon
   if (raw.location) parts.push(`Location: ${raw.location}`);
   if (raw.industry) parts.push(`Industry: ${raw.industry}`);
   if (raw.headline) parts.push(`Headline: ${raw.headline}`);
+  if (raw.about) parts.push(`About: ${raw.about.slice(0, 200)}`);
+  if (raw.preferences) parts.push(`Preferences: ${raw.preferences.slice(0, 200)}`);
   if (contact.emailsNorm.length) parts.push(`Emails: ${contact.emailsNorm.join(', ')}`);
   if (contact.phonesNorm.length) parts.push(`Phones: ${contact.phonesNorm.join(', ')}`);
+
+  // Include tags and interests for rich semantic matching
+  // (e.g., "who likes espresso?" should match contacts with espresso in interests)
+  const tagRows = sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?").all(raw.id) as { tag: string }[];
+  const interestRows = sqlite.prepare("SELECT interest FROM contact_interests WHERE contactId = ?").all(raw.id) as { interest: string }[];
+  const combined = [...tagRows.map(t => t.tag), ...interestRows.map(i => i.interest)];
+  if (combined.length > 0) parts.push(`Interests: ${combined.join(', ')}`);
 
   const content = parts.join(' | ');
   return `task: clustering | query: ${content}`;
@@ -243,7 +254,7 @@ export function normalizeContacts(
 ): NormalizedContact[] {
   // 1. Load all contacts
   const allContacts = sqlite.prepare(
-    `SELECT id, name, firstName, lastName, company, role, location, industry, headline
+    `SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences
      FROM contacts WHERE ${contactFilter}`
   ).all() as RawContactRow[];
 
@@ -309,7 +320,7 @@ export function normalizeContacts(
  */
 export function normalizeContactById(contactId: string): NormalizedContact | null {
   const raw = sqlite.prepare(
-    "SELECT id, name, firstName, lastName, company, role, location, industry, headline FROM contacts WHERE id = ?"
+    "SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences FROM contacts WHERE id = ?"
   ).get(contactId) as RawContactRow | undefined;
 
   if (!raw || !raw.name) return null;

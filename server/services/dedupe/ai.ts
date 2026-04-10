@@ -61,6 +61,7 @@ ${pairDescriptions}
 
 For each pair, return your assessment.`,
       responseFormat: "json",
+      routing: { prefer: "flash" },
       jsonSchema: {
         type: "array",
         items: {

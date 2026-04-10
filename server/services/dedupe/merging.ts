@@ -135,6 +135,11 @@ export function mergeContacts(primaryId: string, duplicateId: string, rid: strin
     }
 
     db.update(schema.contacts).set(updates).where(eq(schema.contacts.id, primaryId)).run();
+
+    // vec0 tables don't support FK cascading — clean up before hard delete
+    try { sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?").run(duplicateId); } catch { /* vec0 row may not exist */ }
+    try { sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?").run(duplicateId); } catch { /* vec0 row may not exist */ }
+
     sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(duplicateId);
   });
 

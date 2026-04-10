@@ -31,3 +31,6 @@ Thumbs.db
 
 # Test / scratch artifacts
 test.eml
+
+# Internal design docs — not part of the shipped product
+docs/

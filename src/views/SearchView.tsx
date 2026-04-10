@@ -208,8 +208,9 @@ export const SearchView = () => {
 
   const results = semanticSearch.data?.matches ?? [];
   const isFallback = semanticSearch.data?.fallback ?? false;
-  const isLoading = semanticSearch.isPending;
-  const hasSearched = semanticSearch.isSuccess || semanticSearch.isError;
+  const isLoading = semanticSearch.isPending && semanticSearch.phase === 'idle';
+  const isEnriching = semanticSearch.phase === 'enriching';
+  const hasSearched = semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface">
@@ -336,6 +337,12 @@ export const SearchView = () => {
                       {results.length} match{results.length !== 1 ? 'es' : ''}
                     </span>
                   </div>
+                  {isEnriching && (
+                    <div className="flex items-center gap-1.5 text-xs text-primary/70">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Enriching with AI…</span>
+                    </div>
+                  )}
                   {isFallback && (
                     <div className="flex items-center gap-1.5 text-xs text-amber-600">
                       <AlertTriangle className="w-3 h-3" />

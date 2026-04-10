@@ -3,7 +3,7 @@
 // =============================================================================
 // Import everything AI-related from this one path.
 // Usage:
-//   import { ai, aiService } from "../ai/index.ts";
+//   import { ai } from "../ai/index.ts";
 //   import type { AIGenerateOptions } from "../ai/index.ts";
 // =============================================================================
 
@@ -16,31 +16,38 @@ export type {
   MentionEntity,
   CompressedContact,
   SemanticMatchResult,
+  RoutingPolicy,
+  DiagnosticsSnapshot,
+  ModelUsageSnapshot,
 } from "./types.ts";
 
-// Shared provider instance — the same resolved provider used everywhere.
-// Use this for lower-level programmatic access (e.g. in AI Search strategies,
-// deduplication service). Prefer the named function exports in aiService.ts
-// when calling well-known business operations.
-import { GeminiAdapter } from "./adapters/gemini.ts";
+// Routing utilities available to consumers
+export { ParallelQueue } from "./routing/ParallelQueue.ts";
 
-const _apiKey = process.env.GEMINI_API_KEY;
-const _configured = !!(
-  _apiKey &&
-  _apiKey !== "dummy_key" &&
-  (process.env.AI_PROVIDER ?? "gemini").toLowerCase() === "gemini"
-);
+// ---------------------------------------------------------------------------
+// Shared Provider Instance
+// ---------------------------------------------------------------------------
+// The single resolved provider used everywhere. Backed by singleton.ts
+// to ensure one QuotaTracker, one SmartRouter, and one set of circuit
+// breakers across the entire application.
+// ---------------------------------------------------------------------------
+
+import { sharedProvider, isProviderConfigured } from "./singleton.ts";
 
 /**
  * Shared AI provider instance.
  * - `ai.generate(options)` — raw generation call
+ * - `ai.getQuotaSnapshot()` — diagnostics
  * - `ai.isConfigured` — true when a valid API key is present
  */
-export const ai = Object.assign(new GeminiAdapter(_apiKey || "dummy_key"), {
-  isConfigured: _configured,
+export const ai = Object.assign(sharedProvider, {
+  isConfigured: isProviderConfigured,
 });
 
-// Re-export all named aiService functions for convenience
+// ---------------------------------------------------------------------------
+// Business Function Re-exports
+// ---------------------------------------------------------------------------
+
 export {
   parseContactRecord,
   generateCatchMeUpBriefing,
@@ -48,5 +55,6 @@ export {
   summarizeEmlEmail,
   semanticContactSearch,
   generateDailyInsight,
+  bulkParseContacts,
 } from "./aiService.ts";
 export type { DailyInsight } from "./aiService.ts";

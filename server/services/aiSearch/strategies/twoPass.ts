@@ -1,18 +1,20 @@
 // =============================================================================
-// AI Search — Two-Pass Strategy (V1)
+// AI Search — Two-Pass Strategy (V2)
 // =============================================================================
 // The canonical strategy for AI Search. Uses two sequential LLM calls to
-// work around the Gemini 2.5 API constraint: googleSearch grounding and
+// work around the Gemini API constraint: googleSearch grounding and
 // responseSchema cannot coexist in the same request.
 //
 // Pass 1 — Grounding: Uses Google Search tool for live internet research.
 //          Returns free-form text with grounding citations.
+//          Prefers "pro" models for highest search accuracy.
 // Pass 2 — Extraction: Takes the grounded text and extracts structured
 //          JSON using a responseSchema. No grounding (already done).
+//          Prefers "lite" models — cheap pure-formatting task.
 //
-// Future: When Gemini 3.x GA models support grounding + schema in a single
-// call, a SinglePassStrategy can be added to the registry to cut latency
-// ~40% and halve token cost. See strategies/index.ts for registration.
+// V2: Model selection is now handled by the SmartRouter via `routing.prefer`
+// instead of hardcoded fallback arrays. The router handles capacity checks,
+// circuit breakers, and tier-aware model selection automatically.
 // =============================================================================
 
 import type { AIProvider } from "../../../ai/provider.ts";
@@ -22,24 +24,14 @@ import { aiSearchOutputSchema, extractionJsonSchema } from "../promptTemplate.ts
 import { log } from "../../../utils/logger.ts";
 
 // ---------------------------------------------------------------------------
-// Model Lists (verified stable — April 2026)
-// ---------------------------------------------------------------------------
-// These are separate from the FALLBACK_MODELS chain in gemini.ts because
-// each pass has different requirements (grounding support vs schema support).
+// Constants
 // ---------------------------------------------------------------------------
 
-/** Pass 1: Must support googleSearch tool — verified stable models only */
-const GROUNDING_MODELS = [
-  'gemini-2.5-flash',       // Verified grounding-capable; best price-performance
-  'gemini-2.5-pro',         // Fallback: most capable, lower RPM
-];
+/** Max attempts for Pass 1 when the search tool returns empty text */
+const GROUNDING_MAX_RETRIES = 2;
 
-/** Pass 2: Any schema-capable model (cheaper models are fine here) */
-const EXTRACTION_MODELS = [
-  'gemini-2.5-flash-lite',  // Cheapest — pure formatting task
-  'gemini-2.5-flash',       // Fallback
-  'gemini-2.5-pro',         // Last resort
-];
+/** Delay before retrying a grounding call that returned empty text */
+const GROUNDING_RETRY_DELAY_MS = 1_500;
 
 // =============================================================================
 // Strategy Implementation
@@ -59,54 +51,58 @@ export class TwoPassStrategy implements AISearchStrategy {
     let citations: Array<{ title: string; uri: string }> = [];
 
     // ── Pass 1: Grounding (web search → text output) ──────────────────
+    // Prefer "pro" models for maximum search grounding accuracy.
+    // The SmartRouter handles model fallback via circuit breakers —
+    // no manual model array iteration needed.
     let groundedText = '';
-    let pass1Error: Error | null = null;
 
-    for (const model of GROUNDING_MODELS) {
-      // Each model gets 2 attempts — grounding occasionally returns empty
-      // text even for valid queries (search tool didn't engage).
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          if (attempt > 0) {
-            log.info('TwoPassStrategy', `Pass 1 (grounding) → ${model} — retry after empty result`);
-            await new Promise(r => setTimeout(r, 1_500));
-          } else {
-            log.info('TwoPassStrategy', `Pass 1 (grounding) → ${model}`);
-          }
+    for (let attempt = 1; attempt <= GROUNDING_MAX_RETRIES; attempt++) {
+      if (attempt > 1) {
+        log.info('TwoPassStrategy', `Pass 1 (grounding) — retry ${attempt} after empty result`);
+        await new Promise(r => setTimeout(r, GROUNDING_RETRY_DELAY_MS));
+      }
 
-          const pass1Result = await adapter.generate({
-            prompt,
-            responseFormat: 'text',
-            enableSearchGrounding: true,
-            model,
-          });
+      try {
+        const pass1Result = await adapter.generate({
+          prompt,
+          responseFormat: 'text',
+          enableSearchGrounding: true,
+          routing: { prefer: "pro" },
+        });
 
-          groundedText = pass1Result.text;
-          modelsUsed.push(pass1Result.model);
-          totalTokens += pass1Result.tokenCount ?? 0;
+        groundedText = pass1Result.text;
+        modelsUsed.push(pass1Result.model);
+        totalTokens += pass1Result.tokenCount ?? 0;
 
-          log.info('TwoPassStrategy', `Pass 1 complete via ${pass1Result.model} in ${pass1Result.latencyMs}ms (${pass1Result.tokenCount ?? '?'} tokens)`);
+        log.info(
+          'TwoPassStrategy',
+          `Pass 1 complete via ${pass1Result.model} in ${pass1Result.latencyMs}ms` +
+            ` (${pass1Result.tokenCount ?? '?'} tokens)`,
+        );
 
-          if (groundedText.trim()) {
-            pass1Error = null;
-            break; // Got non-empty text — success
-          }
-          // Empty text — retry this model
-          log.warn('TwoPassStrategy', `Pass 1 returned empty text from ${model} (attempt ${attempt + 1})`);
-        } catch (err: any) {
-          pass1Error = err;
-          log.warn('TwoPassStrategy', `Pass 1 failed on ${model}: ${err.message}`);
-          break; // Hard error — try next model
+        if (groundedText.trim()) {
+          break; // Got non-empty text — success
+        }
+
+        log.warn('TwoPassStrategy', `Pass 1 returned empty text (attempt ${attempt})`);
+      } catch (err: any) {
+        log.warn('TwoPassStrategy', `Pass 1 failed: ${err.message}`);
+        // On the last attempt, surface the error
+        if (attempt === GROUNDING_MAX_RETRIES) {
+          throw err;
         }
       }
-      if (groundedText.trim()) break; // Success — no need to try next model
     }
 
-    if (pass1Error || !groundedText.trim()) {
-      throw pass1Error ?? new Error('No public information found for this contact. The AI searched the internet but could not identify or find data about this person.');
+    if (!groundedText.trim()) {
+      throw new Error(
+        'No public information found for this contact. ' +
+          'The AI searched the internet but could not identify or find data about this person.',
+      );
     }
 
     // ── Pass 2: Extraction (grounded text → structured JSON) ──────────
+    // Prefer "lite" models — this is a pure formatting/extraction task.
     const extractionPrompt = `
 Below is research text about a specific professional contact.
 Extract the information into the JSON schema provided.
@@ -120,44 +116,31 @@ ${groundedText}
 ---
     `.trim();
 
-    let structuredData: Record<string, unknown> = {};
-    let pass2Error: Error | null = null;
+    const pass2Result = await adapter.generate({
+      prompt: extractionPrompt,
+      responseFormat: 'json',
+      jsonSchema: extractionJsonSchema,
+      routing: { prefer: "lite" },
+    });
 
-    for (const model of EXTRACTION_MODELS) {
-      try {
-        log.info('TwoPassStrategy', `Pass 2 (extraction) → ${model}`);
-        const pass2Result = await adapter.generate({
-          prompt: extractionPrompt,
-          responseFormat: 'json',
-          jsonSchema: extractionJsonSchema,
-          model,
-        });
+    modelsUsed.push(pass2Result.model);
+    totalTokens += pass2Result.tokenCount ?? 0;
 
-        modelsUsed.push(pass2Result.model);
-        totalTokens += pass2Result.tokenCount ?? 0;
+    // Parse and validate with Zod (default .strip() mode — silently
+    // drops unrecognized fields rather than rejecting the entire response)
+    const rawParsed = JSON.parse(pass2Result.text || '{}');
+    const validated = aiSearchOutputSchema.safeParse(rawParsed);
 
-        // Parse and validate with Zod (default .strip() mode — silently
-        // drops unrecognized fields rather than rejecting the entire response)
-        const rawParsed = JSON.parse(pass2Result.text || '{}');
-        const validated = aiSearchOutputSchema.safeParse(rawParsed);
-
-        if (!validated.success) {
-          throw new Error(`Zod validation failed: ${validated.error.message}`);
-        }
-
-        structuredData = validated.data as Record<string, unknown>;
-        log.info('TwoPassStrategy', `Pass 2 complete via ${pass2Result.model} in ${pass2Result.latencyMs}ms (${pass2Result.tokenCount ?? '?'} tokens)`);
-        pass2Error = null;
-        break; // Success
-      } catch (err: any) {
-        pass2Error = err;
-        log.warn('TwoPassStrategy', `Pass 2 failed on ${model}: ${err.message}`);
-      }
+    if (!validated.success) {
+      throw new Error(`Zod validation failed: ${validated.error.message}`);
     }
 
-    if (pass2Error) {
-      throw pass2Error;
-    }
+    const structuredData = validated.data as Record<string, unknown>;
+    log.info(
+      'TwoPassStrategy',
+      `Pass 2 complete via ${pass2Result.model} in ${pass2Result.latencyMs}ms` +
+        ` (${pass2Result.tokenCount ?? '?'} tokens)`,
+    );
 
     const latencyMs = Date.now() - startMs;
 

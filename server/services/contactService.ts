@@ -12,6 +12,8 @@ import { invalidateDailyInsight } from "./dashboardService.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
 import { generateAndStoreEmbedding, generateAndStoreBulkEmbeddings } from "./dedupe/embeddings.ts";
+import { embedContact } from "./search/localEmbeddings.ts";
+import { generateSearchExpansion } from "../ai/aiService.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { dedupeService, dedupeQueue } from "./dedupe/index.ts";
@@ -25,6 +27,14 @@ const _dedupeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Debounce window for incremental checks (ms). */
 const DEDUPE_DEBOUNCE_MS = 5_000;
+
+/**
+ * Fields that trigger search re-indexing (Doc2Query + local search embeddings)
+ * when mutated. Defined once to prevent updateContact and patchContact diverging.
+ */
+const SEARCH_TRIGGER_FIELDS = [
+  'name', 'company', 'role', 'location', 'industry', 'headline', 'about', 'preferences',
+] as const;
 
 /**
  * Schedule a debounced incremental dedupe check for a contact.
@@ -116,6 +126,24 @@ export const contactService = {
       log.warn("ContactService", `Background embedding for ${id} failed: ${err.message}`)
     );
 
+    // Fire-and-forget: Doc2Query search expansion → then embed with complete data
+    // NOTE: We intentionally don't embed before expansion completes — the single
+    // embedContact call after expansion captures the enriched text, avoiding a
+    // double-embed race condition.
+    generateSearchExpansion({
+      name: body.name, role: body.role, company: body.company,
+      industry: body.industry, about: body.about, preferences: body.preferences,
+      tags: body.tags, interests: body.interests,
+    }).then(expansion => {
+      if (expansion) {
+        sqlite.prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?").run(expansion, id);
+      }
+      // Embed with or without expansion — this is the definitive embedding
+      return embedContact(id);
+    }).catch(err =>
+      log.debug("ContactService", `Doc2Query/embed for ${id} skipped: ${err?.message}`)
+    );
+
     // Fire-and-forget: incremental dedupe check (debounced)
     scheduleIncrementalDedupe(id);
 
@@ -170,7 +198,14 @@ export const contactService = {
   bulkDeleteContacts(ids: string[]) {
     const deleteFn = sqlite.transaction(() => {
       const stmt = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
-      for (const id of ids) stmt.run(id);
+      // vec0 tables don't support FK cascading — clean up manually
+      const delSearch = sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?");
+      const delDedupe = sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?");
+      for (const id of ids) {
+        try { delSearch.run(id); } catch { /* vec0 row may not exist */ }
+        try { delDedupe.run(id); } catch { /* vec0 row may not exist */ }
+        stmt.run(id);
+      }
     });
     deleteFn();
     invalidateAllCaches();
@@ -244,6 +279,26 @@ export const contactService = {
       );
     }
 
+    // Fire-and-forget: recompute search embedding + Doc2Query
+    if (SEARCH_TRIGGER_FIELDS.some(f => body[f] !== undefined)) {
+      // Regenerate Doc2Query expansion → then embed once with complete data
+      const row = sqlite.prepare("SELECT name, role, company, industry, about, preferences FROM contacts WHERE id = ?").get(id) as any;
+      if (row) {
+        const tags = (sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?").all(id) as { tag: string }[]).map(t => t.tag);
+        const interests = (sqlite.prepare("SELECT interest FROM contact_interests WHERE contactId = ?").all(id) as { interest: string }[]).map(t => t.interest);
+        generateSearchExpansion({ ...row, tags, interests }).then(expansion => {
+          if (expansion) {
+            sqlite.prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?").run(expansion, id);
+          }
+          return embedContact(id);
+        }).catch(err =>
+          log.debug("ContactService", `Doc2Query/embed update for ${id} skipped: ${err?.message}`)
+        );
+      } else {
+        embedContact(id).catch(() => {});
+      }
+    }
+
     // Fire-and-forget: incremental dedupe if identity fields changed
     const dedupeFields = ['name', 'firstName', 'lastName', 'company', 'role', 'location'];
     if (dedupeFields.some(f => body[f] !== undefined)) {
@@ -262,6 +317,13 @@ export const contactService = {
       queueGeocode(id, body.location);
     }
 
+    // Fire-and-forget: recompute search embedding if searchable fields changed
+    // NOTE: FTS5 is already updated by the contacts_au trigger, but the
+    // vector embedding + Doc2Query expansion must be refreshed explicitly.
+    if (SEARCH_TRIGGER_FIELDS.some(f => body[f] !== undefined)) {
+      embedContact(id).catch(() => {});
+    }
+
     const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
     if (!updated) return null;
 
@@ -270,6 +332,10 @@ export const contactService = {
   },
 
   deleteContact(id: string) {
+    // vec0 tables don't support FK cascading — clean up manually before delete
+    try { sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?").run(id); } catch { /* vec0 row may not exist */ }
+    try { sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?").run(id); } catch { /* vec0 row may not exist */ }
+
     const result = db.delete(schema.contacts).where(eq(schema.contacts.id, id)).returning().get();
     if (!result) return false;
     invalidateAllCaches();

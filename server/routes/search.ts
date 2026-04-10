@@ -18,6 +18,17 @@ router.get("/", asyncHandler(async (req, res) => {
   res.json(results);
 }));
 
+/**
+ * POST /api/search/semantic — Ask Contrack v3 two-phase streaming search.
+ *
+ * Streams NDJSON (newline-delimited JSON):
+ *   Phase 1: { phase: "instant", matches: [...] }   — sent in <15ms
+ *   Phase 2: { phase: "enriched", matches: [...] }  — sent ~500ms later (optional)
+ *   Final:   { phase: "complete", matches: [...] }   — for cache hits + short-circuits
+ *
+ * If the client sends `Accept: application/json`, falls back to the
+ * non-streaming single-response mode for backward compatibility.
+ */
 router.post("/semantic", asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
   const { query } = req.body as { query?: string };
@@ -29,8 +40,24 @@ router.post("/semantic", asyncHandler(async (req, res) => {
     throw new AppError("query must be ≤ 500 characters", 400);
   }
 
-  const result = await searchService.semanticSearch(query, rid);
-  res.json(result);
+  const accept = req.headers.accept || "";
+  // Only stream when explicitly requested — Accept: */* (the default for
+  // curl, Postman, fetch) should fall back to single-response JSON.
+  const wantsStream = accept.includes("application/x-ndjson");
+
+  if (wantsStream) {
+    // Two-phase streaming response
+    res.setHeader("Content-Type", "application/x-ndjson");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Cache-Control", "no-cache");
+    res.flushHeaders();
+
+    await searchService.semanticSearchStream(query, rid, res);
+  } else {
+    // Single-response mode (backward compatible)
+    const result = await searchService.semanticSearch(query, rid);
+    res.json(result);
+  }
 }));
 
 export const searchRouter = router;

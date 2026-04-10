@@ -3,70 +3,37 @@
 // =============================================================================
 // This module contains all AI-powered business operations for the CRM.
 // It programs against the abstract AIProvider interface, never directly
-// against any LLM SDK. The concrete provider is resolved at startup
-// from the AI_PROVIDER environment variable (default: "gemini").
+// against any LLM SDK. The concrete provider is the shared singleton
+// from singleton.ts — ensuring one QuotaTracker, one SmartRouter, and
+// one set of circuit breakers across the entire application.
 //
-// Public API surface (unchanged from the original monolithic aiService.ts):
+// Public API surface:
 //   - parseContactRecord(text)
 //   - generateCatchMeUpBriefing(contact, interactions)
 //   - extractMentions(text)
 //   - summarizeEmlEmail(rawEml)
 //   - semanticContactSearch(query, contacts)
+//   - generateDailyInsight(stats)
+//   - bulkParseContacts(texts, concurrency?)
 // =============================================================================
 
 import "dotenv/config";
-import type { AIProvider } from "./provider.ts";
 import type {
   ParsedContact,
   MentionEntity,
   CompressedContact,
   SemanticMatchResult,
 } from "./types.ts";
-import { GeminiAdapter } from "./adapters/gemini.ts";
+import { sharedProvider, isProviderConfigured } from "./singleton.ts";
+import { ParallelQueue } from "./routing/ParallelQueue.ts";
+import { getAITier } from "./routing/registry.ts";
 import { log } from "../utils/logger.ts";
 
 // Re-export domain types for consumers
 export type { ParsedContact, MentionEntity, CompressedContact, SemanticMatchResult };
 
-// ---------------------------------------------------------------------------
-// Provider Resolution
-// ---------------------------------------------------------------------------
-
-type ResolvedProvider = { provider: AIProvider; configured: boolean };
-
-
-function resolveProvider(): ResolvedProvider {
-  const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-
-  switch (providerName) {
-    case "gemini": {
-      const apiKey = process.env.GEMINI_API_KEY;
-      const configured = !!(apiKey && apiKey !== "dummy_key");
-      if (!configured) {
-        log.warn("AIService", "GEMINI_API_KEY not configured — AI functions will use mock responses");
-      }
-      return { provider: new GeminiAdapter(apiKey || "dummy_key"), configured };
-    }
-
-    // Future adapters plug in here:
-    // case "openai":
-    //   return { provider: new OpenAIAdapter(process.env.OPENAI_API_KEY!), configured: !!process.env.OPENAI_API_KEY };
-    // case "anthropic":
-    //   return { provider: new AnthropicAdapter(process.env.ANTHROPIC_API_KEY!), configured: !!process.env.ANTHROPIC_API_KEY };
-    // case "ollama":
-    //   return { provider: new OllamaAdapter(process.env.OLLAMA_BASE_URL!), configured: !!process.env.OLLAMA_BASE_URL };
-
-    default: {
-      log.warn("AIService", `Unknown AI_PROVIDER "${providerName}", falling back to Gemini`);
-      const apiKey = process.env.GEMINI_API_KEY;
-      const configured = !!(apiKey && apiKey !== "dummy_key");
-      return { provider: new GeminiAdapter(apiKey || "dummy_key"), configured };
-    }
-  }
-}
-
-const { provider, configured: _isConfigured } = resolveProvider();
-log.info("AIService", `Initialized with provider: ${provider.name}`);
+// The shared provider instance — same one used by the barrel export in index.ts
+const provider = sharedProvider;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,7 +41,7 @@ log.info("AIService", `Initialized with provider: ${provider.name}`);
 
 /** Returns true when the AI provider has no valid API key and will use mock responses. */
 function isMockMode(): boolean {
-  return !_isConfigured;
+  return !isProviderConfigured;
 }
 
 /**
@@ -128,6 +95,7 @@ export async function parseContactRecord(text: string): Promise<ParsedContact> {
     systemPrompt,
     prompt,
     responseFormat: "json",
+    routing: { prefer: "lite" },
     jsonSchema: {
       type: "object",
       properties: {
@@ -261,6 +229,7 @@ export async function generateCatchMeUpBriefing(
     systemPrompt,
     prompt,
     responseFormat: "json",
+    routing: { prefer: "lite" },
     jsonSchema: {
       type: "array",
       items: { type: "string" },
@@ -315,6 +284,7 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
       systemPrompt,
       prompt,
       responseFormat: "json",
+      routing: { prefer: "lite" },
       jsonSchema: {
         type: "array",
         items: {
@@ -376,6 +346,7 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
       systemPrompt,
       prompt,
       responseFormat: "text",
+      routing: { prefer: "flash" },
     });
 
     log.info("AIService", `EML digest synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
@@ -387,72 +358,60 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
 }
 
 // =============================================================================
-// 5. semanticContactSearch
+// 5. rerankCandidates (Ask Contrack v2)
 // =============================================================================
 
 /**
- * Performs semantic RAG search over a compressed contact dump.
+ * LLM-based reranker for Ask Contrack hybrid retrieval pipeline.
  *
- * Passes the user's natural-language query plus every active contact
- * (as a null-stripped compact JSON array) to the AI, which acts as a
- * data analyst and returns the subset of contact IDs that match,
- * each paired with a one-sentence explanation.
+ * Takes ~30 pre-filtered candidate contacts (from the hybrid retrieval
+ * engine) and uses the LLM to determine which ones *definitively* match
+ * the user's query, providing evidence-based reasons for each.
  *
- * Prompt engineering notes (why this specific structure):
- * - Precision-first hierarchy: "exclude uncertain" before "be thorough"
- *   prevents the model from over-including borderline contacts.
- * - Self-verification step: the model must re-check each candidate against
- *   the query before emitting it, which catches false positives.
- * - Negative examples: showing what a false positive looks like reduces
- *   hallucinated matches by ~40% in structured extraction tasks.
- * - Confidence field: allows server-side filtering of low-confidence matches.
+ * This is the Stage 2 of the pipeline. Stage 1 (hybrid retrieval) narrows
+ * ~960 contacts to ~30 candidates using FTS5 + vector KNN + SQL filters.
+ * This function evaluates only those 30, making it:
+ * - Much faster: ~1.5K input tokens vs ~100K+ in the old brute-force approach
+ * - Much more accurate: the LLM judges pre-screened candidates, not haystacks
+ * - Much cheaper: uses "lite" model class for a pure filtering task
  */
-export async function semanticContactSearch(
+export async function rerankCandidates(
   query: string,
-  contacts: CompressedContact[]
+  candidates: CompressedContact[],
 ): Promise<SemanticMatchResult[]> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock semantic response due to unconfigured AI provider");
-    await new Promise(resolve => setTimeout(resolve, 800));
-    if (contacts.length > 0) {
-      return [{ contact_id: contacts[0].id, reason: "Mock result: AI provider not configured." }];
+    log.warn("AIService", "Using mock rerank response due to unconfigured AI provider");
+    await new Promise(resolve => setTimeout(resolve, 200));
+    if (candidates.length > 0) {
+      return [{ contact_id: candidates[0].id, reason: "Mock result: AI provider not configured." }];
     }
     return [];
   }
 
-  const systemPrompt = `You are a precise CRM data analyst. Given a JSON array of contacts and a natural-language query, you identify contacts that DEFINITIVELY match the query.
+  if (candidates.length === 0) return [];
 
-CRITICAL RULES (in priority order):
-1. PRECISION OVER RECALL: It is far better to miss a match than to include a false positive. When uncertain, EXCLUDE.
-2. EVIDENCE REQUIRED: Every match must cite a specific field value from the contact data that proves the match. If you cannot point to concrete evidence, do not include the contact.
-3. SELF-VERIFICATION: Before adding any contact to your results, re-read the query and verify the contact truly satisfies it. If your reason includes words like "does not", "doesn't", "not a match", "unrelated", or "no evidence", then DO NOT include that contact.
-4. NO INVENTION: Never infer, assume, or hallucinate data not present in the contact fields.`;
+  const systemPrompt = `You are a precise CRM data analyst. Given a set of candidate contacts and a natural-language query, identify which contacts DEFINITIVELY match the query.
+
+These contacts have already been pre-filtered by a retrieval system — your job is to verify each one and return only the true matches with evidence-based reasons.
+
+CRITICAL RULES:
+1. PRECISION OVER RECALL: It is far better to miss a match than to include a false positive.
+2. EVIDENCE REQUIRED: Every match must cite a specific field value from the contact data. No guessing.
+3. SELF-VERIFICATION: Before including a contact, verify it truly satisfies the query. If your reason uses words like "does not", "doesn't", "no evidence", then EXCLUDE that contact.
+4. NO INVENTION: Only use data present in the contact fields. Never infer or hallucinate.`;
 
   const prompt = `QUERY: "${query.replace(/"/g, "'")}"
 
-TASK: Search through the contacts below and return ONLY those that definitively answer the query.
+CANDIDATES (${candidates.length} pre-filtered contacts):
+${JSON.stringify(candidates)}
 
-PROCESS (follow this exactly):
-1. Read the query carefully. Understand what SPECIFIC criteria a contact must meet.
-2. Scan each contact. For each potential match, ask yourself: "Does this contact's data PROVE it matches the query?"
-3. If YES → include it with a brief evidence-based reason citing the exact field value.
-4. If NO or UNCERTAIN → skip it entirely. Do not include it.
-
-EXAMPLES OF CORRECT BEHAVIOR:
-- Query: "Who works at Google?" → Include {"contact_id": "abc", "reason": "Company field is 'Google'"} ✓
-- Query: "Who works at Google?" → Do NOT include someone whose company is "Alphabet" (that requires inference) ✗
-- Query: "Whose name starts with J?" → Include ONLY contacts whose name field literally begins with 'J' or 'j' ✓
-- Query: "Whose name starts with J?" → Do NOT include "Sabrina" (name does not start with J) ✗
-
-CONTACTS (${contacts.length} total):
-${JSON.stringify(contacts)}
-
-Return a JSON array. If no contacts match, return [].`;
+Return a JSON array of contacts that DEFINITIVELY match the query. For each match, provide a brief evidence-based reason citing the specific field value. If no candidates match, return [].`;
 
   const result = await provider.generate({
     systemPrompt,
     prompt,
     responseFormat: "json",
+    routing: { prefer: "lite" },
     jsonSchema: {
       type: "array",
       items: {
@@ -466,16 +425,19 @@ Return a JSON array. If no contacts match, return [].`;
     },
   });
 
-  const parsed = safeParseJson<SemanticMatchResult[]>(result.text, "semanticContactSearch");
+  const parsed = safeParseJson<SemanticMatchResult[]>(result.text, "rerankCandidates");
   if (!parsed) return [];
 
   // ── Server-side false-positive filter ──────────────────────────────────
-  // Even with improved prompting, LLMs occasionally include contacts whose
-  // reason text contradicts the match. Filter these out as a safety net.
   const negativePatterns = /\bdoes not\b|\bdoesn't\b|\bnot a match\b|\bno evidence\b|\bnot start\b|\bunrelated\b|\bnot related\b|\bnot in\b/i;
   const filtered = parsed.filter(m => {
     if (negativePatterns.test(m.reason)) {
-      log.debug("SemanticSearch", `Filtered false positive: "${m.reason}"`);
+      log.debug("Reranker", `Filtered false positive: "${m.reason}"`);
+      return false;
+    }
+    // Validate the contact_id actually exists in our candidates
+    if (!candidates.some(c => c.id === m.contact_id)) {
+      log.debug("Reranker", `Filtered hallucinated contact_id: "${m.contact_id}"`);
       return false;
     }
     return true;
@@ -483,10 +445,23 @@ Return a JSON array. If no contacts match, return [].`;
 
   log.info(
     "AIService",
-    `Semantic search "${query}" → ${filtered.length} matches (${parsed.length - filtered.length} false positives filtered) in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"} | Contacts scanned: ${contacts.length}`
+    `Reranker "${query}" → ${filtered.length}/${candidates.length} matches ` +
+    `(${parsed.length - filtered.length} filtered) in ${result.latencyMs}ms via ${result.model} | ` +
+    `Tokens: ${result.tokenCount ?? "?"}`,
   );
 
   return filtered;
+}
+
+/**
+ * @deprecated Use `rerankCandidates()` instead. This is a backward-compat shim
+ * that delegates to the new reranker. Kept for any call sites not yet migrated.
+ */
+export async function semanticContactSearch(
+  query: string,
+  contacts: CompressedContact[],
+): Promise<SemanticMatchResult[]> {
+  return rerankCandidates(query, contacts);
 }
 
 // =============================================================================
@@ -538,6 +513,7 @@ export async function generateDailyInsight(stats: {
       systemPrompt,
       prompt,
       responseFormat: "json",
+      routing: { prefer: "lite" },
       jsonSchema: {
         type: "object",
         properties: {
@@ -566,3 +542,133 @@ export async function generateDailyInsight(stats: {
     return null;
   }
 }
+
+// =============================================================================
+// 7. bulkParseContacts
+// =============================================================================
+
+/**
+ * Parse multiple unstructured contact texts in parallel with tier-aware
+ * concurrency. Uses ParallelQueue to enforce concurrency limits and
+ * delegates each item to `parseContactRecord` for DRY prompt/schema reuse.
+ *
+ * Concurrency adapts to AI_TIER automatically:
+ *   - PAID → 10 concurrent workers (10K RPM headroom)
+ *   - FREE → 2 concurrent workers (conservative for ~10 RPM limits)
+ *
+ * Individual failures are isolated — one bad text never crashes the batch.
+ * Failed items return `null` in the result array.
+ *
+ * @param texts       - Array of unstructured text strings to parse
+ * @param concurrency - Override automatic tier-based concurrency
+ * @returns           - Array of parsed contacts (or null for failed items),
+ *                      in the same order as the input array
+ */
+export async function bulkParseContacts(
+  texts: string[],
+  concurrency?: number,
+): Promise<(ParsedContact | null)[]> {
+  if (isMockMode()) {
+    throw new Error("AI provider not configured. Cannot run bulk parser.");
+  }
+
+  if (texts.length === 0) return [];
+
+  // Adapt concurrency to tier if not explicitly provided
+  const tier = getAITier();
+  const effectiveConcurrency = concurrency ?? (tier === "PAID" ? 10 : 2);
+
+  log.info(
+    "AIService",
+    `bulkParseContacts: ${texts.length} items | concurrency: ${effectiveConcurrency} (${tier})`,
+  );
+  const startMs = Date.now();
+
+  const results = await ParallelQueue.process(
+    texts,
+    effectiveConcurrency,
+    async (text, index) => {
+      try {
+        return await parseContactRecord(text);
+      } catch (error: any) {
+        log.warn(
+          "AIService",
+          `bulkParseContacts: item ${index + 1}/${texts.length} failed: ${error.message}`,
+        );
+        throw error; // ParallelQueue captures as Error in results array
+      }
+    },
+  );
+
+  const successes = results.filter((r) => !(r instanceof Error)).length;
+  const failures = results.length - successes;
+
+  log.info(
+    "AIService",
+    `bulkParseContacts: ${successes}/${texts.length} succeeded, ${failures} failed in ${Date.now() - startMs}ms`,
+  );
+
+  return results.map((r) => (r instanceof Error ? null : r));
+}
+
+// =============================================================================
+// 9. generateSearchExpansion (Doc2Query Write-Time Enrichment)
+// =============================================================================
+
+/**
+ * Generate synthetic search terms for a contact, enabling FTS5 to match
+ * queries that use different vocabulary than the raw contact data.
+ *
+ * Example:
+ *   Contact: "Jane Doe, SWE at Stripe"
+ *   Expansion: "fintech, payments, coder, developer, software engineer, silicon valley, tech"
+ *
+ * These terms are stored in `contacts.searchExpansion` and indexed in FTS5,
+ * so "Who works in fintech?" instantly matches Jane via keyword search (<1ms).
+ *
+ * This is called asynchronously in the background on contact create/update.
+ * Uses the "lite" model class — cheap and fast.
+ */
+export async function generateSearchExpansion(contact: {
+  name: string;
+  role?: string | null;
+  company?: string | null;
+  industry?: string | null;
+  about?: string | null;
+  preferences?: string | null;
+  tags?: string[];
+  interests?: string[];
+}): Promise<string | null> {
+  if (isMockMode()) return null;
+
+  const parts: string[] = [];
+  if (contact.name) parts.push(`Name: ${contact.name}`);
+  if (contact.role) parts.push(`Role: ${contact.role}`);
+  if (contact.company) parts.push(`Company: ${contact.company}`);
+  if (contact.industry) parts.push(`Industry: ${contact.industry}`);
+  if (contact.about) parts.push(`About: ${contact.about.slice(0, 200)}`);
+  if (contact.preferences) parts.push(`Preferences: ${contact.preferences.slice(0, 200)}`);
+  if (contact.tags?.length) parts.push(`Tags: ${contact.tags.join(", ")}`);
+  if (contact.interests?.length) parts.push(`Interests: ${contact.interests.join(", ")}`);
+
+  if (parts.length <= 1) return null; // Name-only contacts aren't worth expanding
+
+  try {
+    const result = await provider.generate({
+      systemPrompt: `You generate search expansion keywords. Given a contact profile, output a comma-separated list of 10 search terms that someone might use to find this person. Include: synonyms for their role, industry keywords, related fields, skill inferences, and location-based terms. Output ONLY the comma-separated list, nothing else.`,
+      prompt: parts.join(" | "),
+      responseFormat: "text",
+      routing: { prefer: "lite" },
+    });
+
+    const expansion = result.text?.trim();
+    if (!expansion || expansion.length > 500) return null;
+
+    log.debug("AIService", `Doc2Query for "${contact.name}": "${expansion.slice(0, 80)}..."`);
+    return expansion;
+  } catch (err: any) {
+    log.debug("AIService", `Doc2Query failed for "${contact.name}": ${err.message}`);
+    return null;
+  }
+}
+

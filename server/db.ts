@@ -58,24 +58,35 @@ log.info("Database", "Drizzle migrations applied successfully");
 // FTS5 virtual tables are NOT managed by Drizzle ORM, so we maintain them
 // here with explicit DDL. The index is rebuilt on every startup to ensure
 // consistency with the current data.
+//
+// IMPORTANT: searchExpansion column must exist BEFORE FTS rebuild because
+// the FTS backfill query references c.searchExpansion.
 // =============================================================================
+
+try {
+  sqlite.exec(`ALTER TABLE contacts ADD COLUMN searchExpansion TEXT`);
+  log.info("Database", "Added searchExpansion column to contacts (pre-FTS)");
+} catch {
+  // Column already exists — expected on subsequent runs
+}
 
 try { sqlite.exec(`DROP TABLE IF EXISTS contacts_fts`); } catch { /* may not exist */ }
 
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
-    contactId UNINDEXED, name, company, role, headline, location, about, industry, extras
+    contactId UNINDEXED, name, company, role, headline, location, about, industry, extras, searchExpansion
   );
 
   DROP TRIGGER IF EXISTS contacts_ai;
   CREATE TRIGGER contacts_ai AFTER INSERT ON contacts BEGIN
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     VALUES (
       new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = new.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = new.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = new.id), ''),
+      COALESCE(new.searchExpansion, '')
     );
   END;
 
@@ -87,13 +98,14 @@ sqlite.exec(`
   DROP TRIGGER IF EXISTS contacts_au;
   CREATE TRIGGER contacts_au AFTER UPDATE ON contacts BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.id;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     VALUES (
       new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = new.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = new.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = new.id), ''),
+      COALESCE(new.searchExpansion, '')
     );
   END;
 
@@ -101,72 +113,78 @@ sqlite.exec(`
   DROP TRIGGER IF EXISTS fts_tags_ai;
   CREATE TRIGGER fts_tags_ai AFTER INSERT ON contact_tags BEGIN
     DELETE FROM contacts_fts WHERE contactId = new.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = new.contactId;
   END;
 
   DROP TRIGGER IF EXISTS fts_tags_ad;
   CREATE TRIGGER fts_tags_ad AFTER DELETE ON contact_tags BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = old.contactId;
   END;
 
   DROP TRIGGER IF EXISTS fts_interests_ai;
   CREATE TRIGGER fts_interests_ai AFTER INSERT ON contact_interests BEGIN
     DELETE FROM contacts_fts WHERE contactId = new.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = new.contactId;
   END;
 
   DROP TRIGGER IF EXISTS fts_interests_ad;
   CREATE TRIGGER fts_interests_ad AFTER DELETE ON contact_interests BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = old.contactId;
   END;
 
   DROP TRIGGER IF EXISTS fts_emails_ai;
   CREATE TRIGGER fts_emails_ai AFTER INSERT ON contact_emails BEGIN
     DELETE FROM contacts_fts WHERE contactId = new.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = new.contactId;
   END;
 
   DROP TRIGGER IF EXISTS fts_emails_ad;
   CREATE TRIGGER fts_emails_ad AFTER DELETE ON contact_emails BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = old.contactId;
   END;
 
@@ -174,34 +192,37 @@ sqlite.exec(`
   DROP TRIGGER IF EXISTS fts_phones_ai;
   CREATE TRIGGER fts_phones_ai AFTER INSERT ON contact_phones BEGIN
     DELETE FROM contacts_fts WHERE contactId = new.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = new.contactId;
   END;
 
   DROP TRIGGER IF EXISTS fts_phones_ad;
   CREATE TRIGGER fts_phones_ad AFTER DELETE ON contact_phones BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.contactId;
-    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+    INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
     SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+      COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+      COALESCE(c.searchExpansion, '')
     FROM contacts c WHERE c.id = old.contactId;
   END;
 
   -- Backfill FTS for any contacts not yet indexed (including phones in extras)
-  INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras)
+  INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
   SELECT c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
     COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
     COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
     COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
-    COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), '')
+    COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+    COALESCE(c.searchExpansion, '')
   FROM contacts c
   WHERE c.id NOT IN (SELECT contactId FROM contacts_fts);
 `);
@@ -427,6 +448,17 @@ sqlite.exec(`
 `);
 
 log.info("Database", "contact_embeddings vec0 table ready (768-dim)");
+
+// 9f-b. Search embedding vector storage (local model, 384-dim)
+// Separate from dedupe embeddings — optimized for search with local model
+sqlite.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS search_embeddings USING vec0(
+    contactId TEXT PRIMARY KEY,
+    embedding FLOAT[384]
+  );
+`);
+
+log.info("Database", "search_embeddings vec0 table ready (384-dim, local model)");
 
 // 9g. Embedding metadata: tracks when each contact was last embedded
 //     Used for staleness detection — if contact.updatedAt > embeddedAt, re-embed

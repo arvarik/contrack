@@ -1,36 +1,25 @@
 // =============================================================================
-// AI Layer — Concrete Gemini Adapter
+// AI Layer — Concrete Gemini Adapter (Smart Mesh v1.2)
 // =============================================================================
 // This is the ONLY file in the codebase that imports from `@google/genai`.
 // All Gemini SDK coupling is contained here. The rest of the AI layer
 // programs against the abstract AIProvider interface.
+//
+// v1.2 upgrade: Replaced static FALLBACK_MODELS chain with the Predictive
+// Smart Mesh — tier-aware routing, optimistic quota tracking, circuit
+// breakers, and exponential backoff. The public API is unchanged.
 // =============================================================================
 
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AIProvider } from "../provider.ts";
-import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode } from "../types.ts";
+import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode, DiagnosticsSnapshot } from "../types.ts";
+import { QuotaTracker } from "../routing/QuotaTracker.ts";
+import { SmartRouter } from "../routing/SmartRouter.ts";
+import { getAITier, getGroundingRPDLimit, type AITier } from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
 
 // ---------------------------------------------------------------------------
-// Model Fallback Chain
-// ---------------------------------------------------------------------------
-// Ordered by cost-efficiency and rate-limit headroom. The adapter tries each
-// model in sequence until one succeeds, providing resilience against
-// per-model rate limits or transient failures.
-//
-// Model IDs verified against the Gemini API docs (April 2026).
-// Only STABLE (non-Preview) models are listed here. Preview models require
-// explicit allowlisting from Google and have unstable availability.
-// ---------------------------------------------------------------------------
-
-const FALLBACK_MODELS = [
-  "gemini-2.5-flash-lite",  // Fastest & cheapest in the 2.5 family; highest RPM
-  "gemini-2.5-flash",       // Best price-performance; low-latency, reasoning-capable
-  "gemini-2.5-pro",         // Most capable; lower RPM, use as last resort
-];
-
-// ---------------------------------------------------------------------------
-// JSON Schema Translation
+// JSON Schema Translation (unchanged from v1.0)
 // ---------------------------------------------------------------------------
 // Converts a provider-agnostic JsonSchemaNode tree into Gemini's native
 // schema format that uses the `Type.*` enum vocabulary.
@@ -71,94 +60,246 @@ function translateSchema(node: JsonSchemaNode): any {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Returns true if the error looks like a transient rate-limit or quota error. */
+/**
+ * Returns true if the error looks like a transient server or quota error.
+ *
+ * Retryable errors from the Gemini API:
+ * - 429 / "resource exhausted": Rate limit exceeded
+ * - 503 / "unavailable":        Server temporarily overloaded
+ * - 500 / "internal":           Transient server error
+ * - 408 / "deadline exceeded":  Request timed out
+ */
 function isRetryableError(error: any): boolean {
   const msg = (error?.message ?? "").toLowerCase();
+  const status = error?.status ?? error?.statusCode;
   return (
+    status === 429 ||
+    status === 503 ||
+    status === 500 ||
+    status === 408 ||
     msg.includes("429") ||
     msg.includes("rate limit") ||
     msg.includes("quota") ||
     msg.includes("resource exhausted") ||
     msg.includes("503") ||
-    msg.includes("unavailable")
+    msg.includes("unavailable") ||
+    msg.includes("500") ||
+    msg.includes("internal") ||
+    msg.includes("408") ||
+    msg.includes("deadline")
   );
 }
 
-/**
- * Builds the effective prompt by prepending a systemPrompt when provided.
- * Gemini's generateContent API (non-Chat mode) does not have a dedicated
- * system turn in the same request structure, so we prepend it clearly.
- */
-function buildContents(options: AIGenerateOptions): string {
-  if (!options.systemPrompt) return options.prompt;
-  return `[SYSTEM]\n${options.systemPrompt}\n\n[USER]\n${options.prompt}`;
-}
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Duration (ms) to ban a model after a 429/503 — short enough for fast recovery */
+const CIRCUIT_BREAKER_DURATION_MS = 30_000;
+
+/** Maximum retry attempts for routed requests before giving up */
+const MAX_RETRIES = 3;
+
+/** Base delay for exponential backoff: 500ms, 1000ms, 2000ms */
+const BASE_BACKOFF_MS = 500;
 
 // ---------------------------------------------------------------------------
-// Gemini Adapter
+// Gemini Adapter (Smart Mesh v1.2)
 // ---------------------------------------------------------------------------
 
 export class GeminiAdapter implements AIProvider {
   readonly name = "Gemini";
   private client: GoogleGenAI;
+  private aiTier: AITier;
+
+  // Routing infrastructure (shared across all generate() calls)
+  private tracker: QuotaTracker;
+  private router: SmartRouter;
+  private circuitBreakers = new Set<string>();
 
   constructor(apiKey: string) {
     this.client = new GoogleGenAI({ apiKey });
+
+    // Read tier from environment once at construction time
+    this.aiTier = getAITier();
+    const groundingLimit = getGroundingRPDLimit(this.aiTier);
+
+    this.tracker = new QuotaTracker(groundingLimit);
+    this.router = new SmartRouter(this.tracker, this.aiTier);
+
+    log.info(
+      "GeminiAdapter",
+      `Initialized with AI_TIER=${this.aiTier} | Grounding RPD limit: ${groundingLimit}`,
+    );
   }
+
+  /**
+   * Expose full routing diagnostics for the /api/ai/diagnostics endpoint.
+   * Returns quota snapshot, circuit breaker state, and active tier — all
+   * in one call to keep the diagnostics surface minimal.
+   */
+  getQuotaSnapshot(): DiagnosticsSnapshot {
+    return {
+      ...this.tracker.getSnapshot(),
+      aiTier: this.aiTier,
+      circuitBreakers: [...this.circuitBreakers],
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API — AIProvider.generate()
+  // ---------------------------------------------------------------------------
 
   async generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
     const startMs = Date.now();
+    const requiresGrounding = !!options.enableSearchGrounding;
+
+    // ── Explicit model override: bypass routing entirely ──────────────
+    // TwoPassStrategy and other callers that set `options.model` manage
+    // their own fallback chain. We execute their chosen model directly
+    // without routing, reservation, or retry logic.
+    if (options.model) {
+      return this.executeWithModel(options, options.model, startMs);
+    }
+
+    // ── Smart routing with retry loop ─────────────────────────────────
+    const isJson = options.responseFormat === "json";
+    const estimatedTokens = this.tracker.estimateTokens(
+      options.prompt,
+      options.systemPrompt,
+      isJson,
+    );
+
     let lastError: Error | null = null;
 
-    // When a specific model is requested (e.g., by TwoPassStrategy),
-    // use only that model instead of the full fallback chain.
-    const models = options.model ? [options.model] : FALLBACK_MODELS;
-
-    for (const model of models) {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      // Ask the router for the best available model.
+      // Wrapped in try-catch because the router throws if no models match
+      // (e.g., all circuit-broken + denied by policy). Without this catch,
+      // the throw would bypass lastError and surface as an unhandled exception.
+      let route;
       try {
-        const config: any = {};
+        route = this.router.getNextAvailableRoute(
+          estimatedTokens,
+          options.routing,
+          this.circuitBreakers,
+          requiresGrounding,
+        );
+      } catch (routeError: any) {
+        lastError = routeError;
+        log.warn("GeminiAdapter", `Router exhausted on attempt ${attempt}: ${routeError.message}`);
+        break; // No point retrying if no models are available
+      }
 
-        if (options.enableSearchGrounding) {
-          // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
-          // responseSchema. Must use text output for grounded retrieval.
-          // The TwoPassStrategy in aiSearch handles schema extraction separately.
-          config.tools = [{ googleSearch: {} }];
-          config.responseMimeType = "text/plain";
-        } else if (options.responseFormat === "json") {
-          config.responseMimeType = "application/json";
-          if (options.jsonSchema) {
-            config.responseSchema = translateSchema(options.jsonSchema);
-          }
-        } else {
-          config.responseMimeType = "text/plain";
-        }
+      // Optimistic reservation — deduct from the in-memory ledger BEFORE
+      // the network request fires. This prevents parallel requests from
+      // all targeting the same model simultaneously.
+      this.tracker.reserve(route.modelId, estimatedTokens);
+      if (requiresGrounding) {
+        this.tracker.reserveGrounding();
+      }
 
-        const response = await this.client.models.generateContent({
-          model,
-          contents: buildContents(options),
-          config,
-        });
+      try {
+        const result = await this.executeWithModel(options, route.modelId, startMs);
 
-        const text = response.text ?? "";
-        const tokenCount = response.usageMetadata?.totalTokenCount;
-        const latencyMs = Date.now() - startMs;
+        // Reconcile estimated vs actual tokens to keep the ledger accurate
+        const actualTokens = result.tokenCount ?? estimatedTokens;
+        this.tracker.reconcile(route.modelId, estimatedTokens, actualTokens);
 
-        log.debug("GeminiAdapter", `${model} → ${tokenCount ?? "?"} tokens in ${latencyMs}ms`);
-        return { text, model, tokenCount, latencyMs };
+        log.info(
+          "GeminiAdapter",
+          `[${route.tier.toUpperCase()}] ${route.modelId} | ` +
+            `${result.latencyMs}ms | ${actualTokens} tokens | attempt ${attempt}`,
+        );
 
+        return result;
       } catch (error: any) {
         lastError = error;
-        if (isRetryableError(error)) {
-          log.warn("GeminiAdapter", `Model ${model} rate-limited/unavailable: ${error.message}. Trying next fallback...`);
-        } else {
-          // Hard error (bad request, auth, etc.) — no point trying other models
-          log.error("GeminiAdapter", `Model ${model} hard error: ${error.message}`);
-          throw error;
+
+        // Rollback the optimistic reservation — this request didn't consume quota
+        this.tracker.rollback(route.modelId);
+        if (requiresGrounding) {
+          this.tracker.rollbackGrounding();
         }
+
+        if (isRetryableError(error)) {
+          // Trip circuit breaker: ban this model for 30s so the next
+          // iteration's router call skips it automatically
+          log.warn(
+            "GeminiAdapter",
+            `${route.modelId} hit rate limit (attempt ${attempt}/${MAX_RETRIES}). ` +
+              `Circuit breaker tripped for ${CIRCUIT_BREAKER_DURATION_MS / 1000}s.`,
+          );
+          this.circuitBreakers.add(route.modelId);
+          setTimeout(
+            () => this.circuitBreakers.delete(route.modelId),
+            CIRCUIT_BREAKER_DURATION_MS,
+          );
+
+          // Exponential backoff before next attempt
+          if (attempt < MAX_RETRIES) {
+            const backoffMs = BASE_BACKOFF_MS * Math.pow(2, attempt - 1);
+            await new Promise((r) => setTimeout(r, backoffMs));
+          }
+          continue;
+        }
+
+        // Hard error (bad request, auth, schema) — do not retry
+        log.error("GeminiAdapter", `${route.modelId} hard error: ${error.message}`);
+        throw error;
       }
     }
 
-    log.error("GeminiAdapter", "All fallback models exhausted or rate limited.");
-    throw lastError ?? new Error("All Gemini fallback models exhausted");
+    log.error("GeminiAdapter", "All retry attempts exhausted across all available models.");
+    throw lastError ?? new Error("Max API retries exceeded.");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal — Execute a single API call against a specific model
+  // ---------------------------------------------------------------------------
+  // Shared by both routed and explicit-model codepaths.
+  // Contains the actual Gemini SDK call and response normalization.
+  // ---------------------------------------------------------------------------
+
+  private async executeWithModel(
+    options: AIGenerateOptions,
+    model: string,
+    startMs: number,
+  ): Promise<AIGenerateResult> {
+    const config: any = {};
+
+    if (options.enableSearchGrounding) {
+      // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
+      // responseSchema. Must use text output for grounded retrieval.
+      // The TwoPassStrategy in aiSearch handles schema extraction separately.
+      config.tools = [{ googleSearch: {} }];
+      config.responseMimeType = "text/plain";
+    } else if (options.responseFormat === "json") {
+      config.responseMimeType = "application/json";
+      if (options.jsonSchema) {
+        config.responseSchema = translateSchema(options.jsonSchema);
+      }
+    } else {
+      config.responseMimeType = "text/plain";
+    }
+
+    // Use native systemInstruction when a systemPrompt is provided.
+    // This gives the model a much cleaner signal than concatenating
+    // [SYSTEM]...[USER] markers into the prompt text, and saves tokens.
+    if (options.systemPrompt) {
+      config.systemInstruction = options.systemPrompt;
+    }
+
+    const response = await this.client.models.generateContent({
+      model,
+      contents: options.prompt,
+      config,
+    });
+
+    const text = response.text ?? "";
+    const tokenCount = response.usageMetadata?.totalTokenCount;
+    const latencyMs = Date.now() - startMs;
+
+    return { text, model, tokenCount, latencyMs };
   }
 }

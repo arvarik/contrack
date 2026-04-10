@@ -27,7 +27,10 @@ import { mcpRouter } from "./server/routes/mcp.ts";
 import { actionItemsRouter } from "./server/routes/actionItems.ts";
 import { dashboardRouter } from "./server/routes/dashboard.ts";
 import { aiSearchRouter } from "./server/routes/aiSearch.ts";
+import { aiRouter } from "./server/routes/ai.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
+import { isEmbeddingAvailable, backfillEmbeddings, getEmbeddingCount } from "./server/services/dedupe/embeddings.ts";
+import { initLocalEmbeddings, backfillSearchEmbeddings } from "./server/services/search/localEmbeddings.ts";
 
 import { AppError } from "./server/utils/AppError.ts";
 
@@ -70,6 +73,7 @@ async function startServer() {
   app.use("/api", actionItemsRouter);
   app.use("/api", dashboardRouter);
   app.use("/api", aiSearchRouter);
+  app.use("/api/ai", aiRouter);
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
@@ -132,6 +136,31 @@ async function startServer() {
   // Relationship scoring: full recompute on startup, then hourly sweep
   relationshipService.recomputeAll();
   setInterval(() => relationshipService.recomputeAll(), 60 * 60 * 1000);
+
+  // ── Local embedding model for Ask Contrack v3 ───────────────────────────
+  // Load the Transformers.js model, then backfill search embeddings.
+  // Non-blocking — the server is fully usable while this runs.
+  initLocalEmbeddings().then(() => {
+    log.info("Server", "Local embedding model ready — starting search embedding backfill...");
+    return backfillSearchEmbeddings();
+  }).then(count => {
+    if (count > 0) log.info("Server", `Search embedding backfill complete: ${count} contacts embedded locally`);
+  }).catch(err => {
+    log.warn("Server", `Local embedding init/backfill failed: ${err.message}`);
+  });
+
+  // ── Dedupe embedding backfill (Gemini, for dedupe engine) ───────────────
+  if (isEmbeddingAvailable()) {
+    const existingCount = getEmbeddingCount();
+    if (existingCount === 0) {
+      log.info("Server", "Starting background embedding backfill for dedupe...");
+      backfillEmbeddings().then(count => {
+        if (count > 0) log.info("Server", `Dedupe embedding backfill complete: ${count} contacts embedded`);
+      }).catch(err => {
+        log.warn("Server", `Dedupe embedding backfill failed: ${err.message}`);
+      });
+    }
+  }
 }
 
 startServer();
