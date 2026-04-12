@@ -4,6 +4,8 @@ import { motion } from 'motion/react';
 import { Briefcase, Building, Sparkles } from 'lucide-react';
 import type { SemanticMatch } from '../../types';
 import { fallbackAvatarUrl } from '../../lib/avatar';
+import { ScoreDot, LastContactLine, StaleChip } from './ContactMetaBadges';
+import { DataAgeHalo } from './DataAgeHalo';
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
@@ -26,9 +28,14 @@ interface AIResultCardProps {
   index: number;
   onSelect: () => void;
   isFallback: boolean;
+  /** Enrichment props for StaleChip */
+  hasGroundingCapacity: boolean;
+  isEnriching: boolean;
+  enrichingContactId: string | null;
+  onRefresh: (contactId: string) => void;
 }
 
-export const AIResultCard = ({ match, index, onSelect, isFallback }: AIResultCardProps) => (
+export const AIResultCard = ({ match, index, onSelect, isFallback, hasGroundingCapacity, isEnriching, enrichingContactId, onRefresh }: AIResultCardProps) => (
   <Command.Item
     key={match.id}
     value={`ai_${match.id}_${match.name}`}
@@ -41,26 +48,49 @@ export const AIResultCard = ({ match, index, onSelect, isFallback }: AIResultCar
       transition={{ delay: index * 0.06, duration: 0.2 }}
       className="contents"
     >
-      <img
-        src={match.avatarUrl || fallbackAvatarUrl(match.name)}
-        alt=""
-        className="w-8 h-8 rounded-full bg-surface-container-highest object-cover shrink-0 mt-0.5"
-      />
+      {/* Avatar with Data Age Halo */}
+      <DataAgeHalo updatedAt={match.updatedAt}>
+        <img
+          src={match.avatarUrl || fallbackAvatarUrl(match.name)}
+          alt=""
+          className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
+        />
+      </DataAgeHalo>
+
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        {/* Name + Score Dot + Fallback Badge */}
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm truncate">{match.name}</span>
+          <ScoreDot score={match.relationshipScore ?? null} />
           {isFallback && (
             <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded shrink-0">
               Fallback
             </span>
           )}
         </div>
+
+        {/* Role + Company */}
         {(match.role || match.company) && (
           <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
             {match.role && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{match.role}</span>}
             {match.company && <span className="flex items-center gap-1"><Building className="w-3 h-3" />{match.company}</span>}
           </span>
         )}
+
+        {/* Last Contact Line */}
+        <LastContactLine lastContactedAt={match.lastContactedAt} />
+
+        {/* Stale Data Chip */}
+        <StaleChip
+          contactId={match.id}
+          updatedAt={match.updatedAt}
+          hasGroundingCapacity={hasGroundingCapacity}
+          isEnriching={isEnriching}
+          enrichingContactId={enrichingContactId}
+          onRefresh={onRefresh}
+        />
+
+        {/* AI Reason */}
         {match.aiReason && (
           <motion.span
             initial={{ opacity: 0, y: 2 }}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { isTypingTarget } from '../lib/keyboard';
-import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, Search, Briefcase, Building, MapPin, Globe, Tag,
   ArrowRight, Loader2, AlertTriangle,
@@ -13,6 +13,7 @@ import {
 } from '../lib/styles';
 import { cn } from '../lib/utils';
 import { FloatingContactCard } from '../components/FloatingContactCard';
+import { SynthesisBar } from '../components/command-palette/SynthesisBar';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { fallbackAvatarUrl } from '../lib/avatar';
 
@@ -163,12 +164,33 @@ export const SearchView = () => {
   const prevQueryRef = useRef('');
   const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
 
+  // Read ?q= URL param on mount (from Cmd+K "Open in full-page search" bridge)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQueryHandled = useRef(false);
+
   usePageTitle('AI Search');
 
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Auto-fire search if ?q= param is present on mount
+  useEffect(() => {
+    if (initialQueryHandled.current) return;
+    const urlQuery = searchParams.get('q');
+    if (urlQuery && urlQuery.trim().length >= 3) {
+      initialQueryHandled.current = true;
+      setQuery(urlQuery.trim());
+      // Clear the param to avoid re-firing on back navigation
+      setSearchParams({}, { replace: true });
+      // Defer search to next tick so query state is set
+      queueMicrotask(() => {
+        prevQueryRef.current = urlQuery.trim();
+        semanticSearch.mutate(urlQuery.trim());
+      });
+    }
+  }, [searchParams, setSearchParams, semanticSearch]);
 
   const handleSearch = useCallback((searchQuery?: string) => {
     const q = (searchQuery ?? query).trim();
@@ -248,7 +270,7 @@ export const SearchView = () => {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask anything about your network... (/)"
+                placeholder="Ask anything about your network..."
                 className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant/50 text-lg"
               />
               <button
@@ -350,6 +372,15 @@ export const SearchView = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Synthesis executive brief (Feature 6) */}
+                {!isFallback && (
+                  <SynthesisBar
+                    query={query}
+                    contacts={results}
+                    resultCount={results.length}
+                  />
+                )}
 
                 {/* Cards — CSS stagger, no per-card Framer Motion */}
                 <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ActionItem } from '../types';
+import type { ActionItem, ZeroStatePayload } from '../types';
 
 const API_BASE = '/api';
 
@@ -94,3 +94,23 @@ export const useDailyInsight = () => {
     staleTime: 1000 * 60 * 60 * 2, // 2 hours stale time to prevent multi-fetching AI calls
   });
 };
+
+/**
+ * Fetch CRM intelligence signals for the Cmd+K command palette zero-state.
+ *
+ * Returns action items due, at-risk contacts, and ghost alerts — all computed
+ * from deterministic SQLite queries (no AI calls). Stale time is 2 minutes so
+ * rapid Cmd+K opens don't re-fetch, but the data stays fresh enough to be useful.
+ */
+export const useZeroState = () => {
+  return useQuery({
+    queryKey: ['zeroState'],
+    queryFn: async (): Promise<ZeroStatePayload> => {
+      const res = await fetch(`${API_BASE}/command-palette/zero-state`);
+      if (!res.ok) throw new Error('Failed to fetch zero state');
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+};
+

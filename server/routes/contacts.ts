@@ -10,6 +10,10 @@ import { z } from 'zod';
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { sqlite } from "../db.ts";
+import { ai } from "../ai/index.ts";
+import { getStrategy } from "../services/aiSearch/strategies/index.ts";
+import { buildSearchPrompt } from "../services/aiSearch/promptTemplate.ts";
+import { mergeSearchResult } from "../services/aiSearch/mergeEngine.ts";
 import { generateAndStoreBulkEmbeddings, isEmbeddingAvailable } from "../services/dedupe/embeddings.ts";
 import { dedupeService } from "../services/dedupe/index.ts";
 import { normalizeContactById, normalizeContacts } from "../services/dedupe/normalization.ts";
@@ -407,6 +411,59 @@ router.post("/contacts/:id/avatar", uploadAvatar.single("avatar"), asyncHandler(
   
   log.info("API", `[${rid}] POST /api/contacts/${req.params.id}/avatar → uploaded`);
   res.json(updated);
+}));
+
+/**
+ * POST /api/contacts/:id/enrich
+ *
+ * Single-contact enrichment using the TwoPassStrategy (grounding-based web research).
+ * Reuses the same pipeline as batch AI Search but for an individual contact.
+ *
+ * Quota-aware: Returns 429 if grounding RPD is exhausted.
+ * Returns 503 if AI provider is not configured.
+ */
+router.post("/contacts/:id/enrich", asyncHandler(async (req, res) => {
+  const rid = (req as any).requestId;
+  const { id } = req.params;
+
+  // Check AI provider is configured
+  if (!ai.isConfigured) {
+    throw new AppError("AI provider is not configured. Set GEMINI_API_KEY in your .env file.", 503);
+  }
+
+  // Check grounding capacity
+  const snapshot = ai.getQuotaSnapshot();
+  if (snapshot.grounding.remaining <= 0) {
+    return res.status(429).json({
+      error: "Grounding quota exhausted for today. Try again tomorrow.",
+      remaining: 0,
+      limit: snapshot.grounding.limit,
+    });
+  }
+
+  // Fetch the contact
+  const contact = contactService.getContactById(id);
+  if (!contact) throw new AppError("Contact not found", 404);
+
+  const startMs = Date.now();
+  const strategy = getStrategy('two-pass');
+  const prompt = buildSearchPrompt(contact);
+
+  log.info("API", `[${rid}] POST /api/contacts/${id}/enrich — starting TwoPassStrategy for "${contact.name}"`);
+
+  const result = await strategy.execute(contact, prompt, ai);
+  const fieldsUpdated = mergeSearchResult(id, contact, result.data as any);
+  const latencyMs = Date.now() - startMs;
+
+  log.info("API", `[${rid}] POST /api/contacts/${id}/enrich — ${fieldsUpdated} field(s) merged in ${latencyMs}ms`);
+
+  res.json({
+    success: true,
+    fieldsUpdated,
+    latencyMs,
+    models: result.models,
+    tokenCount: result.tokenCount,
+  });
 }));
 
 export const contactsRouter = router;

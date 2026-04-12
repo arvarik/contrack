@@ -56,5 +56,6 @@ export {
   semanticContactSearch,
   generateDailyInsight,
   bulkParseContacts,
+  synthesizeSearchResults,
 } from "./aiService.ts";
 export type { DailyInsight } from "./aiService.ts";

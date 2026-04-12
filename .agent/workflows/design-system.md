@@ -154,3 +154,42 @@ Allowed accent colors (for semantic meaning only):
 - `amber-500` — warning, nearing due
 - `rose-500` — error, overdue, destructive
 - `blue-500` — informational (phone match badge)
+
+## Command Palette Patterns (cmdk)
+
+The Command Palette uses `cmdk` (`Command.Dialog`). Special rules apply to elements inside it:
+
+### Focus-Stealing Prevention (CRITICAL)
+Any interactive element inside the palette that is NOT a `Command.Item` MUST have `onMouseDown={(e) => e.preventDefault()}` to prevent `cmdk` from closing the dialog on click:
+
+```tsx
+// ✅ CORRECT — prevents cmdk close on click
+<button onClick={handler} onMouseDown={(e) => e.preventDefault()}>
+  Action
+</button>
+
+// ❌ WRONG — clicking this button will close the palette
+<button onClick={handler}>
+  Action
+</button>
+```
+
+Also add `onMouseDown={(e) => e.stopPropagation()}` on container divs (like sub-menu wrappers) to prevent event propagation to the `Command.Dialog` overlay.
+
+### Capture-Phase Keyboard Handlers
+When a sub-component (e.g., `ActionSubMenu`, `FacetAutocomplete`) needs to intercept keyboard events before global shortcuts or `cmdk`'s internal handlers, use capture phase:
+
+```tsx
+window.addEventListener('keydown', handler, true);  // capture phase
+return () => window.removeEventListener('keydown', handler, true);
+```
+
+Always pair with `e.stopPropagation()` to prevent the event from reaching other listeners.
+
+### Mobile Responsiveness
+- **Keyboard hints**: Use `hidden sm:inline-flex` on all `<kbd>` elements
+- **Footer navigation bars**: Use `hidden sm:flex` on desktop-only hint bars
+- **Touch targets**: Use `p-2 sm:p-1` for buttons, `py-3 sm:py-2.5` for list items
+- **Active states**: Add `active:bg-*` and `active:scale-[0.98]` for touch feedback
+- **Responsive text**: Show "Cancel" on mobile, "ESC back" on desktop
+

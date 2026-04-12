@@ -84,37 +84,54 @@ graph TD
 ### 1. "Ask Contrack" AI Search (v3 Spotlight)
 A local-first hybrid retrieval-augmented generation (RAG) pipeline that finds anyone in your network in under 50ms. Combines FTS5 keyword search with local vector KNN (Transformers.js, 384-dim `all-MiniLM-L6-v2`) via Reciprocal Rank Fusion. Results stream progressively: Phase 1 (instant retrieval) appears in <15ms, Phase 2 (AI-enriched reasons) streams via NDJSON ~500ms later.
 
-### 2. Intelligent Deduplication Engine
+### 2. Cmd+K Command Center
+A full-featured command palette powered by `cmdk` that acts as the CRM's operating system:
+
+- **Latency Masking (Slim Cache)**: Client-side filtering delivers 0ms instant results while FTS5 server results load in the background. A `⚡ instant` indicator shows the source.
+- **Faceted Filters**: GitHub-style prefix operators (`role:`, `company:`, `tag:`, `score:>80`, `updated:>3m`) with autocomplete sourced from the contact cache. Active filters display as color-coded pills.
+- **Action Sub-Menu**: Press `→` on any result (or tap `>>` on mobile) to drill into a keyboard-first action panel — Log Note (N), Log Call (C), Catch Me Up (B), Add to List (L), View Profile (↵).
+- **Inline Note Composer**: Compose and save notes/calls without leaving the palette, with `Cmd+Enter` to save.
+- **Zero-State Intelligence**: CRM insights (action items due, at-risk contacts, ghosts) surface before you type.
+- **Search History**: Terminal-style `↑/↓` history navigation, recent query pills, and 30-second re-populate.
+- **Deep Profile Peek**: Hold `Space` on a focused result for a 200ms peek tooltip with score, last contact, and tags.
+- **Data Age Halos**: Colored rings on avatars indicate data freshness (🟢<3mo, 🟡3-6mo, 🔴>6mo) with inline refresh.
+- **Group Synthesis**: "✨ Synthesize" button generates an executive brief from AI search results via streaming NDJSON.
+- **Mobile-First**: All keyboard hints hidden on mobile, touch-friendly tap targets, responsive pill layout.
+
+### 3. Intelligent Deduplication Engine
 A multi-pass, cluster-based deduplication system that finds and merges duplicate contacts using phonetic matching (Double Metaphone), Levenshtein distance, Jaccard similarity, E.164 phone normalization, and 768-dim Gemini embeddings. Features configurable auto-merge thresholds (Conservative / Default / Aggressive) and a swipeable review UI for manual decisions.
 
-### 3. Relationship Pulse Dashboard
+### 4. Relationship Pulse Dashboard
 A proactive intelligence engine that surfaces relationship health through automated scoring (frequency, recency, depth weighted), action item swimlanes, daily AI insights, and network composition analytics. Scores recompute on startup and hourly via background sweeps.
 
-### 4. "Catch-Me-Up" AI Briefing
+### 5. "Catch-Me-Up" AI Briefing
 Walking into a meeting? The briefing pipeline feeds up to 3 years of timeline data into Gemini, producing a structured 3-bullet executive summary (Wins, Projects, Open Loops) with strict JSON bounding to prevent hallucination.
 
-### 5. Bi-Directional Network Weaving
+### 6. Bi-Directional Network Weaving
 Type `@someone` in any interaction via the **Tiptap Rich Interaction Composer**. The system's async AI parser identifies names and executes exact-match queries, generating bi-directional connections in the `interaction_mentions` junction table.
 
-### 6. "Ghost" Entity Extraction
+### 7. "Ghost" Entity Extraction
 The AI passively observes notes, silently registering unrecognized entities as Ghost nodes (`isGhost = 1`). When you eventually interact with them, their profile upgrades to a formal node, pre-hydrated with historical mentions.
 
-### 7. AI Search Enrichment (Web Grounding)
+### 8. AI Search Enrichment (Web Grounding)
 Background batch processor that hydrates contact profiles with internet-sourced data via Gemini's search grounding. Uses a two-pass strategy (discover → merge) with persistent progress tracking and a dedicated settings UI.
 
-### 8. Doc2Query Write-Time Enrichment
+### 9. Quick Note Modal (`Cmd+Shift+I`)
+A system-wide glass-panel modal for rapid interaction logging. Features a fuzzy-search contact picker, type selector pills (Note / Call / Meeting / Email), auto-growing textarea, and `Cmd+Enter` submission with automatic cache invalidation and relationship score recomputation.
+
+### 10. Doc2Query Write-Time Enrichment
 When contacts are created or updated, an async background job generates synthetic search terms (e.g., "fintech, payments, developer" for a Stripe engineer) using Gemini Lite, stored in a `searchExpansion` column indexed by FTS5.
 
-### 9. Smart AI Router
+### 11. Smart AI Router
 All AI calls are routed through a `SmartRouter` that selects the optimal Gemini model (Lite, Flash, or Pro) based on the use case, manages quota tracking per model, and handles automatic retry with fallback to lower-tier models on rate limits.
 
-### 10. Custom Lists & Smart Grouping
+### 12. Custom Lists & Smart Grouping
 Create unlimited, user-defined contact lists with curated icons, drag-to-reorder, bulk member management, and membership inheritance during deduplication merges.
 
-### 11. Geospatial Mapping
+### 13. Geospatial Mapping
 Automatically geocodes contact addresses (via Mapbox or Nominatim fallback) and renders an interactive cluster map using React Leaflet.
 
-### 12. Zero-Chromium Link Unfurling
+### 14. Zero-Chromium Link Unfurling
 Uses `cheerio` HTML parsers for lightweight OpenGraph extraction (`og:title`, `og:image`, `og:description`) without Puppeteer or headless browsers.
 
 ---
@@ -212,6 +229,7 @@ All endpoints are prefixed with `/api`. Payloads are `application/json` unless n
 |---|---|---|
 | `GET` | `/search?q=` | FTS5 keyword search (sidebar). |
 | `POST` | `/search/semantic` | v3 hybrid search. `Accept: application/x-ndjson` for streaming. |
+| `POST` | `/search/synthesize` | Synthesize search results into an executive brief (NDJSON stream). |
 
 ### Deduplication
 | Method | Endpoint | Description |
@@ -234,6 +252,7 @@ All endpoints are prefixed with `/api`. Payloads are `application/json` unless n
 | `PATCH` | `/action-items/:id/complete` | Mark an action item complete. |
 | `GET` | `/dashboard` | Relationship Pulse Dashboard metrics. |
 | `GET` | `/dashboard/insight` | AI-generated daily insight. |
+| `GET` | `/command-palette/zero-state` | CRM intelligence signals for command palette zero-state. |
 
 ### Lists
 | Method | Endpoint | Description |
@@ -250,6 +269,8 @@ All endpoints are prefixed with `/api`. Payloads are `application/json` unless n
 | `GET` | `/utils/unfurl` | OpenGraph link preview extraction. |
 | `GET` | `/contacts/map` | Geocoded contacts for map view. |
 | `GET` | `/ai/diagnostics` | AI model routing and quota diagnostics. |
+| `GET` | `/ai/grounding-capacity` | AI Search grounding RPD quota check. |
+| `POST` | `/contacts/:id/enrich` | Single-contact enrichment via web grounding. |
 
 ---
 
@@ -321,8 +342,37 @@ NODE_ENV=production npx tsx server.ts
 | Shortcut | Action |
 |---|---|
 | `Cmd+K` / `Ctrl+K` | Toggle Command Palette |
+| `Cmd+Shift+I` | Quick Note Modal |
+| `Cmd+Shift+N` | Navigate to Network |
+| `Cmd+Shift+P` | Navigate to Pulse |
+| `Cmd+Shift+M` | Navigate to Map |
+| `Cmd+Shift+S` | Navigate to AI Search |
+| `Cmd+Shift+,` | Navigate to Settings |
+| `Cmd+[` / `Cmd+]` | Browser back / forward |
 | `/` | Focus active search bar |
+| `?` | Toggle Keyboard Shortcuts Reference |
 | `Escape` | Unfocus / close modals |
+
+### Command Palette
+| Shortcut | Action |
+|---|---|
+| `↑ / ↓` | Navigate results |
+| `Enter` | Select / navigate to contact |
+| `→` | Open Action Sub-Menu for focused contact |
+| `←` or `Escape` | Go back one layer (sub-menu → results → close) |
+| `Space` (hold) | Peek contact details (200ms delay) |
+| `↑ / ↓` (empty input) | Browse search history |
+| `Backspace` (empty input) | Remove last facet filter pill |
+| `role:`, `company:`, etc. | Activate faceted filter autocomplete |
+
+### Action Sub-Menu (inside Command Palette)
+| Shortcut | Action |
+|---|---|
+| `↵` Enter | View Profile |
+| `N` | Log Note (inline composer) |
+| `C` | Log Call (inline composer) |
+| `B` | Catch Me Up (AI briefing) |
+| `L` | Add to List (inline picker) |
 
 ### Contact List
 | Shortcut | Action |
@@ -348,6 +398,18 @@ NODE_ENV=production npx tsx server.ts
 ---
 
 ## 🗺️ Roadmap
+
+### ✅ Completed
+- [x] Phase 1 — "The Nervous System": Search history, zero-state CRM intelligence, global nav shortcuts, deep profile peek, data age indicators
+- [x] Phase 2 — "The Power Tools": Cmd+K surface overhaul, Quick Note Modal, group synthesis, latency masking, faceted filters, action sub-menu
+
+### 🔴 Phase 3 — "The Visionary" (Planned)
+- [ ] SearchView Renaissance — full research workbench with persistent query sidebar and result analytics
+- [ ] Orbit Map — interactive force-graph visualization of contact network topology
+- [ ] Constraint Locking — compositional multi-pill queries with Tab-to-lock
+- [ ] Agentic CLI — `> create`, `> tag`, `> remind` macro commands in Cmd+K
+
+### 🔮 Future
 - [ ] End-to-End Encryption (E2EE) for at-rest databases
 - [ ] Calendar CalDAV sync for automatic meeting hydration
 - [ ] iOS/Android PWA optimized layout

@@ -57,6 +57,56 @@ export const useContactNames = () => {
   });
 };
 
+/**
+ * Searchable slim contact projection for latency masking (Feature 8).
+ *
+ * Shares the same query key/cache as useContacts — zero extra network cost.
+ * Projects the fields needed for instant client-side search:
+ * name, role, company, location, industry, tags, score, updatedAt, avatarUrl.
+ *
+ * Used by `useInstantSearch()` to deliver 0ms search results on every keystroke.
+ */
+export interface SlimSearchContact {
+  id: string;
+  name: string;
+  role: string | null;
+  company: string | null;
+  location: string | null;
+  industry: string | null;
+  avatarUrl: string | null;
+  updatedAt: string;
+  lastContactedAt: string | null;
+  relationshipScore: number | null;
+  tags: { tag: string }[];
+}
+
+export const useSlimContactsForSearch = () => {
+  return useQuery({
+    queryKey: ['contacts'],
+    queryFn: async (): Promise<Contact[]> => {
+      const res = await fetch(`${API_BASE}/contacts?view=slim`);
+      if (!res.ok) throw new Error('Failed to fetch contacts');
+      return res.json();
+    },
+    select: (contacts): SlimSearchContact[] =>
+      contacts
+        .filter(c => !c.isGhost && !c.isArchived)
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          role: c.role,
+          company: c.company,
+          location: c.location,
+          industry: c.industry,
+          avatarUrl: c.avatarUrl,
+          updatedAt: c.updatedAt,
+          lastContactedAt: c.lastContactedAt,
+          relationshipScore: c.relationshipScore ?? null,
+          tags: c.tags ?? [],
+        })),
+  });
+};
+
 export const useContact = (id: string | undefined) => {
   return useQuery({
     queryKey: ['contacts', id],

@@ -32,8 +32,25 @@ contrack/
 │   └── db.ts                # Database init, migrations, virtual tables
 ├── src/                     # React 19 frontend
 │   ├── api/                 #   React Query hooks (one file per domain)
+│   ├── hooks/               #   Custom React hooks
+│   │   ├── useInstantSearch.ts    # 0ms client-side search with FTS5 handover
+│   │   ├── useQueryTokenizer.ts   # Faceted filter prefix operator parser
+│   │   ├── useSearchHistory.ts    # Terminal-style search history
+│   │   ├── useGlobalNavShortcuts.ts # Cmd+Shift+* navigation
+│   │   └── ...              #   Other utility hooks
 │   ├── views/               #   Page-level components
 │   ├── components/          #   Shared UI components
+│   │   ├── command-palette/ #   Cmd+K command center
+│   │   │   ├── CommandPalette.tsx  # Main state machine controller
+│   │   │   ├── ActionSubMenu.tsx   # Keyboard-first contact actions
+│   │   │   ├── InlineNoteComposer.tsx # Note/call editor inside palette
+│   │   │   ├── ListPicker.tsx      # List membership toggle
+│   │   │   ├── FacetPills.tsx      # Color-coded filter badges
+│   │   │   ├── FacetAutocomplete.tsx # Prefix operator autocomplete
+│   │   │   ├── ResultPeek.tsx      # Space-to-peek tooltip
+│   │   │   ├── SynthesisBar.tsx    # AI executive brief streamer
+│   │   │   └── ZeroStateView.tsx   # Intelligence + history display
+│   │   └── ...              #   Other shared components
 │   └── db/schema.ts         #   Drizzle ORM schema definition
 ├── tests/                   # Vitest test suites
 │   ├── unit/                #   Pure logic tests (NLP, RRF, search)

@@ -333,3 +333,26 @@ export interface AISearchBatch {
   totalTokens: number;
 }
 
+// =============================================================================
+// Command Palette Zero-State Types
+// =============================================================================
+
+/** A single CRM intelligence signal for the Cmd+K zero-state. */
+export interface ZeroStateInsight {
+  type: 'action_items' | 'at_risk' | 'ghost' | 'stale_data' | 'dedupe';
+  label: string;
+  count?: number;
+  contact?: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+  daysSince?: number;
+  score?: number;
+  mentionCount?: number;
+}
+
+/** Response payload from GET /api/command-palette/zero-state. */
+export interface ZeroStatePayload {
+  insights: ZeroStateInsight[];
+}

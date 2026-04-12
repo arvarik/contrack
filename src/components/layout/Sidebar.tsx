@@ -17,7 +17,7 @@ import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 // SidebarTooltip — styled right-side tooltip with delay
 // ---------------------------------------------------------------------------
 
-const SidebarTooltip = ({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) => {
+const SidebarTooltip = ({ label, shortcut, children, className }: { label: string; shortcut?: string; children: React.ReactNode; className?: string }) => {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -44,6 +44,9 @@ const SidebarTooltip = ({ label, children, className }: { label: string; childre
           >
             <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
               {label}
+              {shortcut && (
+                <span className="block text-[9px] font-mono font-normal text-on-surface-variant/60 mt-0.5">{shortcut}</span>
+              )}
             </div>
             {/* Caret */}
             <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-0 h-0 border-t-4 border-b-4 border-r-4 border-t-transparent border-b-transparent border-r-surface-container-highest" />
@@ -84,13 +87,13 @@ export const Sidebar = () => {
         </span>
       </div>
 
-      <SidebarTooltip label="Network">
+      <SidebarTooltip label="Network" shortcut="⌘⇧N">
         <Link to="/" className={navLink(isHome)}>
           <LayoutDashboard className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label="Relationship Pulse">
+      <SidebarTooltip label="Relationship Pulse" shortcut="⌘⇧P">
         <Link to="/pulse" className={navLink(isPulse, "relative")}>
           <Activity className="w-6 h-6" />
           {/* Urgent action items — red dot (top-right) */}
@@ -109,13 +112,13 @@ export const Sidebar = () => {
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label="Map">
+      <SidebarTooltip label="Map" shortcut="⌘⇧M">
         <Link to="/map" className={navLink(isMap)}>
           <Map className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label="AI Search">
+      <SidebarTooltip label="AI Search" shortcut="⌘⇧S">
         <Link to="/search" className={navLink(isSearch)}>
           <Sparkles className="w-6 h-6" />
         </Link>
@@ -124,7 +127,7 @@ export const Sidebar = () => {
       {/* spacer to push following items down */}
       <div className="flex-1" />
 
-      <SidebarTooltip label="Settings">
+      <SidebarTooltip label="Settings" shortcut="⌘⇧,">
         <Link to="/settings" className={navLink(isCleanup)}>
           <SettingsIcon className="w-6 h-6" />
         </Link>

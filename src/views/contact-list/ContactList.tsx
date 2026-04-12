@@ -599,7 +599,7 @@ export const ContactList = () => {
             <input
               id="search-input"
               type="text"
-              placeholder={isSelectMode ? `${selectedCount} selected — search to filter` : "Search... (/)"}
+              placeholder={isSelectMode ? `${selectedCount} selected — search to filter` : "Search..."}
               value={inputValue}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -725,14 +725,14 @@ export const ContactList = () => {
                 className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
               >
                 <UserPlus className="w-4 h-4" />
-                Add Contact  <kbd className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">N</kbd>
+                Add Contact  <kbd className="hidden sm:inline text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">N</kbd>
               </button>
               <button
                 onClick={() => setIsSmartPasteOpen(true)}
                 className="btn-secondary flex items-center justify-center gap-2 text-sm py-2.5"
               >
                 <Sparkles className="w-4 h-4" />
-                Smart Paste  <kbd className="text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">V</kbd>
+                Smart Paste  <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">V</kbd>
               </button>
             </div>
           </div>

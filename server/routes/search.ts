@@ -3,6 +3,7 @@ import { log } from "../utils/logger.ts";
 import { searchService } from "../services/searchService.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { synthesizeSearchResults } from "../ai/index.ts";
 
 const router = Router();
 
@@ -58,6 +59,57 @@ router.post("/semantic", asyncHandler(async (req, res) => {
     const result = await searchService.semanticSearch(query, rid);
     res.json(result);
   }
+}));
+
+/**
+ * POST /api/search/synthesize — Executive Brief (Feature 6)
+ *
+ * Accepts a query and the already-returned search results, streams an
+ * NDJSON executive summary via the AI service.
+ *
+ * Body: { query: string, contacts: { name, role?, company?, aiReason? }[] }
+ *
+ * Streams:
+ *   { phase: "start" }
+ *   { phase: "complete", text: "..." }
+ */
+router.post("/synthesize", asyncHandler(async (req, res) => {
+  const rid = (req as any).requestId;
+  const { query, contacts } = req.body as {
+    query?: string;
+    contacts?: { name: string; role?: string; company?: string; aiReason?: string }[];
+  };
+
+  if (!query || typeof query !== "string" || query.trim().length === 0) {
+    throw new AppError("query is required", 400);
+  }
+  if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
+    throw new AppError("contacts array is required and must be non-empty", 400);
+  }
+  if (contacts.length > 30) {
+    throw new AppError("contacts array must have ≤ 30 entries", 400);
+  }
+
+  log.info("API", `[${rid}] POST /api/search/synthesize query="${query.slice(0, 50)}" contacts=${contacts.length}`);
+
+  // Stream the response
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Transfer-Encoding", "chunked");
+  res.setHeader("Cache-Control", "no-cache");
+  res.flushHeaders();
+
+  // Send start signal
+  res.write(JSON.stringify({ phase: "start" }) + "\n");
+
+  try {
+    const text = await synthesizeSearchResults(query.trim(), contacts);
+    res.write(JSON.stringify({ phase: "complete", text }) + "\n");
+  } catch (err: any) {
+    log.error("API", `[${rid}] Synthesis failed: ${err.message}`);
+    res.write(JSON.stringify({ phase: "error", error: err.message }) + "\n");
+  }
+
+  res.end();
 }));
 
 export const searchRouter = router;

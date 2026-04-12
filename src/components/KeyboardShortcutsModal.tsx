@@ -21,10 +21,23 @@ interface ShortcutGroup {
 
 const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
+    context: 'Navigation',
+    shortcuts: [
+      { keys: ['⌘', '⇧', 'N'], description: 'Go to Network' },
+      { keys: ['⌘', '⇧', 'P'], description: 'Go to Pulse' },
+      { keys: ['⌘', '⇧', 'M'], description: 'Go to Map' },
+      { keys: ['⌘', '⇧', 'S'], description: 'Go to AI Search' },
+      { keys: ['⌘', '⇧', ','], description: 'Go to Settings' },
+      { keys: ['⌘', '['], description: 'Back' },
+      { keys: ['⌘', ']'], description: 'Forward' },
+    ],
+  },
+  {
     context: 'Global',
     shortcuts: [
       { keys: ['?'], description: 'Show keyboard shortcuts' },
       { keys: ['⌘', 'K'], description: 'Open command palette' },
+      { keys: ['⌘', '⇧', 'I'], description: 'Quick interaction' },
     ],
   },
   {

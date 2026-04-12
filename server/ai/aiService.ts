@@ -672,3 +672,73 @@ export async function generateSearchExpansion(contact: {
   }
 }
 
+// =============================================================================
+// 10. synthesizeSearchResults (Executive Brief)
+// =============================================================================
+
+/**
+ * Generates a concise 2-3 sentence executive summary of a set of AI search
+ * results. This is an opt-in feature — the user clicks "Synthesize these
+ * results" after seeing their matches.
+ *
+ * @param query    - The original user query
+ * @param contacts - Compressed contact objects from the search results
+ * @returns        - A plain-text executive brief
+ */
+export async function synthesizeSearchResults(
+  query: string,
+  contacts: { name: string; role?: string; company?: string; aiReason?: string }[],
+): Promise<string> {
+  if (isMockMode()) {
+    log.warn("AIService", "Using mock synthesis due to unconfigured AI provider");
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return `You have ${contacts.length} connections matching "${query}". ` +
+      `Key figures include ${contacts.slice(0, 3).map(c => c.name).join(", ")}. ` +
+      `Consider reaching out to strengthen these relationships.`;
+  }
+
+  const contactSummaries = contacts.map(c => {
+    const parts = [c.name];
+    if (c.role) parts.push(c.role);
+    if (c.company) parts.push(`at ${c.company}`);
+    if (c.aiReason) parts.push(`— ${c.aiReason}`);
+    return parts.join(", ");
+  }).join("\n");
+
+  const systemPrompt = `You are a CRM intelligence analyst. Given a search query and matching contacts, provide a concise 2-3 sentence executive brief.
+
+RULES:
+1. Summarize WHO these people are and their commonalities.
+2. Highlight the strongest connections or most notable contacts.
+3. If there are actionable patterns (e.g., many at-risk contacts, industry clusters), mention them.
+4. Be specific — reference actual names and data. Do NOT use generic platitudes.
+5. Write in second person ("You have...", "Your strongest...").`;
+
+  const prompt = `QUERY: "${query}"
+
+MATCHING CONTACTS (${contacts.length} total):
+${contactSummaries}
+
+Write a 2-3 sentence executive brief.`;
+
+  try {
+    const result = await provider.generate({
+      systemPrompt,
+      prompt,
+      responseFormat: "text",
+      routing: { prefer: "lite" },
+    });
+
+    const text = result.text?.trim();
+    if (!text) throw new Error("Empty synthesis response");
+
+    log.info(
+      "AIService",
+      `synthesizeSearchResults "${query}" → ${text.length} chars in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
+    );
+    return text;
+  } catch (error: any) {
+    log.error("AIService", "Synthesis failed", { error: error.message });
+    throw error;
+  }
+}

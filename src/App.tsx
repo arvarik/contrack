@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } f
 import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles, Activity } from "lucide-react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
 import { isTypingTarget } from "./lib/keyboard";
+import { useGlobalNavShortcuts } from "./hooks/useGlobalNavShortcuts";
 import { Toaster } from "sonner";
 import React, { useState, useEffect, Suspense } from "react";
 
@@ -9,6 +10,7 @@ import { ContactList } from "./views/contact-list";
 import { ContactDetail } from "./views/contact-detail";
 import { CommandPalette } from './components/command-palette';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { QuickInteractionModal } from './components/QuickInteractionModal';
 import { MapView } from "./views/MapView";
 import { SettingsView } from "./views/SettingsView";
 import { SearchView } from "./views/SearchView";
@@ -30,6 +32,7 @@ const ComponentShowcase = import.meta.env.DEV
 
 const ResponsiveLayout = () => {
   const location = useLocation();
+  useGlobalNavShortcuts();
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");
   const isContactSelected = matchContact || matchMapContact;
@@ -157,14 +160,29 @@ const ResponsiveLayout = () => {
 
 export default function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [quickNoteOpen, setQuickNoteOpen] = useState(false);
 
-  // Global '?' key → open keyboard shortcuts modal
+  // Global keyboard shortcuts: '?' for shortcuts modal, 'Cmd+Shift+I' for quick note
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (isTypingTarget(e)) return;
-      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
+      // ? → keyboard shortcuts modal
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !isTypingTarget(e)) {
         e.preventDefault();
         setShortcutsOpen(prev => !prev);
+        return;
+      }
+
+      // Cmd+Shift+I → quick interaction modal
+      // Conflict guard: close Cmd+K if open
+      if (e.key === 'i' && e.metaKey && e.shiftKey) {
+        e.preventDefault();
+        // If Cmd+K is open, close it first
+        const cmdkDialog = document.querySelector('[cmdk-dialog]');
+        if (cmdkDialog) {
+          cmdkDialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        }
+        setQuickNoteOpen(prev => !prev);
+        return;
       }
     };
     window.addEventListener('keydown', handler);
@@ -181,6 +199,7 @@ export default function App() {
         </AISearchProvider>
         <CommandPalette />
         <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        <QuickInteractionModal isOpen={quickNoteOpen} onClose={() => setQuickNoteOpen(false)} />
         <Toaster theme="light" position="bottom-right" className="font-body" toastOptions={{
           className: 'glass-panel shadow-lg !border-none',
           style: {

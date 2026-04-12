@@ -48,4 +48,21 @@ router.get("/diagnostics", asyncHandler(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/ai/grounding-capacity
+ *
+ * Lightweight endpoint for the frontend to check whether single-contact
+ * enrichment (grounding) is available. Returns remaining daily capacity.
+ */
+router.get("/grounding-capacity", asyncHandler(async (_req, res) => {
+  const snapshot = ai.getQuotaSnapshot();
+  const { grounding } = snapshot;
+
+  res.json({
+    hasCapacity: grounding.remaining > 0,
+    remaining: grounding.remaining,
+    limit: grounding.limit,
+  });
+}));
+
 export const aiRouter = router;

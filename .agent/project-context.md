@@ -72,7 +72,44 @@ The search pipeline (`server/services/search/` + `server/services/searchService.
 
 Phase 1 delivers <15ms results. Phase 2 enriches with AI reasons ~500ms later via streaming.
 
-## 5. Dedupe Architecture
+## 5. Cmd+K Command Center Architecture
+The `CommandPalette.tsx` component acts as a state machine managing multiple layers:
+
+### State Layers (Escape Stack)
+1. **InlineNoteComposer** / **ListPicker** → `Esc` returns to Action Sub-Menu
+2. **ActionSubMenu** → `Esc` returns to search results
+3. **Search Results** → `Esc` closes the palette
+
+### Key Hooks
+| Hook | File | Purpose |
+|---|---|---|
+| `useInstantSearch` | `src/hooks/useInstantSearch.ts` | 0ms client-side filter from slim cache with async FTS5 handover |
+| `useQueryTokenizer` | `src/hooks/useQueryTokenizer.ts` | Parses `field:value` prefix operators into `FacetFilter[]` + free text |
+| `useSearchHistory` | `src/hooks/useSearchHistory.ts` | localStorage-based circular buffer with terminal-style ↑/↓ navigation |
+| `useRecentContacts` | `src/hooks/useRecentContacts.ts` | Tracks recently-viewed contacts for zero-state display |
+| `useGlobalNavShortcuts` | `src/hooks/useGlobalNavShortcuts.ts` | Centralized `Cmd+Shift+*` navigation shortcuts |
+
+### Key Components (`src/components/command-palette/`)
+| Component | Purpose |
+|---|---|
+| `CommandPalette.tsx` | Main controller — search input, mode detection, result rendering, sub-menu state |
+| `ActionSubMenu.tsx` | Keyboard-first action panel (→ on focused result) with 5 actions |
+| `InlineNoteComposer.tsx` | Compact note/call editor inside palette (Cmd+Enter to save) |
+| `ListPicker.tsx` | Check-style list membership toggle |
+| `FacetPills.tsx` | Color-coded filter pill badges with dismiss buttons |
+| `FacetAutocomplete.tsx` | Dropdown autocomplete sourced from slim contact cache |
+| `ResultPeek.tsx` | Space-to-peek tooltip (score, last contact, tags) |
+| `SynthesisBar.tsx` | Streaming executive brief from AI results (NDJSON) |
+| `ZeroStateView.tsx` | CRM intelligence + history + navigation when input is empty |
+| `ContactMetaBadges.tsx` | `ScoreDot`, `LastContactLine`, `StaleChip` inline badges |
+| `DataAgeHalo.tsx` | Colored avatar ring indicating data freshness |
+
+### Critical Patterns
+- **`onMouseDown={(e) => e.preventDefault()}`**: Applied to ALL interactive elements inside the palette that are not `Command.Item` elements. Without this, `cmdk` interprets clicks as "outside" clicks and closes the dialog.
+- **Capture-phase keyboard handlers**: `window.addEventListener('keydown', handler, true)` is used in `ActionSubMenu` and `FacetAutocomplete` to intercept keys before global shortcuts (e.g., ContactList's `N` for new contact) can fire.
+- **Mobile responsiveness**: All `<kbd>` hints use `hidden sm:inline-flex`. The `>>` chevron is always visible on mobile (`opacity-40`) but hover-reveal on desktop. Touch targets are enlarged via `p-2 sm:p-1`.
+
+## 7. Dedupe Architecture
 The deduplication engine (`server/services/dedupe/`) uses:
 - **Multi-pass blocking**: Name phonetics (Double Metaphone), email exact-match, phone normalization, company+location.
 - **Pairwise scoring**: Composite score from name distance, company similarity, role overlap, email/phone overlap, and embedding cosine similarity.
@@ -81,7 +118,7 @@ The deduplication engine (`server/services/dedupe/`) uses:
 - **Manual review**: Below-threshold clusters surface as suggestions in the UI.
 - **Staleness detection**: Embeddings older than the contact's `updatedAt` trigger re-embedding.
 
-## 6. Bootstrapping Notes
+## 8. Bootstrapping Notes
 - Node routes inject a Request UUID for trace logging across the full request lifecycle.
 - `AppError` class + `asyncHandler` HOF provide centralized error handling across all routes.
 - `npm run seed` drops the database and repopulates with synthetic demo data.
