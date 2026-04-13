@@ -45,7 +45,7 @@ export const ArchivedContactsView = () => {
   const handleUnarchive = (id: string, name: string) => {
     unarchive.mutate(id, {
       onSuccess: () => toast.success(`${name} restored to network`),
-      onError: (err) => toast.error(`Failed: ${err.message}`),
+      onError: (err) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
     });
   };
 
@@ -57,7 +57,7 @@ export const ArchivedContactsView = () => {
         toast.success(`Restored ${count} contact${count !== 1 ? 's' : ''} to network`);
         exitSelectMode();
       },
-      onError: (err) => toast.error(`Restore failed: ${err.message}`),
+      onError: (err) => toast.error(`Restore failed: ${(err instanceof Error ? err.message : String(err))}`),
     });
   };
 
@@ -70,7 +70,7 @@ export const ArchivedContactsView = () => {
         exitSelectMode();
         setIsBulkDeleteConfirm(false);
       },
-      onError: (err) => toast.error(`Delete failed: ${err.message}`),
+      onError: (err) => toast.error(`Delete failed: ${(err instanceof Error ? err.message : String(err))}`),
     });
   };
 

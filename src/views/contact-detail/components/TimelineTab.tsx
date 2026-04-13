@@ -101,7 +101,7 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
       { id: interactionId, contactId },
       {
         onSuccess: () => toast.success("Interaction deleted"),
-        onError: (err: Error) => toast.error(`Delete failed: ${err.message}`),
+        onError: (err: Error) => toast.error(`Delete failed: ${(err instanceof Error ? err.message : String(err))}`),
       }
     );
   };

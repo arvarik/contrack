@@ -8,6 +8,29 @@ import { eq, sql } from "drizzle-orm";
 import { log } from "../utils/logger.ts";
 import { extractMentions, generateCatchMeUpBriefing, summarizeEmlEmail } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
+import { aiCache } from "../utils/aiCache.ts";
+
+// =============================================================================
+// Interaction Payload Types
+// =============================================================================
+
+/** Payload for creating a new interaction. */
+interface CreateInteractionPayload {
+  type: string;
+  title: string;
+  content?: string | null;
+  date?: string;
+  duration?: string | null;
+  source?: string | null;
+  actionItem?: { title: string; dueAt: string };
+}
+
+/** Payload for updating an existing interaction. Only title and content are mutable. */
+interface UpdateInteractionPayload {
+  title?: string;
+  content?: string;
+}
+import { getErrorMessage } from "../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -49,8 +72,8 @@ async function runMentionExtraction(interactionId: string, contactId: string, co
       .set({ mentions: JSON.stringify(mappedMentions) })
       .where(eq(schema.interactions.id, interactionId))
       .run();
-  } catch (e: any) {
-    log.error("AI Service", `Background mention extraction failed for interaction ${interactionId}`, { error: e.message });
+  } catch (e: unknown) {
+    log.error("AI Service", `Background mention extraction failed for interaction ${interactionId}`, { error: getErrorMessage(e) });
   }
 }
 
@@ -68,15 +91,15 @@ export const interactionService = {
       LEFT JOIN contacts original ON i.contactId = original.id
       WHERE i.contactId = ? OR i.id IN (SELECT interactionId FROM interaction_mentions WHERE contactId = ?)
       ORDER BY i.date DESC
-    `).all(contactId, contactId, contactId, contactId) as any[];
+    `).all(contactId, contactId, contactId, contactId) as Array<Record<string, unknown>>;
 
     return raw.map(row => {
       let actionItems = [];
       if (row.actionItemsRaw) {
         try {
-          const parsed = JSON.parse(row.actionItemsRaw);
+          const parsed = JSON.parse(row.actionItemsRaw as string);
           // sqlite json_group_array returns '[{}]' even if null sometimes or '[null]'
-          actionItems = parsed.filter((p: any) => p && p.id);
+          actionItems = parsed.filter((p: Record<string, unknown>) => p && p.id);
         } catch { }
       }
       delete row.actionItemsRaw;
@@ -84,7 +107,7 @@ export const interactionService = {
     });
   },
 
-  createInteraction(contactId: string, body: any) {
+  createInteraction(contactId: string, body: CreateInteractionPayload) {
     const { type, title, content, date, duration, source } = body;
     const id = crypto.randomUUID();
     const now = date || new Date().toISOString();
@@ -125,6 +148,10 @@ export const interactionService = {
       setTimeout(() => { runMentionExtraction(id, contactId, content); }, 0);
     }
 
+    // Invalidate cached briefing for this contact — a new interaction means
+    // any cached briefing is stale (it doesn't include this interaction)
+    aiCache.invalidate("briefing", contactId);
+
     // Immediately recompute relationship score for this contact
     relationshipService.computeScore(contactId);
 
@@ -134,6 +161,21 @@ export const interactionService = {
   async generateBriefing(contactId: string) {
     const contact = db.select().from(schema.contacts).where(eq(schema.contacts.id, contactId)).get();
     if (!contact) return null;
+
+    // ── Briefing cache: key = contactId::interactionCount
+    // If the interaction count hasn't changed since the last briefing, the
+    // cached result is still valid. Any new interaction increments the count,
+    // producing a different cache key → automatic invalidation.
+    const interactionCount = (sqlite.prepare(
+      "SELECT COUNT(*) as c FROM interactions WHERE contactId = ?"
+    ).get(contactId) as { c: number }).c;
+    const cacheKey = `${contactId}::${interactionCount}`;
+
+    const cached = aiCache.get<string[]>("briefing", cacheKey);
+    if (cached) {
+      log.info("Briefing", `Cache HIT for ${contact.name} (${interactionCount} interactions)`);
+      return cached;
+    }
 
     const recentInteractions = db.select()
       .from(schema.interactions)
@@ -150,6 +192,10 @@ export const interactionService = {
       aiBriefingAt: now,
       updatedAt: now
     }).where(eq(schema.contacts.id, contactId)).run();
+
+    // Cache the freshly generated briefing
+    aiCache.set("briefing", cacheKey, points);
+    log.info("Briefing", `Cached for ${contact.name} (key: ${cacheKey})`);
 
     return points;
   },
@@ -171,8 +217,8 @@ export const interactionService = {
     if (file.originalname.toLowerCase().endsWith('.eml')) {
       const rawEml = fs.readFileSync(file.path, 'utf8');
       
-      const emlData = await new Promise<any>((resolve, reject) => {
-        emlFormat.read(rawEml, (err: any, data: any) => {
+      const emlData = await new Promise<Record<string, unknown>>((resolve, reject) => {
+        emlFormat.read(rawEml, (err: Error | null, data: Record<string, unknown>) => {
           if (err) reject(err);
           else resolve(data);
         });
@@ -214,7 +260,7 @@ export const interactionService = {
    * to preserve audit-trail integrity. Any other keys in `body` are silently
    * ignored to prevent accidental data corruption.
    */
-  updateInteraction(id: string, body: any) {
+  updateInteraction(id: string, body: UpdateInteractionPayload) {
     const existing = db.select().from(schema.interactions).where(eq(schema.interactions.id, id)).get();
     if (!existing) return null;
 

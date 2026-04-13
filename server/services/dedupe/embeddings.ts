@@ -18,6 +18,7 @@ import { GoogleGenAI } from "@google/genai";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { normalizeContacts, normalizeContactById } from "./normalization.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 // =============================================================================
 // Constants
@@ -130,8 +131,8 @@ export async function generateBatchEmbeddings(
           config: { outputDimensionality: EMBED_DIMENSIONS },
         });
         break; // success
-      } catch (err: any) {
-        lastError = err;
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err : new Error(getErrorMessage(err));
         if (isRetryableError(err) && attempt < MAX_RETRIES) {
           const delayMs = BASE_RETRY_MS * Math.pow(2, attempt);
           log.warn("DedupeEmbeddings", `Rate limited on batch ${Math.floor(i / EMBED_BATCH_SIZE) + 1}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
@@ -482,8 +483,8 @@ export async function generateAndStoreEmbedding(contactId: string): Promise<bool
     storeEmbedding(contactId, embedding);
     log.debug("DedupeEmbeddings", `Embedded contact ${contactId} (${normalized.nameNorm})`);
     return true;
-  } catch (err: any) {
-    log.warn("DedupeEmbeddings", `Failed to embed contact ${contactId}: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn("DedupeEmbeddings", `Failed to embed contact ${contactId}: ${getErrorMessage(err)}`);
     return false;
   } finally {
     _inFlightIds.delete(contactId);
@@ -518,8 +519,8 @@ export async function generateAndStoreBulkEmbeddings(contactIds: string[]): Prom
 
     log.info("DedupeEmbeddings", `Bulk embedded ${entries.length}/${contactIds.length} contacts`);
     return entries.length;
-  } catch (err: any) {
-    log.warn("DedupeEmbeddings", `Bulk embedding failed: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn("DedupeEmbeddings", `Bulk embedding failed: ${getErrorMessage(err)}`);
     return 0;
   }
 }

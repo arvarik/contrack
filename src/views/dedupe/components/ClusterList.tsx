@@ -63,8 +63,8 @@ export const ClusterList = ({ clusters, onRemoveCluster }: ClusterListProps) => 
       await mergeCluster.mutateAsync({ primaryId, duplicateIds });
       onRemoveCluster(cluster.id);
       toast.success(`Merged ${cluster.size} contacts into one`);
-    } catch (err: any) {
-      toast.error(`Merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [mergeCluster, getPrimaryId, onRemoveCluster]);
 
@@ -96,8 +96,8 @@ export const ClusterList = ({ clusters, onRemoveCluster }: ClusterListProps) => 
       if (result.totalFailed > 0) {
         toast.error(`${result.totalFailed} merge(s) failed`);
       }
-    } catch (err: any) {
-      toast.error(`Batch merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Batch merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [clusters, selected, getPrimaryId, mergeClusters, onRemoveCluster]);
 

@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import { log } from './logger.ts';
+import { getErrorMessage } from "./helpers.ts";
 
 const AVATAR_DIR = path.join(process.cwd(), 'uploads', 'avatars');
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
@@ -52,8 +53,8 @@ export async function processBase64Avatar(dataUri: string): Promise<string | nul
     log.debug('AvatarProcessor', `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(stats.size / 1024)}KB (${filename})`);
 
     return `/uploads/avatars/${filename}`;
-  } catch (err: any) {
-    log.warn('AvatarProcessor', `Failed to process avatar: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn('AvatarProcessor', `Failed to process avatar: ${getErrorMessage(err)}`);
     return null;
   }
 }

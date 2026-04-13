@@ -53,7 +53,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
         toast.success(`AI Search started for ${result.jobCount} contact${result.jobCount !== 1 ? 's' : ''}`);
       },
       onError: (err) => {
-        toast.error(err.message);
+        toast.error((err instanceof Error ? err.message : String(err)));
       },
     });
   }, [startMutation]);

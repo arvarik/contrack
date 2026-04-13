@@ -299,12 +299,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                   if (contact.isArchived) {
                     unarchiveContact.mutate(contact.id, {
                       onSuccess: () => toast.success(`${contact.name} restored to network`),
-                      onError: (err: Error) => toast.error(`Failed: ${err.message}`),
+                      onError: (err: Error) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
                     });
                   } else {
                     archiveContact.mutate(contact.id, {
                       onSuccess: () => toast.success(`${contact.name} archived`),
-                      onError: (err: Error) => toast.error(`Failed: ${err.message}`),
+                      onError: (err: Error) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
                     });
                   }
                 }}

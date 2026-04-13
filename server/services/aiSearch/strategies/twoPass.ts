@@ -22,6 +22,7 @@ import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
 import { aiSearchOutputSchema, extractionJsonSchema } from "../promptTemplate.ts";
 import { log } from "../../../utils/logger.ts";
+import { getErrorMessage } from "../../../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,8 +86,8 @@ export class TwoPassStrategy implements AISearchStrategy {
         }
 
         log.warn('TwoPassStrategy', `Pass 1 returned empty text (attempt ${attempt})`);
-      } catch (err: any) {
-        log.warn('TwoPassStrategy', `Pass 1 failed: ${err.message}`);
+      } catch (err: unknown) {
+        log.warn('TwoPassStrategy', `Pass 1 failed: ${getErrorMessage(err)}`);
         // On the last attempt, surface the error
         if (attempt === GROUNDING_MAX_RETRIES) {
           throw err;

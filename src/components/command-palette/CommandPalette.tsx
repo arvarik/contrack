@@ -219,8 +219,8 @@ export const CommandPalette = () => {
       navigate(`/contact/${newContact.id}`);
       handleClose();
       toast.success(`Created contact ${newContact.name}`);
-    } catch (e: any) {
-      toast.error(`Failed to create contact: ${e.message}`);
+    } catch (e: unknown) {
+      toast.error(`Failed to create contact: ${(e instanceof Error ? e.message : String(e))}`);
     }
   };
 
@@ -238,8 +238,8 @@ export const CommandPalette = () => {
       searchHistory.addEntry(search, 'action');
       handleClose();
       toast.success(`Logged ${actionMatch.type} for ${actionMatch.contact.name}`);
-    } catch (e: any) {
-      toast.error(`Failed to log interaction: ${e.message}`);
+    } catch (e: unknown) {
+      toast.error(`Failed to log interaction: ${(e instanceof Error ? e.message : String(e))}`);
     }
   };
 

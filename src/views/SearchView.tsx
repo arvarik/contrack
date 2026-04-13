@@ -2,20 +2,20 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { isTypingTarget } from '../lib/keyboard';
 import {
-  Sparkles, Search, Briefcase, Building, MapPin, Globe, Tag,
-  ArrowRight, Loader2, AlertTriangle,
+  Sparkles, Search, Tag,
+  Loader2, AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSemanticSearch } from '../api';
 import type { SemanticMatch } from '../types';
 import {
-  PAGE_TITLE, SECTION_BG, TAG_PILL, CARD,
+  PAGE_TITLE, SECTION_BG,
 } from '../lib/styles';
 import { cn } from '../lib/utils';
 import { FloatingContactCard } from '../components/FloatingContactCard';
 import { SynthesisBar } from '../components/command-palette/SynthesisBar';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { fallbackAvatarUrl } from '../lib/avatar';
+import { ResultCard, ShimmerCard } from './search/SearchResultCards';
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -30,129 +30,7 @@ const EXAMPLE_QUERIES = [
   'Find people interested in AI or machine learning',
 ];
 
-// ─── Result Card ──────────────────────────────────────────────────────────────
-//
-// Animation strategy: CSS `result-card-enter` with `animation-delay` instead of
-// Framer Motion per-card stagger.
-//
-// Why: CSS opacity animations are always GPU-composited and never trigger layout
-// recalculation. The old approach used `motion.button` (inline element) with a
-// `y: 16 → 0` transform staggered per-card. Inline elements can't use the same
-// GPU compositing path as block/flex elements for transforms, causing subpixel
-// reflow after each card paints — visible as jitter.
-//
-// The nested `motion.div` for `aiReason` inside a staggered parent also created
-// cascading animation phases which compounded the jitter. We removed it entirely;
-// the aiReason text is just rendered normally (the card's own opacity fade is
-// sufficient visual hierarchy).
 
-const ResultCard = ({
-  match,
-  index,
-  isFallback,
-  onClick,
-}: {
-  match: SemanticMatch;
-  index: number;
-  isFallback: boolean;
-  onClick: () => void;
-}) => (
-  <div
-    className="result-card-enter"
-    style={{ animationDelay: `${index * 45}ms` }}
-  >
-    <button
-      onClick={onClick}
-      className={cn(
-        CARD,
-        'w-full text-left flex items-start gap-4 group',
-        'hover:shadow-md hover:scale-[1.005] transition-[shadow,transform] duration-200 cursor-pointer',
-        'hover:ring-2 hover:ring-primary/20',
-      )}
-    >
-      <img
-        src={match.avatarUrl || fallbackAvatarUrl(match.name)}
-        alt=""
-        loading="lazy"
-        className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"
-      />
-      <div className="flex-1 min-w-0 flex flex-col gap-1">
-        {/* Name + fallback badge */}
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-on-surface truncate">{match.name}</span>
-          {isFallback && (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded shrink-0">
-              Keyword
-            </span>
-          )}
-        </div>
-
-        {/* Role / Company / Location / Industry */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
-          {match.role && (
-            <span className="flex items-center gap-1">
-              <Briefcase className="w-3 h-3" />{match.role}
-            </span>
-          )}
-          {match.company && (
-            <span className="flex items-center gap-1">
-              <Building className="w-3 h-3" />{match.company}
-            </span>
-          )}
-          {match.location && (
-            <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" />{match.location}
-            </span>
-          )}
-          {match.industry && (
-            <span className="flex items-center gap-1">
-              <Globe className="w-3 h-3" />{match.industry}
-            </span>
-          )}
-        </div>
-
-        {/* AI Reason — plain render, no nested motion element */}
-        {match.aiReason && (
-          <div className="flex items-start gap-1.5 mt-1">
-            <Sparkles className="w-3.5 h-3.5 text-primary/60 shrink-0 mt-0.5" />
-            <span className="text-sm text-primary/80 italic leading-snug">{match.aiReason}</span>
-          </div>
-        )}
-
-        {/* Tags */}
-        {match.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
-            {match.tags.slice(0, 5).map(t => (
-              <span key={t.id} className={TAG_PILL}>{t.tag}</span>
-            ))}
-            {match.tags.length > 5 && (
-              <span className="text-[10px] text-on-surface-variant opacity-50">+{match.tags.length - 5}</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Arrow */}
-      <ArrowRight className="w-4 h-4 text-on-surface-variant opacity-0 group-hover:opacity-60 transition-opacity shrink-0 mt-2" />
-    </button>
-  </div>
-);
-
-// ─── Shimmer Skeleton ─────────────────────────────────────────────────────────
-
-const ShimmerCard = ({ delay = 0 }: { delay?: number }) => (
-  <div
-    className={cn(CARD, 'flex items-start gap-4 result-card-enter')}
-    style={{ animationDelay: `${delay * 1000}ms` }}
-  >
-    <div className="w-12 h-12 rounded-full bg-primary/10 animate-pulse shrink-0" />
-    <div className="flex-1 space-y-2.5 py-1">
-      <div className="h-4 bg-primary/10 rounded-full animate-pulse w-1/3" />
-      <div className="h-3 bg-surface-container-high rounded-full animate-pulse w-3/5" />
-      <div className="h-3 bg-surface-container rounded-full animate-pulse w-4/5" />
-    </div>
-  </div>
-);
 
 // ─── Main SearchView Component ────────────────────────────────────────────────
 

@@ -89,12 +89,12 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId, contactName, cur
     if (tab === 'upload' && uploadPreview) {
       uploadAvatar.mutate({ contactId, file: uploadPreview.file }, {
         onSuccess: () => { toast.success('Avatar updated'); handleClose(); },
-        onError: (err) => toast.error(`Upload failed: ${err.message}`),
+        onError: (err) => toast.error(`Upload failed: ${(err instanceof Error ? err.message : String(err))}`),
       });
     } else if (tab === 'avatar' && selectedUrl) {
       setDicebear.mutate({ contactId, avatarUrl: selectedUrl }, {
         onSuccess: () => { toast.success('Avatar updated'); handleClose(); },
-        onError: (err) => toast.error(`Failed: ${err.message}`),
+        onError: (err) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
       });
     }
   };

@@ -72,7 +72,7 @@ export const RichInteractionComposer = ({ contactId }: { contactId: string }) =>
       }
       
       setFollowUpText('');
-    } catch (err: any) {
+    } catch (err: unknown) {
        toast.error("Failed to log interaction");
     }
   };

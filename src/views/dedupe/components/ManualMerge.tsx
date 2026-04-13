@@ -51,8 +51,8 @@ export const ManualMerge = () => {
       toast.success(
         `Merged ${duplicates.length} contact${duplicates.length > 1 ? 's' : ''} into "${primary.name}"`,
       );
-    } catch (err: any) {
-      toast.error(`Merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [primary, duplicates, mergeContacts]);
 

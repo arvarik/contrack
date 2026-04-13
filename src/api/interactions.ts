@@ -8,6 +8,7 @@
  * @module api/interactions
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { STALE_TIMES } from '../lib/queryConfig';
 import { Interaction, Contact } from '../types';
 
 const API_BASE = '/api';
@@ -21,6 +22,7 @@ export const useTimeline = (contactId: string | undefined) => {
       return res.json();
     },
     enabled: !!contactId,
+    staleTime: STALE_TIMES.timeline,
   });
 };
 

@@ -123,9 +123,9 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           }
         }
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setErrorMessage(err.message || 'Synthesis failed');
+    } catch (err: unknown) {
+      if (!(err instanceof Error && err.name === 'AbortError')) {
+        setErrorMessage((err instanceof Error ? err.message : String(err)) || 'Synthesis failed');
         setPhase('error');
       }
     }

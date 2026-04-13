@@ -55,8 +55,8 @@ export const ListPicker: React.FC<ListPickerProps> = ({
         await addToList.mutateAsync({ listId, contactId });
         toast.success(`Added ${contactName} to "${listName}"`);
       }
-    } catch (err: any) {
-      toast.error(`Failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`);
     } finally {
       setPendingListId(null);
     }

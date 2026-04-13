@@ -205,8 +205,8 @@ export const SuggestionReviewQueue = () => {
       }
       toast.success(`Merged ${selectedClusters.length} group${selectedClusters.length !== 1 ? 's' : ''}`);
       setSelected(new Set());
-    } catch (err: any) {
-      toast.error(`Batch merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Batch merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     } finally {
       setIsBatchProcessing(false);
     }
@@ -225,8 +225,8 @@ export const SuggestionReviewQueue = () => {
         icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
       });
       setSelected(new Set());
-    } catch (err: any) {
-      toast.error(`Batch dismiss failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Batch dismiss failed: ${(err instanceof Error ? err.message : String(err))}`);
     } finally {
       setIsBatchProcessing(false);
     }
@@ -451,8 +451,8 @@ function PairRow({
     try {
       await mergeSuggestion.mutateAsync({ suggestionId: suggestion.id, primaryId: primary.id });
       toast.success('Merged successfully');
-    } catch (err: any) {
-      toast.error(`Merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   };
 
@@ -462,8 +462,8 @@ function PairRow({
         await dismissSuggestion.mutateAsync(s.id);
       }
       toast('Kept separate', { icon: <Shield className="w-4 h-4 text-on-surface-variant" /> });
-    } catch (err: any) {
-      toast.error(`Dismiss failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Dismiss failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   };
 
@@ -625,8 +625,8 @@ function ClusterCard({
         await mergeSuggestion.mutateAsync({ suggestionId: s.id, primaryId: selectedPrimaryId });
       }
       toast.success(`Merged ${cluster.contacts.length} contacts into one`);
-    } catch (err: any) {
-      toast.error(`Merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     } finally {
       setIsMerging(false);
     }
@@ -638,8 +638,8 @@ function ClusterCard({
         await dismissSuggestion.mutateAsync(s.id);
       }
       toast('Kept all separate', { icon: <Shield className="w-4 h-4 text-on-surface-variant" /> });
-    } catch (err: any) {
-      toast.error(`Dismiss failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Dismiss failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   };
 

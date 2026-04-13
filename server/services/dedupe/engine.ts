@@ -22,6 +22,7 @@ import { buildClusters, computePrimaryScore } from "./clustering.ts";
 import { storeSuggestion, storeSuggestions, clearStaleSuggestions, clearAllPendingSuggestions } from "./suggestions.ts";
 import { softMergeContacts, mergeContacts } from "./merging.ts";
 import type { DedupeScanMode, RawPair, MatchType, NormalizedContact } from "./types.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 function resolveMode(mode: DedupeScanMode): 'quick' | 'deep' | 'full' {
   switch (mode) {
@@ -88,8 +89,8 @@ export const dedupeService = {
             });
             log.info("DedupeService", `[${rid}] Embedding backfill: ${embedded} contacts embedded`);
             embeddingsReady = true;
-          } catch (err: any) {
-            log.warn("DedupeService", `[${rid}] Embedding backfill failed: ${err.message} — continuing with deterministic + name-based passes only`);
+          } catch (err: unknown) {
+            log.warn("DedupeService", `[${rid}] Embedding backfill failed: ${getErrorMessage(err)} — continuing with deterministic + name-based passes only`);
             embeddingsReady = false;
           }
         } else {
@@ -100,8 +101,8 @@ export const dedupeService = {
               log.info("DedupeService", `[${rid}] Re-embedded ${reEmbedded} stale contact(s)`);
             }
             embeddingsReady = true;
-          } catch (err: any) {
-            log.warn("DedupeService", `[${rid}] Stale re-embedding failed: ${err.message}`);
+          } catch (err: unknown) {
+            log.warn("DedupeService", `[${rid}] Stale re-embedding failed: ${getErrorMessage(err)}`);
             embeddingsReady = getEmbeddingCount() > 0;
           }
         }
@@ -198,8 +199,8 @@ export const dedupeService = {
 
           dedupeService.softMergeContacts(primaryId, duplicateId, pair.confidence, pair.reasoning, rid);
           autoMergedCount++;
-        } catch (err: any) {
-          log.warn("DedupeService", `[${rid}] Auto-merge failed for ${pair.idA} ↔ ${pair.idB}: ${err.message}`);
+        } catch (err: unknown) {
+          log.warn("DedupeService", `[${rid}] Auto-merge failed for ${pair.idA} ↔ ${pair.idB}: ${getErrorMessage(err)}`);
           pendingPairs.push(pair);
         }
       }
@@ -223,9 +224,9 @@ export const dedupeService = {
 
       dedupeQueue.complete(scanId, clusters);
 
-    } catch (err: any) {
-      log.error("DedupeService", `[${rid}] Scan ${scanId} failed: ${err.message}`);
-      dedupeQueue.fail(scanId, err.message || 'Unknown error');
+    } catch (err: unknown) {
+      log.error("DedupeService", `[${rid}] Scan ${scanId} failed: ${getErrorMessage(err)}`);
+      dedupeQueue.fail(scanId, getErrorMessage(err) || 'Unknown error');
     }
   },
 
@@ -362,8 +363,8 @@ export const dedupeService = {
               }
             }
           }
-        } catch (err: any) {
-          log.debug("DedupeService", `[${rid}] Incremental KNN failed: ${err.message}`);
+        } catch (err: unknown) {
+          log.debug("DedupeService", `[${rid}] Incremental KNN failed: ${getErrorMessage(err)}`);
         }
       }
 
@@ -385,8 +386,8 @@ export const dedupeService = {
 
             dedupeService.softMergeContacts(primaryId, duplicateId, pair.confidence, pair.reasoning, rid);
             storeSuggestion(pair, 'auto_merged');
-          } catch (err: any) {
-            log.warn("DedupeService", `[${rid}] Incremental auto-merge failed: ${err.message}`);
+          } catch (err: unknown) {
+            log.warn("DedupeService", `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`);
             storeSuggestion(pair, 'pending');
           }
         } else {
@@ -396,8 +397,8 @@ export const dedupeService = {
 
       log.info("DedupeService", `[${rid}] Incremental: ${pairs.length} match(es) for ${contactId} in ${Date.now() - t0}ms`);
 
-    } catch (err: any) {
-      log.error("DedupeService", `[${rid}] Incremental check failed for ${contactId}: ${err.message}`);
+    } catch (err: unknown) {
+      log.error("DedupeService", `[${rid}] Incremental check failed for ${contactId}: ${getErrorMessage(err)}`);
     }
   },
 

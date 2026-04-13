@@ -26,6 +26,7 @@ import { rerankCandidates, type CompressedContact } from "../ai/aiService.ts";
 import { getCachedSearch, setCachedSearch } from "../utils/searchCache.ts";
 import { hybridRetrieval, type RetrievalResult } from "./search/hybridRetrieval.ts";
 import type { Response } from "express";
+import { getErrorMessage } from "../utils/helpers.ts";
 
 // =============================================================================
 // Constants
@@ -187,8 +188,8 @@ export const searchService = {
     let retrieval: RetrievalResult;
     try {
       retrieval = await hybridRetrieval(query, rid);
-    } catch (err: any) {
-      log.error("SemanticSearch", `[${rid}] Hybrid retrieval failed: ${err.message}`);
+    } catch (err: unknown) {
+      log.error("SemanticSearch", `[${rid}] Hybrid retrieval failed: ${getErrorMessage(err)}`);
       res.write(JSON.stringify({ phase: "complete", matches: [], fallback: true, cached: false, latencyMs: Date.now() - startTime }) + "\n");
       res.end();
       return;
@@ -281,10 +282,10 @@ export const searchService = {
         // LLM returned 0 matches — keep Phase 1 results
         setCachedSearch(query, { matches: phase1Matches, fallback: false });
       }
-    } catch (aiErr: any) {
+    } catch (aiErr: unknown) {
       log.warn(
         "SemanticSearch",
-        `[${rid}] LLM reranker failed (${aiErr?.message ?? aiErr}), keeping Phase 1 results`,
+        `[${rid}] LLM reranker failed (${getErrorMessage(aiErr)}), keeping Phase 1 results`,
       );
       // Phase 1 results are already sent — no action needed
     }
@@ -353,7 +354,7 @@ export const searchService = {
         setCachedSearch(query, result);
         return { ...result, cached: false };
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       log.warn("SemanticSearch", `[${rid}] LLM reranker failed, returning Stage 1 results`);
       fallback = true;
     }

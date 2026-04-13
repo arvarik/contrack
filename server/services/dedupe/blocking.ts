@@ -23,6 +23,7 @@ import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import type { NormalizedContact } from "./types.ts";
 import { findNearestNeighbors, getEmbeddingCount } from "./embeddings.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 // =============================================================================
 // Constants
@@ -223,8 +224,8 @@ export function loadNegativeConstraints(): Set<string> {
       distinctPairs.add(pairKey(row.id1, row.id2));
     }
     log.debug("DedupeBlocking", `Loaded ${coOccurrences.length} co-occurrence constraints`);
-  } catch (err: any) {
-    log.warn("DedupeBlocking", `Failed to load co-occurrences: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn("DedupeBlocking", `Failed to load co-occurrences: ${getErrorMessage(err)}`);
   }
 
   // 2. User-dismissed exclusions
@@ -237,8 +238,8 @@ export function loadNegativeConstraints(): Set<string> {
       distinctPairs.add(pairKey(row.contactIdA, row.contactIdB));
     }
     log.debug("DedupeBlocking", `Loaded ${exclusions.length} user exclusion constraints`);
-  } catch (err: any) {
-    log.warn("DedupeBlocking", `Failed to load exclusions: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn("DedupeBlocking", `Failed to load exclusions: ${getErrorMessage(err)}`);
   }
 
   log.info("DedupeBlocking", `Total negative constraints: ${distinctPairs.size}`);

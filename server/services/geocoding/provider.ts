@@ -1,4 +1,5 @@
 import { log } from "../../utils/logger.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 export const INTER_REQUEST_DELAY_MS = 1100;
 
@@ -25,8 +26,8 @@ export async function geocodeWithFallback(location: string): Promise<GeoResult |
       if (fallback < 3) {
         await new Promise(r => setTimeout(r, INTER_REQUEST_DELAY_MS));
       }
-    } catch (err: any) {
-      log.error("Geocode", `API error for "${searchStr}": ${err.message}`);
+    } catch (err: unknown) {
+      log.error("Geocode", `API error for "${searchStr}": ${getErrorMessage(err)}`);
       break; 
     }
   }

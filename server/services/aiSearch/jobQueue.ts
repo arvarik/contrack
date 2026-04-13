@@ -29,6 +29,8 @@ import { mergeSearchResult } from "./mergeEngine.ts";
 import { contactService } from "../contactService.ts";
 import { getStrategy } from "./strategies/index.ts";
 import { log } from "../../utils/logger.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
+import { aiCache } from "../../utils/aiCache.ts";
 
 // =============================================================================
 // Error Classification
@@ -154,6 +156,12 @@ class AISearchJobQueue extends EventEmitter {
     log.info('AISearchQueue', `Processing batch ${batchId} with strategy: ${strategy.name}`);
 
     try {
+      // Batch mode: defer cache invalidations during the entire batch.
+      // Each mergeSearchResult call triggers invalidateSearchCache() —
+      // without batch mode, that's N full cache flushes. With batch mode,
+      // exactly 1 flush after all jobs complete.
+      aiCache.enterBatchMode();
+
       for (let jobIdx = 0; jobIdx < batch.jobs.length; jobIdx++) {
         const job = batch.jobs[jobIdx];
         const jobStartMs = Date.now();
@@ -215,7 +223,7 @@ class AISearchJobQueue extends EventEmitter {
             lastError = null;
             break; // Success — exit retry loop
 
-          } catch (err: any) {
+          } catch (err: unknown) {
             lastError = err;
             const errorType = classifyError(err);
             const isRetryable = errorType === 'rate_limit' || errorType === 'network';
@@ -223,22 +231,23 @@ class AISearchJobQueue extends EventEmitter {
             if (!isRetryable || attempt === MAX_RETRIES) {
               // Non-retryable error or exhausted retries — mark as failed
               job.status = 'error';
-              job.error = err.message || 'Unknown error';
+              job.error = getErrorMessage(err) || 'Unknown error';
               job.errorType = errorType;
               job.completedAt = new Date().toISOString();
               job.latencyMs = Date.now() - jobStartMs;
 
-              log.error('AISearchQueue', `Job ${job.id} (${job.contactName}): ${errorType} — ${err.message}${attempt > 0 ? ` (after ${attempt} retries)` : ''}`);
+              log.error('AISearchQueue', `Job ${job.id} (${job.contactName}): ${errorType} — ${getErrorMessage(err)}${attempt > 0 ? ` (after ${attempt} retries)` : ''}`);
               this.emit(batchId, batch);
               break; // Exit retry loop
             }
 
             // Retryable error — will loop and try again
-            log.warn('AISearchQueue', `Job ${job.id} (${job.contactName}): ${errorType} — ${err.message} (will retry)`);
+            log.warn('AISearchQueue', `Job ${job.id} (${job.contactName}): ${errorType} — ${getErrorMessage(err)} (will retry)`);
           }
         }
       }
     } finally {
+      aiCache.exitBatchMode();
       this.processing = false;
       this.lastBatchCompletedAt = new Date();
       batch.status = 'complete';

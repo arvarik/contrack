@@ -428,8 +428,8 @@ export const parseFacebookJSON = (jsonData: string): Partial<Contact>[] => {
           _sourcePlatform: 'facebook',
         } as any;
       });
-  } catch (e: any) {
-    if (e.message.includes('Could not find')) throw e;
+  } catch (e: unknown) {
+    if ((e instanceof Error ? e.message : String(e)).includes('Could not find')) throw e;
     throw new Error('Failed to parse Facebook JSON. Ensure you uploaded the correct friends data file.');
   }
 };

@@ -16,6 +16,7 @@
  */
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 
 // =============================================================================
 // Types
@@ -154,9 +155,9 @@ export const relationshipService = {
         try {
           const score = computeScoreForContact(c);
           updateStmt.run(score, c.id);
-        } catch (err: any) {
+        } catch (err: unknown) {
           skipped++;
-          log.warn("RelationshipScore", `Skipped ${c.id}: ${err.message}`);
+          log.warn("RelationshipScore", `Skipped ${c.id}: ${getErrorMessage(err)}`);
         }
       }
     });

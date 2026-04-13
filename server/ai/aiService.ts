@@ -28,6 +28,8 @@ import { sharedProvider, isProviderConfigured } from "./singleton.ts";
 import { ParallelQueue } from "./routing/ParallelQueue.ts";
 import { getAITier } from "./routing/registry.ts";
 import { log } from "../utils/logger.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
+import { aiCache, contentHash } from "../utils/aiCache.ts";
 
 // Re-export domain types for consumers
 export type { ParsedContact, MentionEntity, CompressedContact, SemanticMatchResult };
@@ -53,8 +55,8 @@ function safeParseJson<T>(text: string, context: string): T | null {
   if (!text?.trim()) return null;
   try {
     return JSON.parse(text) as T;
-  } catch (err: any) {
-    log.error("AIService", `[${context}] JSON.parse failed: ${err.message}. Raw: ${text.slice(0, 200)}`);
+  } catch (err: unknown) {
+    log.error("AIService", `[${context}] JSON.parse failed: ${getErrorMessage(err)}. Raw: ${text.slice(0, 200)}`);
     return null;
   }
 }
@@ -260,6 +262,12 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
     return [];
   }
 
+  // ── Cache check: interaction text is immutable after save, so mention
+  // extraction results are deterministic per input. Cache permanently (24h TTL).
+  const cacheKey = contentHash(text);
+  const cached = aiCache.get<MentionEntity[]>("mentions", cacheKey);
+  if (cached) return cached;
+
   const systemPrompt = `You are a named-entity recognition system specializing in identifying people mentioned in CRM notes.
     Extract only distinct human beings — never the note author themselves.`;
 
@@ -302,10 +310,13 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
     const parsed = safeParseJson<MentionEntity[]>(result.text, "extractMentions");
     if (!parsed) return [];
 
+    // Cache the result — immutable input means this is safe to cache long-term
+    aiCache.set("mentions", cacheKey, parsed);
+
     log.info("AIService", `extractMentions → ${parsed.length} ghost entities in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
     return parsed;
-  } catch (error: any) {
-    log.error("AIService", "Mention extraction failed", { error: error.message });
+  } catch (error: unknown) {
+    log.error("AIService", "Mention extraction failed", { error: getErrorMessage(error) });
     return [];
   }
 }
@@ -351,8 +362,8 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
 
     log.info("AIService", `EML digest synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
     return result.text || "<p>Email could not be parsed.</p>";
-  } catch (error: any) {
-    log.error("AIService", "EML summarization failed", { error: error.message });
+  } catch (error: unknown) {
+    log.error("AIService", "EML summarization failed", { error: getErrorMessage(error) });
     return "<p><em>Error: Email string mapping structure breached context bounds.</em></p>";
   }
 }
@@ -537,8 +548,8 @@ export async function generateDailyInsight(stats: {
       category: parsed.category,
       generatedAt: new Date().toISOString(),
     };
-  } catch (error: any) {
-    log.error("AIService", "Daily insight generation failed", { error: error.message });
+  } catch (error: unknown) {
+    log.error("AIService", "Daily insight generation failed", { error: getErrorMessage(error) });
     return null;
   }
 }
@@ -590,10 +601,10 @@ export async function bulkParseContacts(
     async (text, index) => {
       try {
         return await parseContactRecord(text);
-      } catch (error: any) {
+      } catch (error: unknown) {
         log.warn(
           "AIService",
-          `bulkParseContacts: item ${index + 1}/${texts.length} failed: ${error.message}`,
+          `bulkParseContacts: item ${index + 1}/${texts.length} failed: ${getErrorMessage(error)}`,
         );
         throw error; // ParallelQueue captures as Error in results array
       }
@@ -666,8 +677,8 @@ export async function generateSearchExpansion(contact: {
 
     log.debug("AIService", `Doc2Query for "${contact.name}": "${expansion.slice(0, 80)}..."`);
     return expansion;
-  } catch (err: any) {
-    log.debug("AIService", `Doc2Query failed for "${contact.name}": ${err.message}`);
+  } catch (err: unknown) {
+    log.debug("AIService", `Doc2Query failed for "${contact.name}": ${getErrorMessage(err)}`);
     return null;
   }
 }
@@ -696,6 +707,11 @@ export async function synthesizeSearchResults(
       `Key figures include ${contacts.slice(0, 3).map(c => c.name).join(", ")}. ` +
       `Consider reaching out to strengthen these relationships.`;
   }
+
+  // ── Cache check: same query + same result count → same synthesis
+  const cacheKey = query.trim().toLowerCase().replace(/\s+/g, " ");
+  const cached = aiCache.get<string>("synthesis", cacheKey);
+  if (cached) return cached;
 
   const contactSummaries = contacts.map(c => {
     const parts = [c.name];
@@ -732,13 +748,16 @@ Write a 2-3 sentence executive brief.`;
     const text = result.text?.trim();
     if (!text) throw new Error("Empty synthesis response");
 
+    // Cache the synthesis result
+    aiCache.set("synthesis", cacheKey, text);
+
     log.info(
       "AIService",
       `synthesizeSearchResults "${query}" → ${text.length} chars in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
     );
     return text;
-  } catch (error: any) {
-    log.error("AIService", "Synthesis failed", { error: error.message });
+  } catch (error: unknown) {
+    log.error("AIService", "Synthesis failed", { error: getErrorMessage(error) });
     throw error;
   }
 }

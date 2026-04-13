@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError.ts";
 import { asyncHandler } from "../../utils/asyncHandler.ts";
 import { log } from "../../utils/logger.ts";
 import { dedupeService } from "../../services/dedupe/index.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerMergeRoutes(router: Router) {
   router.post("/contacts/merge", asyncHandler(async (req, res) => {
@@ -43,8 +44,8 @@ export function registerMergeRoutes(router: Router) {
       try {
         dedupeService.mergeContacts(primaryId, duplicateId, rid);
         results.push({ primaryId, duplicateId, success: true });
-      } catch (err: any) {
-        results.push({ primaryId, duplicateId, success: false, error: err.message });
+      } catch (err: unknown) {
+        results.push({ primaryId, duplicateId, success: false, error: getErrorMessage(err) });
       }
     }
 
@@ -75,8 +76,8 @@ export function registerMergeRoutes(router: Router) {
       try {
         lastResult = dedupeService.mergeContacts(primaryId, dupId, rid);
         merged++;
-      } catch (err: any) {
-        log.warn("API", `[${rid}] Cluster merge: skipping ${dupId}: ${err.message}`);
+      } catch (err: unknown) {
+        log.warn("API", `[${rid}] Cluster merge: skipping ${dupId}: ${getErrorMessage(err)}`);
         failed++;
       }
     }
@@ -116,8 +117,8 @@ export function registerMergeRoutes(router: Router) {
         try {
           dedupeService.mergeContacts(primaryId, dupId, rid);
           merged++;
-        } catch (err: any) {
-          log.warn("API", `[${rid}] Bulk cluster merge: skipping ${dupId}: ${err.message}`);
+        } catch (err: unknown) {
+          log.warn("API", `[${rid}] Bulk cluster merge: skipping ${dupId}: ${getErrorMessage(err)}`);
           failed++;
         }
       }

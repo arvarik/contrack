@@ -30,6 +30,7 @@ import {
   findSearchNeighbors,
   getSearchEmbeddingCount,
 } from "./localEmbeddings.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 // =============================================================================
 // Types
@@ -188,8 +189,8 @@ function extractPreFilters(query: string): PreFilter {
     const ids = new Set(rows.map(r => r.id));
     const summary = summaryParts.join(", ");
     return { contactIds: ids, summary: `${summary} (${ids.size} contacts)` };
-  } catch (err: any) {
-    log.warn("HybridRetrieval", `Pre-filter failed: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn("HybridRetrieval", `Pre-filter failed: ${getErrorMessage(err)}`);
     return { contactIds: null, summary: "error" };
   }
 }
@@ -325,8 +326,8 @@ async function vectorRetrieval(
       rank: i + 1,
       channel: "vector" as const,
     }));
-  } catch (err: any) {
-    log.warn("HybridRetrieval", `Vector channel failed: ${err.message}`);
+  } catch (err: unknown) {
+    log.warn("HybridRetrieval", `Vector channel failed: ${getErrorMessage(err)}`);
     return [];
   }
 }

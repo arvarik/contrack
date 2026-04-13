@@ -8,6 +8,7 @@
  * @module api/lists
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { STALE_TIMES } from '../lib/queryConfig';
 import { Contact, ContactList } from '../types';
 
 const API_BASE = '/api';
@@ -20,6 +21,7 @@ export const useLists = () => {
       if (!res.ok) throw new Error('Failed to fetch lists');
       return res.json();
     },
+    staleTime: STALE_TIMES.lists,
   });
 };
 
@@ -84,6 +86,7 @@ export const useListContacts = (listId: string | null) => {
       return res.json();
     },
     enabled: !!listId,
+    staleTime: STALE_TIMES.listContacts,
   });
 };
 

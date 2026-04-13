@@ -102,8 +102,8 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
       setMergedIds(prev => new Set(prev).add(currentCluster.id));
       removeCluster(currentCluster.id);
       toast.success(`Merged ${duplicateIds.length + 1} contacts into one`);
-    } catch (err: any) {
-      toast.error(`Merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [currentCluster, mergeCluster, removeCluster]);
 

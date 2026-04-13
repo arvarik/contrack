@@ -15,6 +15,7 @@ import { contactService } from "../services/contactService.ts";
 import { ai } from "../ai/index.ts";
 import { log } from "../utils/logger.ts";
 import type { AISearchBatch } from "../services/aiSearch/types.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 
 export const aiSearchRouter = Router();
 
@@ -75,7 +76,7 @@ aiSearchRouter.post(
 
     // Kick off processing async (fire-and-forget — don't await)
     jobQueue.processBatch(batch.id, ai).catch(err => {
-      log.error('AISearchRoute', `Batch ${batch.id} processing error: ${err.message}`);
+      log.error('AISearchRoute', `Batch ${batch.id} processing error: ${getErrorMessage(err)}`);
     });
 
     // Return batch ID immediately

@@ -17,6 +17,7 @@
 
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 // =============================================================================
 // Types & State
@@ -58,8 +59,8 @@ export async function initLocalEmbeddings(): Promise<void> {
 
       modelReady = true;
       log.info("LocalEmbeddings", `Model ${MODEL_ID} loaded in ${Date.now() - t0}ms (384-dim, q8)`);
-    } catch (err: any) {
-      log.warn("LocalEmbeddings", `Failed to load local embedding model: ${err.message}`);
+    } catch (err: unknown) {
+      log.warn("LocalEmbeddings", `Failed to load local embedding model: ${getErrorMessage(err)}`);
       modelReady = false;
     }
   })();

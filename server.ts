@@ -75,6 +75,16 @@ async function startServer() {
   app.use("/api", aiSearchRouter);
   app.use("/api/ai", aiRouter);
 
+  // ── Cache diagnostics (dev only) ─────────────────────────────────────────
+  // Exposes hit/miss counters and entry counts for all aiCache tiers.
+  // Useful for debugging: curl http://localhost:3000/api/debug/cache-stats
+  if (process.env.NODE_ENV !== "production") {
+    const { aiCache } = await import("./server/utils/aiCache.ts");
+    app.get("/api/debug/cache-stats", (_req, res) => {
+      res.json(aiCache.getStats());
+    });
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);

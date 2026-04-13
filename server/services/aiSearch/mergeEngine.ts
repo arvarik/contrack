@@ -19,7 +19,7 @@
 
 import { sqlite } from "../../db.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
-import { invalidateSearchCache } from "../../utils/searchCache.ts";
+import { invalidateSearchCache } from "../../utils/aiCache.ts";
 import type { HydratedContact, ChildRecordsPayload } from "../../repositories/types.ts";
 import type { AISearchOutput } from "./promptTemplate.ts";
 import { log } from "../../utils/logger.ts";

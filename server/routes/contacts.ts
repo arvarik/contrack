@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { log } from "../utils/logger.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
 import { parseContactRecord } from "../ai/aiService.ts";
 import { validateBody, contactCreateSchema, contactUpdateSchema, contactBulkCreateSchema } from "../utils/validators.ts";
@@ -129,8 +130,8 @@ router.post("/contacts/bulk", validateBody(contactBulkCreateSchema), asyncHandle
       try {
         await generateAndStoreBulkEmbeddings(createdIds);
         log.info("API", `[${rid}] Bulk embeddings generated for ${createdIds.length} contacts`);
-      } catch (err: any) {
-        log.warn("API", `[${rid}] Bulk embedding failed: ${err.message}`);
+      } catch (err: unknown) {
+        log.warn("API", `[${rid}] Bulk embedding failed: ${getErrorMessage(err)}`);
       }
     }
 
@@ -189,7 +190,7 @@ router.post("/contacts/bulk", validateBody(contactBulkCreateSchema), asyncHandle
                   dedupeService.softMergeContacts(primaryId, duplicateId, pair.confidence, pair.reasoning, rid);
                   storeSuggestion(pair, 'auto_merged');
                   autoMerged++;
-                } catch (err: any) {
+                } catch (err: unknown) {
                   storeSuggestion(pair, 'pending');
                   needsReview++;
                 }
@@ -307,8 +308,8 @@ router.post("/contacts/bulk", validateBody(contactBulkCreateSchema), asyncHandle
         }
 
         log.info("API", `[${rid}] Post-import dedupe: ${autoMerged} auto-merged, ${needsReview} pending, ${matchedImportIds.size}/${createdIds.length} contacts had matches`);
-      } catch (err: any) {
-        log.warn("API", `[${rid}] Post-import dedupe failed: ${err.message}`);
+      } catch (err: unknown) {
+        log.warn("API", `[${rid}] Post-import dedupe failed: ${getErrorMessage(err)}`);
       }
     }
 
@@ -334,14 +335,14 @@ router.post("/contacts/bulk", validateBody(contactBulkCreateSchema), asyncHandle
     // Generate embeddings + schedule incremental dedupe for each contact
     if (createdIds.length > 0) {
       generateAndStoreBulkEmbeddings(createdIds).catch(err =>
-        log.warn("API", `Background bulk embedding failed: ${err.message}`)
+        log.warn("API", `Background bulk embedding failed: ${getErrorMessage(err)}`)
       );
       // Schedule incremental dedupe for each imported contact
       for (const cid of createdIds) {
         setTimeout(() => {
           const irid = `imp-${cid.slice(0, 8)}`;
           dedupeService.incrementalDedupeCheck(cid, irid).catch(err =>
-            log.warn("API", `Incremental dedupe for ${cid} failed: ${err.message}`)
+            log.warn("API", `Incremental dedupe for ${cid} failed: ${getErrorMessage(err)}`)
           );
         }, 3_000);
       }

@@ -174,8 +174,8 @@ export const ImportModal = ({ isOpen, onClose, onSuccess }: ImportModalProps) =>
       queryClient.invalidateQueries({ queryKey: ['dedupe-suggestions'] });
       queryClient.invalidateQueries({ queryKey: ['dedupe-merge-log'] });
 
-    } catch (err: any) {
-      setError(err.message || 'Failed to process file.');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Failed to process file.');
       setPhase('idle');
       setProgress(null);
     } finally {

@@ -107,7 +107,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         toast.success(`${modeLabels[mode] || 'Scan'} started`);
       },
       onError: (err) => {
-        toast.error(err.message);
+        toast.error((err instanceof Error ? err.message : String(err)));
       },
     });
   }, [startMutation]);

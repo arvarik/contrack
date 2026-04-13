@@ -4,6 +4,7 @@ import { searchService } from "../services/searchService.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { synthesizeSearchResults } from "../ai/index.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 
 const router = Router();
 
@@ -104,9 +105,9 @@ router.post("/synthesize", asyncHandler(async (req, res) => {
   try {
     const text = await synthesizeSearchResults(query.trim(), contacts);
     res.write(JSON.stringify({ phase: "complete", text }) + "\n");
-  } catch (err: any) {
-    log.error("API", `[${rid}] Synthesis failed: ${err.message}`);
-    res.write(JSON.stringify({ phase: "error", error: err.message }) + "\n");
+  } catch (err: unknown) {
+    log.error("API", `[${rid}] Synthesis failed: ${getErrorMessage(err)}`);
+    res.write(JSON.stringify({ phase: "error", error: getErrorMessage(err) }) + "\n");
   }
 
   res.end();

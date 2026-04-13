@@ -6,7 +6,8 @@
  *
  * @module api/contacts
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { STALE_TIMES } from '../lib/queryConfig';
 import { Contact, ContactUpdateData } from '../types';
 
 const API_BASE = '/api';
@@ -116,6 +117,10 @@ export const useContact = (id: string | undefined) => {
       return res.json();
     },
     enabled: !!id,
+    staleTime: STALE_TIMES.contactDetail,
+    // keepPreviousData: When navigating between contacts, show the previous
+    // contact's data briefly instead of a loading skeleton. Prevents flash.
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -126,7 +131,8 @@ export const useMapContacts = () => {
       const res = await fetch(`${API_BASE}/contacts/map`);
       if (!res.ok) throw new Error('Failed to fetch map data');
       return res.json();
-    }
+    },
+    staleTime: STALE_TIMES.mapData,
   });
 };
 
@@ -138,6 +144,7 @@ export const useArchivedContacts = () => {
       if (!res.ok) throw new Error('Failed to fetch archived contacts');
       return res.json();
     },
+    staleTime: STALE_TIMES.archived,
   });
 };
 

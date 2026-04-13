@@ -7,7 +7,7 @@
  *
  * @module api/search
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useState, useCallback, useRef } from 'react';
 import type { Contact, SemanticSearchResult } from '../types';
 
@@ -22,6 +22,15 @@ export const useSearchContacts = (q: string) => {
       return res.json();
     },
     enabled: q.length > 0,
+    // CRITICAL: keepPreviousData prevents the result list from emptying and
+    // re-filling on every debounced keystroke. Without this, each new query key
+    // starts with data=undefined → layout shift → results reappear. With it,
+    // the previous FTS5 results are held as placeholder while the new query
+    // resolves, creating a seamless "results refine" experience.
+    //
+    // The companion `isPlaceholderData` flag is available to consumers that
+    // want to visually dim stale placeholder results (e.g. opacity-70).
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -118,8 +127,8 @@ export const useSemanticSearch = () => {
           }
         }
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
+    } catch (err: unknown) {
+      if (!(err instanceof Error && err.name === 'AbortError')) {
         setIsError(true);
         console.error('Semantic search error:', err);
       }

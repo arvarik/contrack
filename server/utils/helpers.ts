@@ -28,3 +28,22 @@ export function buildContactUpdate(body: Record<string, unknown>) {
   }
   return update;
 }
+
+/**
+ * Extract a human-readable error message from an unknown thrown value.
+ *
+ * TypeScript `catch` blocks receive `unknown` by default. This utility
+ * provides a type-safe one-liner replacement for the `catch (err: unknown)`
+ * anti-pattern used across the codebase.
+ *
+ * @example
+ * ```ts
+ * try { ... } catch (err: unknown) {
+ *   log.error('context', getErrorMessage(err));
+ * }
+ * ```
+ */
+export function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}

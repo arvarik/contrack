@@ -8,6 +8,7 @@ import { getEmbeddingSimilarity } from "./context.ts";
 import { computeMatchSignals, computeCompositeScore, classifyPair } from "./scoring.ts";
 import { evaluateBatchWithAI } from "./ai.ts";
 import type { RawPair, PassContext, MatchSignals } from "./types.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 const MEGA_BLOCK_THRESHOLD = 100;
 const AI_BATCH_SIZE = 12;
@@ -347,8 +348,8 @@ export async function runFunnelPass(ctx: PassContext, scanId?: string, useEmbedd
             });
           }
         }
-      } catch (err: any) {
-        log.warn("DedupeService", `[${rid}] AI batch failed: ${err.message}`);
+      } catch (err: unknown) {
+        log.warn("DedupeService", `[${rid}] AI batch failed: ${getErrorMessage(err)}`);
         for (const candidate of batch) {
           if (candidate.score >= 0.80) {
             const pk = pairKey(candidate.a.id, candidate.b.id);

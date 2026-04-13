@@ -48,8 +48,8 @@ export const ActivityFeed = () => {
     try {
       await undoMerge.mutateAsync(id);
       toast.success(`Restored "${name}"`);
-    } catch (err: any) {
-      toast.error(`Undo failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Undo failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   };
 

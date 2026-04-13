@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { STALE_TIMES } from '../lib/queryConfig';
 import type { ActionItem, ZeroStatePayload } from '../types';
 
 const API_BASE = '/api';
@@ -79,7 +80,8 @@ export const useDashboard = () => {
       const res = await fetch(`${API_BASE}/dashboard`);
       if (!res.ok) throw new Error('Failed to fetch dashboard payload');
       return res.json();
-    }
+    },
+    staleTime: STALE_TIMES.dashboard,
   });
 };
 

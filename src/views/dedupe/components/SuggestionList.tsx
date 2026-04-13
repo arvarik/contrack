@@ -69,8 +69,8 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
       await mergeContacts.mutateAsync({ primaryId, duplicateId });
       onRemoveSuggestion(suggestion.id);
       toast.success(`Merged successfully`);
-    } catch (err: any) {
-      toast.error(`Merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [mergeContacts, swapped, onRemoveSuggestion]);
 
@@ -103,8 +103,8 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
       if (result.succeeded < result.total) {
         toast.error(`${result.total - result.succeeded} merge(s) failed`);
       }
-    } catch (err: any) {
-      toast.error(`Batch merge failed: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Batch merge failed: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [suggestions, selected, swapped, mergeBatch, onRemoveSuggestion]);
 

@@ -2,6 +2,7 @@ import { ai } from "../../ai/index.ts";
 import { log } from "../../utils/logger.ts";
 import type { NormalizedContact } from "./normalization.ts";
 import type { MatchSignals } from "./types.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 /** Enhanced system prompt for timeline-aware duplicate detection. */
 const AI_SYSTEM_PROMPT = `You are a contact de-duplication expert for a personal CRM.
@@ -81,8 +82,8 @@ For each pair, return your assessment.`,
     const results = JSON.parse(result.text) as { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[];
     log.info("DedupeService", `[${rid}] AI evaluated ${results.length} pairs via ${result.model} in ${result.latencyMs}ms`);
     return results;
-  } catch (err: any) {
-    log.error("DedupeService", `[${rid}] AI batch evaluation failed: ${err.message}`);
+  } catch (err: unknown) {
+    log.error("DedupeService", `[${rid}] AI batch evaluation failed: ${getErrorMessage(err)}`);
     return [];
   }
 }

@@ -9,6 +9,7 @@ import { queueGeocode } from "./geocoding/index.ts";
 import { processBase64Avatar, isBase64DataUri } from "../utils/avatarProcessor.ts";
 import { invalidateSearchCache } from "../utils/searchCache.ts";
 import { invalidateDailyInsight } from "./dashboardService.ts";
+import { aiCache } from "../utils/aiCache.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
 import { generateAndStoreEmbedding, generateAndStoreBulkEmbeddings } from "./dedupe/embeddings.ts";
@@ -17,6 +18,7 @@ import { generateSearchExpansion } from "../ai/aiService.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { dedupeService, dedupeQueue } from "./dedupe/index.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
 // Incremental Dedupe — Debounce Map
@@ -49,7 +51,7 @@ function scheduleIncrementalDedupe(contactId: string) {
     _dedupeTimers.delete(contactId);
     const rid = crypto.randomUUID().slice(0, 8);
     dedupeService.incrementalDedupeCheck(contactId, rid).catch(err =>
-      log.warn("ContactService", `Incremental dedupe for ${contactId} failed: ${err.message}`)
+      log.warn("ContactService", `Incremental dedupe for ${contactId} failed: ${getErrorMessage(err)}`)
     );
   }, DEDUPE_DEBOUNCE_MS);
 
@@ -89,8 +91,10 @@ function buildInsertValues(body: any, id: string) {
 
 /** Invalidate all caches that depend on contact data. */
 function invalidateAllCaches() {
-  invalidateSearchCache();
-  invalidateDailyInsight();
+  // aiCache.invalidateAll() flushes all tiers (rerank, synthesis, dailyInsight,
+  // briefing). This is a single call that replaces the former two-call pattern
+  // (invalidateSearchCache + invalidateDailyInsight).
+  aiCache.invalidateAll();
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +127,7 @@ export const contactService = {
 
     // Fire-and-forget: generate embedding in the background
     generateAndStoreEmbedding(id).catch(err =>
-      log.warn("ContactService", `Background embedding for ${id} failed: ${err.message}`)
+      log.warn("ContactService", `Background embedding for ${id} failed: ${getErrorMessage(err)}`)
     );
 
     // Fire-and-forget: Doc2Query search expansion → then embed with complete data
@@ -169,62 +173,80 @@ export const contactService = {
     }
 
     // Phase 2: Insert all contacts into SQLite in a single transaction
+    // Batch mode: defer all cache invalidations until the transaction completes.
+    // Without this, each contact insert triggers a full cache flush (N flushes
+    // for N contacts). With batch mode, exactly 1 flush after all inserts.
+    aiCache.enterBatchMode();
     let count = 0;
     const createdIds: string[] = [];
-    const txn = sqlite.transaction(() => {
-      for (const c of validContacts) {
-        const id = crypto.randomUUID();
-        const values = buildInsertValues(c, id);
+    try {
+      const txn = sqlite.transaction(() => {
+        for (const c of validContacts) {
+          const id = crypto.randomUUID();
+          const values = buildInsertValues(c, id);
 
-        // Smart avatar: gender-aware DiceBear URL if no avatar was provided
-        if (!values.avatarUrl && c.name) {
-          values.avatarUrl = buildSmartAvatarUrl(c.name);
+          // Smart avatar: gender-aware DiceBear URL if no avatar was provided
+          if (!values.avatarUrl && c.name) {
+            values.avatarUrl = buildSmartAvatarUrl(c.name);
+          }
+
+          db.insert(schema.contacts).values(values).run();
+          contactRepo.insertChildRecords(id, c, c._sourcePlatform || 'manual');
+          if (c.location) queueGeocode(id, c.location);
+          createdIds.push(id);
+          count++;
         }
+      });
+      txn();
+      onProgress?.(total, total, 'Complete');
 
-        db.insert(schema.contacts).values(values).run();
-        contactRepo.insertChildRecords(id, c, c._sourcePlatform || 'manual');
-        if (c.location) queueGeocode(id, c.location);
-        createdIds.push(id);
-        count++;
-      }
-    });
-    txn();
-    onProgress?.(total, total, 'Complete');
-
-    invalidateAllCaches();
+      invalidateAllCaches();
+    } finally {
+      aiCache.exitBatchMode();
+    }
     return { count, createdIds };
   },
 
   bulkDeleteContacts(ids: string[]) {
-    const deleteFn = sqlite.transaction(() => {
-      const stmt = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
-      // vec0 tables don't support FK cascading — clean up manually
-      const delSearch = sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?");
-      const delDedupe = sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?");
-      for (const id of ids) {
-        try { delSearch.run(id); } catch { /* vec0 row may not exist */ }
-        try { delDedupe.run(id); } catch { /* vec0 row may not exist */ }
-        stmt.run(id);
-      }
-    });
-    deleteFn();
-    invalidateAllCaches();
+    aiCache.enterBatchMode();
+    try {
+      const deleteFn = sqlite.transaction(() => {
+        const stmt = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
+        // vec0 tables don't support FK cascading — clean up manually
+        const delSearch = sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?");
+        const delDedupe = sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?");
+        for (const id of ids) {
+          try { delSearch.run(id); } catch { /* vec0 row may not exist */ }
+          try { delDedupe.run(id); } catch { /* vec0 row may not exist */ }
+          stmt.run(id);
+        }
+      });
+      deleteFn();
+      invalidateAllCaches();
+    } finally {
+      aiCache.exitBatchMode();
+    }
     return ids.length;
   },
 
   bulkUpdateContacts(ids: string[], data: any) {
-    const update = buildContactUpdate(data);
-    // Safety: buildContactUpdate returns only keys from a hardcoded whitelist
-    // (see utils/helpers.ts). Interpolating those key names into SQL is safe
-    // because no user-supplied string reaches the SET clause — only column names.
-    const updateFn = sqlite.transaction(() => {
-      const setClauses = Object.keys(update).map(k => `${k} = ?`).join(', ');
-      const values = Object.values(update);
-      const stmt = sqlite.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`);
-      for (const id of ids) stmt.run(...values, id);
-    });
-    updateFn();
-    invalidateAllCaches();
+    aiCache.enterBatchMode();
+    try {
+      const update = buildContactUpdate(data);
+      // Safety: buildContactUpdate returns only keys from a hardcoded whitelist
+      // (see utils/helpers.ts). Interpolating those key names into SQL is safe
+      // because no user-supplied string reaches the SET clause — only column names.
+      const updateFn = sqlite.transaction(() => {
+        const setClauses = Object.keys(update).map(k => `${k} = ?`).join(', ');
+        const values = Object.values(update);
+        const stmt = sqlite.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`);
+        for (const id of ids) stmt.run(...values, id);
+      });
+      updateFn();
+      invalidateAllCaches();
+    } finally {
+      aiCache.exitBatchMode();
+    }
     return ids.length;
   },
 
@@ -275,7 +297,7 @@ export const contactService = {
     const embeddingFields = ['name', 'company', 'role', 'location', 'industry', 'headline'];
     if (embeddingFields.some(f => body[f] !== undefined)) {
       generateAndStoreEmbedding(id).catch(err =>
-        log.warn("ContactService", `Background embedding update for ${id} failed: ${err.message}`)
+        log.warn("ContactService", `Background embedding update for ${id} failed: ${getErrorMessage(err)}`)
       );
     }
 

@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError.ts";
 import { asyncHandler } from "../../utils/asyncHandler.ts";
 import { log } from "../../utils/logger.ts";
 import { dedupeService, dedupeQueue, type DedupeScanProgress } from "../../services/dedupe/index.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerScanRoutes(router: Router) {
   router.post("/dedupe/scan", asyncHandler(async (req, res) => {
@@ -32,7 +33,7 @@ export function registerScanRoutes(router: Router) {
     log.info("API", `[${rid}] POST /api/dedupe/scan → scanId=${scan.scanId}, mode=${mode}, threshold=${threshold}`);
 
     dedupeService.runScan(scan.scanId, mode, rid, threshold).catch(err => {
-      log.error("API", `[${rid}] Scan ${scan.scanId} processing error: ${err.message}`);
+      log.error("API", `[${rid}] Scan ${scan.scanId} processing error: ${getErrorMessage(err)}`);
     });
 
     res.json({ scanId: scan.scanId, mode });

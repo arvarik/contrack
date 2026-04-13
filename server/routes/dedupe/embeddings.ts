@@ -4,6 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.ts";
 import { log } from "../../utils/logger.ts";
 import { backfillEmbeddings, getEmbeddingCount, isEmbeddingAvailable } from "../../services/dedupe/index.ts";
 import { sqlite } from "../../db.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerEmbeddingRoutes(router: Router) {
   router.post("/dedupe/backfill-embeddings", asyncHandler(async (req, res) => {
@@ -18,7 +19,7 @@ export function registerEmbeddingRoutes(router: Router) {
     backfillEmbeddings((done, total, phase) => {
       log.debug("API", `[${rid}] Embedding backfill: ${phase} (${done}/${total})`);
     }).catch(err => {
-      log.error("API", `[${rid}] Embedding backfill failed: ${err.message}`);
+      log.error("API", `[${rid}] Embedding backfill failed: ${getErrorMessage(err)}`);
     });
 
     res.json({ started: true });

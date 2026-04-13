@@ -17,6 +17,7 @@ import { QuotaTracker } from "../routing/QuotaTracker.ts";
 import { SmartRouter } from "../routing/SmartRouter.ts";
 import { getAITier, getGroundingRPDLimit, type AITier } from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
 // JSON Schema Translation (unchanged from v1.0)
@@ -25,8 +26,19 @@ import { log } from "../../utils/logger.ts";
 // schema format that uses the `Type.*` enum vocabulary.
 // ---------------------------------------------------------------------------
 
-function translateSchema(node: JsonSchemaNode): any {
-  const typeMap: Record<string, any> = {
+/** Gemini SDK schema node — recursive Record type used by generateContent config. */
+type GeminiSchemaNode = {
+  type: (typeof Type)[keyof typeof Type];
+  nullable?: boolean;
+  description?: string;
+  enum?: string[];
+  properties?: Record<string, GeminiSchemaNode>;
+  items?: GeminiSchemaNode;
+  required?: string[];
+};
+
+function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
+  const typeMap: Record<string, (typeof Type)[keyof typeof Type]> = {
     object: Type.OBJECT,
     array: Type.ARRAY,
     string: Type.STRING,
@@ -35,7 +47,7 @@ function translateSchema(node: JsonSchemaNode): any {
     boolean: Type.BOOLEAN,
   };
 
-  const result: any = {
+  const result: GeminiSchemaNode = {
     type: typeMap[node.type] ?? Type.STRING,
   };
 
@@ -69,9 +81,10 @@ function translateSchema(node: JsonSchemaNode): any {
  * - 500 / "internal":           Transient server error
  * - 408 / "deadline exceeded":  Request timed out
  */
-function isRetryableError(error: any): boolean {
-  const msg = (error?.message ?? "").toLowerCase();
-  const status = error?.status ?? error?.statusCode;
+function isRetryableError(error: unknown): boolean {
+  const errObj = error as Record<string, unknown> | null;
+  const msg = (typeof errObj?.message === 'string' ? errObj.message : '').toLowerCase();
+  const status = (typeof errObj?.status === 'number' ? errObj.status : errObj?.statusCode) as number | undefined;
   return (
     status === 429 ||
     status === 503 ||
@@ -185,9 +198,9 @@ export class GeminiAdapter implements AIProvider {
           this.circuitBreakers,
           requiresGrounding,
         );
-      } catch (routeError: any) {
-        lastError = routeError;
-        log.warn("GeminiAdapter", `Router exhausted on attempt ${attempt}: ${routeError.message}`);
+      } catch (routeError: unknown) {
+        lastError = routeError instanceof Error ? routeError : new Error(getErrorMessage(routeError));
+        log.warn("GeminiAdapter", `Router exhausted on attempt ${attempt}: ${getErrorMessage(routeError)}`);
         break; // No point retrying if no models are available
       }
 
@@ -213,8 +226,8 @@ export class GeminiAdapter implements AIProvider {
         );
 
         return result;
-      } catch (error: any) {
-        lastError = error;
+      } catch (error: unknown) {
+        lastError = error instanceof Error ? error : new Error(getErrorMessage(error));
 
         // Rollback the optimistic reservation — this request didn't consume quota
         this.tracker.rollback(route.modelId);
@@ -245,7 +258,7 @@ export class GeminiAdapter implements AIProvider {
         }
 
         // Hard error (bad request, auth, schema) — do not retry
-        log.error("GeminiAdapter", `${route.modelId} hard error: ${error.message}`);
+        log.error("GeminiAdapter", `${route.modelId} hard error: ${getErrorMessage(error)}`);
         throw error;
       }
     }
@@ -266,7 +279,7 @@ export class GeminiAdapter implements AIProvider {
     model: string,
     startMs: number,
   ): Promise<AIGenerateResult> {
-    const config: any = {};
+    const config: Record<string, unknown> = {};
 
     if (options.enableSearchGrounding) {
       // ⚠️ Gemini API constraint: googleSearch tool is incompatible with

@@ -25,7 +25,7 @@ export const linkPreviewService = {
       }
 
       return { title, description, image, url: targetUrl };
-    } catch (err: any) {
+    } catch (err: unknown) {
       throw new AppError(`Unfurl failed parsing target host: ${targetUrl}`, 500);
     }
   }

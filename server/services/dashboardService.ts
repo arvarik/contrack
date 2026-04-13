@@ -2,20 +2,16 @@ import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { actionItemService } from "./actionItemService.ts";
 import { generateDailyInsight, DailyInsight } from "../ai/aiService.ts";
+import { aiCache } from "../utils/aiCache.ts";
 import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
 import type { ActionItem } from "../../src/types.ts";
-
-let cachedInsight: DailyInsight | null = null;
 
 /**
  * Discard the cached Daily Insight. Call this any time contact data is mutated
  * so the next dashboard/insight request regenerates with fresh CRM data.
  */
 export function invalidateDailyInsight(): void {
-  if (cachedInsight) {
-    log.debug("Dashboard", "Daily Insight cache invalidated by contact mutation");
-    cachedInsight = null;
-  }
+  aiCache.invalidate("dailyInsight");
 }
 
 export const dashboardService = {
@@ -160,10 +156,9 @@ export const dashboardService = {
   },
 
   async getInsight() {
-    // 24 hour cache TTL
-    if (cachedInsight && Date.now() - new Date(cachedInsight.generatedAt).getTime() < 24 * 60 * 60 * 1000) {
-      return cachedInsight;
-    }
+    // Check unified cache (24h TTL managed by aiCache)
+    const cached = aiCache.get<DailyInsight>("dailyInsight", "singleton");
+    if (cached) return cached;
 
     log.info("Dashboard", "Cache miss for Daily Insight. Generating new insight...");
 
@@ -204,7 +199,7 @@ export const dashboardService = {
       LIMIT 3
     `).all() as { name: string }[];
 
-    const numContacts = totalActive; // use totalActive
+    const numContacts = totalActive;
     
     // Check if we have enough data so the AI doesn't hallucinate weird stuff
     if (numContacts === 0) return null;
@@ -220,7 +215,7 @@ export const dashboardService = {
 
     const insight = await generateDailyInsight(stats);
     if (insight) {
-      cachedInsight = insight;
+      aiCache.set("dailyInsight", "singleton", insight);
     }
     
     return insight;

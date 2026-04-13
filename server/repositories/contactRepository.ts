@@ -113,9 +113,18 @@ const stmts = {
   ),
 };
 
-// =============================================================================
-// ContactRepository
-// =============================================================================
+/**
+ * A raw contact row as returned by better-sqlite3 `prepare().get()` or `.all()`.
+ *
+ * Intentionally loose — callers pass different column subsets depending on the
+ * query (slim view, full select, dedupe engine, etc.). Only `id` is required
+ * for child-table JOINs.
+ *
+ * NOTE: Drizzle's InferSelectModel<typeof schema.contacts> is stricter than what
+ * better-sqlite3 actually returns (it returns numbers for booleans, etc.),
+ * so we use a pragmatic Record-based type here.
+ */
+export type RawContactRow = Record<string, unknown> & { id: string };
 
 export const contactRepo = {
   // -------------------------------------------------------------------------
@@ -126,38 +135,42 @@ export const contactRepo = {
    * Hydrate a single raw contact row into the full API response shape.
    * Joins all 10 child tables + list memberships + interaction count.
    *
-   * @param contact - A raw row from the contacts table (or null/undefined)
+   * Accepts `unknown` for ergonomic use with `sqlite.prepare().get()` which
+   * returns `unknown`. Performs a runtime type-narrowing guard internally.
+   *
+   * @param contact - A raw row from the contacts table, or null/undefined/unknown
    * @returns Fully hydrated contact with typed child arrays, or null
    */
-  hydrate(contact: any): HydratedContact | null {
-    if (!contact) return null;
+  hydrate(contact: unknown): HydratedContact | null {
+    if (!contact || typeof contact !== 'object' || !('id' in contact)) return null;
+    const row = contact as RawContactRow;
 
     return {
-      ...contact,
-      emails: (stmts.emails.all(contact.id) as any[]).map(e => ({
+      ...row,
+      emails: (stmts.emails.all(row.id) as Array<Record<string, unknown>>).map(e => ({
         ...e,
         isPrimary: !!e.isPrimary,
       })),
-      phones: (stmts.phones.all(contact.id) as any[]).map(p => ({
+      phones: (stmts.phones.all(row.id) as Array<Record<string, unknown>>).map(p => ({
         ...p,
         isPrimary: !!p.isPrimary,
       })),
-      socialLinks: stmts.socialLinks.all(contact.id),
-      education: stmts.education.all(contact.id),
-      experience: (stmts.experience.all(contact.id) as any[]).map(e => ({
+      socialLinks: stmts.socialLinks.all(row.id),
+      education: stmts.education.all(row.id),
+      experience: (stmts.experience.all(row.id) as Array<Record<string, unknown>>).map(e => ({
         ...e,
         isCurrent: !!e.isCurrent,
       })),
-      sources: stmts.sources.all(contact.id),
-      tags: stmts.tags.all(contact.id),
-      interests: stmts.interests.all(contact.id),
-      attributes: stmts.attributes.all(contact.id),
-      addresses: (stmts.addresses.all(contact.id) as any[]).map(a => ({
+      sources: stmts.sources.all(row.id),
+      tags: stmts.tags.all(row.id),
+      interests: stmts.interests.all(row.id),
+      attributes: stmts.attributes.all(row.id),
+      addresses: (stmts.addresses.all(row.id) as Array<Record<string, unknown>>).map(a => ({
         ...a,
         isPrimary: !!a.isPrimary,
       })),
-      lists: stmts.lists.all(contact.id),
-      interactionCount: (stmts.interactionCount.get(contact.id) as any)?.cnt ?? 0,
+      lists: stmts.lists.all(row.id),
+      interactionCount: (stmts.interactionCount.get(row.id) as { cnt: number } | undefined)?.cnt ?? 0,
     } as HydratedContact;
   },
 
@@ -169,7 +182,7 @@ export const contactRepo = {
    * @param contacts - Array of raw contact rows
    * @returns Array of fully hydrated contacts (nulls filtered out)
    */
-  hydrateMany(contacts: any[]): HydratedContact[] {
+  hydrateMany(contacts: unknown[]): HydratedContact[] {
     return contacts.map(c => contactRepo.hydrate(c)).filter(Boolean) as HydratedContact[];
   },
 

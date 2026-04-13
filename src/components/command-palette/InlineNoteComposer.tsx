@@ -64,8 +64,8 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
 
       toast.success(`${type === 'note' ? 'Note' : 'Call'} logged for ${contactName}`);
       onComplete();
-    } catch (err: any) {
-      toast.error(`Failed to log ${type}: ${err.message}`);
+    } catch (err: unknown) {
+      toast.error(`Failed to log ${type}: ${(err instanceof Error ? err.message : String(err))}`);
     }
   }, [content, contactId, contactName, type, addInteraction, onComplete]);
 
