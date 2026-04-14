@@ -5,29 +5,29 @@ _This file tracks test methods, scenarios, and results with concrete execution e
 ## 0. Local Development Setup
 ### Prerequisites
 - Node.js 22+
-- npm
+- Valid `GEMINI_API_KEY` mapping in `.env`.
 
-### Start the App
-1. Copy `.env.example` to `.env` and set your `GEMINI_API_KEY`.
-2. Run `npm install`.
-3. Run `npm run dev`. This starts the Express backend via `tsx` and the Vite React 19 frontend.
+### Initialization
+1. Ensure dependencies are clean `npm install`.
+2. Generate synthetic data layers via `npm run seed`. This clears raw SQL instances, recreates schemas via explicit Drizzle migrations, and provides controlled fixture nodes.
 
-### Seed / Reset Data
-- Run `npm run seed` to drop the current SQLite database and repopulate it with synthetic demo data.
+## 1. Test Architecture Maps
+Vitest isolates boundary complexities directly mapping onto functional logic points.
 
-### Database
-- Local SQLite database. No external database server is required.
+- **Unit Boundaries (`tests/unit/`)**: Asserts independent parsing routines, Vector KNN math formulas (`RRF` distribution algorithms), and NLP metrics without touching database layers.
+- **Integration Boundaries (`tests/integration/`)**: Operates against true SQLite transactions validating deduplication, trigger cascades, and HTTP routing validations. 
+- **AI Mock Requirements**: Ensure test setups targeting AI integrations inject the mocked `SmartRouter` context rather than emitting expensive production tokens during standard automated checks.
 
-## 1. Test Methods & Tools
-- **Run all tests (Watch Mode)**: `npm test`
-- **Run all tests (Single Pass)**: `npx vitest run` (Executes ~72 Vitest tests in <500ms)
-- **Type Checking**: `npm run lint` (runs `tsc --noEmit`)
+## 2. Test Execution Commands
+- **Standard Run (Watch Mode)**: `npm test`
+- **Instant Parallel Validation**: `npx vitest run` (Resolves native 72+ test block in <500ms).
+- **TypeScript Integrity**: `npm run lint` guarantees strict payload architectures exist uniformly.
 
-## 2. Execution Evidence Rules
+## 3. Execution Evidence Rules
 _Never mark a test as PASS without evidence._
-- For automated tests, paste the output of `npx vitest run`.
-- For type checking, paste the output of `npm run lint`.
-- "PASS" with no evidence is treated as UNTESTED.
+- Automate outputs via raw pasting of `npx vitest run` block completions.
+- Submit `npm run lint` metrics as proof of stable compilation.
+- "PASS" declarations absent execution artifacts must be designated as UNTESTED blocks.
 
 ---
 

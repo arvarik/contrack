@@ -3,22 +3,22 @@
 _This is the soul of the product. It explains why the app exists and what its core beliefs are. Product Visionaries and UI/UX Designers use this to make feature and design decisions. Engineers use it to resolve ambiguity._
 
 ## 1. Why This Exists
-Contrack is a local-first, AI-powered personal CRM built for high-leverage individuals. Traditional CRMs are bloated and geared towards enterprise sales teams. Contrack exists to make maintaining relationships, organizing contacts, and recalling context completely effortless and instantaneous.
+Contrack is a local-first, AI-powered personal CRM built for high-leverage individuals (creative directors, executives, contractors). Traditional CRMs are bloated log-books requiring immense manual input for enterprise funnels. Contrack works differently: **You write the notes, the AI builds the relational graph.** We convert chaotic unstructured interactions into deep intelligence without manual forms.
 
-## 2. Target User
-The target user is a power user or high-leverage individual who values extreme speed, keyboard-first navigation, and high information density. They want immediate access to their network intelligence without onboarding hurdles, bloated interfaces, or sacrificing their privacy.
+## 2. Target User Concept
+The power user values rapid recall, keyboard-first navigation, and immediate insight extraction over complex pipelines. They prefer to pull up a contact dynamically via `Cmd+K` during a live meeting rather than navigating heavy multi-page dashboards.
 
 ## 3. Core Beliefs
-- **Speed over features**: The system must feel instantaneous. 0ms client-side search cache and extremely fast local vector KNN retrieval are prioritized over heavy network operations.
-- **Privacy is non-negotiable**: Local-first architecture (SQLite, local embeddings) ensures that contact data remains strictly on the device unless an explicit AI briefing requires calling an LLM.
-- **Keyboard-first Navigation**: Interactions should center around a powerful Command Palette (Cmd+K) allowing for navigation, searching, and taking action without moving the mouse.
+- **0ms Doctrine**: Latency breaks flow. Client-side caching, FTS5 SQL lookups, local vector embeddings via Transformers.js, and multi-phase NDJSON rendering ensure instantaneous interactions masking any larger structural LLM latency.
+- **Ghost Entity Mapping**: The AI passively processes raw text, discovering references to individuals even before users officially log them. These "Ghost" nodes materialize into formal contacts automatically once active engagement unfolds, ensuring history is never lost purely due to delayed data entry.
+- **Privacy Is Fundamental**: Core storage (SQLite) is local. AI network boundaries are restricted to explicit features (like Catch-Me-Up briefings or data enrichments) using intelligent model adapters that conserve outbound tokens.
 
 ## 4. Design & UX Principles
-- **Information Density**: The UI must be compact and efficient.
-- **Subtle Containment**: Use visual shifts in surface colors (Tailwind token system) rather than hard borders to organize information.
-- **Intelligence at your Fingertips**: Utilize AI passively (e.g., Executive Brief streamer, automatic Doc2Query search expansion) to augment the user's recall, rather than acting as a chat bot.
+- **No-Line Hierarchy**: Lines signify a failure of visual hierarchy. Containment is expressed purely through surface background shifts (`bg-surface`, `bg-surface-container-low`, etc.) rather than rigid borders. 
+- **Glassmorphism Integration**: Modals and floating elements utilize robust blur filters and transparency stacks to represent contextual dominance over underlying text.
+- **Progressive Intelligence**: Utilize background processing (e.g., automated chronological score sorting, passive Doc2Query search expansions) to quietly arm users with relevant insights. Intelligence should feel ambient, not interventional.
 
 ## 5. What This Is NOT
-- **Not a B2B SaaS tool**: There are no "leads", "pipelines", or "conversion tracking" metrics.
-- **Not a cloud-hosted DB**: Data lives on disk locally.
-- **Not a generic task manager**: Focus is specifically on relationships and contact context.
+- **Not a sales tracker**: No traditional leads, conversion pipelines, CRM workflows, or financial metrics.
+- **Not an Enterprise DB**: Database rests strictly isolated on disk, refusing connection with cloud environments.
+- **Not a raw task manager**: Tasks exist strictly as contextual offshoots of relationships (`action_items`), not a daily planner.

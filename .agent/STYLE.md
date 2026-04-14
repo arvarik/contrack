@@ -3,33 +3,37 @@
 _This document enforces the visual identity and coding patterns of the project. It prevents context drift as multiple agents work on the codebase. Agents MUST follow these rules strictly._
 
 ## 1. Visual Language & Tokens
-### Colors & Hierarchy
 - **Tailwind CSS v4** is strictly enforced.
-- **Surface Hierarchy**: Containment is expressed strictly through surface background color shifts, not borders. 
-  - `bg-surface`: Base layer
-  - `bg-surface-container`: Secondary containers
-  - `bg-surface-container-lowest`: Cards and modals
+- **Surface Hierarchy (No-Line Principle)**: Containment is strictly enforced by surface color shifts (`surface` → `surface-container-low` → `surface-container-lowest`). 
+- ❌ **NEVER** use 1px solid borders (`border-gray-200`) for sectioning. The only exceptions are explicit interactivity rings (inputs via `focus:ring-2`, active interactions).
 
 ## 2. Component Patterns
-- **Command Palette (`src/components/command-palette/`)**: Acts as a state machine managing multiple layers (InlineNoteComposer, ActionSubMenu, Search Results).
-- **Interactive Elements**: Use `onMouseDown={(e) => e.preventDefault()}` on ALL interactive elements inside the palette that are not `Command.Item` elements. Without this, `cmdk` interprets clicks as "outside" clicks and closes the dialog.
-- **Keyboard Shortcuts**: Global shortcuts (`Cmd+Shift+*`) are managed in `useGlobalNavShortcuts`. Capture-phase keydown listeners are used inside sub-menus to intercept keys before global nav.
-- **Mobile Design**: `<kbd>` hints are hidden on mobile (`hidden sm:inline-flex`). Touch targets are enlarged via `p-2 sm:p-1`.
+### Grid & Overflow Restrictions
+- When managing responsive layouts with `flex` or `grid`, always use `min-w-0` on immediate children holding distinct internal DOM components (like text truncation or images). This prevents Flexbox from violating column parameters and overflowing content.
+- 🔴 **The `ring-inset` Rule:** Using `overflow-hidden` will aggressively clip any standard `ring-*` styling since rings render outside the box-model. Whenever elements sit within `overflow-hidden` containers (like Command Palette lists or Glass modals), you **MUST** use `ring-inset` to guarantee safe rendering inside paddings.
+
+### Command Palette (`src/components/command-palette/`)
+This acts as an intricate state machine managing layered interactions (`cmdk`).
+- **Focus-Stealing Prevention:** Any interactive DOM object (button, input) inside the Command Palette that is *not* a standard `Command.Item` must carry `onMouseDown={(e) => e.preventDefault()}`. Omitting this prompts `cmdk` to automatically perceive clicks as an "outside DOM click," instantly crashing/closing the palette.
+- **Event Bubbling Safety:** Wrap internal components with `onMouseDown={(e) => e.stopPropagation()}` to prevent event bleeding into the overlay container.
+- **Keyboard Architecture:** `useGlobalNavShortcuts` governs `Cmd+Shift+X`. Inside deeply nested components (`ActionSubMenu`, `FacetAutocomplete`), custom keyboard hooks must exclusively employ the `capture phase`: `window.addEventListener('keydown', handler, true)`.
+
+### Mobile Responsiveness
+- Keybinding tags (`<kbd>`) must remain `hidden sm:inline-flex`.
+- Enlarged hit-areas via padded mobile rules (`py-3 sm:py-2.5`).
 
 ## 3. Code Conventions
 ### Architecture Patterns
-- **Local-First**: SQLite is the canonical data store.
-- **Service Layer**: Express routes (`server/routes/`) must be thin controllers. Complex business logic (dedupe, advanced search) belongs in `server/services/`.
-- **AI Adapter Pattern**: All AI calls route through `server/ai/aiService.ts` -> `SmartRouter` -> `AIProvider` interface. The implementation details of Gemini are isolated.
+- **Local-First Boundary**: Exclusively use the SQLite database.
+- **Thin Routes / Heavy Services**: Express routes live in `server/routes/` and simply parse incoming properties. Advanced AI filtering, deduping, and SQL writes exist exclusively within `server/services/`.
+- **AI Abstraction**: The `SmartRouter` encapsulates vendor specifics. Do not invoke `@google/genai` arbitrarily in a route.
 
 ### Strict Typing
-- **TypeScript**: The codebase maintains strict typing. Usage of `any` is prohibited outside of edge-case type narrowing. 
-- Prefer `Record<string, unknown>` over arbitrary index signatures.
+- Utilize `Record<string, unknown>` for object placeholders instead of implicit indexing. No `any` logic outside strict type narrowing clauses.
 
 ## 4. Anti-Patterns (FORBIDDEN)
-- ❌ **NEVER** use standard border properties (e.g., `border-gray-200`) or 1px solid borders for sectioning. Boundaries must be defined solely through surface background color shifts.
-- ❌ **NEVER** use `any` types outside of absolute necessity for type narrowing.
-- ❌ **NEVER** write raw `useEffect` fetch loops. All frontend data fetching must go through `@tanstack/react-query` hooks.
-- ❌ **NEVER** make network round-trips to managed external databases for core storage. The app is local-first.
-- ❌ **NEVER** silently swallow Promise errors with an empty `.catch(() => {})`. Log defensively.
-- ❌ **NEVER** assume vec0 tables (`search_embeddings`, `contact_embeddings`) support foreign key cascading. They do not.
+- ❌ 1px solid borders for visual segmentation.
+- ❌ Blind nested DOM interactivity inside the Command Palette without `onMouseDown` preventions.
+- ❌ Utilizing `overflow-hidden` on parent wrappers when attempting to show `ring-2` effects without `ring-inset`.
+- ❌ Invoking native `useEffect` fetch loops instead of `@tanstack/react-query` lifecycle managers.
+- ❌ Relying on vec0 SQL cascades without explicit backend code deletion blocks.
