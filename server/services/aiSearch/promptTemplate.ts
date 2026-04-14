@@ -96,21 +96,27 @@ CRITICAL RULES:
 3. Cross-reference multiple sources when possible.
 4. For social links, return ONLY verified URLs that actually exist.
 5. For interests, only include publicly stated interests or hobbies.
-6. Mark all interests as isAiGenerated: true.
+6. Mark ALL interests as isAiGenerated: true — this is mandatory.
 7. For experience entries, set isCurrent: true only for current roles.
-8. IDENTITY VALIDATION: You MUST confirm this is the correct person (matching
+8. For experience entries, include startDate and endDate when available.
+   Use approximate years like "2020" or "2018" if exact dates aren't known.
+   If you cannot determine dates, omit startDate/endDate entirely — do NOT
+   return the string "null".
+9. IDENTITY VALIDATION: You MUST confirm this is the correct person (matching
    name AND company/role/location) before returning any data. If you find
    multiple people with this name and cannot determine which is correct,
    return null for all ambiguous fields.
-9. CONFIDENCE THRESHOLD: Only return data you are at least 80% confident 
+10. CONFIDENCE THRESHOLD: Only return data you are at least 80% confident 
    about. For uncertain fields, return null rather than a best guess.
-10. Do NOT fabricate LinkedIn URLs. LinkedIn profile URLs follow the pattern
+11. Do NOT fabricate LinkedIn URLs. LinkedIn profile URLs follow the pattern
     linkedin.com/in/[handle] — do NOT guess the handle if you cannot verify it.
-11. Do NOT infer education from employment (e.g., "works at Stanford" ≠ 
+12. Do NOT infer education from employment (e.g., "works at Stanford" ≠ 
     "studied at Stanford"). Only return education entries with direct source evidence.
-12. If the known information is insufficient to identify a unique individual
+13. If the known information is insufficient to identify a unique individual
     (e.g., name only, no company or location), return null for ALL fields rather
     than guessing which person with that name might be correct.
+14. NEVER return the literal string "null" as a value. If a field is unknown,
+    use a proper JSON null value, or omit the field entirely.
 
 ## What We Already Know
 

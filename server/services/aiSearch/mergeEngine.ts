@@ -128,15 +128,23 @@ export function mergeSearchResult(
         `${(e.company || '').toLowerCase()}|${(e.role || '').toLowerCase()}`
       )
     );
-    childData.experience = searchResult.experience.filter(e => {
-      if (!e.company) return false;
-      const looseKey = `${e.company.toLowerCase()}|${(e.role || '').toLowerCase()}`;
-      const fullKey = `${looseKey}|${getYear(e.startDate)}`;
-      // If the incoming entry has no startDate, use loose matching
-      if (!e.startDate) return !existingExpLoose.has(looseKey);
-      // Otherwise, use full matching (company + role + year)
-      return !existingExpFull.has(fullKey);
-    });
+    childData.experience = searchResult.experience
+      .filter(e => {
+        if (!e.company) return false;
+        const looseKey = `${e.company.toLowerCase()}|${(e.role || '').toLowerCase()}`;
+        const fullKey = `${looseKey}|${getYear(e.startDate)}`;
+        // If the incoming entry has no startDate, use loose matching
+        if (!e.startDate) return !existingExpLoose.has(looseKey);
+        // Otherwise, use full matching (company + role + year)
+        return !existingExpFull.has(fullKey);
+      })
+      // Sanitize: strip the literal string "null" from date fields.
+      // LLMs sometimes return "null" as a string instead of omitting the field.
+      .map(e => ({
+        ...e,
+        startDate: (e.startDate && e.startDate !== 'null') ? e.startDate : undefined,
+        endDate: (e.endDate && e.endDate !== 'null') ? e.endDate : undefined,
+      }));
     fieldsUpdated += childData.experience.length;
   }
 
@@ -152,10 +160,12 @@ export function mergeSearchResult(
   }
 
   // ── Interests: upsert via ON CONFLICT (handled by insertChildRecords) ──
+  // Force isAiGenerated: true — all interests from AI Search are AI-generated
+  // by definition. Don't rely on the LLM to set this flag correctly.
   if (Array.isArray(searchResult.interests) && searchResult.interests.length > 0) {
     childData.interests = searchResult.interests.map(i => ({
       interest: i.interest,
-      isAiGenerated: i.isAiGenerated ?? true,
+      isAiGenerated: true,
     }));
     fieldsUpdated += childData.interests.length;
   }

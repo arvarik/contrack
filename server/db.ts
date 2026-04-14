@@ -114,6 +114,40 @@ migrate(db, { migrationsFolder: "./drizzle" });
 log.info("Database", "Drizzle migrations applied successfully");
 
 // =============================================================================
+// 2a. Data Cleanup — Sanitize legacy AI Search artifacts
+// =============================================================================
+// These idempotent queries fix two issues in previously-hydrated contacts:
+// 1. AI-search interests stored without isAiGenerated=1 (LLM didn't set the flag)
+// 2. Experience/education dates stored as the literal string 'null'
+// Both are safe to run on every startup — they're no-ops when nothing matches.
+// =============================================================================
+
+try {
+  // Fix interests: any interest on a contact that has AI-search-sourced data
+  // should be marked as AI-generated (it was inserted by the merge engine)
+  const fixedInterests = sqlite.prepare(`
+    UPDATE contact_interests SET isAiGenerated = 1
+    WHERE isAiGenerated = 0
+    AND contactId IN (SELECT DISTINCT contactId FROM contact_experience WHERE source = 'ai-search')
+  `).run();
+  if (fixedInterests.changes > 0) {
+    log.info("Database", `Fixed ${fixedInterests.changes} AI-search interests missing isAiGenerated flag`);
+  }
+
+  // Scrub 'null' strings from experience dates
+  const fixedExpStart = sqlite.prepare(`UPDATE contact_experience SET startDate = NULL WHERE startDate = 'null'`).run();
+  const fixedExpEnd = sqlite.prepare(`UPDATE contact_experience SET endDate = NULL WHERE endDate = 'null'`).run();
+  const fixedEduStart = sqlite.prepare(`UPDATE contact_education SET startDate = NULL WHERE startDate = 'null'`).run();
+  const fixedEduEnd = sqlite.prepare(`UPDATE contact_education SET endDate = NULL WHERE endDate = 'null'`).run();
+  const totalDateFixes = fixedExpStart.changes + fixedExpEnd.changes + fixedEduStart.changes + fixedEduEnd.changes;
+  if (totalDateFixes > 0) {
+    log.info("Database", `Scrubbed ${totalDateFixes} 'null' string date value(s) from experience/education`);
+  }
+} catch (err: any) {
+  log.warn("Database", `Data cleanup skipped: ${err.message}`);
+}
+
+// =============================================================================
 // 3. FTS5 Full-Text Search Index
 // =============================================================================
 // FTS5 virtual tables are NOT managed by Drizzle ORM, so we maintain them

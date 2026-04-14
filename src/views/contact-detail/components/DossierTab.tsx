@@ -84,12 +84,18 @@ export const DossierTab: React.FC<DossierTabProps> = ({
       {/* AI Custom Attributes */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {contact.attributes.map((attr: { id: string; name: string; value: string }) => (
-            <div key={attr.id} className="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-primary block mb-1">{attr.name}</span>
-              <span className="text-sm text-on-surface leading-relaxed font-medium block">{attr.value}</span>
-            </div>
-          ))}
+          {contact.attributes.map((attr: { id: string; name: string; value: string }) => {
+            // Format attribute names: replace underscores/hyphens with spaces, title-case
+            const displayName = attr.name
+              .replace(/[_-]/g, ' ')
+              .replace(/\b\w/g, c => c.toUpperCase());
+            return (
+              <div key={attr.id} className="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-primary block mb-1">{displayName}</span>
+                <span className="text-sm text-on-surface leading-relaxed font-medium block">{attr.value}</span>
+              </div>
+            );
+          })}
         </div>
       )}
       
@@ -118,7 +124,8 @@ export const DossierTab: React.FC<DossierTabProps> = ({
                       </p>
                       <p className="text-sm text-primary font-bold">{exp.company}</p>
                       <p className="text-xs text-on-surface-variant mb-1 font-medium">
-                        {exp.startDate}{exp.endDate ? ` – ${exp.endDate}` : exp.isCurrent ? ' – Present' : ''}
+                        {exp.startDate && exp.startDate !== 'null' ? exp.startDate : ''}
+                        {exp.endDate && exp.endDate !== 'null' ? ` – ${exp.endDate}` : exp.isCurrent ? ' – Present' : ''}
                         {exp.location && <span className="ml-2 opacity-60">· {exp.location}</span>}
                       </p>
                       {exp.description && <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 hover:line-clamp-none mt-1">{exp.description}</p>}
@@ -141,9 +148,9 @@ export const DossierTab: React.FC<DossierTabProps> = ({
                         {edu.degree}
                         {edu.fieldOfStudy && <span className="opacity-70"> · {edu.fieldOfStudy}</span>}
                       </p>
-                      {(edu.startDate || edu.endDate) && (
+                      {((edu.startDate && edu.startDate !== 'null') || (edu.endDate && edu.endDate !== 'null')) && (
                         <p className="text-xs text-on-surface-variant opacity-70 mt-0.5">
-                          {edu.startDate}{edu.endDate ? ` – ${edu.endDate}` : ''}
+                          {edu.startDate && edu.startDate !== 'null' ? edu.startDate : ''}{edu.endDate && edu.endDate !== 'null' ? ` – ${edu.endDate}` : ''}
                         </p>
                       )}
                     </div>

@@ -42,8 +42,18 @@ export function useContactListFilters(contacts: Contact[]) {
   const [inputValue, setInputValue] = useState(() => searchParams.get('q') ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync URL → local state when user navigates back/forward
+  // Track whether the URL change was initiated by our own typing (internal)
+  // vs a browser back/forward navigation (external). Only external changes
+  // should sync URL → local state — otherwise we overwrite characters typed
+  // during the debounce window, causing the "character deletion" bug.
+  const isInternalUpdateRef = useRef(false);
+
+  // Sync URL → local state ONLY for external navigation events
   useEffect(() => {
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      return;
+    }
     const urlQ = searchParams.get('q') ?? '';
     setInputValue(prev => prev === urlQ ? prev : urlQ);
   }, [searchParams]);
@@ -52,6 +62,7 @@ export function useContactListFilters(contacts: Contact[]) {
   const syncQueryToUrl = useCallback((val: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      isInternalUpdateRef.current = true;
       setSearchParams(prev => {
         const next = new URLSearchParams(prev);
         if (val) next.set('q', val); else next.delete('q');

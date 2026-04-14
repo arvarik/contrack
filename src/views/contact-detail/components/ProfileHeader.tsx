@@ -7,7 +7,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Briefcase, ArrowLeft, Sparkles, Archive, Tag, X, ArrowUpRight,
+  Briefcase, ArrowLeft, Sparkles, Archive, X, ArrowUpRight,
   CalendarClock, MoreVertical, Copy, Trash2
 } from "lucide-react";
 import { formatDistanceToNow, isPast, isToday } from "date-fns";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import type { Contact, ContactUpdateData } from "../../../types";
 import { cn } from "../../../lib/utils";
 import {
-  LABEL, CARD_TINTED, TAG_PILL, SECTION_HEADING_SPACED,
+  LABEL, CARD_TINTED, SECTION_HEADING_SPACED,
 } from "../../../lib/styles";
 import { LocalTimeWeather } from "../../../components/LocalTimeWeather";
 
@@ -429,13 +429,31 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               </div>
             )}
 
-            {/* Tags */}
             {contact.tags && contact.tags.length > 0 && (
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {contact.tags.map((t) => (
-                  <span key={t.id} className={cn(TAG_PILL, "flex items-center gap-1")}>
-                    <Tag className="w-2.5 h-2.5" /> {t.tag}
-                  </span>
+                  <div key={t.id} className="group/pill flex items-center gap-1 text-xs font-bold py-1 px-2.5 rounded-full bg-primary/10 text-primary border border-primary/20 transition-all overflow-hidden">
+                    <Sparkles className="w-2.5 h-2.5 opacity-60 shrink-0" />
+                    <span className="whitespace-normal break-words">{t.tag}</span>
+                    <button
+                      onClick={() => {
+                        const before = contact.tags || [];
+                        const after = before.filter(tag => tag.id !== t.id);
+                        updateContact.mutate({ id: contact.id, data: { tags: after.map(tag => ({ tag: tag.tag })) } });
+                        toast('Tag removed', {
+                          duration: 7000,
+                          action: {
+                            label: 'Undo',
+                            onClick: () => updateContact.mutate({ id: contact.id, data: { tags: before.map(tag => ({ tag: tag.tag })) } }),
+                          },
+                        });
+                      }}
+                      className="w-4 h-4 rounded-full text-primary/40 hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 -mr-1"
+                      aria-label={`Remove tag ${t.tag}`}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
