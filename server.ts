@@ -28,6 +28,7 @@ import { actionItemsRouter } from "./server/routes/actionItems.ts";
 import { dashboardRouter } from "./server/routes/dashboard.ts";
 import { aiSearchRouter } from "./server/routes/aiSearch.ts";
 import { aiRouter } from "./server/routes/ai.ts";
+import { aiStatsRouter } from "./server/routes/aiStats.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
 import { isEmbeddingAvailable, backfillEmbeddings, getEmbeddingCount } from "./server/services/dedupe/embeddings.ts";
 import { initLocalEmbeddings, backfillSearchEmbeddings } from "./server/services/search/localEmbeddings.ts";
@@ -46,6 +47,7 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
 
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
@@ -73,6 +75,7 @@ async function startServer() {
   app.use("/api", actionItemsRouter);
   app.use("/api", dashboardRouter);
   app.use("/api", aiSearchRouter);
+  app.use("/api/ai/stats", aiStatsRouter);
   app.use("/api/ai", aiRouter);
 
   // ── Cache diagnostics (dev only) ─────────────────────────────────────────
@@ -142,6 +145,11 @@ async function startServer() {
   });
 
   startRetroactiveGeocoding();
+
+  // ── AI Stats: retention cleanup (30-day rolling window) ──────────────
+  import("./server/services/aiStatsService.ts").then(({ cleanupOldInvocations }) => {
+    cleanupOldInvocations();
+  });
 
   // Relationship scoring: full recompute on startup, then hourly sweep
   relationshipService.recomputeAll();

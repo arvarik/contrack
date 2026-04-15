@@ -29,6 +29,7 @@ import { ParallelQueue } from "./routing/ParallelQueue.ts";
 import { getAITier } from "./routing/registry.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { recordInvocation } from "../services/aiStatsService.ts";
 import { aiCache, contentHash } from "../utils/aiCache.ts";
 
 // Re-export domain types for consumers
@@ -179,6 +180,7 @@ export async function parseContactRecord(text: string): Promise<ParsedContact> {
   if (!parsed) throw new Error("AI returned malformed JSON for contact parsing");
 
   log.info("AIService", `parseContactRecord → "${parsed.name}" via ${result.model} in ${result.latencyMs}ms | Tokens: ${result.tokenCount ?? "?"}`);
+  recordInvocation({ operation: "parse", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Parse: ${(parsed.name || text.slice(0, 30)).slice(0, 60)}` });
   return parsed;
 }
 
@@ -244,6 +246,7 @@ export async function generateCatchMeUpBriefing(
   }
 
   log.info("AIService", `CatchMeUp briefing synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
+  recordInvocation({ operation: "briefing", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Catch-Me-Up for ${(contact as any).name || "contact"}` });
   return parsed;
 }
 
@@ -266,7 +269,10 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
   // extraction results are deterministic per input. Cache permanently (24h TTL).
   const cacheKey = contentHash(text);
   const cached = aiCache.get<MentionEntity[]>("mentions", cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    recordInvocation({ operation: "mentions", latencyMs: 0, cached: true, description: `Mentions: ${text.slice(0, 40)}` });
+    return cached;
+  }
 
   const systemPrompt = `You are a named-entity recognition system specializing in identifying people mentioned in CRM notes.
     Extract only distinct human beings — never the note author themselves.`;
@@ -314,6 +320,7 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
     aiCache.set("mentions", cacheKey, parsed);
 
     log.info("AIService", `extractMentions → ${parsed.length} ghost entities in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
+    recordInvocation({ operation: "mentions", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Mentions: ${text.slice(0, 40)}` });
     return parsed;
   } catch (error: unknown) {
     log.error("AIService", "Mention extraction failed", { error: getErrorMessage(error) });
@@ -361,6 +368,7 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
     });
 
     log.info("AIService", `EML digest synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
+    recordInvocation({ operation: "emlSummary", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: "EML Summary" });
     return result.text || "<p>Email could not be parsed.</p>";
   } catch (error: unknown) {
     log.error("AIService", "EML summarization failed", { error: getErrorMessage(error) });
@@ -460,6 +468,7 @@ Return a JSON array of contacts that DEFINITIVELY match the query. For each matc
     `(${parsed.length - filtered.length} filtered) in ${result.latencyMs}ms via ${result.model} | ` +
     `Tokens: ${result.tokenCount ?? "?"}`,
   );
+  recordInvocation({ operation: "rerank", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Rerank: ${candidates.length} candidates for "${query.slice(0, 40)}"` });
 
   return filtered;
 }
@@ -543,6 +552,7 @@ export async function generateDailyInsight(stats: {
       `generateDailyInsight → generated in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`
     );
 
+    recordInvocation({ operation: "dailyInsight", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: "Daily Insight" });
     return {
       text: parsed.text,
       category: parsed.category,
@@ -618,6 +628,7 @@ export async function bulkParseContacts(
     "AIService",
     `bulkParseContacts: ${successes}/${texts.length} succeeded, ${failures} failed in ${Date.now() - startMs}ms`,
   );
+  recordInvocation({ operation: "bulkParse", latencyMs: Date.now() - startMs, cached: false, description: `Bulk Parse: ${texts.length} contacts (${successes} ok, ${failures} failed)` });
 
   return results.map((r) => (r instanceof Error ? null : r));
 }
@@ -676,6 +687,7 @@ export async function generateSearchExpansion(contact: {
     if (!expansion || expansion.length > 500) return null;
 
     log.debug("AIService", `Doc2Query for "${contact.name}": "${expansion.slice(0, 80)}..."`);
+    recordInvocation({ operation: "searchExpansion", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Search expansion for ${contact.name}` });
     return expansion;
   } catch (err: unknown) {
     log.debug("AIService", `Doc2Query failed for "${contact.name}": ${getErrorMessage(err)}`);
@@ -711,7 +723,10 @@ export async function synthesizeSearchResults(
   // ── Cache check: same query + same result count → same synthesis
   const cacheKey = query.trim().toLowerCase().replace(/\s+/g, " ");
   const cached = aiCache.get<string>("synthesis", cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    recordInvocation({ operation: "synthesis", latencyMs: 0, cached: true, description: `Synthesis: ${query.slice(0, 40)}` });
+    return cached;
+  }
 
   const contactSummaries = contacts.map(c => {
     const parts = [c.name];
@@ -755,6 +770,7 @@ Write a 2-3 sentence executive brief.`;
       "AIService",
       `synthesizeSearchResults "${query}" → ${text.length} chars in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
     );
+    recordInvocation({ operation: "synthesis", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Synthesis: ${query.slice(0, 40)}` });
     return text;
   } catch (error: unknown) {
     log.error("AIService", "Synthesis failed", { error: getErrorMessage(error) });

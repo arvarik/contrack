@@ -103,7 +103,8 @@ _Never mark a test as PASS without evidence._
 | Import pipeline (CSV/LinkedIn/Apple) | No tests | Add unit tests for `src/lib/importers.ts` parsing |
 | List management | No tests | Add CRUD tests for `listService.ts` |
 | AI Search enrichment | No tests | Add mock-based tests for `server/services/aiSearch/` |
-| Frontend components | No tests | Consider React Testing Library for critical components (CommandPalette, ContactList) |
+| AI Stats service | No tests | Add unit tests for `server/services/aiStatsService.ts` — recordInvocation, getSummary, getFeed, cleanup |
+| Frontend components | No tests | Consider React Testing Library for critical components (CommandPalette, ContactList, AIStatsView) |
 
 ## 5. Bugs Found (Fix Phase Queue)
 _List specific bugs discovered during testing._
@@ -114,8 +115,10 @@ _List specific bugs discovered during testing._
 ## 6. Regression Scenarios (Persistent)
 | Scenario | Last Verified | Notes |
 |----------|---------------|-------|
-| _Type Check Passes_ | _YYYY-MM-DD_ | `npm run lint` yields 0 errors |
-| _Vitest Suite Passes_ | _YYYY-MM-DD_ | `npx vitest run` passes all suites |
-| _Production Build Succeeds_ | _YYYY-MM-DD_ | `npm run build` completes without errors |
+| _Type Check Passes_ | 2026-04-14 | `npm run lint` yields 0 errors |
+| _Vitest Suite Passes_ | 2026-04-14 | `npx vitest run` passes all 72 tests |
+| _Production Build Succeeds_ | 2026-04-14 | `npm run build` completes without errors (3195 modules) |
 | _Vec0 Deletion Safety_ | _YYYY-MM-DD_ | Contact deletion explicitly purges `search_embeddings` and `contact_embeddings` |
 | _FTS5 Trigger Consistency_ | _YYYY-MM-DD_ | All 12 FTS triggers fire correctly on child-table mutations |
+| _AI Stats Summary Empty State_ | 2026-04-14 | `GET /api/ai/stats/summary` returns zeros with no invocations (not nulls) |
+| _AI Stats Feed Validation_ | 2026-04-14 | `GET /api/ai/stats/feed?operation=invalid_op` returns 400 with descriptive error |

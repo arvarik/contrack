@@ -360,6 +360,37 @@ export const listMembers = sqliteTable('list_members', {
 }));
 
 // =============================================================================
+// AI Invocation Log (AI Stats Page)
+// =============================================================================
+
+/**
+ * ai_invocations — Persistent audit log of every AI call (fresh and cached).
+ * Standalone table with no foreign keys — invocations are independent events
+ * that reference contacts/queries by description only.
+ *
+ * Used by the AI Stats Page (`/settings/ai-stats`) to surface historical
+ * AI activity, token usage, cache performance, and approximate costs.
+ *
+ * Retention: 30-day rolling window, cleaned up on server startup.
+ */
+export const aiInvocations = sqliteTable('ai_invocations', {
+  id: text('id').primaryKey(),
+  /** Fixed vocabulary: briefing, rerank, mentions, synthesis, parse, searchExpansion, dailyInsight, emlSummary, bulkParse */
+  operation: text('operation').notNull(),
+  /** Model ID that served this request (null for cached responses) */
+  model: text('model'),
+  /** Total token count — input + output combined (null for cached responses) */
+  tokenCount: integer('tokenCount'),
+  /** Wall-clock latency in milliseconds (<1 for cache hits) */
+  latencyMs: integer('latencyMs').notNull(),
+  /** Whether this response was served from aiCache (0|1 boolean) */
+  cached: integer('cached').notNull().default(0),
+  /** Contextual one-liner, e.g. "Catch-Me-Up for Julian Rivera" */
+  description: text('description'),
+  createdAt: text('createdAt').notNull().default(sql`(datetime('now'))`),
+});
+
+// =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================
 
