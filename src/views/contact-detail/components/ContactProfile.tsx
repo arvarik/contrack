@@ -209,10 +209,8 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
               </div>
 
               {activeTab === 'dossier' && (
-                <DossierTab
-                  contact={contact}
-                  contactId={id}
-                  updateContact={updateContact}
+                <DossierTab 
+                  contact={contact} 
                 />
               )}
 

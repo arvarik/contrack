@@ -27,6 +27,7 @@ import { getCachedSearch, setCachedSearch } from "../utils/searchCache.ts";
 import { hybridRetrieval, type RetrievalResult } from "./search/hybridRetrieval.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { recordInvocation } from "./aiStatsService.ts";
 
 // =============================================================================
 // Constants
@@ -309,6 +310,7 @@ export const searchService = {
     const cached = getCachedSearch(query);
     if (cached) {
       log.info("SemanticSearch", `[${rid}] Cache HIT for "${query.trim().slice(0, 60)}" (${Date.now() - startTime}ms)`);
+      recordInvocation({ operation: "rerank", latencyMs: Date.now() - startTime, cached: true, description: `Rerank cache hit: "${query.slice(0, 40)}"` });
       return { ...cached, cached: true };
     }
 

@@ -5,11 +5,10 @@
  * Extracted from ContactProfile to keep each section focused and readable.
  */
 import React, { useState } from "react";
-import { Briefcase, ChevronDown, FileText, Sparkles, Edit2 } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
+import { Briefcase, ChevronDown, FileText, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 
-import type { Contact, ContactUpdateData, ContactExperience, ContactEducation } from "../../../types";
+import type { Contact, ContactExperience, ContactEducation } from "../../../types";
 import { cn } from "../../../lib/utils";
 import {
   CARD, SECTION_HEADING_SPACED, STATUS_BADGE_SUCCESS,
@@ -21,8 +20,6 @@ import {
 
 export interface DossierTabProps {
   contact: Contact;
-  contactId: string;
-  updateContact: { mutate: (args: { id: string; data: ContactUpdateData }) => void };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -31,56 +28,13 @@ export interface DossierTabProps {
 
 export const DossierTab: React.FC<DossierTabProps> = ({
   contact,
-  contactId,
-  updateContact,
 }) => {
-  const [isEditingDossier, setIsEditingDossier] = useState(false);
-  const [dossierText, setDossierText] = useState('');
-
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
-      {/* AI Dossier */}
-      {(contact.aiBackground || isEditingDossier) && (
-        <div className={cn(CARD, "bg-surface-container-lowest relative overflow-hidden group")}>
-          <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-          <div className="flex justify-between items-center mb-4">
-            <h3 className={cn(SECTION_HEADING_SPACED, "text-primary flex items-center gap-2")}><Sparkles className="w-4 h-4" /> AI Dossier</h3>
-            {!isEditingDossier && (
-              <button onClick={() => { setDossierText(contact.aiBackground || ''); setIsEditingDossier(true); }} className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-primary transition-opacity p-1 bg-surface-container-low rounded-md shadow-sm" aria-label="Edit dossier">
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-          {isEditingDossier ? (
-            <div className="flex flex-col gap-3">
-              <textarea 
-                value={dossierText} 
-                onChange={e => setDossierText(e.target.value)} 
-                className="w-full min-h-[300px] p-4 bg-surface-container-low rounded-xl border border-surface-container-highest focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm font-mono text-on-surface resize-y"
-                autoFocus
-              />
-              <div className="flex justify-end gap-2 mt-1">
-                <button onClick={() => setIsEditingDossier(false)} className="px-4 py-1.5 rounded-full text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-colors">Cancel</button>
-                <button onClick={() => { updateContact.mutate({ id: contactId, data: { aiBackground: dossierText } }); setIsEditingDossier(false); }} className="px-4 py-1.5 rounded-full text-xs font-bold bg-primary text-on-primary shadow shadow-primary/20 hover:shadow-md hover:shadow-primary/30 transition-all">Save Dossier</button>
-              </div>
-            </div>
-          ) : (
-            <div 
-              onDoubleClick={() => { setDossierText(contact.aiBackground || ''); setIsEditingDossier(true); }}
-              className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-a:text-primary cursor-text"
-              title="Double click to edit"
-            >
-              <ReactMarkdown>{contact.aiBackground!}</ReactMarkdown>
-            </div>
-          )}
-          {!isEditingDossier && contact.aiHydratedAt && (
-             <p className="text-[10px] text-on-surface-variant mt-4 opacity-70">
-               Sourced via web hydration on {new Date(contact.aiHydratedAt).toLocaleDateString()}
-             </p>
-          )}
-        </div>
+      {contact.about && (
+        <AboutSection about={contact.about} />
       )}
-  
+
       {/* AI Custom Attributes */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -97,10 +51,6 @@ export const DossierTab: React.FC<DossierTabProps> = ({
             );
           })}
         </div>
-      )}
-      
-      {contact.about && (
-        <AboutSection about={contact.about} />
       )}
 
       {/* Experience & Education */}
@@ -169,7 +119,7 @@ export const DossierTab: React.FC<DossierTabProps> = ({
 
 function AboutSection({ about }: { about: string }) {
   const [expanded, setExpanded] = useState(false);
-  const needsTruncation = about.length > 280;
+  const needsTruncation = about.length > 500;
 
   return (
     <div className={cn(CARD, "relative overflow-hidden")}>
@@ -178,7 +128,7 @@ function AboutSection({ about }: { about: string }) {
       <div className="relative">
         <p className={cn(
           "whitespace-pre-wrap text-on-surface-variant text-sm leading-relaxed transition-all duration-300",
-          !expanded && needsTruncation && "max-h-32 overflow-hidden"
+          !expanded && needsTruncation && "max-h-64 overflow-hidden"
         )}>
           {about}
         </p>

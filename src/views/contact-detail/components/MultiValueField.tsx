@@ -99,7 +99,7 @@ const SortableRow = ({
             className="text-[10px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer flex items-center gap-1"
           />
           {/* Primary indicator for first address */}
-          {isAddress && idx === 0 && totalCount > 1 && (
+          {isAddress && idx === 0 && (
             <span className="flex items-center gap-0.5 text-[9px] uppercase tracking-widest text-primary font-bold opacity-70">
               <MapPinIcon className="w-2.5 h-2.5" /> map pin
             </span>
