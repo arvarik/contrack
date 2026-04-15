@@ -11,3 +11,4 @@ export * from './actionItems';
 export * from './dashboard';
 export * from './aiSearch';
 export * from './suggestions';
+export * from './aiStats';

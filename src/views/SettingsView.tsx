@@ -6,11 +6,12 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive, List, Sparkles } from 'lucide-react';
+import { ChevronLeft, Settings as SettingsIcon, Thermometer, Zap, Archive, List, Sparkles, Brain } from 'lucide-react';
 import { DedupeView } from './dedupe';
 import { ArchivedContactsView } from './ArchivedContactsView';
 import { ListManagerView } from './lists';
 import { AISearchView } from './ai-search';
+import { AIStatsView } from './ai-stats';
 import { ICON_BTN, PAGE_TITLE, CARD, SECTION_HEADING } from '../lib/styles';
 import { cn } from '../lib/utils';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -47,10 +48,12 @@ export const SettingsView = () => {
   const isArchived = location.pathname.endsWith('/archived');
   const isLists = location.pathname.endsWith('/lists');
   const isAISearch = location.pathname.includes('/ai-search');
+  const isAIStats = location.pathname.includes('/ai-stats');
 
   const getTitle = () => {
     if (isDedupe) return 'Dedupe Engine';
     if (isAISearch) return 'AI Search';
+    if (isAIStats) return 'AI Usage';
     if (isArchived) return 'Archived Contacts';
     if (isLists) return 'List Management';
     return 'Settings';
@@ -59,12 +62,13 @@ export const SettingsView = () => {
   const getIcon = () => {
     if (isDedupe) return <Zap className="w-6 h-6 text-primary" />;
     if (isAISearch) return <Sparkles className="w-6 h-6 text-primary" />;
+    if (isAIStats) return <Brain className="w-6 h-6 text-primary" />;
     if (isArchived) return <Archive className="w-6 h-6 text-amber-500" />;
     if (isLists) return <List className="w-6 h-6 text-primary" />;
     return <SettingsIcon className="w-6 h-6 text-primary" />;
   };
 
-  const isSubpage = isDedupe || isArchived || isLists || isAISearch;
+  const isSubpage = isDedupe || isArchived || isLists || isAISearch || isAIStats;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
@@ -152,6 +156,17 @@ export const SettingsView = () => {
                 </h3>
                 <p className="text-sm text-on-surface-variant">
                   Automatically research and enrich contact profiles using AI-powered internet search.
+                </p>
+              </Link>
+
+              {/* AI Usage */}
+              <Link to="/settings/ai-stats" className={cn(CARD, "block hover:bg-surface-container-high transition-colors group cursor-pointer")}>
+                <h3 className={cn(SECTION_HEADING, "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors")}>
+                  <Brain className="w-5 h-5 text-primary" />
+                  AI Usage
+                </h3>
+                <p className="text-sm text-on-surface-variant">
+                  View historical AI invocations, token usage, cache performance, and approximate costs.
                 </p>
               </Link>
 
@@ -278,6 +293,12 @@ export const SettingsView = () => {
           <Route path="/ai-search" element={
             <div className="overflow-y-auto h-full">
               <AISearchView />
+            </div>
+          } />
+
+          <Route path="/ai-stats" element={
+            <div className="overflow-y-auto h-full">
+              <AIStatsView />
             </div>
           } />
         </Routes>

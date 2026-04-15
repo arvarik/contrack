@@ -244,3 +244,39 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - **Type Check**: `npm run lint` (`tsc --noEmit`)
 - **Test**: `npm test` (Vitest in watch mode) / `npx vitest run` (single-run)
 - **Requirements**: `GEMINI_API_KEY` in `.env` (copy from `.env.example`)
+
+## 11. AI Stats API Contracts
+
+Two endpoints under `/api/ai/stats` (mounted via `aiStatsRouter`).
+
+### `GET /api/ai/stats/summary`
+
+Returns aggregate session KPIs, quota state, and cache tier statistics.
+
+**Response** `200`:
+```
+{
+  session: { totalInvocations, freshCalls, cachedCalls, totalTokens, estimatedCostUsd, cacheHitRate },
+  tier: "FREE" | "PAID" | "MOCK",
+  quota: { models: Record<modelId, { rpm, tpm, rpd }>, grounding: { rpd, limit, remaining } },
+  cacheTiers: Record<tierName, { entries, hits, misses, evictions, hitRate, ttlMs, maxEntries }>,
+  timestamp: string  // ISO 8601
+}
+```
+
+### `GET /api/ai/stats/feed`
+
+Paginated, filterable AI invocation history.
+
+**Query params**: `offset` (default 0), `limit` (default 50, max 200), `operation` (comma-separated filter), `cached` ("true"|"false"), `sort` ("newest"|"oldest").
+
+**Response** `200`:
+```
+{
+  items: Array<{ id, operation, model, tokenCount, latencyMs, cached: boolean, description, createdAt }>,
+  pagination: { offset, limit, totalCount, hasMore }
+}
+```
+
+**Data source**: `ai_invocations` table in `curator.db`. 30-day rolling retention. Full contract details in `docs/designs/2026-04-14-architect-ai-stats-page.md`.
+

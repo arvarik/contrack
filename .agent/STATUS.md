@@ -7,6 +7,21 @@ _This file tracks the detailed explore/plan/build/test sub-phases per feature. I
 **Phase 3: The Visionary (In Progress)**
 Phases 1 and 2 are complete. We are currently architecting features that deeply leverage visualization, relational analytics, and AI constraints, ensuring robust, production-grade output.
 
+**Active Feature**: AI Stats Page — Implementation complete (all 12 tasks). `npm run lint` 0 errors · `npx vitest run` 72/72 pass · `npm run build` succeeds. Awaiting visual review.
+
+## Relevant Files for Current Task
+- `src/db/schema.ts` (modify — add `aiInvocations` table)
+- `server/services/aiStatsService.ts` (create — recording + query logic)
+- `server/routes/aiStats.ts` (create — 2 endpoints)
+- `server/ai/aiService.ts` (modify — add `recordInvocation()` at 10 call sites)
+- `server.ts` (modify — mount router + retention cleanup)
+- `src/api/aiStats.ts` (create — React Query hooks)
+- `src/views/ai-stats/AIStatsView.tsx` (create — main page)
+- `src/views/ai-stats/components/` (create — SummaryBar, FeedItem, FeedFilters, CacheTiersAccordion, AIStatsSkeleton)
+- `src/views/SettingsView.tsx` (modify — add card + route)
+- `.agent/STYLE.md` (reference — design system tokens)
+- `.agent/ARCHITECTURE.md` §11 (reference — API contracts)
+
 ## State of Work
 
 ### Phase 1: Foundation (Complete)
