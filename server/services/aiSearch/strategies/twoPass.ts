@@ -1,5 +1,5 @@
 // =============================================================================
-// AI Search — Two-Pass Strategy (V2)
+// AI Search — Two-Pass Strategy (V2.1)
 // =============================================================================
 // The canonical strategy for AI Search. Uses two sequential LLM calls to
 // work around the Gemini API constraint: googleSearch grounding and
@@ -7,20 +7,21 @@
 //
 // Pass 1 — Grounding: Uses Google Search tool for live internet research.
 //          Returns free-form text with grounding citations.
-//          Prefers "pro" models for highest search accuracy.
+//          Prefers "flash" models for reliable grounding support.
 // Pass 2 — Extraction: Takes the grounded text and extracts structured
 //          JSON using a responseSchema. No grounding (already done).
 //          Prefers "lite" models — cheap pure-formatting task.
 //
-// V2: Model selection is now handled by the SmartRouter via `routing.prefer`
-// instead of hardcoded fallback arrays. The router handles capacity checks,
-// circuit breakers, and tier-aware model selection automatically.
+// V2.1: Added invocation recording for AI Stats tracking, grounded text
+// passthrough for dossier population, safer JSON parsing, and corrected
+// model routing (pro doesn't support grounding — use flash).
 // =============================================================================
 
 import type { AIProvider } from "../../../ai/provider.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
 import { aiSearchOutputSchema, extractionJsonSchema } from "../promptTemplate.ts";
+import { recordInvocation } from "../../../services/aiStatsService.ts";
 import { log } from "../../../utils/logger.ts";
 import { getErrorMessage } from "../../../utils/helpers.ts";
 
@@ -29,7 +30,7 @@ import { getErrorMessage } from "../../../utils/helpers.ts";
 // ---------------------------------------------------------------------------
 
 /** Max attempts for Pass 1 when the search tool returns empty text */
-const GROUNDING_MAX_RETRIES = 2;
+const GROUNDING_MAX_RETRIES = 3;
 
 /** Delay before retrying a grounding call that returned empty text */
 const GROUNDING_RETRY_DELAY_MS = 1_500;
@@ -53,8 +54,9 @@ export class TwoPassStrategy implements AISearchStrategy {
 
     // ── Pass 1: Grounding (web search → text output) ──────────────────
     // Prefer "pro" models for maximum search grounding accuracy.
-    // The SmartRouter handles model fallback via circuit breakers —
-    // no manual model array iteration needed.
+    // gemini-3.1-pro-preview supports grounding, thinking, and delivers
+    // the deepest, most thorough research results.
+    // The SmartRouter handles model fallback via circuit breakers.
     let groundedText = '';
 
     for (let attempt = 1; attempt <= GROUNDING_MAX_RETRIES; attempt++) {
@@ -64,6 +66,7 @@ export class TwoPassStrategy implements AISearchStrategy {
       }
 
       try {
+        const pass1Start = Date.now();
         const pass1Result = await adapter.generate({
           prompt,
           responseFormat: 'text',
@@ -74,6 +77,16 @@ export class TwoPassStrategy implements AISearchStrategy {
         groundedText = pass1Result.text;
         modelsUsed.push(pass1Result.model);
         totalTokens += pass1Result.tokenCount ?? 0;
+
+        // Record invocation for AI Stats tracking
+        recordInvocation({
+          operation: "aiSearchGrounding",
+          model: pass1Result.model,
+          tokenCount: pass1Result.tokenCount,
+          latencyMs: Date.now() - pass1Start,
+          cached: false,
+          description: `AI Search grounding: ${_contact.name}`,
+        });
 
         log.info(
           'TwoPassStrategy',
@@ -111,12 +124,22 @@ Only extract fields explicitly mentioned in the text.
 Return null for any field not clearly stated.
 Do NOT invent or infer information not present in the research text.
 
+For the "about" field, write a concise 2-4 sentence professional summary synthesizing
+the person's career arc, expertise, and notable achievements from the research text.
+
+For "interests", extract any hobbies, passions, causes, or areas of personal interest mentioned.
+For "socialLinks", extract any profile URLs (LinkedIn, Twitter/X, GitHub, etc.) found.
+For "emails" and "phones", extract any contact information found.
+For "industry", determine the primary industry vertical.
+For "location", extract their current city/region/country.
+
 Research text:
 ---
 ${groundedText}
 ---
     `.trim();
 
+    const pass2Start = Date.now();
     const pass2Result = await adapter.generate({
       prompt: extractionPrompt,
       responseFormat: 'json',
@@ -127,9 +150,25 @@ ${groundedText}
     modelsUsed.push(pass2Result.model);
     totalTokens += pass2Result.tokenCount ?? 0;
 
+    // Record invocation for AI Stats tracking
+    recordInvocation({
+      operation: "aiSearchExtraction",
+      model: pass2Result.model,
+      tokenCount: pass2Result.tokenCount,
+      latencyMs: Date.now() - pass2Start,
+      cached: false,
+      description: `AI Search extraction: ${_contact.name}`,
+    });
+
     // Parse and validate with Zod (default .strip() mode — silently
     // drops unrecognized fields rather than rejecting the entire response)
-    const rawParsed = JSON.parse(pass2Result.text || '{}');
+    let rawParsed: unknown;
+    try {
+      rawParsed = JSON.parse(pass2Result.text || '{}');
+    } catch (parseErr: unknown) {
+      throw new Error(`JSON parse failed for extraction output: ${getErrorMessage(parseErr)}. Raw text: ${(pass2Result.text || '').slice(0, 200)}`);
+    }
+
     const validated = aiSearchOutputSchema.safeParse(rawParsed);
 
     if (!validated.success) {
@@ -151,6 +190,7 @@ ${groundedText}
       tokenCount: totalTokens,
       latencyMs,
       citations,
+      groundedText: groundedText.trim(),
     };
   }
 }

@@ -46,6 +46,9 @@ export function buildSearchPrompt(contact: HydratedContact): string {
   if (contact.emails?.length) {
     known.push(`Emails: ${contact.emails.map(e => e.email).join(', ')}`);
   }
+  if (contact.phones?.length) {
+    known.push(`Phones: ${contact.phones.map(p => p.phone).join(', ')}`);
+  }
   if (contact.socialLinks?.length) {
     known.push(`Social Profiles:\n${contact.socialLinks.map(s =>
       `  - ${s.platform}: ${s.url}`).join('\n')}`);
@@ -59,6 +62,12 @@ export function buildSearchPrompt(contact: HydratedContact): string {
     known.push(`Known Education:\n${contact.education.map(e =>
       `  - ${e.degree || 'Degree'} in ${e.fieldOfStudy || '?'} at ${e.school}`
     ).join('\n')}`);
+  }
+  if (contact.interests?.length) {
+    known.push(`Known Interests: ${contact.interests.map((i: any) => i.interest).join(', ')}`);
+  }
+  if (contact.tags?.length) {
+    known.push(`Tags: ${contact.tags.map((t: any) => t.tag).join(', ')}`);
   }
 
   // Build disambiguation search hints to anchor the model to the right person.
@@ -86,8 +95,18 @@ export function buildSearchPrompt(contact: HydratedContact): string {
     : '';
 
   return `
-You are a professional researcher. Your task is to find accurate, publicly 
-available information about the person described below.
+You are an elite professional researcher and intelligence analyst. Your task is to
+conduct a THOROUGH internet investigation about the person described below.
+
+RESEARCH APPROACH:
+- Search broadly: try the person's name combined with their company, role, location,
+  and other known identifying details
+- Check LinkedIn profiles, company websites, conference speaker bios, news articles,
+  press releases, social media profiles (Twitter/X, GitHub, Instagram), blogs, podcasts,
+  YouTube channels, and public directories
+- Cross-reference multiple sources to verify accuracy
+- Think deeply about what information might be available and where to find it
+- Take your time — thoroughness and accuracy are more important than speed
 
 CRITICAL RULES:
 1. You MUST use Google Search to verify every piece of information you return.
@@ -125,12 +144,47 @@ ${searchHintsBlock}
 
 ## What To Search For
 
-Find any additional information about this person that we don't already have.
-Focus on: professional background, education history, social media profiles,
-public contact information, industry expertise, and notable achievements.
+You MUST use Google Search to search the internet deeply and thoroughly for this
+person. Spend time researching — check multiple sources, cross-reference findings,
+and provide comprehensive results.
 
-Return a JSON object with ONLY the new information you found. Do not repeat
-information we already have. Return null for fields you cannot verify.
+Search for and return ALL of the following categories of information that you can verify:
+
+### Contact Information
+- **emails**: Any professional or publicly listed email addresses
+- **phones**: Any business or publicly listed phone numbers
+- **socialLinks**: All public profile URLs — LinkedIn, Twitter/X, GitHub, Instagram,
+  personal website, blog, YouTube channel, Medium, Substack, Mastodon, and any
+  other public profiles. Return the full verified URL and platform name.
+- **website**: Personal or professional website URL
+
+### Professional Details
+- **headline**: Professional headline or tagline (e.g., "CEO & Co-Founder at Acme Inc")
+- **industry**: Primary industry vertical (e.g., "Artificial Intelligence", "Healthcare",
+  "Financial Services", "Enterprise Software")
+- **location**: Current city, state/region, and country (e.g., "San Francisco, CA, USA")
+- **about**: An extended professional summary (2-4 sentences) synthesizing their career arc,
+  expertise areas, and notable achievements based on what you find online
+
+### Career History
+- **experience**: Complete work history — include company name, role/title, start date,
+  end date (or mark isCurrent: true), description of role, and location for each position
+- **education**: Schools attended, degrees earned, fields of study, and dates
+
+### Personal & Public Information
+- **interests**: Publicly stated hobbies, passions, causes, volunteer work, or areas
+  of personal interest outside their professional role
+- **tags**: Descriptive professional tags (e.g., "founder", "investor", "speaker",
+  "open source contributor", "author", "advisor", "board member")
+- **attributes**: Notable facts as name-value pairs (e.g., "Founded": "Acme Corp in 2019",
+  "Book Author": "The Future of AI", "Podcast Host": "Tech Talks Weekly",
+  "Languages": "English, Mandarin", "Awards": "Forbes 30 Under 30")
+- **addresses**: Known office or business addresses
+- **birthday**: If publicly available
+- **pronouns**: If publicly stated
+
+Return ONLY the new information you found. Do not repeat information we already have.
+Return null for fields you cannot verify through internet search.
   `.trim();
 }
 
@@ -143,6 +197,8 @@ information we already have. Return null for fields you cannot verify.
 // =============================================================================
 
 export const aiSearchOutputSchema = z.object({
+  role: z.string().nullish(),
+  company: z.string().nullish(),
   headline: z.string().nullish(),
   about: z.string().nullish(),
   industry: z.string().nullish(),
@@ -208,6 +264,8 @@ export type AISearchOutput = z.infer<typeof aiSearchOutputSchema>;
 export const extractionJsonSchema: JsonSchemaNode = {
   type: "object",
   properties: {
+    role: { type: "string", nullable: true },
+    company: { type: "string", nullable: true },
     headline: { type: "string", nullable: true },
     about: { type: "string", nullable: true },
     industry: { type: "string", nullable: true },

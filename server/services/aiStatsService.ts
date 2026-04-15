@@ -39,7 +39,9 @@ export type AIOperation =
   | "searchExpansion"
   | "dailyInsight"
   | "emlSummary"
-  | "bulkParse";
+  | "bulkParse"
+  | "aiSearchGrounding"
+  | "aiSearchExtraction";
 
 /** Input shape for recording a single AI invocation. */
 export interface InvocationEntry {

@@ -325,11 +325,28 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               <ContactActionsMenu contact={contact} onDelete={onDelete} />
             </div>
 
-            {contact.headline && (
-              <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
-                {contact.headline}
-              </div>
-            )}
+            {contact.headline && (() => {
+              // Suppress headline if it's just "{role} at {company}" — that's already shown below
+              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const headlineNorm = normalize(contact.headline);
+              const roleCompanyNorm = normalize(`${contact.role || ''} at ${contact.company || ''}`);
+              const roleAtCompany2 = normalize(`${contact.role || ''} ${contact.company || ''}`);
+              const isDuplicate =
+                headlineNorm === roleCompanyNorm ||
+                headlineNorm === roleAtCompany2 ||
+                (contact.role && headlineNorm === normalize(contact.role)) ||
+                (contact.company && headlineNorm === normalize(contact.company));
+              if (isDuplicate) return null;
+              return (
+                <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
+                  <EditableField
+                    value={contact.headline}
+                    onSave={(val) => onUpdate('headline', val)}
+                    placeholder="Add headline"
+                  />
+                </div>
+              );
+            })()}
 
             {contact.aiSummary && (
               <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mb-3 max-w-fit">

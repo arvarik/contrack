@@ -62,6 +62,8 @@ export interface AISearchResult {
   latencyMs: number;
   /** Grounding citations from Pass 1 groundingMetadata — for provenance */
   citations?: Array<{ title: string; uri: string }>;
+  /** Raw grounded text from Pass 1 — saved as aiBackground (dossier) */
+  groundedText?: string;
 }
 
 /**

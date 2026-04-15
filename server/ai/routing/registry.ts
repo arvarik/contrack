@@ -92,7 +92,8 @@ export interface ModelConfig {
 // Grounding Limits
 // =============================================================================
 // These are SEPARATE from each model's generation RPD.
-// Flash and Flash-Lite share a single grounding pool on Gemini 2.5.
+// All current Gemini models (2.5 and 3.x) support search grounding.
+// Grounding RPD is a shared pool across all models.
 // =============================================================================
 
 export const GROUNDING_LIMITS = {
@@ -143,7 +144,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     freeLimits: { rpm: 2, tpm: 4_000, rpd: 2 },
     paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
     costPerM: 10.00,
-    supportsGrounding: false,
+    supportsGrounding: true,
   },
 
   // ── Preview Models (opt-in only — typically paid-tier only) ────────
@@ -156,7 +157,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: 350_000 },
     costPerM: 1.50,
-    supportsGrounding: false,
+    supportsGrounding: true,
   },
   {
     id: "gemini-3-flash-preview",
@@ -167,7 +168,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 2_000, tpm: 3_000_000, rpd: 100_000 },
     costPerM: 3.00,
-    supportsGrounding: false,
+    supportsGrounding: true,
   },
   {
     id: "gemini-3.1-pro-preview",
@@ -178,7 +179,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
     costPerM: 12.00,
-    supportsGrounding: false,
+    supportsGrounding: true,
   },
 ];
 

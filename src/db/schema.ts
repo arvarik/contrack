@@ -375,7 +375,7 @@ export const listMembers = sqliteTable('list_members', {
  */
 export const aiInvocations = sqliteTable('ai_invocations', {
   id: text('id').primaryKey(),
-  /** Fixed vocabulary: briefing, rerank, mentions, synthesis, parse, searchExpansion, dailyInsight, emlSummary, bulkParse */
+  /** Fixed vocabulary: briefing, rerank, mentions, synthesis, parse, searchExpansion, dailyInsight, emlSummary, bulkParse, aiSearchGrounding, aiSearchExtraction */
   operation: text('operation').notNull(),
   /** Model ID that served this request (null for cached responses) */
   model: text('model'),

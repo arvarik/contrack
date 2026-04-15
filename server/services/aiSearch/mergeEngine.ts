@@ -33,8 +33,8 @@ import { log } from "../../utils/logger.ts";
 // =============================================================================
 
 const ALLOWED_SCALAR_FIELDS = new Set([
-  'headline', 'about', 'industry', 'website',
-  'location', 'pronouns', 'birthday',
+  'role', 'company', 'headline', 'about', 'industry', 'website',
+  'location', 'pronouns', 'birthday', 'aiBackground',
 ]);
 
 // =============================================================================
@@ -45,13 +45,14 @@ export function mergeSearchResult(
   contactId: string,
   existing: HydratedContact,
   searchResult: AISearchOutput,
+  groundedText?: string,
 ): number {
   let fieldsUpdated = 0;
   const scalarUpdate: Record<string, unknown> = {};
 
   // 1. Scalar fields — only fill if currently null/empty
   const scalarFields = [
-    'headline', 'about', 'industry', 'website',
+    'role', 'company', 'headline', 'about', 'industry', 'website',
     'location', 'pronouns', 'birthday',
   ] as const;
 
@@ -60,6 +61,15 @@ export function mergeSearchResult(
     const existingVal = existing[field as keyof HydratedContact];
     if (newVal && !existingVal) {
       scalarUpdate[field] = newVal;
+      fieldsUpdated++;
+    }
+  }
+
+  // 1b. aiBackground (dossier) — synthesize a clean markdown brief from extraction
+  if (!existing.aiBackground) {
+    const dossier = synthesizeDossier(existing, searchResult);
+    if (dossier) {
+      scalarUpdate['aiBackground'] = dossier;
       fieldsUpdated++;
     }
   }
@@ -222,4 +232,109 @@ export function mergeSearchResult(
 
   log.info('MergeEngine', `Contact ${contactId}: ${fieldsUpdated} field(s) merged`);
   return fieldsUpdated;
+}
+
+// =============================================================================
+// Dossier Synthesis
+// =============================================================================
+// Generates a clean, human-readable markdown dossier from the structured
+// extraction result. This is what appears in the "AI Dossier" card on the
+// contact detail page — rendered via ReactMarkdown.
+//
+// Design: Combine new findings with existing contact data to produce the
+// richest possible brief. Only include sections that have content.
+// =============================================================================
+
+function synthesizeDossier(
+  existing: HydratedContact,
+  searchResult: AISearchOutput,
+): string | null {
+  const name = existing.name || 'This contact';
+  const sections: string[] = [];
+
+  // ── Professional Summary ───────────────────────────────────────────
+  const about = searchResult.about || (existing as any).about;
+  const headline = searchResult.headline || (existing as any).headline;
+  if (about) {
+    sections.push(about);
+  } else if (headline) {
+    sections.push(`${name} is ${headline}.`);
+  }
+
+  // ── Industry & Location ────────────────────────────────────────────
+  const industry = searchResult.industry || (existing as any).industry;
+  const location = searchResult.location || (existing as any).location;
+  if (industry || location) {
+    const parts: string[] = [];
+    if (industry) parts.push(`**Industry:** ${industry}`);
+    if (location) parts.push(`**Location:** ${location}`);
+    sections.push(parts.join('  \n'));
+  }
+
+  // ── Career Highlights ──────────────────────────────────────────────
+  const experience = searchResult.experience?.length
+    ? searchResult.experience
+    : existing.experience;
+  if (experience && experience.length > 0) {
+    const lines = experience.map((exp: any) => {
+      const current = exp.isCurrent ? ' *(Current)*' : '';
+      const dates = formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
+      const loc = exp.location ? ` · ${exp.location}` : '';
+      let line = `- **${exp.role || 'Role'}** at ${exp.company}${current}`;
+      if (dates || loc) line += `  \n  ${dates}${loc}`;
+      if (exp.description) line += `  \n  ${exp.description}`;
+      return line;
+    });
+    sections.push(`### Career\n${lines.join('\n')}`);
+  }
+
+  // ── Education ──────────────────────────────────────────────────────
+  const education = searchResult.education?.length
+    ? searchResult.education
+    : existing.education;
+  if (education && education.length > 0) {
+    const lines = education.map((edu: any) => {
+      const field = edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : '';
+      const dates = formatDateRange(edu.startDate, edu.endDate);
+      let line = `- **${edu.degree || 'Degree'}**${field} — ${edu.school}`;
+      if (dates) line += ` (${dates})`;
+      return line;
+    });
+    sections.push(`### Education\n${lines.join('\n')}`);
+  }
+
+  // ── Notable Details (attributes) ──────────────────────────────────
+  if (searchResult.attributes && searchResult.attributes.length > 0) {
+    const lines = searchResult.attributes.map(
+      (a: any) => `- **${a.name}:** ${a.value}`
+    );
+    sections.push(`### Notable\n${lines.join('\n')}`);
+  }
+
+  // ── Interests ──────────────────────────────────────────────────────
+  const interests = searchResult.interests?.length
+    ? searchResult.interests.map((i: any) => i.interest || i)
+    : existing.interests?.map((i: any) => i.interest);
+  if (interests && interests.length > 0) {
+    sections.push(`### Interests\n${interests.join(' · ')}`);
+  }
+
+  // Only produce a dossier if we have at least one substantive section
+  if (sections.length === 0) return null;
+
+  return sections.join('\n\n');
+}
+
+/** Format a date range, handling null/"null" sentinel values */
+function formatDateRange(
+  start?: string | null,
+  end?: string | null,
+  isCurrent?: boolean,
+): string {
+  const s = start && start !== 'null' ? start : '';
+  const e = end && end !== 'null' ? end : (isCurrent ? 'Present' : '');
+  if (s && e) return `${s} – ${e}`;
+  if (s) return `${s} – Present`;
+  if (e && e !== 'Present') return `Until ${e}`;
+  return '';
 }

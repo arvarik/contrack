@@ -23,6 +23,7 @@ const router = Router();
 const VALID_OPERATIONS = new Set<string>([
   "briefing", "rerank", "mentions", "synthesis", "parse",
   "searchExpansion", "dailyInsight", "emlSummary", "bulkParse",
+  "aiSearchGrounding", "aiSearchExtraction",
 ]);
 
 // =============================================================================

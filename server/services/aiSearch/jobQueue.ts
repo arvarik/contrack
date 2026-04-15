@@ -42,10 +42,10 @@ function classifyError(error: any): AISearchErrorType {
   if (msg.includes('429') || msg.includes('rate limit') || msg.includes('quota') || msg.includes('resource exhausted')) {
     return 'rate_limit';
   }
-  if (msg.includes('zod') || msg.includes('validation') || msg.includes('json.parse') || msg.includes('schema')) {
+  if (msg.includes('zod') || msg.includes('validation') || msg.includes('json.parse') || msg.includes('schema') || msg.includes('json parse')) {
     return 'validation';
   }
-  if (msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('enotfound') || msg.includes('network')) {
+  if (msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('enotfound') || msg.includes('network') || msg.includes('500') || msg.includes('internal') || msg.includes('503') || msg.includes('unavailable') || msg.includes('408') || msg.includes('deadline')) {
     return 'network';
   }
   if (msg.includes('api key') || msg.includes('unauthorized') || msg.includes('403') || msg.includes('permission')) {
@@ -68,13 +68,13 @@ const COOLDOWN_MS = 5 * 60 * 1000;
 const GC_TTL_MS = 30 * 60 * 1000;
 
 /** Delay between sequential jobs to avoid Gemini grounding API rate limits */
-const INTER_JOB_DELAY_MS = 1_500;
+const INTER_JOB_DELAY_MS = 2_500;
 
-/** Max retries for retryable errors (rate_limit, network) per job */
-const MAX_RETRIES = 3;
+/** Max retries for retryable errors (rate_limit, network, validation, unknown) per job */
+const MAX_RETRIES = 4;
 
-/** Initial backoff delay for retries (doubles each attempt: 2s → 4s → 8s) */
-const INITIAL_BACKOFF_MS = 2_000;
+/** Initial backoff delay for retries (doubles each attempt: 3s → 6s → 12s → 24s) */
+const INITIAL_BACKOFF_MS = 3_000;
 
 /** Non-blocking sleep for inter-job delay and exponential backoff */
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -206,8 +206,8 @@ class AISearchJobQueue extends EventEmitter {
             job.status = 'merging';
             this.emit(batchId, batch);
 
-            // 6. Run merge engine
-            const fieldsUpdated = mergeSearchResult(job.contactId, contact, result.data as any);
+            // 6. Run merge engine (pass grounded text for dossier population)
+            const fieldsUpdated = mergeSearchResult(job.contactId, contact, result.data as any, result.groundedText);
 
             // 7. Set status → 'success'
             job.status = 'success';
@@ -226,7 +226,7 @@ class AISearchJobQueue extends EventEmitter {
           } catch (err: unknown) {
             lastError = err;
             const errorType = classifyError(err);
-            const isRetryable = errorType === 'rate_limit' || errorType === 'network';
+            const isRetryable = errorType === 'rate_limit' || errorType === 'network' || errorType === 'validation' || errorType === 'unknown';
 
             if (!isRetryable || attempt === MAX_RETRIES) {
               // Non-retryable error or exhausted retries — mark as failed
