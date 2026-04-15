@@ -267,7 +267,7 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
             <button
               onClick={confirmDelete}
               disabled={deleteContact.isPending}
-              className="px-5 py-2.5 rounded-xl text-sm font-bold bg-error text-white hover:bg-error/90 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl text-sm font-bold bg-error text-on-error hover:bg-error/90 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
             >
               {deleteContact.isPending ? 'Deleting…' : 'Delete Forever'}
             </button>

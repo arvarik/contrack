@@ -158,7 +158,12 @@ export const dashboardService = {
   async getInsight() {
     // Check unified cache (24h TTL managed by aiCache)
     const cached = aiCache.get<DailyInsight>("dailyInsight", "singleton");
-    if (cached) return cached;
+    if (cached) {
+      import("./aiStatsService.ts").then(({ recordInvocation }) => {
+        recordInvocation({ operation: "dailyInsight", latencyMs: 0, cached: true, description: "Daily Insight cache hit" });
+      });
+      return cached;
+    }
 
     log.info("Dashboard", "Cache miss for Daily Insight. Generating new insight...");
 

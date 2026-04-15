@@ -8,7 +8,7 @@
  * @module api/search
  */
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, type Dispatch, type SetStateAction } from 'react';
 import type { Contact, SemanticSearchResult } from '../types';
 
 const API_BASE = '/api';
@@ -36,15 +36,21 @@ export const useSearchContacts = (q: string) => {
 
 /**
  * Two-phase streaming semantic search hook.
- *
- * Returns:
- * - `data`: the current best results (Phase 1 → Phase 2 progressive update)
- * - `phase`: "idle" | "instant" | "enriching" | "done"
- * - `search(query)`: trigger a search
  */
-export const useSemanticSearch = () => {
-  const [data, setData] = useState<SemanticSearchResult | null>(null);
-  const [phase, setPhase] = useState<'idle' | 'instant' | 'enriching' | 'done'>('idle');
+export const useSemanticSearch = (externalState?: {
+  data: SemanticSearchResult | null;
+  setData: Dispatch<SetStateAction<SemanticSearchResult | null>>;
+  phase: 'idle' | 'instant' | 'enriching' | 'done';
+  setPhase: Dispatch<SetStateAction<'idle' | 'instant' | 'enriching' | 'done'>>;
+}) => {
+  const [internalData, setInternalData] = useState<SemanticSearchResult | null>(null);
+  const [internalPhase, setInternalPhase] = useState<'idle' | 'instant' | 'enriching' | 'done'>('idle');
+
+  const data = externalState ? externalState.data : internalData;
+  const setData = externalState ? externalState.setData : setInternalData;
+  const phase = externalState ? externalState.phase : internalPhase;
+  const setPhase = externalState ? externalState.setPhase : setInternalPhase;
+
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -138,7 +144,7 @@ export const useSemanticSearch = () => {
         setPhase(prev => prev === 'idle' ? 'done' : prev);
       }
     }
-  }, []);
+  }, [setData, setPhase]);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
@@ -147,7 +153,7 @@ export const useSemanticSearch = () => {
     setIsPending(false);
     setIsError(false);
     setIsSuccess(false);
-  }, []);
+  }, [setData, setPhase]);
 
   return {
     data,

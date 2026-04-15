@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
+import { useSession } from "../../contexts/SessionContext";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -63,6 +64,7 @@ const SidebarTooltip = ({ label, shortcut, children, className }: { label: strin
 
 export const Sidebar = () => {
   const location = useLocation();
+  const { lastContactId } = useSession();
   const isMap = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
   const isSearch = location.pathname.startsWith('/search');
@@ -87,8 +89,8 @@ export const Sidebar = () => {
         </span>
       </div>
 
-      <SidebarTooltip label="Network" shortcut="⌘⇧N">
-        <Link to="/" className={navLink(isHome)}>
+      <SidebarTooltip label="Network" shortcut="⌘⇧H">
+        <Link to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"} className={navLink(isHome)}>
           <LayoutDashboard className="w-6 h-6" />
         </Link>
       </SidebarTooltip>

@@ -26,7 +26,7 @@ export interface DossierTabProps {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const DossierTab: React.FC<DossierTabProps> = ({
+const DossierTabInner = ({
   contact,
 }) => {
   return (
@@ -114,6 +114,8 @@ export const DossierTab: React.FC<DossierTabProps> = ({
     </motion.div>
   );
 };
+
+export const DossierTab = React.memo(DossierTabInner);
 
 // ─── AboutSection — click-to-expand replaces hover pattern ───────────────────
 

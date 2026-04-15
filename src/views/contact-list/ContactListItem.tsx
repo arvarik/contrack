@@ -42,7 +42,9 @@ const ContactListItemInner = ({
   onToggleSelect,
 }: ContactListItemProps) => {
   const primaryEmail = contact.emails?.[0]?.email || null;
-  const logoUrl = useCompanyLogo(primaryEmail);
+  const logoInfo = useCompanyLogo(primaryEmail, contact.company);
+  const logoUrl = logoInfo?.url;
+  const logoDomain = logoInfo?.domain;
   const [imgError, setImgError] = useState(false);
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -92,6 +94,18 @@ const ContactListItemInner = ({
     }
   };
 
+  const handleLogoError = () => {
+    setImgError(true);
+    if (logoDomain) {
+      try {
+        const cacheRaw = localStorage.getItem('contrack_failed_logos') || '{}';
+        const cache = JSON.parse(cacheRaw);
+        cache[logoDomain] = true;
+        localStorage.setItem('contrack_failed_logos', JSON.stringify(cache));
+      } catch (e) {}
+    }
+  };
+
   return (
     <Link
       id={`contact-row-${contact.id}`}
@@ -102,7 +116,7 @@ const ContactListItemInner = ({
       className={cn(
         listRow(active && !isSelectMode),
         isSelectMode && "cursor-pointer select-none",
-        isSelectMode && isSelected && "bg-primary/8 ring-2 ring-primary scale-[1.01]",
+        isSelectMode && isSelected && "bg-primary/8 outline-2 outline-primary -outline-offset-2",
       )}
     >
       {/* Checkbox overlay in select mode */}
@@ -153,9 +167,7 @@ const ContactListItemInner = ({
               <img
                 src={logoUrl}
                 alt={`${contact.company} logo`}
-                onError={() => setImgError(true)}
-                loading="lazy"
-                decoding="async"
+                onError={handleLogoError}
                 className="w-4 h-4 rounded-full object-scale-down bg-transparent"
               />
             ) : (

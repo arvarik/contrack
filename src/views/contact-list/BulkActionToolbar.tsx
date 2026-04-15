@@ -64,9 +64,9 @@ export const BulkActionToolbar = ({
 
   return (
     <motion.div
-      initial={{ y: 80, opacity: 0 }}
+      initial={{ y: 80, opacity: 1 }}
       animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 80, opacity: 0 }}
+      exit={{ y: 80, opacity: 1 }}
       transition={{ type: 'spring', damping: 22, stiffness: 300 }}
       className="absolute bottom-24 md:bottom-0 left-0 right-0 z-40 px-3 pb-2 md:pb-4"
     >

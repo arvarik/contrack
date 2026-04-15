@@ -47,7 +47,6 @@ export const ResultCard = ({
       <img
         src={match.avatarUrl || fallbackAvatarUrl(match.name)}
         alt=""
-        loading="lazy"
         className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"
       />
       <div className="flex-1 min-w-0 flex flex-col gap-1">

@@ -63,7 +63,6 @@ export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({ contact, siz
         <img
           src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
           alt={contact.name}
-          loading="lazy"
           className="w-full h-full object-cover shrink-0"
         />
       </div>

@@ -27,10 +27,13 @@ const OP_LABELS: Record<string, string> = {
 };
 
 function formatRelativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 0) return 'just now';
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  
+  // Handle clock skew or very recent items
+  if (diffMs < 60000) return 'just now';
+  
   const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);

@@ -29,6 +29,7 @@ import { dashboardRouter } from "./server/routes/dashboard.ts";
 import { aiSearchRouter } from "./server/routes/aiSearch.ts";
 import { aiRouter } from "./server/routes/ai.ts";
 import { aiStatsRouter } from "./server/routes/aiStats.ts";
+import { logosRouter } from "./server/routes/logos.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
 import { isEmbeddingAvailable, backfillEmbeddings, getEmbeddingCount } from "./server/services/dedupe/embeddings.ts";
 import { initLocalEmbeddings, backfillSearchEmbeddings } from "./server/services/search/localEmbeddings.ts";
@@ -77,6 +78,7 @@ async function startServer() {
   app.use("/api", aiSearchRouter);
   app.use("/api/ai/stats", aiStatsRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/logos", logosRouter);
 
   // ── Cache diagnostics (dev only) ─────────────────────────────────────────
   // Exposes hit/miss counters and entry counts for all aiCache tiers.

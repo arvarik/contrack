@@ -121,11 +121,20 @@ function buildCompressedCandidates(candidateIds: string[], limit: number): Compr
  * Hydrate AI reranker results into full contact objects with AI reasons.
  */
 function hydrateAiMatches(aiMatches: { contact_id: string; reason: string }[]): HydratedMatch[] {
+  if (!aiMatches.length) return [];
+  const ids = aiMatches.map(m => m.contact_id);
+  const placeholders = ids.map(() => '?').join(',');
+  
+  const rows = sqlite.prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`).all(ids);
+  const hydratedRows = contactRepo.hydrateMany(rows);
+  
+  const hydratedMap = new Map(hydratedRows.map(r => [r.id, r]));
+  
   return aiMatches
     .map(m => {
-      const fullRow = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(m.contact_id);
-      if (!fullRow) return null;
-      return { ...contactRepo.hydrate(fullRow), aiReason: m.reason };
+      const fullContact = hydratedMap.get(m.contact_id);
+      if (!fullContact) return null;
+      return { ...fullContact, aiReason: m.reason };
     })
     .filter(Boolean) as HydratedMatch[];
 }
@@ -172,6 +181,7 @@ export const searchService = {
     const cached = getCachedSearch(query);
     if (cached) {
       log.info("SemanticSearch", `[${rid}] Cache HIT for "${query.trim().slice(0, 60)}" (${Date.now() - startTime}ms)`);
+      recordInvocation({ operation: "rerank", latencyMs: Date.now() - startTime, cached: true, description: `Rerank cache hit: "${query.slice(0, 40)}"` });
       res.write(
         JSON.stringify({
           phase: "complete",
@@ -238,6 +248,12 @@ export const searchService = {
     if (retrieval.highConfidence) {
       // Cache the high-confidence result (no need for LLM enrichment)
       setCachedSearch(query, { matches: phase1Matches, fallback: false });
+      recordInvocation({ 
+        operation: "rerank", 
+        latencyMs: Date.now() - startTime, 
+        cached: false, 
+        description: `Search: High-confidence short-circuit (skipped LLM) for "${query.slice(0, 40)}"` 
+      });
       res.write(
         JSON.stringify({
           phase: "complete",
@@ -336,6 +352,12 @@ export const searchService = {
       const elapsed = Date.now() - startTime;
       log.info("SemanticSearch", `[${rid}] v3 "${query}" → ${hydratedPhase1.length} results (high confidence, skipped LLM) in ${elapsed}ms`);
       setCachedSearch(query, { matches: hydratedPhase1, fallback: false });
+      recordInvocation({ 
+        operation: "rerank", 
+        latencyMs: elapsed, 
+        cached: false, 
+        description: `Search: High-confidence short-circuit (skipped LLM) for "${query.slice(0, 40)}"` 
+      });
       return { matches: hydratedPhase1, fallback: false, cached: false };
     }
 

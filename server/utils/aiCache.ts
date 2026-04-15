@@ -67,29 +67,25 @@ interface TierStats {
 const TIER_CONFIGS: Record<string, TierConfig> = {
   /**
    * Briefing: "Catch Me Up" executive briefings per contact.
-   * TTL 30m: A user reviewing a contact before/during a meeting typically reopens
-   * the briefing 2–3 times within 30 minutes. After 30m, the data is stale enough
-   * that a regeneration is warranted.
+   * TTL 24h: Increased from 30m to 24h. Caches will still be invalidated
+   * automatically when the contact's interaction count changes.
    * Invalidation: Targeted per-contact (prefix match on contactId).
    */
-  briefing: { ttlMs: 30 * 60_000, maxEntries: 50, label: "Briefing" },
+  briefing: { ttlMs: 24 * 60 * 60_000, maxEntries: 100, label: "Briefing" },
 
   /**
    * Rerank: LLM reranking results for Ask Contrack search queries.
-   * TTL 5m: Matches the former searchCache.ts TTL. Short enough that freshly
-   * edited contacts appear in results quickly; long enough to skip Gemini for
-   * repeated queries in the same search session.
+   * TTL 12h: Increased from 5m to 12h for longer persistence.
    * Invalidation: Full flush on any contact mutation.
    */
-  rerank: { ttlMs: 5 * 60_000, maxEntries: 100, label: "Rerank" },
+  rerank: { ttlMs: 12 * 60 * 60_000, maxEntries: 200, label: "Rerank" },
 
   /**
    * Synthesis: Executive brief from Ask Contrack search results.
-   * TTL 10m: Users rarely click "Synthesize" for the same query more than once
-   * in 10 minutes. But when they do, it should be instant.
+   * TTL 12h: Increased from 10m to 12h for longer persistence.
    * Invalidation: Full flush on any contact mutation.
    */
-  synthesis: { ttlMs: 10 * 60_000, maxEntries: 30, label: "Synthesis" },
+  synthesis: { ttlMs: 12 * 60 * 60_000, maxEntries: 100, label: "Synthesis" },
 
   /**
    * Mentions: Named entity extraction from interaction text.

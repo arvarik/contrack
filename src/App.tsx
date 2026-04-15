@@ -24,6 +24,7 @@ import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
 import { useUrgentActionItemCount } from "./api";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
+import { SessionProvider, useSession } from "./contexts/SessionContext";
 
 // Dev-only: lazy import so the showcase is not in the prod bundle
 const ComponentShowcase = import.meta.env.DEV
@@ -32,10 +33,19 @@ const ComponentShowcase = import.meta.env.DEV
 
 const ResponsiveLayout = () => {
   const location = useLocation();
+  const { lastContactId, setLastContactId } = useSession();
   useGlobalNavShortcuts();
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");
   const isContactSelected = matchContact || matchMapContact;
+
+  // Track the most recently visited contact to restore it when clicking "Network"
+  useEffect(() => {
+    if (matchContact?.params.id) {
+      setLastContactId(matchContact.params.id);
+    }
+  }, [matchContact?.params.id, setLastContactId]);
+
   const isMapActive = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
   const isSearch = location.pathname.startsWith('/search');
@@ -46,7 +56,10 @@ const ResponsiveLayout = () => {
 
   const mobileNav = (
     <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-6 pt-2 glass-panel rounded-t-xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]">
-      <Link to="/" className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${(!isMapActive && !isPulse && !isCleanup && !isSearch) ? 'text-primary' : 'text-on-surface-variant'}`}>
+      <Link 
+        to={lastContactId && !isContactSelected ? `/contact/${lastContactId}` : "/"} 
+        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${(!isMapActive && !isPulse && !isCleanup && !isSearch) ? 'text-primary' : 'text-on-surface-variant'}`}
+      >
         <LayoutDashboard className="w-5 h-5" />
         <span className="text-[9px] font-bold tracking-wide">Network</span>
       </Link>
@@ -114,9 +127,9 @@ const ResponsiveLayout = () => {
         h-full flex-col relative
       `}>
         <Routes>
-          <Route path="/map" element={<MapView />} />
-          <Route path="/map/contact/:id" element={<MapView />} />
-          <Route path="*" element={<ContactList />} />
+          <Route path="/map" element={<RouteErrorBoundary viewName="Map"><MapView /></RouteErrorBoundary>} />
+          <Route path="/map/contact/:id" element={<RouteErrorBoundary viewName="Map"><MapView /></RouteErrorBoundary>} />
+          <Route path="*" element={<RouteErrorBoundary viewName="ContactList"><ContactList /></RouteErrorBoundary>} />
         </Routes>
       </section>
 
@@ -191,22 +204,24 @@ export default function App() {
 
   return (
     <Router>
-      <LayoutGroup>
-        <AISearchProvider>
-          <DedupeProvider>
-            <ResponsiveLayout />
-          </DedupeProvider>
-        </AISearchProvider>
-        <CommandPalette />
-        <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-        <QuickInteractionModal isOpen={quickNoteOpen} onClose={() => setQuickNoteOpen(false)} />
-        <Toaster theme="light" position="bottom-right" className="font-body" toastOptions={{
-          className: 'glass-panel shadow-lg !border-none',
-          style: {
-            color: 'var(--color-on-surface)',
-          }
-        }} />
-      </LayoutGroup>
+      <SessionProvider>
+        <LayoutGroup>
+          <AISearchProvider>
+            <DedupeProvider>
+              <ResponsiveLayout />
+            </DedupeProvider>
+          </AISearchProvider>
+          <CommandPalette />
+          <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+          <QuickInteractionModal isOpen={quickNoteOpen} onClose={() => setQuickNoteOpen(false)} />
+          <Toaster theme="light" position="bottom-right" className="font-body" toastOptions={{
+            className: 'glass-panel shadow-lg !border-none',
+            style: {
+              color: 'var(--color-on-surface)',
+            }
+          }} />
+        </LayoutGroup>
+      </SessionProvider>
     </Router>
   );
 }

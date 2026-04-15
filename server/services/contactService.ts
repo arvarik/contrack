@@ -397,49 +397,86 @@ export const contactService = {
   },
 
   getSlimContacts() {
-    const rows = sqlite.prepare(`
-      SELECT c.id, c.name, c.firstName, c.lastName, c.company, c.avatarUrl, 
-             c.themeColor, c.isGhost, c.isArchived, c.addedAt, c.updatedAt,
-             c.role, c.headline, c.location, c.industry, c.pronouns,
-             c.cadenceDays, c.lastContactedAt, c.nextFollowUpAt,
-             c.lat, c.lng, c.relationshipScore, c.aiHydratedAt,
-             GROUP_CONCAT(DISTINCT t.tag) as _tags,
-             (SELECT COUNT(*) FROM interactions WHERE contactId = c.id) as interactionCount,
-             (SELECT GROUP_CONCAT(e.email) FROM contact_emails e WHERE e.contactId = c.id) as _allEmails,
-             (SELECT GROUP_CONCAT(p.phone) FROM contact_phones p WHERE p.contactId = c.id) as _allPhones,
-             (SELECT COUNT(*) FROM contact_social_links sl WHERE sl.contactId = c.id) as socialLinkCount
-      FROM contacts c
-      LEFT JOIN contact_tags t ON c.id = t.contactId
-      WHERE (c.isArchived = 0 OR c.isArchived IS NULL)
-      GROUP BY c.id
-      ORDER BY c.addedAt DESC
-    `).all() as any[];
+    const startMs = Date.now();
 
+    // Pass 1: Primary contact data (Fast indexed SELECT)
+    const rows = sqlite.prepare(`
+      SELECT id, name, firstName, lastName, company, avatarUrl, 
+             themeColor, isGhost, isArchived, addedAt, updatedAt,
+             role, headline, location, industry, pronouns,
+             cadenceDays, lastContactedAt, nextFollowUpAt,
+             lat, lng, relationshipScore, aiHydratedAt
+      FROM contacts
+      WHERE (isArchived = 0 OR isArchived IS NULL)
+      ORDER BY addedAt DESC
+    `).all() as any[];
+    const pass1Ms = Date.now() - startMs;
+
+    // Pass 2: Batch fetch all relations (Separate queries are faster than GROUP_CONCAT/LEFT JOIN for large sets)
+    const listStartMs = Date.now();
     const listRows = sqlite.prepare(`
       SELECT lm.contactId, l.id, l.name, l.icon, l.sortOrder
       FROM list_members lm
       JOIN lists l ON l.id = lm.listId
+      WHERE lm.contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)
       ORDER BY l.sortOrder ASC
     `).all() as any[];
 
+    const unarchivedQuery = `WHERE contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)`;
+    const tagRows = sqlite.prepare(`SELECT contactId, tag FROM contact_tags ${unarchivedQuery}`).all() as any[];
+    const emailRows = sqlite.prepare(`SELECT contactId, email FROM contact_emails ${unarchivedQuery}`).all() as any[];
+    const phoneRows = sqlite.prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`).all() as any[];
+    const interactionCounts = sqlite.prepare(`SELECT contactId, COUNT(*) as cnt FROM interactions ${unarchivedQuery} GROUP BY contactId`).all() as any[];
+    const socialLinkCounts = sqlite.prepare(`SELECT contactId, COUNT(*) as cnt FROM contact_social_links ${unarchivedQuery} GROUP BY contactId`).all() as any[];
+    const pass2Ms = Date.now() - listStartMs;
+
+    // Pass 3: Join in JS (Near-zero cost O(N))
+    const joinStartMs = Date.now();
     const listsByContact = new Map<string, any[]>();
-    for (const lr of listRows) {
-      if (!listsByContact.has(lr.contactId)) listsByContact.set(lr.contactId, []);
-      listsByContact.get(lr.contactId)!.push({ id: lr.id, name: lr.name, icon: lr.icon, sortOrder: lr.sortOrder });
+    for (const r of listRows) {
+      if (!listsByContact.has(r.contactId)) listsByContact.set(r.contactId, []);
+      listsByContact.get(r.contactId)!.push({ id: r.id, name: r.name, icon: r.icon, sortOrder: r.sortOrder });
     }
 
-    return rows.map(({ _tags, _allEmails, _allPhones, ...r }) => ({
+    const tagsByContact = new Map<string, any[]>();
+    for (const r of tagRows) {
+      if (!tagsByContact.has(r.contactId)) tagsByContact.set(r.contactId, []);
+      tagsByContact.get(r.contactId)!.push({ id: r.tag, tag: r.tag });
+    }
+
+    const emailsByContact = new Map<string, any[]>();
+    for (const r of emailRows) {
+      if (!emailsByContact.has(r.contactId)) emailsByContact.set(r.contactId, []);
+      emailsByContact.get(r.contactId)!.push({ email: r.email });
+    }
+
+    const phonesByContact = new Map<string, any[]>();
+    for (const r of phoneRows) {
+      if (!phonesByContact.has(r.contactId)) phonesByContact.set(r.contactId, []);
+      phonesByContact.get(r.contactId)!.push({ phone: r.phone });
+    }
+
+    const interactionMap = new Map(interactionCounts.map(r => [r.contactId, r.cnt]));
+    const socialLinkMap = new Map(socialLinkCounts.map(r => [r.contactId, r.cnt]));
+
+    const results = rows.map((r) => ({
       ...r,
       isGhost: !!r.isGhost,
       isArchived: !!r.isArchived,
-      tags: _tags ? _tags.split(',').map((tag: string) => ({ id: tag, tag })) : [],
+      tags: tagsByContact.get(r.id) || [],
       lists: listsByContact.get(r.id) || [],
-      interactionCount: r.interactionCount ?? 0,
-      emails: _allEmails ? _allEmails.split(',').map((e: string) => ({ email: e })) : [],
-      phones: _allPhones ? _allPhones.split(',').map((p: string) => ({ phone: p })) : [],
+      interactionCount: interactionMap.get(r.id) || 0,
+      emails: emailsByContact.get(r.id) || [],
+      phones: phonesByContact.get(r.id) || [],
+      socialLinkCount: socialLinkMap.get(r.id) || 0,
+      // Fixed arrays for slim view compatibility
       socialLinks: [], education: [], experience: [],
       sources: [], addresses: [], interests: [], attributes: [],
     }));
+    const joinMs = Date.now() - joinStartMs;
+
+    log.info("Perf", `getSlimContacts: total=${Date.now() - startMs}ms (sql_base=${pass1Ms}ms, sql_batch=${pass2Ms}ms, js_join=${joinMs}ms) n=${rows.length}`);
+    return results;
   },
 
   getAllContacts() {

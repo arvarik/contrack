@@ -73,11 +73,12 @@ export const CacheTiersAccordion = ({ cacheTiers }: CacheTiersAccordionProps) =>
           >
             <div className="mt-4 space-y-0">
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_60px_60px_60px_60px_50px] gap-2 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/40">
+              <div className="grid grid-cols-[1fr_50px_50px_50px_50px_50px_50px] gap-2 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/40">
                 <span>Tier</span>
                 <span className="text-right">Entries</span>
                 <span className="text-right">Hits</span>
                 <span className="text-right">Misses</span>
+                <span className="text-right">Evicts</span>
                 <span className="text-right">Rate</span>
                 <span className="text-right">TTL</span>
               </div>
@@ -86,7 +87,7 @@ export const CacheTiersAccordion = ({ cacheTiers }: CacheTiersAccordionProps) =>
                 <div
                   key={name}
                   className={cn(
-                    'grid grid-cols-[1fr_60px_60px_60px_60px_50px] gap-2 px-2 py-2 rounded-lg text-xs tabular-nums',
+                    'grid grid-cols-[1fr_50px_50px_50px_50px_50px_50px] gap-2 px-2 py-2 rounded-lg text-xs tabular-nums',
                     i % 2 === 0 ? 'bg-surface-container-low/50' : ''
                   )}
                 >
@@ -101,6 +102,9 @@ export const CacheTiersAccordion = ({ cacheTiers }: CacheTiersAccordionProps) =>
                   </span>
                   <span className="text-right text-on-surface-variant">
                     {tier.misses}
+                  </span>
+                  <span className="text-right text-on-surface-variant">
+                    {tier.evictions}
                   </span>
                   <span className={cn('text-right font-bold', hitRateColor(tier.hitRate))}>
                     {(tier.hitRate * 100).toFixed(0)}%

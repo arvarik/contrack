@@ -16,10 +16,17 @@ export const useContacts = () => {
   return useQuery({
     queryKey: ['contacts'],
     queryFn: async (): Promise<Contact[]> => {
+      const start = performance.now();
       const res = await fetch(`${API_BASE}/contacts?view=slim`);
       if (!res.ok) throw new Error('Failed to fetch contacts');
-      return res.json();
-    }
+      const data = await res.json();
+      const duration = performance.now() - start;
+      if (import.meta.env.DEV) {
+        console.log(`[Perf] useContacts: fetch took ${duration.toFixed(2)}ms, items=${data.length}`);
+      }
+      return data;
+    },
+    staleTime: 600_000, // 10 minutes — navigating back to Network is now instant
   });
 };
 
@@ -47,6 +54,7 @@ export const useContactNames = () => {
       if (!res.ok) throw new Error('Failed to fetch contacts');
       return res.json();
     },
+    staleTime: 600_000,
     select: (contacts): ContactSlim[] =>
       contacts.map(c => ({
         id: c.id,
@@ -89,6 +97,7 @@ export const useSlimContactsForSearch = () => {
       if (!res.ok) throw new Error('Failed to fetch contacts');
       return res.json();
     },
+    staleTime: 600_000,
     select: (contacts): SlimSearchContact[] =>
       contacts
         .filter(c => !c.isGhost && !c.isArchived)

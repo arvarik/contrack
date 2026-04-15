@@ -145,7 +145,7 @@ export const filterPill = (active: boolean) =>
 export const listRow = (active: boolean) =>
   cn(
     "flex items-center gap-3 p-3 rounded-xl transition-all relative",
-    active ? "bg-primary/8 ring-2 ring-primary scale-[1.01] z-10 shadow-sm" : "hover:bg-surface-container-low",
+    active ? "bg-primary/8 ring-2 ring-inset ring-primary z-10 shadow-sm" : "hover:bg-surface-container-low",
   );
 
 // ─── Timeline ────────────────────────────────────────────────────────────────

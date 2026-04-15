@@ -10,7 +10,7 @@
  * The component itself handles only layout rendering and UX hooks
  * (scroll restoration, pull-to-refresh, context menus, drag-to-reorder).
  */
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useMemo, useDeferredValue, useEffect } from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -67,22 +67,56 @@ const FilterButton = ({ label, icon, count, active, onClick }: {
 // ---------------------------------------------------------------------------
 
 interface ContactRowWrapperProps {
-  contactId: string;
+  contact: any;
+  active: boolean;
   isFlashing: boolean;
-  contextItems: Parameters<ReturnType<typeof useContextMenu>['handleContextMenu']>[1];
+  isSelectMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
   handleContextMenu: ReturnType<typeof useContextMenu>['handleContextMenu'];
   recordVisit: (id: string) => void;
-  children: React.ReactNode;
+  archiveContact: () => Promise<void>;
+  navigate: (path: string) => void;
 }
 
-const ContactRowWrapper = ({
-  contactId,
+const ContactRowWrapper = React.memo(({
+  contact,
+  active,
   isFlashing,
-  contextItems,
+  isSelectMode,
+  isSelected,
+  onToggleSelect,
   handleContextMenu,
   recordVisit,
-  children,
+  archiveContact,
+  navigate,
 }: ContactRowWrapperProps) => {
+  const contextItems = useMemo(() => [
+    {
+      id: 'view',
+      label: 'View Contact',
+      icon: <UserPlus className="w-3.5 h-3.5" />,
+      onClick: () => navigate(`/contact/${contact.id}`),
+    },
+    {
+      id: 'copy-email',
+      label: contact.emails?.[0]?.email ? `Copy Email` : 'No email',
+      icon: <Copy className="w-3.5 h-3.5" />,
+      disabled: !contact.emails?.[0]?.email,
+      onClick: () => {
+        navigator.clipboard.writeText(contact.emails![0].email);
+        toast.success('Email copied');
+      },
+    },
+    { id: 'sep1', label: '', separator: true as const },
+    {
+      id: 'archive',
+      label: 'Archive',
+      icon: <Archive className="w-3.5 h-3.5" />,
+      onClick: archiveContact,
+    },
+  ], [contact.id, contact.name, contact.emails, navigate, archiveContact]);
+
   const longPress = useLongPress(({ clientX, clientY }) => {
     const syntheticEvent = {
       preventDefault: () => {},
@@ -95,24 +129,45 @@ const ContactRowWrapper = ({
   return (
     <div
       onContextMenu={(e) => handleContextMenu(e, contextItems)}
-      onClick={() => recordVisit(contactId)}
+      onClick={() => recordVisit(contact.id)}
       {...longPress}
       className={cn(
         "rounded-xl transition-all duration-300",
         isFlashing && "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,158,219,0.2)]"
       )}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '1px 72px' }}
     >
-      {children}
+      <ContactListItem
+        contact={contact}
+        active={active}
+        isSelectMode={isSelectMode}
+        isSelected={isSelected}
+        onToggleSelect={onToggleSelect}
+      />
     </div>
   );
-};
+});
 
 // ---------------------------------------------------------------------------
 // ContactList — Main component
 // ---------------------------------------------------------------------------
 
 export const ContactList = () => {
+  const mountStart = useRef(performance.now());
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log(`[Perf] ContactList mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`);
+    }
+  }, []);
+
   const { data: contacts = [], isLoading, refetch } = useContacts();
+
+  useEffect(() => {
+    if (!isLoading && contacts.length > 0 && import.meta.env.DEV) {
+      console.log(`[Perf] ContactList data ready: items=${contacts.length}, time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`);
+    }
+  }, [isLoading, contacts.length]);
+
   const { data: lists = [] } = useLists();
   const { id } = useParams();
   const navigate = useNavigate();
@@ -194,6 +249,11 @@ export const ContactList = () => {
 
   // ── Shorthand refs ──────────────────────────────────────────────────
   const { filteredContacts, inputValue, searchQuery, setSearchQuery, filterMode, setFilterMode, sortBy, sortDir, cycleSortMode } = filters;
+  
+  // Apply useDeferredValue to the entire contact list so heavy UI re-renders
+  // never block the high-priority main thread (Cmd+K, typing, scrolling).
+  const deferredContacts = useDeferredValue(filteredContacts);
+
   const { isSelectMode, selectedIds, selectedCount, toggleSelect, enterSelectMode, exitSelectMode, selectAll, isPending } = multiSelect;
 
   return (
@@ -477,58 +537,26 @@ export const ContactList = () => {
           })()
         )}
 
-        {filteredContacts.map(contact => {
-          const active = id === contact.id;
-          const isFlashing = flashId === contact.id;
-
-          const contextItems = [
-            {
-              id: 'view',
-              label: 'View Contact',
-              icon: <UserPlus className="w-3.5 h-3.5" />,
-              onClick: () => navigate(`/contact/${contact.id}`),
-            },
-            {
-              id: 'copy-email',
-              label: contact.emails?.[0]?.email ? `Copy Email` : 'No email',
-              icon: <Copy className="w-3.5 h-3.5" />,
-              disabled: !contact.emails?.[0]?.email,
-              onClick: () => {
-                navigator.clipboard.writeText(contact.emails![0].email);
-                toast.success('Email copied');
-              },
-            },
-            { id: 'sep1', label: '', separator: true as const },
-            {
-              id: 'archive',
-              label: 'Archive',
-              icon: <Archive className="w-3.5 h-3.5" />,
-              onClick: async () => {
-                await archiveContact.mutateAsync(contact.id);
-                toast.success(`Archived "${contact.name}"`);
-              },
-            },
-          ];
-
-          return (
+        <div className="space-y-2">
+          {useMemo(() => deferredContacts.map(contact => (
             <ContactRowWrapper
               key={contact.id}
-              contactId={contact.id}
-              isFlashing={isFlashing}
-              contextItems={contextItems}
+              contact={contact}
+              active={id === contact.id}
+              isFlashing={flashId === contact.id}
+              isSelectMode={isSelectMode}
+              isSelected={selectedIds.has(contact.id)}
+              onToggleSelect={toggleSelect}
               handleContextMenu={handleContextMenu}
               recordVisit={recordVisit}
-            >
-              <ContactListItem
-                contact={contact}
-                active={active}
-                isSelectMode={isSelectMode}
-                isSelected={selectedIds.has(contact.id)}
-                onToggleSelect={toggleSelect}
-              />
-            </ContactRowWrapper>
-          );
-        })}
+              archiveContact={async () => {
+                await archiveContact.mutateAsync(contact.id);
+                toast.success(`Archived "${contact.name}"`);
+              }}
+              navigate={navigate}
+            />
+          )), [deferredContacts, id, flashId, isSelectMode, selectedIds, navigate, handleContextMenu, recordVisit, toggleSelect, archiveContact])}
+        </div>
 
         {/* Context menu — portal-rendered, shared across all rows */}
         <ContextMenu {...contextMenu} onClose={closeContextMenu} />

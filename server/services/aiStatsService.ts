@@ -80,7 +80,7 @@ export interface FeedParams {
 
 const insertStmt = sqlite.prepare(`
   INSERT INTO ai_invocations (id, operation, model, tokenCount, latencyMs, cached, description, createdAt)
-  VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 `);
 
 const summaryStmt = sqlite.prepare(`
@@ -127,8 +127,9 @@ for (const model of GEMINI_REGISTRY) {
  */
 export function recordInvocation(entry: InvocationEntry): void {
   try {
+    const id = crypto.randomUUID();
     insertStmt.run(
-      crypto.randomUUID(),
+      id,
       entry.operation,
       entry.model ?? null,
       entry.tokenCount ?? null,
@@ -136,6 +137,7 @@ export function recordInvocation(entry: InvocationEntry): void {
       entry.cached ? 1 : 0,
       entry.description ?? null,
     );
+    log.debug("AIStats", `Recorded invocation: ${entry.operation} (id: ${id.slice(0, 8)}, cached: ${entry.cached})`);
   } catch (err: unknown) {
     // Log but NEVER throw — recording failures must not break AI operations
     log.error("AIStats", `Failed to record invocation: ${(err as Error).message}`);

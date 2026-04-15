@@ -179,7 +179,7 @@ function cleanLinkedInSlug(slug: string): string {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
+const ProfileHeaderInner = ({
   contact,
   onUpdate,
   onDelete,
@@ -497,3 +497,5 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
     </>
   );
 };
+
+export const ProfileHeader = React.memo(ProfileHeaderInner);

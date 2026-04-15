@@ -29,6 +29,10 @@
   --color-secondary-container: #cfe6f2;
   --color-on-secondary-container: #40555f;
 
+  /* ── Error / Destructive ────────────────────────────────────────── */
+  --color-error: #ef4444;
+  --color-on-error: #ffffff;
+
   /* ── Surface Hierarchy (paper-stack) ────────────────────────────── */
   --color-surface: #f5f6f9;                     /* Base layer */
   --color-on-surface: #2a3437;

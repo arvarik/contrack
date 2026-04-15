@@ -81,7 +81,7 @@ function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const TimelineTab: React.FC<TimelineTabProps> = ({
+const TimelineTabInner = ({
   contactId,
   timeline,
   timelineLoading,
@@ -315,3 +315,5 @@ export const TimelineTab: React.FC<TimelineTabProps> = ({
     </div>
   );
 };
+
+export const TimelineTab = React.memo(TimelineTabInner);

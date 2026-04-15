@@ -15,12 +15,12 @@
  *
  * @module src/hooks/useGlobalNavShortcuts
  */
-import { useEffect } from "react";
+import { useEffect, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 
 /** Shortcut definitions — exported for reuse in ZeroStateView KBD hints */
 export const NAV_SHORTCUTS: Record<string, { path: string; label: string; keys: string }> = {
-  "/": { path: "/", label: "Network", keys: "⌘⇧N" },
+  "/": { path: "/", label: "Network", keys: "⌘⇧H" },
   "/pulse": { path: "/pulse", label: "Relationship Pulse", keys: "⌘⇧P" },
   "/map": { path: "/map", label: "Map", keys: "⌘⇧M" },
   "/search": { path: "/search", label: "AI Search", keys: "⌘⇧S" },
@@ -29,6 +29,7 @@ export const NAV_SHORTCUTS: Record<string, { path: string; label: string; keys: 
 
 export const useGlobalNavShortcuts = () => {
   const navigate = useNavigate();
+  const [_, startTransition] = useTransition();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -37,25 +38,25 @@ export const useGlobalNavShortcuts = () => {
         const key = e.key.toLowerCase();
 
         switch (key) {
-          case "n":
+          case "h":
             e.preventDefault();
-            navigate("/");
+            startTransition(() => navigate("/"));
             return;
           case "p":
             e.preventDefault();
-            navigate("/pulse");
+            startTransition(() => navigate("/pulse"));
             return;
           case "m":
             e.preventDefault();
-            navigate("/map");
+            startTransition(() => navigate("/map"));
             return;
           case "s":
             e.preventDefault();
-            navigate("/search");
+            startTransition(() => navigate("/search"));
             return;
           case ",":
             e.preventDefault();
-            navigate("/settings");
+            startTransition(() => navigate("/settings"));
             return;
         }
       }
@@ -64,12 +65,12 @@ export const useGlobalNavShortcuts = () => {
       if (e.metaKey && !e.shiftKey && !e.altKey) {
         if (e.key === "[") {
           e.preventDefault();
-          navigate(-1);
+          startTransition(() => navigate(-1));
           return;
         }
         if (e.key === "]") {
           e.preventDefault();
-          navigate(1);
+          startTransition(() => navigate(1));
           return;
         }
       }

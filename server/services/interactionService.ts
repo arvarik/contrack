@@ -174,6 +174,9 @@ export const interactionService = {
     const cached = aiCache.get<string[]>("briefing", cacheKey);
     if (cached) {
       log.info("Briefing", `Cache HIT for ${contact.name} (${interactionCount} interactions)`);
+      import("./aiStatsService.ts").then(({ recordInvocation }) => {
+        recordInvocation({ operation: "briefing", latencyMs: 0, cached: true, description: `Catch-Me-Up cache hit for ${contact.name}` });
+      });
       return cached;
     }
 

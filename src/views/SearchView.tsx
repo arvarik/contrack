@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { isTypingTarget } from '../lib/keyboard';
 import {
-  Sparkles, Search, Tag,
+  Sparkles, Search, Tag, X,
   Loader2, AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,6 +16,7 @@ import { FloatingContactCard } from '../components/FloatingContactCard';
 import { SynthesisBar } from '../components/command-palette/SynthesisBar';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { ResultCard, ShimmerCard } from './search/SearchResultCards';
+import { useSession } from '../contexts/SessionContext';
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -36,10 +37,23 @@ const EXAMPLE_QUERIES = [
 
 export const SearchView = () => {
   const navigate = useNavigate();
+  const { 
+    lastAISearchQuery, setLastAISearchQuery, 
+    lastAISearchData, setLastAISearchData, 
+    lastAISearchPhase, setLastAISearchPhase 
+  } = useSession();
+
   const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState('');
-  const semanticSearch = useSemanticSearch();
-  const prevQueryRef = useRef('');
+  const [query, setQuery] = useState(lastAISearchQuery);
+  
+  const semanticSearch = useSemanticSearch({
+    data: lastAISearchData,
+    setData: setLastAISearchData,
+    phase: lastAISearchPhase,
+    setPhase: setLastAISearchPhase,
+  });
+
+  const prevQueryRef = useRef(lastAISearchQuery);
   const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
 
   // Read ?q= URL param on mount (from Cmd+K "Open in full-page search" bridge)
@@ -74,18 +88,26 @@ export const SearchView = () => {
     const q = (searchQuery ?? query).trim();
     if (q.length < 3 || q === prevQueryRef.current) return;
     prevQueryRef.current = q;
+    setLastAISearchQuery(q);
     semanticSearch.mutate(q);
-  }, [query, semanticSearch]);
+  }, [query, semanticSearch, setLastAISearchQuery]);
+
+  const handleClear = useCallback(() => {
+    setQuery('');
+    setLastAISearchQuery('');
+    semanticSearch.reset();
+    inputRef.current?.focus();
+  }, [semanticSearch, setLastAISearchQuery]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSearch();
     } else if (e.key === 'Escape') {
-      setQuery('');
-      (e.target as HTMLInputElement).blur();
+      e.preventDefault();
+      handleClear();
     }
-  }, [handleSearch]);
+  }, [handleSearch, handleClear]);
 
   // Global keydown for focusing search
   useEffect(() => {
@@ -103,8 +125,9 @@ export const SearchView = () => {
   const handleExampleClick = useCallback((exampleQuery: string) => {
     setQuery(exampleQuery);
     prevQueryRef.current = '';
+    setLastAISearchQuery(exampleQuery);
     semanticSearch.mutate(exampleQuery);
-  }, [semanticSearch]);
+  }, [semanticSearch, setLastAISearchQuery]);
 
   const results = semanticSearch.data?.matches ?? [];
   const isFallback = semanticSearch.data?.fallback ?? false;
@@ -149,8 +172,28 @@ export const SearchView = () => {
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything about your network..."
-                className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant/50 text-lg"
+                className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant/50 text-lg"
               />
+              <AnimatePresence>
+                {query.length > 0 && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => {
+                      setQuery('');
+                      setLastAISearchQuery('');
+                      semanticSearch.reset();
+                      inputRef.current?.focus();
+                    }}
+                    className="p-1.5 rounded-full text-on-surface-variant/50 hover:bg-surface-container-high hover:text-on-surface transition-colors shrink-0"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-5 h-5" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
               <button
                 onClick={() => handleSearch()}
                 disabled={query.trim().length < 3 || isLoading}

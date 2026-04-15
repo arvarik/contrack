@@ -33,7 +33,7 @@ export interface DetailsCardProps {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const DetailsCard: React.FC<DetailsCardProps> = ({
+const DetailsCardInner = ({
   contact,
   contactId,
   onUpdate,
@@ -228,3 +228,5 @@ export const DetailsCard: React.FC<DetailsCardProps> = ({
     </div>
   );
 };
+
+export const DetailsCard = React.memo(DetailsCardInner);
