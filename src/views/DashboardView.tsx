@@ -78,7 +78,21 @@ const CompletedActionsBar = () => {
 };
 
 export const DashboardView = () => {
+  const mountStart = useRef(performance.now());
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log(`[Perf] DashboardView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`);
+    }
+  }, []);
+
   const { data: dashboard, isLoading: isDashboardLoading, isError } = useDashboard();
+
+  useEffect(() => {
+    if (!isDashboardLoading && dashboard && import.meta.env.DEV) {
+      console.log(`[Perf] DashboardView data ready: time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`);
+    }
+  }, [isDashboardLoading, !!dashboard]);
+
   const { data: insight, isLoading: isInsightLoading } = useDailyInsight();
   const [isCompositionOpen, setIsCompositionOpen] = useState(false);
   const [isVelocityOpen, setIsVelocityOpen] = useState(false);

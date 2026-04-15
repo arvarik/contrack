@@ -23,6 +23,7 @@ import {
   useContacts, useLists, useCreateList, useReorderLists, useArchiveContact,
   useBulkUpdateContacts,
 } from "../../api";
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
@@ -249,16 +250,18 @@ export const ContactList = () => {
 
   // ── Shorthand refs ──────────────────────────────────────────────────
   const { filteredContacts, inputValue, searchQuery, setSearchQuery, filterMode, setFilterMode, sortBy, sortDir, cycleSortMode } = filters;
-  
-  // Apply useDeferredValue to the entire contact list so heavy UI re-renders
-  // never block the high-priority main thread (Cmd+K, typing, scrolling).
-  const deferredContacts = useDeferredValue(filteredContacts);
-
   const { isSelectMode, selectedIds, selectedCount, toggleSelect, enterSelectMode, exitSelectMode, selectAll, isPending } = multiSelect;
 
+  // ── Virtualization ──────────────────────────────────────────────────
+  const rowVirtualizer = useVirtualizer({
+    count: filteredContacts.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 72, // Estimated height of a row + gap (64px + 8px)
+    overscan: 5, // Render 5 items outside viewport for smooth scrolling
+  });
+
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
+    <div className="flex flex-col h-full overflow-hidden">      <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
         <div className="flex justify-between items-center">
           <h2 className={PAGE_TITLE}>Network</h2>
           <div className="flex items-center gap-1.5">
@@ -537,25 +540,47 @@ export const ContactList = () => {
           })()
         )}
 
-        <div className="space-y-2">
-          {useMemo(() => deferredContacts.map(contact => (
-            <ContactRowWrapper
-              key={contact.id}
-              contact={contact}
-              active={id === contact.id}
-              isFlashing={flashId === contact.id}
-              isSelectMode={isSelectMode}
-              isSelected={selectedIds.has(contact.id)}
-              onToggleSelect={toggleSelect}
-              handleContextMenu={handleContextMenu}
-              recordVisit={recordVisit}
-              archiveContact={async () => {
-                await archiveContact.mutateAsync(contact.id);
-                toast.success(`Archived "${contact.name}"`);
-              }}
-              navigate={navigate}
-            />
-          )), [deferredContacts, id, flashId, isSelectMode, selectedIds, navigate, handleContextMenu, recordVisit, toggleSelect, archiveContact])}
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+            const contact = filteredContacts[virtualItem.index];
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                  paddingBottom: '8px', // Replaces space-y-2
+                }}
+              >
+                <ContactRowWrapper
+                  contact={contact}
+                  active={id === contact.id}
+                  isFlashing={flashId === contact.id}
+                  isSelectMode={isSelectMode}
+                  isSelected={selectedIds.has(contact.id)}
+                  onToggleSelect={toggleSelect}
+                  handleContextMenu={handleContextMenu}
+                  recordVisit={recordVisit}
+                  archiveContact={async () => {
+                    await archiveContact.mutateAsync(contact.id);
+                    toast.success(`Archived "${contact.name}"`);
+                  }}
+                  navigate={navigate}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {/* Context menu — portal-rendered, shared across all rows */}

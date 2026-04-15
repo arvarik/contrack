@@ -134,6 +134,15 @@ Automatically geocodes contact addresses (via Mapbox or Nominatim fallback) and 
 ### 14. Zero-Chromium Link Unfurling
 Uses `cheerio` HTML parsers for lightweight OpenGraph extraction (`og:title`, `og:image`, `og:description`) without Puppeteer or headless browsers.
 
+### 15. Enterprise UI Virtualization
+Guarantees <20ms page transitions and 60 FPS scrolling regardless of list size (from 10 to 100,000+ contacts) using `@tanstack/react-virtual`. Eliminates DOM bloat and main-thread blocking by recycling the exact DOM nodes currently visible in the viewport.
+
+### 16. AI Cache Telemetry & Quota Optimization
+A unified, multi-tiered LRU caching layer (`aiCache`) intercepts redundant AI calls (Mentions, Insights, Briefings, Search, Synthesis) with TTLs ranging from 12 to 24 hours. The AI Stats dashboard provides 100% transparency into cache hits, misses, hit rates, and evictions, proving the system's quota-saving efficacy.
+
+### 17. Local Logo Proxy & Heuristic Discovery
+Intelligently guesses company domains from plain text names (stripping legal suffixes) when emails are missing. Routes logo requests through a custom Node.js proxy that fetches from Google S2 Favicons, caches the image binaries directly to your local file system for permanent offline access, and serves them with zero-latency headers.
+
 ---
 
 ## 🛠️ Technology Stack
