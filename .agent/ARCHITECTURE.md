@@ -2,6 +2,12 @@
 
 _This document acts as the definitive anchor for understanding system design, data models, API contracts, and technology boundaries. Update this document during the Design and Review phases._
 
+## 0. Project Topology
+
+**Topology:** `[frontend, backend, ml-ai]`
+
+_Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `backend.md`, and `ml-ai.md`) from `~/.gemini/antigravity/global_workflows/` before proceeding with any workflow step. These profiles enforce component state coverage, data integrity testing, Evaluation-Driven Development (EDD), circuit breaker cost controls, and prompt versioning._
+
 ## 1. Tech Stack & Infrastructure
 - **Language / Runtime**: TypeScript ~5.8 / Node.js 22+
 - **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and Leaflet for interactive maps.
@@ -191,6 +197,22 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - **Date Utilities**: `date-fns` for formatting, `chrono-node` for NLP date parsing.
 - **Validation**: `zod` for runtime payload validation.
 - **Utilities**: `clsx` + `tailwind-merge` for class merging, `dompurify` for HTML sanitization, `papaparse` for CSV parsing, `eml-format` for .eml email parsing.
+
+### Model Ledger (ML/AI Topology)
+
+_Documents every LLM/ML model in use. Required by the ml-ai topology profile for Circuit Breaker calculations._
+
+| Model | Role | Cost (1M in / 1M out) | Context Window | Structured Output | Rate Limit (FREE) | Rate Limit (PAID) | Circuit Breaker Cost Cap |
+|-------|------|----------------------|----------------|-------------------|-------------------|-------------------|--------------------------|
+| `gemini-2.5-flash-lite` | Lite extraction, mentions, reranking, search expansion, daily insight | $0.075 / $0.40 | 1M tokens | Yes (JSON schema) | 10 RPM / 250K TPM / 500 RPD | 10K RPM / 10M TPM / ∞ RPD | $0.50/day |
+| `gemini-2.5-flash` | Flash reasoning, EML summaries, general structured tasks | $0.15 / $2.50 | 1M tokens | Yes (JSON schema) | 2 RPM / 250K TPM / 20 RPD | 2K RPM / 3M TPM / 100K RPD | $2.00/day |
+| `gemini-2.5-pro` | Pro — complex reasoning, AI search grounding (Pass 1) | $1.25 / $10.00 | 1M tokens | Yes (JSON schema) | 2 RPM / 4K TPM / 2 RPD | 1K RPM / 5M TPM / 50K RPD | $5.00/day |
+| `gemini-3.1-flash-lite-preview` | Preview lite — overflow capacity (PAID only) | $0.075 / $1.50 | 1M tokens | Yes (JSON schema) | N/A (paid only) | 10K RPM / 10M TPM / 350K RPD | $1.50/day |
+| `gemini-3-flash-preview` | Preview flash — overflow capacity (PAID only) | $0.15 / $3.00 | 1M tokens | Yes (JSON schema) | N/A (paid only) | 2K RPM / 3M TPM / 100K RPD | $3.00/day |
+| `gemini-3.1-pro-preview` | Preview pro — overflow capacity (PAID only) | $1.25 / $12.00 | 1M tokens | Yes (JSON schema) | N/A (paid only) | 1K RPM / 5M TPM / 50K RPD | $6.00/day |
+| `Xenova/all-MiniLM-L6-v2` | Local 384-dim embeddings for hybrid search (Transformers.js) | Free (local) | 256 tokens | N/A (embedding) | N/A (local) | N/A (local) | $0 |
+
+_Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all models._
 
 ## 6. Environment Variables
 
