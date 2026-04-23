@@ -272,3 +272,22 @@ _List specific bugs discovered during testing._
 | _FTS5 Trigger Consistency_ | _YYYY-MM-DD_ | All 12 FTS triggers fire correctly on child-table mutations |
 | _AI Stats Summary Empty State_ | 2026-04-14 | `GET /api/ai/stats/summary` returns zeros with no invocations (not nulls) |
 | _AI Stats Feed Validation_ | 2026-04-14 | `GET /api/ai/stats/feed?operation=invalid_op` returns 400 with descriptive error |
+
+### Frontend Component State Matrix
+
+| Component | Loading | Empty | Error | Populated | Offline |
+|-----------|---------|-------|-------|-----------|---------|
+| _Fill in your components_ | | | | | |
+
+### Backend Route Coverage
+
+| Route | Method | Auth | Contract Test | Integration Test |
+|-------|--------|------|---------------|------------------|
+| _Fill in your routes_ | | | | |
+
+### ML/AI Evaluation Thresholds
+
+| Metric | Baseline | Target | Current | Status |
+|--------|----------|--------|---------|--------|
+| _Fill in your metrics_ | | | | |
+
