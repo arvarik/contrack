@@ -51,7 +51,7 @@ export const ArchivedContactsView = () => {
 
   // ── Bulk restore ──────────────────────────────────────────────────────
   const handleBulkRestore = () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     bulkUpdate.mutate({ ids, data: { isArchived: false } }, {
       onSuccess: ({ count }) => {
         toast.success(`Restored ${count} contact${count !== 1 ? 's' : ''} to network`);
@@ -63,7 +63,7 @@ export const ArchivedContactsView = () => {
 
   // ── Bulk delete ───────────────────────────────────────────────────────
   const handleBulkDelete = () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
       onSuccess: ({ count }) => {
         toast.success(`Permanently deleted ${count} contact${count !== 1 ? 's' : ''}`);

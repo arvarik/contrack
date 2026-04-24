@@ -10,7 +10,7 @@
  *     <SomeView />
  *   </RouteErrorBoundary>
  */
-import { Component, ErrorInfo, ReactNode } from "react";
+import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
 
 interface Props {
@@ -25,6 +25,8 @@ interface State {
 }
 
 export class RouteErrorBoundary extends Component<Props, State> {
+  declare props: Readonly<Props>;
+  declare setState: Component<Props, State>['setState'];
   public state: State = { hasError: false };
 
   public static getDerivedStateFromError(error: Error): State {

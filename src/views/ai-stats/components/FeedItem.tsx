@@ -9,6 +9,7 @@ import { motion } from 'motion/react';
 import type { AIStatsFeedItem } from '../../../api';
 
 interface FeedItemProps {
+  key?: React.Key;
   item: AIStatsFeedItem;
   index: number;
 }

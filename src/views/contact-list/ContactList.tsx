@@ -623,7 +623,7 @@ export const ContactList = () => {
         isBulkEditOpen={isBulkEditOpen}
         onCloseBulkEdit={() => setIsBulkEditOpen(false)}
         onBulkEditApply={(field, value) => {
-          const ids = Array.from(selectedIds);
+          const ids = Array.from(selectedIds) as string[];
           bulkUpdate.mutate({ ids, data: { [field]: value } as ContactUpdateData }, {
             onSuccess: ({ count }) => {
               toast.success(`Updated ${count} contact${count !== 1 ? 's' : ''}`);

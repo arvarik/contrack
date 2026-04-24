@@ -16,6 +16,7 @@ import { fallbackAvatarUrl } from '../../../../lib/avatar';
 // =============================================================================
 
 export interface ContactCardProps {
+  key?: React.Key;
   contact: Contact;
   label: string;
   labelColor: string;

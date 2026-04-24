@@ -53,6 +53,7 @@
     "@tiptap/pm": "^3.22.0",
     "@tiptap/react": "^3.22.0",
     "@tiptap/starter-kit": "^3.22.0",
+    "@tiptap/suggestion": "^3.22.4",
     "better-sqlite3": "^12.8.0",
     "canvas-confetti": "^1.9.4",
     "cheerio": "^1.2.0",

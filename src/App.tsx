@@ -139,7 +139,7 @@ const ResponsiveLayout = () => {
           ${isContactSelected ? 'flex' : 'hidden lg:flex'}
           flex-1 bg-surface z-10 h-full overflow-hidden relative flex-col
         `}>
-          <Routes location={location} key={location.pathname}>
+          <Routes location={location}>
             <Route path="/" element={<EmptyState />} />
             <Route path="/contact/:id" element={<RouteErrorBoundary viewName="ContactDetail"><ContactDetail /></RouteErrorBoundary>} />
           </Routes>
@@ -157,7 +157,7 @@ const ResponsiveLayout = () => {
               transition={{ type: "spring", bounce: 0, duration: 0.4 }}
               className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
             >
-              <Routes location={location} key={location.pathname}>
+              <Routes location={location}>
                 <Route path="/map/contact/:id" element={<RouteErrorBoundary viewName="ContactDetail"><ContactDetail /></RouteErrorBoundary>} />
               </Routes>
             </motion.main>

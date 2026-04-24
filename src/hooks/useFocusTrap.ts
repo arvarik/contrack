@@ -37,9 +37,9 @@ export function useFocusTrap(
       const container = containerRef.current;
       if (!container) return;
 
-      const focusable = Array.from(
+      const focusable = (Array.from(
         container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-      ).filter(el => el.offsetParent !== null); // Exclude visually hidden (display: none)
+      ) as HTMLElement[]).filter((el) => el.offsetParent !== null); // Exclude visually hidden (display: none)
 
       if (focusable.length === 0) return;
 

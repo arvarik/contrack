@@ -77,7 +77,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId, contactName, cur
     accept: { 'image/*': [] },
     maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
-  });
+  } as any);
 
   const handleClose = () => {
     setSelectedUrl(null);

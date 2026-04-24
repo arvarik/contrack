@@ -20,6 +20,7 @@ import type { Contact } from '../../../types';
 // ---------------------------------------------------------------------------
 
 interface ContactRowProps {
+  key?: React.Key;
   contact: Contact;
   isSelected: boolean;
   hasError: boolean;

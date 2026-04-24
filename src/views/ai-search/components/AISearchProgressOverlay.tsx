@@ -158,7 +158,7 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
 // Individual Job Row
 // ---------------------------------------------------------------------------
 
-function JobRow({ job }: { job: AISearchJob }) {
+function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2 text-sm">
       <div className="shrink-0">{STATUS_ICONS[job.status]}</div>

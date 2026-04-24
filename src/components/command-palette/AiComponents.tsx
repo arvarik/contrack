@@ -24,6 +24,7 @@ export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
 );
 
 interface AIResultCardProps {
+  key?: React.Key;
   match: SemanticMatch;
   index: number;
   onSelect: () => void;

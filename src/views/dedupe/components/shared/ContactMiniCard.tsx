@@ -8,6 +8,7 @@ import { fallbackAvatarUrl } from '../../../../lib/avatar';
 // =============================================================================
 
 export interface ContactMiniCardProps {
+  key?: React.Key;
   contact: Contact;
   selected: boolean;
   onToggle: () => void;

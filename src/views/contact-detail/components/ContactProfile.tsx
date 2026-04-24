@@ -107,7 +107,7 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
       'application/pdf': ['.pdf'],
       'text/*': ['.txt', '.csv', '.md']
     }
-  });
+  } as any);
 
   // ── Event handlers ────────────────────────────────────────────────────
   const handleUpdate = (field: string, val: string) => {

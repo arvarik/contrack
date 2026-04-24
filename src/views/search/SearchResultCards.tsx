@@ -19,6 +19,7 @@ import { fallbackAvatarUrl } from '../../lib/avatar';
 // =============================================================================
 
 interface ResultCardProps {
+  key?: React.Key;
   match: SemanticMatch;
   index: number;
   isFallback: boolean;

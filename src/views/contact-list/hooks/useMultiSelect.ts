@@ -51,7 +51,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   // ── Bulk Actions ──────────────────────────────────────────────────────
 
   const handleBulkDelete = useCallback(() => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
       onSuccess: ({ count }) => {
         toast.success(`Deleted ${count} contact${count !== 1 ? 's' : ''}`);
@@ -62,7 +62,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   }, [selectedIds, bulkDelete, exitSelectMode]);
 
   const handleBulkArchive = useCallback(() => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     bulkUpdate.mutate({ ids, data: { isArchived: true } }, {
       onSuccess: ({ count }) => {
         toast.success(`Archived ${count} contact${count !== 1 ? 's' : ''}`);
@@ -73,7 +73,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   }, [selectedIds, bulkUpdate, exitSelectMode]);
 
   const handleBulkAddToList = useCallback((listId: string) => {
-    const contactIds = Array.from(selectedIds);
+    const contactIds = Array.from(selectedIds) as string[];
     bulkAddToList.mutate({ listId, contactIds }, {
       onSuccess: ({ count }) => {
         toast.success(`Added ${count} contact${count !== 1 ? 's' : ''} to list`);
@@ -84,7 +84,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   }, [selectedIds, bulkAddToList, exitSelectMode]);
 
   const handleBulkColorChange = useCallback((vibeId: string) => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIds) as string[];
     bulkUpdate.mutate({ ids, data: { themeColor: vibeId } }, {
       onSuccess: ({ count }) => {
         toast.success(`Updated color for ${count} contact${count !== 1 ? 's' : ''}`);

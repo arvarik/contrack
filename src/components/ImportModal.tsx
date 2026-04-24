@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from './ui/Modal';
 import { UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, Search, GitMerge, UserPlus, ArrowRight } from 'lucide-react';

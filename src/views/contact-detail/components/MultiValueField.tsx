@@ -58,6 +58,7 @@ const SortableRow = ({
   onRemove,
   isAddress,
 }: {
+  key?: React.Key;
   item: MultiValueItem & { _sortId: string };
   idx: number;
   totalCount: number;

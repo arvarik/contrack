@@ -56,6 +56,9 @@ export const activeProviderName = (process.env.AI_PROVIDER ?? "gemini").toLowerC
  * - `ai.isConfigured` — true when a valid API key is present
  * - `ai.providerName` — active provider identifier
  */
+// Capture the adapter's original method BEFORE Object.assign overwrites it.
+const _adapterSnapshot = sharedProvider.getQuotaSnapshot?.bind(sharedProvider);
+
 export const ai = Object.assign(sharedProvider, {
   isConfigured: isProviderConfigured,
   providerName: activeProviderName,
@@ -64,7 +67,7 @@ export const ai = Object.assign(sharedProvider, {
    * (Gemini), or an empty snapshot for providers without quota tracking.
    */
   getQuotaSnapshot(): DiagnosticsSnapshot {
-    return sharedProvider.getQuotaSnapshot?.() ?? EMPTY_SNAPSHOT;
+    return _adapterSnapshot?.() ?? EMPTY_SNAPSHOT;
   },
 });
 

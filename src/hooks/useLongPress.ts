@@ -15,7 +15,7 @@
  * - The callback receives the touch coordinates for positioning a context menu
  * - Cleans up timer on unmount via empty-dep useEffect
  */
-import { useRef, useCallback, useEffect } from "react";
+import React, { useRef, useCallback, useEffect } from "react";
 
 const DEFAULT_DELAY_MS = 500;
 const MOVE_THRESHOLD_PX = 10; // px of movement that cancels the press

@@ -15,6 +15,7 @@ import { fallbackAvatarUrl } from '../../../lib/avatar';
 // =============================================================================
 
 interface ClusterSwipeCardProps {
+  key?: React.Key;
   cluster: DedupeCluster;
   onMerge: (primaryId: string, duplicateIds: string[]) => Promise<void>;
   onDismiss: () => void;
@@ -334,7 +335,7 @@ export const ClusterSwipeCard = ({
 // EvidenceRow — A single pair evidence item within the cluster
 // =============================================================================
 
-function EvidenceRow({ pair, contacts }: { pair: ClusterPair; contacts: Contact[] }) {
+function EvidenceRow({ pair, contacts }: { key?: React.Key; pair: ClusterPair; contacts: Contact[] }) {
   const contactA = contacts.find(c => c.id === pair.contactIdA);
   const contactB = contacts.find(c => c.id === pair.contactIdB);
 
