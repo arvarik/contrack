@@ -32,5 +32,8 @@ Thumbs.db
 # Test / scratch artifacts
 test.eml
 
-# Internal design docs — not part of the shipped product
-docs/
+# Gemstack-managed internal design docs — not shipped
+docs/archive/
+docs/designs/
+docs/explorations/
+docs/plans/
