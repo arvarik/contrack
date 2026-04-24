@@ -596,8 +596,12 @@ export async function bulkParseContacts(
   if (texts.length === 0) return [];
 
   // Adapt concurrency to tier if not explicitly provided
+  // Non-Gemini providers (OpenAI, Anthropic) are always paid — no RPM restrictions
+  // that justify the conservative FREE tier concurrency of 2.
   const tier = getAITier();
-  const effectiveConcurrency = concurrency ?? (tier === "PAID" ? 10 : 2);
+  const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
+  const effectiveConcurrency = concurrency
+    ?? (providerName !== "gemini" ? 10 : tier === "PAID" ? 10 : 2);
 
   log.info(
     "AIService",

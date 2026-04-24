@@ -12,7 +12,7 @@ import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { sqlite } from "../db.ts";
 import { ai } from "../ai/index.ts";
-import { getStrategy } from "../services/aiSearch/strategies/index.ts";
+import { getStrategy, getDefaultStrategyForProvider } from "../services/aiSearch/strategies/index.ts";
 import { buildSearchPrompt } from "../services/aiSearch/promptTemplate.ts";
 import { mergeSearchResult } from "../services/aiSearch/mergeEngine.ts";
 import { generateAndStoreBulkEmbeddings, isEmbeddingAvailable } from "../services/dedupe/embeddings.ts";
@@ -427,19 +427,25 @@ router.post("/contacts/:id/enrich", asyncHandler(async (req, res) => {
   const rid = (req as any).requestId;
   const { id } = req.params;
 
-  // Check AI provider is configured
+  // Check AI provider is configured (F-03: provider-aware error message)
   if (!ai.isConfigured) {
-    throw new AppError("AI provider is not configured. Set GEMINI_API_KEY in your .env file.", 503);
+    const KEY_MAP: Record<string, string> = {
+      gemini: "GEMINI_API_KEY", openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY",
+    };
+    const keyVar = KEY_MAP[ai.providerName] ?? "GEMINI_API_KEY";
+    throw new AppError(`AI provider is not configured. Set ${keyVar} in your .env file.`, 503);
   }
 
-  // Check grounding capacity
-  const snapshot = ai.getQuotaSnapshot();
-  if (snapshot.grounding.remaining <= 0) {
-    return res.status(429).json({
-      error: "Grounding quota exhausted for today. Try again tomorrow.",
-      remaining: 0,
-      limit: snapshot.grounding.limit,
-    });
+  // Check grounding capacity (F-04: only for Gemini — other providers don't have grounding RPD)
+  if (ai.providerName === "gemini") {
+    const snapshot = ai.getQuotaSnapshot();
+    if (snapshot.grounding.remaining <= 0) {
+      return res.status(429).json({
+        error: "Grounding quota exhausted for today. Try again tomorrow.",
+        remaining: 0,
+        limit: snapshot.grounding.limit,
+      });
+    }
   }
 
   // Fetch the contact
@@ -447,10 +453,12 @@ router.post("/contacts/:id/enrich", asyncHandler(async (req, res) => {
   if (!contact) throw new AppError("Contact not found", 404);
 
   const startMs = Date.now();
-  const strategy = getStrategy('two-pass');
+  // F-02: Use provider-aware strategy instead of hardcoded 'two-pass'
+  const strategyName = getDefaultStrategyForProvider(ai.providerName);
+  const strategy = getStrategy(strategyName);
   const prompt = buildSearchPrompt(contact);
 
-  log.info("API", `[${rid}] POST /api/contacts/${id}/enrich — starting TwoPassStrategy for "${contact.name}"`);
+  log.info("API", `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${ai.providerName})`);
 
   const result = await strategy.execute(contact, prompt, ai);
   const fieldsUpdated = mergeSearchResult(id, contact, result.data as any);

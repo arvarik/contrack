@@ -4,25 +4,47 @@
 // Factory registry for AI Search strategies. New strategies plug in here
 // without modifying any other code in the system.
 //
-// Future strategies:
-// - 'single-pass': When Gemini 3.x GA supports grounding + schema together
-// - 'consensus':   Same prompt against 2-3 models, take intersection
-// - 'judge':       Researcher model + validator model
+// Strategy auto-selection:
+// - Gemini → 'two-pass' (grounding and schema can't coexist)
+// - OpenAI/Anthropic → 'single-pass' (grounding + schema in one request)
+//
+// Can be overridden via explicit strategy name parameter.
 // =============================================================================
 
 import type { AISearchStrategy } from "../types.ts";
 import { TwoPassStrategy } from "./twoPass.ts";
+import { SinglePassStrategy } from "./singlePass.ts";
 
 const STRATEGIES: Record<string, () => AISearchStrategy> = {
   'two-pass': () => new TwoPassStrategy(),
-  // Future strategies plug in here:
-  // 'single-pass': () => new SinglePassStrategy(),
+  'single-pass': () => new SinglePassStrategy(),
+  // Future strategies:
   // 'consensus':   () => new ConsensusStrategy(),
   // 'judge':       () => new JudgeStrategy(),
 };
 
+/**
+ * Get a strategy by name. When no name is provided, defaults to 'two-pass'
+ * (Gemini behavior). Callers can use getDefaultStrategyForProvider() to
+ * resolve the optimal strategy for the active provider.
+ */
 export function getStrategy(name: string = 'two-pass'): AISearchStrategy {
   const factory = STRATEGIES[name];
   if (!factory) throw new Error(`Unknown AI Search strategy: "${name}". Available: ${Object.keys(STRATEGIES).join(', ')}`);
   return factory();
+}
+
+/**
+ * Resolve the default strategy name for a given provider.
+ * - Gemini uses two-pass (grounding + schema incompatible)
+ * - OpenAI/Anthropic use single-pass (both supported together)
+ */
+export function getDefaultStrategyForProvider(providerName: string): string {
+  switch (providerName.toLowerCase()) {
+    case 'openai':
+    case 'anthropic':
+      return 'single-pass';
+    default:
+      return 'two-pass';
+  }
 }

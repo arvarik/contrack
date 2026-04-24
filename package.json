@@ -38,6 +38,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -71,6 +72,7 @@
     "morgan": "^1.10.1",
     "motion": "^12.23.24",
     "multer": "^2.1.1",
+    "openai": "^5.8.0",
     "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

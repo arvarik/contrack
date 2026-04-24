@@ -276,9 +276,9 @@ export interface DedupeScanProgress {
 // =============================================================================
 
 /**
- * A contact returned from a semantic AI search, augmented with Gemini's
- * one-sentence explanation of why it matched the query.
- * `aiReason` is null when the FTS5 fallback path fires instead of Gemini.
+ * A contact returned from a semantic AI search, augmented with the AI provider's
+ * reasoning for why this contact matches the query.
+ * `aiReason` is null when the FTS5 fallback path fires instead of the AI provider.
  */
 export interface SemanticMatch extends Contact {
   aiReason: string | null;
@@ -286,7 +286,7 @@ export interface SemanticMatch extends Contact {
 
 /**
  * Full response envelope from POST /api/search/semantic.
- * `fallback: true` signals that Gemini was unavailable and the results
+ * `fallback: true` signals that the AI provider was unavailable and the results
  * are plain FTS5 keyword matches with no AI reasoning.
  */
 export interface SemanticSearchResult {

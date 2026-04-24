@@ -16,6 +16,7 @@ import { ai } from "../ai/index.ts";
 import { log } from "../utils/logger.ts";
 import type { AISearchBatch } from "../services/aiSearch/types.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { getDefaultStrategyForProvider } from "../services/aiSearch/strategies/index.ts";
 
 export const aiSearchRouter = Router();
 
@@ -28,9 +29,10 @@ export const aiSearchRouter = Router();
 // (max 5/hr). Omitted intentionally — this is a single-user local app and
 // the in-memory 5-minute cooldown in jobQueue.canStartBatch() provides
 // equivalent protection. Add express-rate-limit if deploying multi-tenant.
+const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
 const aiSearchBodySchema = z.object({
   contactIds: z.array(z.string()).min(1).max(100),
-  strategy: z.string().optional().default('two-pass'),
+  strategy: z.string().optional().default(getDefaultStrategyForProvider(providerName)),
 });
 
 // =============================================================================
@@ -45,8 +47,12 @@ aiSearchRouter.post(
 
     // Check AI provider is configured
     if (!ai.isConfigured) {
+      const KEY_MAP: Record<string, string> = {
+        gemini: "GEMINI_API_KEY", openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY",
+      };
+      const keyVar = KEY_MAP[providerName] ?? "GEMINI_API_KEY";
       return res.status(503).json({
-        error: 'AI provider is not configured. Set GEMINI_API_KEY in your .env file.',
+        error: `AI provider is not configured. Set ${keyVar} in your .env file.`,
       });
     }
 

@@ -78,7 +78,7 @@ export const ContactProfile = ({ contactId: id, onClose, showNetworkButton = fal
     if (acceptedFiles.length > 0 && id) {
       acceptedFiles.forEach(file => {
         const isEml = file.name.toLowerCase().endsWith('.eml');
-        const toastId = toast.loading(isEml ? `Summarizing email thread with Gemini...` : `Uploading "${file.name}"...`);
+        const toastId = toast.loading(isEml ? `Summarizing email thread with AI...` : `Uploading "${file.name}"...`);
 
         addAttachment.mutate(
           { contactId: id, file },

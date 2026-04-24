@@ -36,10 +36,21 @@ import { initLocalEmbeddings, backfillSearchEmbeddings } from "./server/services
 
 import { AppError } from "./server/utils/AppError.ts";
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_KEY || GEMINI_KEY === "dummy_key") {
-  console.warn("\n\x1b[33m⚠️  [WARNING] GEMINI_API_KEY is not configured inside .env!\x1b[0m");
-  console.warn("\x1b[33m   AI features (Briefings, Entity Extraction) will fail gracefully.\x1b[0m\n");
+// ── Provider-aware API key validation ────────────────────────────────────────
+const AI_PROVIDER = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
+const API_KEY_MAP: Record<string, string> = {
+  gemini: "GEMINI_API_KEY",
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+};
+const KEY_VAR = API_KEY_MAP[AI_PROVIDER] ?? "GEMINI_API_KEY";
+const KEY_VALUE = process.env[KEY_VAR];
+
+if (!KEY_VALUE || (AI_PROVIDER === "gemini" && KEY_VALUE === "dummy_key")) {
+  console.warn(`\n\x1b[33m⚠️  [WARNING] ${KEY_VAR} is not configured inside .env!\x1b[0m`);
+  console.warn(`\x1b[33m   AI provider "${AI_PROVIDER}" will not be available. AI features will fail gracefully.\x1b[0m\n`);
+} else {
+  console.log(`\x1b[36mℹ️  AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)\x1b[0m`);
 }
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;

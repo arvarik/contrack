@@ -13,7 +13,7 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 - **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and Leaflet for interactive maps.
 - **Backend / API**: Express 4 running natively via `tsx`. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
 - **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
-- **AI Provider**: Google Gemini via `@google/genai`. Local embeddings via `@huggingface/transformers` (Transformers.js).
+- **AI Provider**: Multi-provider — Google Gemini via `@google/genai` (default), OpenAI via `openai`, Anthropic via `@anthropic-ai/sdk`. Selected at startup via `AI_PROVIDER` env var. Local embeddings via `@huggingface/transformers` (Transformers.js).
 - **Deployment**: Local-first / Self-hosted. Single Node.js process serves both API and frontend.
 - **Package Management**: npm
 - **Styling**: Tailwind CSS v4 via `@tailwindcss/vite` plugin.
@@ -31,21 +31,30 @@ Multi-stage hybrid retrieval with Reciprocal Rank Fusion (k=15):
 3. **FTS5 Weighted BM25**: Full-text search across `contacts_fts` virtual table (name, company, role, headline, location, about, industry, extras, searchExpansion).
 4. **Local Vector KNN**: `sqlite-vec` cosine similarity search against 384-dim embeddings from `Xenova/all-MiniLM-L6-v2` generated locally via Transformers.js.
 5. **RRF Fusion**: Combines FTS5 and vector results using Reciprocal Rank Fusion (see `server/services/search/hybridRetrieval.ts`).
-6. **Optional LLM Reranker**: `rerankCandidates()` in `aiService.ts` uses Gemini to filter false positives from ~30 pre-screened candidates.
+6. **Optional LLM Reranker**: `rerankCandidates()` in `aiService.ts` uses the active AI provider to filter false positives from ~30 pre-screened candidates.
 7. **Two-Phase NDJSON Streaming**: Instant UI feedback from local retrieval (<15ms), followed by enriched backend resolution.
 
 ### AI Adapter Pipeline
 All AI operations route through a layered architecture in `server/ai/`:
-- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates`, `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults`.
-- **`singleton.ts`**: Ensures one `SmartRouter`, one `QuotaTracker`, and one set of circuit breakers across the entire application.
-- **`routing/SmartRouter.ts`**: 3-pass model selection algorithm:
-  - **Pass 1 (Filter)**: Removes models blocked by policy, circuit breakers, tier availability, stability (preview vs stable), or feature requirements (grounding).
-  - **Pass 2 (Capacity)**: Scans remaining models (cheapest-first, or preference-sorted) for tier-specific capacity via QuotaTracker.
-  - **Pass 3 (Overflow)**: If all capacity exhausted, uses cheapest model with paid-tier limits (if `allowPaidSpillover` is enabled).
-- **`routing/QuotaTracker.ts`**: Optimistic in-memory sliding-window tracker. Deducts quota synchronously BEFORE network requests to prevent burst 429 errors across parallel calls. Tracks RPM, TPM, RPD per model + shared grounding RPD pool.
-- **`routing/registry.ts`**: Single source of truth for Gemini model configs. Current registry includes `gemini-2.5-flash-lite`, `gemini-2.5-flash`, `gemini-2.5-pro` (stable), and `gemini-3.1-flash-lite-preview`, `gemini-3-flash-preview`, `gemini-3.1-pro-preview` (preview). Model classes: `lite`, `flash`, `pro`.
-- **`routing/ParallelQueue.ts`**: Tier-aware concurrency limiter (PAID=10, FREE=2 workers).
-- **`adapters/gemini.ts`**: Sole integration point with `@google/genai`. All vendor-specific logic isolated here.
+- **`provider.ts`**: Abstract `AIProvider` interface — the single contract all adapters implement. Methods: `generate(options)` (required), `getQuotaSnapshot()` (optional, Gemini-only).
+- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates`, `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults`. **Never imports any SDK directly.**
+- **`singleton.ts`**: Provider factory — resolves the active `AIProvider` instance based on `AI_PROVIDER` env var. Supports `"gemini"` (default), `"openai"`, and `"anthropic"`. Ensures one shared instance across the entire application.
+- **`types.ts`**: Provider-agnostic type definitions including `AIProviderName = "gemini" | "openai" | "anthropic"`, `AIGenerateOptions`, `AIGenerateResult`, `JsonSchemaNode`, `RoutingPolicy`.
+- **Adapters** (`server/ai/adapters/`):
+  - `gemini.ts` — Google Gemini via `@google/genai`. Includes SmartRouter integration, QuotaTracker, circuit breakers. Schema translation: `JsonSchemaNode` → Gemini `Type.*` enums.
+  - `openai.ts` — OpenAI via `openai` npm package. Schema translation: `JsonSchemaNode` → `response_format: { type: "json_schema", json_schema: { strict: true, ... } }`. Web search via Responses API `web_search` tool. System prompt via `system` role message.
+  - `anthropic.ts` — Anthropic Claude via `@anthropic-ai/sdk`. Schema translation: `JsonSchemaNode` → `output_config.format: { type: "json_schema" }`. Web search via native `web_search` tool. System prompt via `system` parameter. Requires explicit `max_tokens` on every request.
+- **Routing** (Gemini-only, `server/ai/routing/`):
+  - `SmartRouter.ts` — 3-pass model selection (Filter → Capacity → Overflow). **Only used by GeminiAdapter.**
+  - `QuotaTracker.ts` — Optimistic in-memory sliding-window quota tracker. **Only used by GeminiAdapter.**
+  - `registry.ts` — Gemini model configs with per-tier rate limits. Model classes: `lite`, `flash`, `pro`.
+  - `ParallelQueue.ts` — Tier-aware concurrency limiter (PAID=10, FREE=2 workers). Provider-agnostic.
+- **Model class mapping** (`routing.prefer`):
+  | `prefer` | Gemini | OpenAI | Anthropic |
+  |----------|--------|--------|-----------|
+  | `"lite"` | `gemini-2.5-flash-lite` | `gpt-4o-mini` | `claude-haiku-4.5` |
+  | `"flash"` | `gemini-2.5-flash` | `gpt-5.4-mini` | `claude-sonnet-4.6` |
+  | `"pro"` | `gemini-2.5-pro` | `gpt-5.4` | `claude-opus-4.6` |
 
 ### AI Search Enrichment Pipeline (`server/services/aiSearch/`)
 Deep enrichment system for contact data using LLM-powered web search:
@@ -141,7 +150,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 
 ### Backend (`server/`)
 - `server/ai/` — AI layer: `aiService.ts` facade, `singleton.ts`, `provider.ts`, `types.ts`
-  - `server/ai/adapters/` — Vendor integrations (`gemini.ts` — sole `@google/genai` touchpoint)
+  - `server/ai/adapters/` — Vendor integrations: `gemini.ts` (`@google/genai`), `openai.ts` (`openai`), `anthropic.ts` (`@anthropic-ai/sdk`)
   - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
 - `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`
 - `server/services/` — Heavy business logic:
@@ -187,8 +196,12 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `tsconfig.json` — TypeScript config (ES2022 target, ESNext modules, bundler resolution, `@/*` path alias)
 
 ## 5. External Integrations
-- **LLM**: Google Gemini (6 registered models across lite/flash/pro × stable/preview). All calls routed through `server/ai/adapters/gemini.ts`.
-- **Local Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search.
+- **LLM Providers** (selected via `AI_PROVIDER` env var):
+  - **Gemini** (default): 6 registered models via `@google/genai`. Full SmartRouter + QuotaTracker + circuit breakers. Includes Google Search grounding and embedding models.
+  - **OpenAI**: `gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4` via `openai` npm package. Web search via Responses API. Structured output via `response_format: json_schema`.
+  - **Anthropic**: `claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.6` via `@anthropic-ai/sdk`. Web search via native `web_search` tool. Structured output via `output_config.format: json_schema`.
+- **Dedupe Embeddings**: `gemini-embedding-2-preview` via `@google/genai` (Gemini-only, uses `GEMINI_API_KEY` regardless of active `AI_PROVIDER`). Degrades to deterministic-only matching when unavailable.
+- **Local Search Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search. Provider-agnostic (runs locally).
 - **Geocoding**: Mapbox (Primary, requires `MAPBOX_API_KEY`) / Nominatim (Fallback, no key needed).
 - **Avatar Processing**: `sharp` for image resizing/optimization.
 - **Icons**: `lucide-react` icon library.
@@ -202,6 +215,8 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 
 _Documents every LLM/ML model in use. Required by the ml-ai topology profile for Circuit Breaker calculations._
 
+#### Gemini Models (AI_PROVIDER="gemini")
+
 | Model | Role | Cost (1M in / 1M out) | Context Window | Structured Output | Rate Limit (FREE) | Rate Limit (PAID) | Circuit Breaker Cost Cap |
 |-------|------|----------------------|----------------|-------------------|-------------------|-------------------|--------------------------|
 | `gemini-2.5-flash-lite` | Lite extraction, mentions, reranking, search expansion, daily insight | $0.075 / $0.40 | 1M tokens | Yes (JSON schema) | 10 RPM / 250K TPM / 500 RPD | 10K RPM / 10M TPM / ∞ RPD | $0.50/day |
@@ -210,17 +225,44 @@ _Documents every LLM/ML model in use. Required by the ml-ai topology profile for
 | `gemini-3.1-flash-lite-preview` | Preview lite — overflow capacity (PAID only) | $0.075 / $1.50 | 1M tokens | Yes (JSON schema) | N/A (paid only) | 10K RPM / 10M TPM / 350K RPD | $1.50/day |
 | `gemini-3-flash-preview` | Preview flash — overflow capacity (PAID only) | $0.15 / $3.00 | 1M tokens | Yes (JSON schema) | N/A (paid only) | 2K RPM / 3M TPM / 100K RPD | $3.00/day |
 | `gemini-3.1-pro-preview` | Preview pro — overflow capacity (PAID only) | $1.25 / $12.00 | 1M tokens | Yes (JSON schema) | N/A (paid only) | 1K RPM / 5M TPM / 50K RPD | $6.00/day |
-| `Xenova/all-MiniLM-L6-v2` | Local 384-dim embeddings for hybrid search (Transformers.js) | Free (local) | 256 tokens | N/A (embedding) | N/A (local) | N/A (local) | $0 |
 
-_Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all models._
+_Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all Gemini models._
+
+#### OpenAI Models (AI_PROVIDER="openai")
+
+| Model | Class | Cost (1M in / 1M out) | Context Window | Structured Output | Web Search | Notes |
+|-------|-------|----------------------|----------------|-------------------|------------|-------|
+| `gpt-4o-mini` | lite | $0.15 / $0.60 | 128K tokens | Yes (`json_schema`) | Yes (Responses API) | Cheapest, default for lite tasks |
+| `gpt-5.4-mini` | flash | $0.75 / $4.50 | 400K tokens | Yes (`json_schema`) | Yes (Responses API) | Balanced price/quality |
+| `gpt-5.4` | pro | $2.50 / $15.00 | 1.05M tokens | Yes (`json_schema`) | Yes (Responses API) | Flagship reasoning |
+
+_No free tier. Prepaid billing required (~$5 starter credits for new accounts). Rate limits are dynamic based on account spend tier._
+
+#### Anthropic Models (AI_PROVIDER="anthropic")
+
+| Model | Class | Cost (1M in / 1M out) | Context Window | Structured Output | Web Search | Notes |
+|-------|-------|----------------------|----------------|-------------------|------------|-------|
+| `claude-haiku-4.5` | lite | $1.00 / $5.00 | 200K tokens | Yes (`json_schema`) | Yes (native tool) | Cheapest, default for lite tasks |
+| `claude-sonnet-4.6` | flash | $3.00 / $15.00 | 200K tokens | Yes (`json_schema`) | Yes (native tool) | Balanced coding/agents |
+| `claude-opus-4.6` | pro | $5.00 / $25.00 | 200K tokens | Yes (`json_schema`) | Yes (native tool) | Flagship reasoning |
+
+_No free tier. Prepaid billing required (~$5 starter credits for new accounts). Rate limits based on 4-tier spend system. No first-party embedding models._
+
+#### Local Models (Provider-Agnostic)
+
+| Model | Role | Cost | Dimensions | Notes |
+|-------|------|------|------------|-------|
+| `Xenova/all-MiniLM-L6-v2` | Search embeddings (Transformers.js) | Free (local) | 384-dim | Powers KNN in Spotlight. Runs regardless of AI_PROVIDER. |
 
 ## 6. Environment Variables
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `GEMINI_API_KEY` | Yes (for AI features) | — | Google Gemini API key. AI features degrade gracefully with mock responses if missing. |
-| `AI_TIER` | No | `FREE` | Controls rate limit profiles: `FREE` (conservative ~10 RPM) or `PAID` (aggressive 10K+ RPM, includes preview models). |
-| `AI_PROVIDER` | No | `gemini` | LLM provider adapter selection. Currently only `gemini` supported. |
+| `AI_PROVIDER` | No | `gemini` | LLM provider adapter selection. Supported: `"gemini"`, `"openai"`, `"anthropic"`. |
+| `GEMINI_API_KEY` | When `AI_PROVIDER=gemini` | — | Google Gemini API key. Also used for dedupe embeddings regardless of active provider. |
+| `OPENAI_API_KEY` | When `AI_PROVIDER=openai` | — | OpenAI API key. Prepaid billing required. |
+| `ANTHROPIC_API_KEY` | When `AI_PROVIDER=anthropic` | — | Anthropic Claude API key. Prepaid billing required. |
+| `AI_TIER` | No | `FREE` | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
 | `MAPBOX_API_KEY` | No | — | Enables Mapbox as primary geocoder (falls back to Nominatim if missing). |
 | `PORT` | No | `3000` | Server port. |
 | `APP_URL` | No | — | Self-referential URL for OAuth/links (injected by AI Studio). |
@@ -231,7 +273,8 @@ _Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all mo
 - **NEVER** write native `useEffect` fetch loops for data operations. Rely solely on `@tanstack/react-query`.
 - **NEVER** silently swallow errors (`.catch(() => {})`).
 - **MUST** manually purge `search_embeddings` and `contact_embeddings` on contact deletion/merge.
-- **MUST** route all AI calls through the `ai` singleton exported from `server/ai/index.ts`. Never import `@google/genai` directly.
+- **MUST** route all AI calls through the `ai` singleton exported from `server/ai/index.ts`. Never import `@google/genai`, `openai`, or `@anthropic-ai/sdk` directly outside the adapter layer.
+- **Exception**: `server/services/dedupe/embeddings.ts` imports `@google/genai` directly for embedding generation — this is Gemini-only and does not go through the provider adapter.
 - **Local-First Mandate**: External relational database usage is forbidden. All data lives in `curator.db`.
 - **Thin Routes / Heavy Services**: Express routes parse payloads and delegate. Business logic lives in `server/services/`.
 
@@ -244,7 +287,7 @@ _Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all mo
 
 ## 9. Startup Lifecycle (`server.ts`)
 1. Load environment variables (`dotenv/config`)
-2. Validate `GEMINI_API_KEY` (warn if missing)
+2. Validate active provider's API key based on `AI_PROVIDER` (warn if missing)
 3. Initialize Express with CORS, JSON parsing (50MB limit), request ID middleware, Morgan logging
 4. Mount all API routers
 5. Cache diagnostics endpoint (dev only: `/api/debug/cache-stats`)
@@ -265,7 +308,7 @@ _Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all mo
 - **Migrations**: `npm run db:generate` (outputs Drizzle migration)
 - **Type Check**: `npm run lint` (`tsc --noEmit`)
 - **Test**: `npm test` (Vitest in watch mode) / `npx vitest run` (single-run)
-- **Requirements**: `GEMINI_API_KEY` in `.env` (copy from `.env.example`)
+- **Requirements**: Set `AI_PROVIDER` and the corresponding API key (`GEMINI_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`) in `.env` (copy from `.env.example`)
 
 ## 11. AI Stats API Contracts
 

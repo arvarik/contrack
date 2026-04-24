@@ -15,9 +15,11 @@ interface SummaryBarProps {
 }
 
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
-  FREE:  { label: 'Free Tier',  color: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20' },
-  PAID:  { label: 'Paid Tier',  color: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
-  MOCK:  { label: 'Mock Mode',  color: 'bg-amber-500/10 text-amber-400 ring-amber-500/20' },
+  FREE:      { label: 'Free Tier',  color: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20' },
+  PAID:      { label: 'Paid Tier',  color: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
+  MOCK:      { label: 'Mock Mode',  color: 'bg-amber-500/10 text-amber-400 ring-amber-500/20' },
+  OPENAI:    { label: 'OpenAI',     color: 'bg-teal-500/10 text-teal-400 ring-teal-500/20' },
+  ANTHROPIC: { label: 'Anthropic',  color: 'bg-orange-500/10 text-orange-400 ring-orange-500/20' },
 };
 
 function buildSummaryText(s: AIStatsSummary): string {
@@ -33,7 +35,9 @@ function buildSummaryText(s: AIStatsSummary): string {
     parts.push(`${formatCompact(session.totalTokens)} tokens`);
   }
 
-  if (tier === 'PAID' && session.estimatedCostUsd > 0) {
+  // Cost displays for any paid provider (PAID, OPENAI, ANTHROPIC — anything not FREE/MOCK)
+  const isPaidProvider = tier !== 'FREE' && tier !== 'MOCK';
+  if (isPaidProvider && session.estimatedCostUsd > 0) {
     parts.push(`~$${session.estimatedCostUsd.toFixed(4)} est.`);
   }
 

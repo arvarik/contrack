@@ -617,7 +617,7 @@ export const CommandPalette = () => {
                   {aiQuery.length >= 3 && isAiLoading && (
                     <div className="px-1 py-2 space-y-1">
                       <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary/60 flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking Gemini…
+                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking AI…
                       </div>
                       <AIShimmerRow delay={0} />
                       <AIShimmerRow delay={0.08} />

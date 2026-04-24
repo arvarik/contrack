@@ -58,7 +58,7 @@ export const DailyInsightCard = ({ insight, isLoading, delay = 0 }: DailyInsight
           </motion.div>
         ) : (
           <motion.div key="empty" className="text-on-surface-variant/70 text-sm">
-            Configure your Gemini API key to receive automated relationship insights.
+            Configure your AI provider API key to receive automated relationship insights.
           </motion.div>
         )}
       </AnimatePresence>

@@ -6,6 +6,12 @@
 // =============================================================================
 
 /**
+ * Union of supported AI provider identifiers.
+ * Used by the singleton factory to resolve the correct adapter.
+ */
+export type AIProviderName = "gemini" | "openai" | "anthropic";
+
+/**
  * Options passed to any AIProvider's `generate` method.
  * Contains the prompt, desired response format, and an optional JSON schema
  * expressed in standard JSON Schema vocabulary (no provider-specific enums).

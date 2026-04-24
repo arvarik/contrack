@@ -6,7 +6,7 @@
 // never against SDK-specific classes.
 // =============================================================================
 
-import type { AIGenerateOptions, AIGenerateResult } from "./types.ts";
+import type { AIGenerateOptions, AIGenerateResult, DiagnosticsSnapshot } from "./types.ts";
 
 /**
  * Abstract interface for an LLM provider.
@@ -31,4 +31,14 @@ export interface AIProvider {
    * @throws Error if all models / retries are exhausted
    */
   generate(options: AIGenerateOptions): Promise<AIGenerateResult>;
+
+  /**
+   * Optional: Return routing diagnostics and quota state.
+   *
+   * Only meaningful for providers with built-in quota tracking (Gemini).
+   * Non-Gemini providers may omit this — callers should use the
+   * `getQuotaSnapshot()` helper on the barrel export which returns a
+   * safe empty snapshot as fallback.
+   */
+  getQuotaSnapshot?(): DiagnosticsSnapshot;
 }

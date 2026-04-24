@@ -88,7 +88,9 @@ export const AIStatsView = () => {
     : undefined;
 
   // Sub-value for the tokens card
-  const tokenSub = tier === 'PAID' && session && session.estimatedCostUsd > 0
+  // Cost displays for any paid provider (PAID, OPENAI, ANTHROPIC — anything not FREE/MOCK)
+  const isPaidProvider = tier !== undefined && tier !== 'FREE' && tier !== 'MOCK';
+  const tokenSub = isPaidProvider && session && session.estimatedCostUsd > 0
     ? `~$${session.estimatedCostUsd.toFixed(4)}`
     : tier === 'FREE' && summary?.quota?.grounding
       ? `${summary.quota.grounding.remaining} grounding RPD left`

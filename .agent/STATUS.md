@@ -1,14 +1,37 @@
 # Contrack CRM — Project Status
-[STATE: SHIPPED]
+[STATE: IDLE]
 
+## Current Focus
+
+_No active feature — ready for next cycle._
+
+## Feature Lifecycle
+
+_Empty — start a new feature with `/step1-spec`._
 
 ## Current State
-**Phase 3: The Visionary (In Progress)**
+**Phase:** Idle
+
+**Test Suite:** 113 tests (113 passing) — full suite, 0 regressions
+
 Phases 1 and 2 are complete. We are currently architecting features that deeply leverage visualization, relational analytics, and AI constraints, ensuring robust, production-grade output.
 
-No active feature in progress. Ready for the next ideation cycle.
+## Relevant Files for Current Task
+_None — next feature not started._
 
 ## Recently Completed
+
+**Multi-Provider AI** (2026-04-24) — Shipped to main.
+- OpenAI (`gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4`) and Anthropic (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.6`) as first-class providers alongside Gemini
+- Provider-agnostic `AIProvider` interface with adapters in `server/ai/adapters/`
+- Singleton factory resolves provider from `AI_PROVIDER` env var
+- Single-pass search strategy for OpenAI/Anthropic (web search + structured output in one call)
+- Provider-aware UI: generic "AI" labels, per-provider tier badges, cost display for all paid tiers
+- Provider-aware diagnostics, quota visualization, error messages
+- 41 multi-provider contract tests + 72 existing = 113 total
+- 2 audit cycles (10 findings total, all resolved)
+- Archived to `docs/archive/multi-provider-ai/`
+
 **AI Stats Page** (2026-04-14) — Shipped to main.
 - Invocation tracking across all 10 AI functions + 2 cache-hit paths
 - `/settings/ai-stats` dashboard with SummaryBar, KPI cards, filtered feed, cache tiers accordion
@@ -21,9 +44,7 @@ No active feature in progress. Ready for the next ideation cycle.
 - B-02: Feed pagination replaces pages instead of appending (design decision needed)
 - S-02: Error messages reflect raw user input in JSON (low risk, React escapes)
 - S-03: No `Cache-Control: no-store` header on stats endpoints (low risk)
-
-## Relevant Files for Current Task
-_None — next feature not started._
+- D-02: OpenAI/Anthropic adapters lack retry/error handling (job queue provides batch-level retry with 4 attempts + 3s backoff; adapter-level retry is a v2 enhancement)
 
 ---
 
@@ -44,7 +65,7 @@ _Track mock/stub status across the frontend. Populated during Build phase, clear
 | `server/ai/aiService.ts:715` — `synthesizeSearchResults()` | isMockMode mock data | `POST /api/search/synthesize` | Production — returns templated string |
 | `src/views/ai-stats/components/SummaryBar.tsx:20` | Tier badge label | N/A (UI label) | Production — displays "Mock Mode" tier badge |
 
-_All stubs are production-grade graceful degradation paths (triggered when `GEMINI_API_KEY` is absent). No MSW mocking or dev-only fake data detected._
+_All stubs are production-grade graceful degradation paths (triggered when the active provider's API key is absent). No MSW mocking or dev-only fake data detected._
 
 ---
 

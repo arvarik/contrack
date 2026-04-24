@@ -85,7 +85,7 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
             </span>
           ) : item.model ? (
             <span className="text-[10px] font-mono text-on-surface-variant/60 bg-surface-container px-1.5 py-0.5 rounded">
-              {item.model.replace('gemini-', '').replace('-preview', ' ⌘')}
+              {item.model.replace('gemini-', '').replace('gpt-', '').replace('claude-', '').replace('-preview', ' ⌘')}
             </span>
           ) : null}
 

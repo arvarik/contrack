@@ -21,7 +21,8 @@
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { aiCache } from "../utils/aiCache.ts";
-import { sharedProvider, isProviderConfigured } from "../ai/singleton.ts";
+import { isProviderConfigured } from "../ai/singleton.ts";
+import { ai, activeProviderName } from "../ai/index.ts";
 import { getAITier, GEMINI_REGISTRY } from "../ai/routing/registry.ts";
 import crypto from "crypto";
 
@@ -41,7 +42,8 @@ export type AIOperation =
   | "emlSummary"
   | "bulkParse"
   | "aiSearchGrounding"
-  | "aiSearchExtraction";
+  | "aiSearchExtraction"
+  | "aiSearchSinglePass";
 
 /** Input shape for recording a single AI invocation. */
 export interface InvocationEntry {
@@ -109,13 +111,26 @@ const countStmt = sqlite.prepare(`
 `);
 
 // =============================================================================
-// Cost Lookup — Build a model→costPerM map from the registry
+// Cost Lookup — Build a model→costPerM map from all provider registries
 // =============================================================================
 
 const costPerMMap = new Map<string, number>();
+
+// Gemini models (from registry)
 for (const model of GEMINI_REGISTRY) {
   costPerMMap.set(model.id, model.costPerM);
 }
+
+// OpenAI models — average of (input + output) cost per 1M tokens
+// Source: ARCHITECTURE.md §2 Model Ledger
+costPerMMap.set("gpt-4o-mini", 0.375);       // avg($0.15 in, $0.60 out)
+costPerMMap.set("gpt-5.4-mini", 2.625);      // avg($0.75 in, $4.50 out)
+costPerMMap.set("gpt-5.4", 8.75);            // avg($2.50 in, $15.00 out)
+
+// Anthropic models — average of (input + output) cost per 1M tokens
+costPerMMap.set("claude-haiku-4.5", 3.0);    // avg($1.00 in, $5.00 out)
+costPerMMap.set("claude-sonnet-4.6", 9.0);   // avg($3.00 in, $15.00 out)
+costPerMMap.set("claude-opus-4.6", 15.0);    // avg($5.00 in, $25.00 out)
 
 // =============================================================================
 // Public API
@@ -170,11 +185,20 @@ export function getSummary() {
     ? agg.cachedCalls / agg.totalInvocations
     : 0;
 
-  // 4. Tier
-  const tier = !isProviderConfigured ? "MOCK" : getAITier();
+  // 4. Tier — provider-aware (F-07)
+  // For Gemini: show FREE/PAID tier from AI_TIER env var
+  // For OpenAI/Anthropic: show provider name (always paid, no free tier concept)
+  let tier: string;
+  if (!isProviderConfigured) {
+    tier = "MOCK";
+  } else if (activeProviderName === "gemini") {
+    tier = getAITier();
+  } else {
+    tier = activeProviderName.toUpperCase(); // "OPENAI" or "ANTHROPIC"
+  }
 
-  // 5. Quota snapshot (in-memory, from QuotaTracker)
-  const quotaSnapshot = sharedProvider.getQuotaSnapshot();
+  // 5. Quota snapshot (safe for all providers via barrel export)
+  const quotaSnapshot = ai.getQuotaSnapshot();
   const quota = {
     models: quotaSnapshot.models,
     grounding: quotaSnapshot.grounding,
