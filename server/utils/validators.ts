@@ -1,14 +1,18 @@
-import { z } from 'zod';
-import { Request, Response, NextFunction } from "express";
+import { z } from "zod";
+import type { Request, Response, NextFunction } from "express";
+import { ValidationError } from "./AppError.ts";
 
 // ============================================================================
 // Foundation / Base Values
 // ============================================================================
 
-const stringToBool = z.union([z.boolean(), z.string()]).transform((val) => {
-  if (typeof val === 'boolean') return val;
-  return val === 'true' || val === '1';
-}).optional();
+const stringToBool = z
+  .union([z.boolean(), z.string()])
+  .transform((val) => {
+    if (typeof val === "boolean") return val;
+    return val === "true" || val === "1";
+  })
+  .optional();
 
 // ============================================================================
 // Child Records Schemas
@@ -20,7 +24,7 @@ export const emailSchema = z.union([
     email: z.string().email().or(z.string().min(1)),
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
-  })
+  }),
 ]);
 
 export const phoneSchema = z.union([
@@ -29,7 +33,7 @@ export const phoneSchema = z.union([
     phone: z.string().min(1),
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
-  })
+  }),
 ]);
 
 export const addressSchema = z.union([
@@ -38,7 +42,7 @@ export const addressSchema = z.union([
     address: z.string().min(1),
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
-  })
+  }),
 ]);
 
 export const socialLinkSchema = z.union([
@@ -47,7 +51,7 @@ export const socialLinkSchema = z.union([
     url: z.string().url().or(z.string().min(1)),
     platform: z.string().nullable().optional(),
     handle: z.string().nullable().optional(),
-  })
+  }),
 ]);
 
 export const educationSchema = z.object({
@@ -76,20 +80,17 @@ export const sourceSchema = z.union([
     externalId: z.string().nullable().optional(),
     connectedOn: z.string().nullable().optional(),
     rawData: z.string().nullable().optional(),
-  })
+  }),
 ]);
 
-export const tagSchema = z.union([
-  z.string(),
-  z.object({ tag: z.string().min(1) })
-]);
+export const tagSchema = z.union([z.string(), z.object({ tag: z.string().min(1) })]);
 
 export const interestSchema = z.union([
   z.string(),
   z.object({
     interest: z.string().min(1),
     isAiGenerated: stringToBool,
-  })
+  }),
 ]);
 
 export const attributeSchema = z.object({
@@ -97,7 +98,6 @@ export const attributeSchema = z.object({
   value: z.string(),
 });
 
-// A complete child-records payload object
 export const childRecordsSchema = z.object({
   emails: z.array(emailSchema).optional(),
   phones: z.array(phoneSchema).optional(),
@@ -116,89 +116,124 @@ export const childRecordsSchema = z.object({
 // ============================================================================
 
 /** Payload for POST /contacts (Contact creation) */
-export const contactCreateSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  firstName: z.string().nullable().optional(),
-  lastName: z.string().nullable().optional(),
-  headline: z.string().nullable().optional(),
-  role: z.string().nullable().optional(),
-  company: z.string().nullable().optional(),
-  location: z.string().nullable().optional(),
-  lat: z.number().nullable().optional(),
-  lng: z.number().nullable().optional(),
-  industry: z.string().nullable().optional(),
-  about: z.string().nullable().optional(),
-  aiSummary: z.string().nullable().optional(),
-  aiBackground: z.string().nullable().optional(),
-  aiBriefing: z.string().nullable().optional(),
-  aiBriefingAt: z.string().nullable().optional(),
-  avatarUrl: z.string().nullable().optional(),
-  themeColor: z.string().nullable().optional(),
-  preferences: z.string().nullable().optional(),
-  birthday: z.string().nullable().optional(),
-  pronouns: z.string().nullable().optional(),
-  isGhost: stringToBool,
-  isArchived: stringToBool,
-  nextFollowUpAt: z.string().nullable().optional(),
-}).merge(childRecordsSchema);
+export const contactCreateSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    firstName: z.string().nullable().optional(),
+    lastName: z.string().nullable().optional(),
+    headline: z.string().nullable().optional(),
+    role: z.string().nullable().optional(),
+    company: z.string().nullable().optional(),
+    location: z.string().nullable().optional(),
+    lat: z.number().nullable().optional(),
+    lng: z.number().nullable().optional(),
+    industry: z.string().nullable().optional(),
+    about: z.string().nullable().optional(),
+    aiSummary: z.string().nullable().optional(),
+    aiBackground: z.string().nullable().optional(),
+    aiBriefing: z.string().nullable().optional(),
+    aiBriefingAt: z.string().nullable().optional(),
+    avatarUrl: z.string().nullable().optional(),
+    themeColor: z.string().nullable().optional(),
+    preferences: z.string().nullable().optional(),
+    birthday: z.string().nullable().optional(),
+    pronouns: z.string().nullable().optional(),
+    isGhost: stringToBool,
+    isArchived: stringToBool,
+    nextFollowUpAt: z.string().nullable().optional(),
+  })
+  .merge(childRecordsSchema);
 
-/** Payload for PUT /contacts/:id (Contact update) */
 export const contactUpdateSchema = contactCreateSchema.partial();
 
-/** Payload for POST /contacts/bulk */
 export const contactBulkCreateSchema = z.array(contactCreateSchema);
 
-/** Payload for POST /interactions. Type is an open string — known types: note, call, meeting, email, message, sms, linkedin, facebook, import */
-export const interactionCreateSchema = z.object({
-  type: z.string().min(1, "Type is required"),
-  title: z.string().min(1, "Title is required"),
-  content: z.string().nullable().optional(),
-  date: z.string().nullable().optional(),
-  duration: z.number().nullable().optional(),
-  isViaId: z.string().nullable().optional(),
-  isViaName: z.string().nullable().optional(),
-  actionItem: z.object({
-    title: z.string().min(1, "Action item title is required"),
-    dueAt: z.string().min(1, "Action item due date is required"),
-  }).optional(),
-}).passthrough();
+/** Payload for POST /interactions. Type is open string. */
+export const interactionCreateSchema = z
+  .object({
+    type: z.string().min(1, "Type is required"),
+    title: z.string().min(1, "Title is required"),
+    content: z.string().nullable().optional(),
+    date: z.string().nullable().optional(),
+    duration: z.number().nullable().optional(),
+    isViaId: z.string().nullable().optional(),
+    isViaName: z.string().nullable().optional(),
+    actionItem: z
+      .object({
+        title: z.string().min(1, "Action item title is required"),
+        dueAt: z.string().min(1, "Action item due date is required"),
+      })
+      .optional(),
+  })
+  .passthrough();
 
-/** Payload for POST /contacts/:id/action-items */
 export const actionItemCreateSchema = z.object({
   title: z.string().min(1, "Title is required"),
   dueAt: z.string().min(1, "Due date is required"),
 });
 
-/** Payload for PATCH /action-items/:id (snooze / edit) */
 export const actionItemUpdateSchema = z.object({
   title: z.string().min(1).optional(),
   dueAt: z.string().min(1).optional(),
 });
 
-/** Payload for POST /lists */
 export const listCreateSchema = z.object({
-  name: z.string().min(1, 'List name is required').max(60),
+  name: z.string().min(1, "List name is required").max(60),
   icon: z.string().optional(),
 });
 
-export const listUpdateSchema = z.object({
-  name: z.string().min(1).max(60).optional(),
-  icon: z.string().optional(),
-}).refine(d => d.name !== undefined || d.icon !== undefined, {
-  message: 'At least one of name or icon is required',
+export const listUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(60).optional(),
+    icon: z.string().optional(),
+  })
+  .refine((d) => d.name !== undefined || d.icon !== undefined, {
+    message: "At least one of name or icon is required",
+  });
+
+/** Generic id-in-URL guard. Strips empty/whitespace ids that the router would otherwise pass straight through. */
+export const idParamSchema = z.object({
+  id: z.string().trim().min(1, "id is required"),
 });
+
+// ============================================================================
+// Middleware Factories
+// ============================================================================
+//
+// All three throw `ValidationError` (which the central error handler renders
+// as a 400 with `code: "VALIDATION_ERROR"` and the Zod issue list as
+// `details`). Routes therefore never reach into `res` from inside a
+// validator — that responsibility belongs to the error middleware.
+
+function runOrThrow<T>(schema: z.ZodTypeAny, value: unknown, where: "body" | "params" | "query"): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ValidationError(`Invalid request ${where}`, result.error.issues);
+  }
+  return result.data as T;
+}
 
 export const validateBody = (schema: z.ZodTypeAny) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      req.body = schema.parse(req.body);
-      next();
-    } catch (e) {
-      if (e instanceof z.ZodError) {
-        res.status(400).json({ status: "error", code: "VALIDATION_ERROR", message: "Invalid request payload", details: e.issues });
-      } else {
-        next(e);
-      }
-    }
+  return (req: Request, _res: Response, next: NextFunction) => {
+    req.body = runOrThrow(schema, req.body, "body");
+    next();
+  };
+};
+
+export const validateParams = (schema: z.ZodTypeAny) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    // Express params are a frozen-ish object on the request; mutate via assign
+    // rather than replacement so downstream code keeps working.
+    const parsed = runOrThrow<Record<string, string>>(schema, req.params, "params");
+    Object.assign(req.params, parsed);
+    next();
+  };
+};
+
+export const validateQuery = (schema: z.ZodTypeAny) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const parsed = runOrThrow<Record<string, unknown>>(schema, req.query, "query");
+    Object.assign(req.query, parsed);
+    next();
   };
 };

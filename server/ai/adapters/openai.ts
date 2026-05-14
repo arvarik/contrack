@@ -5,27 +5,24 @@
 // All OpenAI SDK coupling is contained here. The rest of the AI layer
 // programs against the abstract AIProvider interface.
 //
-// Key differences from Gemini:
-// - System prompt is a separate message role, not a config field
-// - Structured output uses response_format: { type: "json_schema", ... }
-// - Web search uses the Responses API with web_search tool
-// - Supports grounding + structured output in a single request (single-pass)
-// - Requires nullable → anyOf transformation (no native nullable support)
+// Resiliency (Phase 2 backend refactor):
+// - Per-attempt timeout via AbortSignal, propagated to the SDK call so the
+//   socket is actually torn down (not just abandoned).
+// - Exponential backoff + jitter on transient failures (5xx/429/timeout/
+//   socket reset).
+// - Tolerant JSON validation when responseFormat === "json".
+// - Caller-cancellation: if the request's AbortSignal aborts, no further
+//   retries are attempted and an AppError(code: CANCELLED) is thrown.
 // =============================================================================
 
 import OpenAI from "openai";
 import type { AIProvider } from "../provider.ts";
 import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode } from "../types.ts";
 import { log } from "../../utils/logger.ts";
-import { getErrorMessage } from "../../utils/helpers.ts";
+import { withTimeout, withRetry, parseAIJson, AI_DEFAULTS } from "../resilience.ts";
 
 // ---------------------------------------------------------------------------
 // Model Class Mapping
-// ---------------------------------------------------------------------------
-// Contract (ARCHITECTURE.md §2):
-//   lite  → gpt-4o-mini
-//   flash → gpt-5.4-mini
-//   pro   → gpt-5.4
 // ---------------------------------------------------------------------------
 
 const MODEL_MAP: Record<string, string> = {
@@ -37,51 +34,30 @@ const MODEL_MAP: Record<string, string> = {
 const DEFAULT_MODEL_CLASS = "lite";
 
 // ---------------------------------------------------------------------------
-// Schema Translation
-// ---------------------------------------------------------------------------
-// Converts a provider-agnostic JsonSchemaNode tree into OpenAI's
-// response_format: { type: "json_schema", json_schema: { ... } } format.
-//
-// Key transformation: OpenAI doesn't support `nullable` — must convert to
-// anyOf: [{ type: "original" }, { type: "null" }]
+// Schema Translation (unchanged — OpenAI still needs nullable→anyOf)
 // ---------------------------------------------------------------------------
 
 function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
-  // Handle nullable via anyOf pattern (OpenAI doesn't support nullable)
   if (node.nullable) {
-    return {
-      anyOf: [{ type: node.type }, { type: "null" }],
-    };
+    return { anyOf: [{ type: node.type }, { type: "null" }] };
   }
 
   result.type = node.type;
-
-  if (node.enum) {
-    result.enum = node.enum;
-  }
-
-  if (node.description) {
-    result.description = node.description;
-  }
+  if (node.enum) result.enum = node.enum;
+  if (node.description) result.description = node.description;
 
   if (node.properties) {
     result.properties = {};
     for (const [key, value] of Object.entries(node.properties)) {
       (result.properties as Record<string, unknown>)[key] = translateSchemaNode(value);
     }
-    // OpenAI strict mode requires additionalProperties: false on objects
     result.additionalProperties = false;
   }
 
-  if (node.items) {
-    result.items = translateSchemaNode(node.items);
-  }
-
-  if (node.required) {
-    result.required = node.required;
-  }
+  if (node.items) result.items = translateSchemaNode(node.items);
+  if (node.required) result.required = node.required;
 
   return result;
 }
@@ -98,92 +74,103 @@ export class OpenAIAdapter implements AIProvider {
     this.client = new OpenAI({ apiKey });
   }
 
-  /**
-   * Resolve a model class preference to a concrete OpenAI model ID.
-   * If an explicit modelOverride is provided, it bypasses the class mapping.
-   */
   resolveModel(prefer?: string, modelOverride?: string): string {
     if (modelOverride) return modelOverride;
     return MODEL_MAP[prefer ?? DEFAULT_MODEL_CLASS] ?? MODEL_MAP[DEFAULT_MODEL_CLASS];
   }
 
-  /**
-   * Translate a provider-agnostic JsonSchemaNode into OpenAI's
-   * response_format structure.
-   */
   translateSchema(schema: JsonSchemaNode): {
     type: "json_schema";
     json_schema: { name: string; strict: true; schema: Record<string, unknown> };
   } {
     return {
       type: "json_schema",
-      json_schema: {
-        name: "response",
-        strict: true,
-        schema: translateSchemaNode(schema),
-      },
+      json_schema: { name: "response", strict: true, schema: translateSchemaNode(schema) },
     };
   }
 
-  // ── AIProvider.generate() ───────────────────────────────────────────
   async generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
-    const startMs = Date.now();
     const model = options.model ?? this.resolveModel(options.routing?.prefer);
+    const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
 
-    // ── Web search via Responses API ──────────────────────────────────
-    if (options.enableSearchGrounding) {
-      return this.generateWithSearch(options, model, startMs);
-    }
+    return withRetry(async (attempt) => {
+      const startMs = Date.now();
+      const result = await withTimeout(
+        async (signal) => {
+          return options.enableSearchGrounding
+            ? this.runResponsesAPI(options, model, signal, startMs)
+            : this.runChatCompletion(options, model, signal, startMs);
+        },
+        timeoutMs,
+        options.signal,
+      );
 
-    // ── Standard Chat Completion ──────────────────────────────────────
+      // JSON validation lives at the adapter boundary so every business
+      // caller can rely on `result.text` being parseable when requested.
+      if (options.responseFormat === "json") {
+        parseAIJson(result.text, `OpenAIAdapter.generate(${model})`);
+      }
+
+      if (attempt > 1) {
+        log.info("OpenAIAdapter", `${model} succeeded on attempt ${attempt}/${AI_DEFAULTS.maxAttempts}`);
+      }
+      return result;
+    }, {
+      signal: options.signal,
+      onRetry: (attempt, err) => {
+        const msg = (err as Error)?.message ?? String(err);
+        log.warn("OpenAIAdapter", `${model} attempt ${attempt} failed (will retry): ${msg.slice(0, 200)}`);
+      },
+    });
+  }
+
+  // ── Standard chat completion ──────────────────────────────────────────
+  private async runChatCompletion(
+    options: AIGenerateOptions,
+    model: string,
+    signal: AbortSignal,
+    startMs: number,
+  ): Promise<AIGenerateResult> {
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
-
-    if (options.systemPrompt) {
-      messages.push({ role: "system", content: options.systemPrompt });
-    }
+    if (options.systemPrompt) messages.push({ role: "system", content: options.systemPrompt });
     messages.push({ role: "user", content: options.prompt });
 
-    const requestParams: Record<string, unknown> = {
-      model,
-      messages,
-    };
-
-    // Structured JSON output
+    const requestParams: Record<string, unknown> = { model, messages };
     if (options.responseFormat === "json" && options.jsonSchema) {
       requestParams.response_format = this.translateSchema(options.jsonSchema);
     } else if (options.responseFormat === "json") {
       requestParams.response_format = { type: "json_object" };
     }
 
-    const response: any = await this.client.chat.completions.create(
+    // Minimal local response shape — the OpenAI SDK types are unions over a dozen
+    // overloads (streaming vs. non-streaming, function-calling, etc.) and TypeScript
+    // can't narrow them at our call site. We assert the non-streaming branch here.
+    interface ChatCompletionResponse {
+      choices?: Array<{ message?: { content?: string | null } }>;
+      usage?: { total_tokens?: number };
+    }
+    const response = (await this.client.chat.completions.create(
       requestParams as unknown as Parameters<typeof this.client.chat.completions.create>[0],
-    );
+      { signal },
+    )) as unknown as ChatCompletionResponse;
 
     const text = response.choices?.[0]?.message?.content ?? "";
     const tokenCount = response.usage?.total_tokens;
     const latencyMs = Date.now() - startMs;
 
-    log.info(
-      "OpenAIAdapter",
-      `${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
-    );
-
+    log.info("OpenAIAdapter", `${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`);
     return { text, model, tokenCount, latencyMs };
   }
 
-  // ── Search Grounding via Responses API ──────────────────────────────
-  // OpenAI's Responses API supports web_search as a tool, and can combine
-  // it with structured output in a single request (unlike Gemini).
-  private async generateWithSearch(
+  // ── Responses API with web_search tool ────────────────────────────────
+  private async runResponsesAPI(
     options: AIGenerateOptions,
     model: string,
+    signal: AbortSignal,
     startMs: number,
   ): Promise<AIGenerateResult> {
     const input: Array<{ role: "system" | "user"; content: string }> = [];
-
-    if (options.systemPrompt) {
-      input.push({ role: "system", content: options.systemPrompt });
-    }
+    if (options.systemPrompt) input.push({ role: "system", content: options.systemPrompt });
     input.push({ role: "user", content: options.prompt });
 
     const requestParams: Record<string, unknown> = {
@@ -191,24 +178,30 @@ export class OpenAIAdapter implements AIProvider {
       input,
       tools: [{ type: "web_search" }],
     };
-
-    // Can combine search + structured output in single pass
     if (options.responseFormat === "json" && options.jsonSchema) {
-      requestParams.text = {
-        format: this.translateSchema(options.jsonSchema),
-      };
+      requestParams.text = { format: this.translateSchema(options.jsonSchema) };
     }
 
-    const response: any = await this.client.responses.create(
+    // Local response shape for the Responses API — the SDK types are too
+    // permissive (output can be any of a dozen tool/message types). We model
+    // only the branches we extract from.
+    interface ResponsesAPIResponse {
+      output?: Array<{
+        type?: string;
+        content?: Array<{ type?: string; text?: string }>;
+      }>;
+      usage?: { total_tokens?: number };
+    }
+    const response = (await this.client.responses.create(
       requestParams as unknown as Parameters<typeof this.client.responses.create>[0],
-    );
+      { signal },
+    )) as unknown as ResponsesAPIResponse;
 
-    // Extract text from the response output items
     let text = "";
     if (response.output) {
-      for (const item of response.output as Array<Record<string, unknown>>) {
+      for (const item of response.output) {
         if (item.type === "message" && Array.isArray(item.content)) {
-          for (const block of item.content as Array<Record<string, unknown>>) {
+          for (const block of item.content) {
             if (block.type === "output_text" && typeof block.text === "string") {
               text += block.text;
             }
@@ -220,11 +213,7 @@ export class OpenAIAdapter implements AIProvider {
     const tokenCount = response.usage?.total_tokens;
     const latencyMs = Date.now() - startMs;
 
-    log.info(
-      "OpenAIAdapter",
-      `${model} (search) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
-    );
-
+    log.info("OpenAIAdapter", `${model} (search) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`);
     return { text, model, tokenCount, latencyMs };
   }
 }

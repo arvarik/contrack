@@ -11,74 +11,102 @@
 // =============================================================================
 // Normalized Child Entity Types
 // =============================================================================
+// Each child entity has its own database table with a CASCADE FK to `contacts`.
+// All `id` fields are server-issued UUIDv4 strings (`nanoid`-compatible).
+// =============================================================================
 
+/** A single email address attached to a contact. Multiple per contact allowed. */
 export interface ContactEmail {
+  /** Server-issued primary key. */
   id: string;
+  /** RFC-5321 syntactically valid email address. Not validated for deliverability. */
   email: string;
+  /** Free-form label such as `"work"`, `"personal"`, or the importer's tag. */
   label: string;
+  /** True when this email should be presented as the contact's default. */
   isPrimary: boolean;
+  /** Origin tag (`"linkedin"`, `"google"`, `"manual"`, etc.) or `null` if unknown. */
   source: string | null;
 }
 
+/** A single phone number attached to a contact. Stored as the original string. */
 export interface ContactPhone {
   id: string;
+  /** Raw phone string as entered/imported. Not normalized to E.164 in this type. */
   phone: string;
   label: string;
   isPrimary: boolean;
   source: string | null;
 }
 
+/** A social or professional URL with platform classification. */
 export interface ContactSocialLink {
   id: string;
+  /** Normalized platform tag (`"linkedin"`, `"twitter"`, `"github"`, …). */
   platform: string;
   url: string;
+  /** Username/handle extracted from the URL when one is detectable. */
   handle: string | null;
   source: string | null;
 }
 
+/** A school / degree row from a contact's education history. */
 export interface ContactEducation {
   id: string;
   school: string;
   degree: string | null;
   fieldOfStudy: string | null;
+  /** ISO-8601 date string or `null` if unknown. */
   startDate: string | null;
   endDate: string | null;
   description: string | null;
 }
 
+/** A single job / role in a contact's work history. */
 export interface ContactExperience {
   id: string;
   company: string;
   role: string | null;
   startDate: string | null;
   endDate: string | null;
+  /** True for the contact's current job. Multiple `isCurrent: true` rows are allowed. */
   isCurrent: boolean;
   description: string | null;
   location: string | null;
 }
 
+/** A per-import provenance record — which platform did this contact come from. */
 export interface ContactSource {
   id: string;
   platform: string;
+  /** External system's stable ID for this contact (e.g. LinkedIn member URN). */
   externalId: string | null;
+  /** When the relationship was originally formed on the source platform. */
   connectedOn: string | null;
+  /** When this row was created in Contrack. */
   importedAt: string;
 }
 
+/** A free-form tag. Multiple tags per contact, no schema-enforced taxonomy. */
 export interface ContactTag {
   id: string;
   tag: string;
 }
 
+/** A user-created list/group of contacts. */
 export interface ContactList {
   id: string;
   name: string;
+  /** Lucide icon name used for the list's chip rendering. */
   icon: string;
+  /** Drag-and-drop order. Lower values appear first. */
   sortOrder: number;
   createdAt: string;
+  /** Server-computed count of members; only populated when this list is fetched in list-mode. */
   memberCount?: number;
 }
 
+/** A postal address attached to a contact. */
 export interface ContactAddress {
   id: string;
   address: string;
@@ -90,6 +118,16 @@ export interface ContactAddress {
 // Primary Entity Types
 // =============================================================================
 
+/**
+ * The fully-hydrated contact shape returned by `GET /api/contacts/:id`.
+ *
+ * Mirror of {@link import("../../server/repositories/types").HydratedContact} —
+ * if you change the server-side `HydratedContact`, update this interface too.
+ *
+ * Optional fields (`aiBriefing`, `aiSummary`, etc.) are present only on
+ * single-contact responses. The list endpoint returns a `ContactSlim`
+ * variant in `src/api/contacts.ts`.
+ */
 export interface Contact {
   id: string;
   name: string;
@@ -159,38 +197,63 @@ export type ContactUpdateData = Partial<Omit<Contact,
   tags?: Partial<ContactTag>[];
 };
 
-/** Well-known types: note, call, meeting, email, message, sms, import, linkedin, facebook */
+/**
+ * A single entry on a contact's interaction timeline.
+ *
+ * `type` is intentionally a free-form string (not an enum) because the UI
+ * recognizes a closed set but the import pipeline may inject custom types
+ * (e.g. CSV import sources). Well-known values rendered by the UI:
+ *   `note`, `call`, `meeting`, `email`, `message`, `sms`, `import`,
+ *   `linkedin`, `facebook`.
+ */
 export interface Interaction {
   id: string;
   contactId: string;
+  /** Well-known: `note`, `call`, `meeting`, `email`, `message`, `sms`, `import`, `linkedin`, `facebook`. */
   type: string;
   title: string;
+  /** Tiptap-rendered HTML or raw text. Nullable for type-only entries (e.g. system imports). */
   content: string | null;
+  /** ISO-8601 instant when the interaction occurred (NOT the row's insert time). */
   date: string;
+  /** Human-formatted duration (`"42m"`, `"1h 5m"`). Stored as a string for free-form display. */
   duration: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
   fileType?: string | null;
   source?: string | null;
+  /** JSON-encoded array of mentioned contact IDs. Decoded on the server side. */
   mentions?: string | null;
+  /** When this interaction was created via a @mention, the displayed name of the mentioning contact. */
   isViaName?: string | null;
+  /** When this interaction was created via a @mention, the ID of the mentioning contact. */
   isViaId?: string | null;
   updatedAt?: string | null;
+  /** Linked follow-up tasks. Populated by joined queries; absent on the bare POST request. */
   actionItems?: {
     id: string;
     title: string;
     dueAt: string;
     completedAt: string | null;
   }[];
-  /** Write-only — accepted by POST to create a linked action item */
+  /** Write-only — accepted by POST to create a linked action item in the same call. */
   actionItem?: { title: string; dueAt: string };
 }
 
+/**
+ * A first-class follow-up task linked to a contact.
+ *
+ * Fields prefixed with `contact*` are joined from `contacts` and are only
+ * populated on global-list endpoints (`GET /api/action-items`). The
+ * per-contact endpoint returns the bare row.
+ */
 export interface ActionItem {
   id: string;
   contactId: string;
   title: string;
+  /** ISO-8601 instant of the next planned outreach. */
   dueAt: string;
+  /** `null` until completed. Once stamped, the row is hidden from the active queue. */
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;

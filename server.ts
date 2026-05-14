@@ -34,7 +34,7 @@ import { relationshipService } from "./server/services/relationshipService.ts";
 import { isEmbeddingAvailable, backfillEmbeddings, getEmbeddingCount } from "./server/services/dedupe/embeddings.ts";
 import { initLocalEmbeddings, backfillSearchEmbeddings } from "./server/services/search/localEmbeddings.ts";
 
-import { AppError } from "./server/utils/AppError.ts";
+import { errorHandler, notFoundHandler } from "./server/middleware/errorHandler.ts";
 
 // ── Provider-aware API key validation ────────────────────────────────────────
 const AI_PROVIDER = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
@@ -101,6 +101,11 @@ async function startServer() {
     });
   }
 
+  // 404 catch-all for unknown /api/* paths — runs immediately after the
+  // API routers so we don't fall through to Vite or the SPA index.html.
+  // Non-/api/* paths are passed through to Vite/static below.
+  app.use(notFoundHandler);
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
@@ -110,45 +115,10 @@ async function startServer() {
     app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
-  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    const isProd = process.env.NODE_ENV === "production";
-    const requestId = (req as any).requestId;
-    
-    let statusCode = 500;
-    let message = "Internal Server Error";
-    let isOperational = false;
-
-    if (err instanceof AppError) {
-      statusCode = err.statusCode;
-      message = err.message;
-      isOperational = err.isOperational;
-    } else if (err.type === "entity.parse.failed") {
-      statusCode = 400;
-      message = "Invalid JSON payload format";
-      isOperational = true;
-    } else if (err.code === "SQLITE_CONSTRAINT") {
-      statusCode = 400;
-      message = "Database constraint violation";
-      isOperational = true;
-    } else if (err.code === "SQLITE_BUSY") {
-      statusCode = 503;
-      message = "Database is currently busy, please try again later";
-      isOperational = true;
-    }
-
-    if (!isOperational && statusCode === 500) {
-      // Log full stack trace for generic errors
-      log.error("Unhandled", `[${requestId}] ${err.stack || err.message}`);
-    } else {
-      // Log operational error appropriately
-      log.error("Operational", `[${requestId}] ${statusCode} - ${message}`);
-    }
-
-    res.status(statusCode).json({
-      error: message,
-      ...(isProd ? {} : { stack: err.stack })
-    });
-  });
+  // Centralized error handler. Translates AppError / ZodError / SQLite
+  // codes into a canonical JSON envelope and strips internal details
+  // (stack, cause) before responding in production.
+  app.use(errorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

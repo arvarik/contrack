@@ -62,15 +62,19 @@ contrack/
 
 ### Code Style
 
-- **TypeScript**: All code must be strictly typed. Usage of `any` is prohibited outside of edge-case type narrowing. Prefer `Record<string, unknown>` over index signatures.
+- **TypeScript**: All code must be strictly typed. Usage of `any` is prohibited outside of edge-case type narrowing on third-party SDK boundaries (e.g. OpenAI / Anthropic response unions). Prefer `Record<string, unknown>` over index signatures.
+- **TSDoc on Exports**: Every exported function, class, and interface in `src/lib/`, `src/types.ts`, `server/utils/`, and `server/repositories/types.ts` MUST carry a TSDoc block describing purpose, parameters, return value, and edge cases.
 - **React Query**: All frontend data fetching must go through `@tanstack/react-query` hooks. Raw `useEffect` fetch loops are not acceptable.
-- **Styling**: Use Tailwind CSS v4 utility classes following the design system in `.agent/workflows/design-system.md`. No raw borders — containment is expressed through surface background shifts.
+- **Styling**: Use Tailwind CSS v4 utility classes. No raw borders — containment is expressed through surface background shifts. Touch-interactive elements must have a 44×44 px minimum hit area (use `<IconButton>` for icon-only buttons).
+- **Logging Discipline**: `log.info` for state changes (model selected, scan started, contact merged), `log.warn` for retries and operational degradation (rate-limit hit, AI fallback fired), `log.error` for caught exceptions and unhandled errors. Never `console.log` from production code.
 
 ### Architecture Principles
 
 - **Local-First**: Database is SQLite. Network round-trips to managed DBs are forbidden.
 - **Service Layer**: Routes are thin controllers. Business logic lives in `server/services/`.
-- **AI Adapter Pattern**: The `server/ai/` module uses a provider-agnostic interface. All AI calls go through `aiService.ts`. When using Gemini, the `SmartRouter` selects the optimal model class (Lite/Flash/Pro); OpenAI and Anthropic adapters use fixed model routing.
+- **AI Adapter Pattern**: The `server/ai/` module uses a provider-agnostic interface. All AI calls go through `aiService.ts`. Every adapter wraps its SDK call in `withTimeout` + `withRetry` + `parseAIJson` from `server/ai/resilience.ts`. When using Gemini, the `SmartRouter` selects the optimal model class (Lite/Flash/Pro); OpenAI and Anthropic adapters use fixed model routing.
+- **Error Discipline**: All operational errors thrown from services/repositories MUST be an `AppError` subclass (`NotFoundError`, `ValidationError`, `ConflictError`, `RateLimitedError`, `ServiceUnavailableError`, `UpstreamTimeoutError`). Plain `throw new Error(...)` in the service layer is a code-review block. All async route handlers must be wrapped in `asyncHandler` from `server/utils/asyncHandler.ts`.
+- **Transactional Integrity**: Multi-step DB mutations (e.g. contact-with-children inserts, dedupe merges) must execute inside `sqlite.transaction(...)` so partial failures roll back atomically.
 - **Defensive Error Handling**: All fire-and-forget async operations must log errors, never silently swallow with empty `.catch(() => {})`.
 - **Vec0 Cleanup**: When deleting contacts, manually clean up `search_embeddings` and `contact_embeddings` (vec0 tables don't support FK cascading).
 
@@ -79,7 +83,7 @@ contrack/
 Run the full test suite:
 ```bash
 npm test              # Watch mode
-npx vitest run        # Single run (113 tests, <500ms)
+npx vitest run        # Single run (180 tests, <600ms)
 npm run lint          # TypeScript type check
 ```
 

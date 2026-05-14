@@ -18,6 +18,8 @@ import { SmartRouter } from "../routing/SmartRouter.ts";
 import { getAITier, getGroundingRPDLimit, type AITier } from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { withTimeout, parseAIJson, AI_DEFAULTS } from "../resilience.ts";
+import { AppError } from "../../utils/AppError.ts";
 
 // ---------------------------------------------------------------------------
 // JSON Schema Translation (unchanged from v1.0)
@@ -167,6 +169,11 @@ export class GeminiAdapter implements AIProvider {
     const startMs = Date.now();
     const requiresGrounding = !!options.enableSearchGrounding;
 
+    // Early bail-out for already-cancelled callers — saves a routing lookup.
+    if (options.signal?.aborted) {
+      throw new AppError("AI call cancelled by caller", 499, { code: "CANCELLED" });
+    }
+
     // ── Explicit model override: bypass routing entirely ──────────────
     // TwoPassStrategy and other callers that set `options.model` manage
     // their own fallback chain. We execute their chosen model directly
@@ -303,15 +310,28 @@ export class GeminiAdapter implements AIProvider {
       config.systemInstruction = options.systemPrompt;
     }
 
-    const response = await this.client.models.generateContent({
-      model,
-      contents: options.prompt,
-      config,
-    });
+    // The Gemini SDK's `generateContent` does not accept an AbortSignal
+    // option, so we wrap it in `withTimeout` (Promise.race-based). When the
+    // timer fires the SDK call is left running in the background, but
+    // `withTimeout` will throw an `UpstreamTimeoutError` which the SmartMesh
+    // retry loop (or the caller) treats as a transient failure.
+    const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
+    const response = await withTimeout(
+      async () => this.client.models.generateContent({ model, contents: options.prompt, config }),
+      timeoutMs,
+      options.signal,
+    );
 
     const text = response.text ?? "";
     const tokenCount = response.usageMetadata?.totalTokenCount;
     const latencyMs = Date.now() - startMs;
+
+    // Validate JSON at the adapter boundary so downstream callers never
+    // crash on `JSON.parse` of a malformed model response. We deliberately
+    // do this for routed AND explicit-model paths so behavior is uniform.
+    if (options.responseFormat === "json" && !options.enableSearchGrounding) {
+      parseAIJson(text, `GeminiAdapter.executeWithModel(${model})`);
+    }
 
     return { text, model, tokenCount, latencyMs };
   }

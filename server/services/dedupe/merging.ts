@@ -4,14 +4,18 @@ import { eq } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
-import { recordMerge } from "./suggestions.ts";
+import { recordMergeUnsafe } from "./suggestions.ts";
+import { NotFoundError } from "../../utils/AppError.ts";
 
 export function mergeContacts(primaryId: string, duplicateId: string, rid: string) {
+  // Note: the TOCTOU window between these SELECTs and the BEGIN inside the
+  // transaction is bounded by SQLite's serialized writer. The transaction
+  // itself re-reads both rows before mutating (see comment inside the txn).
   const primary = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId) as any;
   const duplicate = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(duplicateId) as any;
 
   if (!primary) {
-    throw new Error(`Primary contact ${primaryId} not found — it may have been deleted`);
+    throw new NotFoundError("Primary contact", primaryId);
   }
 
   if (!duplicate) {
@@ -20,6 +24,20 @@ export function mergeContacts(primaryId: string, duplicateId: string, rid: strin
   }
 
   const mergeTxn = sqlite.transaction(() => {
+    // Re-read inside the transaction so we observe a consistent snapshot.
+    // SQLite's WAL mode + foreign-keys=ON guarantees the writer is serialized,
+    // but we still need the in-tx read to catch the case where the primary
+    // was deleted between the outer SELECT and the BEGIN.
+    const primaryInTx = sqlite.prepare("SELECT id FROM contacts WHERE id = ?").get(primaryId);
+    if (!primaryInTx) {
+      throw new NotFoundError("Primary contact", primaryId);
+    }
+    const duplicateInTx = sqlite.prepare("SELECT id FROM contacts WHERE id = ?").get(duplicateId);
+    if (!duplicateInTx) {
+      log.warn("DedupeService", `[${rid}] Duplicate ${duplicateId} vanished mid-merge — aborting txn`);
+      return;
+    }
+
     sqlite.prepare("UPDATE interactions SET contactId = ? WHERE contactId = ?").run(primaryId, duplicateId);
 
     sqlite.prepare(`
@@ -141,10 +159,16 @@ export function mergeContacts(primaryId: string, duplicateId: string, rid: strin
     try { sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?").run(duplicateId); } catch { /* vec0 row may not exist */ }
 
     sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(duplicateId);
+
+    // Audit log is part of the SAME transaction. If recordMerge throws (e.g.
+    // an unexpected FK problem in dedupe_merge_log), the entire merge rolls
+    // back. Previously this ran AFTER mergeTxn() committed, which meant a
+    // crash between commit and recordMerge would orphan the merge without
+    // an audit row — making `undoSoftMerge` impossible.
+    recordMergeUnsafe(primaryId, duplicateId, 1.0, "User-initiated merge", "user", "hard");
   });
 
   mergeTxn();
-  recordMerge(primaryId, duplicateId, 1.0, 'User-initiated merge', 'user', 'hard');
   return contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId));
 }
 
@@ -153,7 +177,7 @@ export function softMergeContacts(primaryId: string, duplicateId: string, confid
   const duplicate = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(duplicateId) as any;
 
   if (!primary) {
-    throw new Error(`Primary contact ${primaryId} not found`);
+    throw new NotFoundError("Primary contact", primaryId);
   }
   if (!duplicate) {
     log.warn("DedupeService", `[${rid}] Duplicate ${duplicateId} not found — skipping soft merge`);
@@ -165,6 +189,18 @@ export function softMergeContacts(primaryId: string, duplicateId: string, confid
   }
 
   const softTxn = sqlite.transaction(() => {
+    // Re-validate inside the transaction. If a concurrent soft-merge set
+    // canonicalId between the outer SELECT and BEGIN, bail out atomically.
+    const dupInTx = sqlite.prepare("SELECT id, canonicalId FROM contacts WHERE id = ?").get(duplicateId) as { id: string; canonicalId: string | null } | undefined;
+    if (!dupInTx) {
+      log.warn("DedupeService", `[${rid}] Duplicate ${duplicateId} vanished mid soft-merge — aborting txn`);
+      return;
+    }
+    if (dupInTx.canonicalId) {
+      log.warn("DedupeService", `[${rid}] Duplicate ${duplicateId} was soft-merged concurrently — aborting txn`);
+      return;
+    }
+
     // 1:1 same as mergeContacts, minus the hard DELETE
     sqlite.prepare("UPDATE interactions SET contactId = ? WHERE contactId = ?").run(primaryId, duplicateId);
 
@@ -283,9 +319,11 @@ export function softMergeContacts(primaryId: string, duplicateId: string, confid
     db.update(schema.contacts).set(updates).where(eq(schema.contacts.id, primaryId)).run();
 
     sqlite.prepare("UPDATE contacts SET canonicalId = ? WHERE id = ?").run(primaryId, duplicateId);
+
+    // Audit log is part of the SAME transaction — see comment in mergeContacts().
+    recordMergeUnsafe(primaryId, duplicateId, confidence, reasoning, "auto", "soft");
   });
 
   softTxn();
-  recordMerge(primaryId, duplicateId, confidence, reasoning, 'auto', 'soft');
   log.info("DedupeService", `[${rid}] Soft-merged ${duplicateId} → ${primaryId} (confidence: ${(confidence * 100).toFixed(0)}%)`);
 }
