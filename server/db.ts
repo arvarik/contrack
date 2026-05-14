@@ -20,7 +20,8 @@ import crypto from "crypto";
 // 1. Open SQLite Connection
 // =============================================================================
 
-const DB_PATH = "curator.db";
+import path from "path";
+const DB_PATH = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "curator.db") : "curator.db";
 export const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");

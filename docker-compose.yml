@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  contrack:
+    build: .
+    container_name: contrack
+    ports:
+      - "3210:3210"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - AI_PROVIDER=${AI_PROVIDER:-gemini}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AI_TIER=${AI_TIER:-FREE}
+      - MAPBOX_API_KEY=${MAPBOX_API_KEY}
+    restart: unless-stopped

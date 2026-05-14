@@ -102,6 +102,22 @@ Timeline with @mention network weaving, AI briefings, Ghost entity extraction, m
 
 ## 🚀 Quick Start
 
+### Option 1: Docker (Recommended)
+
+The easiest way to run Contrack is via Docker Compose. This ensures all native dependencies (like `sqlite-vec`) work perfectly.
+
+```bash
+git clone https://github.com/arvarik/contrack.git
+cd contrack
+cp .env.example .env
+# Add your API key (GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)
+docker-compose up -d
+```
+
+Open **http://localhost:3210**. Data is automatically persisted to `./data`.
+
+### Option 2: Native Installation
+
 ```bash
 git clone https://github.com/arvarik/contrack.git
 cd contrack
@@ -111,7 +127,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Open **http://localhost:3000**. The server auto-initializes the database, loads embedding models, and starts background tasks.
+Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks.
 
 > **Seed data:** Run `npm run seed` to populate with demo contacts.
 
@@ -165,7 +181,7 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | `OPENAI_API_KEY` | OpenAI API key | — |
 | `ANTHROPIC_API_KEY` | Anthropic API key | — |
 | `AI_TIER` | `FREE` or `PAID` rate limit profile | `FREE` |
-| `PORT` | Express listening port | `3000` |
+| `PORT` | Express listening port | `3210` |
 | `MAPBOX_API_KEY` | Mapbox geocoding (optional, higher accuracy) | — |
 
 See [Configuration Guide](docs/configuration.md) for full details.

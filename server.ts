@@ -53,8 +53,10 @@ if (!KEY_VALUE || (AI_PROVIDER === "gemini" && KEY_VALUE === "dummy_key")) {
   console.log(`\x1b[36mℹ️  AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)\x1b[0m`);
 }
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-const uploadDir = path.join(process.cwd(), "uploads");
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
+const uploadDir = process.env.DATA_DIR 
+  ? path.join(process.env.DATA_DIR, "uploads")
+  : path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 async function startServer() {
