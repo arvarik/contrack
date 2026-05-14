@@ -7,8 +7,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Briefcase, ArrowLeft, Sparkles, Archive, X, ArrowUpRight,
-  CalendarClock, MoreVertical, Copy, Trash2
+  Briefcase,
+  ArrowLeft,
+  Sparkles,
+  Archive,
+  X,
+  ArrowUpRight,
+  CalendarClock,
+  MoreVertical,
+  Copy,
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow, isPast, isToday } from "date-fns";
 import { motion, AnimatePresence } from "motion/react";
@@ -17,7 +25,9 @@ import { toast } from "sonner";
 import type { Contact, ContactUpdateData } from "../../../types";
 import { cn } from "../../../lib/utils";
 import {
-  LABEL, CARD_TINTED, SECTION_HEADING_SPACED,
+  LABEL,
+  CARD_TINTED,
+  SECTION_HEADING_SPACED,
 } from "../../../lib/styles";
 import { LocalTimeWeather } from "../../../components/LocalTimeWeather";
 
@@ -27,7 +37,7 @@ import { VibePickerPopover, VIBE_COLORS } from "./VibePickerPopover";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactListsSection } from "./ContactListsSection";
 import { CatchMeUpFab } from "./CatchMeUpFab";
-import { fallbackAvatarUrl } from '../../../lib/avatar';
+import { fallbackAvatarUrl } from "../../../lib/avatar";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -43,10 +53,30 @@ export interface ProfileHeaderProps {
 
   // Mutations passed from parent
   generateBriefing: { mutate: (id: string) => void; isPending: boolean };
-  archiveContact: { mutate: (id: string, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void; isPending: boolean };
-  unarchiveContact: { mutate: (id: string, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void; isPending: boolean };
-  updateContact: { mutate: (args: { id: string; data: ContactUpdateData }) => void };
-  promoteGhost: { mutate: (id: string, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void; isPending: boolean };
+  archiveContact: {
+    mutate: (
+      id: string,
+      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    ) => void;
+    isPending: boolean;
+  };
+  unarchiveContact: {
+    mutate: (
+      id: string,
+      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    ) => void;
+    isPending: boolean;
+  };
+  updateContact: {
+    mutate: (args: { id: string; data: ContactUpdateData }) => void;
+  };
+  promoteGhost: {
+    mutate: (
+      id: string,
+      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    ) => void;
+    isPending: boolean;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -54,7 +84,7 @@ export interface ProfileHeaderProps {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SocialLinkPill: React.FC<{
-  sl: { id: string; platform: string; url: string; handle?: string };
+  sl: { id: string; platform: string; url: string; handle?: string | null };
   displayName: string;
   platformColor: string;
   isKnown: boolean;
@@ -67,10 +97,11 @@ const SocialLinkPill: React.FC<{
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node))
+        setMenuOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
   return (
@@ -96,7 +127,11 @@ const SocialLinkPill: React.FC<{
 
       {/* Action trigger — fades in on hover */}
       <button
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(v => !v); }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setMenuOpen((v) => !v);
+        }}
         className={cn(
           "absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-lg transition-all duration-200",
           "text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-container-highest",
@@ -114,7 +149,7 @@ const SocialLinkPill: React.FC<{
             onClick={(e) => {
               e.preventDefault();
               navigator.clipboard.writeText(sl.url);
-              toast.success('Link copied');
+              toast.success("Link copied");
               setMenuOpen(false);
             }}
             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
@@ -162,7 +197,7 @@ const SocialLinkPill: React.FC<{
 // ═══════════════════════════════════════════════════════════════════════════
 
 function cleanLinkedInSlug(slug: string): string {
-  const lastDash = slug.lastIndexOf('-');
+  const lastDash = slug.lastIndexOf("-");
   if (lastDash === -1) return slug; // no hyphens → custom username, leave untouched
 
   const suffix = slug.slice(lastDash + 1);
@@ -179,7 +214,7 @@ function cleanLinkedInSlug(slug: string): string {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-const ProfileHeaderInner = ({
+const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   contact,
   onUpdate,
   onDelete,
@@ -205,25 +240,30 @@ const ProfileHeaderInner = ({
       {/* Mobile Back Button */}
       {onClose && (
         <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center shrink-0">
-          <button onClick={onClose} className="flex items-center gap-2 text-primary font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-2 text-primary font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
+          >
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
         </div>
       )}
 
       {/* URGENCY BANNER */}
-      {contact.nextFollowUpAt && (isPast(new Date(contact.nextFollowUpAt)) || isToday(new Date(contact.nextFollowUpAt))) && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full bg-error/15 px-6 py-3 flex items-center justify-center gap-2 shadow-sm"
-        >
-          <CalendarClock className="w-4 h-4 text-error shrink-0" />
-          <span className="text-sm font-bold text-error truncate">
-            Pending Follow-Up Alert
-          </span>
-        </motion.div>
-      )}
+      {contact.nextFollowUpAt &&
+        (isPast(new Date(contact.nextFollowUpAt)) ||
+          isToday(new Date(contact.nextFollowUpAt))) && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full bg-error/15 px-6 py-3 flex items-center justify-center gap-2 shadow-sm"
+          >
+            <CalendarClock className="w-4 h-4 text-error shrink-0" />
+            <span className="text-sm font-bold text-error truncate">
+              Pending Follow-Up Alert
+            </span>
+          </motion.div>
+        )}
 
       <div className="p-6 md:p-8 lg:px-10 lg:pt-8 lg:pb-6 max-w-6xl mx-auto w-full relative lg:shrink-0">
         <section className="flex flex-col md:flex-row items-start gap-6">
@@ -242,8 +282,17 @@ const ProfileHeaderInner = ({
               className="absolute inset-0 rounded-3xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer z-10"
             >
               <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-5 h-5"
+                >
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                 </svg>
               </div>
             </button>
@@ -257,7 +306,9 @@ const ProfileHeaderInner = ({
               <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">
                 <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
                 <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
-                  <strong className="block text-primary mb-0.5">Ghost Profile</strong>
+                  <strong className="block text-primary mb-0.5">
+                    Ghost Profile
+                  </strong>
                   Created automatically from a mention. Waiting to be populated.
                 </div>
               </div>
@@ -268,10 +319,18 @@ const ProfileHeaderInner = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
               <div className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 pt-1">
-                <EditableField value={contact.name} onSave={(val) => onUpdate('name', val)} placeholder="Contact Name" />
-                {contact.pronouns && <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle pb-1">({contact.pronouns})</span>}
+                <EditableField
+                  value={contact.name}
+                  onSave={(val) => onUpdate("name", val)}
+                  placeholder="Contact Name"
+                />
+                {contact.pronouns && (
+                  <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle pb-1">
+                    ({contact.pronouns})
+                  </span>
+                )}
               </div>
-              
+
               <VibePickerPopover
                 showVibePicker={showVibePicker}
                 setShowVibePicker={setShowVibePicker}
@@ -283,14 +342,17 @@ const ProfileHeaderInner = ({
                 <button
                   onClick={() => {
                     promoteGhost.mutate(contact.id, {
-                      onSuccess: () => toast.success(`${contact.name} promoted to network!`)
+                      onSuccess: () =>
+                        toast.success(`${contact.name} promoted to network!`),
                     });
                   }}
                   disabled={promoteGhost.isPending}
                   className="px-3 py-1.5 rounded-xl bg-primary text-white font-bold text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-1.5 ml-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  {promoteGhost.isPending ? 'Promoting...' : 'Promote to Contact'}
+                  {promoteGhost.isPending
+                    ? "Promoting..."
+                    : "Promote to Contact"}
                 </button>
               )}
 
@@ -298,55 +360,76 @@ const ProfileHeaderInner = ({
                 onClick={() => {
                   if (contact.isArchived) {
                     unarchiveContact.mutate(contact.id, {
-                      onSuccess: () => toast.success(`${contact.name} restored to network`),
-                      onError: (err: Error) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
+                      onSuccess: () =>
+                        toast.success(`${contact.name} restored to network`),
+                      onError: (err: Error) =>
+                        toast.error(
+                          `Failed: ${err instanceof Error ? err.message : String(err)}`,
+                        ),
                     });
                   } else {
                     archiveContact.mutate(contact.id, {
-                      onSuccess: () => toast.success(`${contact.name} archived`),
-                      onError: (err: Error) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
+                      onSuccess: () =>
+                        toast.success(`${contact.name} archived`),
+                      onError: (err: Error) =>
+                        toast.error(
+                          `Failed: ${err instanceof Error ? err.message : String(err)}`,
+                        ),
                     });
                   }
                 }}
-                disabled={archiveContact.isPending || unarchiveContact.isPending}
-                title={contact.isArchived ? 'Unarchive Contact' : 'Archive Contact'}
-                aria-label={contact.isArchived ? 'Unarchive contact' : 'Archive contact'}
+                disabled={
+                  archiveContact.isPending || unarchiveContact.isPending
+                }
+                title={
+                  contact.isArchived ? "Unarchive Contact" : "Archive Contact"
+                }
+                aria-label={
+                  contact.isArchived ? "Unarchive contact" : "Archive contact"
+                }
                 aria-pressed={!!contact.isArchived}
                 className={cn(
                   "p-2 rounded-xl transition-all flex items-center justify-center",
                   contact.isArchived
                     ? "text-amber-500 bg-amber-500/15 hover:bg-amber-500/25"
-                    : "text-on-surface-variant hover:bg-surface-container hover:text-amber-500"
+                    : "text-on-surface-variant hover:bg-surface-container hover:text-amber-500",
                 )}
               >
                 <Archive className="w-5 h-5" />
               </button>
-              
+
               <ContactActionsMenu contact={contact} onDelete={onDelete} />
             </div>
 
-            {contact.headline && (() => {
-              // Suppress headline if it's just "{role} at {company}" — that's already shown below
-              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-              const headlineNorm = normalize(contact.headline);
-              const roleCompanyNorm = normalize(`${contact.role || ''} at ${contact.company || ''}`);
-              const roleAtCompany2 = normalize(`${contact.role || ''} ${contact.company || ''}`);
-              const isDuplicate =
-                headlineNorm === roleCompanyNorm ||
-                headlineNorm === roleAtCompany2 ||
-                (contact.role && headlineNorm === normalize(contact.role)) ||
-                (contact.company && headlineNorm === normalize(contact.company));
-              if (isDuplicate) return null;
-              return (
-                <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
-                  <EditableField
-                    value={contact.headline}
-                    onSave={(val) => onUpdate('headline', val)}
-                    placeholder="Add headline"
-                  />
-                </div>
-              );
-            })()}
+            {contact.headline &&
+              (() => {
+                // Suppress headline if it's just "{role} at {company}" — that's already shown below
+                const normalize = (s: string) =>
+                  s.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const headlineNorm = normalize(contact.headline);
+                const roleCompanyNorm = normalize(
+                  `${contact.role || ""} at ${contact.company || ""}`,
+                );
+                const roleAtCompany2 = normalize(
+                  `${contact.role || ""} ${contact.company || ""}`,
+                );
+                const isDuplicate =
+                  headlineNorm === roleCompanyNorm ||
+                  headlineNorm === roleAtCompany2 ||
+                  (contact.role && headlineNorm === normalize(contact.role)) ||
+                  (contact.company &&
+                    headlineNorm === normalize(contact.company));
+                if (isDuplicate) return null;
+                return (
+                  <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
+                    <EditableField
+                      value={contact.headline}
+                      onSave={(val) => onUpdate("headline", val)}
+                      placeholder="Add headline"
+                    />
+                  </div>
+                );
+              })()}
 
             {contact.aiSummary && (
               <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mb-3 max-w-fit">
@@ -359,44 +442,70 @@ const ProfileHeaderInner = ({
 
             <div className="text-lg md:text-xl font-medium text-on-surface-variant flex items-center flex-wrap gap-x-2 mb-2">
               <Briefcase className="w-5 h-5 opacity-50 inline-block" />
-              <EditableField value={contact.role} onSave={(val) => onUpdate('role', val)} placeholder="Role / Title" />
+              <EditableField
+                value={contact.role}
+                onSave={(val) => onUpdate("role", val)}
+                placeholder="Role / Title"
+              />
               <span className="opacity-50">at</span>
-              <EditableField value={contact.company} onSave={(val) => onUpdate('company', val)} placeholder="Company" />
-              <ContactListsSection contactId={contact.id} contactLists={contact.lists || []} />
-              <CatchMeUpFab contact={contact} generateBriefing={generateBriefing} />
+              <EditableField
+                value={contact.company}
+                onSave={(val) => onUpdate("company", val)}
+                placeholder="Company"
+              />
+              <ContactListsSection
+                contactId={contact.id}
+                contactLists={contact.lists || []}
+              />
+              <CatchMeUpFab
+                contact={contact}
+                generateBriefing={generateBriefing}
+              />
             </div>
 
             {/* Social Links */}
-            {((contact.lat && contact.lng) || (contact.socialLinks && contact.socialLinks.length > 0) || contact.website) && (
+            {((contact.lat && contact.lng) ||
+              (contact.socialLinks && contact.socialLinks.length > 0) ||
+              contact.website) && (
               <div className="flex flex-wrap items-center gap-2 mt-4 mb-2">
                 {contact.lat && contact.lng && (
                   <LocalTimeWeather lat={contact.lat} lng={contact.lng} />
                 )}
                 {contact.socialLinks?.map((sl) => {
-                  const platformKey = sl.platform?.toLowerCase() || 'other';
-                  const platformColor = PLATFORM_COLORS[platformKey] || 'text-on-surface-variant';
+                  const platformKey = sl.platform?.toLowerCase() || "other";
+                  const platformColor =
+                    PLATFORM_COLORS[platformKey] || "text-on-surface-variant";
                   const isKnown = hasKnownIcon(platformKey);
 
                   // Build display name: prefer handle, then platform label, then hostname
                   let displayName = sl.handle || sl.platform;
                   if (!sl.handle && sl.url) {
-                    try { displayName = new URL(sl.url).hostname.replace('www.', ''); } catch {}
+                    try {
+                      displayName = new URL(sl.url).hostname.replace(
+                        "www.",
+                        "",
+                      );
+                    } catch {}
                   }
                   // Capitalize platform name for known ones
                   if (!sl.handle && isKnown) {
-                    displayName = sl.platform.charAt(0).toUpperCase() + sl.platform.slice(1);
+                    displayName =
+                      sl.platform.charAt(0).toUpperCase() +
+                      sl.platform.slice(1);
                   }
 
                   // Clean up LinkedIn auto-generated suffixes for display
-                  if (platformKey === 'linkedin' && sl.handle) {
+                  if (platformKey === "linkedin" && sl.handle) {
                     displayName = cleanLinkedInSlug(sl.handle);
-                  } else if (platformKey === 'linkedin' && sl.url) {
+                  } else if (platformKey === "linkedin" && sl.url) {
                     // Extract slug from LinkedIn URL and clean it
                     try {
                       const url = new URL(sl.url);
-                      const pathParts = url.pathname.replace(/\/+$/, '').split('/');
+                      const pathParts = url.pathname
+                        .replace(/\/+$/, "")
+                        .split("/");
                       const slug = pathParts[pathParts.length - 1];
-                      if (slug && slug !== 'in') {
+                      if (slug && slug !== "in") {
                         displayName = cleanLinkedInSlug(slug);
                       }
                     } catch {}
@@ -411,13 +520,32 @@ const ProfileHeaderInner = ({
                       isKnown={isKnown}
                       onDelete={() => {
                         const before = contact.socialLinks || [];
-                        const after = before.filter(s => s.id !== sl.id);
-                        updateContact.mutate({ id: contact.id, data: { socialLinks: after.map(s => ({ platform: s.platform, url: s.url, handle: s.handle })) } });
-                        toast('Link removed', {
+                        const after = before.filter((s) => s.id !== sl.id);
+                        updateContact.mutate({
+                          id: contact.id,
+                          data: {
+                            socialLinks: after.map((s) => ({
+                              platform: s.platform,
+                              url: s.url,
+                              handle: s.handle,
+                            })),
+                          },
+                        });
+                        toast("Link removed", {
                           duration: 7000,
                           action: {
-                            label: 'Undo',
-                            onClick: () => updateContact.mutate({ id: contact.id, data: { socialLinks: before.map(s => ({ platform: s.platform, url: s.url, handle: s.handle })) } }),
+                            label: "Undo",
+                            onClick: () =>
+                              updateContact.mutate({
+                                id: contact.id,
+                                data: {
+                                  socialLinks: before.map((s) => ({
+                                    platform: s.platform,
+                                    url: s.url,
+                                    handle: s.handle,
+                                  })),
+                                },
+                              }),
                           },
                         });
                       }}
@@ -425,43 +553,71 @@ const ProfileHeaderInner = ({
                   );
                 })}
                 {/* Show website if not already in social links */}
-                {contact.website && !contact.socialLinks?.some(sl => sl.url === contact.website) && (
-                  <a
-                    href={contact.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
-                  >
-                    <PlatformIcon
-                      platform="website"
-                      url={contact.website}
-                      className="w-4 h-4 text-on-surface-variant"
-                      useFavicon
-                    />
-                    <span className="text-on-surface-variant group-hover:text-on-surface transition-colors">
-                      {(() => { try { return new URL(contact.website).hostname.replace('www.', ''); } catch { return 'Website'; } })()}
-                    </span>
-                  </a>
-                )}
+                {contact.website &&
+                  !contact.socialLinks?.some(
+                    (sl) => sl.url === contact.website,
+                  ) && (
+                    <a
+                      href={contact.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
+                    >
+                      <PlatformIcon
+                        platform="website"
+                        url={contact.website}
+                        className="w-4 h-4 text-on-surface-variant"
+                        useFavicon
+                      />
+                      <span className="text-on-surface-variant group-hover:text-on-surface transition-colors">
+                        {(() => {
+                          try {
+                            return new URL(contact.website).hostname.replace(
+                              "www.",
+                              "",
+                            );
+                          } catch {
+                            return "Website";
+                          }
+                        })()}
+                      </span>
+                    </a>
+                  )}
               </div>
             )}
 
             {contact.tags && contact.tags.length > 0 && (
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {contact.tags.map((t) => (
-                  <div key={t.id} className="group/pill flex items-center gap-1 text-xs font-bold py-1 px-2.5 rounded-full bg-primary/10 text-primary border border-primary/20 transition-all overflow-hidden">
+                  <div
+                    key={t.id}
+                    className="group/pill flex items-center gap-1 text-xs font-bold py-1 px-2.5 rounded-full bg-primary/10 text-primary border border-primary/20 transition-all overflow-hidden"
+                  >
                     <Sparkles className="w-2.5 h-2.5 opacity-60 shrink-0" />
-                    <span className="whitespace-normal break-words">{t.tag}</span>
+                    <span className="whitespace-normal break-words">
+                      {t.tag}
+                    </span>
                     <button
                       onClick={() => {
                         const before = contact.tags || [];
-                        const after = before.filter(tag => tag.id !== t.id);
-                        updateContact.mutate({ id: contact.id, data: { tags: after.map(tag => ({ tag: tag.tag })) } });
-                        toast('Tag removed', {
+                        const after = before.filter((tag) => tag.id !== t.id);
+                        updateContact.mutate({
+                          id: contact.id,
+                          data: {
+                            tags: after.map((tag) => ({ tag: tag.tag })),
+                          },
+                        });
+                        toast("Tag removed", {
                           duration: 7000,
                           action: {
-                            label: 'Undo',
-                            onClick: () => updateContact.mutate({ id: contact.id, data: { tags: before.map(tag => ({ tag: tag.tag })) } }),
+                            label: "Undo",
+                            onClick: () =>
+                              updateContact.mutate({
+                                id: contact.id,
+                                data: {
+                                  tags: before.map((tag) => ({ tag: tag.tag })),
+                                },
+                              }),
                           },
                         });
                       }}

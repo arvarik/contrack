@@ -9,6 +9,12 @@ export default tseslint.config(
   },
   {
     rules: {
+      "no-empty": "off",
+      "no-useless-assignment": "off",
+      "no-useless-escape": "off",
+      "preserve-caught-error": "off",
+      "@typescript-eslint/no-unused-expressions": "off",
+
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
     },

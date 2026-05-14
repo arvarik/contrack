@@ -15,73 +15,101 @@ import {
 } from "../../services/dedupe/index.ts";
 
 export function registerSuggestionRoutes(router: Router) {
-  router.get("/dedupe/suggestions", asyncHandler(async (req, res) => {
-    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
-    const suggestions = getPendingSuggestions(limit);
-    res.json({ suggestions, total: suggestions.length });
-  }));
+  router.get(
+    "/dedupe/suggestions",
+    asyncHandler(async (req, res) => {
+      const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+      const suggestions = getPendingSuggestions(limit);
+      res.json({ suggestions, total: suggestions.length });
+    }),
+  );
 
-  router.get("/dedupe/suggestions/count", asyncHandler(async (_req, res) => {
-    const count = getPendingCount();
-    res.json({ count });
-  }));
+  router.get(
+    "/dedupe/suggestions/count",
+    asyncHandler(async (_req, res) => {
+      const count = getPendingCount();
+      res.json({ count });
+    }),
+  );
 
-  router.get("/dedupe/suggestion-for/:contactId", asyncHandler(async (req, res) => {
-    const { contactId } = req.params;
-    const suggestion = getSuggestionForContact(contactId);
-    res.json({ suggestion });
-  }));
+  router.get(
+    "/dedupe/suggestion-for/:contactId",
+    asyncHandler(async (req, res) => {
+      const { contactId } = req.params;
+      const suggestion = getSuggestionForContact(String(contactId));
+      res.json({ suggestion });
+    }),
+  );
 
-  router.post("/dedupe/suggestions/:id/dismiss", asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
-    const { id } = req.params;
+  router.post(
+    "/dedupe/suggestions/:id/dismiss",
+    asyncHandler(async (req, res) => {
+      const rid = (req as any).requestId;
+      const id = String(req.params.id);
 
-    dismissSuggestion(id, rid);
-    log.info("API", `[${rid}] POST /api/dedupe/suggestions/${id}/dismiss`);
-    res.json({ success: true });
-  }));
+      dismissSuggestion(id, rid);
+      log.info("API", `[${rid}] POST /api/dedupe/suggestions/${id}/dismiss`);
+      res.json({ success: true });
+    }),
+  );
 
-  router.post("/dedupe/suggestions/:id/merge", asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
-    const { id } = req.params;
-    const { primaryId } = req.body;
+  router.post(
+    "/dedupe/suggestions/:id/merge",
+    asyncHandler(async (req, res) => {
+      const rid = (req as any).requestId;
+      const id = String(req.params.id);
+      const { primaryId } = req.body;
 
-    const suggestion = getSuggestionById(id);
-    if (!suggestion) {
-      throw new AppError("Suggestion not found", 404);
-    }
-    if (suggestion.status !== 'pending') {
-      throw new AppError(`Suggestion is already ${suggestion.status}`, 400);
-    }
+      const suggestion = getSuggestionById(id);
+      if (!suggestion) {
+        throw new AppError("Suggestion not found", 404);
+      }
+      if (suggestion.status !== "pending") {
+        throw new AppError(`Suggestion is already ${suggestion.status}`, 400);
+      }
 
-    const duplicateId = primaryId === suggestion.contactIdA
-      ? suggestion.contactIdB
-      : suggestion.contactIdA;
+      const duplicateId =
+        primaryId === suggestion.contactIdA
+          ? suggestion.contactIdB
+          : suggestion.contactIdA;
 
-    if (!primaryId || primaryId === duplicateId) {
-      throw new AppError("primaryId is required and must differ from duplicateId", 400);
-    }
+      if (!primaryId || primaryId === duplicateId) {
+        throw new AppError(
+          "primaryId is required and must differ from duplicateId",
+          400,
+        );
+      }
 
-    const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
+      const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
 
-    markSuggestionMerged(id, 'user:suggestion');
+      markSuggestionMerged(id, "user:suggestion");
 
-    log.info("API", `[${rid}] POST /api/dedupe/suggestions/${id}/merge → merged ${duplicateId} into ${primaryId}`);
-    res.json({ success: true, contact: merged });
-  }));
+      log.info(
+        "API",
+        `[${rid}] POST /api/dedupe/suggestions/${id}/merge → merged ${duplicateId} into ${primaryId}`,
+      );
+      res.json({ success: true, contact: merged });
+    }),
+  );
 
-  router.get("/dedupe/merge-log", asyncHandler(async (req, res) => {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const entries = getMergeLog(limit);
-    res.json({ entries, total: entries.length });
-  }));
+  router.get(
+    "/dedupe/merge-log",
+    asyncHandler(async (req, res) => {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const entries = getMergeLog(limit);
+      res.json({ entries, total: entries.length });
+    }),
+  );
 
-  router.post("/dedupe/merge-log/:id/undo", asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
-    const { id } = req.params;
+  router.post(
+    "/dedupe/merge-log/:id/undo",
+    asyncHandler(async (req, res) => {
+      const rid = (req as any).requestId;
+      const id = String(req.params.id);
 
-    undoSoftMerge(id, rid);
-    log.info("API", `[${rid}] POST /api/dedupe/merge-log/${id}/undo`);
-    res.json({ success: true });
-  }));
+      undoSoftMerge(id, rid);
+      log.info("API", `[${rid}] POST /api/dedupe/merge-log/${id}/undo`);
+      res.json({ success: true });
+    }),
+  );
 }

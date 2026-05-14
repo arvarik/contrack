@@ -14,10 +14,25 @@
  * On mount, checks the server for any in-progress scan and recovers
  * the SSE connection — handles page refresh during an active scan.
  */
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
-import { useStartDedupeScan, useDedupeStream, fetchActiveScan } from '../api/dedupe';
-import { toast } from 'sonner';
-import type { DedupeScanMode, DedupeScanProgress, DedupeCluster } from '../types';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "react";
+import {
+  useStartDedupeScan,
+  useDedupeStream,
+  fetchActiveScan,
+} from "../api/dedupe";
+import { toast } from "sonner";
+import type {
+  DedupeScanMode,
+  DedupeScanProgress,
+  DedupeCluster,
+} from "../types";
 
 interface DedupeContextValue {
   startScan: (mode: DedupeScanMode, autoMergeThreshold?: number) => void;
@@ -35,7 +50,7 @@ const DedupeContext = createContext<DedupeContextValue | null>(null);
 
 export function useDedupe() {
   const ctx = useContext(DedupeContext);
-  if (!ctx) throw new Error('useDedupe must be used within DedupeProvider');
+  if (!ctx) throw new Error("useDedupe must be used within DedupeProvider");
   return ctx;
 }
 
@@ -50,7 +65,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   // would see the pre-scan page while the server is still processing.
   useEffect(() => {
     let cancelled = false;
-    fetchActiveScan().then(activeScan => {
+    fetchActiveScan().then((activeScan) => {
       if (cancelled || !activeScan) return;
       // Only recover if we don't already have a scan in progress
       if (!scanId) {
@@ -58,59 +73,73 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         setScanId(activeScan.scanId);
       }
     });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
   }, []); // Run once on mount only
 
   // SSE stream hook — updates scan state in real-time
   const handleUpdate = useCallback((updatedScan: DedupeScanProgress) => {
     setScan(updatedScan);
     // When complete, capture the final clusters
-    if (updatedScan.phase === 'complete') {
+    if (updatedScan.phase === "complete") {
       setClusters(updatedScan.clusters ?? []);
     }
   }, []);
 
   useDedupeStream(scanId, handleUpdate);
 
-  const startScan = useCallback((mode: DedupeScanMode, autoMergeThreshold?: number) => {
-    startMutation.mutate({ mode, autoMergeThreshold }, {
-      onSuccess: (result) => {
-        // Set optimistic scan state BEFORE the SSE event arrives.
-        // This prevents the pre-scan page from briefly flashing back during the
-        // ~100-300ms gap between isStarting going false and the first SSE message.
-        setScan({
-          scanId: result.scanId,
-          mode: result.mode,
-          phase: 'starting',
-          phaseName: 'Initializing scan…',
-          contactsScanned: 0,
-          totalContacts: 0,
-          deterministicFound: 0,
-          aiCandidatesFound: 0,
-          aiEvaluated: 0,
-          blockingCandidates: 0,
-          scoringAutoMerge: 0,
-          scoringAiQueue: 0,
-          scoringDiscarded: 0,
-          suggestions: [],
-          clustersFound: 0,
-          totalPairs: 0,
-          autoMerged: 0,
-          pendingSuggestions: 0,
-          clusters: [],
-          startedAt: new Date().toISOString(),
-        });
-        setScanId(result.scanId);
-        setClusters([]);
-        const modeLabels: Record<string, string> = { quick: 'Quick Scan', deep: 'Smart Scan', full: 'Full Scan', deterministic: 'Quick Scan', ai: 'Smart Scan', both: 'Smart Scan' };
-        toast.success(`${modeLabels[mode] || 'Scan'} started`);
-      },
-      onError: (err) => {
-        toast.error((err instanceof Error ? err.message : String(err)));
-      },
-    });
-  }, [startMutation]);
+  const startScan = useCallback(
+    (mode: DedupeScanMode, autoMergeThreshold?: number) => {
+      startMutation.mutate(
+        { mode, autoMergeThreshold },
+        {
+          onSuccess: (result) => {
+            // Set optimistic scan state BEFORE the SSE event arrives.
+            // This prevents the pre-scan page from briefly flashing back during the
+            // ~100-300ms gap between isStarting going false and the first SSE message.
+            setScan({
+              scanId: result.scanId,
+              mode: result.mode,
+              phase: "starting",
+              phaseName: "Initializing scan…",
+              contactsScanned: 0,
+              totalContacts: 0,
+              deterministicFound: 0,
+              aiCandidatesFound: 0,
+              aiEvaluated: 0,
+              blockingCandidates: 0,
+              scoringAutoMerge: 0,
+              scoringAiQueue: 0,
+              scoringDiscarded: 0,
+              suggestions: [],
+              clustersFound: 0,
+              totalPairs: 0,
+              autoMerged: 0,
+              pendingSuggestions: 0,
+              clusters: [],
+              startedAt: new Date().toISOString(),
+            });
+            setScanId(result.scanId);
+            setClusters([]);
+            const modeLabels: Record<string, string> = {
+              quick: "Quick Scan",
+              deep: "Smart Scan",
+              full: "Full Scan",
+              deterministic: "Quick Scan",
+              ai: "Smart Scan",
+              both: "Smart Scan",
+            };
+            toast.success(`${modeLabels[mode] || "Scan"} started`);
+          },
+          onError: (err) => {
+            toast.error(err instanceof Error ? err.message : String(err));
+          },
+        },
+      );
+    },
+    [startMutation],
+  );
 
   const reset = useCallback(() => {
     setScan(null);
@@ -119,10 +148,11 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeCluster = useCallback((id: string) => {
-    setClusters(prev => prev.filter(c => c.id !== id));
+    setClusters((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  const isScanning = !!scan && scan.phase !== 'complete' && scan.phase !== 'error';
+  const isScanning =
+    !!scan && scan.phase !== "complete" && scan.phase !== "error";
 
   // Memoize the provider value to avoid forcing every consumer to re-render
   // when the DedupeProvider's parent re-renders for unrelated reasons.
@@ -139,13 +169,18 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
       reset,
       removeCluster,
     }),
-    [startScan, scan, clusters, isScanning, startMutation.isPending, reset, removeCluster],
+    [
+      startScan,
+      scan,
+      clusters,
+      isScanning,
+      startMutation.isPending,
+      reset,
+      removeCluster,
+    ],
   );
 
   return (
-    <DedupeContext.Provider value={value}>
-      {children}
-    </DedupeContext.Provider>
+    <DedupeContext.Provider value={value}>{children}</DedupeContext.Provider>
   );
 }
-

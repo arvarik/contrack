@@ -8,8 +8,19 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Mail, Phone, FileText, Handshake, Sparkles, UploadCloud, Trash2,
-  MessageSquare, ExternalLink, Linkedin, Facebook, File, CalendarCheck
+  Mail,
+  Phone,
+  FileText,
+  Handshake,
+  Sparkles,
+  UploadCloud,
+  Trash2,
+  MessageSquare,
+  ExternalLink,
+  Linkedin,
+  Facebook,
+  File,
+  CalendarCheck,
 } from "lucide-react";
 import DOMPurify from "dompurify";
 import { motion, AnimatePresence } from "motion/react";
@@ -35,9 +46,18 @@ export interface TimelineTabProps {
   getInputProps: () => any;
 
   // Mutations passed from parent
-  deleteInteraction: { mutate: (args: { id: string; contactId: string }, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void };
-  updateInteraction: { mutate: (args: { id: string; contactId: string; data: Partial<Interaction> }) => void };
-  promoteGhost: { mutate: (id: string, opts?: { onSuccess?: () => void }) => void };
+  deleteInteraction: {
+    mutate: (
+      args: { id: string; contactId: string },
+      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    ) => void;
+  };
+  updateInteraction: {
+    mutate: (args: { id: string; contactId: string; data: any }) => void;
+  };
+  promoteGhost: {
+    mutate: (id: string, opts?: { onSuccess?: () => void }) => void;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -50,19 +70,54 @@ function getInteractionStyle(type: string) {
   let bgClass = "bg-surface-container";
   let textClass = "text-on-surface";
 
-  if (type === 'call') { Icon = Phone; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
-  if (type === 'meeting') { Icon = Handshake; bgClass = "bg-emerald-500/10"; textClass = "text-emerald-600"; }
-  if (type === 'email') { Icon = Mail; bgClass = "bg-green-500/10"; textClass = "text-green-500"; }
-  if (type === 'note') { bgClass = "bg-primary/10"; textClass = "text-primary"; }
-  if (type === 'message' || type === 'sms') { Icon = MessageSquare; bgClass = "bg-teal-500/10"; textClass = "text-teal-500"; }
-  if (type === 'linkedin') { Icon = Linkedin; bgClass = "bg-blue-600/10"; textClass = "text-blue-600"; }
-  if (type === 'facebook') { Icon = Facebook; bgClass = "bg-blue-500/10"; textClass = "text-blue-500"; }
-  if (type === 'import') { Icon = ExternalLink; bgClass = "bg-amber-500/10"; textClass = "text-amber-500"; }
+  if (type === "call") {
+    Icon = Phone;
+    bgClass = "bg-blue-500/10";
+    textClass = "text-blue-500";
+  }
+  if (type === "meeting") {
+    Icon = Handshake;
+    bgClass = "bg-emerald-500/10";
+    textClass = "text-emerald-600";
+  }
+  if (type === "email") {
+    Icon = Mail;
+    bgClass = "bg-green-500/10";
+    textClass = "text-green-500";
+  }
+  if (type === "note") {
+    bgClass = "bg-primary/10";
+    textClass = "text-primary";
+  }
+  if (type === "message" || type === "sms") {
+    Icon = MessageSquare;
+    bgClass = "bg-teal-500/10";
+    textClass = "text-teal-500";
+  }
+  if (type === "linkedin") {
+    Icon = Linkedin;
+    bgClass = "bg-blue-600/10";
+    textClass = "text-blue-600";
+  }
+  if (type === "facebook") {
+    Icon = Facebook;
+    bgClass = "bg-blue-500/10";
+    textClass = "text-blue-500";
+  }
+  if (type === "import") {
+    Icon = ExternalLink;
+    bgClass = "bg-amber-500/10";
+    textClass = "text-amber-500";
+  }
 
   return { Icon, bgClass, textClass };
 }
 
-interface ParsedMention { contactId: string; name: string; isGhost?: boolean; }
+interface ParsedMention {
+  contactId: string;
+  name: string;
+  isGhost?: boolean;
+}
 
 /** Safely parse the JSON mentions string. Returns null if empty/invalid. */
 function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
@@ -72,7 +127,7 @@ function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
     return parsed;
   } catch (err) {
-    console.warn('[TimelineTab] Failed to parse mentions JSON:', err);
+    console.warn("[TimelineTab] Failed to parse mentions JSON:", err);
     return null;
   }
 }
@@ -81,7 +136,7 @@ function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-const TimelineTabInner = ({
+const TimelineTabInner: React.FC<TimelineTabProps> = ({
   contactId,
   timeline,
   timelineLoading,
@@ -93,7 +148,8 @@ const TimelineTabInner = ({
   promoteGhost,
 }) => {
   const navigate = useNavigate();
-  const [selectedInteraction, setSelectedInteraction] = useState<Interaction | null>(null);
+  const [selectedInteraction, setSelectedInteraction] =
+    useState<Interaction | null>(null);
   const completeActionItem = useCompleteActionItem();
 
   const handleDeleteInteraction = (interactionId: string) => {
@@ -101,27 +157,35 @@ const TimelineTabInner = ({
       { id: interactionId, contactId },
       {
         onSuccess: () => toast.success("Interaction deleted"),
-        onError: (err: Error) => toast.error(`Delete failed: ${(err instanceof Error ? err.message : String(err))}`),
-      }
+        onError: (err: Error) =>
+          toast.error(
+            `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+      },
     );
   };
 
   return (
-    <div className="flex flex-col gap-6 relative timeline-enter" {...getRootProps()}>
+    <div
+      className="flex flex-col gap-6 relative timeline-enter"
+      {...getRootProps()}
+    >
       <input {...getInputProps()} />
 
       {/* Drop Zone Overlay */}
       <AnimatePresence>
         {isDragActive && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-50 bg-surface-container-lowest/80 backdrop-blur-sm rounded-3xl flex items-center justify-center border-4 border-dashed border-primary"
           >
             <div className="text-center">
               <UploadCloud className="w-20 h-20 text-primary mx-auto mb-4 animate-bounce" />
-              <p className="text-2xl font-bold font-headline text-on-surface">Drop file to attach...</p>
+              <p className="text-2xl font-bold font-headline text-on-surface">
+                Drop file to attach...
+              </p>
             </div>
           </motion.div>
         )}
@@ -138,24 +202,30 @@ const TimelineTabInner = ({
 
       {/* Timeline */}
       <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-surface-container-high before:to-transparent">
-        {timelineLoading && <div className="text-center p-4 text-on-surface-variant animate-pulse">Loading timeline...</div>}
-        
+        {timelineLoading && (
+          <div className="text-center p-4 text-on-surface-variant animate-pulse">
+            Loading timeline...
+          </div>
+        )}
+
         {timeline.map((item: Interaction, index: number) => {
           const { Icon, bgClass, textClass } = getInteractionStyle(item.type);
 
           return (
-            <div 
-              key={item.id} 
+            <div
+              key={item.id}
               className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active timeline-entry"
               style={{ animationDelay: `${index * 40}ms` }}
             >
               {/* Icon marker */}
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${bgClass} ${textClass} z-10 mx-auto absolute left-0 md:left-1/2 -translate-x-0`}>
+              <div
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${bgClass} ${textClass} z-10 mx-auto absolute left-0 md:left-1/2 -translate-x-0`}
+              >
                 <Icon className="w-4 h-4" />
               </div>
 
               {/* Content Box */}
-              <div 
+              <div
                 className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer"
                 onClick={() => setSelectedInteraction(item)}
               >
@@ -164,11 +234,13 @@ const TimelineTabInner = ({
                     {item.title}
                   </h4>
                   <div className="flex items-center gap-2 shrink-0">
-                    <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{new Date(item.date).toLocaleDateString()}</time>
+                    <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+                      {new Date(item.date).toLocaleDateString()}
+                    </time>
                     <button
                       onClick={(e) => {
-                         e.stopPropagation();
-                         handleDeleteInteraction(item.id);
+                        e.stopPropagation();
+                        handleDeleteInteraction(item.id);
                       }}
                       className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-red-500 p-1 rounded transition-opacity"
                       title="Delete interaction"
@@ -178,92 +250,118 @@ const TimelineTabInner = ({
                     </button>
                   </div>
                 </div>
-                
+
                 {/* Via mention badge */}
                 {item.isViaName && (
-                  <div 
-                    className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold" 
+                  <div
+                    className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
                     onClick={(e) => {
-                       e.stopPropagation();
-                       navigate(`/contact/${item.isViaId}`);
+                      e.stopPropagation();
+                      navigate(`/contact/${item.isViaId}`);
                     }}
                     title="Navigate to Original Interaction"
                   >
-                    <ExternalLink className="w-3 h-3 text-primary" /> via {item.isViaName}
+                    <ExternalLink className="w-3 h-3 text-primary" /> via{" "}
+                    {item.isViaName}
                   </div>
                 )}
 
                 {item.content ? (
-                  <div 
+                  <div
                     className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"
-                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.content) }}
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(item.content),
+                    }}
                   />
                 ) : null}
-                
+
                 {/* Ghost Mentions */}
                 {(() => {
                   const mentions = parseMentions(item.mentions);
                   if (!mentions) return null;
                   return (
                     <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
-                      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1"><Sparkles className="w-3 h-3 text-primary opacity-60"/> Mentioned:</span>
-                      {mentions.map((mention: { contactId: string; name: string; isGhost?: boolean }, idx: number) => {
-                        if (mention.isGhost) {
+                      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-primary opacity-60" />{" "}
+                        Mentioned:
+                      </span>
+                      {mentions.map(
+                        (
+                          mention: {
+                            contactId: string;
+                            name: string;
+                            isGhost?: boolean;
+                          },
+                          idx: number,
+                        ) => {
+                          if (mention.isGhost) {
+                            return (
+                              <button
+                                key={idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  promoteGhost.mutate(mention.contactId, {
+                                    onSuccess: () =>
+                                      navigate(`/contact/${mention.contactId}`),
+                                  });
+                                }}
+                                title={`Promote ${mention.name} to Contact`}
+                                className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
+                              >
+                                <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
+                                  {mention.name.charAt(0)}
+                                </div>
+                                <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
+                                  {mention.name}
+                                </div>
+                              </button>
+                            );
+                          }
                           return (
-                            <button 
+                            <Link
                               key={idx}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                promoteGhost.mutate(mention.contactId, {
-                                  onSuccess: () => navigate(`/contact/${mention.contactId}`)
-                                });
-                              }}
-                              title={`Promote ${mention.name} to Contact`}
-                              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
+                              to={`/contact/${mention.contactId}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
                             >
-                              <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
+                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
                                 {mention.name.charAt(0)}
                               </div>
-                              <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
+                              <span className="text-xs font-semibold text-on-surface line-clamp-1">
                                 {mention.name}
-                              </div>
-                            </button>
+                              </span>
+                            </Link>
                           );
-                        }
-                        return (
-                          <Link 
-                            key={idx}
-                            to={`/contact/${mention.contactId}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
-                          >
-                            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                              {mention.name.charAt(0)}
-                            </div>
-                            <span className="text-xs font-semibold text-on-surface line-clamp-1">{mention.name}</span>
-                          </Link>
-                        );
-                      })}
+                        },
+                      )}
                     </div>
                   );
                 })()}
-                
+
                 {/* File Attachment */}
                 {item.fileUrl && (
                   <div className="mt-3">
-                    {item.fileType?.startsWith('image/') ? (
-                      <img src={item.fileUrl} alt={item.fileName || 'Attachment'} className="max-w-full rounded-xl shadow-sm object-cover max-h-64" />
+                    {item.fileType?.startsWith("image/") ? (
+                      <img
+                        src={item.fileUrl}
+                        alt={item.fileName || "Attachment"}
+                        className="max-w-full rounded-xl shadow-sm object-cover max-h-64"
+                      />
                     ) : (
-                      <a 
-                        href={item.fileUrl} 
-                        download 
+                      <a
+                        href={item.fileUrl}
+                        download
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden"
                       >
                         <File className="w-8 h-8 text-primary shrink-0 opacity-80" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-on-surface truncate">{item.fileName}</p>
-                          <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">{item.fileType?.split('/')[1] || 'FILE'}</p>
+                          <p className="text-sm font-semibold text-on-surface truncate">
+                            {item.fileName}
+                          </p>
+                          <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">
+                            {item.fileType?.split("/")[1] || "FILE"}
+                          </p>
                         </div>
                       </a>
                     )}
@@ -276,27 +374,33 @@ const TimelineTabInner = ({
                     <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
                       Follow Up:
                     </span>
-                    {item.actionItems.map((action: NonNullable<Interaction['actionItems']>[number]) => (
-                      <div
-                        key={action.id}
-                        className={cn(
-                          "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all text-xs font-semibold select-none",
-                          action.completedAt 
-                            ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60" 
-                            : "bg-surface-container-lowest text-on-surface border-surface-container-high shadow-sm"
-                        )}
-                      >
-                        {action.completedAt && <CalendarCheck className="w-3 h-3 text-on-surface-variant opacity-60" />}
-                        {action.title}
-                      </div>
-                    ))}
+                    {item.actionItems.map(
+                      (
+                        action: NonNullable<Interaction["actionItems"]>[number],
+                      ) => (
+                        <div
+                          key={action.id}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all text-xs font-semibold select-none",
+                            action.completedAt
+                              ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60"
+                              : "bg-surface-container-lowest text-on-surface border-surface-container-high shadow-sm",
+                          )}
+                        >
+                          {action.completedAt && (
+                            <CalendarCheck className="w-3 h-3 text-on-surface-variant opacity-60" />
+                          )}
+                          {action.title}
+                        </div>
+                      ),
+                    )}
                   </div>
                 )}
-                
+
                 {/* Duration */}
                 {item.duration && (
                   <p className="text-xs text-on-surface-variant mt-3 font-medium flex items-center gap-1 opacity-70">
-                     Duration: {item.duration}
+                    Duration: {item.duration}
                   </p>
                 )}
               </div>
@@ -305,12 +409,14 @@ const TimelineTabInner = ({
         })}
       </div>
 
-      <InteractionDetailModal 
-        isOpen={!!selectedInteraction} 
+      <InteractionDetailModal
+        isOpen={!!selectedInteraction}
         onClose={() => setSelectedInteraction(null)}
         interaction={selectedInteraction}
         onCompleteActionItem={(id) => completeActionItem.mutate(id)}
-        onUpdateInteraction={(id, data) => updateInteraction.mutate({ id, contactId, data })}
+        onUpdateInteraction={(id, data) =>
+          updateInteraction.mutate({ id, contactId, data })
+        }
       />
     </div>
   );

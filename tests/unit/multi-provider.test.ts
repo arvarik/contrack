@@ -164,12 +164,19 @@ describe("OpenAIAdapter", () => {
       const schema = {
         type: "object" as const,
         properties: {
-          category: { type: "string" as const, enum: ["work", "personal", "other"] },
+          category: {
+            type: "string" as const,
+            enum: ["work", "personal", "other"],
+          },
         },
       };
 
       const translated = adapter.translateSchema(schema);
-      expect(translated.json_schema.schema.properties.category.enum).toEqual(["work", "personal", "other"]);
+      expect(translated.json_schema.schema.properties.category.enum).toEqual([
+        "work",
+        "personal",
+        "other",
+      ]);
     });
   });
 });
@@ -299,13 +306,17 @@ describe("Provider Factory (singleton.ts)", () => {
 
   afterEach(() => {
     // Restore env
-    if (originalProvider !== undefined) process.env.AI_PROVIDER = originalProvider;
+    if (originalProvider !== undefined)
+      process.env.AI_PROVIDER = originalProvider;
     else delete process.env.AI_PROVIDER;
-    if (originalGeminiKey !== undefined) process.env.GEMINI_API_KEY = originalGeminiKey;
+    if (originalGeminiKey !== undefined)
+      process.env.GEMINI_API_KEY = originalGeminiKey;
     else delete process.env.GEMINI_API_KEY;
-    if (originalOpenAIKey !== undefined) process.env.OPENAI_API_KEY = originalOpenAIKey;
+    if (originalOpenAIKey !== undefined)
+      process.env.OPENAI_API_KEY = originalOpenAIKey;
     else delete process.env.OPENAI_API_KEY;
-    if (originalAnthropicKey !== undefined) process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+    if (originalAnthropicKey !== undefined)
+      process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
     else delete process.env.ANTHROPIC_API_KEY;
   });
 
@@ -348,11 +359,11 @@ describe("Provider Factory (singleton.ts)", () => {
     const mod = await import("../../server/ai/singleton.ts");
     // The factory should accept provider name and resolve the right key
     expect(mod.getApiKeyForProvider).toBeDefined();
-    
+
     process.env.GEMINI_API_KEY = "gk";
     process.env.OPENAI_API_KEY = "ok";
     process.env.ANTHROPIC_API_KEY = "ak";
-    
+
     expect(mod.getApiKeyForProvider("gemini")).toBe("gk");
     expect(mod.getApiKeyForProvider("openai")).toBe("ok");
     expect(mod.getApiKeyForProvider("anthropic")).toBe("ak");
@@ -368,33 +379,29 @@ describe("Provider Factory (singleton.ts)", () => {
 
 describe("AI Search Strategy Selection", () => {
   it("single-pass strategy exists and is importable", async () => {
-    const mod = await import(
-      "../../server/services/aiSearch/strategies/singlePass.ts"
-    );
+    const mod =
+      await import("../../server/services/aiSearch/strategies/singlePass.ts");
     expect(mod.SinglePassStrategy).toBeDefined();
   });
 
   it("single-pass strategy implements AISearchStrategy interface", async () => {
-    const mod = await import(
-      "../../server/services/aiSearch/strategies/singlePass.ts"
-    );
+    const mod =
+      await import("../../server/services/aiSearch/strategies/singlePass.ts");
     const strategy = new mod.SinglePassStrategy();
     expect(strategy.name).toBe("single-pass");
     expect(typeof strategy.execute).toBe("function");
   });
 
   it("strategy registry includes single-pass", async () => {
-    const { getStrategy } = await import(
-      "../../server/services/aiSearch/strategies/index.ts"
-    );
+    const { getStrategy } =
+      await import("../../server/services/aiSearch/strategies/index.ts");
     const strategy = getStrategy("single-pass");
     expect(strategy.name).toBe("single-pass");
   });
 
   it("strategy registry defaults to two-pass for gemini", async () => {
-    const { getStrategy } = await import(
-      "../../server/services/aiSearch/strategies/index.ts"
-    );
+    const { getStrategy } =
+      await import("../../server/services/aiSearch/strategies/index.ts");
     // When no name is given, should default to two-pass (gemini behavior)
     const strategy = getStrategy();
     expect(strategy.name).toBe("two-pass");
@@ -427,7 +434,7 @@ describe("Environment Variable Contracts", () => {
     expect(envExample).toContain("ANTHROPIC_API_KEY");
   });
 
-  it('.env.example documents all three AI_PROVIDER options', async () => {
+  it(".env.example documents all three AI_PROVIDER options", async () => {
     const fs = await import("fs");
     const envExample = fs.readFileSync(
       new URL("../../.env.example", import.meta.url),
@@ -449,10 +456,7 @@ describe("NPM Dependency Contracts", () => {
   it("package.json includes openai dependency", async () => {
     const fs = await import("fs");
     const pkg = JSON.parse(
-      fs.readFileSync(
-        new URL("../../package.json", import.meta.url),
-        "utf-8",
-      ),
+      fs.readFileSync(new URL("../../package.json", import.meta.url), "utf-8"),
     );
     expect(pkg.dependencies).toHaveProperty("openai");
   });
@@ -460,10 +464,7 @@ describe("NPM Dependency Contracts", () => {
   it("package.json includes @anthropic-ai/sdk dependency", async () => {
     const fs = await import("fs");
     const pkg = JSON.parse(
-      fs.readFileSync(
-        new URL("../../package.json", import.meta.url),
-        "utf-8",
-      ),
+      fs.readFileSync(new URL("../../package.json", import.meta.url), "utf-8"),
     );
     expect(pkg.dependencies).toHaveProperty("@anthropic-ai/sdk");
   });
@@ -490,8 +491,11 @@ describe("SDK Import Containment Invariant", () => {
     // Allow: server/ai/adapters/openai.ts, package.json, package-lock.json, node_modules
     try {
       const result = execSync(
-        `grep -rl "from ['\"]openai['\"]" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "server/ai/adapters/openai.ts"`,
-        { cwd: path.resolve(new URL("../../", import.meta.url).pathname), encoding: "utf-8" },
+        `grep -rl "from ['\\"]openai['\\"]" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "server/ai/adapters/openai.ts"`,
+        {
+          cwd: path.resolve(new URL("../../", import.meta.url).pathname),
+          encoding: "utf-8",
+        },
       ).trim();
 
       // If we get here, files were found that import openai outside the adapter
@@ -509,8 +513,11 @@ describe("SDK Import Containment Invariant", () => {
 
     try {
       const result = execSync(
-        `grep -rl "from ['\"]@anthropic-ai/sdk['\"]" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "server/ai/adapters/anthropic.ts"`,
-        { cwd: path.resolve(new URL("../../", import.meta.url).pathname), encoding: "utf-8" },
+        `grep -rl "from ['\\"]@anthropic-ai/sdk['\\"]" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "server/ai/adapters/anthropic.ts"`,
+        {
+          cwd: path.resolve(new URL("../../", import.meta.url).pathname),
+          encoding: "utf-8",
+        },
       ).trim();
 
       expect(result).toBe("");
@@ -527,7 +534,8 @@ describe("SDK Import Containment Invariant", () => {
 
 describe("Edge Cases", () => {
   it("OpenAI adapter handles empty prompt gracefully", async () => {
-    const { OpenAIAdapter } = await import("../../server/ai/adapters/openai.ts");
+    const { OpenAIAdapter } =
+      await import("../../server/ai/adapters/openai.ts");
     const adapter = new OpenAIAdapter("test-key");
 
     // Should not throw on construction with empty-ish prompt
@@ -536,7 +544,8 @@ describe("Edge Cases", () => {
   });
 
   it("Anthropic adapter handles missing systemPrompt", async () => {
-    const { AnthropicAdapter } = await import("../../server/ai/adapters/anthropic.ts");
+    const { AnthropicAdapter } =
+      await import("../../server/ai/adapters/anthropic.ts");
     const adapter = new AnthropicAdapter("test-key");
 
     // Adapter should handle undefined systemPrompt without crashing
@@ -544,7 +553,8 @@ describe("Edge Cases", () => {
   });
 
   it("OpenAI adapter handles explicit model override", async () => {
-    const { OpenAIAdapter } = await import("../../server/ai/adapters/openai.ts");
+    const { OpenAIAdapter } =
+      await import("../../server/ai/adapters/openai.ts");
     const adapter = new OpenAIAdapter("test-key");
 
     // When options.model is set, bypass routing
@@ -553,7 +563,8 @@ describe("Edge Cases", () => {
   });
 
   it("Anthropic adapter handles explicit model override", async () => {
-    const { AnthropicAdapter } = await import("../../server/ai/adapters/anthropic.ts");
+    const { AnthropicAdapter } =
+      await import("../../server/ai/adapters/anthropic.ts");
     const adapter = new AnthropicAdapter("test-key");
 
     const model = adapter.resolveModel(undefined, "claude-3-opus-20240229");

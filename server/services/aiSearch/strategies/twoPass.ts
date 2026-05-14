@@ -20,7 +20,10 @@
 import type { AIProvider } from "../../../ai/provider.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
-import { aiSearchOutputSchema, extractionJsonSchema } from "../promptTemplate.ts";
+import {
+  aiSearchOutputSchema,
+  extractionJsonSchema,
+} from "../promptTemplate.ts";
 import { recordInvocation } from "../../../services/aiStatsService.ts";
 import { log } from "../../../utils/logger.ts";
 import { getErrorMessage } from "../../../utils/helpers.ts";
@@ -40,7 +43,7 @@ const GROUNDING_RETRY_DELAY_MS = 1_500;
 // =============================================================================
 
 export class TwoPassStrategy implements AISearchStrategy {
-  readonly name = 'two-pass';
+  readonly name = "two-pass";
 
   async execute(
     _contact: HydratedContact,
@@ -50,26 +53,29 @@ export class TwoPassStrategy implements AISearchStrategy {
     const startMs = Date.now();
     const modelsUsed: string[] = [];
     let totalTokens = 0;
-    let citations: Array<{ title: string; uri: string }> = [];
+    const citations: Array<{ title: string; uri: string }> = [];
 
     // ── Pass 1: Grounding (web search → text output) ──────────────────
     // Prefer "pro" models for maximum search grounding accuracy.
     // gemini-3.1-pro-preview supports grounding, thinking, and delivers
     // the deepest, most thorough research results.
     // The SmartRouter handles model fallback via circuit breakers.
-    let groundedText = '';
+    let groundedText = "";
 
     for (let attempt = 1; attempt <= GROUNDING_MAX_RETRIES; attempt++) {
       if (attempt > 1) {
-        log.info('TwoPassStrategy', `Pass 1 (grounding) — retry ${attempt} after empty result`);
-        await new Promise(r => setTimeout(r, GROUNDING_RETRY_DELAY_MS));
+        log.info(
+          "TwoPassStrategy",
+          `Pass 1 (grounding) — retry ${attempt} after empty result`,
+        );
+        await new Promise((r) => setTimeout(r, GROUNDING_RETRY_DELAY_MS));
       }
 
       try {
         const pass1Start = Date.now();
         const pass1Result = await adapter.generate({
           prompt,
-          responseFormat: 'text',
+          responseFormat: "text",
           enableSearchGrounding: true,
           routing: { prefer: "pro" },
         });
@@ -89,18 +95,21 @@ export class TwoPassStrategy implements AISearchStrategy {
         });
 
         log.info(
-          'TwoPassStrategy',
+          "TwoPassStrategy",
           `Pass 1 complete via ${pass1Result.model} in ${pass1Result.latencyMs}ms` +
-            ` (${pass1Result.tokenCount ?? '?'} tokens)`,
+            ` (${pass1Result.tokenCount ?? "?"} tokens)`,
         );
 
         if (groundedText.trim()) {
           break; // Got non-empty text — success
         }
 
-        log.warn('TwoPassStrategy', `Pass 1 returned empty text (attempt ${attempt})`);
+        log.warn(
+          "TwoPassStrategy",
+          `Pass 1 returned empty text (attempt ${attempt})`,
+        );
       } catch (err: unknown) {
-        log.warn('TwoPassStrategy', `Pass 1 failed: ${getErrorMessage(err)}`);
+        log.warn("TwoPassStrategy", `Pass 1 failed: ${getErrorMessage(err)}`);
         // On the last attempt, surface the error
         if (attempt === GROUNDING_MAX_RETRIES) {
           throw err;
@@ -110,8 +119,8 @@ export class TwoPassStrategy implements AISearchStrategy {
 
     if (!groundedText.trim()) {
       throw new Error(
-        'No public information found for this contact. ' +
-          'The AI searched the internet but could not identify or find data about this person.',
+        "No public information found for this contact. " +
+          "The AI searched the internet but could not identify or find data about this person.",
       );
     }
 
@@ -142,7 +151,7 @@ ${groundedText}
     const pass2Start = Date.now();
     const pass2Result = await adapter.generate({
       prompt: extractionPrompt,
-      responseFormat: 'json',
+      responseFormat: "json",
       jsonSchema: extractionJsonSchema,
       routing: { prefer: "lite" },
     });
@@ -164,9 +173,11 @@ ${groundedText}
     // drops unrecognized fields rather than rejecting the entire response)
     let rawParsed: unknown;
     try {
-      rawParsed = JSON.parse(pass2Result.text || '{}');
+      rawParsed = JSON.parse(pass2Result.text || "{}");
     } catch (parseErr: unknown) {
-      throw new Error(`JSON parse failed for extraction output: ${getErrorMessage(parseErr)}. Raw text: ${(pass2Result.text || '').slice(0, 200)}`);
+      throw new Error(
+        `JSON parse failed for extraction output: ${getErrorMessage(parseErr)}. Raw text: ${(pass2Result.text || "").slice(0, 200)}`,
+      );
     }
 
     const validated = aiSearchOutputSchema.safeParse(rawParsed);
@@ -177,9 +188,9 @@ ${groundedText}
 
     const structuredData = validated.data as Record<string, unknown>;
     log.info(
-      'TwoPassStrategy',
+      "TwoPassStrategy",
       `Pass 2 complete via ${pass2Result.model} in ${pass2Result.latencyMs}ms` +
-        ` (${pass2Result.tokenCount ?? '?'} tokens)`,
+        ` (${pass2Result.tokenCount ?? "?"} tokens)`,
     );
 
     const latencyMs = Date.now() - startMs;

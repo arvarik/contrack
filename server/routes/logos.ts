@@ -15,8 +15,8 @@ if (!fs.existsSync(logosDir)) {
 const knownFailedDomains = new Set<string>();
 
 router.get("/:domain", async (req: Request, res: Response) => {
-  const domain = req.params.domain;
-  
+  const domain = String(req.params.domain);
+
   // Strict regex for valid domain names (letters, numbers, hyphens, and dots)
   // This inherently prevents path traversal (no slashes) and guarantees safe filenames.
   const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$/;
@@ -25,7 +25,7 @@ router.get("/:domain", async (req: Request, res: Response) => {
   }
 
   const sanitizedDomain = domain.toLowerCase().trim();
-  
+
   // Set long-lived cache control for browsers since logos rarely change
   res.setHeader("Cache-Control", "public, max-age=2592000"); // 30 days
 
@@ -51,7 +51,9 @@ router.get("/:domain", async (req: Request, res: Response) => {
       if (response.status === 404) {
         knownFailedDomains.add(sanitizedDomain);
       }
-      return res.status(response.status).send(`Failed to fetch logo: ${response.statusText}`);
+      return res
+        .status(response.status)
+        .send(`Failed to fetch logo: ${response.statusText}`);
     }
 
     const contentType = response.headers.get("content-type") || "image/png";
