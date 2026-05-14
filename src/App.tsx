@@ -24,7 +24,7 @@ import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
 import { useUrgentActionItemCount } from "./api";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
-import { SessionProvider, useSession } from "./contexts/SessionContext";
+import { SessionProvider, useRecent } from "./contexts/SessionContext";
 
 // Dev-only: lazy import so the showcase is not in the prod bundle
 const ComponentShowcase = import.meta.env.DEV
@@ -33,7 +33,9 @@ const ComponentShowcase = import.meta.env.DEV
 
 const ResponsiveLayout = () => {
   const location = useLocation();
-  const { lastContactId, setLastContactId } = useSession();
+  // Narrow context read — see SessionContext for the split rationale. This
+  // component no longer re-renders on every AI-search keystroke.
+  const { lastContactId, setLastContactId } = useRecent();
   useGlobalNavShortcuts();
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");

@@ -10,7 +10,7 @@
  * The AISearchProgressOverlay is rendered via portal from this provider,
  * so it floats above all content regardless of routing.
  */
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useStartAISearch, useAISearchStream } from '../api/aiSearch';
 import { toast } from 'sonner';
 import type { AISearchBatch } from '../types';
@@ -63,14 +63,23 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
     // Don't clear batch data — user might want to re-open
   }, []);
 
-  return (
-    <AISearchContext.Provider value={{
+  // Memoize the provider value so an outer-tree re-render does NOT recreate
+  // the object and force every `useAISearch()` consumer to re-render. The
+  // identity of `value` now only changes when one of its observable fields
+  // actually changes.
+  const value = useMemo(
+    () => ({
       startSearch,
       batch,
       isVisible,
       dismiss,
       isStarting: startMutation.isPending,
-    }}>
+    }),
+    [startSearch, batch, isVisible, dismiss, startMutation.isPending],
+  );
+
+  return (
+    <AISearchContext.Provider value={value}>
       {children}
       {/* Progress overlay rendered via portal-like positioning at root level */}
       {isVisible && batch && (

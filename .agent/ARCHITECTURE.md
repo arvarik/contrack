@@ -279,11 +279,99 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 - **Thin Routes / Heavy Services**: Express routes parse payloads and delegate. Business logic lives in `server/services/`.
 
 ## 8. Error Handling
-- **Request Tracing**: Every request gets a UUID-prefix via middleware (`crypto.randomUUID().split("-")[0]`).
-- **`asyncHandler`**: Higher-order function wrapping async route handlers to forward errors to Express error middleware.
-- **`AppError`**: Custom error class with `statusCode`, `message`, and `isOperational` flag. Operational errors are logged at appropriate level; unexpected errors log full stack traces.
-- **Centralized Error Middleware**: Handles `AppError`, `entity.parse.failed` (400), `SQLITE_CONSTRAINT` (400), `SQLITE_BUSY` (503), and generic 500s. Stack traces hidden in production.
-- **Client Error Boundaries**: `ErrorBoundary` (global) and `RouteErrorBoundary` (per-route) catch rendering crashes with recovery UI.
+
+### Request Tracing
+Every request is assigned an 8-char UUID prefix by middleware (`crypto.randomUUID().split("-")[0]`). The id appears in every log line **and** is echoed back to the client in the error response body, so users can quote it when reporting an issue.
+
+### `asyncHandler`
+`server/utils/asyncHandler.ts` is a higher-order function that wraps any async (or sync-throwing) Express handler so its errors flow into the central error middleware. Every route in the codebase uses it — bare `async (req, res) => …` handlers are a code-review block because Express won't catch a rejected promise on its own.
+
+### `AppError` hierarchy (`server/utils/AppError.ts`)
+Every operational error thrown from a service or repository MUST be an `AppError` (or one of its subclasses). Plain `throw new Error(...)` in the service layer is a code-review block — it surfaces as a generic 500 and loses both the HTTP status and the machine-readable code.
+
+| Class | Status | `code` | Use when… |
+|-------|--------|--------|-----------|
+| `AppError` | configurable | derived from status | The catch-all — only for cases no subclass fits |
+| `NotFoundError(entity, id?)` | 404 | `NOT_FOUND` | An entity wasn't found |
+| `ValidationError(message, details)` | 400 | `VALIDATION_ERROR` | Inbound payload failed validation (carries Zod issues) |
+| `ConflictError` | 409 | `CONFLICT` | Resource already exists / state conflict |
+| `RateLimitedError` | 429 | `RATE_LIMITED` | Upstream or local rate limit hit |
+| `ServiceUnavailableError` | 503 | `SERVICE_UNAVAILABLE` | Dependency is down (e.g. AI provider after retries) |
+| `UpstreamTimeoutError` | 504 | `UPSTREAM_TIMEOUT` | A bounded upstream call exceeded its timeout |
+
+Every `AppError` carries: `message`, `statusCode`, `code` (stable machine-readable identifier), `details` (arbitrary structured blob — used by `ValidationError` to carry the Zod issue list), `cause` (the original underlying error, kept for log forensics — never sent to clients), and `isOperational` (`true` for expected errors, `false` for programmer errors).
+
+### Centralized Error Middleware (`server/middleware/errorHandler.ts`)
+A single Express error handler translates every known thrown shape into the canonical response body:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Contact c_123 not found",
+    "requestId": "ab12cd34",
+    "details": { "entity": "Contact", "id": "c_123" },
+    "stack": "..."
+  }
+}
+```
+
+The middleware handles:
+- `AppError` and subclasses — uses the carried `statusCode`, `code`, `message`, `details`
+- `ZodError` — 400 / `VALIDATION_ERROR` with `issues` as `details`
+- Express `entity.parse.failed` — 400 / `INVALID_JSON`
+- `SQLITE_CONSTRAINT` — 400 / `DB_CONSTRAINT`
+- `SQLITE_BUSY` — 503 / `DB_BUSY`
+- `SQLITE_READONLY` — 503 / `DB_READONLY`
+- Anything else — 500 / `INTERNAL` with a generic message (raw thrown text is never leaked)
+
+`stack` is included in the response body only when `NODE_ENV !== "production"`. `cause` is never serialized to clients — it's strictly for the server log. When the response has already started streaming (e.g. SSE routes), the middleware ends the connection instead of trying to write a JSON body on top of partial bytes.
+
+### `notFoundHandler`
+Mounted after every API router and before the SPA fallback. Catches any `/api/*` request that didn't match a route and emits an `AppError(404, "ROUTE_NOT_FOUND")` so the client gets a JSON 404 instead of falling through to `index.html`. Non-`/api/*` paths pass through unchanged so the SPA can render the route.
+
+### Input Validation (`server/utils/validators.ts`)
+- `validateBody(schema)`, `validateParams(schema)`, `validateQuery(schema)` — Zod-driven middleware factories. They mutate `req.body` / `req.params` / `req.query` to the parsed value and throw `ValidationError` on failure (never writing to `res` directly).
+
+### Client Error Boundaries
+- `ErrorBoundary` (global) and `RouteErrorBoundary` (per-route) catch rendering crashes with recovery UI.
+
+## 8a. AI Resilience (`server/ai/resilience.ts`)
+
+Shared utilities that every adapter (Gemini, OpenAI, Anthropic) wraps its SDK call in. Without this module, each adapter would reinvent (or skip) retries and timeouts independently.
+
+### `withTimeout(op, timeoutMs, parentSignal?)`
+Runs `op(signal)` with a hard timeout. Resolves with the op's value within `timeoutMs`, or rejects with an `UpstreamTimeoutError` once the timer fires. The signal passed into `op` is aborted when the timer fires AND when `parentSignal` aborts (if provided). Adapters MUST forward this signal to their SDK call (`{ signal }` on the OpenAI / Anthropic clients) so the underlying socket is actually closed — without that, the timer just lets the request leak in the background.
+
+### `withRetry(op, opts)`
+Exponential-backoff retry with jitter. Defaults: 3 attempts, base 500ms, jitter 250ms. Recognizes transient failures via `isRetryableError`: HTTP 408/429/5xx, `ECONNRESET`/`ECONNREFUSED`/`ETIMEDOUT`/`EAI_AGAIN`, and message-keyword matches (`rate limit`, `quota`, `overloaded`, `temporarily unavailable`, `timeout`, `deadline`). `UpstreamTimeoutError` is always retryable. When retries are exhausted, the final error is mapped to a typed `AppError`: 429 → `RateLimitedError`, 5xx → `ServiceUnavailableError`, anything else → `ServiceUnavailableError("AI provider call failed after retries")`. The caller's `signal` is honored — if it aborts mid-flight the retry loop breaks immediately and an `AppError(499, "CANCELLED")` is thrown.
+
+The `onRetry(attempt, err)` hook is the adapter's seam for `log.warn(...)` retry telemetry and per-adapter side effects like circuit-breaker tripping.
+
+### `parseAIJson(raw, context?)`
+Tolerant JSON parser for model output. Strips markdown code fences (```json … ```), trims surrounding whitespace, and falls back to extracting the first balanced `{...}` or `[...]` block when models wrap JSON in prose. On unrecoverable input, throws `AppError(502, "AI_INVALID_JSON")` with a snippet of the offending response — clients can branch on that code to substitute a default or retry.
+
+### Adapter integration
+All three adapters (`server/ai/adapters/{gemini,openai,anthropic}.ts`) share the same shape:
+
+```ts
+return withRetry(async (attempt) => {
+  const result = await withTimeout(
+    (signal) => this.client.someMethod(params, { signal }),
+    timeoutMs,
+    options.signal,
+  );
+  if (options.responseFormat === "json") parseAIJson(result.text, "ProviderAdapter.generate(...)");
+  return result;
+}, {
+  signal: options.signal,
+  onRetry: (attempt, err) => log.warn("ProviderAdapter", `attempt ${attempt} failed: ${getErrorMessage(err)}`),
+});
+```
+
+### Transactional Data Integrity
+- `ContactRepository.insertChildRecords` runs all child-table inserts inside a single `sqlite.transaction()` — if any insert fails the entire contact write is rolled back.
+- `mergeContacts` and `softMergeContacts` in `server/services/dedupe/merging.ts` re-fetch contact data **inside** the transaction (to mitigate TOCTOU) and write the audit log via `recordMergeUnsafe` **inside** the same transaction — there is no longer a window where a merge succeeds but the audit log doesn't.
 
 ## 9. Startup Lifecycle (`server.ts`)
 1. Load environment variables (`dotenv/config`)

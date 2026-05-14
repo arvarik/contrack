@@ -12,12 +12,40 @@ _Empty — start a new feature with `/step1-spec`._
 ## Current State
 **Phase:** Idle
 
-**Test Suite:** 113 tests (113 passing) — full suite, 0 regressions
+**Test Suite:** 180 tests (180 passing) — full suite, 0 regressions, <600ms run time
 
-Phases 1 and 2 are complete. We are currently architecting features that deeply leverage visualization, relational analytics, and AI constraints, ensuring robust, production-grade output.
+The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
 
 ## Relevant Files for Current Task
 _None — next feature not started._
+
+## Stabilization & Polish Sweep (Phase 2–4, 2026-05-14)
+
+**Phase 2 — Backend Stabilization & Robustness:**
+- `server/utils/AppError.ts` — added `code`, `details`, `cause` fields + named subclasses (`NotFoundError`, `ValidationError`, `ConflictError`, `RateLimitedError`, `ServiceUnavailableError`, `UpstreamTimeoutError`)
+- `server/utils/asyncHandler.ts` — strict typing; catches synchronous throws
+- `server/middleware/errorHandler.ts` (NEW) — central translation for AppError / ZodError / Express parse errors / SQLite errors; production stack stripping; `notFoundHandler` for `/api/*` 404s
+- `server/utils/validators.ts` — `validateBody` / `validateParams` / `validateQuery` now throw `ValidationError` instead of writing responses
+- `server/ai/resilience.ts` (NEW) — shared `withTimeout`, `withRetry`, `isRetryableError`, `parseAIJson` primitives consumed by every adapter
+- OpenAI / Anthropic / Gemini adapters — all now have retries, hard timeouts, and tolerant JSON parsing
+- `server/repositories/contactRepository.ts` — `insertChildRecords` wrapped in `sqlite.transaction()`
+- `server/services/dedupe/merging.ts` + `suggestions.ts` — merge + audit log now atomic; `throw new Error` replaced with typed `AppError` subclasses
+
+**Phase 3 — Frontend Consistency & Mobile Responsiveness:**
+- `src/contexts/SessionContext.tsx` — split into `RecentContext` + `AISearchSessionContext`; both provider values memoized
+- `src/contexts/AISearchContext.tsx` + `DedupeContext.tsx` — provider values memoized to stop value-recreation cascades
+- `src/components/ui/Modal.tsx` — responsive bottom-sheet on mobile (full-width, slide-up); 44px close-button hit area; safe-area inset
+- `src/components/ui/IconButton.tsx` (NEW) — touch-safe 44×44 icon button primitive
+- `src/components/QuickInteractionModal.tsx` — re-platformed onto shared `Modal` + `IconButton`; `text-base` mobile inputs to suppress iOS auto-zoom
+- `src/components/BulkEditFieldModal.tsx` — fixed hard-coded dark dropdown (was `bg-[#242424]`); added click-outside; 44px touch targets
+
+**Phase 4 — Open Source Polish & Test Coverage:**
+- TSDoc enrichment for `src/lib/utils.ts`, `server/utils/helpers.ts`, `src/types.ts`, `server/repositories/types.ts`
+- New test file `tests/unit/resilience.test.ts` (35 tests) — full coverage of timeout, retry, classifier, JSON parser
+- New test file `tests/unit/appError.test.ts` (14 tests) — AppError contract + every subclass
+- New test file `tests/unit/errorHandler.test.ts` (18 tests) — middleware translation for every error shape
+- Removed `: any` on the 3 AI adapter SDK response sites (replaced with minimal local interfaces)
+- Logger usage verified: INFO for state changes, WARN for AI retries + operational errors, ERROR for unhandled exceptions
 
 ## Recently Completed
 
@@ -44,7 +72,11 @@ _None — next feature not started._
 - B-02: Feed pagination replaces pages instead of appending (design decision needed)
 - S-02: Error messages reflect raw user input in JSON (low risk, React escapes)
 - S-03: No `Cache-Control: no-store` header on stats endpoints (low risk)
-- D-02: OpenAI/Anthropic adapters lack retry/error handling (job queue provides batch-level retry with 4 attempts + 3s backoff; adapter-level retry is a v2 enhancement)
+- D-02: ~~OpenAI/Anthropic adapters lack retry/error handling~~ — **resolved 2026-05-14** via the shared `server/ai/resilience.ts` module (`withTimeout` + `withRetry` + `parseAIJson` integrated into all three adapters)
+
+## Carried Tech Debt (not blocking ship)
+- `server/services/dedupe/` retains ~30 `any` casts on raw SQLite row access. These are pragmatic — the row shapes are joined-ad-hoc rather than `$inferSelect`-able — but should be narrowed to local row interfaces when next touched. (Out of scope for the polish sweep per the negative constraint "do not change feature logic".)
+- `src/views/dedupe/DedupeView.tsx` (742 LOC), `src/views/dedupe/components/SuggestionReviewQueue.tsx` (802 LOC), and `src/components/command-palette/CommandPalette.tsx` (850 LOC) remain "god components". They were flagged in the Phase 1 audit but not decomposed in Phase 3 — each warrants its own focused refactor.
 
 ---
 

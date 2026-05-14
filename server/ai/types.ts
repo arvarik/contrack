@@ -66,6 +66,23 @@ export interface AIGenerateOptions {
    * All fields are optional — omitting this gives default routing behavior.
    */
   routing?: RoutingPolicy;
+
+  /**
+   * Per-attempt timeout in milliseconds. Defaults to `AI_DEFAULTS.perAttemptTimeoutMs`
+   * (60s). Long-running grounded research calls may need to raise this.
+   *
+   * Hitting this limit aborts the underlying SDK call (via AbortSignal) and
+   * throws an `UpstreamTimeoutError`, which the retry layer treats as a
+   * transient failure and may re-issue against another model.
+   */
+  timeoutMs?: number;
+
+  /**
+   * Caller cancellation signal. When the signal aborts (e.g. the HTTP client
+   * disconnected) the active SDK call is cancelled and no further retries
+   * are attempted. The thrown error is an `AppError` with code `"CANCELLED"`.
+   */
+  signal?: AbortSignal;
 }
 
 // =============================================================================

@@ -8,7 +8,7 @@
   [![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
   [![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
   [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-  [![Tests](https://img.shields.io/badge/Tests-113_passing-brightgreen)](https://vitest.dev/)
+  [![Tests](https://img.shields.io/badge/Tests-180_passing-brightgreen)](https://vitest.dev/)
   [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 </div>
 
@@ -127,7 +127,7 @@ Open **http://localhost:3000**. The server auto-initializes the database, loads 
 | **AI** | Gemini / OpenAI / Anthropic (provider-agnostic adapter pattern) |
 | **Search** | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
 | **Mapping** | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding |
-| **Testing** | Vitest — 113 tests, <500ms |
+| **Testing** | Vitest — 180 tests, <600ms |
 
 ---
 

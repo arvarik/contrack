@@ -49,6 +49,9 @@ vi.mock('../server/db.ts', () => ({
 |------|-------|---------|
 | `routing.test.ts` | 492 | SmartRouter 3-pass algorithm: model selection, circuit breakers, tier filtering, paid spillover, preference sorting, capacity exhaustion |
 | `multi-provider.test.ts` | ~550 | Multi-provider AI contracts: adapter compliance (OpenAI, Anthropic), singleton factory, strategy selection, type safety, env validation |
+| `resilience.test.ts` | ~330 | Shared AI resilience: `withTimeout` (deadline + parent-abort), `withRetry` (jittered backoff, classifier, AppError conversion), `parseAIJson` (fences, prose, balanced-bracket recovery), `isRetryableError` (HTTP / ECONN / keyword) |
+| `appError.test.ts` | ~120 | AppError contract: status mapping, default codes, named subclasses (NotFound/Validation/Conflict/RateLimited/ServiceUnavailable/UpstreamTimeout) |
+| `errorHandler.test.ts` | ~245 | Central middleware: AppError translation, ZodError, Express parse errors, SQLite codes, stack stripping in production, headers-sent safety, notFoundHandler for /api/* |
 | `search.test.ts` | 121 | Search pipeline: query tokenization, RRF fusion math, FTS5 query building |
 | `nlp.names.test.ts` | 47 | Name parsing: split first/last, handle suffixes, multi-word names |
 | `nlp.distances.test.ts` | 47 | String distance metrics: Levenshtein, Jaro-Winkler, normalized similarity |
@@ -60,6 +63,8 @@ vi.mock('../server/db.ts', () => ({
 |------|-------|---------|
 | `dedupe.test.ts` | 15 | Deduplication engine: blocking pass output, merge conflict detection |
 | `geocoding.test.ts` | 16 | Geocoding service: Mapbox/Nominatim fallback, coordinate validation |
+
+**Current count**: 180 tests across 12 files, full suite <600ms.
 
 ### AI Mock Requirements
 Tests targeting AI integrations **MUST**:
@@ -91,6 +96,9 @@ _Never mark a test as PASS without evidence._
 | Domain | Test Files | Coverage Notes |
 |--------|-----------|----------------|
 | AI Routing (SmartRouter) | `routing.test.ts` (492 lines) | Thorough: tier filtering, circuit breakers, overflow, preference sorting, capacity limits |
+| AI Resilience Primitives | `resilience.test.ts` (35 tests) | `withTimeout` / `withRetry` / `parseAIJson` / `isRetryableError` — covers transient classification, abort propagation, error-type conversion, JSON fence stripping, prose-wrapped recovery |
+| Error Handling Contracts | `appError.test.ts` + `errorHandler.test.ts` (32 tests) | AppError subclass shapes + central middleware translation for AppError / ZodError / express parse / SQLite codes + headers-sent safety |
+| Multi-Provider AI Contracts | `multi-provider.test.ts` (~52 tests) | Adapter contracts, singleton factory, strategy selection, env contracts, SDK import containment |
 | NLP Primitives | 4 files (142 lines total) | Core algorithms: names, phonetics, distances, company normalization |
 | Search Pipeline | `search.test.ts` (121 lines) | Query parsing, RRF math, FTS5 query construction |
 
@@ -266,8 +274,10 @@ _List specific bugs discovered during testing._
 ## 6. Regression Scenarios (Persistent)
 | Scenario | Last Verified | Notes |
 |----------|---------------|-------|
-| _Type Check Passes_ | 2026-04-24 | `npm run lint` yields 0 new errors (pre-existing TS strict issues in frontend components are known, non-blocking) |
-| _Vitest Suite Passes_ | 2026-04-24 | `npx vitest run` passes all 113 tests (9 test files) |
+| _Type Check Passes_ | 2026-05-14 | `npm run lint` yields 0 new errors |
+| _Vitest Suite Passes_ | 2026-05-14 | `npx vitest run` passes all 180 tests across 12 test files |
+| _AI Adapter Retry Contract_ | 2026-05-14 | `resilience.test.ts` covers 5xx/429 → typed AppError conversion and abort propagation |
+| _Error Middleware Translation_ | 2026-05-14 | `errorHandler.test.ts` covers AppError / ZodError / express parse / SQLite codes; stack stripped in `NODE_ENV=production` |
 | _Production Build Succeeds_ | 2026-04-14 | `npm run build` completes without errors (3195 modules) |
 | _Vec0 Deletion Safety_ | _YYYY-MM-DD_ | Contact deletion explicitly purges `search_embeddings` and `contact_embeddings` |
 | _FTS5 Trigger Consistency_ | _YYYY-MM-DD_ | All 12 FTS triggers fire correctly on child-table mutations |

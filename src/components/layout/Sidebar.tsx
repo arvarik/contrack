@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
-import { useSession } from "../../contexts/SessionContext";
+import { useRecent } from "../../contexts/SessionContext";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -64,7 +64,10 @@ const SidebarTooltip = ({ label, shortcut, children, className }: { label: strin
 
 export const Sidebar = () => {
   const location = useLocation();
-  const { lastContactId } = useSession();
+  // Narrow context read: this hook is now isolated from AI-search keystroke
+  // updates, so the sidebar no longer re-renders when the user types in the
+  // global search bar.
+  const { lastContactId } = useRecent();
   const isMap = location.pathname.startsWith('/map');
   const isCleanup = location.pathname.startsWith('/settings');
   const isSearch = location.pathname.startsWith('/search');

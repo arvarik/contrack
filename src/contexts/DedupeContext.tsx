@@ -14,7 +14,7 @@
  * On mount, checks the server for any in-progress scan and recovers
  * the SSE connection — handles page refresh during an active scan.
  */
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { useStartDedupeScan, useDedupeStream, fetchActiveScan } from '../api/dedupe';
 import { toast } from 'sonner';
 import type { DedupeScanMode, DedupeScanProgress, DedupeCluster } from '../types';
@@ -124,8 +124,13 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
 
   const isScanning = !!scan && scan.phase !== 'complete' && scan.phase !== 'error';
 
-  return (
-    <DedupeContext.Provider value={{
+  // Memoize the provider value to avoid forcing every consumer to re-render
+  // when the DedupeProvider's parent re-renders for unrelated reasons.
+  // The SSE stream fires frequently during a scan; without this memo any
+  // ancestor change would create a new value reference and double-fire
+  // consumers in addition to the real SSE updates.
+  const value = useMemo(
+    () => ({
       startScan,
       scan,
       clusters,
@@ -133,7 +138,12 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
       isStarting: startMutation.isPending,
       reset,
       removeCluster,
-    }}>
+    }),
+    [startScan, scan, clusters, isScanning, startMutation.isPending, reset, removeCluster],
+  );
+
+  return (
+    <DedupeContext.Provider value={value}>
       {children}
     </DedupeContext.Provider>
   );

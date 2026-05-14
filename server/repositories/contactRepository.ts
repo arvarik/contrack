@@ -195,11 +195,28 @@ export const contactRepo = {
    * Handles the polymorphic input types (string | object unions) and normalizes
    * them into proper typed inserts.
    *
+   * ATOMICITY: All ten child-table inserts run inside a single `sqlite.transaction`.
+   * If any individual `.run()` throws (FK violation, UNIQUE conflict on
+   * attributes/interests/addresses, etc.) the entire batch is rolled back —
+   * we never leave a contact with partial child rows. better-sqlite3
+   * transactions are synchronous, which suits this loop perfectly.
+   *
    * @param contactId - Foreign key UUID of the parent contact
    * @param body - Payload containing arrays of child record objects
    * @param sourceName - Origin stamp for provenance tracking (default: 'manual')
    */
   insertChildRecords(contactId: string, body: ChildRecordsPayload, sourceName = 'manual'): void {
+    const txn = sqlite.transaction(() => contactRepo._insertChildRecordsUnsafe(contactId, body, sourceName));
+    txn();
+  },
+
+  /**
+   * INTERNAL — caller MUST hold an open transaction. Used by
+   * `insertChildRecords` (which opens its own) and by any service that
+   * already runs inside a wider transaction (e.g. bulk import) to avoid
+   * nested-transaction errors.
+   */
+  _insertChildRecordsUnsafe(contactId: string, body: ChildRecordsPayload, sourceName = 'manual'): void {
     // ── Emails ──────────────────────────────────────────────────────────
     if (Array.isArray(body.emails)) {
       for (let i = 0; i < body.emails.length; i++) {

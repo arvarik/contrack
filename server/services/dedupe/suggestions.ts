@@ -21,6 +21,7 @@ import crypto from "crypto";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
+import { AppError } from "../../utils/AppError.ts";
 
 // =============================================================================
 // Types
@@ -267,10 +268,13 @@ export function getSuggestionForContact(contactId: string): DedupeSuggestion | n
 export function dismissSuggestion(id: string, rid: string): void {
   const suggestion = _stmts.getById.get(id) as DedupeSuggestion | undefined;
   if (!suggestion) {
-    throw new Error(`Suggestion ${id} not found`);
+    throw new AppError(`Suggestion ${id} not found`, 404, { code: "NOT_FOUND" });
   }
   if (suggestion.status !== "pending") {
-    throw new Error(`Suggestion ${id} is already ${suggestion.status}`);
+    throw new AppError(`Suggestion ${id} is already ${suggestion.status}`, 409, {
+      code: "CONFLICT",
+      details: { currentStatus: suggestion.status },
+    });
   }
 
   const txn = sqlite.transaction(() => {
@@ -300,7 +304,12 @@ export function markSuggestionMerged(id: string, mergedBy: string): void {
 // =============================================================================
 
 /**
- * Record a merge operation in the audit log.
+ * Insert a merge audit-log row. Stand-alone variant: opens its own
+ * `sqlite.transaction` so the row is committed atomically.
+ *
+ * Use `recordMergeUnsafe` (below) when the caller is ALREADY inside a
+ * transaction — better-sqlite3 disallows nested transactions, and a nested
+ * call here would throw "cannot start a transaction within a transaction".
  *
  * @param primaryId    - The surviving contact
  * @param duplicateId  - The contact being merged away
@@ -312,6 +321,34 @@ export function markSuggestionMerged(id: string, mergedBy: string): void {
  * @returns The merge log entry ID
  */
 export function recordMerge(
+  primaryId: string,
+  duplicateId: string,
+  confidence: number,
+  reasoning: string,
+  mergedBy: string,
+  mergeType: "soft" | "hard",
+  snapshot?: string | null,
+): string {
+  let id: string;
+  const txn = sqlite.transaction(() => {
+    id = recordMergeUnsafe(primaryId, duplicateId, confidence, reasoning, mergedBy, mergeType, snapshot);
+  });
+  txn();
+  return id!;
+}
+
+/**
+ * INTERNAL — caller MUST already hold a transaction. Used by
+ * `mergeContacts` and `softMergeContacts` so the audit log entry is
+ * folded into the SAME transaction as the merge mutations.
+ *
+ * Why this matters: prior to this split the audit log was written AFTER
+ * the merge txn committed. A crash (or any thrown exception in the audit
+ * insert) between commit and recordMerge would orphan the merge — the
+ * contacts were merged, but `dedupe_merge_log` had no row, so `undoSoftMerge`
+ * was permanently impossible.
+ */
+export function recordMergeUnsafe(
   primaryId: string,
   duplicateId: string,
   confidence: number,
@@ -378,13 +415,19 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
   const entry = _stmts.getMergeLogById.get(mergeLogId) as MergeLogEntry | undefined;
 
   if (!entry) {
-    throw new Error(`Merge log entry ${mergeLogId} not found`);
+    throw new AppError(`Merge log entry ${mergeLogId} not found`, 404, { code: "NOT_FOUND" });
   }
   if (entry.undoneAt) {
-    throw new Error(`Merge ${mergeLogId} was already undone at ${entry.undoneAt}`);
+    throw new AppError(`Merge ${mergeLogId} was already undone at ${entry.undoneAt}`, 409, {
+      code: "ALREADY_UNDONE",
+      details: { undoneAt: entry.undoneAt },
+    });
   }
   if (entry.mergeType !== "soft") {
-    throw new Error(`Cannot undo a hard merge (${mergeLogId}) — the duplicate was permanently deleted`);
+    throw new AppError(`Cannot undo a hard merge — the duplicate was permanently deleted`, 409, {
+      code: "HARD_MERGE_IRREVERSIBLE",
+      details: { mergeLogId },
+    });
   }
 
   // Verify the duplicate contact still exists (it should — soft merge doesn't delete)
@@ -393,10 +436,14 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
   ).get(entry.duplicateId) as any;
 
   if (!duplicate) {
-    throw new Error(`Duplicate contact ${entry.duplicateId} no longer exists — cannot undo`);
+    throw new AppError(`Duplicate contact ${entry.duplicateId} no longer exists — cannot undo`, 410, {
+      code: "GONE",
+    });
   }
   if (!duplicate.canonicalId) {
-    throw new Error(`Duplicate contact ${entry.duplicateId} is not soft-merged (canonicalId is NULL)`);
+    throw new AppError(`Duplicate contact ${entry.duplicateId} is not soft-merged (canonicalId is NULL)`, 409, {
+      code: "INVALID_STATE",
+    });
   }
 
   const txn = sqlite.transaction(() => {
