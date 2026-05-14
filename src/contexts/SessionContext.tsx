@@ -19,8 +19,15 @@
  * fields — it now reads from both contexts but does NOT broadcast updates
  * across the boundary.
  */
-import React, { createContext, useContext, useMemo, useState, Dispatch, SetStateAction } from 'react';
-import type { SemanticSearchResult } from '../types';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  Dispatch,
+  SetStateAction,
+} from "react";
+import type { SemanticSearchResult } from "../types";
 
 // =============================================================================
 // RecentContext — last-viewed-contact cursor (network list scroll restore)
@@ -35,7 +42,7 @@ const RecentContext = createContext<RecentContextValue | null>(null);
 
 export function useRecent(): RecentContextValue {
   const ctx = useContext(RecentContext);
-  if (!ctx) throw new Error('useRecent must be used within SessionProvider');
+  if (!ctx) throw new Error("useRecent must be used within SessionProvider");
   return ctx;
 }
 
@@ -43,7 +50,7 @@ export function useRecent(): RecentContextValue {
 // AISearchSessionContext — transcript of the current AI search session
 // =============================================================================
 
-type SearchPhase = 'idle' | 'instant' | 'enriching' | 'done';
+type SearchPhase = "idle" | "instant" | "enriching" | "done";
 
 interface AISearchSessionValue {
   lastAISearchQuery: string;
@@ -58,7 +65,8 @@ const AISearchSessionContext = createContext<AISearchSessionValue | null>(null);
 
 export function useAISearchSession(): AISearchSessionValue {
   const ctx = useContext(AISearchSessionContext);
-  if (!ctx) throw new Error('useAISearchSession must be used within SessionProvider');
+  if (!ctx)
+    throw new Error("useAISearchSession must be used within SessionProvider");
   return ctx;
 }
 
@@ -79,9 +87,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── AI Search Session (wide, high-churn) ────────────────────────────
-  const [lastAISearchQuery, setLastAISearchQuery] = useState('');
-  const [lastAISearchData, setLastAISearchData] = useState<SemanticSearchResult | null>(null);
-  const [lastAISearchPhase, setLastAISearchPhase] = useState<SearchPhase>('idle');
+  const [lastAISearchQuery, setLastAISearchQuery] = useState("");
+  const [lastAISearchData, setLastAISearchData] =
+    useState<SemanticSearchResult | null>(null);
+  const [lastAISearchPhase, setLastAISearchPhase] =
+    useState<SearchPhase>("idle");
 
   const aiSearchValue = useMemo<AISearchSessionValue>(
     () => ({

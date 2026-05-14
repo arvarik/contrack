@@ -7,9 +7,19 @@
  */
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeftRight, CheckCircle2, Loader2, Sparkles, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useSuggestionForContact, useDismissSuggestion, useMergeSuggestion } from "../../../api";
+import {
+  useSuggestionForContact,
+  useDismissSuggestion,
+  useMergeSuggestion,
+} from "../../../api";
 import { ContactCard } from "../../dedupe/components/shared/ContactCard";
 
 // =============================================================================
@@ -35,13 +45,15 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
 
   if (isLoading || !suggestion || dismissed) return null;
 
-  const currentContact = suggestion.contactIdA === contactId
-    ? suggestion.contactA
-    : suggestion.contactB;
+  const currentContact =
+    suggestion.contactIdA === contactId
+      ? suggestion.contactA
+      : suggestion.contactB;
 
-  const otherContact = suggestion.contactIdA === contactId
-    ? suggestion.contactB
-    : suggestion.contactA;
+  const otherContact =
+    suggestion.contactIdA === contactId
+      ? suggestion.contactB
+      : suggestion.contactA;
 
   if (!otherContact || !currentContact) return null;
 
@@ -53,19 +65,26 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
     try {
       await dismiss.mutateAsync(suggestion.id);
       setDismissed(true);
-      toast('Marked as different people');
+      toast("Marked as different people");
     } catch (err: unknown) {
-      toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
   const handleMerge = async () => {
     try {
-      await merge.mutateAsync({ suggestionId: suggestion.id, primaryId: primary.id });
+      await merge.mutateAsync({
+        suggestionId: suggestion.id,
+        primaryId: primary.id,
+      });
       setDismissed(true); // Hide banner after merge
       toast.success(`Merged into ${primary.name}`);
     } catch (err: unknown) {
-      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -75,14 +94,14 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
       <div className="flex items-center gap-3 bg-primary/5 rounded-xl px-4 py-3">
         <span className="text-primary text-base">✨</span>
         <p className="flex-1 text-sm text-on-surface">
-          We found another contact that looks like{' '}
-          <span className="font-bold">{otherContact.name || 'someone'}</span>.
+          We found another contact that looks like{" "}
+          <span className="font-bold">{otherContact.name || "someone"}</span>.
         </p>
         <button
-          onClick={() => setShowReview(v => !v)}
+          onClick={() => setShowReview((v) => !v)}
           className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full hover:shadow-md hover:shadow-primary/20 transition-all"
         >
-          {showReview ? 'Hide' : 'Review Match'}
+          {showReview ? "Hide" : "Review Match"}
         </button>
         <button
           onClick={handleDismiss}
@@ -98,9 +117,9 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
         {showReview && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
             className="overflow-hidden"
           >
             <div className="pt-4 space-y-4">
@@ -108,7 +127,9 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
               {suggestion.reasoning && (
                 <div className="flex items-start gap-2.5 bg-primary/5 rounded-xl p-3">
                   <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-sm text-on-surface leading-relaxed">{suggestion.reasoning}</p>
+                  <p className="text-sm text-on-surface leading-relaxed">
+                    {suggestion.reasoning}
+                  </p>
                 </div>
               )}
 
@@ -124,7 +145,7 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
                   />
                 </div>
                 <button
-                  onClick={() => setSwapped(s => !s)}
+                  onClick={() => setSwapped((s) => !s)}
                   className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center"
                   title="Swap primary / duplicate"
                 >
@@ -136,14 +157,14 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
                     label="Duplicate (Merges In)"
                     labelColor="text-amber-600 bg-amber-500/10"
                     other={primary}
-                    onSetPrimary={() => setSwapped(s => !s)}
+                    onSetPrimary={() => setSwapped((s) => !s)}
                   />
                 </div>
               </div>
 
               {/* Mobile swap button */}
               <button
-                onClick={() => setSwapped(s => !s)}
+                onClick={() => setSwapped((s) => !s)}
                 className="lg:hidden w-full flex items-center justify-center gap-2 py-2 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />

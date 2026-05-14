@@ -121,7 +121,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     hasFreeTier: true,
     freeLimits: { rpm: 10, tpm: 250_000, rpd: 500 },
     paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: Infinity },
-    costPerM: 0.40,
+    costPerM: 0.4,
     supportsGrounding: true,
   },
   {
@@ -132,7 +132,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     hasFreeTier: true,
     freeLimits: { rpm: 2, tpm: 250_000, rpd: 20 },
     paidLimits: { rpm: 2_000, tpm: 3_000_000, rpd: 100_000 },
-    costPerM: 2.50,
+    costPerM: 2.5,
     supportsGrounding: true,
   },
   {
@@ -143,7 +143,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     hasFreeTier: true,
     freeLimits: { rpm: 2, tpm: 4_000, rpd: 2 },
     paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
-    costPerM: 10.00,
+    costPerM: 10.0,
     supportsGrounding: true,
   },
 
@@ -156,7 +156,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     hasFreeTier: false,
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: 350_000 },
-    costPerM: 1.50,
+    costPerM: 1.5,
     supportsGrounding: true,
   },
   {
@@ -167,7 +167,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     hasFreeTier: false,
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 2_000, tpm: 3_000_000, rpd: 100_000 },
-    costPerM: 3.00,
+    costPerM: 3.0,
     supportsGrounding: true,
   },
   {
@@ -178,7 +178,7 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     hasFreeTier: false,
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
-    costPerM: 12.00,
+    costPerM: 12.0,
     supportsGrounding: true,
   },
 ];
@@ -205,7 +205,9 @@ export function getActiveLimits(model: ModelConfig, tier: AITier): TierLimits {
 
 /** Get the active grounding RPD limit based on the current AI_TIER. */
 export function getGroundingRPDLimit(tier: AITier): number {
-  return tier === "PAID" ? GROUNDING_LIMITS.paid.rpd : GROUNDING_LIMITS.free.rpd;
+  return tier === "PAID"
+    ? GROUNDING_LIMITS.paid.rpd
+    : GROUNDING_LIMITS.free.rpd;
 }
 
 /** Lookup a model config by ID. Returns undefined if not registered. */

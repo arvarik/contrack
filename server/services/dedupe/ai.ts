@@ -23,33 +23,48 @@ IMPORTANT REASONING GUIDELINES:
  * Enhanced with source platform info and embedding similarity context.
  */
 export async function evaluateBatchWithAI(
-  candidates: { idx: number; a: any; b: any; nA: NormalizedContact; nB: NormalizedContact; signals: MatchSignals; score: number }[],
+  candidates: {
+    idx: number;
+    a: any;
+    b: any;
+    nA: NormalizedContact;
+    nB: NormalizedContact;
+    signals: MatchSignals;
+    score: number;
+  }[],
   rid: string,
-): Promise<{ idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[]> {
+): Promise<
+  { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[]
+> {
   if (candidates.length === 0) return [];
 
-  const pairDescriptions = candidates.map((c) => {
-    const srcA = c.nA.sources.length > 0 ? c.nA.sources.join(", ") : "unknown";
-    const srcB = c.nB.sources.length > 0 ? c.nB.sources.join(", ") : "unknown";
-    const emailsA = c.nA.emailsNorm.join(", ") || "(none)";
-    const emailsB = c.nB.emailsNorm.join(", ") || "(none)";
-    const phonesA = c.nA.phonesNorm.join(", ") || "(none)";
-    const phonesB = c.nB.phonesNorm.join(", ") || "(none)";
+  const pairDescriptions = candidates
+    .map((c) => {
+      const srcA =
+        c.nA.sources.length > 0 ? c.nA.sources.join(", ") : "unknown";
+      const srcB =
+        c.nB.sources.length > 0 ? c.nB.sources.join(", ") : "unknown";
+      const emailsA = c.nA.emailsNorm.join(", ") || "(none)";
+      const emailsB = c.nB.emailsNorm.join(", ") || "(none)";
+      const phonesA = c.nA.phonesNorm.join(", ") || "(none)";
+      const phonesB = c.nB.phonesNorm.join(", ") || "(none)";
 
-    let signals = `Name similarity: ${(c.signals.nameJaroWinkler * 100).toFixed(0)}%`;
-    if (c.signals.nameMetaphoneMatch) signals += ", phonetically similar";
-    if (c.signals.nicknameMatch) signals += ", possible nickname";
-    if (c.signals.companyMatch) signals += ", same company";
-    if (c.signals.locationOverlap) signals += ", same location";
-    if (c.signals.isCrossSource) signals += ", different import sources";
-    if (c.signals.embeddingSimilarity > 0) signals += `, embedding similarity: ${(c.signals.embeddingSimilarity * 100).toFixed(0)}%`;
-    signals += `, composite score: ${(c.score * 100).toFixed(0)}%`;
+      let signals = `Name similarity: ${(c.signals.nameJaroWinkler * 100).toFixed(0)}%`;
+      if (c.signals.nameMetaphoneMatch) signals += ", phonetically similar";
+      if (c.signals.nicknameMatch) signals += ", possible nickname";
+      if (c.signals.companyMatch) signals += ", same company";
+      if (c.signals.locationOverlap) signals += ", same location";
+      if (c.signals.isCrossSource) signals += ", different import sources";
+      if (c.signals.embeddingSimilarity > 0)
+        signals += `, embedding similarity: ${(c.signals.embeddingSimilarity * 100).toFixed(0)}%`;
+      signals += `, composite score: ${(c.score * 100).toFixed(0)}%`;
 
-    return `Pair ${c.idx}:
-  Contact A: "${c.a.name}" | Company: ${c.a.company || '(none)'} | Role: ${c.a.role || '(none)'} | Location: ${c.a.location || '(none)'} | Emails: ${emailsA} | Phones: ${phonesA} | Source: ${srcA}
-  Contact B: "${c.b.name}" | Company: ${c.b.company || '(none)'} | Role: ${c.b.role || '(none)'} | Location: ${c.b.location || '(none)'} | Emails: ${emailsB} | Phones: ${phonesB} | Source: ${srcB}
+      return `Pair ${c.idx}:
+  Contact A: "${c.a.name}" | Company: ${c.a.company || "(none)"} | Role: ${c.a.role || "(none)"} | Location: ${c.a.location || "(none)"} | Emails: ${emailsA} | Phones: ${phonesA} | Source: ${srcA}
+  Contact B: "${c.b.name}" | Company: ${c.b.company || "(none)"} | Role: ${c.b.role || "(none)"} | Location: ${c.b.location || "(none)"} | Emails: ${emailsB} | Phones: ${phonesB} | Source: ${srcB}
   Signals: ${signals}`;
-  }).join('\\n\\n');
+    })
+    .join("\\n\\n");
 
   try {
     const result = await ai.generate({
@@ -79,11 +94,22 @@ For each pair, return your assessment.`,
     });
 
     if (!result.text?.trim()) return [];
-    const results = JSON.parse(result.text) as { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[];
-    log.info("DedupeService", `[${rid}] AI evaluated ${results.length} pairs via ${result.model} in ${result.latencyMs}ms`);
+    const results = JSON.parse(result.text) as {
+      idx: number;
+      isDuplicate: boolean;
+      confidence: number;
+      reasoning: string;
+    }[];
+    log.info(
+      "DedupeService",
+      `[${rid}] AI evaluated ${results.length} pairs via ${result.model} in ${result.latencyMs}ms`,
+    );
     return results;
   } catch (err: unknown) {
-    log.error("DedupeService", `[${rid}] AI batch evaluation failed: ${getErrorMessage(err)}`);
+    log.error(
+      "DedupeService",
+      `[${rid}] AI batch evaluation failed: ${getErrorMessage(err)}`,
+    );
     return [];
   }
 }

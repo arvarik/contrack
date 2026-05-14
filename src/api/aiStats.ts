@@ -5,9 +5,9 @@
  * - useAIStatsSummary()  → GET /api/ai/stats/summary
  * - useAIStatsFeed()     → GET /api/ai/stats/feed
  */
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 
-const API_BASE = '/api/ai/stats';
+const API_BASE = "/api/ai/stats";
 
 // =============================================================================
 // Types (match backend response shapes exactly)
@@ -39,7 +39,7 @@ export interface AIStatsQuota {
 
 export interface AIStatsSummary {
   session: AIStatsSessionKPIs;
-  tier: 'FREE' | 'PAID' | 'MOCK';
+  tier: "FREE" | "PAID" | "MOCK";
   quota: AIStatsQuota;
   cacheTiers: Record<string, AIStatsCacheTier>;
   timestamp: string;
@@ -74,8 +74,8 @@ export interface FeedQueryParams {
   offset?: number;
   limit?: number;
   operation?: string;
-  cached?: 'true' | 'false';
-  sort?: 'newest' | 'oldest';
+  cached?: "true" | "false";
+  sort?: "newest" | "oldest";
 }
 
 // =============================================================================
@@ -88,10 +88,10 @@ export interface FeedQueryParams {
  */
 export const useAIStatsSummary = () => {
   return useQuery({
-    queryKey: ['aiStats', 'summary'],
+    queryKey: ["aiStats", "summary"],
     queryFn: async (): Promise<AIStatsSummary> => {
       const res = await fetch(`${API_BASE}/summary`);
-      if (!res.ok) throw new Error('Failed to fetch AI stats summary');
+      if (!res.ok) throw new Error("Failed to fetch AI stats summary");
       return res.json();
     },
     staleTime: 30_000,
@@ -105,20 +105,24 @@ export const useAIStatsSummary = () => {
 export const useAIStatsFeed = (params: FeedQueryParams = {}) => {
   // Build URLSearchParams from non-undefined values
   const searchParams = new URLSearchParams();
-  if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
-  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
-  if (params.operation) searchParams.set('operation', params.operation);
-  if (params.cached) searchParams.set('cached', params.cached);
-  if (params.sort) searchParams.set('sort', params.sort);
+  if (params.offset !== undefined)
+    searchParams.set("offset", String(params.offset));
+  if (params.limit !== undefined)
+    searchParams.set("limit", String(params.limit));
+  if (params.operation) searchParams.set("operation", params.operation);
+  if (params.cached) searchParams.set("cached", params.cached);
+  if (params.sort) searchParams.set("sort", params.sort);
 
   const queryString = searchParams.toString();
 
   return useQuery({
-    queryKey: ['aiStats', 'feed', params],
+    queryKey: ["aiStats", "feed", params],
     queryFn: async (): Promise<AIStatsFeedResponse> => {
-      const url = queryString ? `${API_BASE}/feed?${queryString}` : `${API_BASE}/feed`;
+      const url = queryString
+        ? `${API_BASE}/feed?${queryString}`
+        : `${API_BASE}/feed`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to fetch AI stats feed');
+      if (!res.ok) throw new Error("Failed to fetch AI stats feed");
       return res.json();
     },
     staleTime: 30_000,

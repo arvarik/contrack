@@ -1,5 +1,10 @@
 import React, { useState } from "react";
-import { X, UserPlus, Calendar as CalendarIcon, ExternalLink } from "lucide-react";
+import {
+  X,
+  UserPlus,
+  Calendar as CalendarIcon,
+  ExternalLink,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { DashboardPayload } from "../../api";
 import { SECTION_HEADING, CARD_COMPACT } from "../../lib/styles";
@@ -15,8 +20,15 @@ interface NetworkGrowthModalProps {
   totalCount: number;
 }
 
-export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: NetworkGrowthModalProps) => {
-  const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
+export const NetworkGrowthModal = ({
+  isOpen,
+  onClose,
+  timeline,
+  totalCount,
+}: NetworkGrowthModalProps) => {
+  const [floatingContactId, setFloatingContactId] = useState<string | null>(
+    null,
+  );
 
   if (!timeline) return null;
 
@@ -30,13 +42,15 @@ export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: Ne
               <UserPlus className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-on-surface">Network Growth</h2>
+              <h2 className="text-xl font-bold text-on-surface">
+                Network Growth
+              </h2>
               <p className="text-xs text-on-surface-variant font-medium flex items-center gap-1.5 mt-0.5">
                 <CalendarIcon className="w-3 h-3 opacity-70" /> 30-Day Pipeline
               </p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
           >
@@ -52,7 +66,7 @@ export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: Ne
               {totalCount} Total
             </span>
           </div>
-          
+
           {timeline.length === 0 ? (
             <div className="text-center py-10 text-on-surface-variant text-sm font-medium bg-surface-container-low rounded-2xl">
               No new contacts met in the last 30 days.
@@ -62,10 +76,12 @@ export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: Ne
               {timeline.map((contact, index) => {
                 const addedDate = new Date(contact.addedAt);
                 const isToday = isSameDay(addedDate, new Date());
-                const relativeTime = isToday ? 'Today' : formatDistanceToNow(addedDate, { addSuffix: true });
+                const relativeTime = isToday
+                  ? "Today"
+                  : formatDistanceToNow(addedDate, { addSuffix: true });
 
                 return (
-                  <motion.div 
+                  <motion.div
                     key={contact.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -74,7 +90,7 @@ export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: Ne
                   >
                     {/* Timeline dot */}
                     <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary ring-4 ring-surface-container-lowest" />
-                    
+
                     <div className="mb-2">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant/80">
                         {relativeTime} • {format(addedDate, "MMM d, yyyy")}
@@ -84,18 +100,21 @@ export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: Ne
                     <button
                       onClick={() => setFloatingContactId(contact.id)}
                       className={cn(
-                        CARD_COMPACT, 
-                        "w-full text-left flex items-center gap-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 group/btn bg-surface-container"
+                        CARD_COMPACT,
+                        "w-full text-left flex items-center gap-4 hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 group/btn bg-surface-container",
                       )}
                     >
-                      <div 
+                      <div
                         className="w-12 h-12 rounded-full shadow-sm flex items-center justify-center font-bold text-white text-sm bg-cover bg-center shrink-0"
-                        style={{ 
+                        style={{
                           backgroundColor: contact.themeColor,
-                          backgroundImage: contact.avatarUrl ? `url(${contact.avatarUrl})` : 'none' 
+                          backgroundImage: contact.avatarUrl
+                            ? `url(${contact.avatarUrl})`
+                            : "none",
                         }}
                       >
-                        {!contact.avatarUrl && contact.name.charAt(0).toUpperCase()}
+                        {!contact.avatarUrl &&
+                          contact.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -120,8 +139,8 @@ export const NetworkGrowthModal = ({ isOpen, onClose, timeline, totalCount }: Ne
           )}
         </div>
       </Modal>
-      
-      <FloatingContactCard 
+
+      <FloatingContactCard
         contactId={floatingContactId}
         isOpen={!!floatingContactId}
         onClose={() => setFloatingContactId(null)}

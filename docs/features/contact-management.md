@@ -34,6 +34,7 @@ Access via **Settings → Import** or the import button on the contact list. Sup
 - **EML files** — Email message parsing
 
 The import pipeline runs in 4 SSE-streamed phases:
+
 1. **Importing** — Creating contact records
 2. **Embedding** — Generating contact fingerprints for deduplication
 3. **Scanning** — Checking for duplicates against existing contacts
@@ -59,22 +60,23 @@ Each contact has a comprehensive profile with two tabs: **Dossier** (details) an
 
 ### Detail Fields
 
-| Field | Type | Notes |
-|-------|------|-------|
-| Name, First, Last | Text | Auto-split on creation |
-| Headline | Text | One-line professional summary |
-| Role | Text | Job title |
-| Company | Text | Auto-fetches company logo via local proxy |
-| Location | Text | Auto-geocoded for map view |
-| Birthday | Date | With age calculation display |
-| Pronouns | Text | |
-| Industry | Text | With autocomplete from existing industries |
-| Website | URL | |
-| About | Text | Free-form biography |
+| Field             | Type | Notes                                      |
+| ----------------- | ---- | ------------------------------------------ |
+| Name, First, Last | Text | Auto-split on creation                     |
+| Headline          | Text | One-line professional summary              |
+| Role              | Text | Job title                                  |
+| Company           | Text | Auto-fetches company logo via local proxy  |
+| Location          | Text | Auto-geocoded for map view                 |
+| Birthday          | Date | With age calculation display               |
+| Pronouns          | Text |                                            |
+| Industry          | Text | With autocomplete from existing industries |
+| Website           | URL  |                                            |
+| About             | Text | Free-form biography                        |
 
 ### Multi-Value Fields
 
 These fields support multiple entries with labels:
+
 - **Emails** — Work, Personal, Other
 - **Phones** — Mobile, Work, Home, Other
 - **Addresses** — With geocoding for map integration
@@ -104,6 +106,7 @@ The timeline tab shows all interactions with a contact in chronological order. E
 ### Logging Interactions
 
 Use the **Rich Interaction Composer** at the bottom of the timeline tab. Features:
+
 - Type selector pills (Note / Call / Meeting / Email)
 - Tiptap rich text editor with @mention support
 - File upload via drag-and-drop or click

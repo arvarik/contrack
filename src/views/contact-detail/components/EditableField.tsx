@@ -5,10 +5,10 @@
  * ✓ confirmation animation so users know the change was persisted.
  * Escape reverts to the original value without saving.
  */
-import React, { useState, useEffect } from 'react';
-import { Check } from 'lucide-react';
-import { cn } from '../../../lib/utils';
-import { EDITABLE_INPUT } from '../../../lib/styles';
+import React, { useState, useEffect } from "react";
+import { Check } from "lucide-react";
+import { cn } from "../../../lib/utils";
+import { EDITABLE_INPUT } from "../../../lib/styles";
 
 export const EditableField = ({
   value,
@@ -41,11 +41,11 @@ export const EditableField = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       e.currentTarget.blur();
     }
-    if (e.key === 'Escape') {
+    if (e.key === "Escape") {
       setCurrentVal(value || "");
       setIsEditing(false);
     }
@@ -56,7 +56,7 @@ export const EditableField = ({
       <input
         autoFocus
         value={currentVal}
-        onChange={e => setCurrentVal(e.target.value)}
+        onChange={(e) => setCurrentVal(e.target.value)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         className={cn(EDITABLE_INPUT, className)}
@@ -71,12 +71,14 @@ export const EditableField = ({
       className={cn(
         "relative cursor-text group inline-flex items-center gap-1.5",
         !value && "text-on-surface-variant opacity-50 italic",
-        className
+        className,
       )}
     >
       {/* Absolute hover background layer completely decoupled from flex flow */}
       <span className="absolute -inset-x-2 -top-1 -bottom-1.5 rounded bg-transparent group-hover:bg-surface-container-high transition-colors -z-10 pointer-events-none" />
-      <span className="relative pointer-events-none">{value || placeholder}</span>
+      <span className="relative pointer-events-none">
+        {value || placeholder}
+      </span>
       {/* Save confirmation ✓ — fades in/out */}
       {showSaved && (
         <span

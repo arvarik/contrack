@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { cn } from "../../lib/utils";
 import { CARD_COMPACT, SECTION_HEADING, TAG_PILL } from "../../lib/styles";
 import { ActionItem } from "../../types";
-import { Check, Clock, CalendarDays, MoreVertical, Keyboard } from "lucide-react";
+import {
+  Check,
+  Clock,
+  CalendarDays,
+  MoreVertical,
+  Keyboard,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCompleteActionItem, useUpdateActionItem } from "../../api";
 import { format, isPast, isToday, addDays } from "date-fns";
@@ -16,7 +22,15 @@ interface SwimlaneProps {
   firstActionItemId?: string;
 }
 
-const SnoozeDropdown = ({ item, onClose, triggerRect }: { item: ActionItem, onClose: () => void, triggerRect: DOMRect }) => {
+const SnoozeDropdown = ({
+  item,
+  onClose,
+  triggerRect,
+}: {
+  item: ActionItem;
+  onClose: () => void;
+  triggerRect: DOMRect;
+}) => {
   const update = useUpdateActionItem();
 
   const handleSnooze = (days: number) => {
@@ -31,27 +45,48 @@ const SnoozeDropdown = ({ item, onClose, triggerRect }: { item: ActionItem, onCl
   return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div 
-        className={cn("absolute z-50 mt-1 w-36 overflow-hidden rounded-xl glass-panel py-1 shadow-xl outline-none")}
+      <div
+        className={cn(
+          "absolute z-50 mt-1 w-36 overflow-hidden rounded-xl glass-panel py-1 shadow-xl outline-none",
+        )}
         style={{ top, left: Math.max(10, left) }}
       >
-        <div className="px-3 py-1.5 bg-surface-container-high text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">Snooze</div>
-        <button onClick={() => handleSnooze(1)} className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors">
+        <div className="px-3 py-1.5 bg-surface-container-high text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">
+          Snooze
+        </div>
+        <button
+          onClick={() => handleSnooze(1)}
+          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors"
+        >
           <Clock className="w-3 h-3 mr-2 opacity-80" /> Tomorrow
         </button>
-        <button onClick={() => handleSnooze(3)} className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors">
+        <button
+          onClick={() => handleSnooze(3)}
+          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors"
+        >
           <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> In 3 days
         </button>
-        <button onClick={() => handleSnooze(7)} className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors">
+        <button
+          onClick={() => handleSnooze(7)}
+          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors"
+        >
           <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> Next week
         </button>
       </div>
     </>,
-    document.body
+    document.body,
   );
 };
 
-const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string, isActive?: boolean }) => {
+const ActionCard = ({
+  item,
+  theme,
+  isActive,
+}: {
+  item: ActionItem;
+  theme: string;
+  isActive?: boolean;
+}) => {
   const complete = useCompleteActionItem();
   const [showSnooze, setShowSnooze] = useState(false);
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
@@ -59,15 +94,20 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
   const [isCompleting, setIsCompleting] = useState(false);
 
   const colors = {
-    urgent: "text-error border-error/20 bg-error/5 hover:bg-error/10 hover:border-error/40",
-    today: "text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40",
-    upcoming: "text-on-surface-variant border-surface-container bg-surface-container-lowest hover:bg-surface-container",
+    urgent:
+      "text-error border-error/20 bg-error/5 hover:bg-error/10 hover:border-error/40",
+    today:
+      "text-primary border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40",
+    upcoming:
+      "text-on-surface-variant border-surface-container bg-surface-container-lowest hover:bg-surface-container",
   };
 
   const checkColors = {
     urgent: "border-error/30 text-error hover:bg-error hover:text-white",
-    today: "border-primary/30 text-primary hover:bg-primary hover:text-on-primary",
-    upcoming: "border-on-surface-variant/30 text-on-surface-variant hover:bg-primary hover:text-on-primary hover:border-primary",
+    today:
+      "border-primary/30 text-primary hover:bg-primary hover:text-on-primary",
+    upcoming:
+      "border-on-surface-variant/30 text-on-surface-variant hover:bg-primary hover:text-on-primary hover:border-primary",
   };
 
   const handleComplete = () => {
@@ -80,12 +120,15 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
   };
 
   return (
-    <div className={cn(
-      "w-full rounded-xl border p-4 flex items-center gap-4 transition-all duration-300 group shadow-sm relative",
-      colors[theme as keyof typeof colors],
-      isActive && "ring-2 ring-primary border-primary ring-offset-2 ring-offset-surface scale-[1.01] z-10",
-      isCompleting && "opacity-50 scale-[0.98]"
-    )}>
+    <div
+      className={cn(
+        "w-full rounded-xl border p-4 flex items-center gap-4 transition-all duration-300 group shadow-sm relative",
+        colors[theme as keyof typeof colors],
+        isActive &&
+          "ring-2 ring-primary border-primary ring-offset-2 ring-offset-surface scale-[1.01] z-10",
+        isCompleting && "opacity-50 scale-[0.98]",
+      )}
+    >
       {/* Checkbox */}
       <button
         onClick={handleComplete}
@@ -93,21 +136,26 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
         className={cn(
           "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200",
           checkColors[theme as keyof typeof checkColors],
-          isCompleting && "bg-emerald-500 border-emerald-500 text-white scale-110"
+          isCompleting &&
+            "bg-emerald-500 border-emerald-500 text-white scale-110",
         )}
       >
-        <Check className={cn(
-          "w-3.5 h-3.5 transition-opacity",
-          isCompleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        )} />
+        <Check
+          className={cn(
+            "w-3.5 h-3.5 transition-opacity",
+            isCompleting ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
+        />
       </button>
 
       {/* Content */}
       <div className="flex flex-col flex-1 min-w-0">
-        <span className={cn(
-          "font-bold text-on-surface truncate pr-2 transition-all duration-300",
-          isCompleting && "line-through opacity-40"
-        )}>
+        <span
+          className={cn(
+            "font-bold text-on-surface truncate pr-2 transition-all duration-300",
+            isCompleting && "line-through opacity-40",
+          )}
+        >
           {item.title}
         </span>
         <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -115,7 +163,12 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
             {item.contactName || "Unknown"}
           </span>
           <span className="w-1 h-1 rounded-full bg-surface-container-high" />
-          <span className={cn("text-[10px] font-bold uppercase tracking-wider", theme === 'urgent' && 'text-error font-extrabold')}>
+          <span
+            className={cn(
+              "text-[10px] font-bold uppercase tracking-wider",
+              theme === "urgent" && "text-error font-extrabold",
+            )}
+          >
             {format(new Date(item.dueAt), "MMM d, h:mm a")}
           </span>
         </div>
@@ -135,16 +188,26 @@ const ActionCard = ({ item, theme, isActive }: { item: ActionItem, theme: string
       </div>
 
       {showSnooze && triggerRect && (
-        <SnoozeDropdown item={item} onClose={() => setShowSnooze(false)} triggerRect={triggerRect} />
+        <SnoozeDropdown
+          item={item}
+          onClose={() => setShowSnooze(false)}
+          triggerRect={triggerRect}
+        />
       )}
     </div>
   );
 };
 
-export const ActionItemSwimlane = ({ title, items, theme, delay = 0, firstActionItemId }: SwimlaneProps) => {
+export const ActionItemSwimlane = ({
+  title,
+  items,
+  theme,
+  delay = 0,
+  firstActionItemId,
+}: SwimlaneProps) => {
   if (items.length === 0) return null;
 
-  const hasActiveItem = items.some(item => item.id === firstActionItemId);
+  const hasActiveItem = items.some((item) => item.id === firstActionItemId);
 
   return (
     <motion.div
@@ -162,14 +225,26 @@ export const ActionItemSwimlane = ({ title, items, theme, delay = 0, firstAction
         </div>
         {hasActiveItem && (
           <div className="hidden md:flex items-center gap-2 text-on-surface-variant group/hint cursor-help relative">
-              <span className="text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover/hint:opacity-100 transition-opacity translate-x-2 group-hover/hint:translate-x-0">
-                  Press <kbd className="bg-surface-container rounded px-1 font-mono">D</kbd> Done · <kbd className="bg-surface-container rounded px-1 font-mono">S</kbd> Snooze · <kbd className="bg-surface-container rounded px-1 font-mono">L</kbd> Log
-              </span>
-              <Keyboard className="w-4 h-4 opacity-50 group-hover/hint:opacity-100 transition-opacity group-hover/hint:text-primary" />
+            <span className="text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover/hint:opacity-100 transition-opacity translate-x-2 group-hover/hint:translate-x-0">
+              Press{" "}
+              <kbd className="bg-surface-container rounded px-1 font-mono">
+                D
+              </kbd>{" "}
+              Done ·{" "}
+              <kbd className="bg-surface-container rounded px-1 font-mono">
+                S
+              </kbd>{" "}
+              Snooze ·{" "}
+              <kbd className="bg-surface-container rounded px-1 font-mono">
+                L
+              </kbd>{" "}
+              Log
+            </span>
+            <Keyboard className="w-4 h-4 opacity-50 group-hover/hint:opacity-100 transition-opacity group-hover/hint:text-primary" />
           </div>
         )}
       </div>
-      
+
       <div className="flex flex-col gap-2">
         <AnimatePresence initial={false}>
           {items.map((item) => (
@@ -177,11 +252,15 @@ export const ActionItemSwimlane = ({ title, items, theme, delay = 0, firstAction
               key={item.id}
               layout
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, scale: 0.95, height: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <ActionCard item={item} theme={theme} isActive={item.id === firstActionItemId} />
+              <ActionCard
+                item={item}
+                theme={theme}
+                isActive={item.id === firstActionItemId}
+              />
             </motion.div>
           ))}
         </AnimatePresence>

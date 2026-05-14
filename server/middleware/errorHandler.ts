@@ -139,7 +139,10 @@ export function errorHandler(
       `[${requestId ?? "-"}] ${req.method} ${req.originalUrl} → ${t.statusCode} ${t.code}: ${t.message}`,
     );
     if (t.cause) {
-      log.debug("Operational", `[${requestId ?? "-"}] cause: ${String((t.cause as Error)?.message ?? t.cause)}`);
+      log.debug(
+        "Operational",
+        `[${requestId ?? "-"}] cause: ${String((t.cause as Error)?.message ?? t.cause)}`,
+      );
     }
   }
 
@@ -157,7 +160,9 @@ export function errorHandler(
       message: t.message,
       ...(requestId ? { requestId } : {}),
       ...(t.details !== undefined ? { details: t.details } : {}),
-      ...(!isProd && (err as Error)?.stack ? { stack: (err as Error).stack } : {}),
+      ...(!isProd && (err as Error)?.stack
+        ? { stack: (err as Error).stack }
+        : {}),
     },
   };
 
@@ -169,7 +174,11 @@ export function errorHandler(
  * but BEFORE the error middleware. Without it, unknown `/api/*` paths fall
  * through to the SPA index.html which is confusing for API clients.
  */
-export function notFoundHandler(req: Request, res: Response, next: NextFunction): void {
+export function notFoundHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   if (req.path.startsWith("/api/")) {
     return next(
       new AppError(`Unknown API endpoint: ${req.method} ${req.path}`, 404, {

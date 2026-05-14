@@ -45,9 +45,9 @@ interface TierConfig {
 /** A single cached entry within a tier. */
 interface CacheEntry<T = unknown> {
   value: T;
-  expiresAt: number;     // epoch ms
-  lastAccessed: number;  // epoch ms — for LRU ordering
-  createdAt: number;     // epoch ms — for diagnostics
+  expiresAt: number; // epoch ms
+  lastAccessed: number; // epoch ms — for LRU ordering
+  createdAt: number; // epoch ms — for diagnostics
 }
 
 /** Hit/miss statistics for a single tier. */
@@ -101,7 +101,11 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * TTL 24h: Regenerated once per day. Single-slot cache (maxEntries: 1).
    * Invalidation: Full flush on any contact mutation.
    */
-  dailyInsight: { ttlMs: 24 * 60 * 60_000, maxEntries: 1, label: "DailyInsight" },
+  dailyInsight: {
+    ttlMs: 24 * 60 * 60_000,
+    maxEntries: 1,
+    label: "DailyInsight",
+  },
 };
 
 // =============================================================================
@@ -124,7 +128,10 @@ for (const [op, config] of Object.entries(TIER_CONFIGS)) {
 const tierSummary = Object.entries(TIER_CONFIGS)
   .map(([op, c]) => `${op}(${formatMs(c.ttlMs)}/${c.maxEntries})`)
   .join(", ");
-log.info("AICache", `Initialized ${Object.keys(TIER_CONFIGS).length} tiers: ${tierSummary}`);
+log.info(
+  "AICache",
+  `Initialized ${Object.keys(TIER_CONFIGS).length} tiers: ${tierSummary}`,
+);
 
 // =============================================================================
 // Batch Mode (Phase 4)
@@ -168,7 +175,10 @@ function evictLRU(tier: string, store: Map<string, CacheEntry>): void {
     const tierStats = stats.get(tier)!;
     tierStats.evictions++;
     tierStats.entries = store.size;
-    log.debug("AICache", `EVICT [${TIER_CONFIGS[tier]?.label}] "${oldestKey.slice(0, 40)}…" (LRU, ${store.size} remaining)`);
+    log.debug(
+      "AICache",
+      `EVICT [${TIER_CONFIGS[tier]?.label}] "${oldestKey.slice(0, 40)}…" (LRU, ${store.size} remaining)`,
+    );
   }
 }
 
@@ -204,7 +214,10 @@ export const aiCache = {
     const entry = store.get(key);
     if (!entry) {
       tierStats.misses++;
-      log.debug("AICache", `MISS [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (${store.size} entries)`);
+      log.debug(
+        "AICache",
+        `MISS [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (${store.size} entries)`,
+      );
       return null;
     }
 
@@ -214,7 +227,10 @@ export const aiCache = {
       tierStats.misses++;
       tierStats.entries = store.size;
       const age = Math.round((Date.now() - entry.createdAt) / 1000);
-      log.debug("AICache", `EXPIRED [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (age: ${age}s)`);
+      log.debug(
+        "AICache",
+        `EXPIRED [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (age: ${age}s)`,
+      );
       return null;
     }
 
@@ -222,7 +238,10 @@ export const aiCache = {
     entry.lastAccessed = Date.now();
     tierStats.hits++;
     const ageMs = Date.now() - entry.createdAt;
-    log.debug("AICache", `HIT [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (age: ${Math.round(ageMs / 1000)}s, ${store.size} entries)`);
+    log.debug(
+      "AICache",
+      `HIT [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (age: ${Math.round(ageMs / 1000)}s, ${store.size} entries)`,
+    );
     return entry.value as T;
   },
 
@@ -251,7 +270,10 @@ export const aiCache = {
       createdAt: now,
     });
     tierStats.entries = store.size;
-    log.debug("AICache", `SET [${config.label}] "${key.slice(0, 50)}" (TTL: ${formatMs(config.ttlMs)}, ${store.size} entries)`);
+    log.debug(
+      "AICache",
+      `SET [${config.label}] "${key.slice(0, 50)}" (TTL: ${formatMs(config.ttlMs)}, ${store.size} entries)`,
+    );
   },
 
   /**
@@ -265,7 +287,10 @@ export const aiCache = {
     if (batchRefCount > 0) {
       const deferKey = keyPrefix ? `${operation}::${keyPrefix}` : operation;
       pendingInvalidations.add(deferKey);
-      log.debug("AICache", `BATCH_DEFER [${TIER_CONFIGS[operation]?.label}] invalidation deferred (depth: ${batchRefCount})`);
+      log.debug(
+        "AICache",
+        `BATCH_DEFER [${TIER_CONFIGS[operation]?.label}] invalidation deferred (depth: ${batchRefCount})`,
+      );
       return;
     }
 
@@ -284,7 +309,10 @@ export const aiCache = {
       }
       tierStats.entries = store.size;
       if (removed > 0) {
-        log.debug("AICache", `INVALIDATE [${TIER_CONFIGS[operation]?.label}] ${removed} entries matching "${keyPrefix}*" (${store.size} remaining)`);
+        log.debug(
+          "AICache",
+          `INVALIDATE [${TIER_CONFIGS[operation]?.label}] ${removed} entries matching "${keyPrefix}*" (${store.size} remaining)`,
+        );
       }
     } else {
       // Full flush of this tier
@@ -292,7 +320,10 @@ export const aiCache = {
       store.clear();
       tierStats.entries = 0;
       if (count > 0) {
-        log.info("AICache", `INVALIDATE [${TIER_CONFIGS[operation]?.label}] flushed ${count} entries`);
+        log.info(
+          "AICache",
+          `INVALIDATE [${TIER_CONFIGS[operation]?.label}] flushed ${count} entries`,
+        );
       }
     }
   },
@@ -304,7 +335,10 @@ export const aiCache = {
   invalidateAll(): void {
     if (batchRefCount > 0) {
       pendingInvalidations.add("__all__");
-      log.debug("AICache", `BATCH_DEFER invalidateAll deferred (depth: ${batchRefCount})`);
+      log.debug(
+        "AICache",
+        `BATCH_DEFER invalidateAll deferred (depth: ${batchRefCount})`,
+      );
       return;
     }
 
@@ -316,7 +350,10 @@ export const aiCache = {
       tierStats.entries = 0;
     }
     if (totalFlushed > 0) {
-      log.info("AICache", `INVALIDATE_ALL flushed ${totalFlushed} entries across ${stores.size} tiers`);
+      log.info(
+        "AICache",
+        `INVALIDATE_ALL flushed ${totalFlushed} entries across ${stores.size} tiers`,
+      );
     }
   },
 
@@ -344,10 +381,16 @@ export const aiCache = {
     }
 
     batchRefCount--;
-    log.info("AICache", `BATCH_EXIT (depth: ${batchRefCount}, pending: ${pendingInvalidations.size})`);
+    log.info(
+      "AICache",
+      `BATCH_EXIT (depth: ${batchRefCount}, pending: ${pendingInvalidations.size})`,
+    );
 
     if (batchRefCount === 0 && pendingInvalidations.size > 0) {
-      log.info("AICache", `BATCH_FLUSH replaying ${pendingInvalidations.size} deferred invalidation(s)`);
+      log.info(
+        "AICache",
+        `BATCH_FLUSH replaying ${pendingInvalidations.size} deferred invalidation(s)`,
+      );
 
       // If "all" was requested, just do a full flush
       if (pendingInvalidations.has("__all__")) {
@@ -382,7 +425,10 @@ export const aiCache = {
    */
   forceClearBatchMode(): void {
     if (batchRefCount > 0) {
-      log.warn("AICache", `BATCH_FORCE_CLEAR resetting depth from ${batchRefCount} to 0`);
+      log.warn(
+        "AICache",
+        `BATCH_FORCE_CLEAR resetting depth from ${batchRefCount} to 0`,
+      );
       batchRefCount = 0;
       pendingInvalidations.clear();
       aiCache.invalidateAll();
@@ -394,7 +440,12 @@ export const aiCache = {
   // ===========================================================================
 
   /** Get hit/miss/entry statistics for all tiers. */
-  getStats(): Record<string, TierStats & { ttlMs: number; maxEntries: number }> & { batchMode: { active: boolean; depth: number; pendingInvalidations: number } } {
+  getStats(): Record<
+    string,
+    TierStats & { ttlMs: number; maxEntries: number }
+  > & {
+    batchMode: { active: boolean; depth: number; pendingInvalidations: number };
+  } {
     const result: Record<string, any> = {};
     for (const [op, tierStats] of stats) {
       // Clean expired before reporting
@@ -439,7 +490,10 @@ export function getCachedSearch(query: string): CachedSearchResult | null {
 /**
  * Store a search result. Drop-in replacement for searchCache.setCachedSearch().
  */
-export function setCachedSearch(query: string, value: CachedSearchResult): void {
+export function setCachedSearch(
+  query: string,
+  value: CachedSearchResult,
+): void {
   const key = normalizeKey(query);
   aiCache.set("rerank", key, value);
 }

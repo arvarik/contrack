@@ -26,7 +26,7 @@ interface State {
 
 export class RouteErrorBoundary extends Component<Props, State> {
   declare props: Readonly<Props>;
-  declare setState: Component<Props, State>['setState'];
+  declare setState: Component<Props, State>["setState"];
   public state: State = { hasError: false };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -34,7 +34,11 @@ export class RouteErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(`[RouteErrorBoundary${this.props.viewName ? `: ${this.props.viewName}` : ''}]`, error, info);
+    console.error(
+      `[RouteErrorBoundary${this.props.viewName ? `: ${this.props.viewName}` : ""}]`,
+      error,
+      info,
+    );
   }
 
   private handleRetry = () => {
@@ -49,9 +53,12 @@ export class RouteErrorBoundary extends Component<Props, State> {
             <div className="w-12 h-12 bg-error/10 text-error rounded-full flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h2 className="text-lg font-bold font-headline">Something went wrong</h2>
+            <h2 className="text-lg font-bold font-headline">
+              Something went wrong
+            </h2>
             <p className="text-sm text-on-surface-variant leading-relaxed">
-              This view crashed unexpectedly. The rest of the app is still working — you can retry or navigate elsewhere.
+              This view crashed unexpectedly. The rest of the app is still
+              working — you can retry or navigate elsewhere.
             </p>
             {this.state.error && (
               <div className="bg-surface-container-highest p-3 rounded-xl text-left overflow-x-auto text-xs font-mono text-error">

@@ -10,9 +10,9 @@
  * Items follow the ContextMenuItem interface. Separator items have `separator: true`.
  * Danger items have `danger: true` (rendered in rose).
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
 
 export interface ContextMenuItem {
   id: string;
@@ -39,31 +39,41 @@ interface ContextMenuProps extends ContextMenuState {
 // ContextMenu component
 // ---------------------------------------------------------------------------
 
-export const ContextMenu = ({ x, y, items, isOpen, onClose }: ContextMenuProps) => {
+export const ContextMenu = ({
+  x,
+  y,
+  items,
+  isOpen,
+  onClose,
+}: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click or Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+      if (menuRef.current && !menuRef.current.contains(e.target as Node))
+        onClose();
     };
-    window.addEventListener('keydown', handleKey);
+    window.addEventListener("keydown", handleKey);
     // Use capture to fire before other handlers
-    window.addEventListener('mousedown', handleClick, true);
+    window.addEventListener("mousedown", handleClick, true);
     return () => {
-      window.removeEventListener('keydown', handleKey);
-      window.removeEventListener('mousedown', handleClick, true);
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("mousedown", handleClick, true);
     };
   }, [isOpen, onClose]);
 
   // Clamp to viewport so menu never clips off-screen
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
   useEffect(() => {
-    if (!isOpen || !menuRef.current) { setAdjustedPos({ x, y }); return; }
+    if (!isOpen || !menuRef.current) {
+      setAdjustedPos({ x, y });
+      return;
+    }
     const rect = menuRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -81,13 +91,18 @@ export const ContextMenu = ({ x, y, items, isOpen, onClose }: ContextMenuProps) 
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -4 }}
           transition={{ duration: 0.1 }}
-          style={{ position: 'fixed', left: adjustedPos.x, top: adjustedPos.y }}
+          style={{ position: "fixed", left: adjustedPos.x, top: adjustedPos.y }}
           className="z-[300] min-w-[180px] glass-panel rounded-xl shadow-2xl py-1 overflow-hidden"
           onContextMenu={(e) => e.preventDefault()}
         >
           {items.map((item) => {
             if (item.separator) {
-              return <div key={item.id} className="my-1 h-px bg-surface-container-high mx-2" />;
+              return (
+                <div
+                  key={item.id}
+                  className="my-1 h-px bg-surface-container-high mx-2"
+                />
+              );
             }
             return (
               <button
@@ -98,14 +113,18 @@ export const ContextMenu = ({ x, y, items, isOpen, onClose }: ContextMenuProps) 
                   item.onClick?.();
                 }}
                 className={[
-                  'w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors text-left',
+                  "w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors text-left",
                   item.danger
-                    ? 'text-rose-500 hover:bg-rose-500/10 disabled:opacity-40'
-                    : 'text-on-surface hover:bg-surface-container-low disabled:opacity-40',
-                ].join(' ')}
+                    ? "text-rose-500 hover:bg-rose-500/10 disabled:opacity-40"
+                    : "text-on-surface hover:bg-surface-container-low disabled:opacity-40",
+                ].join(" ")}
               >
                 {item.icon && (
-                  <span className={item.danger ? 'text-rose-400' : 'text-on-surface-variant'}>
+                  <span
+                    className={
+                      item.danger ? "text-rose-400" : "text-on-surface-variant"
+                    }
+                  >
                     {item.icon}
                   </span>
                 )}
@@ -138,7 +157,7 @@ export const useContextMenu = () => {
       e.preventDefault();
       setState({ x: e.clientX, y: e.clientY, items, isOpen: true });
     },
-    []
+    [],
   );
 
   const closeContextMenu = useCallback(() => {

@@ -47,7 +47,9 @@ const EMPTY_SNAPSHOT: DiagnosticsSnapshot = {
  * The active provider name (lowercase), e.g. "gemini", "openai", "anthropic".
  * Routes use this to branch provider-specific logic (grounding checks, strategy selection).
  */
-export const activeProviderName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
+export const activeProviderName = (
+  process.env.AI_PROVIDER ?? "gemini"
+).toLowerCase();
 
 /**
  * Shared AI provider instance.

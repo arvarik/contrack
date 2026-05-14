@@ -96,9 +96,24 @@ const HIGH_CONFIDENCE_FTS_RATIO = 0.85;
  * Prevents false positives like "interested in AI" → location:AI.
  */
 const NON_LOCATIONS = new Set([
-  "ai", "tech", "fintech", "finance", "healthcare", "saas", "crypto",
-  "marketing", "sales", "engineering", "design", "consulting", "trading",
-  "business", "data", "science", "research", "management",
+  "ai",
+  "tech",
+  "fintech",
+  "finance",
+  "healthcare",
+  "saas",
+  "crypto",
+  "marketing",
+  "sales",
+  "engineering",
+  "design",
+  "consulting",
+  "trading",
+  "business",
+  "data",
+  "science",
+  "research",
+  "management",
 ]);
 
 /**
@@ -106,8 +121,14 @@ const NON_LOCATIONS = new Set([
  * Prevents false positives like "works at a startup" → company:"a startup".
  */
 const NON_COMPANIES = new Set([
-  "a startup", "a company", "a firm", "a bank", "a school",
-  "a university", "a hospital", "an agency",
+  "a startup",
+  "a company",
+  "a firm",
+  "a bank",
+  "a school",
+  "a university",
+  "a hospital",
+  "an agency",
 ]);
 
 // =============================================================================
@@ -143,13 +164,16 @@ function extractPreFilters(query: string): PreFilter {
   // ── Location: "in London", "from New York", "based in SF" ─────────────────
   // CAREFUL: "interested in AI" should NOT match "AI" as a location.
   // We require location-specific prepositions and filter against NON_LOCATIONS.
-  const locationMatch = q.match(
-    /(?:^|\s)(?:located\s+in|based\s+in|live[s]?\s+in|living\s+in|from)\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:who|that|and|working|doing|\?|$))/i
-  ) || q.match(
-    /(?:^|\s)(?:located\s+in|based\s+in|live[s]?\s+in|living\s+in|from)\s+([A-Z][a-zA-Z\s,]+)$/i
-  ) || q.match(
-    /\b(?:contacts?|people|connections?|friends?|colleagues?|network)\s+in\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:who|that|and|working|doing|\?|$))/i
-  );
+  const locationMatch =
+    q.match(
+      /(?:^|\s)(?:located\s+in|based\s+in|live[s]?\s+in|living\s+in|from)\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:who|that|and|working|doing|\?|$))/i,
+    ) ||
+    q.match(
+      /(?:^|\s)(?:located\s+in|based\s+in|live[s]?\s+in|living\s+in|from)\s+([A-Z][a-zA-Z\s,]+)$/i,
+    ) ||
+    q.match(
+      /\b(?:contacts?|people|connections?|friends?|colleagues?|network)\s+in\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:who|that|and|working|doing|\?|$))/i,
+    );
   if (locationMatch) {
     const location = locationMatch[1].trim();
     if (location.length >= 3 && !NON_LOCATIONS.has(location.toLowerCase())) {
@@ -162,7 +186,7 @@ function extractPreFilters(query: string): PreFilter {
   // ── Company: "works at Google", "at Apple" ─────────────────────────────────
   // Careful: "works at a startup" should NOT become company:"a startup"
   const companyMatch = q.match(
-    /(?:works?\s+at|at|from|employed\s+(?:at|by))\s+([A-Z][a-zA-Z\s&.]+?)(?:\s+(?:who|as|in|and|\?|$))/i
+    /(?:works?\s+at|at|from|employed\s+(?:at|by))\s+([A-Z][a-zA-Z\s&.]+?)(?:\s+(?:who|as|in|and|\?|$))/i,
   );
   if (companyMatch) {
     const company = companyMatch[1].trim();
@@ -180,13 +204,17 @@ function extractPreFilters(query: string): PreFilter {
   // Execute the pre-filter query
   try {
     const whereClause = conditions.join(" AND ");
-    const rows = sqlite.prepare(`
+    const rows = sqlite
+      .prepare(
+        `
       SELECT id FROM contacts
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
         AND ${whereClause}
-    `).all(...params) as { id: string }[];
+    `,
+      )
+      .all(...params) as { id: string }[];
 
-    const ids = new Set(rows.map(r => r.id));
+    const ids = new Set(rows.map((r) => r.id));
     const summary = summaryParts.join(", ");
     return { contactIds: ids, summary: `${summary} (${ids.size} contacts)` };
   } catch (err: unknown) {
@@ -200,10 +228,16 @@ function extractPreFilters(query: string): PreFilter {
  * Handles: "haven't contacted in 3 months", "since last fall",
  *          "not talked to since Christmas", "in the past 2 weeks"
  */
-function parseTemporalFilter(q: string): { sql: string; params: string[]; summary: string } | null {
+function parseTemporalFilter(
+  q: string,
+): { sql: string; params: string[]; summary: string } | null {
   // Check if this is a "haven't contacted" / "not contacted" type query
-  const isNegativeTemporal = /(?:haven'?t|not|didn'?t)\s+(?:contacted?|spoken?|talked?|reached?|met|seen)/i.test(q);
-  const isTimeBound = /(?:in\s+(?:the\s+)?(?:last|past)|since|for|over|ago)/i.test(q);
+  const isNegativeTemporal =
+    /(?:haven'?t|not|didn'?t)\s+(?:contacted?|spoken?|talked?|reached?|met|seen)/i.test(
+      q,
+    );
+  const isTimeBound =
+    /(?:in\s+(?:the\s+)?(?:last|past)|since|for|over|ago)/i.test(q);
 
   if (!isNegativeTemporal && !isTimeBound) return null;
 
@@ -223,13 +257,16 @@ function parseTemporalFilter(q: string): { sql: string; params: string[]; summar
   }
 
   // Fallback to manual regex if chrono-node didn't parse
-  const manualMatch = q.match(
-    /(\d+)\s+(day|week|month|year)s?/i
-  );
+  const manualMatch = q.match(/(\d+)\s+(day|week|month|year)s?/i);
   if (manualMatch) {
     const amount = parseInt(manualMatch[1], 10);
     const unit = manualMatch[2].toLowerCase();
-    const daysMap: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
+    const daysMap: Record<string, number> = {
+      day: 1,
+      week: 7,
+      month: 30,
+      year: 365,
+    };
     const days = amount * (daysMap[unit] ?? 30);
 
     return {
@@ -251,11 +288,14 @@ function parseTemporalFilter(q: string): { sql: string; params: string[]; summar
  * Column weights prioritize name > company > role > rest.
  * Pre-filtered subset is applied post-query (FTS5 can't use WHERE on external tables).
  */
-function ftsRetrieval(query: string, preFilterIds: Set<string> | null): RankedItem[] {
+function ftsRetrieval(
+  query: string,
+  preFilterIds: Set<string> | null,
+): RankedItem[] {
   const sanitized = query.replace(/['\"]/g, "").trim();
   if (!sanitized) return [];
 
-  const tokens = sanitized.split(/\s+/).filter(t => t.length > 0);
+  const tokens = sanitized.split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length === 0) return [];
 
   // Multiple FTS5 strategies, from most specific to most permissive
@@ -263,24 +303,28 @@ function ftsRetrieval(query: string, preFilterIds: Set<string> | null): RankedIt
     // Strategy 1: Full phrase match
     `"${sanitized}"`,
     // Strategy 2: AND of individual token prefixes
-    tokens.map(t => `"${t}"*`).join(" "),
+    tokens.map((t) => `"${t}"*`).join(" "),
     // Strategy 3: OR of individual tokens (most permissive)
-    tokens.map(t => `"${t}"*`).join(" OR "),
+    tokens.map((t) => `"${t}"*`).join(" OR "),
   ];
 
   for (const ftsQuery of strategies) {
     try {
-      const rows = sqlite.prepare(`
+      const rows = sqlite
+        .prepare(
+          `
         SELECT contactId, bm25(contacts_fts, ${BM25_WEIGHTS}) as score
         FROM contacts_fts
         WHERE contacts_fts MATCH ?
         ORDER BY score
         LIMIT ?
-      `).all(ftsQuery, FTS_LIMIT) as { contactId: string; score: number }[];
+      `,
+        )
+        .all(ftsQuery, FTS_LIMIT) as { contactId: string; score: number }[];
 
       // Apply pre-filter
       const filtered = preFilterIds
-        ? rows.filter(r => preFilterIds.has(r.contactId))
+        ? rows.filter((r) => preFilterIds.has(r.contactId))
         : rows;
 
       if (filtered.length > 0) {
@@ -319,7 +363,11 @@ async function vectorRetrieval(
     const queryVec = await embedText(query);
     if (!queryVec) return [];
 
-    const neighbors = findSearchNeighbors(queryVec, VECTOR_LIMIT, preFilterIds ?? undefined);
+    const neighbors = findSearchNeighbors(
+      queryVec,
+      VECTOR_LIMIT,
+      preFilterIds ?? undefined,
+    );
 
     return neighbors.map((n, i) => ({
       contactId: n.contactId,
@@ -327,7 +375,10 @@ async function vectorRetrieval(
       channel: "vector" as const,
     }));
   } catch (err: unknown) {
-    log.warn("HybridRetrieval", `Vector channel failed: ${getErrorMessage(err)}`);
+    log.warn(
+      "HybridRetrieval",
+      `Vector channel failed: ${getErrorMessage(err)}`,
+    );
     return [];
   }
 }
@@ -349,7 +400,10 @@ export function reciprocalRankFusion(
   rankedLists: RankedItem[][],
   limit?: number,
 ): RetrievalCandidate[] {
-  const scoreMap = new Map<string, { score: number; channels: Set<"fts" | "vector"> }>();
+  const scoreMap = new Map<
+    string,
+    { score: number; channels: Set<"fts" | "vector"> }
+  >();
 
   for (const list of rankedLists) {
     for (const item of list) {
@@ -404,8 +458,15 @@ export async function hybridRetrieval(
 
   // If pre-filter returned 0 contacts, short-circuit
   if (preFilter.contactIds && preFilter.contactIds.size === 0) {
-    log.info("HybridRetrieval", `[${rid}] Pre-filter returned 0 contacts (${preFilter.summary}), skipping`);
-    return { candidates: [], highConfidence: false, preFilterSummary: preFilter.summary };
+    log.info(
+      "HybridRetrieval",
+      `[${rid}] Pre-filter returned 0 contacts (${preFilter.summary}), skipping`,
+    );
+    return {
+      candidates: [],
+      highConfidence: false,
+      preFilterSummary: preFilter.summary,
+    };
   }
 
   // Phase 1: Run FTS5 + Vector KNN (FTS is sync, vector is async)
@@ -420,18 +481,19 @@ export async function hybridRetrieval(
   // Phase 3: Confidence assessment
   // If FTS dominates the results, this is likely an exact keyword query
   // and the LLM reranker is unnecessary overhead.
-  const ftsCount = fused.filter(c => c.channels.includes("fts")).length;
-  const highConfidence = fused.length > 0 &&
-    (ftsCount / fused.length) >= HIGH_CONFIDENCE_FTS_RATIO &&
+  const ftsCount = fused.filter((c) => c.channels.includes("fts")).length;
+  const highConfidence =
+    fused.length > 0 &&
+    ftsCount / fused.length >= HIGH_CONFIDENCE_FTS_RATIO &&
     ftsResults.length >= 2;
 
   const elapsed = Date.now() - t0;
   log.info(
     "HybridRetrieval",
     `[${rid}] "${query.slice(0, 60)}" → ` +
-    `FTS:${ftsResults.length} + Vec:${vectorResults.length} ` +
-    `→ ${fused.length} fused in ${elapsed}ms ` +
-    `(preFilter: ${preFilter.summary}, confidence: ${highConfidence ? "HIGH" : "low"})`,
+      `FTS:${ftsResults.length} + Vec:${vectorResults.length} ` +
+      `→ ${fused.length} fused in ${elapsed}ms ` +
+      `(preFilter: ${preFilter.summary}, confidence: ${highConfidence ? "HIGH" : "low"})`,
   );
 
   return {

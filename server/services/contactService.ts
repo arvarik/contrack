@@ -6,13 +6,19 @@ import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { queueGeocode } from "./geocoding/index.ts";
-import { processBase64Avatar, isBase64DataUri } from "../utils/avatarProcessor.ts";
+import {
+  processBase64Avatar,
+  isBase64DataUri,
+} from "../utils/avatarProcessor.ts";
 import { invalidateSearchCache } from "../utils/searchCache.ts";
 import { invalidateDailyInsight } from "./dashboardService.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
-import { generateAndStoreEmbedding, generateAndStoreBulkEmbeddings } from "./dedupe/embeddings.ts";
+import {
+  generateAndStoreEmbedding,
+  generateAndStoreBulkEmbeddings,
+} from "./dedupe/embeddings.ts";
 import { embedContact } from "./search/localEmbeddings.ts";
 import { generateSearchExpansion } from "../ai/aiService.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
@@ -35,7 +41,14 @@ const DEDUPE_DEBOUNCE_MS = 5_000;
  * when mutated. Defined once to prevent updateContact and patchContact diverging.
  */
 const SEARCH_TRIGGER_FIELDS = [
-  'name', 'company', 'role', 'location', 'industry', 'headline', 'about', 'preferences',
+  "name",
+  "company",
+  "role",
+  "location",
+  "industry",
+  "headline",
+  "about",
+  "preferences",
 ] as const;
 
 /**
@@ -50,9 +63,14 @@ function scheduleIncrementalDedupe(contactId: string) {
   const timer = setTimeout(() => {
     _dedupeTimers.delete(contactId);
     const rid = crypto.randomUUID().slice(0, 8);
-    dedupeService.incrementalDedupeCheck(contactId, rid).catch(err =>
-      log.warn("ContactService", `Incremental dedupe for ${contactId} failed: ${getErrorMessage(err)}`)
-    );
+    dedupeService
+      .incrementalDedupeCheck(contactId, rid)
+      .catch((err) =>
+        log.warn(
+          "ContactService",
+          `Incremental dedupe for ${contactId} failed: ${getErrorMessage(err)}`,
+        ),
+      );
   }, DEDUPE_DEBOUNCE_MS);
 
   _dedupeTimers.set(contactId, timer);
@@ -102,7 +120,7 @@ function invalidateAllCaches() {
 // ---------------------------------------------------------------------------
 
 export const contactService = {
-  createContact(body: any, source: string = 'manual') {
+  createContact(body: any, source: string = "manual") {
     const id = crypto.randomUUID();
     const values = buildInsertValues(body, id);
 
@@ -120,14 +138,21 @@ export const contactService = {
     if (body.location) {
       queueGeocode(id, body.location);
     } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
-      const primaryAddress = body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
-      const addressString = typeof primaryAddress === 'string' ? primaryAddress : primaryAddress.address;
+      const primaryAddress =
+        body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
+      const addressString =
+        typeof primaryAddress === "string"
+          ? primaryAddress
+          : primaryAddress.address;
       if (addressString) queueGeocode(id, addressString);
     }
 
     // Fire-and-forget: generate embedding in the background
-    generateAndStoreEmbedding(id).catch(err =>
-      log.warn("ContactService", `Background embedding for ${id} failed: ${getErrorMessage(err)}`)
+    generateAndStoreEmbedding(id).catch((err) =>
+      log.warn(
+        "ContactService",
+        `Background embedding for ${id} failed: ${getErrorMessage(err)}`,
+      ),
     );
 
     // Fire-and-forget: Doc2Query search expansion → then embed with complete data
@@ -135,24 +160,38 @@ export const contactService = {
     // embedContact call after expansion captures the enriched text, avoiding a
     // double-embed race condition.
     generateSearchExpansion({
-      name: body.name, role: body.role, company: body.company,
-      industry: body.industry, about: body.about, preferences: body.preferences,
-      tags: body.tags, interests: body.interests,
-    }).then(expansion => {
-      if (expansion) {
-        sqlite.prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?").run(expansion, id);
-      }
-      // Embed with or without expansion — this is the definitive embedding
-      return embedContact(id);
-    }).catch(err =>
-      log.debug("ContactService", `Doc2Query/embed for ${id} skipped: ${err?.message}`)
-    );
+      name: body.name,
+      role: body.role,
+      company: body.company,
+      industry: body.industry,
+      about: body.about,
+      preferences: body.preferences,
+      tags: body.tags,
+      interests: body.interests,
+    })
+      .then((expansion) => {
+        if (expansion) {
+          sqlite
+            .prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?")
+            .run(expansion, id);
+        }
+        // Embed with or without expansion — this is the definitive embedding
+        return embedContact(id);
+      })
+      .catch((err) =>
+        log.debug(
+          "ContactService",
+          `Doc2Query/embed for ${id} skipped: ${err?.message}`,
+        ),
+      );
 
     // Fire-and-forget: incremental dedupe check (debounced)
     scheduleIncrementalDedupe(id);
 
     invalidateAllCaches();
-    return contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
+    return contactRepo.hydrate(
+      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
+    );
   },
 
   async bulkCreateContacts(
@@ -169,7 +208,7 @@ export const contactService = {
         const fileUrl = await processBase64Avatar(c.avatarUrl);
         c.avatarUrl = fileUrl; // null if processing failed; smart avatar fallback below
       }
-      onProgress?.(i + 1, total, 'Processing images');
+      onProgress?.(i + 1, total, "Processing images");
     }
 
     // Phase 2: Insert all contacts into SQLite in a single transaction
@@ -191,14 +230,14 @@ export const contactService = {
           }
 
           db.insert(schema.contacts).values(values).run();
-          contactRepo.insertChildRecords(id, c, c._sourcePlatform || 'manual');
+          contactRepo.insertChildRecords(id, c, c._sourcePlatform || "manual");
           if (c.location) queueGeocode(id, c.location);
           createdIds.push(id);
           count++;
         }
       });
       txn();
-      onProgress?.(total, total, 'Complete');
+      onProgress?.(total, total, "Complete");
 
       invalidateAllCaches();
     } finally {
@@ -213,11 +252,23 @@ export const contactService = {
       const deleteFn = sqlite.transaction(() => {
         const stmt = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
         // vec0 tables don't support FK cascading — clean up manually
-        const delSearch = sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?");
-        const delDedupe = sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?");
+        const delSearch = sqlite.prepare(
+          "DELETE FROM search_embeddings WHERE contactId = ?",
+        );
+        const delDedupe = sqlite.prepare(
+          "DELETE FROM contact_embeddings WHERE contactId = ?",
+        );
         for (const id of ids) {
-          try { delSearch.run(id); } catch { /* vec0 row may not exist */ }
-          try { delDedupe.run(id); } catch { /* vec0 row may not exist */ }
+          try {
+            delSearch.run(id);
+          } catch {
+            /* vec0 row may not exist */
+          }
+          try {
+            delDedupe.run(id);
+          } catch {
+            /* vec0 row may not exist */
+          }
           stmt.run(id);
         }
       });
@@ -237,9 +288,13 @@ export const contactService = {
       // (see utils/helpers.ts). Interpolating those key names into SQL is safe
       // because no user-supplied string reaches the SET clause — only column names.
       const updateFn = sqlite.transaction(() => {
-        const setClauses = Object.keys(update).map(k => `${k} = ?`).join(', ');
+        const setClauses = Object.keys(update)
+          .map((k) => `${k} = ?`)
+          .join(", ");
         const values = Object.values(update);
-        const stmt = sqlite.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`);
+        const stmt = sqlite.prepare(
+          `UPDATE contacts SET ${setClauses} WHERE id = ?`,
+        );
         for (const id of ids) stmt.run(...values, id);
       });
       updateFn();
@@ -258,72 +313,121 @@ export const contactService = {
     }
 
     const txn = sqlite.transaction(() => {
-      db.update(schema.contacts).set(updateData).where(eq(schema.contacts.id, id)).run();
+      db.update(schema.contacts)
+        .set(updateData)
+        .where(eq(schema.contacts.id, id))
+        .run();
 
       const childMappings: [keyof typeof body, string][] = [
-        ['emails', 'contact_emails'],
-        ['phones', 'contact_phones'],
-        ['socialLinks', 'contact_social_links'],
-        ['tags', 'contact_tags'],
-        ['interests', 'contact_interests'],
-        ['addresses', 'contact_addresses'],
-        ['attributes', 'contact_attributes'],
-        ['education', 'contact_education'],
-        ['experience', 'contact_experience'],
-        ['sources', 'contact_sources'],
+        ["emails", "contact_emails"],
+        ["phones", "contact_phones"],
+        ["socialLinks", "contact_social_links"],
+        ["tags", "contact_tags"],
+        ["interests", "contact_interests"],
+        ["addresses", "contact_addresses"],
+        ["attributes", "contact_attributes"],
+        ["education", "contact_education"],
+        ["experience", "contact_experience"],
+        ["sources", "contact_sources"],
       ];
 
       for (const [bodyKey, tableName] of childMappings) {
         if (body[bodyKey] !== undefined && Array.isArray(body[bodyKey])) {
-          sqlite.prepare(`DELETE FROM ${tableName} WHERE contactId = ?`).run(id);
+          sqlite
+            .prepare(`DELETE FROM ${tableName} WHERE contactId = ?`)
+            .run(id);
           contactRepo.insertChildRecords(id, { [bodyKey]: body[bodyKey] });
         }
       }
     });
     txn();
 
-    const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
+    const updated = contactRepo.hydrate(
+      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
+    );
     if (!updated) return null;
 
     if (body.location) {
       queueGeocode(id, body.location);
     } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
-      const primaryAddress = body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
-      const addressString = typeof primaryAddress === 'string' ? primaryAddress : primaryAddress.address;
+      const primaryAddress =
+        body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
+      const addressString =
+        typeof primaryAddress === "string"
+          ? primaryAddress
+          : primaryAddress.address;
       if (addressString) queueGeocode(id, addressString);
     }
 
     // Fire-and-forget: recompute embedding if key fields changed
-    const embeddingFields = ['name', 'company', 'role', 'location', 'industry', 'headline'];
-    if (embeddingFields.some(f => body[f] !== undefined)) {
-      generateAndStoreEmbedding(id).catch(err =>
-        log.warn("ContactService", `Background embedding update for ${id} failed: ${getErrorMessage(err)}`)
+    const embeddingFields = [
+      "name",
+      "company",
+      "role",
+      "location",
+      "industry",
+      "headline",
+    ];
+    if (embeddingFields.some((f) => body[f] !== undefined)) {
+      generateAndStoreEmbedding(id).catch((err) =>
+        log.warn(
+          "ContactService",
+          `Background embedding update for ${id} failed: ${getErrorMessage(err)}`,
+        ),
       );
     }
 
     // Fire-and-forget: recompute search embedding + Doc2Query
-    if (SEARCH_TRIGGER_FIELDS.some(f => body[f] !== undefined)) {
+    if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
       // Regenerate Doc2Query expansion → then embed once with complete data
-      const row = sqlite.prepare("SELECT name, role, company, industry, about, preferences FROM contacts WHERE id = ?").get(id) as any;
+      const row = sqlite
+        .prepare(
+          "SELECT name, role, company, industry, about, preferences FROM contacts WHERE id = ?",
+        )
+        .get(id) as any;
       if (row) {
-        const tags = (sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?").all(id) as { tag: string }[]).map(t => t.tag);
-        const interests = (sqlite.prepare("SELECT interest FROM contact_interests WHERE contactId = ?").all(id) as { interest: string }[]).map(t => t.interest);
-        generateSearchExpansion({ ...row, tags, interests }).then(expansion => {
-          if (expansion) {
-            sqlite.prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?").run(expansion, id);
-          }
-          return embedContact(id);
-        }).catch(err =>
-          log.debug("ContactService", `Doc2Query/embed update for ${id} skipped: ${err?.message}`)
-        );
+        const tags = (
+          sqlite
+            .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+            .all(id) as { tag: string }[]
+        ).map((t) => t.tag);
+        const interests = (
+          sqlite
+            .prepare(
+              "SELECT interest FROM contact_interests WHERE contactId = ?",
+            )
+            .all(id) as { interest: string }[]
+        ).map((t) => t.interest);
+        generateSearchExpansion({ ...row, tags, interests })
+          .then((expansion) => {
+            if (expansion) {
+              sqlite
+                .prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?")
+                .run(expansion, id);
+            }
+            return embedContact(id);
+          })
+          .catch((err) =>
+            log.debug(
+              "ContactService",
+              `Doc2Query/embed update for ${id} skipped: ${err?.message}`,
+            ),
+          );
       } else {
         embedContact(id).catch(() => {});
       }
     }
 
     // Fire-and-forget: incremental dedupe if identity fields changed
-    const dedupeFields = ['name', 'firstName', 'lastName', 'company', 'role', 'location'];
-    if (dedupeFields.some(f => body[f] !== undefined)) {
+    const dedupeFields = [
+      "name",
+      "firstName",
+      "lastName",
+      "company",
+      "role",
+      "location",
+    ];
+    if (dedupeFields.some((f) => body[f] !== undefined)) {
       scheduleIncrementalDedupe(id);
     }
 
@@ -333,7 +437,10 @@ export const contactService = {
 
   patchContact(id: string, body: any) {
     const update = buildContactUpdate(body);
-    db.update(schema.contacts).set(update).where(eq(schema.contacts.id, id)).run();
+    db.update(schema.contacts)
+      .set(update)
+      .where(eq(schema.contacts.id, id))
+      .run();
 
     if (body.location) {
       queueGeocode(id, body.location);
@@ -342,11 +449,13 @@ export const contactService = {
     // Fire-and-forget: recompute search embedding if searchable fields changed
     // NOTE: FTS5 is already updated by the contacts_au trigger, but the
     // vector embedding + Doc2Query expansion must be refreshed explicitly.
-    if (SEARCH_TRIGGER_FIELDS.some(f => body[f] !== undefined)) {
+    if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
       embedContact(id).catch(() => {});
     }
 
-    const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
+    const updated = contactRepo.hydrate(
+      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
+    );
     if (!updated) return null;
 
     invalidateAllCaches();
@@ -355,10 +464,26 @@ export const contactService = {
 
   deleteContact(id: string) {
     // vec0 tables don't support FK cascading — clean up manually before delete
-    try { sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?").run(id); } catch { /* vec0 row may not exist */ }
-    try { sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?").run(id); } catch { /* vec0 row may not exist */ }
+    try {
+      sqlite
+        .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
+        .run(id);
+    } catch {
+      /* vec0 row may not exist */
+    }
+    try {
+      sqlite
+        .prepare("DELETE FROM contact_embeddings WHERE contactId = ?")
+        .run(id);
+    } catch {
+      /* vec0 row may not exist */
+    }
 
-    const result = db.delete(schema.contacts).where(eq(schema.contacts.id, id)).returning().get();
+    const result = db
+      .delete(schema.contacts)
+      .where(eq(schema.contacts.id, id))
+      .returning()
+      .get();
     if (!result) return false;
     invalidateAllCaches();
     return true;
@@ -367,8 +492,10 @@ export const contactService = {
   updateAvatar(id: string, fileFilename: string, fileOriginalName: string) {
     const avatarUrl = `/uploads/avatars/${fileFilename}`;
 
-    const existing = sqlite.prepare("SELECT avatarUrl FROM contacts WHERE id = ?").get(id) as any;
-    if (existing?.avatarUrl?.startsWith('/uploads/avatars/')) {
+    const existing = sqlite
+      .prepare("SELECT avatarUrl FROM contacts WHERE id = ?")
+      .get(id) as any;
+    if (existing?.avatarUrl?.startsWith("/uploads/avatars/")) {
       const oldPath = path.join(process.cwd(), existing.avatarUrl);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
@@ -378,7 +505,9 @@ export const contactService = {
       .where(eq(schema.contacts.id, id))
       .run();
 
-    const updated = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id));
+    const updated = contactRepo.hydrate(
+      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
+    );
     if (!updated) return null;
 
     invalidateAllCaches();
@@ -386,13 +515,19 @@ export const contactService = {
   },
 
   getMapContacts() {
-    return sqlite.prepare(
-      "SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts WHERE lat IS NOT NULL AND lng IS NOT NULL AND (isArchived = 0 OR isArchived IS NULL)"
-    ).all();
+    return sqlite
+      .prepare(
+        "SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts WHERE lat IS NOT NULL AND lng IS NOT NULL AND (isArchived = 0 OR isArchived IS NULL)",
+      )
+      .all();
   },
 
   getArchivedContacts() {
-    const all = sqlite.prepare("SELECT * FROM contacts WHERE isArchived = 1 ORDER BY updatedAt DESC").all();
+    const all = sqlite
+      .prepare(
+        "SELECT * FROM contacts WHERE isArchived = 1 ORDER BY updatedAt DESC",
+      )
+      .all();
     return contactRepo.hydrateMany(all);
   },
 
@@ -400,7 +535,9 @@ export const contactService = {
     const startMs = Date.now();
 
     // Pass 1: Primary contact data (Fast indexed SELECT)
-    const rows = sqlite.prepare(`
+    const rows = sqlite
+      .prepare(
+        `
       SELECT id, name, firstName, lastName, company, avatarUrl, 
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
@@ -409,25 +546,45 @@ export const contactService = {
       FROM contacts
       WHERE (isArchived = 0 OR isArchived IS NULL)
       ORDER BY addedAt DESC
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
     const pass1Ms = Date.now() - startMs;
 
     // Pass 2: Batch fetch all relations (Separate queries are faster than GROUP_CONCAT/LEFT JOIN for large sets)
     const listStartMs = Date.now();
-    const listRows = sqlite.prepare(`
+    const listRows = sqlite
+      .prepare(
+        `
       SELECT lm.contactId, l.id, l.name, l.icon, l.sortOrder
       FROM list_members lm
       JOIN lists l ON l.id = lm.listId
       WHERE lm.contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)
       ORDER BY l.sortOrder ASC
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     const unarchivedQuery = `WHERE contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)`;
-    const tagRows = sqlite.prepare(`SELECT contactId, tag FROM contact_tags ${unarchivedQuery}`).all() as any[];
-    const emailRows = sqlite.prepare(`SELECT contactId, email FROM contact_emails ${unarchivedQuery}`).all() as any[];
-    const phoneRows = sqlite.prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`).all() as any[];
-    const interactionCounts = sqlite.prepare(`SELECT contactId, COUNT(*) as cnt FROM interactions ${unarchivedQuery} GROUP BY contactId`).all() as any[];
-    const socialLinkCounts = sqlite.prepare(`SELECT contactId, COUNT(*) as cnt FROM contact_social_links ${unarchivedQuery} GROUP BY contactId`).all() as any[];
+    const tagRows = sqlite
+      .prepare(`SELECT contactId, tag FROM contact_tags ${unarchivedQuery}`)
+      .all() as any[];
+    const emailRows = sqlite
+      .prepare(`SELECT contactId, email FROM contact_emails ${unarchivedQuery}`)
+      .all() as any[];
+    const phoneRows = sqlite
+      .prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`)
+      .all() as any[];
+    const interactionCounts = sqlite
+      .prepare(
+        `SELECT contactId, COUNT(*) as cnt FROM interactions ${unarchivedQuery} GROUP BY contactId`,
+      )
+      .all() as any[];
+    const socialLinkCounts = sqlite
+      .prepare(
+        `SELECT contactId, COUNT(*) as cnt FROM contact_social_links ${unarchivedQuery} GROUP BY contactId`,
+      )
+      .all() as any[];
     const pass2Ms = Date.now() - listStartMs;
 
     // Pass 3: Join in JS (Near-zero cost O(N))
@@ -435,7 +592,9 @@ export const contactService = {
     const listsByContact = new Map<string, any[]>();
     for (const r of listRows) {
       if (!listsByContact.has(r.contactId)) listsByContact.set(r.contactId, []);
-      listsByContact.get(r.contactId)!.push({ id: r.id, name: r.name, icon: r.icon, sortOrder: r.sortOrder });
+      listsByContact
+        .get(r.contactId)!
+        .push({ id: r.id, name: r.name, icon: r.icon, sortOrder: r.sortOrder });
     }
 
     const tagsByContact = new Map<string, any[]>();
@@ -446,18 +605,24 @@ export const contactService = {
 
     const emailsByContact = new Map<string, any[]>();
     for (const r of emailRows) {
-      if (!emailsByContact.has(r.contactId)) emailsByContact.set(r.contactId, []);
+      if (!emailsByContact.has(r.contactId))
+        emailsByContact.set(r.contactId, []);
       emailsByContact.get(r.contactId)!.push({ email: r.email });
     }
 
     const phonesByContact = new Map<string, any[]>();
     for (const r of phoneRows) {
-      if (!phonesByContact.has(r.contactId)) phonesByContact.set(r.contactId, []);
+      if (!phonesByContact.has(r.contactId))
+        phonesByContact.set(r.contactId, []);
       phonesByContact.get(r.contactId)!.push({ phone: r.phone });
     }
 
-    const interactionMap = new Map(interactionCounts.map(r => [r.contactId, r.cnt]));
-    const socialLinkMap = new Map(socialLinkCounts.map(r => [r.contactId, r.cnt]));
+    const interactionMap = new Map(
+      interactionCounts.map((r) => [r.contactId, r.cnt]),
+    );
+    const socialLinkMap = new Map(
+      socialLinkCounts.map((r) => [r.contactId, r.cnt]),
+    );
 
     const results = rows.map((r) => ({
       ...r,
@@ -470,23 +635,37 @@ export const contactService = {
       phones: phonesByContact.get(r.id) || [],
       socialLinkCount: socialLinkMap.get(r.id) || 0,
       // Fixed arrays for slim view compatibility
-      socialLinks: [], education: [], experience: [],
-      sources: [], addresses: [], interests: [], attributes: [],
+      socialLinks: [],
+      education: [],
+      experience: [],
+      sources: [],
+      addresses: [],
+      interests: [],
+      attributes: [],
     }));
     const joinMs = Date.now() - joinStartMs;
 
-    log.info("Perf", `getSlimContacts: total=${Date.now() - startMs}ms (sql_base=${pass1Ms}ms, sql_batch=${pass2Ms}ms, js_join=${joinMs}ms) n=${rows.length}`);
+    log.info(
+      "Perf",
+      `getSlimContacts: total=${Date.now() - startMs}ms (sql_base=${pass1Ms}ms, sql_batch=${pass2Ms}ms, js_join=${joinMs}ms) n=${rows.length}`,
+    );
     return results;
   },
 
   getAllContacts() {
-    const all = sqlite.prepare("SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) ORDER BY addedAt DESC").all();
+    const all = sqlite
+      .prepare(
+        "SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) ORDER BY addedAt DESC",
+      )
+      .all();
     return contactRepo.hydrateMany(all);
   },
 
   getContactById(id: string) {
-    const contact = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id);
+    const contact = sqlite
+      .prepare("SELECT * FROM contacts WHERE id = ?")
+      .get(id);
     if (!contact) return null;
     return contactRepo.hydrate(contact);
-  }
+  },
 };

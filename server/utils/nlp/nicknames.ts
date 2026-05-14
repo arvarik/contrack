@@ -114,7 +114,7 @@ export const NICKNAME_GROUPS: string[][] = [
   ["sneha", "sne"],
   ["pallavi", "pallu"],
   ["jyothi", "jo"],
-  ["shruthi", "shru"]
+  ["shruthi", "shru"],
 ];
 
 const _nicknameMap = new Map<string, number>();
@@ -147,7 +147,9 @@ export function isNicknameMatch(nameA: string, nameB: string): boolean {
   if (tokensA.length === 0 || tokensB.length === 0) return false;
 
   if (tokensA.length === 1 && tokensB.length === 1) {
-    return areNicknameEquivalent(tokensA[0], tokensB[0]) && tokensA[0] !== tokensB[0];
+    return (
+      areNicknameEquivalent(tokensA[0], tokensB[0]) && tokensA[0] !== tokensB[0]
+    );
   }
 
   const lastA = tokensA[tokensA.length - 1];

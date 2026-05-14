@@ -31,10 +31,20 @@ import { aiRouter } from "./server/routes/ai.ts";
 import { aiStatsRouter } from "./server/routes/aiStats.ts";
 import { logosRouter } from "./server/routes/logos.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
-import { isEmbeddingAvailable, backfillEmbeddings, getEmbeddingCount } from "./server/services/dedupe/embeddings.ts";
-import { initLocalEmbeddings, backfillSearchEmbeddings } from "./server/services/search/localEmbeddings.ts";
+import {
+  isEmbeddingAvailable,
+  backfillEmbeddings,
+  getEmbeddingCount,
+} from "./server/services/dedupe/embeddings.ts";
+import {
+  initLocalEmbeddings,
+  backfillSearchEmbeddings,
+} from "./server/services/search/localEmbeddings.ts";
 
-import { errorHandler, notFoundHandler } from "./server/middleware/errorHandler.ts";
+import {
+  errorHandler,
+  notFoundHandler,
+} from "./server/middleware/errorHandler.ts";
 
 // ── Provider-aware API key validation ────────────────────────────────────────
 const AI_PROVIDER = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
@@ -47,25 +57,31 @@ const KEY_VAR = API_KEY_MAP[AI_PROVIDER] ?? "GEMINI_API_KEY";
 const KEY_VALUE = process.env[KEY_VAR];
 
 if (!KEY_VALUE || (AI_PROVIDER === "gemini" && KEY_VALUE === "dummy_key")) {
-  console.warn(`\n\x1b[33m⚠️  [WARNING] ${KEY_VAR} is not configured inside .env!\x1b[0m`);
-  console.warn(`\x1b[33m   AI provider "${AI_PROVIDER}" will not be available. AI features will fail gracefully.\x1b[0m\n`);
+  console.warn(
+    `\n\x1b[33m⚠️  [WARNING] ${KEY_VAR} is not configured inside .env!\x1b[0m`,
+  );
+  console.warn(
+    `\x1b[33m   AI provider "${AI_PROVIDER}" will not be available. AI features will fail gracefully.\x1b[0m\n`,
+  );
 } else {
-  console.log(`\x1b[36mℹ️  AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)\x1b[0m`);
+  console.log(
+    `\x1b[36mℹ️  AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)\x1b[0m`,
+  );
 }
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
-const uploadDir = process.env.DATA_DIR 
+const uploadDir = process.env.DATA_DIR
   ? path.join(process.env.DATA_DIR, "uploads")
   : path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 async function startServer() {
   const app = express();
-  app.disable('x-powered-by');
+  app.disable("x-powered-by");
 
   app.use(cors());
-  app.use(express.json({ limit: '50mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   app.use((req, res, next) => {
     (req as any).requestId = crypto.randomUUID().split("-")[0];
@@ -73,9 +89,14 @@ async function startServer() {
   });
 
   const morganFormat = process.env.NODE_ENV === "production" ? "short" : "dev";
-  app.use(morgan(morganFormat, {
-    skip: (req) => req.url.includes("node_modules") || req.url.includes("@vite") || req.url.includes("src/")
-  }));
+  app.use(
+    morgan(morganFormat, {
+      skip: (req) =>
+        req.url.includes("node_modules") ||
+        req.url.includes("@vite") ||
+        req.url.includes("src/"),
+    }),
+  );
 
   app.use("/uploads", express.static(uploadDir));
 
@@ -109,12 +130,17 @@ async function startServer() {
   app.use(notFoundHandler);
 
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    app.get("*", (_req, res) =>
+      res.sendFile(path.join(distPath, "index.html")),
+    );
   }
 
   // Centralized error handler. Translates AppError / ZodError / SQLite
@@ -132,9 +158,11 @@ async function startServer() {
   startRetroactiveGeocoding();
 
   // ── AI Stats: retention cleanup (30-day rolling window) ──────────────
-  import("./server/services/aiStatsService.ts").then(({ cleanupOldInvocations }) => {
-    cleanupOldInvocations();
-  });
+  import("./server/services/aiStatsService.ts").then(
+    ({ cleanupOldInvocations }) => {
+      cleanupOldInvocations();
+    },
+  );
 
   // Relationship scoring: full recompute on startup, then hourly sweep
   relationshipService.recomputeAll();
@@ -143,25 +171,50 @@ async function startServer() {
   // ── Local embedding model for Ask Contrack v3 ───────────────────────────
   // Load the Transformers.js model, then backfill search embeddings.
   // Non-blocking — the server is fully usable while this runs.
-  initLocalEmbeddings().then(() => {
-    log.info("Server", "Local embedding model ready — starting search embedding backfill...");
-    return backfillSearchEmbeddings();
-  }).then(count => {
-    if (count > 0) log.info("Server", `Search embedding backfill complete: ${count} contacts embedded locally`);
-  }).catch(err => {
-    log.warn("Server", `Local embedding init/backfill failed: ${err.message}`);
-  });
+  initLocalEmbeddings()
+    .then(() => {
+      log.info(
+        "Server",
+        "Local embedding model ready — starting search embedding backfill...",
+      );
+      return backfillSearchEmbeddings();
+    })
+    .then((count) => {
+      if (count > 0)
+        log.info(
+          "Server",
+          `Search embedding backfill complete: ${count} contacts embedded locally`,
+        );
+    })
+    .catch((err) => {
+      log.warn(
+        "Server",
+        `Local embedding init/backfill failed: ${err.message}`,
+      );
+    });
 
   // ── Dedupe embedding backfill (Gemini, for dedupe engine) ───────────────
   if (isEmbeddingAvailable()) {
     const existingCount = getEmbeddingCount();
     if (existingCount === 0) {
-      log.info("Server", "Starting background embedding backfill for dedupe...");
-      backfillEmbeddings().then(count => {
-        if (count > 0) log.info("Server", `Dedupe embedding backfill complete: ${count} contacts embedded`);
-      }).catch(err => {
-        log.warn("Server", `Dedupe embedding backfill failed: ${err.message}`);
-      });
+      log.info(
+        "Server",
+        "Starting background embedding backfill for dedupe...",
+      );
+      backfillEmbeddings()
+        .then((count) => {
+          if (count > 0)
+            log.info(
+              "Server",
+              `Dedupe embedding backfill complete: ${count} contacts embedded`,
+            );
+        })
+        .catch((err) => {
+          log.warn(
+            "Server",
+            `Dedupe embedding backfill failed: ${err.message}`,
+          );
+        });
     }
   }
 }

@@ -71,17 +71,23 @@ export const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
   let isStale = false;
 
   try {
-    const distance = formatDistanceToNow(new Date(lastContactedAt), { addSuffix: true });
+    const distance = formatDistanceToNow(new Date(lastContactedAt), {
+      addSuffix: true,
+    });
     text = distance;
     // Consider > 60 days as stale for visual emphasis
-    const daysSince = (Date.now() - new Date(lastContactedAt).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSince =
+      (Date.now() - new Date(lastContactedAt).getTime()) /
+      (1000 * 60 * 60 * 24);
     isStale = daysSince > 60;
   } catch {
     text = "Unknown";
   }
 
   return (
-    <span className={`text-[11px] flex items-center gap-1 ${isStale ? "text-rose-500/70" : "text-on-surface-variant/50"}`}>
+    <span
+      className={`text-[11px] flex items-center gap-1 ${isStale ? "text-rose-500/70" : "text-on-surface-variant/50"}`}
+    >
       <Clock className="w-2.5 h-2.5 shrink-0" />
       {text}
     </span>
@@ -123,14 +129,15 @@ export const StaleChip = ({
   if (months < 6) return null;
 
   const isThisEnriching = isEnriching && enrichingContactId === contactId;
-  const ageLabel = months >= 12 ? `${Math.floor(months / 12)}y old` : `${months}mo old`;
+  const ageLabel =
+    months >= 12 ? `${Math.floor(months / 12)}y old` : `${months}mo old`;
 
   const disabled = !hasGroundingCapacity || isEnriching;
   const tooltip = isThisEnriching
     ? "Refreshing…"
     : !hasGroundingCapacity
-    ? "Grounding quota exhausted for today"
-    : `Refresh data for this contact`;
+      ? "Grounding quota exhausted for today"
+      : `Refresh data for this contact`;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Don't trigger the result's onSelect

@@ -4,7 +4,11 @@
 
 export { dedupeService } from "./engine.ts";
 export { dedupeQueue } from "./jobQueue.ts";
-export { backfillEmbeddings, getEmbeddingCount, isEmbeddingAvailable } from "./embeddings.ts";
+export {
+  backfillEmbeddings,
+  getEmbeddingCount,
+  isEmbeddingAvailable,
+} from "./embeddings.ts";
 
 export {
   storeSuggestion,
@@ -19,7 +23,7 @@ export {
   getMergeLog,
   undoSoftMerge,
   clearStaleSuggestions,
-  clearAllPendingSuggestions
+  clearAllPendingSuggestions,
 } from "./suggestions.ts";
 
 export * from "./types.ts";

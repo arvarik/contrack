@@ -64,8 +64,8 @@ describe("Reciprocal Rank Fusion (k=15)", () => {
 
     // "x" should rank higher despite rank 5 in each channel,
     // because 2× contributions beat 1× contribution
-    const xResult = result.find(r => r.contactId === "x")!;
-    const yResult = result.find(r => r.contactId === "y")!;
+    const xResult = result.find((r) => r.contactId === "x")!;
+    const yResult = result.find((r) => r.contactId === "y")!;
 
     expect(xResult.score).toBeGreaterThan(yResult.score);
     expect(xResult.channels).toHaveLength(2);

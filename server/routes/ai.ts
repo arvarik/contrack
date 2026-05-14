@@ -9,7 +9,11 @@
 
 import { Router } from "express";
 import { ai, activeProviderName } from "../ai/index.ts";
-import { getAvailableModels, getAITier, GEMINI_REGISTRY } from "../ai/routing/registry.ts";
+import {
+  getAvailableModels,
+  getAITier,
+  GEMINI_REGISTRY,
+} from "../ai/routing/registry.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { log } from "../utils/logger.ts";
 
@@ -27,43 +31,49 @@ const router = Router();
  * For non-Gemini providers, returns a simplified response indicating
  * that detailed quota tracking is not available.
  */
-router.get("/diagnostics", asyncHandler(async (req, res) => {
-  const rid = (req as any).requestId;
+router.get(
+  "/diagnostics",
+  asyncHandler(async (req, res) => {
+    const rid = (req as any).requestId;
 
-  const snapshot = ai.getQuotaSnapshot();
+    const snapshot = ai.getQuotaSnapshot();
 
-  log.debug("API", `[${rid}] GET /api/ai/diagnostics (provider: ${activeProviderName})`);
+    log.debug(
+      "API",
+      `[${rid}] GET /api/ai/diagnostics (provider: ${activeProviderName})`,
+    );
 
-  // Non-Gemini providers: return provider info without Gemini-specific registry data
-  if (activeProviderName !== "gemini") {
-    return res.json({
+    // Non-Gemini providers: return provider info without Gemini-specific registry data
+    if (activeProviderName !== "gemini") {
+      return res.json({
+        ...snapshot,
+        provider: activeProviderName,
+        registry: {
+          totalModels: 0,
+          availableModels: 0,
+          availableModelIds: [],
+          note: `Detailed quota tracking is not available for ${activeProviderName}. Quota is managed by the provider.`,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Gemini: full registry + quota data
+    const tier = getAITier();
+    const available = getAvailableModels(tier);
+
+    res.json({
       ...snapshot,
       provider: activeProviderName,
       registry: {
-        totalModels: 0,
-        availableModels: 0,
-        availableModelIds: [],
-        note: `Detailed quota tracking is not available for ${activeProviderName}. Quota is managed by the provider.`,
+        totalModels: GEMINI_REGISTRY.length,
+        availableModels: available.length,
+        availableModelIds: available.map((m) => m.id),
       },
       timestamp: new Date().toISOString(),
     });
-  }
-
-  // Gemini: full registry + quota data
-  const tier = getAITier();
-  const available = getAvailableModels(tier);
-
-  res.json({
-    ...snapshot,
-    provider: activeProviderName,
-    registry: {
-      totalModels: GEMINI_REGISTRY.length,
-      availableModels: available.length,
-      availableModelIds: available.map((m) => m.id),
-    },
-    timestamp: new Date().toISOString(),
-  });
-}));
+  }),
+);
 
 /**
  * GET /api/ai/grounding-capacity
@@ -74,27 +84,29 @@ router.get("/diagnostics", asyncHandler(async (req, res) => {
  * For non-Gemini providers, always returns hasCapacity: true since they
  * don't have a shared grounding RPD pool.
  */
-router.get("/grounding-capacity", asyncHandler(async (_req, res) => {
-  // Non-Gemini providers don't have grounding RPD limits
-  if (activeProviderName !== "gemini") {
-    return res.json({
-      hasCapacity: true,
-      remaining: null,
-      limit: null,
-      provider: activeProviderName,
-      note: "Grounding capacity limits are Gemini-specific. This provider has no shared grounding pool.",
+router.get(
+  "/grounding-capacity",
+  asyncHandler(async (_req, res) => {
+    // Non-Gemini providers don't have grounding RPD limits
+    if (activeProviderName !== "gemini") {
+      return res.json({
+        hasCapacity: true,
+        remaining: null,
+        limit: null,
+        provider: activeProviderName,
+        note: "Grounding capacity limits are Gemini-specific. This provider has no shared grounding pool.",
+      });
+    }
+
+    const snapshot = ai.getQuotaSnapshot();
+    const { grounding } = snapshot;
+
+    res.json({
+      hasCapacity: grounding.remaining > 0,
+      remaining: grounding.remaining,
+      limit: grounding.limit,
     });
-  }
-
-  const snapshot = ai.getQuotaSnapshot();
-  const { grounding } = snapshot;
-
-  res.json({
-    hasCapacity: grounding.remaining > 0,
-    remaining: grounding.remaining,
-    limit: grounding.limit,
-  });
-}));
+  }),
+);
 
 export const aiRouter = router;
-

@@ -19,13 +19,13 @@ This "latency masking" pattern ensures you never see a loading spinner for basic
 
 Use GitHub-style prefix operators to narrow results:
 
-| Prefix | Example | Description |
-|--------|---------|-------------|
-| `role:` | `role:engineer` | Filter by job title |
-| `company:` | `company:stripe` | Filter by company name |
-| `tag:` | `tag:investor` | Filter by tag |
-| `score:>N` | `score:>80` | Filter by relationship score |
-| `updated:>Nm` | `updated:>3m` | Filter by last update (N months) |
+| Prefix        | Example          | Description                      |
+| ------------- | ---------------- | -------------------------------- |
+| `role:`       | `role:engineer`  | Filter by job title              |
+| `company:`    | `company:stripe` | Filter by company name           |
+| `tag:`        | `tag:investor`   | Filter by tag                    |
+| `score:>N`    | `score:>80`      | Filter by relationship score     |
+| `updated:>Nm` | `updated:>3m`    | Filter by last update (N months) |
 
 Active filters display as **color-coded pills** below the search input. Press `Backspace` on an empty input to remove the last pill.
 
@@ -35,13 +35,13 @@ Typing a prefix (e.g., `role:`) triggers **autocomplete** sourced from the conta
 
 Press `→` on any search result (or tap `>>` on mobile) to drill into a keyboard-first action panel:
 
-| Key | Action | Description |
-|-----|--------|-------------|
+| Key       | Action       | Description                            |
+| --------- | ------------ | -------------------------------------- |
 | `↵` Enter | View Profile | Navigate to the contact's full profile |
-| `N` | Log Note | Opens inline note composer |
-| `C` | Log Call | Opens inline call composer |
-| `B` | Catch Me Up | Generates AI briefing for the contact |
-| `L` | Add to List | Opens inline list picker |
+| `N`       | Log Note     | Opens inline note composer             |
+| `C`       | Log Call     | Opens inline call composer             |
+| `B`       | Catch Me Up  | Generates AI briefing for the contact  |
+| `L`       | Add to List  | Opens inline list picker               |
 
 Press `←` or `Escape` to go back to the search results.
 
@@ -62,13 +62,13 @@ No need to navigate to the contact's profile — log interactions from anywhere.
 
 Before you type anything, the palette displays **CRM intelligence signals**:
 
-| Signal | Description |
-|--------|-------------|
-| 🔴 Action Items | Tasks due today or overdue |
-| ⚠️ At-Risk Contacts | Contacts you haven't interacted with beyond their cadence |
-| 👻 Ghost Contacts | Names mentioned multiple times but not yet in your contacts |
-| 📊 Stale Data | Contacts with outdated information |
-| 🔗 Dedupe | Pending duplicate suggestions to review |
+| Signal              | Description                                                 |
+| ------------------- | ----------------------------------------------------------- |
+| 🔴 Action Items     | Tasks due today or overdue                                  |
+| ⚠️ At-Risk Contacts | Contacts you haven't interacted with beyond their cadence   |
+| 👻 Ghost Contacts   | Names mentioned multiple times but not yet in your contacts |
+| 📊 Stale Data       | Contacts with outdated information                          |
+| 🔗 Dedupe           | Pending duplicate suggestions to review                     |
 
 These signals are fetched from `GET /api/command-palette/zero-state` and provide proactive intelligence without requiring a search.
 
@@ -109,6 +109,7 @@ This is useful for preparing for meetings with a group, understanding team compo
 ## Mobile Behavior
 
 On mobile devices:
+
 - All keyboard shortcuts are hidden
 - Touch-friendly tap targets (minimum 44px)
 - Responsive pill layout

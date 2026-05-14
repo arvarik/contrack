@@ -1,5 +1,12 @@
 import React from "react";
-import { ActivitySquare, Phone, Mail, FileText, Calendar, LucideIcon } from "lucide-react";
+import {
+  ActivitySquare,
+  Phone,
+  Mail,
+  FileText,
+  Calendar,
+  LucideIcon,
+} from "lucide-react";
 import { X } from "lucide-react";
 import { motion } from "motion/react";
 import { DashboardPayload } from "../../api";
@@ -20,10 +27,14 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   default: ActivitySquare,
 };
 
-export const InteractionVelocityModal = ({ isOpen, onClose, breakdown }: InteractionVelocityModalProps) => {
+export const InteractionVelocityModal = ({
+  isOpen,
+  onClose,
+  breakdown,
+}: InteractionVelocityModalProps) => {
   if (!breakdown) return null;
 
-  const maxCount = Math.max(...breakdown.map(d => d.count), 1);
+  const maxCount = Math.max(...breakdown.map((d) => d.count), 1);
   const totalCount = breakdown.reduce((acc, d) => acc + d.count, 0);
 
   return (
@@ -35,11 +46,15 @@ export const InteractionVelocityModal = ({ isOpen, onClose, breakdown }: Interac
             <ActivitySquare className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-on-surface">Interaction Velocity</h2>
-            <p className="text-xs text-on-surface-variant font-medium">Last 30 Days</p>
+            <h2 className="text-xl font-bold text-on-surface">
+              Interaction Velocity
+            </h2>
+            <p className="text-xs text-on-surface-variant font-medium">
+              Last 30 Days
+            </p>
           </div>
         </div>
-        <button 
+        <button
           onClick={onClose}
           className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
         >
@@ -61,9 +76,10 @@ export const InteractionVelocityModal = ({ isOpen, onClose, breakdown }: Interac
           ) : (
             <div className="flex flex-col gap-4">
               {breakdown.map((item, index) => {
-                const Icon = TYPE_ICONS[item.type.toLowerCase()] || TYPE_ICONS.default;
+                const Icon =
+                  TYPE_ICONS[item.type.toLowerCase()] || TYPE_ICONS.default;
                 const widthPercentage = (item.count / maxCount) * 100;
-                
+
                 return (
                   <div key={item.type} className="flex flex-col gap-1 w-full">
                     <div className="flex items-center justify-between text-sm">
@@ -74,15 +90,22 @@ export const InteractionVelocityModal = ({ isOpen, onClose, breakdown }: Interac
                         </span>
                       </div>
                       <span className="text-on-surface-variant font-medium">
-                        {item.count} <span className="opacity-50 text-xs">({Math.round((item.count / totalCount) * 100)}%)</span>
+                        {item.count}{" "}
+                        <span className="opacity-50 text-xs">
+                          ({Math.round((item.count / totalCount) * 100)}%)
+                        </span>
                       </span>
                     </div>
-                    
+
                     <div className="h-2.5 w-full bg-surface-container-high rounded-full overflow-hidden flex mt-1">
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${widthPercentage}%` }}
-                        transition={{ duration: 0.8, delay: 0.1 + index * 0.05, ease: "easeOut" }}
+                        transition={{
+                          duration: 0.8,
+                          delay: 0.1 + index * 0.05,
+                          ease: "easeOut",
+                        }}
                         className="h-full bg-primary rounded-full origin-left"
                       />
                     </div>
@@ -91,13 +114,15 @@ export const InteractionVelocityModal = ({ isOpen, onClose, breakdown }: Interac
               })}
             </div>
           )}
-          
+
           <div className="mt-4 flex justify-between items-center bg-surface-container-low p-4 rounded-xl">
-             <span className="font-bold text-on-surface-variant text-sm flex items-center gap-2">
-               <ActivitySquare className="w-4 h-4 opacity-50" />
-               Total Monthly Touchpoints
-             </span>
-             <span className="text-xl font-headline font-bold text-primary">{totalCount}</span>
+            <span className="font-bold text-on-surface-variant text-sm flex items-center gap-2">
+              <ActivitySquare className="w-4 h-4 opacity-50" />
+              Total Monthly Touchpoints
+            </span>
+            <span className="text-xl font-headline font-bold text-primary">
+              {totalCount}
+            </span>
           </div>
         </div>
       </div>

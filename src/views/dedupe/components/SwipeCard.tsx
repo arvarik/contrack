@@ -1,12 +1,24 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState } from "react";
 import {
-  ArrowLeft, ArrowRight, Check, X, Loader2, ArrowLeftRight, Sparkles,
-} from 'lucide-react';
-import { motion, useMotionValue, useTransform, useAnimation, AnimatePresence } from 'motion/react';
-import type { Contact, DedupeSuggestion } from '../../../types';
-import { ContactCard } from './shared/ContactCard';
-import { MatchBadge } from './shared/MatchBadge';
-import { cn } from '../../../lib/utils';
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  X,
+  Loader2,
+  ArrowLeftRight,
+  Sparkles,
+} from "lucide-react";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  useAnimation,
+  AnimatePresence,
+} from "motion/react";
+import type { Contact, DedupeSuggestion } from "../../../types";
+import { ContactCard } from "./shared/ContactCard";
+import { MatchBadge } from "./shared/MatchBadge";
+import { cn } from "../../../lib/utils";
 
 // =============================================================================
 // SwipeCard — Tinder-style draggable review card
@@ -21,7 +33,13 @@ interface SwipeCardProps {
   nextSuggestion?: DedupeSuggestion | null;
 }
 
-export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSuggestion }: SwipeCardProps) => {
+export const SwipeCard = ({
+  suggestion,
+  onMerge,
+  onDismiss,
+  isMerging,
+  nextSuggestion,
+}: SwipeCardProps) => {
   const [swapped, setSwapped] = useState(false);
 
   // Derive the "primary" and "duplicate" based on swap state
@@ -36,39 +54,49 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
   const approveOpacity = useTransform(x, [0, 80, 200], [0, 0.5, 1]);
   const rejectOpacity = useTransform(x, [-200, -80, 0], [1, 0.5, 0]);
 
-  const handleDragEnd = useCallback((_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
-    const threshold = 100;
-    const velocityThreshold = 500;
+  const handleDragEnd = useCallback(
+    (_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
+      const threshold = 100;
+      const velocityThreshold = 500;
 
-    if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
-      // Swipe right → merge
-      controls.start({
-        x: 600,
-        opacity: 0,
-        rotate: 15,
-        transition: { duration: 0.4, ease: 'easeOut' },
-      }).then(() => {
-        onMerge(primary.id, duplicate.id);
-      });
-    } else if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
-      // Swipe left → dismiss
-      controls.start({
-        x: -600,
-        opacity: 0,
-        rotate: -15,
-        transition: { duration: 0.4, ease: 'easeOut' },
-      }).then(() => {
-        onDismiss();
-      });
-    } else {
-      // Snap back
-      controls.start({
-        x: 0,
-        rotate: 0,
-        transition: { type: 'spring', stiffness: 500, damping: 30 },
-      });
-    }
-  }, [controls, onMerge, onDismiss, primary.id, duplicate.id]);
+      if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+        // Swipe right → merge
+        controls
+          .start({
+            x: 600,
+            opacity: 0,
+            rotate: 15,
+            transition: { duration: 0.4, ease: "easeOut" },
+          })
+          .then(() => {
+            onMerge(primary.id, duplicate.id);
+          });
+      } else if (
+        info.offset.x < -threshold ||
+        info.velocity.x < -velocityThreshold
+      ) {
+        // Swipe left → dismiss
+        controls
+          .start({
+            x: -600,
+            opacity: 0,
+            rotate: -15,
+            transition: { duration: 0.4, ease: "easeOut" },
+          })
+          .then(() => {
+            onDismiss();
+          });
+      } else {
+        // Snap back
+        controls.start({
+          x: 0,
+          rotate: 0,
+          transition: { type: "spring", stiffness: 500, damping: 30 },
+        });
+      }
+    },
+    [controls, onMerge, onDismiss, primary.id, duplicate.id],
+  );
 
   const handleButtonMerge = useCallback(async () => {
     if (isMerging) return;
@@ -76,7 +104,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
       x: 600,
       opacity: 0,
       rotate: 15,
-      transition: { duration: 0.35, ease: 'easeOut' },
+      transition: { duration: 0.35, ease: "easeOut" },
     });
     onMerge(primary.id, duplicate.id);
   }, [controls, onMerge, primary.id, duplicate.id, isMerging]);
@@ -86,7 +114,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
       x: -600,
       opacity: 0,
       rotate: -15,
-      transition: { duration: 0.35, ease: 'easeOut' },
+      transition: { duration: 0.35, ease: "easeOut" },
     });
     onDismiss();
   }, [controls, onDismiss]);
@@ -109,7 +137,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
         style={{ x, rotate }}
         initial={{ opacity: 0, y: 40, scale: 0.95 }}
         whileInView={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
         className="relative cursor-grab active:cursor-grabbing"
       >
         {/* Swipe overlay indicators */}
@@ -136,9 +164,14 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
           <div className="bg-surface-container-low rounded-xl p-3 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-on-surface leading-relaxed">{suggestion.reasoning}</p>
+              <p className="text-sm text-on-surface leading-relaxed">
+                {suggestion.reasoning}
+              </p>
             </div>
-            <MatchBadge type={suggestion.matchType} confidence={suggestion.confidence} />
+            <MatchBadge
+              type={suggestion.matchType}
+              confidence={suggestion.confidence}
+            />
           </div>
 
           {/* Side-by-side contact cards */}
@@ -152,7 +185,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
 
             {/* Swap button between cards */}
             <button
-              onClick={() => setSwapped(s => !s)}
+              onClick={() => setSwapped((s) => !s)}
               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2.5 bg-surface-container-lowest rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center group"
               title="Swap primary / duplicate"
             >
@@ -169,7 +202,7 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
 
           {/* Mobile swap button */}
           <button
-            onClick={() => setSwapped(s => !s)}
+            onClick={() => setSwapped((s) => !s)}
             className="lg:hidden w-full flex items-center justify-center gap-2 py-2 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
           >
             <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -185,7 +218,9 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
               <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <div className="text-left">
                 <div className="text-sm font-bold">Keep Separate</div>
-                <div className="text-[10px] uppercase tracking-wider opacity-60">← or Swipe Left</div>
+                <div className="text-[10px] uppercase tracking-wider opacity-60">
+                  ← or Swipe Left
+                </div>
               </div>
             </button>
 
@@ -196,9 +231,11 @@ export const SwipeCard = ({ suggestion, onMerge, onDismiss, isMerging, nextSugge
             >
               <div className="text-right">
                 <div className="text-sm font-bold">
-                  {isMerging ? 'Merging...' : 'Merge'}
+                  {isMerging ? "Merging..." : "Merge"}
                 </div>
-                <div className="text-[10px] uppercase tracking-wider opacity-70">Swipe Right or →</div>
+                <div className="text-[10px] uppercase tracking-wider opacity-70">
+                  Swipe Right or →
+                </div>
               </div>
               {isMerging ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

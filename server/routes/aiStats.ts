@@ -21,19 +21,30 @@ const router = Router();
 // =============================================================================
 
 const VALID_OPERATIONS = new Set<string>([
-  "briefing", "rerank", "mentions", "synthesis", "parse",
-  "searchExpansion", "dailyInsight", "emlSummary", "bulkParse",
-  "aiSearchGrounding", "aiSearchExtraction",
+  "briefing",
+  "rerank",
+  "mentions",
+  "synthesis",
+  "parse",
+  "searchExpansion",
+  "dailyInsight",
+  "emlSummary",
+  "bulkParse",
+  "aiSearchGrounding",
+  "aiSearchExtraction",
 ]);
 
 // =============================================================================
 // GET /summary
 // =============================================================================
 
-router.get("/summary", asyncHandler(async (_req, res) => {
-  const summary = getSummary();
-  res.json(summary);
-}));
+router.get(
+  "/summary",
+  asyncHandler(async (_req, res) => {
+    const summary = getSummary();
+    res.json(summary);
+  }),
+);
 
 // =============================================================================
 // GET /feed
@@ -47,40 +58,46 @@ const feedQuerySchema = z.object({
   sort: z.enum(["newest", "oldest"]).default("newest"),
 });
 
-router.get("/feed", asyncHandler(async (req, res) => {
-  const parsed = feedQuerySchema.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: "Invalid query parameters",
-      details: parsed.error.flatten().fieldErrors,
-    });
-    return;
-  }
-
-  const { offset, limit, operation, cached, sort } = parsed.data;
-
-  // Parse comma-separated operation filter
-  let operations: string[] | undefined;
-  if (operation) {
-    operations = operation.split(",").map((s) => s.trim()).filter(Boolean);
-    const invalid = operations.filter((op) => !VALID_OPERATIONS.has(op));
-    if (invalid.length > 0) {
+router.get(
+  "/feed",
+  asyncHandler(async (req, res) => {
+    const parsed = feedQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
       res.status(400).json({
-        error: `Invalid operation filter(s): ${invalid.join(", ")}. Valid values: ${[...VALID_OPERATIONS].join(", ")}`,
+        error: "Invalid query parameters",
+        details: parsed.error.flatten().fieldErrors,
       });
       return;
     }
-  }
 
-  const result = getFeed({
-    offset,
-    limit,
-    operations,
-    cached: cached === undefined ? undefined : cached === "true",
-    sort,
-  });
+    const { offset, limit, operation, cached, sort } = parsed.data;
 
-  res.json(result);
-}));
+    // Parse comma-separated operation filter
+    let operations: string[] | undefined;
+    if (operation) {
+      operations = operation
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const invalid = operations.filter((op) => !VALID_OPERATIONS.has(op));
+      if (invalid.length > 0) {
+        res.status(400).json({
+          error: `Invalid operation filter(s): ${invalid.join(", ")}. Valid values: ${[...VALID_OPERATIONS].join(", ")}`,
+        });
+        return;
+      }
+    }
+
+    const result = getFeed({
+      offset,
+      limit,
+      operations,
+      cached: cached === undefined ? undefined : cached === "true",
+      sort,
+    });
+
+    res.json(result);
+  }),
+);
 
 export const aiStatsRouter = router;

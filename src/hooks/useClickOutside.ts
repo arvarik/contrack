@@ -1,14 +1,14 @@
 /**
  * useClickOutside — Generic "click outside" dismiss hook.
  *
- * Replaces the copy-pasted `useEffect(() => { document.addEventListener('mousedown', ...` 
+ * Replaces the copy-pasted `useEffect(() => { document.addEventListener('mousedown', ...`
  * pattern that was duplicated across ContactList and other dropdown components.
  *
  * Usage:
  *   const ref = useRef<HTMLDivElement>(null);
  *   useClickOutside(ref, () => setOpen(false), isOpen);
  */
-import { useEffect, type RefObject } from 'react';
+import { useEffect, type RefObject } from "react";
 
 export function useClickOutside(
   ref: RefObject<HTMLElement | null>,
@@ -24,7 +24,7 @@ export function useClickOutside(
       }
     };
 
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [ref, onOutsideClick, enabled]);
 }

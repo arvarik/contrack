@@ -99,9 +99,10 @@ export const zeroStateService = {
     if (urgent.count > 0) {
       insights.push({
         type: "action_items",
-        label: urgent.count === 1
-          ? "1 follow-up due"
-          : `${urgent.count} follow-ups due`,
+        label:
+          urgent.count === 1
+            ? "1 follow-up due"
+            : `${urgent.count} follow-ups due`,
         count: urgent.count,
       });
     }
@@ -125,12 +126,14 @@ export const zeroStateService = {
     }
 
     // 3. Ghost alert (frequently mentioned but not a real contact)
-    const ghost = stmts.topGhost.get() as {
-      id: string;
-      name: string;
-      avatarUrl: string | null;
-      mentionCount: number;
-    } | undefined;
+    const ghost = stmts.topGhost.get() as
+      | {
+          id: string;
+          name: string;
+          avatarUrl: string | null;
+          mentionCount: number;
+        }
+      | undefined;
     if (ghost && ghost.mentionCount >= 2) {
       insights.push({
         type: "ghost",
@@ -145,9 +148,10 @@ export const zeroStateService = {
     if (stale.count > 0) {
       insights.push({
         type: "stale_data",
-        label: stale.count === 1
-          ? "1 contact has stale data"
-          : `${stale.count} contacts have stale data`,
+        label:
+          stale.count === 1
+            ? "1 contact has stale data"
+            : `${stale.count} contacts have stale data`,
         count: stale.count,
       });
     }
@@ -157,15 +161,19 @@ export const zeroStateService = {
     if (dedupe.count > 0) {
       insights.push({
         type: "dedupe",
-        label: dedupe.count === 1
-          ? "1 potential duplicate detected"
-          : `${dedupe.count} potential duplicates detected`,
+        label:
+          dedupe.count === 1
+            ? "1 potential duplicate detected"
+            : `${dedupe.count} potential duplicates detected`,
         count: dedupe.count,
       });
     }
 
     const elapsed = Date.now() - startMs;
-    log.debug("ZeroState", `Computed zero-state payload in ${elapsed}ms (${insights.length} insights)`);
+    log.debug(
+      "ZeroState",
+      `Computed zero-state payload in ${elapsed}ms (${insights.length} insights)`,
+    );
 
     return { insights };
   },

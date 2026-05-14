@@ -19,13 +19,15 @@ import {
   isNicknameMatch,
   normalizeCompany,
 } from "../../utils/nlp/index.ts";
-import type { NormalizedContact, MatchSignals, PairClassification } from "./types.ts";
+import type {
+  NormalizedContact,
+  MatchSignals,
+  PairClassification,
+} from "./types.ts";
 
 // =============================================================================
 // Types
 // =============================================================================
-
-
 
 // =============================================================================
 // Signal Computation
@@ -53,14 +55,20 @@ export function computeMatchSignals(
   socialUrlsB: string[] = [],
 ): MatchSignals {
   // --- Identity anchors ---
-  const emailOverlap = a.emailsNorm.length > 0 && b.emailsNorm.length > 0 &&
-    a.emailsNorm.some(e => b.emailsNorm.includes(e));
+  const emailOverlap =
+    a.emailsNorm.length > 0 &&
+    b.emailsNorm.length > 0 &&
+    a.emailsNorm.some((e) => b.emailsNorm.includes(e));
 
-  const phoneOverlap = a.phonesNorm.length > 0 && b.phonesNorm.length > 0 &&
-    a.phonesNorm.some(p => b.phonesNorm.includes(p));
+  const phoneOverlap =
+    a.phonesNorm.length > 0 &&
+    b.phonesNorm.length > 0 &&
+    a.phonesNorm.some((p) => b.phonesNorm.includes(p));
 
-  const socialUrlOverlap = socialUrlsA.length > 0 && socialUrlsB.length > 0 &&
-    socialUrlsA.some(u => socialUrlsB.includes(u));
+  const socialUrlOverlap =
+    socialUrlsA.length > 0 &&
+    socialUrlsB.length > 0 &&
+    socialUrlsA.some((u) => socialUrlsB.includes(u));
 
   // --- Name signals ---
   const nameExactMatch = a.nameNorm.length > 0 && a.nameNorm === b.nameNorm;
@@ -70,23 +78,31 @@ export function computeMatchSignals(
     b.nameTokens.join(" "),
   );
 
-  const nameJaroWinkler = a.nameNorm.length > 0 && b.nameNorm.length > 0
-    ? jaroWinkler(a.nameNorm, b.nameNorm)
-    : 0;
+  const nameJaroWinkler =
+    a.nameNorm.length > 0 && b.nameNorm.length > 0
+      ? jaroWinkler(a.nameNorm, b.nameNorm)
+      : 0;
 
-  const nameMetaphoneMatch = a.phoneticHash.length > 0 && b.phoneticHash.length > 0 &&
+  const nameMetaphoneMatch =
+    a.phoneticHash.length > 0 &&
+    b.phoneticHash.length > 0 &&
     a.phoneticHash === b.phoneticHash;
 
-  const lastNameExactMatch = a.lastNameNorm.length > 1 && b.lastNameNorm.length > 1 &&
+  const lastNameExactMatch =
+    a.lastNameNorm.length > 1 &&
+    b.lastNameNorm.length > 1 &&
     a.lastNameNorm === b.lastNameNorm;
 
   // --- Context signals ---
-  const companyMatch = a.companyNorm.length > 1 && b.companyNorm.length > 1 &&
+  const companyMatch =
+    a.companyNorm.length > 1 &&
+    b.companyNorm.length > 1 &&
     a.companyNorm === b.companyNorm;
 
-  const companyFuzzy = a.companyNorm.length > 1 && b.companyNorm.length > 1
-    ? jaroWinkler(a.companyNorm, b.companyNorm)
-    : 0;
+  const companyFuzzy =
+    a.companyNorm.length > 1 && b.companyNorm.length > 1
+      ? jaroWinkler(a.companyNorm, b.companyNorm)
+      : 0;
 
   // Location: crude city match (first word before comma, or entire string)
   const locA = (a.location ?? "").toLowerCase().split(",")[0].trim();
@@ -94,8 +110,10 @@ export function computeMatchSignals(
   const locationOverlap = locA.length > 2 && locB.length > 2 && locA === locB;
 
   // Cross-source: contacts imported from different platforms
-  const isCrossSource = a.sources.length > 0 && b.sources.length > 0 &&
-    !a.sources.some(s => b.sources.includes(s));
+  const isCrossSource =
+    a.sources.length > 0 &&
+    b.sources.length > 0 &&
+    !a.sources.some((s) => b.sources.includes(s));
 
   return {
     emailOverlap,
@@ -144,7 +162,7 @@ export function computeCompositeScore(signals: MatchSignals): number {
 
   // --- Name signals (primary weight) ---
   if (signals.nameExactMatch) {
-    score += 0.60;
+    score += 0.6;
   } else if (signals.nicknameMatch && signals.lastNameExactMatch) {
     score += 0.55;
   } else {
@@ -176,8 +194,8 @@ export function computeCompositeScore(signals: MatchSignals): number {
 // =============================================================================
 
 /** Score thresholds for pair routing. */
-const THRESHOLD_AUTO = 0.93;   // ≥ 0.93 → auto-merge quality (or send straight to cluster)
-const THRESHOLD_AI = 0.60;     // 0.60–0.93 → needs AI verification
+const THRESHOLD_AUTO = 0.93; // ≥ 0.93 → auto-merge quality (or send straight to cluster)
+const THRESHOLD_AI = 0.6; // 0.60–0.93 → needs AI verification
 // < 0.60 → discard (too different)
 
 /**

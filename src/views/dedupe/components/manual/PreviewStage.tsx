@@ -1,8 +1,8 @@
-import React from 'react';
-import { motion } from 'motion/react';
-import { ChevronLeft, Merge, Loader2 } from 'lucide-react';
-import { MergePreview } from '../MergePreview';
-import type { Contact } from '../../../../types';
+import React from "react";
+import { motion } from "motion/react";
+import { ChevronLeft, Merge, Loader2 } from "lucide-react";
+import { MergePreview } from "../MergePreview";
+import type { Contact } from "../../../../types";
 
 interface PreviewStageProps {
   primary: Contact | null;
@@ -12,7 +12,13 @@ interface PreviewStageProps {
   isMerging: boolean;
 }
 
-export const PreviewStage = ({ primary, duplicates, onBack, onMerge, isMerging }: PreviewStageProps) => {
+export const PreviewStage = ({
+  primary,
+  duplicates,
+  onBack,
+  onMerge,
+  isMerging,
+}: PreviewStageProps) => {
   if (!primary) return null;
 
   return (

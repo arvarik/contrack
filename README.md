@@ -30,6 +30,7 @@ Contrack isn't just an address book — it's a **Personal AI Relational Engine**
 <td width="50%">
 
 ### 🔍 Ask Contrack (AI Search)
+
 Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal Rank Fusion. Results stream in two phases: instant retrieval (<15ms) then AI-enriched reasons (~500ms).
 
 <!-- ![AI Search](docs/screenshots/ai-search-results.png) -->
@@ -38,6 +39,7 @@ Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal Rank Fusion
 <td width="50%">
 
 ### ⌘ Command Palette (Cmd+K)
+
 GitHub-style command center with faceted filters (`role:`, `company:`, `tag:`), action sub-menus, inline note composer, zero-state CRM intelligence, and deep profile peek.
 
 <!-- ![Command Palette](docs/screenshots/command-palette.png) -->
@@ -48,6 +50,7 @@ GitHub-style command center with faceted filters (`role:`, `company:`, `tag:`), 
 <td width="50%">
 
 ### ⚡ Intelligent Deduplication
+
 Multi-pass engine using phonetic matching, Levenshtein distance, E.164 phone normalization, and AI embeddings. Swipeable card review with configurable auto-merge thresholds and one-click undo.
 
 <!-- ![Deduplication](docs/screenshots/dedupe-review.png) -->
@@ -56,6 +59,7 @@ Multi-pass engine using phonetic matching, Levenshtein distance, E.164 phone nor
 <td width="50%">
 
 ### 💓 Relationship Pulse
+
 Proactive intelligence dashboard with automated scoring (frequency × recency × depth), action item swimlanes, network health metrics, and AI-generated daily insights.
 
 <!-- ![Pulse Dashboard](docs/screenshots/pulse-dashboard.png) -->
@@ -66,6 +70,7 @@ Proactive intelligence dashboard with automated scoring (frequency × recency ×
 <td width="50%">
 
 ### 🗺️ Geospatial Mapping
+
 Interactive cluster map via React Leaflet with Mapbox/Nominatim geocoding. Click pins to open contact detail overlays.
 
 <!-- ![Map View](docs/screenshots/map-view.png) -->
@@ -74,6 +79,7 @@ Interactive cluster map via React Leaflet with Mapbox/Nominatim geocoding. Click
 <td width="50%">
 
 ### 👤 Rich Contact Profiles
+
 Timeline with @mention network weaving, AI briefings, Ghost entity extraction, multi-value fields, vibe colors, and data age halos.
 
 <!-- ![Contact Detail](docs/screenshots/contact-detail.png) -->
@@ -135,15 +141,15 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 
 ## 🛠️ Technology Stack
 
-| Domain | Technology |
-|--------|-----------|
-| **Frontend** | React 19, Vite 6, React Query v5, Tailwind CSS v4, Tiptap, Motion |
-| **Backend** | Node.js 22, Express, TypeScript (tsx), Zod validation |
-| **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec |
-| **AI** | Gemini / OpenAI / Anthropic (provider-agnostic adapter pattern) |
-| **Search** | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
-| **Mapping** | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding |
-| **Testing** | Vitest — 180 tests, <600ms |
+| Domain       | Technology                                                            |
+| ------------ | --------------------------------------------------------------------- |
+| **Frontend** | React 19, Vite 6, React Query v5, Tailwind CSS v4, Tiptap, Motion     |
+| **Backend**  | Node.js 22, Express, TypeScript (tsx), Zod validation                 |
+| **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
+| **AI**       | Gemini / OpenAI / Anthropic (provider-agnostic adapter pattern)       |
+| **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
+| **Mapping**  | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding           |
+| **Testing**  | Vitest — 180 tests, <600ms                                            |
 
 ---
 
@@ -151,38 +157,38 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 
 Full documentation lives in the [`docs/`](docs/) directory:
 
-| Guide | Description |
-|-------|-------------|
+| Guide                                      | Description                                           |
+| ------------------------------------------ | ----------------------------------------------------- |
 | [Getting Started](docs/getting-started.md) | Installation, first boot, scripts, keyboard shortcuts |
-| [Configuration](docs/configuration.md) | Environment variables, AI provider setup, tier tuning |
-| [Architecture](docs/architecture.md) | System overview, data flow, schema, caching |
-| [API Reference](docs/api-reference.md) | Complete REST API with curl and JavaScript examples |
+| [Configuration](docs/configuration.md)     | Environment variables, AI provider setup, tier tuning |
+| [Architecture](docs/architecture.md)       | System overview, data flow, schema, caching           |
+| [API Reference](docs/api-reference.md)     | Complete REST API with curl and JavaScript examples   |
 
 ### Feature Guides
 
-| Feature | Guide |
-|---------|-------|
+| Feature            | Guide                                                                      |
+| ------------------ | -------------------------------------------------------------------------- |
 | Contact Management | [docs/features/contact-management.md](docs/features/contact-management.md) |
-| Command Palette | [docs/features/command-palette.md](docs/features/command-palette.md) |
-| AI Search | [docs/features/ai-search.md](docs/features/ai-search.md) |
-| Deduplication | [docs/features/deduplication.md](docs/features/deduplication.md) |
-| Pulse Dashboard | [docs/features/dashboard-pulse.md](docs/features/dashboard-pulse.md) |
-| Map View | [docs/features/map-view.md](docs/features/map-view.md) |
-| Lists | [docs/features/lists.md](docs/features/lists.md) |
+| Command Palette    | [docs/features/command-palette.md](docs/features/command-palette.md)       |
+| AI Search          | [docs/features/ai-search.md](docs/features/ai-search.md)                   |
+| Deduplication      | [docs/features/deduplication.md](docs/features/deduplication.md)           |
+| Pulse Dashboard    | [docs/features/dashboard-pulse.md](docs/features/dashboard-pulse.md)       |
+| Map View           | [docs/features/map-view.md](docs/features/map-view.md)                     |
+| Lists              | [docs/features/lists.md](docs/features/lists.md)                           |
 
 ---
 
 ## 🔐 Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AI_PROVIDER` | LLM provider: `gemini`, `openai`, `anthropic` | `gemini` |
-| `GEMINI_API_KEY` | Gemini API key | — |
-| `OPENAI_API_KEY` | OpenAI API key | — |
-| `ANTHROPIC_API_KEY` | Anthropic API key | — |
-| `AI_TIER` | `FREE` or `PAID` rate limit profile | `FREE` |
-| `PORT` | Express listening port | `3210` |
-| `MAPBOX_API_KEY` | Mapbox geocoding (optional, higher accuracy) | — |
+| Variable            | Description                                   | Default  |
+| ------------------- | --------------------------------------------- | -------- |
+| `AI_PROVIDER`       | LLM provider: `gemini`, `openai`, `anthropic` | `gemini` |
+| `GEMINI_API_KEY`    | Gemini API key                                | —        |
+| `OPENAI_API_KEY`    | OpenAI API key                                | —        |
+| `ANTHROPIC_API_KEY` | Anthropic API key                             | —        |
+| `AI_TIER`           | `FREE` or `PAID` rate limit profile           | `FREE`   |
+| `PORT`              | Express listening port                        | `3210`   |
+| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)  | —        |
 
 See [Configuration Guide](docs/configuration.md) for full details.
 

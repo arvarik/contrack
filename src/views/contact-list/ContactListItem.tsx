@@ -9,7 +9,13 @@
  */
 import React, { useState, useRef, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { CheckCheck, Building, Briefcase, CalendarClock, Sparkles } from "lucide-react";
+import {
+  CheckCheck,
+  Building,
+  Briefcase,
+  CalendarClock,
+  Sparkles,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { HealthRingAvatar } from "../../components/HealthRingAvatar";
@@ -98,10 +104,10 @@ const ContactListItemInner = ({
     setImgError(true);
     if (logoDomain) {
       try {
-        const cacheRaw = localStorage.getItem('contrack_failed_logos') || '{}';
+        const cacheRaw = localStorage.getItem("contrack_failed_logos") || "{}";
         const cache = JSON.parse(cacheRaw);
         cache[logoDomain] = true;
-        localStorage.setItem('contrack_failed_logos', JSON.stringify(cache));
+        localStorage.setItem("contrack_failed_logos", JSON.stringify(cache));
       } catch (e) {}
     }
   };
@@ -116,7 +122,9 @@ const ContactListItemInner = ({
       className={cn(
         listRow(active && !isSelectMode),
         isSelectMode && "cursor-pointer select-none",
-        isSelectMode && isSelected && "bg-primary/8 outline-2 outline-primary -outline-offset-2",
+        isSelectMode &&
+          isSelected &&
+          "bg-primary/8 outline-2 outline-primary -outline-offset-2",
       )}
     >
       {/* Checkbox overlay in select mode */}
@@ -128,12 +136,14 @@ const ContactListItemInner = ({
             exit={{ scale: 0.6, opacity: 0 }}
             className="shrink-0"
           >
-            <div className={cn(
-              "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
-              isSelected
-                ? "bg-primary border-primary"
-                : "border-on-surface-variant/40 bg-surface-container-low"
-            )}>
+            <div
+              className={cn(
+                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                isSelected
+                  ? "bg-primary border-primary"
+                  : "border-on-surface-variant/40 bg-surface-container-low",
+              )}
+            >
               {isSelected && <CheckCheck className="w-3 h-3 text-white" />}
             </div>
           </motion.div>
@@ -145,7 +155,9 @@ const ContactListItemInner = ({
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3 className={`text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}>
+            <h3
+              className={`text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}
+            >
               {contact.name}
             </h3>
             {contact.isGhost ? (
@@ -191,7 +203,10 @@ const ContactListItemInner = ({
  * This prevents cascade rerenders when ContactList state (flashId, contextMenu,
  * drag state, etc.) changes without touching this contact's data.
  */
-const areEqual = (prev: ContactListItemProps, next: ContactListItemProps): boolean => {
+const areEqual = (
+  prev: ContactListItemProps,
+  next: ContactListItemProps,
+): boolean => {
   return (
     prev.contact.id === next.contact.id &&
     prev.contact.updatedAt === next.contact.updatedAt &&

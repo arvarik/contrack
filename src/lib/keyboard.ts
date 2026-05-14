@@ -21,14 +21,14 @@ export function isTypingTarget(e?: KeyboardEvent): boolean {
   if (!el) return false;
 
   const tag = el.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   if (el.isContentEditable) return true;
 
-  const role = el.getAttribute('role');
-  if (role === 'textbox' || role === 'combobox') return true;
+  const role = el.getAttribute("role");
+  if (role === "textbox" || role === "combobox") return true;
 
   // cmdk search input (used by CommandPalette)
-  if (el.closest('[cmdk-input]')) return true;
+  if (el.closest("[cmdk-input]")) return true;
 
   return false;
 }

@@ -15,8 +15,8 @@
  *   const { scheduleDelete } = useUndoableAction();
  *   await scheduleDelete(() => deleteList.mutateAsync(id), `Deleted "${list.name}"`);
  */
-import { useCallback, useRef, useEffect } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 export interface UndoableActionOptions {
   /** Toast label, e.g. 'Deleted "SF List"' */
@@ -40,7 +40,10 @@ export const useUndoableAction = () => {
   }, []);
 
   const schedule = useCallback(
-    (action: () => Promise<void>, options: UndoableActionOptions): Promise<boolean> => {
+    (
+      action: () => Promise<void>,
+      options: UndoableActionOptions,
+    ): Promise<boolean> => {
       const { label, delayMs = 4000 } = options;
 
       return new Promise<boolean>((resolve) => {
@@ -57,7 +60,7 @@ export const useUndoableAction = () => {
             resolve(true);
           } catch (err) {
             // Surface the error as a toast so the caller doesn't need to handle it
-            toast.error(err instanceof Error ? err.message : 'Action failed');
+            toast.error(err instanceof Error ? err.message : "Action failed");
             resolve(false);
           }
         }, delayMs);
@@ -67,7 +70,7 @@ export const useUndoableAction = () => {
         toast(label, {
           duration: delayMs,
           action: {
-            label: 'Undo',
+            label: "Undo",
             onClick: () => {
               cancelled = true;
               clearTimeout(timerId);
@@ -79,7 +82,7 @@ export const useUndoableAction = () => {
         });
       });
     },
-    []
+    [],
   );
 
   return { schedule };

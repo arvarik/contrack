@@ -37,7 +37,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   }, []);
 
   const toggleSelect = useCallback((contactId: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(contactId) ? next.delete(contactId) : next.add(contactId);
       return next;
@@ -45,7 +45,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   }, []);
 
   const selectAll = useCallback(() => {
-    setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+    setSelectedIds(new Set(filteredContacts.map((c) => c.id)));
   }, [filteredContacts]);
 
   // ── Bulk Actions ──────────────────────────────────────────────────────
@@ -54,59 +54,94 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
       onSuccess: ({ count }) => {
-        toast.success(`Deleted ${count} contact${count !== 1 ? 's' : ''}`);
+        toast.success(`Deleted ${count} contact${count !== 1 ? "s" : ""}`);
         exitSelectMode();
       },
-      onError: (err) => toast.error(`Delete failed: ${(err instanceof Error ? err.message : String(err))}`),
+      onError: (err) =>
+        toast.error(
+          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
+        ),
     });
   }, [selectedIds, bulkDelete, exitSelectMode]);
 
   const handleBulkArchive = useCallback(() => {
     const ids = Array.from(selectedIds) as string[];
-    bulkUpdate.mutate({ ids, data: { isArchived: true } }, {
-      onSuccess: ({ count }) => {
-        toast.success(`Archived ${count} contact${count !== 1 ? 's' : ''}`);
-        exitSelectMode();
+    bulkUpdate.mutate(
+      { ids, data: { isArchived: true } },
+      {
+        onSuccess: ({ count }) => {
+          toast.success(`Archived ${count} contact${count !== 1 ? "s" : ""}`);
+          exitSelectMode();
+        },
+        onError: (err) =>
+          toast.error(
+            `Archive failed: ${err instanceof Error ? err.message : String(err)}`,
+          ),
       },
-      onError: (err) => toast.error(`Archive failed: ${(err instanceof Error ? err.message : String(err))}`),
-    });
+    );
   }, [selectedIds, bulkUpdate, exitSelectMode]);
 
-  const handleBulkAddToList = useCallback((listId: string) => {
-    const contactIds = Array.from(selectedIds) as string[];
-    bulkAddToList.mutate({ listId, contactIds }, {
-      onSuccess: ({ count }) => {
-        toast.success(`Added ${count} contact${count !== 1 ? 's' : ''} to list`);
-        exitSelectMode();
-      },
-      onError: (err) => toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`),
-    });
-  }, [selectedIds, bulkAddToList, exitSelectMode]);
+  const handleBulkAddToList = useCallback(
+    (listId: string) => {
+      const contactIds = Array.from(selectedIds) as string[];
+      bulkAddToList.mutate(
+        { listId, contactIds },
+        {
+          onSuccess: ({ count }) => {
+            toast.success(
+              `Added ${count} contact${count !== 1 ? "s" : ""} to list`,
+            );
+            exitSelectMode();
+          },
+          onError: (err) =>
+            toast.error(
+              `Failed: ${err instanceof Error ? err.message : String(err)}`,
+            ),
+        },
+      );
+    },
+    [selectedIds, bulkAddToList, exitSelectMode],
+  );
 
-  const handleBulkColorChange = useCallback((vibeId: string) => {
-    const ids = Array.from(selectedIds) as string[];
-    bulkUpdate.mutate({ ids, data: { themeColor: vibeId } }, {
-      onSuccess: ({ count }) => {
-        toast.success(`Updated color for ${count} contact${count !== 1 ? 's' : ''}`);
-        exitSelectMode();
-      },
-      onError: (err) => toast.error(`Color update failed: ${(err instanceof Error ? err.message : String(err))}`),
-    });
-  }, [selectedIds, bulkUpdate, exitSelectMode]);
+  const handleBulkColorChange = useCallback(
+    (vibeId: string) => {
+      const ids = Array.from(selectedIds) as string[];
+      bulkUpdate.mutate(
+        { ids, data: { themeColor: vibeId } },
+        {
+          onSuccess: ({ count }) => {
+            toast.success(
+              `Updated color for ${count} contact${count !== 1 ? "s" : ""}`,
+            );
+            exitSelectMode();
+          },
+          onError: (err) =>
+            toast.error(
+              `Color update failed: ${err instanceof Error ? err.message : String(err)}`,
+            ),
+        },
+      );
+    },
+    [selectedIds, bulkUpdate, exitSelectMode],
+  );
 
   /** Export selected contacts as CSV to clipboard. */
   const handleExportCSV = useCallback(() => {
-    const selected = filteredContacts.filter(c => selectedIds.has(c.id));
-    const header = 'Name,Role,Company,Location,Email,Phone';
-    const rows = selected.map(c => [
-      c.name,
-      c.role || '',
-      c.company || '',
-      c.location || '',
-      c.emails?.[0]?.email || '',
-      c.phones?.[0]?.phone || '',
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-    const csv = [header, ...rows].join('\n');
+    const selected = filteredContacts.filter((c) => selectedIds.has(c.id));
+    const header = "Name,Role,Company,Location,Email,Phone";
+    const rows = selected.map((c) =>
+      [
+        c.name,
+        c.role || "",
+        c.company || "",
+        c.location || "",
+        c.emails?.[0]?.email || "",
+        c.phones?.[0]?.phone || "",
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(","),
+    );
+    const csv = [header, ...rows].join("\n");
 
     const copyToClipboard = (text: string): Promise<void> => {
       // Try modern async Clipboard API first
@@ -115,30 +150,36 @@ export function useMultiSelect(filteredContacts: Contact[]) {
       }
       // Fallback: legacy execCommand approach (works in all browsers)
       return new Promise((resolve, reject) => {
-        const el = document.createElement('textarea');
+        const el = document.createElement("textarea");
         el.value = text;
-        el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+        el.style.cssText =
+          "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
         document.body.appendChild(el);
         el.focus();
         el.select();
-        const ok = document.execCommand('copy');
+        const ok = document.execCommand("copy");
         document.body.removeChild(el);
-        ok ? resolve() : reject(new Error('execCommand copy failed'));
+        ok ? resolve() : reject(new Error("execCommand copy failed"));
       });
     };
 
     copyToClipboard(csv)
       .then(() => {
-        toast.success(`Copied ${selected.length} contact${selected.length !== 1 ? 's' : ''} as CSV`);
+        toast.success(
+          `Copied ${selected.length} contact${selected.length !== 1 ? "s" : ""} as CSV`,
+        );
         exitSelectMode();
       })
       .catch(() => {
-        toast.error('Clipboard access denied — please allow clipboard permissions and try again.');
+        toast.error(
+          "Clipboard access denied — please allow clipboard permissions and try again.",
+        );
       });
   }, [filteredContacts, selectedIds, exitSelectMode]);
 
   const selectedCount = selectedIds.size;
-  const isPending = bulkUpdate.isPending || bulkDelete.isPending || bulkAddToList.isPending;
+  const isPending =
+    bulkUpdate.isPending || bulkDelete.isPending || bulkAddToList.isPending;
 
   return {
     isSelectMode,

@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, type RefObject } from "react";
 
 /**
  * Focus-trapping selector — matches all natively focusable, non-disabled elements.
@@ -7,13 +7,13 @@ import { useEffect, type RefObject } from 'react';
  * and anything with an explicit non-negative tabindex.
  */
 const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not(:disabled)',
-  'textarea:not(:disabled)',
+  "a[href]",
+  "button:not(:disabled)",
+  "textarea:not(:disabled)",
   'input:not(:disabled):not([type="hidden"])',
-  'select:not(:disabled)',
+  "select:not(:disabled)",
   '[tabindex]:not([tabindex="-1"])',
-].join(', ');
+].join(", ");
 
 /**
  * useFocusTrap — Traps Tab/Shift+Tab cycling within a container.
@@ -32,14 +32,16 @@ export function useFocusTrap(
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
+      if (e.key !== "Tab") return;
 
       const container = containerRef.current;
       if (!container) return;
 
-      const focusable = (Array.from(
-        container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-      ) as HTMLElement[]).filter((el) => el.offsetParent !== null); // Exclude visually hidden (display: none)
+      const focusable = (
+        Array.from(
+          container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+        ) as HTMLElement[]
+      ).filter((el) => el.offsetParent !== null); // Exclude visually hidden (display: none)
 
       if (focusable.length === 0) return;
 
@@ -61,7 +63,7 @@ export function useFocusTrap(
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown, true);
-    return () => document.removeEventListener('keydown', handleKeyDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [containerRef, enabled]);
 }

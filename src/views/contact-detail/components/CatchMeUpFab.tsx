@@ -12,7 +12,10 @@ interface CatchMeUpFabProps {
   generateBriefing: { mutate: (id: string) => void; isPending: boolean };
 }
 
-export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBriefing }) => {
+export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
+  contact,
+  generateBriefing,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const isBriefingValid = React.useMemo(() => {
@@ -29,7 +32,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
 
   return (
     <>
-      <button 
+      <button
         onClick={() => {
           if (!isBriefingValid && !generateBriefing.isPending) {
             generateBriefing.mutate(contact.id);
@@ -48,35 +51,39 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsOpen(false)}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-xl bg-surface-container-lowest shadow-2xl rounded-[2rem] p-6 md:p-8 overflow-hidden"
             >
-              <button 
-                onClick={() => setIsOpen(false)} 
+              <button
+                onClick={() => setIsOpen(false)}
                 className="absolute top-5 right-5 p-2 rounded-full hover:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
                 aria-label="Close briefing"
               >
                 <X className="w-5 h-5" />
               </button>
-              
+
               <h3 className="text-xl md:text-2xl font-black font-headline mb-6 flex items-center gap-2.5 text-on-surface">
-                <span className="bg-primary/10 p-2 rounded-xl text-primary"><Sparkles className="w-5 h-5"/></span>
+                <span className="bg-primary/10 p-2 rounded-xl text-primary">
+                  <Sparkles className="w-5 h-5" />
+                </span>
                 Executive Briefing
               </h3>
 
               {generateBriefing.isPending && (
                 <div className="space-y-4 pt-2">
-                  <p className="text-sm font-bold text-primary animate-pulse">Synthesizing Context...</p>
+                  <p className="text-sm font-bold text-primary animate-pulse">
+                    Synthesizing Context...
+                  </p>
                   <SkeletonText lines={4} className="h-4" />
                 </div>
               )}
@@ -84,18 +91,25 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({ contact, generateBri
               {isBriefingValid && !generateBriefing.isPending && (
                 <div>
                   <ul className="space-y-3.5 pr-2">
-                    {parseBriefingPoints(contact.aiBriefing!).map((point: string, idx: number) => (
-                      <li key={idx} className="flex gap-3">
-                        <span className="text-primary font-bold max-w-fit flex-shrink-0 mt-0.5">•</span> 
-                        <span className="leading-relaxed text-sm text-on-surface-variant">{point}</span>
-                      </li>
-                    ))}
+                    {parseBriefingPoints(contact.aiBriefing!).map(
+                      (point: string, idx: number) => (
+                        <li key={idx} className="flex gap-3">
+                          <span className="text-primary font-bold max-w-fit flex-shrink-0 mt-0.5">
+                            •
+                          </span>
+                          <span className="leading-relaxed text-sm text-on-surface-variant">
+                            {point}
+                          </span>
+                        </li>
+                      ),
+                    )}
                   </ul>
                   <div className="flex items-center justify-between mt-8 pt-4 bg-surface-container-low -mx-6 md:-mx-8 px-6 md:px-8 -mb-6 md:-mb-8 pb-6 md:pb-8 rounded-b-[2rem]">
                     <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50 font-bold">
-                      {contact.aiBriefingAt && `Generated ${formatDistanceToNow(new Date(contact.aiBriefingAt), {addSuffix: true})}`}
+                      {contact.aiBriefingAt &&
+                        `Generated ${formatDistanceToNow(new Date(contact.aiBriefingAt), { addSuffix: true })}`}
                     </p>
-                    <button 
+                    <button
                       onClick={() => generateBriefing.mutate(contact.id)}
                       className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                       aria-label="Regenerate briefing"

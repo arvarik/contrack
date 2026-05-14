@@ -17,7 +17,12 @@
  *   at fault. `parseAIJson()` produces a single, typed error class.
  */
 
-import { UpstreamTimeoutError, RateLimitedError, ServiceUnavailableError, AppError } from "../utils/AppError.ts";
+import {
+  UpstreamTimeoutError,
+  RateLimitedError,
+  ServiceUnavailableError,
+  AppError,
+} from "../utils/AppError.ts";
 
 // ---------------------------------------------------------------------------
 // Defaults — tuned for a desktop local-first app where latency matters less
@@ -49,17 +54,35 @@ export const AI_DEFAULTS = {
  *  - Native AbortError when triggered by our own timeout (NOT when the
  *    caller's signal aborts — caller-aborts are surfaced unchanged).
  */
-export function isRetryableError(error: unknown, abortedByTimeout: boolean): boolean {
+export function isRetryableError(
+  error: unknown,
+  abortedByTimeout: boolean,
+): boolean {
   if (abortedByTimeout) return true;
 
-  const e = error as { status?: number; statusCode?: number; code?: string; name?: string; message?: string };
+  const e = error as {
+    status?: number;
+    statusCode?: number;
+    code?: string;
+    name?: string;
+    message?: string;
+  };
   const status = typeof e?.status === "number" ? e.status : e?.statusCode;
-  if (status === 408 || status === 429 || (typeof status === "number" && status >= 500 && status <= 599)) {
+  if (
+    status === 408 ||
+    status === 429 ||
+    (typeof status === "number" && status >= 500 && status <= 599)
+  ) {
     return true;
   }
 
   const code = typeof e?.code === "string" ? e.code : "";
-  if (code === "ECONNRESET" || code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "EAI_AGAIN") {
+  if (
+    code === "ECONNRESET" ||
+    code === "ECONNREFUSED" ||
+    code === "ETIMEDOUT" ||
+    code === "EAI_AGAIN"
+  ) {
     return true;
   }
 
@@ -80,7 +103,11 @@ export function isRetryableError(error: unknown, abortedByTimeout: boolean): boo
 /** Distinguish "the client cancelled us" from "the timer cancelled us". */
 function isAbortError(err: unknown): boolean {
   const e = err as { name?: string; code?: string };
-  return e?.name === "AbortError" || e?.code === "ABORT_ERR" || (e?.name === "Error" && (e as { message?: string }).message === "Aborted");
+  return (
+    e?.name === "AbortError" ||
+    e?.code === "ABORT_ERR" ||
+    (e?.name === "Error" && (e as { message?: string }).message === "Aborted")
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +149,10 @@ export async function withTimeout<T>(
     return await op(controller.signal);
   } catch (err) {
     if (timedOut) {
-      throw new UpstreamTimeoutError(`AI call exceeded ${timeoutMs}ms timeout`, { cause: (err as Error)?.message });
+      throw new UpstreamTimeoutError(
+        `AI call exceeded ${timeoutMs}ms timeout`,
+        { cause: (err as Error)?.message },
+      );
     }
     throw err;
   } finally {
@@ -148,7 +178,10 @@ export interface RetryOptions {
   onRetry?(attempt: number, err: unknown): void;
 }
 
-export async function withRetry<T>(op: (attempt: number) => Promise<T>, opts: RetryOptions = {}): Promise<T> {
+export async function withRetry<T>(
+  op: (attempt: number) => Promise<T>,
+  opts: RetryOptions = {},
+): Promise<T> {
   const maxAttempts = opts.maxAttempts ?? AI_DEFAULTS.maxAttempts;
   const baseBackoffMs = opts.baseBackoffMs ?? AI_DEFAULTS.baseBackoffMs;
   const jitterMs = opts.jitterMs ?? AI_DEFAULTS.jitterMs;
@@ -156,7 +189,9 @@ export async function withRetry<T>(op: (attempt: number) => Promise<T>, opts: Re
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (opts.signal?.aborted) {
-      throw new AppError("AI call cancelled by caller", 499, { code: "CANCELLED" });
+      throw new AppError("AI call cancelled by caller", 499, {
+        code: "CANCELLED",
+      });
     }
 
     try {
@@ -166,7 +201,9 @@ export async function withRetry<T>(op: (attempt: number) => Promise<T>, opts: Re
 
       // Caller cancelled mid-flight — never retry.
       if (opts.signal?.aborted && isAbortError(err)) {
-        throw new AppError("AI call cancelled by caller", 499, { code: "CANCELLED" });
+        throw new AppError("AI call cancelled by caller", 499, {
+          code: "CANCELLED",
+        });
       }
 
       // UpstreamTimeoutError is always retryable (it's a thrown sentinel from withTimeout).
@@ -176,7 +213,8 @@ export async function withRetry<T>(op: (attempt: number) => Promise<T>, opts: Re
       if (!retryable || attempt >= maxAttempts) break;
 
       opts.onRetry?.(attempt, err);
-      const backoff = baseBackoffMs * Math.pow(2, attempt - 1) + Math.random() * jitterMs;
+      const backoff =
+        baseBackoffMs * Math.pow(2, attempt - 1) + Math.random() * jitterMs;
       await sleep(backoff, opts.signal);
     }
   }
@@ -185,24 +223,40 @@ export async function withRetry<T>(op: (attempt: number) => Promise<T>, opts: Re
   // produces a stable client-facing code instead of a generic 500.
   if (lastErr instanceof AppError) throw lastErr;
 
-  const e = lastErr as { status?: number; statusCode?: number; message?: string };
+  const e = lastErr as {
+    status?: number;
+    statusCode?: number;
+    message?: string;
+  };
   const status = typeof e?.status === "number" ? e.status : e?.statusCode;
-  if (status === 429) throw new RateLimitedError("AI provider rate limit exceeded", { cause: e?.message });
+  if (status === 429)
+    throw new RateLimitedError("AI provider rate limit exceeded", {
+      cause: e?.message,
+    });
   if (typeof status === "number" && status >= 500) {
-    throw new ServiceUnavailableError("AI provider temporarily unavailable", { cause: e?.message });
+    throw new ServiceUnavailableError("AI provider temporarily unavailable", {
+      cause: e?.message,
+    });
   }
-  throw new ServiceUnavailableError("AI provider call failed after retries", { cause: e?.message });
+  throw new ServiceUnavailableError("AI provider call failed after retries", {
+    cause: e?.message,
+  });
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new AppError("Cancelled", 499, { code: "CANCELLED" }));
+    if (signal?.aborted)
+      return reject(new AppError("Cancelled", 499, { code: "CANCELLED" }));
     const t = setTimeout(() => resolve(), ms);
     if (signal) {
-      signal.addEventListener("abort", () => {
-        clearTimeout(t);
-        reject(new AppError("Cancelled", 499, { code: "CANCELLED" }));
-      }, { once: true });
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(t);
+          reject(new AppError("Cancelled", 499, { code: "CANCELLED" }));
+        },
+        { once: true },
+      );
     }
   });
 }
@@ -235,7 +289,10 @@ export function parseAIJson<T = unknown>(raw: string, context?: string): T {
 
   // Strip markdown fences if present.
   if (text.startsWith("```")) {
-    text = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    text = text
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
   }
 
   try {
@@ -276,7 +333,10 @@ function extractFirstJsonValue(s: string): string | null {
         else if (c === '"') inStr = false;
         continue;
       }
-      if (c === '"') { inStr = true; continue; }
+      if (c === '"') {
+        inStr = true;
+        continue;
+      }
       if (c === ch) depth++;
       else if (c === close) {
         depth--;

@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
-import { STALE_TIMES } from '../lib/queryConfig';
-import type { ActionItem, ZeroStatePayload } from '../types';
+import { useQuery } from "@tanstack/react-query";
+import { STALE_TIMES } from "../lib/queryConfig";
+import type { ActionItem, ZeroStatePayload } from "../types";
 
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 export interface DashboardPayload {
   overdue: ActionItem[];
@@ -75,10 +75,10 @@ export interface DailyInsight {
 
 export const useDashboard = () => {
   return useQuery({
-    queryKey: ['dashboard'],
+    queryKey: ["dashboard"],
     queryFn: async (): Promise<DashboardPayload> => {
       const res = await fetch(`${API_BASE}/dashboard`);
-      if (!res.ok) throw new Error('Failed to fetch dashboard payload');
+      if (!res.ok) throw new Error("Failed to fetch dashboard payload");
       return res.json();
     },
     staleTime: STALE_TIMES.dashboard,
@@ -87,10 +87,10 @@ export const useDashboard = () => {
 
 export const useDailyInsight = () => {
   return useQuery({
-    queryKey: ['dashboard', 'insight'],
+    queryKey: ["dashboard", "insight"],
     queryFn: async (): Promise<DailyInsight | null> => {
       const res = await fetch(`${API_BASE}/dashboard/insight`);
-      if (!res.ok) throw new Error('Failed to fetch daily insight');
+      if (!res.ok) throw new Error("Failed to fetch daily insight");
       return res.json();
     },
     staleTime: 1000 * 60 * 60 * 2, // 2 hours stale time to prevent multi-fetching AI calls
@@ -106,13 +106,12 @@ export const useDailyInsight = () => {
  */
 export const useZeroState = () => {
   return useQuery({
-    queryKey: ['zeroState'],
+    queryKey: ["zeroState"],
     queryFn: async (): Promise<ZeroStatePayload> => {
       const res = await fetch(`${API_BASE}/command-palette/zero-state`);
-      if (!res.ok) throw new Error('Failed to fetch zero state');
+      if (!res.ok) throw new Error("Failed to fetch zero state");
       return res.json();
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 };
-

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 export const BirthdayField = ({
   value,
@@ -11,7 +11,7 @@ export const BirthdayField = ({
 
   // Normalize stored value to YYYY-MM-DD for the input
   const toInputValue = (v: string | null): string => {
-    if (!v) return '';
+    if (!v) return "";
     // If already YYYY-MM-DD, return as-is
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
     // Try parsing other formats
@@ -19,7 +19,7 @@ export const BirthdayField = ({
       const d = new Date(v);
       if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
     } catch {}
-    return '';
+    return "";
   };
 
   const formatDisplay = (v: string | null): string | null => {
@@ -28,22 +28,30 @@ export const BirthdayField = ({
       const inputVal = toInputValue(v);
       if (!inputVal) return v;
       // Parse as local date (avoid UTC shift)
-      const [year, month, day] = inputVal.split('-').map(Number);
+      const [year, month, day] = inputVal.split("-").map(Number);
       const d = new Date(year, month - 1, day);
-      return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    } catch { return v; }
+      return d.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return v;
+    }
   };
 
   // Upcoming birthday badge (within 30 days)
   const upcomingDays = (() => {
     const inputVal = toInputValue(value);
     if (!inputVal) return null;
-    const [, month, day] = inputVal.split('-').map(Number);
+    const [, month, day] = inputVal.split("-").map(Number);
     const today = new Date();
     const thisYear = today.getFullYear();
     let bday = new Date(thisYear, month - 1, day);
     if (bday < today) bday = new Date(thisYear + 1, month - 1, day);
-    const diff = Math.round((bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const diff = Math.round(
+      (bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
     return diff <= 30 ? diff : null;
   })();
 
@@ -77,14 +85,16 @@ export const BirthdayField = ({
     >
       <span
         className={`text-sm font-medium py-0.5 px-2 -ml-2 rounded transition-colors hover:bg-surface-container-high ${
-          display ? 'text-on-surface' : 'text-on-surface-variant opacity-50 italic'
+          display
+            ? "text-on-surface"
+            : "text-on-surface-variant opacity-50 italic"
         }`}
       >
-        {display || 'Add Birthday...'}
+        {display || "Add Birthday..."}
       </span>
       {upcomingDays !== null && (
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 shrink-0">
-          {upcomingDays === 0 ? '🎂 Today!' : `🎂 in ${upcomingDays}d`}
+          {upcomingDays === 0 ? "🎂 Today!" : `🎂 in ${upcomingDays}d`}
         </span>
       )}
     </div>

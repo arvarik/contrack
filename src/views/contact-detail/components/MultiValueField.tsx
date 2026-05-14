@@ -1,6 +1,6 @@
-import React, { useState, useId } from 'react';
-import { toast } from 'sonner';
-import { X, GripVertical, MapPin as MapPinIcon } from 'lucide-react';
+import React, { useState, useId } from "react";
+import { toast } from "sonner";
+import { X, GripVertical, MapPin as MapPinIcon } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -10,17 +10,17 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-} from '@dnd-kit/core';
+} from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { CustomSelect } from '../../../components/ui/CustomSelect';
-import { cn } from '../../../lib/utils';
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { CustomSelect } from "../../../components/ui/CustomSelect";
+import { cn } from "../../../lib/utils";
 
 export interface MultiValueItem {
   id?: string;
@@ -28,9 +28,9 @@ export interface MultiValueItem {
   label: string;
 }
 
-export const EMAIL_LABELS  = ['work', 'personal', 'other'] as const;
-export const PHONE_LABELS  = ['mobile', 'work', 'home', 'other'] as const;
-export const ADDR_LABELS   = ['home', 'work', 'other'] as const;
+export const EMAIL_LABELS = ["work", "personal", "other"] as const;
+export const PHONE_LABELS = ["mobile", "work", "home", "other"] as const;
+export const ADDR_LABELS = ["home", "work", "other"] as const;
 
 /**
  * Shows an undo toast for 7 seconds with a shrinking timer bar.
@@ -40,7 +40,7 @@ const showUndoToast = (label: string, onUndo: () => void) => {
   toast(label, {
     duration: 7000,
     action: {
-      label: 'Undo',
+      label: "Undo",
       onClick: onUndo,
     },
   });
@@ -87,15 +87,15 @@ const SortableRow = ({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-start gap-1.5 group/item rounded-lg transition-colors py-0.5',
-        isDragging && 'opacity-60 bg-primary/5 shadow-lg',
+        "flex items-start gap-1.5 group/item rounded-lg transition-colors py-0.5",
+        isDragging && "opacity-60 bg-primary/5 shadow-lg",
       )}
     >
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
           <CustomSelect
             value={item.label}
-            onChange={newLabel => onLabelChange(idx, newLabel)}
+            onChange={(newLabel) => onLabelChange(idx, newLabel)}
             options={labelOptions}
             className="text-[10px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer flex items-center gap-1"
           />
@@ -126,9 +126,9 @@ const SortableRow = ({
       {totalCount > 1 && (
         <button
           className={cn(
-            'mt-1 p-0.5 rounded text-on-surface-variant/30 hover:text-on-surface-variant cursor-grab active:cursor-grabbing shrink-0 touch-none',
-            'opacity-0 group-hover/item:opacity-100 transition-opacity',
-            'lg:opacity-40 lg:group-hover/item:opacity-100',
+            "mt-1 p-0.5 rounded text-on-surface-variant/30 hover:text-on-surface-variant cursor-grab active:cursor-grabbing shrink-0 touch-none",
+            "opacity-0 group-hover/item:opacity-100 transition-opacity",
+            "lg:opacity-40 lg:group-hover/item:opacity-100",
           )}
           {...attributes}
           {...listeners}
@@ -147,7 +147,10 @@ const SortableRow = ({
 // ---------------------------------------------------------------------------
 const AddressDisplay = ({ value }: { value: string }) => {
   // Split by comma to create separate addressable parts
-  const parts = value.split(',').map((p: string) => p.trim()).filter(Boolean);
+  const parts = value
+    .split(",")
+    .map((p: string) => p.trim())
+    .filter(Boolean);
 
   if (parts.length <= 1) {
     // Fallback: single segment, use normal word-break
@@ -163,13 +166,14 @@ const AddressDisplay = ({ value }: { value: string }) => {
       {parts.map((part, i) => (
         <React.Fragment key={i}>
           <span className="inline whitespace-nowrap">{part}</span>
-          {i < parts.length - 1 && <span className="text-on-surface-variant/50">, </span>}
+          {i < parts.length - 1 && (
+            <span className="text-on-surface-variant/50">, </span>
+          )}
         </React.Fragment>
       ))}
     </span>
   );
 };
-
 
 // ---------------------------------------------------------------------------
 // MultiValueField — Main component with DnD reorder support
@@ -179,7 +183,7 @@ export const MultiValueField = ({
   onSave,
   labelOptions,
   emptyPlaceholder,
-  addMoreLabel = 'Add another',
+  addMoreLabel = "Add another",
   inputPlaceholder,
   isAddress = false,
 }: {
@@ -191,8 +195,8 @@ export const MultiValueField = ({
   inputPlaceholder: string;
   isAddress?: boolean;
 }) => {
-  const [inputValue, setInputValue] = useState('');
-  const [inputLabel, setInputLabel] = useState(labelOptions[0] || 'work');
+  const [inputValue, setInputValue] = useState("");
+  const [inputLabel, setInputLabel] = useState(labelOptions[0] || "work");
   const [isAdding, setIsAdding] = useState(false);
 
   // Generate stable sort IDs for dnd-kit
@@ -216,14 +220,14 @@ export const MultiValueField = ({
   );
 
   const toSavable = (arr: MultiValueItem[]) =>
-    arr.map(i => ({ value: i.value, label: i.label }));
+    arr.map((i) => ({ value: i.value, label: i.label }));
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = itemsWithIds.findIndex(i => i._sortId === active.id);
-    const newIndex = itemsWithIds.findIndex(i => i._sortId === over.id);
+    const oldIndex = itemsWithIds.findIndex((i) => i._sortId === active.id);
+    const newIndex = itemsWithIds.findIndex((i) => i._sortId === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
     const reordered = arrayMove(items, oldIndex, newIndex);
@@ -232,18 +236,24 @@ export const MultiValueField = ({
     // Notify user if the primary address changed (affects map pin)
     if (isAddress && (oldIndex === 0 || newIndex === 0)) {
       const newPrimary = reordered[0];
-      toast.success(`Map pin updated to: ${newPrimary.value.split(',').slice(0, 2).join(',')}`, {
-        duration: 3000,
-      });
+      toast.success(
+        `Map pin updated to: ${newPrimary.value.split(",").slice(0, 2).join(",")}`,
+        {
+          duration: 3000,
+        },
+      );
     }
   };
 
   const handleAdd = () => {
     const trimmed = inputValue.trim();
-    if (!trimmed) { setIsAdding(false); return; }
+    if (!trimmed) {
+      setIsAdding(false);
+      return;
+    }
     onSave([...toSavable(items), { value: trimmed, label: inputLabel }]);
-    setInputValue('');
-    setInputLabel(labelOptions[0] || 'work');
+    setInputValue("");
+    setInputLabel(labelOptions[0] || "work");
     setIsAdding(false);
   };
 
@@ -255,7 +265,12 @@ export const MultiValueField = ({
   };
 
   const handleChangeLabel = (idx: number, newLabel: string) =>
-    onSave(items.map((item, i) => ({ value: item.value, label: i === idx ? newLabel : item.label })));
+    onSave(
+      items.map((item, i) => ({
+        value: item.value,
+        label: i === idx ? newLabel : item.label,
+      })),
+    );
 
   return (
     <div className="flex flex-col gap-2">
@@ -266,7 +281,7 @@ export const MultiValueField = ({
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={itemsWithIds.map(i => i._sortId)}
+            items={itemsWithIds.map((i) => i._sortId)}
             strategy={verticalListSortingStrategy}
           >
             {itemsWithIds.map((item, idx) => (
@@ -296,10 +311,16 @@ export const MultiValueField = ({
           <input
             autoFocus
             value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { e.preventDefault(); handleAdd(); }
-              if (e.key === 'Escape') { setIsAdding(false); setInputValue(''); }
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAdd();
+              }
+              if (e.key === "Escape") {
+                setIsAdding(false);
+                setInputValue("");
+              }
             }}
             onBlur={handleAdd}
             placeholder={inputPlaceholder}

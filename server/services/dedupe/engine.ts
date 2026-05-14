@@ -5,9 +5,9 @@ import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
 import { dedupeQueue } from "./jobQueue.ts";
 import { buildPassContext, getEmbeddingSimilarity } from "./context.ts";
-import { 
-  backfillEmbeddings, 
-  isEmbeddingAvailable, 
+import {
+  backfillEmbeddings,
+  isEmbeddingAvailable,
   getEmbeddingCount,
   getEmbedding,
   findNearestNeighbors,
@@ -16,23 +16,45 @@ import {
 } from "./embeddings.ts";
 import { normalizeContacts, normalizeContactById } from "./normalization.ts";
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
-import { computeMatchSignals, computeCompositeScore, classifyPair, distanceToSimilarity } from "./scoring.ts";
-import { runDeterministicPass, runFunnelPass, buildScoringReasoning } from "./passes.ts";
+import {
+  computeMatchSignals,
+  computeCompositeScore,
+  classifyPair,
+  distanceToSimilarity,
+} from "./scoring.ts";
+import {
+  runDeterministicPass,
+  runFunnelPass,
+  buildScoringReasoning,
+} from "./passes.ts";
 import { buildClusters, computePrimaryScore } from "./clustering.ts";
-import { storeSuggestion, storeSuggestions, clearStaleSuggestions, clearAllPendingSuggestions } from "./suggestions.ts";
+import {
+  storeSuggestion,
+  storeSuggestions,
+  clearStaleSuggestions,
+  clearAllPendingSuggestions,
+} from "./suggestions.ts";
 import { softMergeContacts, mergeContacts } from "./merging.ts";
-import type { DedupeScanMode, RawPair, MatchType, NormalizedContact } from "./types.ts";
+import type {
+  DedupeScanMode,
+  RawPair,
+  MatchType,
+  NormalizedContact,
+} from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
-function resolveMode(mode: DedupeScanMode): 'quick' | 'deep' | 'full' {
+function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
   switch (mode) {
-    case 'quick':
-    case 'deterministic': return 'quick';
-    case 'full': return 'full';
-    case 'deep':
-    case 'ai':
-    case 'both':
-    default: return 'deep';
+    case "quick":
+    case "deterministic":
+      return "quick";
+    case "full":
+      return "full";
+    case "deep":
+    case "ai":
+    case "both":
+    default:
+      return "deep";
   }
 }
 
@@ -40,15 +62,20 @@ export const dedupeService = {
   mergeContacts,
   softMergeContacts,
 
-  async runScan(scanId: string, mode: DedupeScanMode, rid: string, autoMergeThreshold = 0.93): Promise<void> {
+  async runScan(
+    scanId: string,
+    mode: DedupeScanMode,
+    rid: string,
+    autoMergeThreshold = 0.93,
+  ): Promise<void> {
     dedupeQueue.setProcessing(true);
     const resolved = resolveMode(mode);
     let embeddingsReady = false;
 
     try {
       dedupeQueue.update(scanId, {
-        phase: 'normalizing',
-        phaseName: 'Normalizing contacts…',
+        phase: "normalizing",
+        phaseName: "Normalizing contacts…",
       });
 
       const ctx = buildPassContext(rid);
@@ -63,23 +90,27 @@ export const dedupeService = {
         return;
       }
 
-      if (resolved !== 'quick' && isEmbeddingAvailable()) {
+      if (resolved !== "quick" && isEmbeddingAvailable()) {
         const existingCount = getEmbeddingCount();
-        const needsBackfill = resolved === 'full' || existingCount === 0;
+        const needsBackfill = resolved === "full" || existingCount === 0;
 
         if (needsBackfill) {
           dedupeQueue.update(scanId, {
-            phase: 'normalizing',
-            phaseName: resolved === 'full'
-              ? 'Re-embedding all contacts…'
-              : 'Generating contact embeddings…',
+            phase: "normalizing",
+            phaseName:
+              resolved === "full"
+                ? "Re-embedding all contacts…"
+                : "Generating contact embeddings…",
           });
 
           try {
-            if (resolved === 'full') {
+            if (resolved === "full") {
               sqlite.prepare("DELETE FROM contact_embeddings").run();
               clearEmbeddingMeta();
-              log.info("DedupeService", `[${rid}] Full mode: cleared all embeddings for re-generation`);
+              log.info(
+                "DedupeService",
+                `[${rid}] Full mode: cleared all embeddings for re-generation`,
+              );
             }
 
             const embedded = await backfillEmbeddings((done, total, phase) => {
@@ -87,10 +118,16 @@ export const dedupeService = {
                 phaseName: `Embedding contacts (${done}/${total})…`,
               });
             });
-            log.info("DedupeService", `[${rid}] Embedding backfill: ${embedded} contacts embedded`);
+            log.info(
+              "DedupeService",
+              `[${rid}] Embedding backfill: ${embedded} contacts embedded`,
+            );
             embeddingsReady = true;
           } catch (err: unknown) {
-            log.warn("DedupeService", `[${rid}] Embedding backfill failed: ${getErrorMessage(err)} — continuing with deterministic + name-based passes only`);
+            log.warn(
+              "DedupeService",
+              `[${rid}] Embedding backfill failed: ${getErrorMessage(err)} — continuing with deterministic + name-based passes only`,
+            );
             embeddingsReady = false;
           }
         } else {
@@ -98,23 +135,32 @@ export const dedupeService = {
           try {
             const reEmbedded = await reEmbedStaleContacts();
             if (reEmbedded > 0) {
-              log.info("DedupeService", `[${rid}] Re-embedded ${reEmbedded} stale contact(s)`);
+              log.info(
+                "DedupeService",
+                `[${rid}] Re-embedded ${reEmbedded} stale contact(s)`,
+              );
             }
             embeddingsReady = true;
           } catch (err: unknown) {
-            log.warn("DedupeService", `[${rid}] Stale re-embedding failed: ${getErrorMessage(err)}`);
+            log.warn(
+              "DedupeService",
+              `[${rid}] Stale re-embedding failed: ${getErrorMessage(err)}`,
+            );
             embeddingsReady = getEmbeddingCount() > 0;
           }
         }
-      } else if (resolved !== 'quick') {
-        log.warn("DedupeService", `[${rid}] Gemini API unavailable — skipping embedding-based blocking`);
+      } else if (resolved !== "quick") {
+        log.warn(
+          "DedupeService",
+          `[${rid}] Gemini API unavailable — skipping embedding-based blocking`,
+        );
       }
 
       const allPairs: RawPair[] = [];
 
       dedupeQueue.update(scanId, {
-        phase: 'deterministic',
-        phaseName: 'Scanning for exact matches (email, phone, name)…',
+        phase: "deterministic",
+        phaseName: "Scanning for exact matches (email, phone, name)…",
         contactsScanned: 0,
       });
 
@@ -126,7 +172,7 @@ export const dedupeService = {
         contactsScanned: ctx.allContacts.length,
       });
 
-      if (resolved !== 'quick') {
+      if (resolved !== "quick") {
         const funnelResults = await runFunnelPass(ctx, scanId, embeddingsReady);
         allPairs.push(...funnelResults);
 
@@ -137,16 +183,16 @@ export const dedupeService = {
       }
 
       dedupeQueue.update(scanId, {
-        phase: 'clustering',
-        phaseName: 'Grouping duplicates into clusters…',
+        phase: "clustering",
+        phaseName: "Grouping duplicates into clusters…",
         totalPairs: allPairs.length,
       });
 
       const clusters = buildClusters(allPairs, ctx.contactMap, rid);
 
       dedupeQueue.update(scanId, {
-        phase: 'persisting',
-        phaseName: 'Persisting suggestions and auto-merging…',
+        phase: "persisting",
+        phaseName: "Persisting suggestions and auto-merging…",
       });
 
       clearStaleSuggestions();
@@ -157,9 +203,15 @@ export const dedupeService = {
 
       for (const cluster of clusters) {
         const isSmallCluster = cluster.size === 2;
-        const allHighConfidence = cluster.pairs.every(p => p.confidence >= autoMergeThreshold);
+        const allHighConfidence = cluster.pairs.every(
+          (p) => p.confidence >= autoMergeThreshold,
+        );
 
-        if (isSmallCluster && allHighConfidence && !cluster.requiresConfirmation) {
+        if (
+          isSmallCluster &&
+          allHighConfidence &&
+          !cluster.requiresConfirmation
+        ) {
           for (const pair of cluster.pairs) {
             autoMergePairs.push({
               idA: pair.contactIdA,
@@ -193,14 +245,22 @@ export const dedupeService = {
 
           const scoreA = computePrimaryScore(contactRepo.hydrate(rawA));
           const scoreB = computePrimaryScore(contactRepo.hydrate(rawB));
-          const [primaryId, duplicateId] = scoreA >= scoreB
-            ? [pair.idA, pair.idB]
-            : [pair.idB, pair.idA];
+          const [primaryId, duplicateId] =
+            scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
 
-          dedupeService.softMergeContacts(primaryId, duplicateId, pair.confidence, pair.reasoning, rid);
+          dedupeService.softMergeContacts(
+            primaryId,
+            duplicateId,
+            pair.confidence,
+            pair.reasoning,
+            rid,
+          );
           autoMergedCount++;
         } catch (err: unknown) {
-          log.warn("DedupeService", `[${rid}] Auto-merge failed for ${pair.idA} ↔ ${pair.idB}: ${getErrorMessage(err)}`);
+          log.warn(
+            "DedupeService",
+            `[${rid}] Auto-merge failed for ${pair.idA} ↔ ${pair.idB}: ${getErrorMessage(err)}`,
+          );
           pendingPairs.push(pair);
         }
       }
@@ -208,14 +268,17 @@ export const dedupeService = {
       if (autoMergePairs.length > 0) {
         storeSuggestions(
           autoMergePairs.filter((_, i) => i < autoMergedCount),
-          'auto_merged',
+          "auto_merged",
         );
       }
       if (pendingPairs.length > 0) {
-        storeSuggestions(pendingPairs, 'pending');
+        storeSuggestions(pendingPairs, "pending");
       }
 
-      log.info("DedupeService", `[${rid}] Persisted: ${autoMergedCount} auto-merged, ${pendingPairs.length} pending suggestions`);
+      log.info(
+        "DedupeService",
+        `[${rid}] Persisted: ${autoMergedCount} auto-merged, ${pendingPairs.length} pending suggestions`,
+      );
 
       dedupeQueue.update(scanId, {
         autoMerged: autoMergedCount,
@@ -223,20 +286,29 @@ export const dedupeService = {
       });
 
       dedupeQueue.complete(scanId, clusters);
-
     } catch (err: unknown) {
-      log.error("DedupeService", `[${rid}] Scan ${scanId} failed: ${getErrorMessage(err)}`);
-      dedupeQueue.fail(scanId, getErrorMessage(err) || 'Unknown error');
+      log.error(
+        "DedupeService",
+        `[${rid}] Scan ${scanId} failed: ${getErrorMessage(err)}`,
+      );
+      dedupeQueue.fail(scanId, getErrorMessage(err) || "Unknown error");
     }
   },
 
-  async incrementalDedupeCheck(contactId: string, rid: string, autoMergeThreshold = 0.93): Promise<void> {
+  async incrementalDedupeCheck(
+    contactId: string,
+    rid: string,
+    autoMergeThreshold = 0.93,
+  ): Promise<void> {
     const t0 = Date.now();
 
     try {
       const target = normalizeContactById(contactId);
       if (!target) {
-        log.debug("DedupeService", `[${rid}] Incremental: contact ${contactId} not found or empty — skipping`);
+        log.debug(
+          "DedupeService",
+          `[${rid}] Incremental: contact ${contactId} not found or empty — skipping`,
+        );
         return;
       }
 
@@ -246,30 +318,44 @@ export const dedupeService = {
 
       if (target.emailsNorm.length > 0) {
         const placeholders = target.emailsNorm.map(() => "?").join(",");
-        const emailMatches = sqlite.prepare(`
+        const emailMatches = sqlite
+          .prepare(
+            `
           SELECT DISTINCT ce.contactId
           FROM contact_emails ce
           JOIN contacts c ON c.id = ce.contactId
           WHERE LOWER(TRIM(ce.email)) IN (${placeholders})
             AND ce.contactId != ?
             AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-        `).all(...target.emailsNorm, contactId) as { contactId: string }[];
+        `,
+          )
+          .all(...target.emailsNorm, contactId) as { contactId: string }[];
 
         for (const match of emailMatches) {
           const pk = pairKey(contactId, match.contactId);
           if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
             seenPairs.add(pk);
-            pairs.push({ idA: contactId, idB: match.contactId, matchType: 'email', confidence: 0.99, reasoning: 'Shared email address' });
+            pairs.push({
+              idA: contactId,
+              idB: match.contactId,
+              matchType: "email",
+              confidence: 0.99,
+              reasoning: "Shared email address",
+            });
           }
         }
       }
 
       if (target.phonesNorm.length > 0) {
-        const allPhones = sqlite.prepare(`
+        const allPhones = sqlite
+          .prepare(
+            `
           SELECT contactId, phone FROM contact_phones cp
           JOIN contacts c ON c.id = cp.contactId
           WHERE cp.contactId != ? AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-        `).all(contactId) as { contactId: string; phone: string }[];
+        `,
+          )
+          .all(contactId) as { contactId: string; phone: string }[];
 
         const targetPhoneSet = new Set(target.phonesNorm);
         for (const row of allPhones) {
@@ -278,7 +364,13 @@ export const dedupeService = {
             const pk = pairKey(contactId, row.contactId);
             if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
               seenPairs.add(pk);
-              pairs.push({ idA: contactId, idB: row.contactId, matchType: 'phone', confidence: 0.99, reasoning: 'Shared phone number' });
+              pairs.push({
+                idA: contactId,
+                idB: row.contactId,
+                matchType: "phone",
+                confidence: 0.99,
+                reasoning: "Shared phone number",
+              });
             }
           }
         }
@@ -293,30 +385,42 @@ export const dedupeService = {
           const pk = pairKey(contactId, other.id);
           if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
 
-          const sharesBlock = other.blockKeys.some(k => targetBlockKeys.has(k));
+          const sharesBlock = other.blockKeys.some((k) =>
+            targetBlockKeys.has(k),
+          );
           if (!sharesBlock) continue;
 
           if (target.nameNorm === other.nameNorm) {
             seenPairs.add(pk);
-            const isCrossSource = target.sources.length > 0 && other.sources.length > 0 &&
-              !target.sources.some(s => other.sources.includes(s));
+            const isCrossSource =
+              target.sources.length > 0 &&
+              other.sources.length > 0 &&
+              !target.sources.some((s) => other.sources.includes(s));
             pairs.push({
-              idA: contactId, idB: other.id,
-              matchType: isCrossSource ? 'cross_source' : 'name',
+              idA: contactId,
+              idB: other.id,
+              matchType: isCrossSource ? "cross_source" : "name",
               confidence: isCrossSource ? 0.95 : 0.92,
               reasoning: isCrossSource
                 ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
-                : 'Exact name match',
+                : "Exact name match",
             });
             continue;
           }
 
-          if (target.lastNameNorm && target.lastNameNorm === other.lastNameNorm && target.firstNameNorm && other.firstNameNorm) {
+          if (
+            target.lastNameNorm &&
+            target.lastNameNorm === other.lastNameNorm &&
+            target.firstNameNorm &&
+            other.firstNameNorm
+          ) {
             if (isNicknameMatch(target.firstNameNorm, other.firstNameNorm)) {
               seenPairs.add(pk);
               pairs.push({
-                idA: contactId, idB: other.id,
-                matchType: 'nickname', confidence: 0.88,
+                idA: contactId,
+                idB: other.id,
+                matchType: "nickname",
+                confidence: 0.88,
                 reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
               });
             }
@@ -345,18 +449,29 @@ export const dedupeService = {
               if (!otherNorm) continue;
 
               const pairDistinct = distinctPairs.has(pk);
-              const signals = computeMatchSignals(target, otherNorm, distanceToSimilarity(neighbor.distance), pairDistinct, targetSimCtx.socialUrlsByContact.get(target.id) ?? [], targetSimCtx.socialUrlsByContact.get(otherNorm.id) ?? []);
+              const signals = computeMatchSignals(
+                target,
+                otherNorm,
+                distanceToSimilarity(neighbor.distance),
+                pairDistinct,
+                targetSimCtx.socialUrlsByContact.get(target.id) ?? [],
+                targetSimCtx.socialUrlsByContact.get(otherNorm.id) ?? [],
+              );
               const score = computeCompositeScore(signals);
               const classification = classifyPair(score);
 
-              if (classification !== 'discard') {
+              if (classification !== "discard") {
                 seenPairs.add(pk);
-                const rawA = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(contactId) as any;
-                const rawB = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(neighbor.contactId) as any;
+                const rawA = sqlite
+                  .prepare("SELECT * FROM contacts WHERE id = ?")
+                  .get(contactId) as any;
+                const rawB = sqlite
+                  .prepare("SELECT * FROM contacts WHERE id = ?")
+                  .get(neighbor.contactId) as any;
                 pairs.push({
                   idA: contactId,
                   idB: neighbor.contactId,
-                  matchType: 'fuzzy',
+                  matchType: "fuzzy",
                   confidence: score,
                   reasoning: buildScoringReasoning(signals, score, rawA, rawB),
                 });
@@ -364,64 +479,122 @@ export const dedupeService = {
             }
           }
         } catch (err: unknown) {
-          log.debug("DedupeService", `[${rid}] Incremental KNN failed: ${getErrorMessage(err)}`);
+          log.debug(
+            "DedupeService",
+            `[${rid}] Incremental KNN failed: ${getErrorMessage(err)}`,
+          );
         }
       }
 
       if (pairs.length === 0) {
-        log.debug("DedupeService", `[${rid}] Incremental: no duplicates found for ${contactId} (${Date.now() - t0}ms)`);
+        log.debug(
+          "DedupeService",
+          `[${rid}] Incremental: no duplicates found for ${contactId} (${Date.now() - t0}ms)`,
+        );
         return;
       }
 
       for (const pair of pairs) {
         if (pair.confidence >= autoMergeThreshold) {
           try {
-            const rawA = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(pair.idA));
-            const rawB = contactRepo.hydrate(sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(pair.idB));
+            const rawA = contactRepo.hydrate(
+              sqlite
+                .prepare("SELECT * FROM contacts WHERE id = ?")
+                .get(pair.idA),
+            );
+            const rawB = contactRepo.hydrate(
+              sqlite
+                .prepare("SELECT * FROM contacts WHERE id = ?")
+                .get(pair.idB),
+            );
             const scoreA = computePrimaryScore(rawA);
             const scoreB = computePrimaryScore(rawB);
-            const [primaryId, duplicateId] = scoreA >= scoreB
-              ? [pair.idA, pair.idB]
-              : [pair.idB, pair.idA];
+            const [primaryId, duplicateId] =
+              scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
 
-            dedupeService.softMergeContacts(primaryId, duplicateId, pair.confidence, pair.reasoning, rid);
-            storeSuggestion(pair, 'auto_merged');
+            dedupeService.softMergeContacts(
+              primaryId,
+              duplicateId,
+              pair.confidence,
+              pair.reasoning,
+              rid,
+            );
+            storeSuggestion(pair, "auto_merged");
           } catch (err: unknown) {
-            log.warn("DedupeService", `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`);
-            storeSuggestion(pair, 'pending');
+            log.warn(
+              "DedupeService",
+              `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`,
+            );
+            storeSuggestion(pair, "pending");
           }
         } else {
-          storeSuggestion(pair, 'pending');
+          storeSuggestion(pair, "pending");
         }
       }
 
-      log.info("DedupeService", `[${rid}] Incremental: ${pairs.length} match(es) for ${contactId} in ${Date.now() - t0}ms`);
-
+      log.info(
+        "DedupeService",
+        `[${rid}] Incremental: ${pairs.length} match(es) for ${contactId} in ${Date.now() - t0}ms`,
+      );
     } catch (err: unknown) {
-      log.error("DedupeService", `[${rid}] Incremental check failed for ${contactId}: ${getErrorMessage(err)}`);
+      log.error(
+        "DedupeService",
+        `[${rid}] Incremental check failed for ${contactId}: ${getErrorMessage(err)}`,
+      );
     }
   },
 
   seedDuplicates() {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('seedDuplicates() is a dev-only utility and cannot run in production');
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "seedDuplicates() is a dev-only utility and cannot run in production",
+      );
     }
-    const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    const ids = [
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+      crypto.randomUUID(),
+    ];
 
-    const insertContact = sqlite.prepare("INSERT INTO contacts (id, name, company, role, themeColor) VALUES (?, ?, ?, ?, ?)");
-    const insertEmail = sqlite.prepare("INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, 1)");
-    const insertPhone = sqlite.prepare("INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, ?, 1)");
+    const insertContact = sqlite.prepare(
+      "INSERT INTO contacts (id, name, company, role, themeColor) VALUES (?, ?, ?, ?, ?)",
+    );
+    const insertEmail = sqlite.prepare(
+      "INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, 1)",
+    );
+    const insertPhone = sqlite.prepare(
+      "INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, ?, 1)",
+    );
 
-    insertContact.run(ids[0], "Bobby Johnson", "Acme Corp", "VP Sales", "brand");
+    insertContact.run(
+      ids[0],
+      "Bobby Johnson",
+      "Acme Corp",
+      "VP Sales",
+      "brand",
+    );
     insertPhone.run(crypto.randomUUID(), ids[0], "(555) 867-5309");
 
-    insertContact.run(ids[1], "Robert A. Johnson", "Acme Corp", "Vice President of Sales", "indigo");
+    insertContact.run(
+      ids[1],
+      "Robert A. Johnson",
+      "Acme Corp",
+      "Vice President of Sales",
+      "indigo",
+    );
     insertEmail.run(crypto.randomUUID(), ids[1], "bob.johnson@gmail.com");
 
-    insertContact.run(ids[2], "Robert Johnson", "Acme Corporation", "VP Sales", "violet");
+    insertContact.run(
+      ids[2],
+      "Robert Johnson",
+      "Acme Corporation",
+      "VP Sales",
+      "violet",
+    );
     insertEmail.run(crypto.randomUUID(), ids[2], "bob.johnson@gmail.com");
 
     insertContact.run(ids[3], "R. Johnson", null, null, "teal");
     insertPhone.run(crypto.randomUUID(), ids[3], "555-867-5309");
-  }
+  },
 };

@@ -6,10 +6,10 @@
  *
  * @module components/command-palette/FacetAutocomplete
  */
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useSlimContactsForSearch } from '../../api/contacts';
-import type { FacetField, FacetFilter } from '../../hooks/useQueryTokenizer';
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { useSlimContactsForSearch } from "../../api/contacts";
+import type { FacetField, FacetFilter } from "../../hooks/useQueryTokenizer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,16 +27,16 @@ interface FacetAutocompleteProps {
 // ─── Preset suggestions for non-text fields ───────────────────────────────────
 
 const SCORE_PRESETS = [
-  { label: 'High (≥80)',   value: '80',  operator: '>' as const },
-  { label: 'Medium (≥50)', value: '50',  operator: '>' as const },
-  { label: 'Low (≤30)',    value: '30',  operator: '<' as const },
+  { label: "High (≥80)", value: "80", operator: ">" as const },
+  { label: "Medium (≥50)", value: "50", operator: ">" as const },
+  { label: "Low (≤30)", value: "30", operator: "<" as const },
 ];
 
 const UPDATED_PRESETS = [
-  { label: 'Last month',      value: '1m',  operator: '<' as const },
-  { label: 'Last 3 months',   value: '3m',  operator: '<' as const },
-  { label: 'Stale (>3 months)', value: '3m', operator: '>' as const },
-  { label: 'Very stale (>6 months)', value: '6m', operator: '>' as const },
+  { label: "Last month", value: "1m", operator: "<" as const },
+  { label: "Last 3 months", value: "3m", operator: "<" as const },
+  { label: "Stale (>3 months)", value: "3m", operator: ">" as const },
+  { label: "Very stale (>6 months)", value: "6m", operator: ">" as const },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -52,16 +52,28 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
 
   // ── Build suggestions from slim cache ───────────────────────────────────
   const suggestions = useMemo(() => {
-    if (field === 'score') {
-      return SCORE_PRESETS
-        .filter(p => !partial || p.value.includes(partial) || p.label.toLowerCase().includes(partial.toLowerCase()))
-        .map(p => ({ label: p.label, filter: { field, value: p.value, operator: p.operator } as FacetFilter }));
+    if (field === "score") {
+      return SCORE_PRESETS.filter(
+        (p) =>
+          !partial ||
+          p.value.includes(partial) ||
+          p.label.toLowerCase().includes(partial.toLowerCase()),
+      ).map((p) => ({
+        label: p.label,
+        filter: { field, value: p.value, operator: p.operator } as FacetFilter,
+      }));
     }
 
-    if (field === 'updated') {
-      return UPDATED_PRESETS
-        .filter(p => !partial || p.value.includes(partial) || p.label.toLowerCase().includes(partial.toLowerCase()))
-        .map(p => ({ label: p.label, filter: { field, value: p.value, operator: p.operator } as FacetFilter }));
+    if (field === "updated") {
+      return UPDATED_PRESETS.filter(
+        (p) =>
+          !partial ||
+          p.value.includes(partial) ||
+          p.label.toLowerCase().includes(partial.toLowerCase()),
+      ).map((p) => ({
+        label: p.label,
+        filter: { field, value: p.value, operator: p.operator } as FacetFilter,
+      }));
     }
 
     if (!slimContacts?.length) return [];
@@ -70,20 +82,38 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
     let values: string[] = [];
 
     switch (field) {
-      case 'role':
-        values = [...new Set(slimContacts.map(c => c.role).filter(Boolean) as string[])];
+      case "role":
+        values = [
+          ...new Set(
+            slimContacts.map((c) => c.role).filter(Boolean) as string[],
+          ),
+        ];
         break;
-      case 'company':
-        values = [...new Set(slimContacts.map(c => c.company).filter(Boolean) as string[])];
+      case "company":
+        values = [
+          ...new Set(
+            slimContacts.map((c) => c.company).filter(Boolean) as string[],
+          ),
+        ];
         break;
-      case 'location':
-        values = [...new Set(slimContacts.map(c => c.location).filter(Boolean) as string[])];
+      case "location":
+        values = [
+          ...new Set(
+            slimContacts.map((c) => c.location).filter(Boolean) as string[],
+          ),
+        ];
         break;
-      case 'industry':
-        values = [...new Set(slimContacts.map(c => c.industry).filter(Boolean) as string[])];
+      case "industry":
+        values = [
+          ...new Set(
+            slimContacts.map((c) => c.industry).filter(Boolean) as string[],
+          ),
+        ];
         break;
-      case 'tag':
-        values = [...new Set(slimContacts.flatMap(c => c.tags.map(t => t.tag)))];
+      case "tag":
+        values = [
+          ...new Set(slimContacts.flatMap((c) => c.tags.map((t) => t.tag))),
+        ];
         break;
       default:
         return [];
@@ -91,11 +121,13 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
 
     // Filter by partial match and sort alphabetically
     const filtered = values
-      .filter(v => !partial || v.toLowerCase().includes(partial.toLowerCase()))
+      .filter(
+        (v) => !partial || v.toLowerCase().includes(partial.toLowerCase()),
+      )
       .sort((a, b) => a.localeCompare(b))
       .slice(0, 8);
 
-    return filtered.map(v => ({
+    return filtered.map((v) => ({
       label: v,
       filter: { field, value: v } as FacetFilter,
     }));
@@ -107,32 +139,37 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
   }, [suggestions.length, partial]);
 
   // ── Keyboard navigation ─────────────────────────────────────────────────
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (suggestions.length === 0) return;
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (suggestions.length === 0) return;
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedIndex(prev => (prev + 1) % suggestions.length);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      e.stopPropagation();
-      const selected = suggestions[selectedIndex];
-      if (selected) onSelect(selected.filter);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      onDismiss();
-    }
-  }, [suggestions, selectedIndex, onSelect, onDismiss]);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedIndex((prev) => (prev + 1) % suggestions.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        setSelectedIndex(
+          (prev) => (prev - 1 + suggestions.length) % suggestions.length,
+        );
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        const selected = suggestions[selectedIndex];
+        if (selected) onSelect(selected.filter);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onDismiss();
+      }
+    },
+    [suggestions, selectedIndex, onSelect, onDismiss],
+  );
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown]);
 
   if (suggestions.length === 0) return null;
@@ -157,9 +194,10 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
               onMouseDown={(e) => e.preventDefault()}
               className={`
                 w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2
-                ${i === selectedIndex
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-on-surface hover:bg-surface-container-low'
+                ${
+                  i === selectedIndex
+                    ? "bg-primary/10 text-primary"
+                    : "text-on-surface hover:bg-surface-container-low"
                 }
               `}
             >

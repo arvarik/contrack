@@ -35,7 +35,9 @@ const readFromStorage = (): string[] => {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
   } catch {
     // Corrupted storage — reset gracefully
     return [];
@@ -65,7 +67,9 @@ export const useRecentContactsLimit = () => {
       const stored = localStorage.getItem(LIMIT_KEY);
       if (!stored) return DEFAULT_RECENT_LIMIT;
       const n = parseInt(stored, 10);
-      return isNaN(n) ? DEFAULT_RECENT_LIMIT : Math.min(Math.max(n, MIN_RECENT_LIMIT), MAX_RECENT_LIMIT);
+      return isNaN(n)
+        ? DEFAULT_RECENT_LIMIT
+        : Math.min(Math.max(n, MIN_RECENT_LIMIT), MAX_RECENT_LIMIT);
     } catch {
       return DEFAULT_RECENT_LIMIT;
     }
@@ -74,11 +78,14 @@ export const useRecentContactsLimit = () => {
   const [limit, setLimitState] = useState<number>(readLimit);
 
   const setLimit = (n: number): void => {
-    const clamped = Math.min(Math.max(Math.round(n), MIN_RECENT_LIMIT), MAX_RECENT_LIMIT);
+    const clamped = Math.min(
+      Math.max(Math.round(n), MIN_RECENT_LIMIT),
+      MAX_RECENT_LIMIT,
+    );
     try {
       localStorage.setItem(LIMIT_KEY, String(clamped));
       // Notify other components (ContactList) that the preference changed
-      window.dispatchEvent(new Event('contrack_settings_changed'));
+      window.dispatchEvent(new Event("contrack_settings_changed"));
     } catch {
       // Ignore quota errors
     }
@@ -88,8 +95,9 @@ export const useRecentContactsLimit = () => {
   // Stay in sync if another tab or component changes the preference
   useEffect(() => {
     const handler = () => setLimitState(readLimit());
-    window.addEventListener('contrack_settings_changed', handler);
-    return () => window.removeEventListener('contrack_settings_changed', handler);
+    window.addEventListener("contrack_settings_changed", handler);
+    return () =>
+      window.removeEventListener("contrack_settings_changed", handler);
   }, []);
 
   return { limit, setLimit };

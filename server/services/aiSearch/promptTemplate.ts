@@ -23,9 +23,17 @@ import type { JsonSchemaNode } from "../../ai/types.ts";
 
 /** Common free-email domains that offer zero disambiguation signal. */
 const FREE_EMAIL_DOMAINS = new Set([
-  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
-  'icloud.com', 'aol.com', 'protonmail.com', 'live.com',
-  'mail.com', 'zoho.com', 'yandex.com',
+  "gmail.com",
+  "yahoo.com",
+  "hotmail.com",
+  "outlook.com",
+  "icloud.com",
+  "aol.com",
+  "protonmail.com",
+  "live.com",
+  "mail.com",
+  "zoho.com",
+  "yandex.com",
 ]);
 
 export function buildSearchPrompt(contact: HydratedContact): string {
@@ -44,30 +52,45 @@ export function buildSearchPrompt(contact: HydratedContact): string {
   if (contact.about) known.push(`Bio: ${contact.about}`);
 
   if (contact.emails?.length) {
-    known.push(`Emails: ${contact.emails.map(e => e.email).join(', ')}`);
+    known.push(`Emails: ${contact.emails.map((e) => e.email).join(", ")}`);
   }
   if (contact.phones?.length) {
-    known.push(`Phones: ${contact.phones.map(p => p.phone).join(', ')}`);
+    known.push(`Phones: ${contact.phones.map((p) => p.phone).join(", ")}`);
   }
   if (contact.socialLinks?.length) {
-    known.push(`Social Profiles:\n${contact.socialLinks.map(s =>
-      `  - ${s.platform}: ${s.url}`).join('\n')}`);
+    known.push(
+      `Social Profiles:\n${contact.socialLinks
+        .map((s) => `  - ${s.platform}: ${s.url}`)
+        .join("\n")}`,
+    );
   }
   if (contact.experience?.length) {
-    known.push(`Known Work History:\n${contact.experience.map(e =>
-      `  - ${e.role || '?'} at ${e.company}${e.isCurrent ? ' (current)' : ''}`
-    ).join('\n')}`);
+    known.push(
+      `Known Work History:\n${contact.experience
+        .map(
+          (e) =>
+            `  - ${e.role || "?"} at ${e.company}${e.isCurrent ? " (current)" : ""}`,
+        )
+        .join("\n")}`,
+    );
   }
   if (contact.education?.length) {
-    known.push(`Known Education:\n${contact.education.map(e =>
-      `  - ${e.degree || 'Degree'} in ${e.fieldOfStudy || '?'} at ${e.school}`
-    ).join('\n')}`);
+    known.push(
+      `Known Education:\n${contact.education
+        .map(
+          (e) =>
+            `  - ${e.degree || "Degree"} in ${e.fieldOfStudy || "?"} at ${e.school}`,
+        )
+        .join("\n")}`,
+    );
   }
   if (contact.interests?.length) {
-    known.push(`Known Interests: ${contact.interests.map((i: any) => i.interest).join(', ')}`);
+    known.push(
+      `Known Interests: ${contact.interests.map((i: any) => i.interest).join(", ")}`,
+    );
   }
   if (contact.tags?.length) {
-    known.push(`Tags: ${contact.tags.map((t: any) => t.tag).join(', ')}`);
+    known.push(`Tags: ${contact.tags.map((t: any) => t.tag).join(", ")}`);
   }
 
   // Build disambiguation search hints to anchor the model to the right person.
@@ -84,15 +107,16 @@ export function buildSearchPrompt(contact: HydratedContact): string {
   }
   // Email-domain hint: corporate email domains are high-signal for disambiguation
   if (contact.emails?.length) {
-    const domain = contact.emails[0].email.split('@')[1];
+    const domain = contact.emails[0].email.split("@")[1];
     if (domain && !FREE_EMAIL_DOMAINS.has(domain.toLowerCase())) {
       searchHints.push(`  - "${contact.name} ${domain}"`);
     }
   }
 
-  const searchHintsBlock = searchHints.length > 0
-    ? `\n## Suggested Search Queries\nStart with these targeted queries to identify the correct person:\n${searchHints.join('\n')}`
-    : '';
+  const searchHintsBlock =
+    searchHints.length > 0
+      ? `\n## Suggested Search Queries\nStart with these targeted queries to identify the correct person:\n${searchHints.join("\n")}`
+      : "";
 
   return `
 You are an elite professional researcher and intelligence analyst. Your task is to
@@ -139,7 +163,7 @@ CRITICAL RULES:
 
 ## What We Already Know
 
-${known.join('\n')}
+${known.join("\n")}
 ${searchHintsBlock}
 
 ## What To Search For
@@ -206,49 +230,85 @@ export const aiSearchOutputSchema = z.object({
   location: z.string().nullish(),
   pronouns: z.string().nullish(),
   birthday: z.string().nullish(),
-  emails: z.array(z.object({
-    email: z.string(),
-    label: z.string().optional(),
-  })).optional(),
-  phones: z.array(z.object({
-    phone: z.string(),
-    label: z.string().optional(),
-  })).optional(),
-  socialLinks: z.array(z.object({
-    platform: z.string(),
-    url: z.string(),
-  })).optional(),
-  education: z.array(z.object({
-    school: z.string(),
-    degree: z.string().optional(),
-    fieldOfStudy: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-  })).optional(),
-  experience: z.array(z.object({
-    company: z.string(),
-    role: z.string().optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    isCurrent: z.boolean().optional(),
-    description: z.string().optional(),
-    location: z.string().optional(),
-  })).optional(),
-  tags: z.array(z.object({
-    tag: z.string(),
-  })).optional(),
-  interests: z.array(z.object({
-    interest: z.string(),
-    isAiGenerated: z.boolean().optional(),
-  })).optional(),
-  attributes: z.array(z.object({
-    name: z.string(),
-    value: z.string(),
-  })).optional(),
-  addresses: z.array(z.object({
-    address: z.string(),
-    label: z.string().optional(),
-  })).optional(),
+  emails: z
+    .array(
+      z.object({
+        email: z.string(),
+        label: z.string().optional(),
+      }),
+    )
+    .optional(),
+  phones: z
+    .array(
+      z.object({
+        phone: z.string(),
+        label: z.string().optional(),
+      }),
+    )
+    .optional(),
+  socialLinks: z
+    .array(
+      z.object({
+        platform: z.string(),
+        url: z.string(),
+      }),
+    )
+    .optional(),
+  education: z
+    .array(
+      z.object({
+        school: z.string(),
+        degree: z.string().optional(),
+        fieldOfStudy: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }),
+    )
+    .optional(),
+  experience: z
+    .array(
+      z.object({
+        company: z.string(),
+        role: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        isCurrent: z.boolean().optional(),
+        description: z.string().optional(),
+        location: z.string().optional(),
+      }),
+    )
+    .optional(),
+  tags: z
+    .array(
+      z.object({
+        tag: z.string(),
+      }),
+    )
+    .optional(),
+  interests: z
+    .array(
+      z.object({
+        interest: z.string(),
+        isAiGenerated: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  attributes: z
+    .array(
+      z.object({
+        name: z.string(),
+        value: z.string(),
+      }),
+    )
+    .optional(),
+  addresses: z
+    .array(
+      z.object({
+        address: z.string(),
+        label: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type AISearchOutput = z.infer<typeof aiSearchOutputSchema>;

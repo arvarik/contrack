@@ -22,16 +22,22 @@ import { cn } from "./utils";
 // ─── Typography ──────────────────────────────────────────────────────────────
 
 /** Micro label — field labels inside detail cards (e.g. "LOCATION", "EMAIL") */
-export const LABEL = "text-[10px] font-bold uppercase tracking-widest text-on-surface-variant";
+export const LABEL =
+  "text-[10px] font-bold uppercase tracking-widest text-on-surface-variant";
 
 /** Primary micro label — highlighted labels (e.g. "NEXT FOLLOW UP") */
-export const LABEL_PRIMARY = "text-[10px] font-bold uppercase tracking-widest text-primary";
+export const LABEL_PRIMARY =
+  "text-[10px] font-bold uppercase tracking-widest text-primary";
 
 /** Section heading — card titles (e.g. "DETAILS", "About", "Experience") */
-export const SECTION_HEADING = "text-xs font-bold uppercase tracking-widest text-on-surface-variant";
+export const SECTION_HEADING =
+  "text-xs font-bold uppercase tracking-widest text-on-surface-variant";
 
 /** Section heading with bottom spacing — preformatted for card headers */
-export const SECTION_HEADING_SPACED = cn(SECTION_HEADING, "mb-3 flex items-center gap-2");
+export const SECTION_HEADING_SPACED = cn(
+  SECTION_HEADING,
+  "mb-3 flex items-center gap-2",
+);
 
 /** Page title */
 export const PAGE_TITLE = "text-2xl font-headline font-bold";
@@ -42,13 +48,15 @@ export const PAGE_TITLE = "text-2xl font-headline font-bold";
 export const CARD = "bg-surface-container-lowest rounded-2xl p-6 shadow-sm";
 
 /** Card compact — slightly tighter padding */
-export const CARD_COMPACT = "bg-surface-container-lowest rounded-2xl p-5 shadow-sm";
+export const CARD_COMPACT =
+  "bg-surface-container-lowest rounded-2xl p-5 shadow-sm";
 
 /** Section background — the mid-tone layer for headers / sidebars */
 export const SECTION_BG = "bg-surface-container-low";
 
 /** Tinted card — subtle primary wash (e.g. AI Intel block) */
-export const CARD_TINTED = "bg-primary/5 rounded-2xl p-6 shadow-sm relative overflow-hidden";
+export const CARD_TINTED =
+  "bg-primary/5 rounded-2xl p-6 shadow-sm relative overflow-hidden";
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
 
@@ -56,7 +64,9 @@ export const CARD_TINTED = "bg-primary/5 rounded-2xl p-6 shadow-sm relative over
 export const navLink = (active: boolean, extra?: string) =>
   cn(
     "p-3 rounded-xl transition-colors",
-    active ? "bg-primary/15 text-primary" : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
+    active
+      ? "bg-primary/15 text-primary"
+      : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
     extra,
   );
 
@@ -70,10 +80,12 @@ export const ICON_BTN =
   "p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors";
 
 /** Icon button, active/selected variant */
-export const ICON_BTN_ACTIVE = "p-2 rounded-lg bg-primary text-on-primary shadow-sm transition-all";
+export const ICON_BTN_ACTIVE =
+  "p-2 rounded-lg bg-primary text-on-primary shadow-sm transition-all";
 
 /** Icon button, inactive variant (for toggle groups like composer type selector) */
-export const ICON_BTN_INACTIVE = "p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all";
+export const ICON_BTN_INACTIVE =
+  "p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all";
 
 /** Toggle icon button — returns className based on active state */
 export const iconToggle = (active: boolean) =>
@@ -89,16 +101,20 @@ export const DANGER_BTN =
 // ─── Badges & Pills ─────────────────────────────────────────────────────────
 
 /** Tag pill — used in contact tags, filter indicators */
-export const TAG_PILL = "text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full";
+export const TAG_PILL =
+  "text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full";
 
 /** Micro badge — tiny inline status labels (e.g. "Current", "work", "personal") */
-export const MICRO_BADGE = "text-[9px] uppercase tracking-widest opacity-50 bg-surface-container px-1 rounded";
+export const MICRO_BADGE =
+  "text-[9px] uppercase tracking-widest opacity-50 bg-surface-container px-1 rounded";
 
 /** Status badge — success variant (e.g. "Current" on experience) */
-export const STATUS_BADGE_SUCCESS = "text-[9px] uppercase tracking-widest bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-bold";
+export const STATUS_BADGE_SUCCESS =
+  "text-[9px] uppercase tracking-widest bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-bold";
 
 /** Source badge */
-export const SOURCE_BADGE = "text-[10px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full";
+export const SOURCE_BADGE =
+  "text-[10px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full";
 
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
@@ -113,21 +129,26 @@ export const EDITABLE_INPUT =
 // ─── Keyboard shortcut hints ─────────────────────────────────────────────────
 
 /** Keyboard shortcut badge */
-export const KBD = "bg-surface-container-high px-2 rounded-md text-xs font-mono";
+export const KBD =
+  "bg-surface-container-high px-2 rounded-md text-xs font-mono";
 
 /** Keyboard shortcut badge — smaller variant */
-export const KBD_SM = "bg-surface-container-high px-1.5 rounded font-mono text-[9px] shadow-sm";
+export const KBD_SM =
+  "bg-surface-container-high px-1.5 rounded font-mono text-[9px] shadow-sm";
 
 // ─── Filter Tabs ─────────────────────────────────────────────────────────────
 
 /** Tab container — pill-style tab bar background */
-export const TAB_CONTAINER = "flex gap-1 bg-surface-container-low p-1 rounded-xl";
+export const TAB_CONTAINER =
+  "flex gap-1 bg-surface-container-low p-1 rounded-xl";
 
 /** Tab item — returns className based on active state */
 export const tabItem = (active: boolean) =>
   cn(
     "px-4 py-2 text-sm font-bold rounded-lg transition-colors",
-    active ? "text-primary bg-surface-container-lowest shadow-sm" : "text-on-surface-variant hover:text-on-surface",
+    active
+      ? "text-primary bg-surface-container-lowest shadow-sm"
+      : "text-on-surface-variant hover:text-on-surface",
   );
 
 // ─── Filter pills ────────────────────────────────────────────────────────────
@@ -136,7 +157,9 @@ export const tabItem = (active: boolean) =>
 export const filterPill = (active: boolean) =>
   cn(
     "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
-    active ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30" : "text-on-surface-variant hover:bg-surface-container-high",
+    active
+      ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30"
+      : "text-on-surface-variant hover:bg-surface-container-high",
   );
 
 // ─── List Items ──────────────────────────────────────────────────────────────
@@ -145,7 +168,9 @@ export const filterPill = (active: boolean) =>
 export const listRow = (active: boolean) =>
   cn(
     "flex items-center gap-3 p-3 rounded-xl transition-all relative",
-    active ? "bg-primary/8 ring-2 ring-inset ring-primary z-10 shadow-sm" : "hover:bg-surface-container-low",
+    active
+      ? "bg-primary/8 ring-2 ring-inset ring-primary z-10 shadow-sm"
+      : "hover:bg-surface-container-low",
   );
 
 // ─── Timeline ────────────────────────────────────────────────────────────────
@@ -169,31 +194,38 @@ export const COMPOSER =
   "bg-surface-container-lowest rounded-2xl p-4 shadow-sm mb-8 z-20 transition-all focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md";
 
 /** NLP action input (follow-up detector) */
-export const NLP_INPUT_ROW = "flex items-center mt-3 bg-surface-container-low p-2 rounded-xl";
+export const NLP_INPUT_ROW =
+  "flex items-center mt-3 bg-surface-container-low p-2 rounded-xl";
 
 // ─── Empty States ────────────────────────────────────────────────────────────
 
 /** Empty state container */
-export const EMPTY_STATE = "text-center p-8 bg-surface-container-low rounded-2xl text-on-surface-variant";
+export const EMPTY_STATE =
+  "text-center p-8 bg-surface-container-low rounded-2xl text-on-surface-variant";
 
 /** Empty state hero — large centered content with icon + heading */
-export const EMPTY_HERO = "flex flex-col items-center justify-center h-full text-center max-w-md mx-auto";
+export const EMPTY_HERO =
+  "flex flex-col items-center justify-center h-full text-center max-w-md mx-auto";
 
 // ─── Dropdowns ───────────────────────────────────────────────────────────────
 
 /** Dropdown container — floats above other elements, scrollable, glass-panel styled */
-export const DROPDOWN_MENU = "absolute z-50 mt-1 max-h-56 w-max min-w-full overflow-y-auto rounded-xl glass-panel py-1.5 shadow-xl outline-none nice-scrollbar";
+export const DROPDOWN_MENU =
+  "absolute z-50 mt-1 max-h-56 w-max min-w-full overflow-y-auto rounded-xl glass-panel py-1.5 shadow-xl outline-none nice-scrollbar";
 
 /** Dropdown standard item */
-export const DROPDOWN_ITEM = "cursor-pointer px-4 py-2 text-sm font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors flex items-center";
+export const DROPDOWN_ITEM =
+  "cursor-pointer px-4 py-2 text-sm font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors flex items-center";
 
 // ─── Form Inputs ─────────────────────────────────────────────────────────────
 
 /** Standard modal form label */
-export const FORM_LABEL = "block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5";
+export const FORM_LABEL =
+  "block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5";
 
 /** Standard modal form input */
-export const FORM_INPUT = "w-full rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none bg-surface-container text-on-surface transition-shadow";
+export const FORM_INPUT =
+  "w-full rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none bg-surface-container text-on-surface transition-shadow";
 
 /** AI pre-fill glow — returns additional classes when a field was auto-populated */
 export const formInputHighlight = (hasValue: boolean) =>

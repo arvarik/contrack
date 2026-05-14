@@ -48,8 +48,8 @@ export interface MergeLogEntry {
   id: string;
   primaryId: string;
   duplicateId: string;
-  mergedBy: string;   // 'user' | 'auto' | 'user:suggestion'
-  mergeType: string;   // 'soft' | 'hard'
+  mergedBy: string; // 'user' | 'auto' | 'user:suggestion'
+  mergeType: string; // 'soft' | 'hard'
   confidence: number;
   reasoning: string;
   mergedAt: string;
@@ -148,13 +148,22 @@ const _stmts = {
  * INSERT OR IGNORE makes this idempotent — safe for re-scans.
  */
 export function storeSuggestion(
-  pair: { idA: string; idB: string; matchType: string; confidence: number; reasoning: string; matchedField?: string },
+  pair: {
+    idA: string;
+    idB: string;
+    matchType: string;
+    confidence: number;
+    reasoning: string;
+    matchedField?: string;
+  },
   status: "pending" | "auto_merged",
 ): void {
-  const [a, b] = pair.idA < pair.idB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
+  const [a, b] =
+    pair.idA < pair.idB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
   _stmts.insertSuggestion.run(
     crypto.randomUUID(),
-    a, b,
+    a,
+    b,
     pair.matchType,
     pair.confidence,
     pair.reasoning,
@@ -168,17 +177,26 @@ export function storeSuggestion(
  * Used at the end of a scan to persist all detected pairs.
  */
 export function storeSuggestions(
-  pairs: { idA: string; idB: string; matchType: string; confidence: number; reasoning: string; matchedField?: string }[],
+  pairs: {
+    idA: string;
+    idB: string;
+    matchType: string;
+    confidence: number;
+    reasoning: string;
+    matchedField?: string;
+  }[],
   status: "pending" | "auto_merged",
 ): void {
   if (pairs.length === 0) return;
 
   const txn = sqlite.transaction(() => {
     for (const pair of pairs) {
-      const [a, b] = pair.idA < pair.idB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
+      const [a, b] =
+        pair.idA < pair.idB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
       _stmts.insertSuggestion.run(
         crypto.randomUUID(),
-        a, b,
+        a,
+        b,
         pair.matchType,
         pair.confidence,
         pair.reasoning,
@@ -202,8 +220,12 @@ export function getPendingSuggestions(limit: number = 100): DedupeSuggestion[] {
   // Hydrate contacts for display
   for (const row of rows) {
     try {
-      const rawA = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(row.contactIdA);
-      const rawB = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(row.contactIdB);
+      const rawA = sqlite
+        .prepare("SELECT * FROM contacts WHERE id = ?")
+        .get(row.contactIdA);
+      const rawB = sqlite
+        .prepare("SELECT * FROM contacts WHERE id = ?")
+        .get(row.contactIdB);
       if (rawA) row.contactA = contactRepo.hydrate(rawA);
       if (rawB) row.contactB = contactRepo.hydrate(rawB);
     } catch {
@@ -226,8 +248,12 @@ export function getSuggestionById(id: string): DedupeSuggestion | null {
 
   // Hydrate contacts
   try {
-    const rawA = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(row.contactIdA);
-    const rawB = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(row.contactIdB);
+    const rawA = sqlite
+      .prepare("SELECT * FROM contacts WHERE id = ?")
+      .get(row.contactIdA);
+    const rawB = sqlite
+      .prepare("SELECT * FROM contacts WHERE id = ?")
+      .get(row.contactIdB);
     if (rawA) row.contactA = contactRepo.hydrate(rawA);
     if (rawB) row.contactB = contactRepo.hydrate(rawB);
   } catch {
@@ -241,13 +267,21 @@ export function getSuggestionById(id: string): DedupeSuggestion | null {
  * Find a pending suggestion involving a specific contact.
  * Used for point-of-action banners on the contact detail page.
  */
-export function getSuggestionForContact(contactId: string): DedupeSuggestion | null {
-  const row = _stmts.getForContact.get(contactId, contactId) as DedupeSuggestion | undefined;
+export function getSuggestionForContact(
+  contactId: string,
+): DedupeSuggestion | null {
+  const row = _stmts.getForContact.get(contactId, contactId) as
+    | DedupeSuggestion
+    | undefined;
   if (!row) return null;
 
   try {
-    const rawA = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(row.contactIdA);
-    const rawB = sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(row.contactIdB);
+    const rawA = sqlite
+      .prepare("SELECT * FROM contacts WHERE id = ?")
+      .get(row.contactIdA);
+    const rawB = sqlite
+      .prepare("SELECT * FROM contacts WHERE id = ?")
+      .get(row.contactIdB);
     if (rawA) row.contactA = contactRepo.hydrate(rawA);
     if (rawB) row.contactB = contactRepo.hydrate(rawB);
   } catch {
@@ -268,13 +302,19 @@ export function getSuggestionForContact(contactId: string): DedupeSuggestion | n
 export function dismissSuggestion(id: string, rid: string): void {
   const suggestion = _stmts.getById.get(id) as DedupeSuggestion | undefined;
   if (!suggestion) {
-    throw new AppError(`Suggestion ${id} not found`, 404, { code: "NOT_FOUND" });
+    throw new AppError(`Suggestion ${id} not found`, 404, {
+      code: "NOT_FOUND",
+    });
   }
   if (suggestion.status !== "pending") {
-    throw new AppError(`Suggestion ${id} is already ${suggestion.status}`, 409, {
-      code: "CONFLICT",
-      details: { currentStatus: suggestion.status },
-    });
+    throw new AppError(
+      `Suggestion ${id} is already ${suggestion.status}`,
+      409,
+      {
+        code: "CONFLICT",
+        details: { currentStatus: suggestion.status },
+      },
+    );
   }
 
   const txn = sqlite.transaction(() => {
@@ -286,7 +326,10 @@ export function dismissSuggestion(id: string, rid: string): void {
   });
   txn();
 
-  log.info("DedupeSuggestions", `[${rid}] Dismissed suggestion ${id} (${suggestion.contactIdA} ↔ ${suggestion.contactIdB})`);
+  log.info(
+    "DedupeSuggestions",
+    `[${rid}] Dismissed suggestion ${id} (${suggestion.contactIdA} ↔ ${suggestion.contactIdB})`,
+  );
 }
 
 /**
@@ -331,7 +374,15 @@ export function recordMerge(
 ): string {
   let id: string;
   const txn = sqlite.transaction(() => {
-    id = recordMergeUnsafe(primaryId, duplicateId, confidence, reasoning, mergedBy, mergeType, snapshot);
+    id = recordMergeUnsafe(
+      primaryId,
+      duplicateId,
+      confidence,
+      reasoning,
+      mergedBy,
+      mergeType,
+      snapshot,
+    );
   });
   txn();
   return id!;
@@ -368,7 +419,10 @@ export function recordMergeUnsafe(
     reasoning,
     snapshot ?? null,
   );
-  log.info("DedupeSuggestions", `Merge log: ${mergeType} merge of ${duplicateId} → ${primaryId} (by ${mergedBy}, confidence ${(confidence * 100).toFixed(0)}%)`);
+  log.info(
+    "DedupeSuggestions",
+    `Merge log: ${mergeType} merge of ${duplicateId} → ${primaryId} (by ${mergedBy}, confidence ${(confidence * 100).toFixed(0)}%)`,
+  );
   return id;
 }
 
@@ -384,8 +438,12 @@ export function getMergeLog(limit: number = 50): MergeLogEntry[] {
   for (const row of rows) {
     try {
       // Primary may still exist; duplicate may be soft-merged (canonicalId set) or hard-deleted
-      const primary = sqlite.prepare("SELECT name FROM contacts WHERE id = ?").get(row.primaryId) as any;
-      const duplicate = sqlite.prepare("SELECT name FROM contacts WHERE id = ?").get(row.duplicateId) as any;
+      const primary = sqlite
+        .prepare("SELECT name FROM contacts WHERE id = ?")
+        .get(row.primaryId) as any;
+      const duplicate = sqlite
+        .prepare("SELECT name FROM contacts WHERE id = ?")
+        .get(row.duplicateId) as any;
       row.primaryName = primary?.name ?? "(deleted)";
       row.duplicateName = duplicate?.name ?? "(deleted)";
     } catch {
@@ -412,59 +470,93 @@ export function getMergeLog(limit: number = 50): MergeLogEntry[] {
  * @throws Error if the merge log entry is not found, already undone, or was a hard merge
  */
 export function undoSoftMerge(mergeLogId: string, rid: string): void {
-  const entry = _stmts.getMergeLogById.get(mergeLogId) as MergeLogEntry | undefined;
+  const entry = _stmts.getMergeLogById.get(mergeLogId) as
+    | MergeLogEntry
+    | undefined;
 
   if (!entry) {
-    throw new AppError(`Merge log entry ${mergeLogId} not found`, 404, { code: "NOT_FOUND" });
+    throw new AppError(`Merge log entry ${mergeLogId} not found`, 404, {
+      code: "NOT_FOUND",
+    });
   }
   if (entry.undoneAt) {
-    throw new AppError(`Merge ${mergeLogId} was already undone at ${entry.undoneAt}`, 409, {
-      code: "ALREADY_UNDONE",
-      details: { undoneAt: entry.undoneAt },
-    });
+    throw new AppError(
+      `Merge ${mergeLogId} was already undone at ${entry.undoneAt}`,
+      409,
+      {
+        code: "ALREADY_UNDONE",
+        details: { undoneAt: entry.undoneAt },
+      },
+    );
   }
   if (entry.mergeType !== "soft") {
-    throw new AppError(`Cannot undo a hard merge — the duplicate was permanently deleted`, 409, {
-      code: "HARD_MERGE_IRREVERSIBLE",
-      details: { mergeLogId },
-    });
+    throw new AppError(
+      `Cannot undo a hard merge — the duplicate was permanently deleted`,
+      409,
+      {
+        code: "HARD_MERGE_IRREVERSIBLE",
+        details: { mergeLogId },
+      },
+    );
   }
 
   // Verify the duplicate contact still exists (it should — soft merge doesn't delete)
-  const duplicate = sqlite.prepare(
-    "SELECT id, canonicalId FROM contacts WHERE id = ?"
-  ).get(entry.duplicateId) as any;
+  const duplicate = sqlite
+    .prepare("SELECT id, canonicalId FROM contacts WHERE id = ?")
+    .get(entry.duplicateId) as any;
 
   if (!duplicate) {
-    throw new AppError(`Duplicate contact ${entry.duplicateId} no longer exists — cannot undo`, 410, {
-      code: "GONE",
-    });
+    throw new AppError(
+      `Duplicate contact ${entry.duplicateId} no longer exists — cannot undo`,
+      410,
+      {
+        code: "GONE",
+      },
+    );
   }
   if (!duplicate.canonicalId) {
-    throw new AppError(`Duplicate contact ${entry.duplicateId} is not soft-merged (canonicalId is NULL)`, 409, {
-      code: "INVALID_STATE",
-    });
+    throw new AppError(
+      `Duplicate contact ${entry.duplicateId} is not soft-merged (canonicalId is NULL)`,
+      409,
+      {
+        code: "INVALID_STATE",
+      },
+    );
   }
 
   const txn = sqlite.transaction(() => {
     // 1. Restore the duplicate contact's visibility
-    sqlite.prepare("UPDATE contacts SET canonicalId = NULL WHERE id = ?").run(entry.duplicateId);
+    sqlite
+      .prepare("UPDATE contacts SET canonicalId = NULL WHERE id = ?")
+      .run(entry.duplicateId);
 
     // 2. Mark the merge log entry as undone
     _stmts.undoMergeLog.run(mergeLogId);
 
     // 3. Remove the corresponding suggestion's "auto_merged" status
     //    so it can re-appear as "pending" if the user wants to re-evaluate
-    sqlite.prepare(`
+    sqlite
+      .prepare(
+        `
       UPDATE dedupe_suggestions
       SET status = 'pending', reviewedAt = NULL, reviewedBy = NULL
       WHERE ((contactIdA = ? AND contactIdB = ?) OR (contactIdA = ? AND contactIdB = ?))
         AND status = 'auto_merged'
-    `).run(entry.primaryId, entry.duplicateId, entry.duplicateId, entry.primaryId);
+    `,
+      )
+      .run(
+        entry.primaryId,
+        entry.duplicateId,
+        entry.duplicateId,
+        entry.primaryId,
+      );
   });
   txn();
 
-  log.info("DedupeSuggestions", `[${rid}] Undone soft merge ${mergeLogId}: restored ${entry.duplicateId} (was merged into ${entry.primaryId})`);
+  log.info(
+    "DedupeSuggestions",
+    `[${rid}] Undone soft merge ${mergeLogId}: restored ${entry.duplicateId} (was merged into ${entry.primaryId})`,
+  );
 }
 
 // =============================================================================
@@ -480,7 +572,10 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
 export function clearStaleSuggestions(): number {
   const result = _stmts.clearStale.run();
   if (result.changes > 0) {
-    log.info("DedupeSuggestions", `Cleared ${result.changes} stale pending suggestions`);
+    log.info(
+      "DedupeSuggestions",
+      `Cleared ${result.changes} stale pending suggestions`,
+    );
   }
   return result.changes;
 }

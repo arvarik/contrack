@@ -4,13 +4,13 @@
  * Bootstraps the application by mounting the React tree into #root with
  * StrictMode, an ErrorBoundary, and the TanStack React Query provider.
  */
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorBoundary } from './components/layout/ErrorBoundary';
-import { logCacheEvent } from './lib/queryConfig';
-import App from './App.tsx';
-import './index.css';
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ErrorBoundary } from "./components/layout/ErrorBoundary";
+import { logCacheEvent } from "./lib/queryConfig";
+import App from "./App.tsx";
+import "./index.css";
 
 /**
  * Global React Query configuration.
@@ -49,21 +49,21 @@ const queryClient = new QueryClient({
 // useContacts() — zero duplication, zero extra network requests.
 // =============================================================================
 queryClient.prefetchQuery({
-  queryKey: ['contacts'],
+  queryKey: ["contacts"],
   queryFn: async () => {
-    const res = await fetch('/api/contacts?view=slim');
-    if (!res.ok) throw new Error('Prefetch failed');
+    const res = await fetch("/api/contacts?view=slim");
+    if (!res.ok) throw new Error("Prefetch failed");
     const data = await res.json();
     logCacheEvent({
-      type: 'prefetch',
+      type: "prefetch",
       queryKey: "['contacts']",
-      meta: { count: data.length, source: 'cold-boot' },
+      meta: { count: data.length, source: "cold-boot" },
     });
     return data;
   },
 });
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -72,4 +72,3 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
-

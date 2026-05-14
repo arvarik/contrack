@@ -8,20 +8,24 @@
  *
  * @module components/command-palette/ActionSubMenu
  */
-import React, { useEffect, useCallback, useState, useRef } from 'react';
-import { motion } from 'motion/react';
+import React, { useEffect, useCallback, useState, useRef } from "react";
+import { motion } from "motion/react";
 import {
-  User, FileText, Phone, Sparkles, ListPlus,
+  User,
+  FileText,
+  Phone,
+  Sparkles,
+  ListPlus,
   ArrowLeft,
-} from 'lucide-react';
-import { KBD_SM } from '../../lib/styles';
-import { fallbackAvatarUrl } from '../../lib/avatar';
-import { InlineNoteComposer } from './InlineNoteComposer';
-import { ListPicker } from './ListPicker';
+} from "lucide-react";
+import { KBD_SM } from "../../lib/styles";
+import { fallbackAvatarUrl } from "../../lib/avatar";
+import { InlineNoteComposer } from "./InlineNoteComposer";
+import { ListPicker } from "./ListPicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type SubMenuMode = 'actions' | 'note' | 'call' | 'list';
+export type SubMenuMode = "actions" | "note" | "call" | "list";
 
 interface ActionSubMenuProps {
   contactId: string;
@@ -52,137 +56,148 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   onBack,
   onClose,
 }) => {
-  const [mode, setMode] = useState<SubMenuMode>('actions');
+  const [mode, setMode] = useState<SubMenuMode>("actions");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // ── Action items ────────────────────────────────────────────────────────
   const actions: ActionItem[] = [
     {
-      id: 'view',
-      label: 'View Profile',
+      id: "view",
+      label: "View Profile",
       icon: <User className="w-4 h-4" />,
-      shortcut: '↵',
+      shortcut: "↵",
       handler: onViewProfile,
     },
     {
-      id: 'note',
-      label: 'Log Note',
+      id: "note",
+      label: "Log Note",
       icon: <FileText className="w-4 h-4" />,
-      shortcut: 'N',
-      handler: () => setMode('note'),
+      shortcut: "N",
+      handler: () => setMode("note"),
     },
     {
-      id: 'call',
-      label: 'Log Call',
+      id: "call",
+      label: "Log Call",
       icon: <Phone className="w-4 h-4" />,
-      shortcut: 'C',
-      handler: () => setMode('call'),
+      shortcut: "C",
+      handler: () => setMode("call"),
     },
     {
-      id: 'brief',
-      label: 'Catch Me Up',
+      id: "brief",
+      label: "Catch Me Up",
       icon: <Sparkles className="w-4 h-4" />,
-      shortcut: 'B',
+      shortcut: "B",
       handler: onCatchMeUp,
     },
     {
-      id: 'list',
-      label: 'Add to List',
+      id: "list",
+      label: "Add to List",
       icon: <ListPlus className="w-4 h-4" />,
-      shortcut: 'L',
-      handler: () => setMode('list'),
+      shortcut: "L",
+      handler: () => setMode("list"),
     },
   ];
 
   // ── Keyboard handling ───────────────────────────────────────────────────
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Don't intercept when in a sub-mode that handles its own keys
-    if (mode !== 'actions') {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        setMode('actions');
-        setSelectedIndex(0);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      // Don't intercept when in a sub-mode that handles its own keys
+      if (mode !== "actions") {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          setMode("actions");
+          setSelectedIndex(0);
+        }
+        return;
       }
-      return;
-    }
 
-    // Typing target check — don't intercept when typing in a textarea/input
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      // Typing target check — don't intercept when typing in a textarea/input
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
-        e.stopPropagation();
-        onBack();
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % actions.length);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + actions.length) % actions.length);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        actions[selectedIndex]?.handler();
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        onBack();
-        break;
-      // Letter shortcuts
-      case 'n':
-      case 'N':
-        e.preventDefault();
-        setMode('note');
-        break;
-      case 'c':
-      case 'C':
-        e.preventDefault();
-        setMode('call');
-        break;
-      case 'b':
-      case 'B':
-        e.preventDefault();
-        onCatchMeUp();
-        break;
-      case 'l':
-      case 'L':
-        e.preventDefault();
-        setMode('list');
-        break;
-    }
-  }, [mode, selectedIndex, actions, onBack, onCatchMeUp]);
+      switch (e.key) {
+        case "Escape":
+          e.preventDefault();
+          e.stopPropagation();
+          onBack();
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev + 1) % actions.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setSelectedIndex(
+            (prev) => (prev - 1 + actions.length) % actions.length,
+          );
+          break;
+        case "Enter":
+          e.preventDefault();
+          actions[selectedIndex]?.handler();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          onBack();
+          break;
+        // Letter shortcuts
+        case "n":
+        case "N":
+          e.preventDefault();
+          setMode("note");
+          break;
+        case "c":
+        case "C":
+          e.preventDefault();
+          setMode("call");
+          break;
+        case "b":
+        case "B":
+          e.preventDefault();
+          onCatchMeUp();
+          break;
+        case "l":
+        case "L":
+          e.preventDefault();
+          setMode("list");
+          break;
+      }
+    },
+    [mode, selectedIndex, actions, onBack, onCatchMeUp],
+  );
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown]);
 
   // ── Note / Call composer ────────────────────────────────────────────────
-  if (mode === 'note' || mode === 'call') {
+  if (mode === "note" || mode === "call") {
     return (
       <InlineNoteComposer
         contactId={contactId}
         contactName={contactName}
-        type={mode === 'note' ? 'note' : 'call'}
-        onBack={() => { setMode('actions'); setSelectedIndex(0); }}
+        type={mode === "note" ? "note" : "call"}
+        onBack={() => {
+          setMode("actions");
+          setSelectedIndex(0);
+        }}
         onComplete={onClose}
       />
     );
   }
 
   // ── List picker ─────────────────────────────────────────────────────────
-  if (mode === 'list') {
+  if (mode === "list") {
     return (
       <ListPicker
         contactId={contactId}
         contactName={contactName}
-        onBack={() => { setMode('actions'); setSelectedIndex(0); }}
+        onBack={() => {
+          setMode("actions");
+          setSelectedIndex(0);
+        }}
       />
     );
   }
@@ -193,7 +208,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
       ref={actionsRef}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
       className="p-2"
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -213,8 +228,12 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           className="w-7 h-7 rounded-full bg-surface-container-highest object-cover"
         />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-on-surface truncate">{contactName}</p>
-          <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Actions</p>
+          <p className="text-sm font-bold text-on-surface truncate">
+            {contactName}
+          </p>
+          <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
+            Actions
+          </p>
         </div>
       </div>
 
@@ -227,23 +246,29 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
             onMouseDown={(e) => e.preventDefault()}
             className={`
               w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-xl text-sm transition-all active:scale-[0.98]
-              ${i === selectedIndex
-                ? 'bg-primary/10 text-primary'
-                : 'text-on-surface hover:bg-surface-container-low active:bg-surface-container-low'
+              ${
+                i === selectedIndex
+                  ? "bg-primary/10 text-primary"
+                  : "text-on-surface hover:bg-surface-container-low active:bg-surface-container-low"
               }
             `}
           >
-            <span className={`
+            <span
+              className={`
               w-8 h-8 flex items-center justify-center rounded-lg shrink-0
-              ${i === selectedIndex
-                ? 'bg-primary/15 text-primary'
-                : 'bg-surface-container-high text-on-surface-variant'
+              ${
+                i === selectedIndex
+                  ? "bg-primary/15 text-primary"
+                  : "bg-surface-container-high text-on-surface-variant"
               }
-            `}>
+            `}
+            >
               {action.icon}
             </span>
             <span className="flex-1 text-left font-medium">{action.label}</span>
-            <kbd className={`${KBD_SM} hidden sm:inline-flex`}>{action.shortcut}</kbd>
+            <kbd className={`${KBD_SM} hidden sm:inline-flex`}>
+              {action.shortcut}
+            </kbd>
           </button>
         ))}
       </div>

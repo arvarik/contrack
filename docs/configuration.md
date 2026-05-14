@@ -8,16 +8,16 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `AI_PROVIDER` | LLM provider adapter: `gemini`, `openai`, or `anthropic` | `gemini` | No |
-| `GEMINI_API_KEY` | Google Gemini API key | — | Yes (if provider = gemini) |
-| `OPENAI_API_KEY` | OpenAI API key | — | Yes (if provider = openai) |
-| `ANTHROPIC_API_KEY` | Anthropic API key | — | Yes (if provider = anthropic) |
-| `AI_TIER` | Rate limit profile: `FREE` or `PAID` | `FREE` | No |
-| `APP_URL` | Host URL for self-referential links | `http://localhost:3000` | No |
-| `PORT` | Express listening port | `3000` | No |
-| `MAPBOX_API_KEY` | Mapbox geocoding API key (higher accuracy) | — | No |
+| Variable            | Description                                              | Default                 | Required                      |
+| ------------------- | -------------------------------------------------------- | ----------------------- | ----------------------------- |
+| `AI_PROVIDER`       | LLM provider adapter: `gemini`, `openai`, or `anthropic` | `gemini`                | No                            |
+| `GEMINI_API_KEY`    | Google Gemini API key                                    | —                       | Yes (if provider = gemini)    |
+| `OPENAI_API_KEY`    | OpenAI API key                                           | —                       | Yes (if provider = openai)    |
+| `ANTHROPIC_API_KEY` | Anthropic API key                                        | —                       | Yes (if provider = anthropic) |
+| `AI_TIER`           | Rate limit profile: `FREE` or `PAID`                     | `FREE`                  | No                            |
+| `APP_URL`           | Host URL for self-referential links                      | `http://localhost:3000` | No                            |
+| `PORT`              | Express listening port                                   | `3000`                  | No                            |
+| `MAPBOX_API_KEY`    | Mapbox geocoding API key (higher accuracy)               | —                       | No                            |
 
 ---
 
@@ -36,6 +36,7 @@ Contrack supports three AI providers through a provider-agnostic adapter archite
 3. The SmartRouter automatically selects the optimal Gemini model (Lite, Flash, or Pro) per use case
 
 **Gemini-exclusive features:**
+
 - SmartRouter model-class routing (Lite → Flash → Pro)
 - Grounding-based web search for AI Search enrichment (two-pass strategy)
 - Quota tracking with RPD limits
@@ -67,9 +68,9 @@ Contrack supports three AI providers through a provider-agnostic adapter archite
 
 The `AI_TIER` variable controls rate limiting and model access:
 
-| Tier | Behavior |
-|------|----------|
-| `FREE` | Conservative routing, limits matching free-tier quotas (~10 RPM). Avoids paid spillover. Default. |
+| Tier   | Behavior                                                                                                    |
+| ------ | ----------------------------------------------------------------------------------------------------------- |
+| `FREE` | Conservative routing, limits matching free-tier quotas (~10 RPM). Avoids paid spillover. Default.           |
 | `PAID` | Aggressive routing, full paid-tier limits (10K+ RPM). Includes paid-only models (e.g., Gemini 3.x preview). |
 
 > **Note:** `AI_TIER` only affects Gemini's SmartRouter. OpenAI and Anthropic adapters use their own default rate limits.

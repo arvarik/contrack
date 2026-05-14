@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { cn } from '../../lib/utils';
-import { DROPDOWN_MENU, DROPDOWN_ITEM } from '../../lib/styles';
-import { ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect } from "react";
+import { cn } from "../../lib/utils";
+import { DROPDOWN_MENU, DROPDOWN_ITEM } from "../../lib/styles";
+import { ChevronDown } from "lucide-react";
 
 export const CustomSelect = ({
   value,
   onChange,
   options,
-  className
+  className,
 }: {
   value: string;
   onChange: (val: string) => void;
@@ -19,12 +19,15 @@ export const CustomSelect = ({
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
   return (
@@ -38,10 +41,13 @@ export const CustomSelect = ({
         {value}
         <ChevronDown className="w-2.5 h-2.5 opacity-60" />
       </button>
-      
+
       {isOpen && (
-        <ul className={cn(DROPDOWN_MENU, "min-w-[100px]")} onMouseDown={(e) => e.preventDefault()}>
-          {options.map(opt => (
+        <ul
+          className={cn(DROPDOWN_MENU, "min-w-[100px]")}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {options.map((opt) => (
             <li
               key={opt}
               className={DROPDOWN_ITEM}

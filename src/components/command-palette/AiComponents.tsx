@@ -1,11 +1,11 @@
-import React from 'react';
-import { Command } from 'cmdk';
-import { motion } from 'motion/react';
-import { Briefcase, Building, Sparkles } from 'lucide-react';
-import type { SemanticMatch } from '../../types';
-import { fallbackAvatarUrl } from '../../lib/avatar';
-import { ScoreDot, LastContactLine, StaleChip } from './ContactMetaBadges';
-import { DataAgeHalo } from './DataAgeHalo';
+import React from "react";
+import { Command } from "cmdk";
+import { motion } from "motion/react";
+import { Briefcase, Building, Sparkles } from "lucide-react";
+import type { SemanticMatch } from "../../types";
+import { fallbackAvatarUrl } from "../../lib/avatar";
+import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
+import { DataAgeHalo } from "./DataAgeHalo";
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
@@ -36,7 +36,16 @@ interface AIResultCardProps {
   onRefresh: (contactId: string) => void;
 }
 
-export const AIResultCard = ({ match, index, onSelect, isFallback, hasGroundingCapacity, isEnriching, enrichingContactId, onRefresh }: AIResultCardProps) => (
+export const AIResultCard = ({
+  match,
+  index,
+  onSelect,
+  isFallback,
+  hasGroundingCapacity,
+  isEnriching,
+  enrichingContactId,
+  onRefresh,
+}: AIResultCardProps) => (
   <Command.Item
     key={match.id}
     value={`ai_${match.id}_${match.name}`}
@@ -73,8 +82,18 @@ export const AIResultCard = ({ match, index, onSelect, isFallback, hasGroundingC
         {/* Role + Company */}
         {(match.role || match.company) && (
           <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
-            {match.role && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{match.role}</span>}
-            {match.company && <span className="flex items-center gap-1"><Building className="w-3 h-3" />{match.company}</span>}
+            {match.role && (
+              <span className="flex items-center gap-1">
+                <Briefcase className="w-3 h-3" />
+                {match.role}
+              </span>
+            )}
+            {match.company && (
+              <span className="flex items-center gap-1">
+                <Building className="w-3 h-3" />
+                {match.company}
+              </span>
+            )}
           </span>
         )}
 

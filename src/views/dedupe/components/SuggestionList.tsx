@@ -1,17 +1,21 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from "react";
 import {
-  CheckCircle2, Loader2, ChevronDown, ChevronUp,
-  ArrowLeftRight, Merge as MergeIcon,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import type { DedupeSuggestion } from '../../../types';
-import { ContactCard } from './shared/ContactCard';
-import { MatchBadge } from './shared/MatchBadge';
-import { cn } from '../../../lib/utils';
-import { CARD } from '../../../lib/styles';
-import { toast } from 'sonner';
-import { useMergeContacts, useMergeBatch } from '../../../api';
-import { fallbackAvatarUrl } from '../../../lib/avatar';
+  CheckCircle2,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  ArrowLeftRight,
+  Merge as MergeIcon,
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import type { DedupeSuggestion } from "../../../types";
+import { ContactCard } from "./shared/ContactCard";
+import { MatchBadge } from "./shared/MatchBadge";
+import { cn } from "../../../lib/utils";
+import { CARD } from "../../../lib/styles";
+import { toast } from "sonner";
+import { useMergeContacts, useMergeBatch } from "../../../api";
+import { fallbackAvatarUrl } from "../../../lib/avatar";
 
 // =============================================================================
 // SuggestionList — Table/list view of all duplicate suggestions
@@ -22,17 +26,21 @@ interface SuggestionListProps {
   onRemoveSuggestion: (id: string) => void;
 }
 
-export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionListProps) => {
+export const SuggestionList = ({
+  suggestions,
+  onRemoveSuggestion,
+}: SuggestionListProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
   const [swapped, setSwapped] = useState<Set<string>>(new Set());
   const mergeContacts = useMergeContacts();
   const mergeBatch = useMergeBatch();
 
-  const allSelected = suggestions.length > 0 && selected.size === suggestions.length;
+  const allSelected =
+    suggestions.length > 0 && selected.size === suggestions.length;
 
   const toggleSelect = useCallback((id: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -44,16 +52,16 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
     if (allSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(suggestions.map(s => s.id)));
+      setSelected(new Set(suggestions.map((s) => s.id)));
     }
   }, [allSelected, suggestions]);
 
   const toggleExpand = useCallback((id: string) => {
-    setExpanded(prev => prev === id ? null : id);
+    setExpanded((prev) => (prev === id ? null : id));
   }, []);
 
   const toggleSwap = useCallback((id: string) => {
-    setSwapped(prev => {
+    setSwapped((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -61,23 +69,32 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
     });
   }, []);
 
-  const handleSingleMerge = useCallback(async (suggestion: DedupeSuggestion) => {
-    const isSwap = swapped.has(suggestion.id);
-    const primaryId = isSwap ? suggestion.contactB.id : suggestion.contactA.id;
-    const duplicateId = isSwap ? suggestion.contactA.id : suggestion.contactB.id;
-    try {
-      await mergeContacts.mutateAsync({ primaryId, duplicateId });
-      onRemoveSuggestion(suggestion.id);
-      toast.success(`Merged successfully`);
-    } catch (err: unknown) {
-      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
-    }
-  }, [mergeContacts, swapped, onRemoveSuggestion]);
+  const handleSingleMerge = useCallback(
+    async (suggestion: DedupeSuggestion) => {
+      const isSwap = swapped.has(suggestion.id);
+      const primaryId = isSwap
+        ? suggestion.contactB.id
+        : suggestion.contactA.id;
+      const duplicateId = isSwap
+        ? suggestion.contactA.id
+        : suggestion.contactB.id;
+      try {
+        await mergeContacts.mutateAsync({ primaryId, duplicateId });
+        onRemoveSuggestion(suggestion.id);
+        toast.success(`Merged successfully`);
+      } catch (err: unknown) {
+        toast.error(
+          `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    },
+    [mergeContacts, swapped, onRemoveSuggestion],
+  );
 
   const handleBulkMerge = useCallback(async () => {
     const merges = suggestions
-      .filter(s => selected.has(s.id))
-      .map(s => {
+      .filter((s) => selected.has(s.id))
+      .map((s) => {
         const isSwap = swapped.has(s.id);
         return {
           primaryId: isSwap ? s.contactB.id : s.contactA.id,
@@ -91,7 +108,9 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
       const result = await mergeBatch.mutateAsync(merges);
       // Remove successfully merged suggestions
       const successPairs = new Set(
-        result.results.filter(r => r.success).map(r => `${[r.primaryId, r.duplicateId].sort().join('::')}`)
+        result.results
+          .filter((r) => r.success)
+          .map((r) => `${[r.primaryId, r.duplicateId].sort().join("::")}`),
       );
       for (const s of suggestions) {
         if (selected.has(s.id) && successPairs.has(s.id)) {
@@ -104,7 +123,9 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
         toast.error(`${result.total - result.succeeded} merge(s) failed`);
       }
     } catch (err: unknown) {
-      toast.error(`Batch merge failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Batch merge failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }, [suggestions, selected, swapped, mergeBatch, onRemoveSuggestion]);
 
@@ -113,7 +134,9 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
       <div className="flex flex-col items-center justify-center h-full text-center py-16">
         <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
         <h3 className="text-lg font-headline font-bold mb-2">All clean!</h3>
-        <p className="text-sm text-on-surface-variant">No duplicate suggestions remaining.</p>
+        <p className="text-sm text-on-surface-variant">
+          No duplicate suggestions remaining.
+        </p>
       </div>
     );
   }
@@ -129,21 +152,27 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
               "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
               allSelected
                 ? "bg-primary/15 text-primary"
-                : "bg-surface-container-low text-on-surface-variant hover:text-on-surface"
+                : "bg-surface-container-low text-on-surface-variant hover:text-on-surface",
             )}
           >
-            <div className={cn(
-              "w-4 h-4 rounded flex items-center justify-center transition-all",
-              allSelected ? "bg-primary text-white" : "bg-surface-container-high"
-            )}>
+            <div
+              className={cn(
+                "w-4 h-4 rounded flex items-center justify-center transition-all",
+                allSelected
+                  ? "bg-primary text-white"
+                  : "bg-surface-container-high",
+              )}
+            >
               {allSelected && <CheckCircle2 className="w-3 h-3" />}
             </div>
-            {allSelected ? 'Deselect All' : 'Select All'}
+            {allSelected ? "Deselect All" : "Select All"}
           </button>
           <span className="text-xs text-on-surface-variant">
-            {suggestions.length} suggestion{suggestions.length !== 1 ? 's' : ''}
+            {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""}
             {selected.size > 0 && (
-              <span className="ml-1 text-primary font-bold">· {selected.size} selected</span>
+              <span className="ml-1 text-primary font-bold">
+                · {selected.size} selected
+              </span>
             )}
           </span>
         </div>
@@ -180,10 +209,12 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
             >
-              <div className={cn(
-                "bg-surface-container-lowest rounded-2xl shadow-sm transition-all",
-                isSelected && "ring-2 ring-primary/40"
-              )}>
+              <div
+                className={cn(
+                  "bg-surface-container-lowest rounded-2xl shadow-sm transition-all",
+                  isSelected && "ring-2 ring-primary/40",
+                )}
+              >
                 {/* Summary row */}
                 <div
                   className="flex items-center gap-3 px-5 py-4 cursor-pointer group"
@@ -191,10 +222,15 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
                 >
                   {/* Checkbox */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleSelect(suggestion.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(suggestion.id);
+                    }}
                     className={cn(
                       "w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all",
-                      isSelected ? "bg-primary text-white" : "bg-surface-container-high group-hover:bg-surface-container-highest"
+                      isSelected
+                        ? "bg-primary text-white"
+                        : "bg-surface-container-high group-hover:bg-surface-container-highest",
                     )}
                   >
                     {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -208,39 +244,57 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
                       className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
                     />
                     <div className="min-w-0">
-                      <div className="text-sm font-bold truncate">{primary.name}</div>
+                      <div className="text-sm font-bold truncate">
+                        {primary.name}
+                      </div>
                       {primary.company && (
-                        <div className="text-[11px] text-on-surface-variant truncate">{primary.company}</div>
+                        <div className="text-[11px] text-on-surface-variant truncate">
+                          {primary.company}
+                        </div>
                       )}
                     </div>
                   </div>
 
                   {/* Arrow */}
-                  <span className="text-on-surface-variant/30 shrink-0 text-xs">⇄</span>
+                  <span className="text-on-surface-variant/30 shrink-0 text-xs">
+                    ⇄
+                  </span>
 
                   {/* Contact B */}
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <img
-                      src={duplicate.avatarUrl || fallbackAvatarUrl(duplicate.name)}
+                      src={
+                        duplicate.avatarUrl || fallbackAvatarUrl(duplicate.name)
+                      }
                       alt={duplicate.name}
                       className="w-8 h-8 rounded-full object-cover bg-surface-container-high shrink-0"
                     />
                     <div className="min-w-0">
-                      <div className="text-sm font-bold truncate">{duplicate.name}</div>
+                      <div className="text-sm font-bold truncate">
+                        {duplicate.name}
+                      </div>
                       {duplicate.company && (
-                        <div className="text-[11px] text-on-surface-variant truncate">{duplicate.company}</div>
+                        <div className="text-[11px] text-on-surface-variant truncate">
+                          {duplicate.company}
+                        </div>
                       )}
                     </div>
                   </div>
 
                   {/* Match badge */}
                   <div className="shrink-0 hidden sm:block">
-                    <MatchBadge type={suggestion.matchType} confidence={suggestion.confidence} />
+                    <MatchBadge
+                      type={suggestion.matchType}
+                      confidence={suggestion.confidence}
+                    />
                   </div>
 
                   {/* Individual merge button */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleSingleMerge(suggestion); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSingleMerge(suggestion);
+                    }}
                     disabled={mergeContacts.isPending}
                     className="shrink-0 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:opacity-50"
                   >
@@ -249,7 +303,11 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
 
                   {/* Expand chevron */}
                   <div className="shrink-0 text-on-surface-variant/40">
-                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    {isExpanded ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
                   </div>
                 </div>
 
@@ -258,9 +316,9 @@ export const SuggestionList = ({ suggestions, onRemoveSuggestion }: SuggestionLi
                   {isExpanded && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
+                      animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      transition={{ duration: 0.2, ease: "easeInOut" }}
                       className="overflow-hidden"
                     >
                       <div className="px-5 pb-5 space-y-4">

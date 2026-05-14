@@ -10,11 +10,17 @@
  * The AISearchProgressOverlay is rendered via portal from this provider,
  * so it floats above all content regardless of routing.
  */
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { useStartAISearch, useAISearchStream } from '../api/aiSearch';
-import { toast } from 'sonner';
-import type { AISearchBatch } from '../types';
-import { AISearchProgressOverlay } from '../views/ai-search/components/AISearchProgressOverlay';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
+import { useStartAISearch, useAISearchStream } from "../api/aiSearch";
+import { toast } from "sonner";
+import type { AISearchBatch } from "../types";
+import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
 
 interface AISearchContextValue {
   startSearch: (contactIds: string[]) => void;
@@ -28,7 +34,7 @@ const AISearchContext = createContext<AISearchContextValue | null>(null);
 
 export function useAISearch() {
   const ctx = useContext(AISearchContext);
-  if (!ctx) throw new Error('useAISearch must be used within AISearchProvider');
+  if (!ctx) throw new Error("useAISearch must be used within AISearchProvider");
   return ctx;
 }
 
@@ -45,18 +51,23 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
 
   useAISearchStream(batchId, handleUpdate);
 
-  const startSearch = useCallback((contactIds: string[]) => {
-    startMutation.mutate(contactIds, {
-      onSuccess: (result) => {
-        setBatchId(result.batchId);
-        setIsVisible(true);
-        toast.success(`AI Search started for ${result.jobCount} contact${result.jobCount !== 1 ? 's' : ''}`);
-      },
-      onError: (err) => {
-        toast.error((err instanceof Error ? err.message : String(err)));
-      },
-    });
-  }, [startMutation]);
+  const startSearch = useCallback(
+    (contactIds: string[]) => {
+      startMutation.mutate(contactIds, {
+        onSuccess: (result) => {
+          setBatchId(result.batchId);
+          setIsVisible(true);
+          toast.success(
+            `AI Search started for ${result.jobCount} contact${result.jobCount !== 1 ? "s" : ""}`,
+          );
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : String(err));
+        },
+      });
+    },
+    [startMutation],
+  );
 
   const dismiss = useCallback(() => {
     setIsVisible(false);

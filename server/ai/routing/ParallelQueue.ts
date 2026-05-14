@@ -51,7 +51,10 @@ export class ParallelQueue {
       while (nextIndex < items.length) {
         const currentIndex = nextIndex++;
         try {
-          results[currentIndex] = await taskFn(items[currentIndex], currentIndex);
+          results[currentIndex] = await taskFn(
+            items[currentIndex],
+            currentIndex,
+          );
         } catch (error: unknown) {
           // Isolate failures: one bad item doesn't crash the batch
           results[currentIndex] =

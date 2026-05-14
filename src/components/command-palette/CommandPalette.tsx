@@ -1,56 +1,97 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { Command } from 'cmdk';
-import { useNavigate } from 'react-router-dom';
-import { useCreateContact, useContactNames, useAddInteraction, useSemanticSearch, useZeroState } from '../../api';
-import { useDebounce } from '../../hooks/useDebounce';
-import { useRecentContacts } from '../../hooks/useRecentContacts';
-import { useSearchHistory } from '../../hooks/useSearchHistory';
-import { useInstantSearch } from '../../hooks/useInstantSearch';
-import { useQueryTokenizer } from '../../hooks/useQueryTokenizer';
-import { Search, UserPlus, Briefcase, Building, Zap, MessageSquare, Phone, Calendar, Mail, Sparkles, AlertTriangle, ArrowUpRight, ChevronsRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { toast } from 'sonner';
-import { KBD, KBD_SM, SECTION_BG } from '../../lib/styles';
-import type { SemanticMatch, ZeroStateInsight } from '../../types';
-import { getMode, EXAMPLE_QUERIES, GROUP_HEADING_DEFAULT, GROUP_HEADING_PRIMARY, GROUP_HEADING_EMERALD } from './utils';
-import { AIShimmerRow, AIResultCard } from './AiComponents';
-import { ZeroStateView } from './ZeroStateView';
-import { ScoreDot, LastContactLine, StaleChip } from './ContactMetaBadges';
-import { DataAgeHalo } from './DataAgeHalo';
-import { useGroundingCapacity, useEnrichContact } from '../../api/enrichment';
-import { ResultPeek } from './ResultPeek';
-import { SynthesisBar } from './SynthesisBar';
-import type { PeekContact } from './ResultPeek';
-import { fallbackAvatarUrl } from '../../lib/avatar';
-import { FacetPills } from './FacetPills';
-import { FacetAutocomplete } from './FacetAutocomplete';
-import { ActionSubMenu } from './ActionSubMenu';
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
+import { Command } from "cmdk";
+import { useNavigate } from "react-router-dom";
+import {
+  useCreateContact,
+  useContactNames,
+  useAddInteraction,
+  useSemanticSearch,
+  useZeroState,
+} from "../../api";
+import { useDebounce } from "../../hooks/useDebounce";
+import { useRecentContacts } from "../../hooks/useRecentContacts";
+import { useSearchHistory } from "../../hooks/useSearchHistory";
+import { useInstantSearch } from "../../hooks/useInstantSearch";
+import { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
+import {
+  Search,
+  UserPlus,
+  Briefcase,
+  Building,
+  Zap,
+  MessageSquare,
+  Phone,
+  Calendar,
+  Mail,
+  Sparkles,
+  AlertTriangle,
+  ArrowUpRight,
+  ChevronsRight,
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
+import { KBD, KBD_SM, SECTION_BG } from "../../lib/styles";
+import type { SemanticMatch, ZeroStateInsight } from "../../types";
+import {
+  getMode,
+  EXAMPLE_QUERIES,
+  GROUP_HEADING_DEFAULT,
+  GROUP_HEADING_PRIMARY,
+  GROUP_HEADING_EMERALD,
+} from "./utils";
+import { AIShimmerRow, AIResultCard } from "./AiComponents";
+import { ZeroStateView } from "./ZeroStateView";
+import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
+import { DataAgeHalo } from "./DataAgeHalo";
+import { useGroundingCapacity, useEnrichContact } from "../../api/enrichment";
+import { ResultPeek } from "./ResultPeek";
+import { SynthesisBar } from "./SynthesisBar";
+import type { PeekContact } from "./ResultPeek";
+import { fallbackAvatarUrl } from "../../lib/avatar";
+import { FacetPills } from "./FacetPills";
+import { FacetAutocomplete } from "./FacetAutocomplete";
+import { ActionSubMenu } from "./ActionSubMenu";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export const CommandPalette = () => {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const navigate = useNavigate();
 
   // ── Mode detection ──
   const mode = getMode(search);
-  const debouncedSearch = useDebounce(search, mode === 'ai' ? 600 : 200);
+  const debouncedSearch = useDebounce(search, mode === "ai" ? 600 : 200);
 
   // ── Faceted filter tokenizer (Feature 5) ──
-  const { parsed, addFilter, removeFilter, removeLastFilter, clearFilters, hasFilters } = useQueryTokenizer(search, setSearch);
+  const {
+    parsed,
+    addFilter,
+    removeFilter,
+    removeLastFilter,
+    clearFilters,
+    hasFilters,
+  } = useQueryTokenizer(search, setSearch);
 
   // ── Instant search (Feature 8) — 0ms client filter + FTS handover ──
   const instantSearch = useInstantSearch(
-    mode === 'normal' ? parsed.freeText : '',
+    mode === "normal" ? parsed.freeText : "",
     parsed.filters,
-    mode === 'normal' && (!!parsed.freeText.trim() || hasFilters),
+    mode === "normal" && (!!parsed.freeText.trim() || hasFilters),
   );
 
   // ── Action Sub-Menu state (Feature 4) ──
   const [subMenuContactId, setSubMenuContactId] = useState<string | null>(null);
-  const [subMenuContactName, setSubMenuContactName] = useState('');
-  const [subMenuContactAvatar, setSubMenuContactAvatar] = useState<string | null>(null);
+  const [subMenuContactName, setSubMenuContactName] = useState("");
+  const [subMenuContactAvatar, setSubMenuContactAvatar] = useState<
+    string | null
+  >(null);
 
   // Hooks
   const { data: allContacts = [] } = useContactNames();
@@ -66,14 +107,19 @@ export const CommandPalette = () => {
   // Enrichment hooks for StaleChip refresh action
   const { data: groundingCapacity } = useGroundingCapacity();
   const enrichContact = useEnrichContact();
-  const [enrichingContactId, setEnrichingContactId] = useState<string | null>(null);
+  const [enrichingContactId, setEnrichingContactId] = useState<string | null>(
+    null,
+  );
 
-  const handleRefreshContact = useCallback((contactId: string) => {
-    setEnrichingContactId(contactId);
-    enrichContact.mutate(contactId, {
-      onSettled: () => setEnrichingContactId(null),
-    });
-  }, [enrichContact]);
+  const handleRefreshContact = useCallback(
+    (contactId: string) => {
+      setEnrichingContactId(contactId);
+      enrichContact.mutate(contactId, {
+        onSettled: () => setEnrichingContactId(null),
+      });
+    },
+    [enrichContact],
+  );
 
   // ── Space-to-Peek state ──
   const [peekContact, setPeekContact] = useState<PeekContact | null>(null);
@@ -87,22 +133,27 @@ export const CommandPalette = () => {
     return recentIds
       .slice(0, 3)
       .map((id) => allContacts.find((c) => c.id === id))
-      .filter((c): c is typeof allContacts[number] => !!c)
-      .map((c) => ({ id: c.id, name: c.name, avatarUrl: null as string | null }));
+      .filter((c): c is (typeof allContacts)[number] => !!c)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        avatarUrl: null as string | null,
+      }));
   }, [recentIds, allContacts]);
 
   // Track last fired query to prevent duplicate calls
-  const prevAiQueryRef = useRef<string>('');
+  const prevAiQueryRef = useRef<string>("");
 
   // Track if a successful FTS search was recorded for the current debounced term
-  const lastRecordedFtsRef = useRef<string>('');
+  const lastRecordedFtsRef = useRef<string>("");
 
   // Derive the raw NL query from the ? prefix
-  const aiQuery = mode === 'ai' ? search.replace(/^\?+\s*/, '').trim() : '';
+  const aiQuery = mode === "ai" ? search.replace(/^\?+\s*/, "").trim() : "";
 
   // Derive AI results directly from mutation data (reactive, no extra useState)
-  const aiResults: SemanticMatch[] = mode === 'ai' && semanticSearch.data ? semanticSearch.data.matches : [];
-  const aiFallback: boolean = mode === 'ai' && !!semanticSearch.data?.fallback;
+  const aiResults: SemanticMatch[] =
+    mode === "ai" && semanticSearch.data ? semanticSearch.data.matches : [];
+  const aiFallback: boolean = mode === "ai" && !!semanticSearch.data?.fallback;
 
   // Build a lookup map from search results for O(1) peek resolution
   const resultMap = useMemo(() => {
@@ -110,7 +161,7 @@ export const CommandPalette = () => {
     for (const c of instantSearch.results) {
       map.set(c.id, c as PeekContact);
     }
-    if (mode === 'ai') {
+    if (mode === "ai") {
       for (const m of aiResults) {
         map.set(m.id, m as PeekContact);
       }
@@ -120,7 +171,7 @@ export const CommandPalette = () => {
 
   // Fire semantic search when debounced AI query changes and is ≥3 chars
   useEffect(() => {
-    if (mode !== 'ai' || aiQuery.length < 3) return;
+    if (mode !== "ai" || aiQuery.length < 3) return;
     if (aiQuery === prevAiQueryRef.current) return; // same query, skip
     prevAiQueryRef.current = aiQuery;
     semanticSearch.mutate(aiQuery);
@@ -128,50 +179,60 @@ export const CommandPalette = () => {
 
   // Reset mutation state when mode changes away from AI
   useEffect(() => {
-    if (mode !== 'ai') {
+    if (mode !== "ai") {
       semanticSearch.reset();
-      prevAiQueryRef.current = '';
+      prevAiQueryRef.current = "";
     }
   }, [mode]);
 
   // Record successful FTS searches to history (when results arrive)
   useEffect(() => {
     if (
-      mode === 'normal' &&
+      mode === "normal" &&
       instantSearch.results.length > 0 &&
       !instantSearch.isInstant &&
       debouncedSearch.trim().length >= 2 &&
       debouncedSearch !== lastRecordedFtsRef.current
     ) {
       lastRecordedFtsRef.current = debouncedSearch;
-      searchHistory.addEntry(debouncedSearch, 'normal');
+      searchHistory.addEntry(debouncedSearch, "normal");
     }
   }, [instantSearch.results, instantSearch.isInstant, debouncedSearch, mode]);
 
   // Record successful AI searches to history
   useEffect(() => {
     if (
-      mode === 'ai' &&
+      mode === "ai" &&
       semanticSearch.isSuccess &&
       aiResults.length > 0 &&
       aiQuery.length >= 3
     ) {
-      searchHistory.addEntry(`? ${aiQuery}`, 'ai');
+      searchHistory.addEntry(`? ${aiQuery}`, "ai");
     }
   }, [semanticSearch.isSuccess, aiResults.length, aiQuery, mode]);
 
   // Action mode (> prefix)
-  const isAction = mode === 'action';
+  const isAction = mode === "action";
   const actionMatch = useMemo(() => {
     if (!isAction) return null;
     const regex = /^>\s*(note|call|meeting|email)\s+([^:]+):\s*(.*)$/i;
     const match = search.match(regex);
     if (!match) return null;
     const [_, type, nameStr, content] = match;
-    const typeLower = type.toLowerCase() as 'note' | 'call' | 'meeting' | 'email';
-    const targetContact = allContacts.find(c => c.name?.toLowerCase().includes(nameStr.toLowerCase().trim()));
+    const typeLower = type.toLowerCase() as
+      | "note"
+      | "call"
+      | "meeting"
+      | "email";
+    const targetContact = allContacts.find((c) =>
+      c.name?.toLowerCase().includes(nameStr.toLowerCase().trim()),
+    );
     if (targetContact && content.trim()) {
-      return { type: typeLower, contact: targetContact, content: content.trim() };
+      return {
+        type: typeLower,
+        contact: targetContact,
+        content: content.trim(),
+      };
     }
     return null;
   }, [search, allContacts, isAction]);
@@ -179,9 +240,9 @@ export const CommandPalette = () => {
   // Global ⌘K / Ctrl+K listener
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen(prev => {
+        setOpen((prev) => {
           if (!prev) {
             // Opening — check for 30s re-populate
             const last = searchHistory.getLastQuery();
@@ -194,33 +255,38 @@ export const CommandPalette = () => {
         });
       }
     };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
   }, []);
 
   const handleClose = useCallback(() => {
     setOpen(false);
-    setSearch('');
+    setSearch("");
     semanticSearch.reset();
-    prevAiQueryRef.current = '';
-    lastRecordedFtsRef.current = '';
+    prevAiQueryRef.current = "";
+    lastRecordedFtsRef.current = "";
     searchHistory.resetNavigation();
     clearFilters();
     setSubMenuContactId(null);
-    setSubMenuContactName('');
+    setSubMenuContactName("");
     setSubMenuContactAvatar(null);
   }, [clearFilters]);
 
   const handleCreateContact = async () => {
     if (!search.trim()) return;
     try {
-      const newContact = await createContact.mutateAsync({ name: search.trim(), cadenceDays: 90 });
+      const newContact = await createContact.mutateAsync({
+        name: search.trim(),
+        cadenceDays: 90,
+      });
       recordVisit(newContact.id);
       navigate(`/contact/${newContact.id}`);
       handleClose();
       toast.success(`Created contact ${newContact.name}`);
     } catch (e: unknown) {
-      toast.error(`Failed to create contact: ${(e instanceof Error ? e.message : String(e))}`);
+      toast.error(
+        `Failed to create contact: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   };
 
@@ -228,114 +294,149 @@ export const CommandPalette = () => {
     if (!actionMatch) return;
     try {
       const titleMap: Record<string, string> = {
-        note: 'Quick Note', call: 'Phone Call logged', meeting: 'Meeting summary', email: 'Email sent',
+        note: "Quick Note",
+        call: "Phone Call logged",
+        meeting: "Meeting summary",
+        email: "Email sent",
       };
       await addInteraction.mutateAsync({
         contactId: actionMatch.contact.id,
-        data: { type: actionMatch.type, title: titleMap[actionMatch.type], content: actionMatch.content, date: new Date().toISOString() },
+        data: {
+          type: actionMatch.type,
+          title: titleMap[actionMatch.type],
+          content: actionMatch.content,
+          date: new Date().toISOString(),
+        },
       });
       // Record action to history
-      searchHistory.addEntry(search, 'action');
+      searchHistory.addEntry(search, "action");
       handleClose();
-      toast.success(`Logged ${actionMatch.type} for ${actionMatch.contact.name}`);
+      toast.success(
+        `Logged ${actionMatch.type} for ${actionMatch.contact.name}`,
+      );
     } catch (e: unknown) {
-      toast.error(`Failed to log interaction: ${(e instanceof Error ? e.message : String(e))}`);
+      toast.error(
+        `Failed to log interaction: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   };
 
   const getLogIcon = (type: string) => {
     switch (type) {
-      case 'note': return <MessageSquare className="w-4 h-4" />;
-      case 'email': return <Mail className="w-4 h-4" />;
-      case 'call': return <Phone className="w-4 h-4" />;
-      case 'meeting': return <Calendar className="w-4 h-4" />;
-      default: return <Zap className="w-4 h-4" />;
+      case "note":
+        return <MessageSquare className="w-4 h-4" />;
+      case "email":
+        return <Mail className="w-4 h-4" />;
+      case "call":
+        return <Phone className="w-4 h-4" />;
+      case "meeting":
+        return <Calendar className="w-4 h-4" />;
+      default:
+        return <Zap className="w-4 h-4" />;
     }
   };
 
   // ── Zero-state handlers ──
 
-  const handleSelectContact = useCallback((id: string) => {
-    recordVisit(id);
-    navigate(`/contact/${id}`);
-    handleClose();
-  }, [navigate, handleClose, recordVisit]);
+  const handleSelectContact = useCallback(
+    (id: string) => {
+      recordVisit(id);
+      navigate(`/contact/${id}`);
+      handleClose();
+    },
+    [navigate, handleClose, recordVisit],
+  );
 
   const handleSelectHistory = useCallback((query: string) => {
     setSearch(query);
     searchHistory.resetNavigation();
   }, []);
 
-  const handleSelectInsight = useCallback((insight: ZeroStateInsight) => {
-    if (insight.type === 'action_items') {
-      navigate('/pulse');
-    } else if (insight.type === 'stale_data') {
-      navigate('/settings');
-    } else if (insight.type === 'dedupe') {
-      navigate('/pulse');
-    } else if (insight.contact) {
-      recordVisit(insight.contact.id);
-      navigate(`/contact/${insight.contact.id}`);
-    }
-    handleClose();
-  }, [navigate, handleClose, recordVisit]);
+  const handleSelectInsight = useCallback(
+    (insight: ZeroStateInsight) => {
+      if (insight.type === "action_items") {
+        navigate("/pulse");
+      } else if (insight.type === "stale_data") {
+        navigate("/settings");
+      } else if (insight.type === "dedupe") {
+        navigate("/pulse");
+      } else if (insight.contact) {
+        recordVisit(insight.contact.id);
+        navigate(`/contact/${insight.contact.id}`);
+      }
+      handleClose();
+    },
+    [navigate, handleClose, recordVisit],
+  );
 
-  const handleNavigate = useCallback((path: string) => {
-    navigate(path);
-    handleClose();
-  }, [navigate, handleClose]);
+  const handleNavigate = useCallback(
+    (path: string) => {
+      navigate(path);
+      handleClose();
+    },
+    [navigate, handleClose],
+  );
 
   // ── Terminal-style ↑/↓ history navigation ──
 
-  const handleSearchInputKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Backspace on empty input deletes the last facet pill
-    if (e.key === 'Backspace' && search === '' && hasFilters) {
-      e.preventDefault();
-      removeLastFilter();
-      return;
-    }
+  const handleSearchInputKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      // Backspace on empty input deletes the last facet pill
+      if (e.key === "Backspace" && search === "" && hasFilters) {
+        e.preventDefault();
+        removeLastFilter();
+        return;
+      }
 
-    // Only handle ↑/↓ when input is empty (zero-state)
-    if (search.trim() === '' && !hasFilters) {
-      if (e.key === 'ArrowUp') {
-        const historyQuery = searchHistory.navigateHistory('up', search);
-        if (historyQuery !== null) {
-          e.preventDefault();
-          setSearch(historyQuery);
+      // Only handle ↑/↓ when input is empty (zero-state)
+      if (search.trim() === "" && !hasFilters) {
+        if (e.key === "ArrowUp") {
+          const historyQuery = searchHistory.navigateHistory("up", search);
+          if (historyQuery !== null) {
+            e.preventDefault();
+            setSearch(historyQuery);
+          }
+          return;
         }
-        return;
-      }
-      if (e.key === 'ArrowDown' && searchHistory.historyIndex >= 0) {
-        const historyQuery = searchHistory.navigateHistory('down', search);
-        if (historyQuery !== null) {
-          e.preventDefault();
-          setSearch(historyQuery);
+        if (e.key === "ArrowDown" && searchHistory.historyIndex >= 0) {
+          const historyQuery = searchHistory.navigateHistory("down", search);
+          if (historyQuery !== null) {
+            e.preventDefault();
+            setSearch(historyQuery);
+          }
+          return;
         }
-        return;
       }
-    }
-  }, [search, searchHistory, hasFilters, removeLastFilter]);
+    },
+    [search, searchHistory, hasFilters, removeLastFilter],
+  );
 
   // Is the input empty? (determines zero-state vs search results)
-  const isEmptyInput = search.trim() === '' && !hasFilters;
+  const isEmptyInput = search.trim() === "" && !hasFilters;
 
   // ── → key handler: enter sub-menu on focused result ──
   useEffect(() => {
     if (!open || subMenuContactId) return;
 
     const handleArrowRight = (e: KeyboardEvent) => {
-      if (e.key !== 'ArrowRight') return;
+      if (e.key !== "ArrowRight") return;
       // Don't intercept when typing in the search input
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      )
+        return;
       // Only in normal mode with results showing
-      if (mode !== 'normal' || isEmptyInput) return;
+      if (mode !== "normal" || isEmptyInput) return;
 
       // Find the currently focused result
-      const selected = listRef.current?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+      const selected = listRef.current?.querySelector(
+        '[aria-selected="true"]',
+      ) as HTMLElement | null;
       if (!selected) return;
 
       // Extract contact ID from data-value
-      const value = selected.getAttribute('data-value') || '';
+      const value = selected.getAttribute("data-value") || "";
       for (const contact of instantSearch.results) {
         if (value.includes(contact.id)) {
           e.preventDefault();
@@ -347,24 +448,27 @@ export const CommandPalette = () => {
       }
     };
 
-    window.addEventListener('keydown', handleArrowRight);
-    return () => window.removeEventListener('keydown', handleArrowRight);
+    window.addEventListener("keydown", handleArrowRight);
+    return () => window.removeEventListener("keydown", handleArrowRight);
   }, [open, subMenuContactId, mode, isEmptyInput, instantSearch.results]);
 
   // Reset history navigation when user types
-  const handleSearchChange = useCallback((value: string) => {
-    setSearch(value);
-    if (searchHistory.historyIndex >= 0) {
-      searchHistory.resetNavigation();
-    }
-    // Clear sub-menu if user starts typing again
-    if (subMenuContactId) {
-      setSubMenuContactId(null);
-    }
-  }, [searchHistory.historyIndex, subMenuContactId]);
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearch(value);
+      if (searchHistory.historyIndex >= 0) {
+        searchHistory.resetNavigation();
+      }
+      // Clear sub-menu if user starts typing again
+      if (subMenuContactId) {
+        setSubMenuContactId(null);
+      }
+    },
+    [searchHistory.historyIndex, subMenuContactId],
+  );
 
   // AI loading: mutation is pending AND query is long enough
-  const isAiLoading = mode === 'ai' && semanticSearch.isPending;
+  const isAiLoading = mode === "ai" && semanticSearch.isPending;
 
   // ── Space-to-Peek: track focused result via MutationObserver ──
   useEffect(() => {
@@ -377,13 +481,15 @@ export const CommandPalette = () => {
     const checkFocused = () => {
       const el = listRef.current;
       if (!el) return;
-      const selected = el.querySelector('[aria-selected="true"]') as HTMLElement | null;
+      const selected = el.querySelector(
+        '[aria-selected="true"]',
+      ) as HTMLElement | null;
       if (!selected) {
         setPeekContact(null);
         return;
       }
       // Extract contact ID from the cmdk value attribute
-      const value = selected.getAttribute('data-value') || '';
+      const value = selected.getAttribute("data-value") || "";
       // FTS results use "id + name" as value, AI uses "ai_id_name"
       // Try to find a matching contact from our result map
       for (const [id, contact] of resultMap) {
@@ -399,7 +505,11 @@ export const CommandPalette = () => {
     const el = listRef.current;
     if (!el) return;
     const observer = new MutationObserver(checkFocused);
-    observer.observe(el, { attributes: true, attributeFilter: ['aria-selected'], subtree: true });
+    observer.observe(el, {
+      attributes: true,
+      attributeFilter: ["aria-selected"],
+      subtree: true,
+    });
     checkFocused(); // Initial check
 
     return () => observer.disconnect();
@@ -410,9 +520,13 @@ export const CommandPalette = () => {
     if (!open) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== 'Space') return;
+      if (e.code !== "Space") return;
       // Don't interfere if user is typing in the search input
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      )
+        return;
       if (!peekContact) return;
 
       e.preventDefault();
@@ -424,7 +538,7 @@ export const CommandPalette = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code !== 'Space') return;
+      if (e.code !== "Space") return;
       if (peekTimerRef.current) {
         clearTimeout(peekTimerRef.current);
         peekTimerRef.current = null;
@@ -432,18 +546,17 @@ export const CommandPalette = () => {
       setPeekVisible(false);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
       if (peekTimerRef.current) {
         clearTimeout(peekTimerRef.current);
         peekTimerRef.current = null;
       }
     };
   }, [open, peekContact]);
-
 
   return (
     <AnimatePresence>
@@ -455,7 +568,7 @@ export const CommandPalette = () => {
               // Escape stack: sub-menu open → close sub-menu, not palette
               if (subMenuContactId) {
                 setSubMenuContactId(null);
-                setSubMenuContactName('');
+                setSubMenuContactName("");
                 setSubMenuContactAvatar(null);
                 return;
               }
@@ -465,7 +578,9 @@ export const CommandPalette = () => {
             }
           }}
           label="Global Command Palette"
-          shouldFilter={mode !== 'ai' && !isEmptyInput && !subMenuContactId && !hasFilters}
+          shouldFilter={
+            mode !== "ai" && !isEmptyInput && !subMenuContactId && !hasFilters
+          }
           className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40 transition-all duration-200"
         >
           <motion.div
@@ -481,16 +596,36 @@ export const CommandPalette = () => {
             {/* ── Search input row ── */}
             <div className="flex items-center px-4 py-4 bg-surface-container-low gap-3">
               <AnimatePresence mode="wait">
-                {mode === 'ai' ? (
-                  <motion.div key="ai-icon" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.15 }}>
-                    <Sparkles className={`w-5 h-5 text-primary ${isAiLoading ? 'animate-pulse' : ''}`} />
+                {mode === "ai" ? (
+                  <motion.div
+                    key="ai-icon"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <Sparkles
+                      className={`w-5 h-5 text-primary ${isAiLoading ? "animate-pulse" : ""}`}
+                    />
                   </motion.div>
-                ) : mode === 'action' ? (
-                  <motion.div key="action-icon" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.15 }}>
+                ) : mode === "action" ? (
+                  <motion.div
+                    key="action-icon"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
                     <Zap className="w-5 h-5 text-emerald-500 animate-pulse" />
                   </motion.div>
                 ) : (
-                  <motion.div key="search-icon" initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={{ duration: 0.15 }}>
+                  <motion.div
+                    key="search-icon"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
                     <Search className="w-5 h-5 text-on-surface-variant" />
                   </motion.div>
                 )}
@@ -501,7 +636,11 @@ export const CommandPalette = () => {
                 onValueChange={handleSearchChange}
                 onKeyDown={handleSearchInputKeyDown}
                 autoFocus
-                placeholder={hasFilters ? 'Add more filters or search...' : 'Search contacts, ? to ask AI, > for actions...'}
+                placeholder={
+                  hasFilters
+                    ? "Add more filters or search..."
+                    : "Search contacts, ? to ask AI, > for actions..."
+                }
                 className="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant outline-none text-lg"
               />
               <div className="flex items-center gap-1.5 opacity-50">
@@ -511,15 +650,21 @@ export const CommandPalette = () => {
 
             {/* ── Mode indicator ribbon ── */}
             <div className="flex items-center gap-3 px-4 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container">
-              <span className={`flex items-center gap-1 ${mode === 'normal' ? 'text-on-surface font-bold' : 'text-on-surface-variant/50'}`}>
+              <span
+                className={`flex items-center gap-1 ${mode === "normal" ? "text-on-surface font-bold" : "text-on-surface-variant/50"}`}
+              >
                 <Search className="w-3 h-3" /> Search
               </span>
               <span className="text-on-surface-variant/20">•</span>
-              <span className={`flex items-center gap-1 ${mode === 'ai' ? 'text-primary font-bold' : 'text-on-surface-variant/50'}`}>
+              <span
+                className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant/50"}`}
+              >
                 <Sparkles className="w-3 h-3" /> ? AI Query
               </span>
               <span className="text-on-surface-variant/20">•</span>
-              <span className={`flex items-center gap-1 ${mode === 'action' ? 'text-emerald-500 font-bold' : 'text-on-surface-variant/50'}`}>
+              <span
+                className={`flex items-center gap-1 ${mode === "action" ? "text-emerald-500 font-bold" : "text-on-surface-variant/50"}`}
+              >
                 <Zap className="w-3 h-3" /> &gt; Actions
               </span>
             </div>
@@ -533,17 +678,19 @@ export const CommandPalette = () => {
                 onSelect={(filter) => {
                   addFilter(filter);
                   // Clear the partial from input
-                  setSearch(search.replace(/\b\w+:\S*$/, '').trim());
+                  setSearch(search.replace(/\b\w+:\S*$/, "").trim());
                 }}
                 onDismiss={() => {
                   // Remove the active prefix from input
-                  setSearch(search.replace(/\b\w+:$/, '').trim());
+                  setSearch(search.replace(/\b\w+:$/, "").trim());
                 }}
               />
             )}
 
-            <Command.List ref={listRef} className="max-h-[380px] overflow-y-auto p-2 scrollbar-hide">
-
+            <Command.List
+              ref={listRef}
+              className="max-h-[380px] overflow-y-auto p-2 scrollbar-hide"
+            >
               {/* ═══════════════ ACTION SUB-MENU (Feature 4) ═══════════════ */}
               {subMenuContactId && (
                 <ActionSubMenu
@@ -562,7 +709,7 @@ export const CommandPalette = () => {
                   }}
                   onBack={() => {
                     setSubMenuContactId(null);
-                    setSubMenuContactName('');
+                    setSubMenuContactName("");
                     setSubMenuContactAvatar(null);
                   }}
                   onClose={handleClose}
@@ -570,7 +717,7 @@ export const CommandPalette = () => {
               )}
 
               {/* ═══════════════ ZERO STATE (empty input, normal mode) ═══════════════ */}
-              {!subMenuContactId && mode === 'normal' && isEmptyInput && (
+              {!subMenuContactId && mode === "normal" && isEmptyInput && (
                 <ZeroStateView
                   recentContacts={recentContacts}
                   historyEntries={searchHistory.recentDisplay}
@@ -583,19 +730,26 @@ export const CommandPalette = () => {
               )}
 
               {/* ═══════════════ AI MODE ═══════════════ */}
-              {!subMenuContactId && mode === 'ai' && (
+              {!subMenuContactId && mode === "ai" && (
                 <>
                   {/* Empty / typing prompt */}
                   {aiQuery.length === 0 && (
                     <Command.Empty className="py-8 text-center text-sm text-on-surface-variant">
                       <Sparkles className="w-8 h-8 text-primary/30 mx-auto mb-3" />
-                      <p className="font-bold text-on-surface mb-1">AI Query Mode</p>
-                      <p className="text-xs mb-4">Ask anything about your network in plain English.</p>
+                      <p className="font-bold text-on-surface mb-1">
+                        AI Query Mode
+                      </p>
+                      <p className="text-xs mb-4">
+                        Ask anything about your network in plain English.
+                      </p>
                       <div className="space-y-1.5 text-left max-w-xs mx-auto">
-                        {EXAMPLE_QUERIES.map(q => (
+                        {EXAMPLE_QUERIES.map((q) => (
                           <button
                             key={q}
-                            onMouseDown={(e) => { e.preventDefault(); setSearch(`? ${q}`); }}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setSearch(`? ${q}`);
+                            }}
                             className="w-full text-left text-xs px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
                           >
                             ? {q}
@@ -617,7 +771,8 @@ export const CommandPalette = () => {
                   {aiQuery.length >= 3 && isAiLoading && (
                     <div className="px-1 py-2 space-y-1">
                       <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary/60 flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking AI…
+                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking
+                        AI…
                       </div>
                       <AIShimmerRow delay={0} />
                       <AIShimmerRow delay={0.08} />
@@ -626,83 +781,128 @@ export const CommandPalette = () => {
                   )}
 
                   {/* AI results */}
-                  {aiQuery.length >= 3 && !isAiLoading && aiResults.length > 0 && (
-                    <Command.Group
-                      heading={aiFallback ? 'Keyword Results (AI Fallback)' : 'AI Query Results'}
-                      className={GROUP_HEADING_PRIMARY}
-                    >
-                      {aiFallback && (
-                        <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-amber-600">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>AI unavailable — showing keyword matches</span>
-                        </div>
-                      )}
-                      {aiResults.map((match, i) => (
-                        <AIResultCard
-                          key={match.id}
-                          match={match}
-                          index={i}
-                          isFallback={aiFallback}
-                          onSelect={() => { recordVisit(match.id); navigate(`/contact/${match.id}`); handleClose(); }}
-                          hasGroundingCapacity={groundingCapacity?.hasCapacity ?? false}
-                          isEnriching={enrichContact.isPending}
-                          enrichingContactId={enrichingContactId}
-                          onRefresh={handleRefreshContact}
-                        />
-                      ))}
-                    </Command.Group>
-                  )}
+                  {aiQuery.length >= 3 &&
+                    !isAiLoading &&
+                    aiResults.length > 0 && (
+                      <Command.Group
+                        heading={
+                          aiFallback
+                            ? "Keyword Results (AI Fallback)"
+                            : "AI Query Results"
+                        }
+                        className={GROUP_HEADING_PRIMARY}
+                      >
+                        {aiFallback && (
+                          <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-amber-600">
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>
+                              AI unavailable — showing keyword matches
+                            </span>
+                          </div>
+                        )}
+                        {aiResults.map((match, i) => (
+                          <AIResultCard
+                            key={match.id}
+                            match={match}
+                            index={i}
+                            isFallback={aiFallback}
+                            onSelect={() => {
+                              recordVisit(match.id);
+                              navigate(`/contact/${match.id}`);
+                              handleClose();
+                            }}
+                            hasGroundingCapacity={
+                              groundingCapacity?.hasCapacity ?? false
+                            }
+                            isEnriching={enrichContact.isPending}
+                            enrichingContactId={enrichingContactId}
+                            onRefresh={handleRefreshContact}
+                          />
+                        ))}
+                      </Command.Group>
+                    )}
 
                   {/* Synthesis executive brief (Feature 6) */}
-                  {aiQuery.length >= 3 && !isAiLoading && aiResults.length > 0 && (
-                    <SynthesisBar
-                      query={aiQuery}
-                      contacts={aiResults}
-                      resultCount={aiResults.length}
-                      compact
-                    />
-                  )}
+                  {aiQuery.length >= 3 &&
+                    !isAiLoading &&
+                    aiResults.length > 0 && (
+                      <SynthesisBar
+                        query={aiQuery}
+                        contacts={aiResults}
+                        resultCount={aiResults.length}
+                        compact
+                      />
+                    )}
 
                   {/* "Open in full-page search" bridge (Feature 11C) */}
-                  {aiQuery.length >= 3 && !isAiLoading && aiResults.length > 0 && (
-                    <div className="px-3 py-2 flex justify-end">
-                      <button
-                        onClick={() => {
-                          navigate(`/search?q=${encodeURIComponent(aiQuery)}`);
-                          handleClose();
-                        }}
-                        className="text-xs text-primary/60 hover:text-primary flex items-center gap-1 transition-colors group"
-                      >
-                        Open in full-page search
-                        <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                      </button>
-                    </div>
-                  )}
+                  {aiQuery.length >= 3 &&
+                    !isAiLoading &&
+                    aiResults.length > 0 && (
+                      <div className="px-3 py-2 flex justify-end">
+                        <button
+                          onClick={() => {
+                            navigate(
+                              `/search?q=${encodeURIComponent(aiQuery)}`,
+                            );
+                            handleClose();
+                          }}
+                          className="text-xs text-primary/60 hover:text-primary flex items-center gap-1 transition-colors group"
+                        >
+                          Open in full-page search
+                          <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        </button>
+                      </div>
+                    )}
 
                   {/* No AI matches */}
-                  {aiQuery.length >= 3 && !isAiLoading && aiResults.length === 0 && !semanticSearch.isPending && semanticSearch.isSuccess && (
-                    <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                      <Sparkles className="w-8 h-8 text-on-surface-variant/20 mx-auto mb-3" />
-                      <p className="font-bold text-on-surface mb-1">No matches found</p>
-                      <p className="text-xs">Try rephrasing your query, or use the regular search.</p>
-                    </Command.Empty>
-                  )}
+                  {aiQuery.length >= 3 &&
+                    !isAiLoading &&
+                    aiResults.length === 0 &&
+                    !semanticSearch.isPending &&
+                    semanticSearch.isSuccess && (
+                      <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
+                        <Sparkles className="w-8 h-8 text-on-surface-variant/20 mx-auto mb-3" />
+                        <p className="font-bold text-on-surface mb-1">
+                          No matches found
+                        </p>
+                        <p className="text-xs">
+                          Try rephrasing your query, or use the regular search.
+                        </p>
+                      </Command.Empty>
+                    )}
                 </>
               )}
 
               {/* ═══════════════ ACTION MODE ═══════════════ */}
-              {!subMenuContactId && mode === 'action' && !actionMatch && (
+              {!subMenuContactId && mode === "action" && !actionMatch && (
                 <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
                   <Zap className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
-                  <p className="font-bold text-on-surface">Action Mode Active</p>
-                  <p className="mt-1">Syntax: <code className="text-primary bg-primary/10 px-1 rounded">&gt; [type] [name]: [content]</code></p>
-                  <p className="mt-2 text-xs">Types: note, call, meeting, email</p>
-                  <p className="mt-1 text-xs text-on-surface-variant">Example: <code>&gt; note Julian: Left a voicemail regarding Q3 targets</code></p>
+                  <p className="font-bold text-on-surface">
+                    Action Mode Active
+                  </p>
+                  <p className="mt-1">
+                    Syntax:{" "}
+                    <code className="text-primary bg-primary/10 px-1 rounded">
+                      &gt; [type] [name]: [content]
+                    </code>
+                  </p>
+                  <p className="mt-2 text-xs">
+                    Types: note, call, meeting, email
+                  </p>
+                  <p className="mt-1 text-xs text-on-surface-variant">
+                    Example:{" "}
+                    <code>
+                      &gt; note Julian: Left a voicemail regarding Q3 targets
+                    </code>
+                  </p>
                 </Command.Empty>
               )}
 
-              {!subMenuContactId && mode === 'action' && actionMatch && (
-                <Command.Group heading="Action Engine" className={GROUP_HEADING_EMERALD}>
+              {!subMenuContactId && mode === "action" && actionMatch && (
+                <Command.Group
+                  heading="Action Engine"
+                  className={GROUP_HEADING_EMERALD}
+                >
                   <Command.Item
                     value={`action_${actionMatch.type}_${actionMatch.contact.id}`}
                     onSelect={handleActionExecute}
@@ -712,8 +912,15 @@ export const CommandPalette = () => {
                       {getLogIcon(actionMatch.type)}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="font-bold text-sm block truncate">Log {actionMatch.type} for <span className="text-emerald-400">{actionMatch.contact.name}</span></span>
-                      <span className="text-sm text-on-surface-variant truncate mt-0.5">"{actionMatch.content}"</span>
+                      <span className="font-bold text-sm block truncate">
+                        Log {actionMatch.type} for{" "}
+                        <span className="text-emerald-400">
+                          {actionMatch.contact.name}
+                        </span>
+                      </span>
+                      <span className="text-sm text-on-surface-variant truncate mt-0.5">
+                        "{actionMatch.content}"
+                      </span>
                     </div>
                     <div className="shrink-0 opacity-50 px-2 flex items-center justify-center space-x-1">
                       <span className="text-xs">Press</span>
@@ -724,10 +931,12 @@ export const CommandPalette = () => {
               )}
 
               {/* ═══════════════ NORMAL MODE (with search text or facets) ═══════════════ */}
-              {!subMenuContactId && mode === 'normal' && !isEmptyInput && (
+              {!subMenuContactId && mode === "normal" && !isEmptyInput && (
                 <>
                   <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                    {instantSearch.isFtsLoading ? 'Searching...' : 'No results found.'}
+                    {instantSearch.isFtsLoading
+                      ? "Searching..."
+                      : "No results found."}
                   </Command.Empty>
 
                   {instantSearch.results.length > 0 && (
@@ -736,10 +945,14 @@ export const CommandPalette = () => {
                         <span className="flex items-center gap-1.5">
                           Contacts
                           {instantSearch.isInstant && (
-                            <span className="text-amber-500 text-[9px] font-bold uppercase tracking-widest animate-pulse">⚡ instant</span>
+                            <span className="text-amber-500 text-[9px] font-bold uppercase tracking-widest animate-pulse">
+                              ⚡ instant
+                            </span>
                           )}
                           {hasFilters && (
-                            <span className="text-primary/50 text-[9px] font-bold uppercase tracking-widest">filtered</span>
+                            <span className="text-primary/50 text-[9px] font-bold uppercase tracking-widest">
+                              filtered
+                            </span>
                           )}
                         </span>
                       }
@@ -749,32 +962,57 @@ export const CommandPalette = () => {
                         <Command.Item
                           key={contact.id}
                           value={contact.id + contact.name}
-                          onSelect={() => { recordVisit(contact.id); navigate(`/contact/${contact.id}`); handleClose(); }}
+                          onSelect={() => {
+                            recordVisit(contact.id);
+                            navigate(`/contact/${contact.id}`);
+                            handleClose();
+                          }}
                           className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface group/result"
                         >
                           <DataAgeHalo updatedAt={contact.updatedAt}>
                             <img
-                              src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
+                              src={
+                                contact.avatarUrl ||
+                                fallbackAvatarUrl(contact.name)
+                              }
                               alt=""
                               className="w-8 h-8 rounded-full bg-surface-container-highest object-cover"
                             />
                           </DataAgeHalo>
                           <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm truncate">{contact.name}</span>
-                              <ScoreDot score={contact.relationshipScore ?? null} />
+                              <span className="font-bold text-sm truncate">
+                                {contact.name}
+                              </span>
+                              <ScoreDot
+                                score={contact.relationshipScore ?? null}
+                              />
                             </div>
                             {(contact.role || contact.company) && (
                               <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
-                                {contact.role && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{contact.role}</span>}
-                                {contact.company && <span className="flex items-center gap-1"><Building className="w-3 h-3" />{contact.company}</span>}
+                                {contact.role && (
+                                  <span className="flex items-center gap-1">
+                                    <Briefcase className="w-3 h-3" />
+                                    {contact.role}
+                                  </span>
+                                )}
+                                {contact.company && (
+                                  <span className="flex items-center gap-1">
+                                    <Building className="w-3 h-3" />
+                                    {contact.company}
+                                  </span>
+                                )}
                               </span>
                             )}
-                            <LastContactLine lastContactedAt={contact.lastContactedAt} />
+                            <LastContactLine
+                              lastContactedAt={contact.lastContactedAt}
+                            />
                             <StaleChip
                               contactId={contact.id}
                               updatedAt={contact.updatedAt}
-                              hasGroundingCapacity={groundingCapacity?.hasCapacity ?? false}
+                              hasGroundingCapacity={
+                                groundingCapacity?.hasCapacity ?? false
+                              }
                               isEnriching={enrichContact.isPending}
                               enrichingContactId={enrichingContactId}
                               onRefresh={handleRefreshContact}
@@ -799,20 +1037,30 @@ export const CommandPalette = () => {
                     </Command.Group>
                   )}
 
-                  {parsed.freeText.trim().length > 0 && instantSearch.results.length === 0 && !instantSearch.isFtsLoading && (
-                    <Command.Group heading="Actions" className={`mt-2 text-on-surface-variant ${GROUP_HEADING_DEFAULT}`}>
-                      <Command.Item
-                        value={`create_${search}`}
-                        onSelect={handleCreateContact}
-                        className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-surface-container-high transition-colors text-on-surface"
+                  {parsed.freeText.trim().length > 0 &&
+                    instantSearch.results.length === 0 &&
+                    !instantSearch.isFtsLoading && (
+                      <Command.Group
+                        heading="Actions"
+                        className={`mt-2 text-on-surface-variant ${GROUP_HEADING_DEFAULT}`}
                       >
-                        <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full">
-                          <UserPlus className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="text-sm">Create new contact <span className="font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] inline-block align-bottom">"{parsed.freeText}"</span></span>
-                      </Command.Item>
-                    </Command.Group>
-                  )}
+                        <Command.Item
+                          value={`create_${search}`}
+                          onSelect={handleCreateContact}
+                          className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-surface-container-high transition-colors text-on-surface"
+                        >
+                          <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full">
+                            <UserPlus className="w-4 h-4 text-primary" />
+                          </div>
+                          <span className="text-sm">
+                            Create new contact{" "}
+                            <span className="font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] inline-block align-bottom">
+                              "{parsed.freeText}"
+                            </span>
+                          </span>
+                        </Command.Item>
+                      </Command.Group>
+                    )}
                 </>
               )}
             </Command.List>
@@ -821,11 +1069,16 @@ export const CommandPalette = () => {
             <ResultPeek contact={peekContact} visible={peekVisible} />
 
             {/* ── Footer ── */}
-            <div className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden sm:flex items-center justify-between`}>
+            <div
+              className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden sm:flex items-center justify-between`}
+            >
               <span className="flex items-center gap-2">
-                Use <kbd className={KBD_SM}>↑</kbd> <kbd className={KBD_SM}>↓</kbd> to navigate
+                Use <kbd className={KBD_SM}>↑</kbd>{" "}
+                <kbd className={KBD_SM}>↓</kbd> to navigate
                 {isEmptyInput && searchHistory.entries.length > 0 && (
-                  <span className="text-on-surface-variant/40 ml-1">• ↑ for history</span>
+                  <span className="text-on-surface-variant/40 ml-1">
+                    • ↑ for history
+                  </span>
                 )}
               </span>
               <span className="flex items-center gap-1">

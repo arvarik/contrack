@@ -1,15 +1,26 @@
-import React from 'react';
+import React from "react";
 import {
-  Mail, Phone, Building, Briefcase, MapPin, Globe,
-  Shield, FileText, Tag, MessageSquare,
-} from 'lucide-react';
-import type { Contact } from '../../../../types';
+  Mail,
+  Phone,
+  Building,
+  Briefcase,
+  MapPin,
+  Globe,
+  Shield,
+  FileText,
+  Tag,
+  MessageSquare,
+} from "lucide-react";
+import type { Contact } from "../../../../types";
 import {
-  CARD_COMPACT, SECTION_HEADING, SOURCE_BADGE, TAG_PILL,
-} from '../../../../lib/styles';
-import { cn } from '../../../../lib/utils';
-import { FieldRow } from './FieldRow';
-import { fallbackAvatarUrl } from '../../../../lib/avatar';
+  CARD_COMPACT,
+  SECTION_HEADING,
+  SOURCE_BADGE,
+  TAG_PILL,
+} from "../../../../lib/styles";
+import { cn } from "../../../../lib/utils";
+import { FieldRow } from "./FieldRow";
+import { fallbackAvatarUrl } from "../../../../lib/avatar";
 
 // =============================================================================
 // ContactCard — Full side-by-side comparison card
@@ -25,13 +36,21 @@ export interface ContactCardProps {
   onSetPrimary?: () => void;
 }
 
-export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSetPrimary }: ContactCardProps) => {
+export const ContactCard = ({
+  contact,
+  label,
+  labelColor,
+  other,
+  isPrimary,
+  onSetPrimary,
+}: ContactCardProps) => {
   const isDiff = (field: keyof Contact) => {
     if (!other) return false;
     const a = contact[field];
     const b = other[field];
     if (!a && !b) return false;
-    if (typeof a === 'string' && typeof b === 'string') return a.toLowerCase().trim() !== b.toLowerCase().trim();
+    if (typeof a === "string" && typeof b === "string")
+      return a.toLowerCase().trim() !== b.toLowerCase().trim();
     return a !== b;
   };
 
@@ -39,13 +58,21 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
   const primaryPhone = contact.phones?.[0]?.phone;
 
   return (
-    <div className={cn(
-      CARD_COMPACT, "space-y-3 relative transition-all overflow-hidden min-w-0",
-      isPrimary && "ring-2 ring-inset ring-emerald-500/50 shadow-md"
-    )}>
+    <div
+      className={cn(
+        CARD_COMPACT,
+        "space-y-3 relative transition-all overflow-hidden min-w-0",
+        isPrimary && "ring-2 ring-inset ring-emerald-500/50 shadow-md",
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className={cn(SECTION_HEADING, `px-3 py-1 rounded-full ${labelColor}`)}>
+        <span
+          className={cn(
+            SECTION_HEADING,
+            `px-3 py-1 rounded-full ${labelColor}`,
+          )}
+        >
           {label}
         </span>
         <div className="flex items-center gap-2">
@@ -57,7 +84,7 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
           )}
           {contact.sources?.length > 0 && (
             <span className={SOURCE_BADGE}>
-              via {contact.sources.map((s: any) => s.platform).join(', ')}
+              via {contact.sources.map((s: any) => s.platform).join(", ")}
             </span>
           )}
         </div>
@@ -71,7 +98,7 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
             "w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all",
             isPrimary
               ? "bg-emerald-500/10 text-emerald-600"
-              : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+              : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
           )}
         >
           {isPrimary ? (
@@ -93,11 +120,15 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
           className="w-12 h-12 rounded-full object-cover bg-surface-container-high"
         />
         <div>
-          <div className={`text-base font-bold ${isDiff('name') ? 'bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2' : ''}`}>
+          <div
+            className={`text-base font-bold ${isDiff("name") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+          >
             {contact.name}
           </div>
           {contact.headline && (
-            <div className={`text-xs text-on-surface-variant italic ${isDiff('headline') ? 'bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2' : ''}`}>
+            <div
+              className={`text-xs text-on-surface-variant italic ${isDiff("headline") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+            >
               {contact.headline}
             </div>
           )}
@@ -107,22 +138,38 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
       {/* Fields */}
       <div className="space-y-2.5 text-sm">
         {contact.role && (
-          <FieldRow icon={<Briefcase className="w-4 h-4" />} label="Role" highlighted={isDiff('role')}>
+          <FieldRow
+            icon={<Briefcase className="w-4 h-4" />}
+            label="Role"
+            highlighted={isDiff("role")}
+          >
             {contact.role}
           </FieldRow>
         )}
         {contact.company && (
-          <FieldRow icon={<Building className="w-4 h-4" />} label="Company" highlighted={isDiff('company')}>
+          <FieldRow
+            icon={<Building className="w-4 h-4" />}
+            label="Company"
+            highlighted={isDiff("company")}
+          >
             {contact.company}
           </FieldRow>
         )}
         {contact.location && (
-          <FieldRow icon={<MapPin className="w-4 h-4" />} label="Location" highlighted={isDiff('location')}>
+          <FieldRow
+            icon={<MapPin className="w-4 h-4" />}
+            label="Location"
+            highlighted={isDiff("location")}
+          >
             {contact.location}
           </FieldRow>
         )}
         {contact.industry && (
-          <FieldRow icon={<Globe className="w-4 h-4" />} label="Industry" highlighted={isDiff('industry')}>
+          <FieldRow
+            icon={<Globe className="w-4 h-4" />}
+            label="Industry"
+            highlighted={isDiff("industry")}
+          >
             {contact.industry}
           </FieldRow>
         )}
@@ -130,7 +177,9 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
           <FieldRow icon={<Mail className="w-4 h-4" />} label="Email">
             <span className="font-mono text-xs">{primaryEmail}</span>
             {contact.emails.length > 1 && (
-              <span className="text-[10px] text-on-surface-variant ml-1">+{contact.emails.length - 1}</span>
+              <span className="text-[10px] text-on-surface-variant ml-1">
+                +{contact.emails.length - 1}
+              </span>
             )}
           </FieldRow>
         )}
@@ -142,8 +191,10 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
         {contact.tags?.length > 0 && (
           <FieldRow icon={<Tag className="w-4 h-4" />} label="Tags">
             <div className="flex flex-wrap gap-1">
-              {contact.tags.map(t => (
-                <span key={t.id} className={TAG_PILL}>{t.tag}</span>
+              {contact.tags.map((t) => (
+                <span key={t.id} className={TAG_PILL}>
+                  {t.tag}
+                </span>
               ))}
             </div>
           </FieldRow>
@@ -152,7 +203,9 @@ export const ContactCard = ({ contact, label, labelColor, other, isPrimary, onSe
 
       {/* About */}
       {contact.about && (
-        <div className={`text-xs text-on-surface-variant leading-relaxed p-3 bg-surface-container-low rounded-xl ${isDiff('about') ? 'ring-2 ring-amber-400/30' : ''}`}>
+        <div
+          className={`text-xs text-on-surface-variant leading-relaxed p-3 bg-surface-container-low rounded-xl ${isDiff("about") ? "ring-2 ring-amber-400/30" : ""}`}
+        >
           <FileText className="w-3.5 h-3.5 inline mr-1 opacity-50" />
           {contact.about}
         </div>

@@ -1,12 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { Search, Users, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import type { Contact } from '../../../types';
-import { useContacts } from '../../../api';
-import { ContactMiniCard } from './shared/ContactMiniCard';
-import { SEARCH_INPUT } from '../../../lib/styles';
-import { cn } from '../../../lib/utils';
-import { fallbackAvatarUrl } from '../../../lib/avatar';
+import React, { useMemo, useState } from "react";
+import { Search, Users, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import type { Contact } from "../../../types";
+import { useContacts } from "../../../api";
+import { ContactMiniCard } from "./shared/ContactMiniCard";
+import { SEARCH_INPUT } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
+import { fallbackAvatarUrl } from "../../../lib/avatar";
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
@@ -18,37 +18,45 @@ interface ContactPickerProps {
   maxSelection?: number;
 }
 
-export const ContactPicker = ({ selected, onSelectionChange, maxSelection = 3 }: ContactPickerProps) => {
+export const ContactPicker = ({
+  selected,
+  onSelectionChange,
+  maxSelection = 3,
+}: ContactPickerProps) => {
   const { data: allContacts = [], isLoading } = useContacts();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
 
   // Filter out ghosts and archived, then apply search
   const filteredContacts = useMemo(() => {
-    const pool = allContacts.filter(c => !c.isGhost && !c.isArchived);
+    const pool = allContacts.filter((c) => !c.isGhost && !c.isArchived);
     if (!query.trim()) return pool;
     const q = query.toLowerCase().trim();
-    return pool.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.company?.toLowerCase().includes(q) ||
-      c.role?.toLowerCase().includes(q) ||
-      c.emails?.some(e => e.email.toLowerCase().includes(q)) ||
-      c.phones?.some(p => p.phone.includes(q))
+    return pool.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.company?.toLowerCase().includes(q) ||
+        c.role?.toLowerCase().includes(q) ||
+        c.emails?.some((e) => e.email.toLowerCase().includes(q)) ||
+        c.phones?.some((p) => p.phone.includes(q)),
     );
   }, [allContacts, query]);
 
-  const selectedIds = useMemo(() => new Set(selected.map(c => c.id)), [selected]);
+  const selectedIds = useMemo(
+    () => new Set(selected.map((c) => c.id)),
+    [selected],
+  );
   const atMax = selected.length >= maxSelection;
 
   const toggleContact = (contact: Contact) => {
     if (selectedIds.has(contact.id)) {
-      onSelectionChange(selected.filter(c => c.id !== contact.id));
+      onSelectionChange(selected.filter((c) => c.id !== contact.id));
     } else if (!atMax) {
       onSelectionChange([...selected, contact]);
     }
   };
 
   const removeContact = (id: string) => {
-    onSelectionChange(selected.filter(c => c.id !== id));
+    onSelectionChange(selected.filter((c) => c.id !== id));
   };
 
   return (
@@ -58,11 +66,11 @@ export const ContactPicker = ({ selected, onSelectionChange, maxSelection = 3 }:
         {selected.length > 0 && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="flex flex-wrap gap-2 mb-4 overflow-hidden"
           >
-            {selected.map(c => (
+            {selected.map((c) => (
               <motion.div
                 key={c.id}
                 initial={{ scale: 0.8, opacity: 0 }}
@@ -95,14 +103,14 @@ export const ContactPicker = ({ selected, onSelectionChange, maxSelection = 3 }:
         <input
           type="text"
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="Search contacts by name, email, company..."
           className={cn(SEARCH_INPUT)}
           autoFocus
         />
         {query && (
           <button
-            onClick={() => setQuery('')}
+            onClick={() => setQuery("")}
             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-container-high transition-colors"
           >
             <X className="w-3.5 h-3.5 text-on-surface-variant" />
@@ -116,10 +124,12 @@ export const ContactPicker = ({ selected, onSelectionChange, maxSelection = 3 }:
           <Users className="w-3.5 h-3.5" />
           {filteredContacts.length} contacts
         </span>
-        <span className={cn(
-          "text-[10px] font-bold uppercase tracking-widest",
-          atMax ? "text-amber-500" : "text-on-surface-variant"
-        )}>
+        <span
+          className={cn(
+            "text-[10px] font-bold uppercase tracking-widest",
+            atMax ? "text-amber-500" : "text-on-surface-variant",
+          )}
+        >
           {selected.length} / {maxSelection} selected
         </span>
       </div>
@@ -132,10 +142,10 @@ export const ContactPicker = ({ selected, onSelectionChange, maxSelection = 3 }:
           </div>
         ) : filteredContacts.length === 0 ? (
           <div className="text-center py-12 text-on-surface-variant text-sm">
-            {query ? 'No contacts match your search' : 'No contacts available'}
+            {query ? "No contacts match your search" : "No contacts available"}
           </div>
         ) : (
-          filteredContacts.map(contact => (
+          filteredContacts.map((contact) => (
             <ContactMiniCard
               key={contact.id}
               contact={contact}

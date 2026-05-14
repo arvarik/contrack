@@ -32,11 +32,11 @@ import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 const SIZE_MAP: Record<string, string> = {
-  sm:   "sm:max-w-sm",
-  md:   "sm:max-w-lg",
-  lg:   "sm:max-w-2xl",
-  xl:   "sm:max-w-4xl",
-  "2xl":"sm:max-w-5xl",
+  sm: "sm:max-w-sm",
+  md: "sm:max-w-lg",
+  lg: "sm:max-w-2xl",
+  xl: "sm:max-w-4xl",
+  "2xl": "sm:max-w-5xl",
   full: "sm:max-w-[min(95vw,1280px)]",
 };
 
@@ -55,7 +55,14 @@ interface ModalProps {
   disableMobileSheet?: boolean;
 }
 
-export function Modal({ isOpen, onClose, title, children, size = "md", disableMobileSheet = false }: ModalProps) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = "md",
+  disableMobileSheet = false,
+}: ModalProps) {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
@@ -80,8 +87,10 @@ export function Modal({ isOpen, onClose, title, children, size = "md", disableMo
   useEffect(() => {
     if (!isOpen) return;
     const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [isOpen]);
 
   // Escape key closes
@@ -115,7 +124,9 @@ export function Modal({ isOpen, onClose, title, children, size = "md", disableMo
 
   // Mobile sheet slides up; desktop scales in. Both share an opacity fade.
   // Reduced-motion users get an instant opacity-only transition.
-  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const enterAnim = reducedMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
     : disableMobileSheet
@@ -166,7 +177,12 @@ export function Modal({ isOpen, onClose, title, children, size = "md", disableMo
             {title ? (
               <>
                 <div className="flex justify-between items-center px-5 py-4 sm:p-6 bg-surface-container-low">
-                  <h2 id={titleId} className="text-lg sm:text-xl font-bold font-headline">{title}</h2>
+                  <h2
+                    id={titleId}
+                    className="text-lg sm:text-xl font-bold font-headline"
+                  >
+                    {title}
+                  </h2>
                   <button
                     ref={closeButtonRef}
                     onClick={onClose}

@@ -3,24 +3,37 @@ import { contactRepo } from "../repositories/contactRepository.ts";
 
 export const mcpService = {
   queryContacts(options: {
-    limit: number; offset: number; fields?: string;
-    role?: string; company?: string; industry?: string;
+    limit: number;
+    offset: number;
+    fields?: string;
+    role?: string;
+    company?: string;
+    industry?: string;
   }) {
     let q = "SELECT * FROM contacts WHERE 1=1";
     const params: any[] = [];
-    
-    if (options.role) { q += " AND role LIKE ?"; params.push(`%${options.role}%`); }
-    if (options.company) { q += " AND company LIKE ?"; params.push(`%${options.company}%`); }
-    if (options.industry) { q += " AND industry = ?"; params.push(options.industry); }
-    
+
+    if (options.role) {
+      q += " AND role LIKE ?";
+      params.push(`%${options.role}%`);
+    }
+    if (options.company) {
+      q += " AND company LIKE ?";
+      params.push(`%${options.company}%`);
+    }
+    if (options.industry) {
+      q += " AND industry = ?";
+      params.push(options.industry);
+    }
+
     q += " ORDER BY addedAt DESC LIMIT ? OFFSET ?";
     params.push(options.limit, options.offset);
 
     let rows = sqlite.prepare(q).all(...params) as any[];
-    
+
     if (options.fields) {
-      const allowed = options.fields.split(',').map(f => f.trim());
-      rows = rows.map(r => {
+      const allowed = options.fields.split(",").map((f) => f.trim());
+      rows = rows.map((r) => {
         const projected: any = {};
         for (const k of allowed) if (k in r) projected[k] = r[k];
         return projected;
@@ -32,7 +45,9 @@ export const mcpService = {
 
   getActionItems() {
     const now = new Date().toISOString();
-    const rows = sqlite.prepare(`
+    const rows = sqlite
+      .prepare(
+        `
       SELECT * FROM contacts 
       WHERE 
         nextFollowUpAt <= ?
@@ -41,17 +56,25 @@ export const mcpService = {
            datetime(lastContactedAt, '+' || cadenceDays || ' days') <= ?
         )
       ORDER BY lastContactedAt ASC
-    `).all(now, now) as any[];
-    
+    `,
+      )
+      .all(now, now) as any[];
+
     return contactRepo.hydrateMany(rows);
   },
 
   getTags() {
-    return sqlite.prepare("SELECT DISTINCT tag FROM contact_tags ORDER BY tag ASC").all() as {tag:string}[];
+    return sqlite
+      .prepare("SELECT DISTINCT tag FROM contact_tags ORDER BY tag ASC")
+      .all() as { tag: string }[];
   },
 
   getIndustries() {
-    return sqlite.prepare("SELECT DISTINCT industry FROM contacts WHERE industry IS NOT NULL AND industry != '' ORDER BY industry ASC").all() as {industry:string}[];
+    return sqlite
+      .prepare(
+        "SELECT DISTINCT industry FROM contacts WHERE industry IS NOT NULL AND industry != '' ORDER BY industry ASC",
+      )
+      .all() as { industry: string }[];
   },
 
   searchInteractions(q: string, type?: string) {
@@ -63,12 +86,12 @@ export const mcpService = {
       WHERE (i.title LIKE ? OR i.content LIKE ?)
     `;
     const params: any[] = [safeQ, safeQ];
-    
+
     if (type) {
       sqlQuery += " AND i.type = ?";
       params.push(type);
     }
-    
+
     sqlQuery += " ORDER BY i.date DESC LIMIT 50";
     return sqlite.prepare(sqlQuery).all(...params);
   },
@@ -96,5 +119,5 @@ export const mcpService = {
     params.push(limit);
 
     return sqlite.prepare(sqlQuery).all(...params);
-  }
+  },
 };

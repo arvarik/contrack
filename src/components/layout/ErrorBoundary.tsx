@@ -13,7 +13,7 @@ interface State {
 export class ErrorBoundary extends Component<Props, State> {
   declare props: Readonly<Props>;
   public state: State = {
-    hasError: false
+    hasError: false,
   };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -32,9 +32,12 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertCircle className="w-8 h-8" />
             </div>
-            <h1 className="text-2xl font-extrabold font-headline mb-3">System Crash</h1>
+            <h1 className="text-2xl font-extrabold font-headline mb-3">
+              System Crash
+            </h1>
             <p className="text-on-surface-variant mb-6 text-sm">
-              The application encountered an unexpected error. This has been logged for review.
+              The application encountered an unexpected error. This has been
+              logged for review.
             </p>
             {this.state.error && (
               <div className="bg-surface-container-highest p-4 rounded-xl text-left mb-6 overflow-x-auto text-xs font-mono text-red-400">
@@ -42,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
             <button
-              onClick={() => window.location.href = '/'}
+              onClick={() => (window.location.href = "/")}
               className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
             >
               <RefreshCw className="w-4 h-4" />

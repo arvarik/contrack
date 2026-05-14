@@ -17,10 +17,10 @@
  *     ...content...
  *   </div>
  */
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect } from "react";
 
 const PULL_THRESHOLD = 80; // px to trigger refresh
-const MAX_PULL = 120;      // max visual pull distance
+const MAX_PULL = 120; // max visual pull distance
 
 interface UsePullToRefreshOptions {
   disabled?: boolean;
@@ -28,7 +28,7 @@ interface UsePullToRefreshOptions {
 
 export const usePullToRefresh = (
   onRefresh: () => Promise<void> | void,
-  options: UsePullToRefreshOptions = {}
+  options: UsePullToRefreshOptions = {},
 ) => {
   const { disabled = false } = options;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,14 +79,14 @@ export const usePullToRefresh = (
       }
     };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: true });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
 
     return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
     };
   }, [disabled, isRefreshing, pullDistance, triggerRefresh]);
 

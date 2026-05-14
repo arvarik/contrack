@@ -14,7 +14,7 @@ export function computePrimaryScore(contact: any): number {
 
   // Custom imported avatar = massive priority boost (user invested effort)
   if (contact.avatarUrl) {
-    const isCustom = contact.avatarUrl.startsWith('/uploads/avatars/');
+    const isCustom = contact.avatarUrl.startsWith("/uploads/avatars/");
     score += isCustom ? 100 : 5;
   }
   if (contact.about) score += 5;
@@ -27,13 +27,13 @@ export function computePrimaryScore(contact: any): number {
   score += (contact.emails?.length ?? 0) * 3;
   score += (contact.phones?.length ?? 0) * 3;
   score += (contact.socialLinks?.length ?? 0) * 2;
-  score += (contact.tags?.length ?? 0);
+  score += contact.tags?.length ?? 0;
   score += (contact.education?.length ?? 0) * 2;
   score += (contact.experience?.length ?? 0) * 2;
 
-  const row = sqlite.prepare(
-    "SELECT COUNT(*) as c FROM interactions WHERE contactId = ?"
-  ).get(contact.id) as any;
+  const row = sqlite
+    .prepare("SELECT COUNT(*) as c FROM interactions WHERE contactId = ?")
+    .get(contact.id) as any;
   score += (row?.c ?? 0) * 5;
 
   if (contact.updatedAt) {
@@ -63,47 +63,60 @@ export function selectBestPrimary(contacts: any[]): any {
 /**
  * Generate a human-readable summary describing why the cluster was grouped.
  */
-export function generateClusterSummary(contacts: any[], pairs: ClusterPair[]): string {
+export function generateClusterSummary(
+  contacts: any[],
+  pairs: ClusterPair[],
+): string {
   const parts: string[] = [];
 
-  const emailPairs = pairs.filter(p => p.matchType === 'email');
+  const emailPairs = pairs.filter((p) => p.matchType === "email");
   if (emailPairs.length > 0) {
-    const emails = [...new Set(emailPairs.map(p => p.matchedField).filter(Boolean))];
-    parts.push(`shared email${emails.length > 1 ? 's' : ''} ${emails.join(', ')}`);
+    const emails = [
+      ...new Set(emailPairs.map((p) => p.matchedField).filter(Boolean)),
+    ];
+    parts.push(
+      `shared email${emails.length > 1 ? "s" : ""} ${emails.join(", ")}`,
+    );
   }
 
-  const phonePairs = pairs.filter(p => p.matchType === 'phone');
+  const phonePairs = pairs.filter((p) => p.matchType === "phone");
   if (phonePairs.length > 0) {
-    const phones = [...new Set(phonePairs.map(p => p.matchedField).filter(Boolean))];
-    parts.push(`shared phone${phones.length > 1 ? 's' : ''} ${phones.join(', ')}`);
+    const phones = [
+      ...new Set(phonePairs.map((p) => p.matchedField).filter(Boolean)),
+    ];
+    parts.push(
+      `shared phone${phones.length > 1 ? "s" : ""} ${phones.join(", ")}`,
+    );
   }
 
-  const namePairs = pairs.filter(p => p.matchType === 'name' || p.matchType === 'name_company');
+  const namePairs = pairs.filter(
+    (p) => p.matchType === "name" || p.matchType === "name_company",
+  );
   if (namePairs.length > 0) {
-    parts.push('exact name match');
+    parts.push("exact name match");
   }
 
-  const nickPairs = pairs.filter(p => p.matchType === 'nickname');
+  const nickPairs = pairs.filter((p) => p.matchType === "nickname");
   if (nickPairs.length > 0) {
-    const names = [...new Set(contacts.map(c => c.name))];
-    parts.push(`nickname match (${names.join(' ↔ ')})`);
+    const names = [...new Set(contacts.map((c) => c.name))];
+    parts.push(`nickname match (${names.join(" ↔ ")})`);
   }
 
-  const crossPairs = pairs.filter(p => p.matchType === 'cross_source');
+  const crossPairs = pairs.filter((p) => p.matchType === "cross_source");
   if (crossPairs.length > 0) {
-    parts.push('same name from different import sources');
+    parts.push("same name from different import sources");
   }
 
-  const fuzzyPairs = pairs.filter(p => p.matchType === 'fuzzy');
+  const fuzzyPairs = pairs.filter((p) => p.matchType === "fuzzy");
   if (fuzzyPairs.length > 0) {
-    parts.push('high composite similarity');
+    parts.push("high composite similarity");
   }
 
-  const aiPairs = pairs.filter(p => p.matchType === 'ai');
+  const aiPairs = pairs.filter((p) => p.matchType === "ai");
   if (aiPairs.length > 0 && namePairs.length === 0 && nickPairs.length === 0) {
-    const names = [...new Set(contacts.map(c => c.name))];
+    const names = [...new Set(contacts.map((c) => c.name))];
     if (names.length > 1) {
-      parts.push(`AI-confirmed match (${names.join(' ↔ ')})`);
+      parts.push(`AI-confirmed match (${names.join(" ↔ ")})`);
     }
   }
 
@@ -111,7 +124,7 @@ export function generateClusterSummary(contacts: any[], pairs: ClusterPair[]): s
     return `${contacts.length} contacts may represent the same person.`;
   }
 
-  return `These ${contacts.length} contacts have ${parts.join(' and ')}.`;
+  return `These ${contacts.length} contacts have ${parts.join(" and ")}.`;
 }
 
 /** Clusters above this size require explicit user confirmation before merging */
@@ -137,16 +150,16 @@ export function buildClusters(
 
   for (const [, memberIds] of clusterGroups) {
     const contacts = memberIds
-      .map(id => contactMap.get(id))
+      .map((id) => contactMap.get(id))
       .filter(Boolean)
-      .map(raw => contactRepo.hydrate(raw));
+      .map((raw) => contactRepo.hydrate(raw));
 
     if (contacts.length < 2) continue;
 
     const clusterRoot = uf.find(memberIds[0]);
     const clusterPairs: ClusterPair[] = pairs
-      .filter(p => uf.find(p.idA) === clusterRoot)
-      .map(p => ({
+      .filter((p) => uf.find(p.idA) === clusterRoot)
+      .map((p) => ({
         contactIdA: p.idA,
         contactIdB: p.idB,
         matchType: p.matchType,
@@ -156,13 +169,16 @@ export function buildClusters(
       }));
 
     const primary = selectBestPrimary(contacts);
-    const confidences = clusterPairs.map(p => p.confidence);
+    const confidences = clusterPairs.map((p) => p.confidence);
     const aggregateConfidence = Math.max(...confidences);
     const minConfidence = Math.min(...confidences);
     const isLarge = contacts.length > LARGE_CLUSTER_THRESHOLD;
 
     if (isLarge) {
-      log.warn("DedupeService", `[${rid}] Large cluster detected: ${contacts.length} contacts (threshold: ${LARGE_CLUSTER_THRESHOLD}) — will require user confirmation`);
+      log.warn(
+        "DedupeService",
+        `[${rid}] Large cluster detected: ${contacts.length} contacts (threshold: ${LARGE_CLUSTER_THRESHOLD}) — will require user confirmation`,
+      );
     }
 
     clusters.push({
@@ -173,13 +189,16 @@ export function buildClusters(
       aggregateConfidence,
       summary: generateClusterSummary(contacts, clusterPairs),
       size: contacts.length,
-      hasWeakLink: minConfidence < 0.60,
+      hasWeakLink: minConfidence < 0.6,
       minConfidence,
       requiresConfirmation: isLarge,
     });
   }
 
   clusters.sort((a, b) => b.aggregateConfidence - a.aggregateConfidence);
-  log.info("DedupeService", `[${rid}] Clustered ${pairs.length} pair(s) into ${clusters.length} cluster(s)`);
+  log.info(
+    "DedupeService",
+    `[${rid}] Clustered ${pairs.length} pair(s) into ${clusters.length} cluster(s)`,
+  );
   return clusters;
 }

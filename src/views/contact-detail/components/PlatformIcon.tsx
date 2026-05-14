@@ -2,8 +2,17 @@
  * PlatformIcon — Resolves a social platform name to the appropriate icon.
  * Uses Lucide icons for known platforms, falls back to a favicon proxy or Globe.
  */
-import React from 'react';
-import { Linkedin, Facebook, Github, Twitter, Instagram, Globe, Youtube, ExternalLink } from 'lucide-react';
+import React from "react";
+import {
+  Linkedin,
+  Facebook,
+  Github,
+  Twitter,
+  Instagram,
+  Globe,
+  Youtube,
+  ExternalLink,
+} from "lucide-react";
 
 // Known platform → icon mapping
 const PLATFORM_ICONS: Record<string, React.FC<{ className?: string }>> = {
@@ -17,14 +26,14 @@ const PLATFORM_ICONS: Record<string, React.FC<{ className?: string }>> = {
 
 // Known platform → brand color mapping
 export const PLATFORM_COLORS: Record<string, string> = {
-  linkedin: 'text-[#0A66C2]',
-  facebook: 'text-[#1877F2]',
-  github: 'text-[#333] dark:text-[#f0f6fc]',
-  twitter: 'text-[#1DA1F2]',
-  instagram: 'text-[#E4405F]',
-  youtube: 'text-[#FF0000]',
-  website: 'text-on-surface-variant',
-  homepage: 'text-on-surface-variant',
+  linkedin: "text-[#0A66C2]",
+  facebook: "text-[#1877F2]",
+  github: "text-[#333] dark:text-[#f0f6fc]",
+  twitter: "text-[#1DA1F2]",
+  instagram: "text-[#E4405F]",
+  youtube: "text-[#FF0000]",
+  website: "text-on-surface-variant",
+  homepage: "text-on-surface-variant",
 };
 
 /**
@@ -62,7 +71,12 @@ interface PlatformIconProps {
   useFavicon?: boolean;
 }
 
-export const PlatformIcon = ({ platform, url, className, useFavicon = false }: PlatformIconProps) => {
+export const PlatformIcon = ({
+  platform,
+  url,
+  className,
+  useFavicon = false,
+}: PlatformIconProps) => {
   const key = platform.toLowerCase();
   const Icon = PLATFORM_ICONS[key];
 
@@ -83,7 +97,7 @@ export const PlatformIcon = ({ platform, url, className, useFavicon = false }: P
             // Fall back to Globe icon on favicon load failure
             const parent = (e.target as HTMLElement).parentElement;
             if (parent) {
-              (e.target as HTMLElement).style.display = 'none';
+              (e.target as HTMLElement).style.display = "none";
             }
           }}
         />

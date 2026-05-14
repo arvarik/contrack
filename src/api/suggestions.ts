@@ -12,19 +12,19 @@
  *
  * @module api/suggestions
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-const API = '/api';
+const API = "/api";
 
 // =============================================================================
 // Query Keys
 // =============================================================================
 
 export const suggestionKeys = {
-  count: ['dedupe-suggestions-count'] as const,
-  pending: ['dedupe-suggestions'] as const,
-  forContact: (id: string) => ['dedupe-suggestion', id] as const,
-  mergeLog: ['dedupe-merge-log'] as const,
+  count: ["dedupe-suggestions-count"] as const,
+  pending: ["dedupe-suggestions"] as const,
+  forContact: (id: string) => ["dedupe-suggestion", id] as const,
+  mergeLog: ["dedupe-merge-log"] as const,
 };
 
 // =============================================================================
@@ -50,7 +50,7 @@ export const usePendingSuggestions = (enabled = true) =>
     queryKey: suggestionKeys.pending,
     queryFn: async () => {
       const res = await fetch(`${API}/dedupe/suggestions?limit=200`);
-      if (!res.ok) throw new Error('Failed to fetch suggestions');
+      if (!res.ok) throw new Error("Failed to fetch suggestions");
       const data = await res.json();
       return data.suggestions as any[];
     },
@@ -78,7 +78,7 @@ export const useMergeLog = (enabled = true) =>
     queryKey: suggestionKeys.mergeLog,
     queryFn: async () => {
       const res = await fetch(`${API}/dedupe/merge-log?limit=100`);
-      if (!res.ok) throw new Error('Failed to fetch merge log');
+      if (!res.ok) throw new Error("Failed to fetch merge log");
       const data = await res.json();
       return data.entries as any[];
     },
@@ -94,15 +94,24 @@ export const useMergeLog = (enabled = true) =>
 export const useMergeSuggestion = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ suggestionId, primaryId }: { suggestionId: string; primaryId: string }) => {
-      const res = await fetch(`${API}/dedupe/suggestions/${suggestionId}/merge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ primaryId }),
-      });
+    mutationFn: async ({
+      suggestionId,
+      primaryId,
+    }: {
+      suggestionId: string;
+      primaryId: string;
+    }) => {
+      const res = await fetch(
+        `${API}/dedupe/suggestions/${suggestionId}/merge`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ primaryId }),
+        },
+      );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Merge failed');
+        throw new Error(err.error ?? "Merge failed");
       }
       return res.json();
     },
@@ -110,7 +119,7 @@ export const useMergeSuggestion = () => {
       qc.invalidateQueries({ queryKey: suggestionKeys.count });
       qc.invalidateQueries({ queryKey: suggestionKeys.pending });
       qc.invalidateQueries({ queryKey: suggestionKeys.mergeLog });
-      qc.invalidateQueries({ queryKey: ['contacts'] });
+      qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };
@@ -120,12 +129,15 @@ export const useDismissSuggestion = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (suggestionId: string) => {
-      const res = await fetch(`${API}/dedupe/suggestions/${suggestionId}/dismiss`, {
-        method: 'POST',
-      });
+      const res = await fetch(
+        `${API}/dedupe/suggestions/${suggestionId}/dismiss`,
+        {
+          method: "POST",
+        },
+      );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Dismiss failed');
+        throw new Error(err.error ?? "Dismiss failed");
       }
       return res.json();
     },
@@ -142,11 +154,11 @@ export const useUndoMerge = () => {
   return useMutation({
     mutationFn: async (mergeLogId: string) => {
       const res = await fetch(`${API}/dedupe/merge-log/${mergeLogId}/undo`, {
-        method: 'POST',
+        method: "POST",
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Undo failed');
+        throw new Error(err.error ?? "Undo failed");
       }
       return res.json();
     },
@@ -154,7 +166,7 @@ export const useUndoMerge = () => {
       qc.invalidateQueries({ queryKey: suggestionKeys.count });
       qc.invalidateQueries({ queryKey: suggestionKeys.pending });
       qc.invalidateQueries({ queryKey: suggestionKeys.mergeLog });
-      qc.invalidateQueries({ queryKey: ['contacts'] });
+      qc.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };

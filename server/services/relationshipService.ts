@@ -63,13 +63,18 @@ function computeScoreForContact(contact: ContactScoreRow): number {
   let recency = 0;
   if (contact.lastContactedAt) {
     const lastDate = new Date(contact.lastContactedAt);
-    const daysSince = Math.max(0, (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    const daysSince = Math.max(
+      0,
+      (Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
     recency = recencyScore(daysSince, cadence);
   }
   // No lastContactedAt → 0 recency (never interacted)
 
   // ── Frequency, Depth, Reciprocity, Momentum (from interactions) ────────
-  const stats = sqlite.prepare(`
+  const stats = sqlite
+    .prepare(
+      `
     SELECT
       COALESCE(SUM(CASE WHEN date >= date('now', '-90 days') THEN 1 ELSE 0 END), 0) as total90d,
       COALESCE(SUM(CASE WHEN date >= date('now', '-30 days') THEN 1 ELSE 0 END), 0) as total30d,
@@ -80,14 +85,16 @@ function computeScoreForContact(contact: ContactScoreRow): number {
     FROM interactions
     WHERE contactId = ?
       AND date >= date('now', '-90 days')
-  `).get(contact.id) as InteractionStatsRow;
+  `,
+    )
+    .get(contact.id) as InteractionStatsRow;
 
   // Frequency (25%): 10+ interactions in 90 days = max score
   const frequency = Math.min(100, stats.total90d * 10);
 
   // Depth (15%): Average content length of recent interactions, normalized
   // 500+ chars avg = max score
-  const depth = Math.min(100, (stats.avgContentLength / 5));
+  const depth = Math.min(100, stats.avgContentLength / 5);
 
   // Reciprocity (10%): Ratio of bidirectional interaction types
   let reciprocity = 50; // Default: neutral
@@ -99,9 +106,11 @@ function computeScoreForContact(contact: ContactScoreRow): number {
   let momentum = 50; // Default: stable
   if (stats.totalPrev30d > 0) {
     const ratio = stats.total30d / stats.totalPrev30d;
-    if (ratio >= 1.2) momentum = 100;      // Increasing
-    else if (ratio <= 0.5) momentum = 0;   // Declining sharply
-    else momentum = ratio * 50 + 20;       // Linear interpolation
+    if (ratio >= 1.2)
+      momentum = 100; // Increasing
+    else if (ratio <= 0.5)
+      momentum = 0; // Declining sharply
+    else momentum = ratio * 50 + 20; // Linear interpolation
   } else if (stats.total30d > 0) {
     momentum = 100; // New activity from nothing = max momentum
   } else {
@@ -109,7 +118,12 @@ function computeScoreForContact(contact: ContactScoreRow): number {
   }
 
   // ── Weighted composite ─────────────────────────────────────────────────
-  const raw = (0.40 * recency) + (0.25 * frequency) + (0.15 * depth) + (0.10 * reciprocity) + (0.10 * momentum);
+  const raw =
+    0.4 * recency +
+    0.25 * frequency +
+    0.15 * depth +
+    0.1 * reciprocity +
+    0.1 * momentum;
   return Math.round(Math.max(0, Math.min(100, raw)));
 }
 
@@ -123,14 +137,20 @@ export const relationshipService = {
    * Called after each interaction creation for immediate feedback.
    */
   computeScore(contactId: string): number {
-    const contact = sqlite.prepare(`
+    const contact = sqlite
+      .prepare(
+        `
       SELECT id, cadenceDays, lastContactedAt FROM contacts WHERE id = ?
-    `).get(contactId) as ContactScoreRow | undefined;
+    `,
+      )
+      .get(contactId) as ContactScoreRow | undefined;
 
     if (!contact) return 50;
 
     const score = computeScoreForContact(contact);
-    sqlite.prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?").run(score, contactId);
+    sqlite
+      .prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?")
+      .run(score, contactId);
     return score;
   },
 
@@ -142,12 +162,18 @@ export const relationshipService = {
   recomputeAll(): void {
     const startMs = Date.now();
 
-    const contacts = sqlite.prepare(`
+    const contacts = sqlite
+      .prepare(
+        `
       SELECT id, cadenceDays, lastContactedAt FROM contacts
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-    `).all() as ContactScoreRow[];
+    `,
+      )
+      .all() as ContactScoreRow[];
 
-    const updateStmt = sqlite.prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?");
+    const updateStmt = sqlite.prepare(
+      "UPDATE contacts SET relationshipScore = ? WHERE id = ?",
+    );
 
     let skipped = 0;
     const txn = sqlite.transaction(() => {
@@ -157,13 +183,19 @@ export const relationshipService = {
           updateStmt.run(score, c.id);
         } catch (err: unknown) {
           skipped++;
-          log.warn("RelationshipScore", `Skipped ${c.id}: ${getErrorMessage(err)}`);
+          log.warn(
+            "RelationshipScore",
+            `Skipped ${c.id}: ${getErrorMessage(err)}`,
+          );
         }
       }
     });
     txn();
 
     const elapsed = Date.now() - startMs;
-    log.info("RelationshipScore", `Recomputed ${contacts.length} scores in ${elapsed}ms${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+    log.info(
+      "RelationshipScore",
+      `Recomputed ${contacts.length} scores in ${elapsed}ms${skipped > 0 ? ` (${skipped} skipped)` : ""}`,
+    );
   },
 };

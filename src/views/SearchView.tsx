@@ -1,37 +1,30 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { isTypingTarget } from '../lib/keyboard';
-import {
-  Sparkles, Search, Tag, X,
-  Loader2, AlertTriangle,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useSemanticSearch } from '../api';
-import type { SemanticMatch } from '../types';
-import {
-  PAGE_TITLE, SECTION_BG,
-} from '../lib/styles';
-import { cn } from '../lib/utils';
-import { FloatingContactCard } from '../components/FloatingContactCard';
-import { SynthesisBar } from '../components/command-palette/SynthesisBar';
-import { usePageTitle } from '../hooks/usePageTitle';
-import { ResultCard, ShimmerCard } from './search/SearchResultCards';
-import { useSession } from '../contexts/SessionContext';
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { isTypingTarget } from "../lib/keyboard";
+import { Sparkles, Search, Tag, X, Loader2, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { useSemanticSearch } from "../api";
+import type { SemanticMatch } from "../types";
+import { PAGE_TITLE, SECTION_BG } from "../lib/styles";
+import { cn } from "../lib/utils";
+import { FloatingContactCard } from "../components/FloatingContactCard";
+import { SynthesisBar } from "../components/command-palette/SynthesisBar";
+import { usePageTitle } from "../hooks/usePageTitle";
+import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
+import { useSession } from "../contexts/SessionContext";
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
 // =============================================================================
 
 const EXAMPLE_QUERIES = [
-  'Who do I know in London working in FinTech?',
-  'Who likes espresso?',
+  "Who do I know in London working in FinTech?",
+  "Who likes espresso?",
   "Who haven't I contacted in over 3 months?",
-  'Who works at a startup as a designer?',
-  'Who do I know in venture capital?',
-  'Find people interested in AI or machine learning',
+  "Who works at a startup as a designer?",
+  "Who do I know in venture capital?",
+  "Find people interested in AI or machine learning",
 ];
-
-
 
 // ─── Main SearchView Component ────────────────────────────────────────────────
 
@@ -39,20 +32,25 @@ export const SearchView = () => {
   const mountStart = useRef(performance.now());
   useEffect(() => {
     if (import.meta.env.DEV) {
-      console.log(`[Perf] SearchView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`);
+      console.log(
+        `[Perf] SearchView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
+      );
     }
   }, []);
 
   const navigate = useNavigate();
-  const { 
-    lastAISearchQuery, setLastAISearchQuery, 
-    lastAISearchData, setLastAISearchData, 
-    lastAISearchPhase, setLastAISearchPhase 
+  const {
+    lastAISearchQuery,
+    setLastAISearchQuery,
+    lastAISearchData,
+    setLastAISearchData,
+    lastAISearchPhase,
+    setLastAISearchPhase,
   } = useSession();
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(lastAISearchQuery);
-  
+
   const semanticSearch = useSemanticSearch({
     data: lastAISearchData,
     setData: setLastAISearchData,
@@ -61,13 +59,15 @@ export const SearchView = () => {
   });
 
   const prevQueryRef = useRef(lastAISearchQuery);
-  const [floatingContactId, setFloatingContactId] = useState<string | null>(null);
+  const [floatingContactId, setFloatingContactId] = useState<string | null>(
+    null,
+  );
 
   // Read ?q= URL param on mount (from Cmd+K "Open in full-page search" bridge)
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQueryHandled = useRef(false);
 
-  usePageTitle('AI Search');
+  usePageTitle("AI Search");
 
   // Focus input on mount
   useEffect(() => {
@@ -77,7 +77,7 @@ export const SearchView = () => {
   // Auto-fire search if ?q= param is present on mount
   useEffect(() => {
     if (initialQueryHandled.current) return;
-    const urlQuery = searchParams.get('q');
+    const urlQuery = searchParams.get("q");
     if (urlQuery && urlQuery.trim().length >= 3) {
       initialQueryHandled.current = true;
       setQuery(urlQuery.trim());
@@ -91,30 +91,36 @@ export const SearchView = () => {
     }
   }, [searchParams, setSearchParams, semanticSearch]);
 
-  const handleSearch = useCallback((searchQuery?: string) => {
-    const q = (searchQuery ?? query).trim();
-    if (q.length < 3 || q === prevQueryRef.current) return;
-    prevQueryRef.current = q;
-    setLastAISearchQuery(q);
-    semanticSearch.mutate(q);
-  }, [query, semanticSearch, setLastAISearchQuery]);
+  const handleSearch = useCallback(
+    (searchQuery?: string) => {
+      const q = (searchQuery ?? query).trim();
+      if (q.length < 3 || q === prevQueryRef.current) return;
+      prevQueryRef.current = q;
+      setLastAISearchQuery(q);
+      semanticSearch.mutate(q);
+    },
+    [query, semanticSearch, setLastAISearchQuery],
+  );
 
   const handleClear = useCallback(() => {
-    setQuery('');
-    setLastAISearchQuery('');
+    setQuery("");
+    setLastAISearchQuery("");
     semanticSearch.reset();
     inputRef.current?.focus();
   }, [semanticSearch, setLastAISearchQuery]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSearch();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      handleClear();
-    }
-  }, [handleSearch, handleClear]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleSearch();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        handleClear();
+      }
+    },
+    [handleSearch, handleClear],
+  );
 
   // Global keydown for focusing search
   useEffect(() => {
@@ -129,26 +135,30 @@ export const SearchView = () => {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
 
-  const handleExampleClick = useCallback((exampleQuery: string) => {
-    setQuery(exampleQuery);
-    prevQueryRef.current = '';
-    setLastAISearchQuery(exampleQuery);
-    semanticSearch.mutate(exampleQuery);
-  }, [semanticSearch, setLastAISearchQuery]);
+  const handleExampleClick = useCallback(
+    (exampleQuery: string) => {
+      setQuery(exampleQuery);
+      prevQueryRef.current = "";
+      setLastAISearchQuery(exampleQuery);
+      semanticSearch.mutate(exampleQuery);
+    },
+    [semanticSearch, setLastAISearchQuery],
+  );
 
   const results = semanticSearch.data?.matches ?? [];
   const isFallback = semanticSearch.data?.fallback ?? false;
-  const isLoading = semanticSearch.isPending && semanticSearch.phase === 'idle';
-  const isEnriching = semanticSearch.phase === 'enriching';
-  const hasSearched = semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
+  const isLoading = semanticSearch.isPending && semanticSearch.phase === "idle";
+  const isEnriching = semanticSearch.phase === "enriching";
+  const hasSearched =
+    semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface">
       {/* Header */}
-      <header className={cn(SECTION_BG, 'p-6 shrink-0')}>
+      <header className={cn(SECTION_BG, "p-6 shrink-0")}>
         <div className="flex items-center gap-4">
           <div>
-            <h1 className={cn(PAGE_TITLE, 'flex items-center gap-3')}>
+            <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
               <div className="p-2 bg-primary/10 rounded-xl">
                 <Sparkles className="w-6 h-6 text-primary" />
               </div>
@@ -164,7 +174,6 @@ export const SearchView = () => {
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-
           {/* Search Input */}
           <div className="relative">
             <div className="flex items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-5 py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-all">
@@ -176,7 +185,7 @@ export const SearchView = () => {
               <input
                 ref={inputRef}
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything about your network..."
                 className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant/50 text-lg"
@@ -189,8 +198,8 @@ export const SearchView = () => {
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: 0.15 }}
                     onClick={() => {
-                      setQuery('');
-                      setLastAISearchQuery('');
+                      setQuery("");
+                      setLastAISearchQuery("");
                       semanticSearch.reset();
                       inputRef.current?.focus();
                     }}
@@ -233,7 +242,9 @@ export const SearchView = () => {
                     onClick={() => handleExampleClick(q)}
                     className="text-left px-4 py-3 rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md hover:bg-primary/5 text-sm text-on-surface-variant hover:text-primary transition-all group"
                   >
-                    <span className="text-primary/50 group-hover:text-primary mr-1.5 font-bold">?</span>
+                    <span className="text-primary/50 group-hover:text-primary mr-1.5 font-bold">
+                      ?
+                    </span>
                     {q}
                   </motion.button>
                 ))}
@@ -281,10 +292,10 @@ export const SearchView = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                      {isFallback ? 'Keyword Results' : 'AI Results'}
+                      {isFallback ? "Keyword Results" : "AI Results"}
                     </span>
                     <span className="text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
-                      {results.length} match{results.length !== 1 ? 'es' : ''}
+                      {results.length} match{results.length !== 1 ? "es" : ""}
                     </span>
                   </div>
                   {isEnriching && (
@@ -327,21 +338,27 @@ export const SearchView = () => {
           </AnimatePresence>
 
           {/* No results */}
-          {!isLoading && hasSearched && results.length === 0 && !semanticSearch.isError && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-16 text-center"
-            >
-              <div className="p-4 bg-surface-container-low rounded-2xl mb-4">
-                <Search className="w-10 h-10 text-on-surface-variant/30" />
-              </div>
-              <p className="font-bold text-on-surface mb-1">No matches found</p>
-              <p className="text-sm text-on-surface-variant">
-                Try rephrasing your query, or check if your contacts have relevant details filled in.
-              </p>
-            </motion.div>
-          )}
+          {!isLoading &&
+            hasSearched &&
+            results.length === 0 &&
+            !semanticSearch.isError && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center justify-center py-16 text-center"
+              >
+                <div className="p-4 bg-surface-container-low rounded-2xl mb-4">
+                  <Search className="w-10 h-10 text-on-surface-variant/30" />
+                </div>
+                <p className="font-bold text-on-surface mb-1">
+                  No matches found
+                </p>
+                <p className="text-sm text-on-surface-variant">
+                  Try rephrasing your query, or check if your contacts have
+                  relevant details filled in.
+                </p>
+              </motion.div>
+            )}
 
           {/* Error state */}
           {semanticSearch.isError && (
@@ -355,7 +372,8 @@ export const SearchView = () => {
               </div>
               <p className="font-bold text-on-surface mb-1">Search failed</p>
               <p className="text-sm text-on-surface-variant">
-                {(semanticSearch.error as Error)?.message || 'An unexpected error occurred.'}
+                {(semanticSearch.error as Error)?.message ||
+                  "An unexpected error occurred."}
               </p>
             </motion.div>
           )}

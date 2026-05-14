@@ -30,7 +30,8 @@ export type ContactEmailRow = typeof schema.contactEmails.$inferSelect;
 /** Raw `contact_phones` row — one per phone-per-contact. */
 export type ContactPhoneRow = typeof schema.contactPhones.$inferSelect;
 /** Raw `contact_social_links` row — one per social URL. */
-export type ContactSocialLinkRow = typeof schema.contactSocialLinks.$inferSelect;
+export type ContactSocialLinkRow =
+  typeof schema.contactSocialLinks.$inferSelect;
 /** Raw `contact_education` row — one per school+degree pair. */
 export type ContactEducationRow = typeof schema.contactEducation.$inferSelect;
 /** Raw `contact_experience` row — one per job/role. */
@@ -109,7 +110,11 @@ export interface HydratedContact extends ContactRow {
     importedAt: string | null;
   }>;
   tags: Array<{ id: string; tag: string }>;
-  interests: Array<{ id: string; interest: string; isAiGenerated: number | boolean | null }>;
+  interests: Array<{
+    id: string;
+    interest: string;
+    isAiGenerated: number | boolean | null;
+  }>;
   attributes: Array<{ id: string; name: string; value: string }>;
   addresses: Array<{
     id: string;
@@ -136,12 +141,41 @@ export interface HydratedContact extends ContactRow {
 export interface ChildRecordsPayload {
   emails?: (string | { email: string; label?: string; isPrimary?: boolean })[];
   phones?: (string | { phone: string; label?: string; isPrimary?: boolean })[];
-  socialLinks?: (string | { url: string; platform?: string; handle?: string })[];
-  education?: { school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; description?: string }[];
-  experience?: { company: string; role?: string; startDate?: string; endDate?: string; isCurrent?: boolean; description?: string; location?: string }[];
+  socialLinks?: (
+    | string
+    | { url: string; platform?: string; handle?: string }
+  )[];
+  education?: {
+    school: string;
+    degree?: string;
+    fieldOfStudy?: string;
+    startDate?: string;
+    endDate?: string;
+    description?: string;
+  }[];
+  experience?: {
+    company: string;
+    role?: string;
+    startDate?: string;
+    endDate?: string;
+    isCurrent?: boolean;
+    description?: string;
+    location?: string;
+  }[];
   tags?: (string | { tag: string })[];
-  sources?: (string | { platform: string; externalId?: string; connectedOn?: string; rawData?: string })[];
+  sources?: (
+    | string
+    | {
+        platform: string;
+        externalId?: string;
+        connectedOn?: string;
+        rawData?: string;
+      }
+  )[];
   interests?: (string | { interest: string; isAiGenerated?: boolean })[];
   attributes?: { name: string; value: string }[];
-  addresses?: (string | { address: string; label?: string; isPrimary?: boolean })[];
+  addresses?: (
+    | string
+    | { address: string; label?: string; isPrimary?: boolean }
+  )[];
 }

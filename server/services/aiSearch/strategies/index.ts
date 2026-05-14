@@ -16,8 +16,8 @@ import { TwoPassStrategy } from "./twoPass.ts";
 import { SinglePassStrategy } from "./singlePass.ts";
 
 const STRATEGIES: Record<string, () => AISearchStrategy> = {
-  'two-pass': () => new TwoPassStrategy(),
-  'single-pass': () => new SinglePassStrategy(),
+  "two-pass": () => new TwoPassStrategy(),
+  "single-pass": () => new SinglePassStrategy(),
   // Future strategies:
   // 'consensus':   () => new ConsensusStrategy(),
   // 'judge':       () => new JudgeStrategy(),
@@ -28,9 +28,12 @@ const STRATEGIES: Record<string, () => AISearchStrategy> = {
  * (Gemini behavior). Callers can use getDefaultStrategyForProvider() to
  * resolve the optimal strategy for the active provider.
  */
-export function getStrategy(name: string = 'two-pass'): AISearchStrategy {
+export function getStrategy(name: string = "two-pass"): AISearchStrategy {
   const factory = STRATEGIES[name];
-  if (!factory) throw new Error(`Unknown AI Search strategy: "${name}". Available: ${Object.keys(STRATEGIES).join(', ')}`);
+  if (!factory)
+    throw new Error(
+      `Unknown AI Search strategy: "${name}". Available: ${Object.keys(STRATEGIES).join(", ")}`,
+    );
   return factory();
 }
 
@@ -41,10 +44,10 @@ export function getStrategy(name: string = 'two-pass'): AISearchStrategy {
  */
 export function getDefaultStrategyForProvider(providerName: string): string {
   switch (providerName.toLowerCase()) {
-    case 'openai':
-    case 'anthropic':
-      return 'single-pass';
+    case "openai":
+    case "anthropic":
+      return "single-pass";
     default:
-      return 'two-pass';
+      return "two-pass";
   }
 }

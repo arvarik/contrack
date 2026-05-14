@@ -13,15 +13,13 @@
 import { EventEmitter } from "events";
 import crypto from "crypto";
 import { log } from "../../utils/logger.ts";
-import type { 
-  DedupeScanMode, 
-  DedupeScanPhase, 
-  DedupeScanProgress, 
-  DedupeCluster, 
-  ClusterPair 
+import type {
+  DedupeScanMode,
+  DedupeScanPhase,
+  DedupeScanProgress,
+  DedupeCluster,
+  ClusterPair,
 } from "./types.ts";
-
-
 
 // =============================================================================
 // Job Queue
@@ -37,7 +35,10 @@ class DedupeJobQueue extends EventEmitter {
   /** Check whether a new scan can be started. */
   canStartScan(): { allowed: boolean; reason?: string } {
     if (this.processing) {
-      return { allowed: false, reason: 'A dedupe scan is already in progress.' };
+      return {
+        allowed: false,
+        reason: "A dedupe scan is already in progress.",
+      };
     }
     return { allowed: true };
   }
@@ -50,8 +51,8 @@ class DedupeJobQueue extends EventEmitter {
     const scan: DedupeScanProgress = {
       scanId,
       mode,
-      phase: 'starting',
-      phaseName: 'Initializing scan…',
+      phase: "starting",
+      phaseName: "Initializing scan…",
       contactsScanned: 0,
       totalContacts: 0,
       deterministicFound: 0,
@@ -70,7 +71,7 @@ class DedupeJobQueue extends EventEmitter {
     };
 
     this.scans.set(scanId, scan);
-    log.info('DedupeQueue', `Scan ${scanId} created — mode: ${mode}`);
+    log.info("DedupeQueue", `Scan ${scanId} created — mode: ${mode}`);
     return scan;
   }
 
@@ -83,7 +84,7 @@ class DedupeJobQueue extends EventEmitter {
   getActiveScan(): DedupeScanProgress | null {
     if (!this.processing) return null;
     for (const scan of this.scans.values()) {
-      if (scan.phase !== 'complete' && scan.phase !== 'error') {
+      if (scan.phase !== "complete" && scan.phase !== "error") {
         return scan;
       }
     }
@@ -112,27 +113,30 @@ class DedupeJobQueue extends EventEmitter {
   complete(scanId: string, clusters: DedupeCluster[]): void {
     const scan = this.scans.get(scanId);
     if (!scan) return;
-    scan.phase = 'complete';
-    scan.phaseName = 'Scan complete';
+    scan.phase = "complete";
+    scan.phaseName = "Scan complete";
     scan.clusters = clusters;
     scan.clustersFound = clusters.length;
     scan.completedAt = new Date().toISOString();
     this.processing = false;
     this.emit(scanId, scan);
-    log.info('DedupeQueue', `Scan ${scanId} complete — ${clusters.length} cluster(s)`);
+    log.info(
+      "DedupeQueue",
+      `Scan ${scanId} complete — ${clusters.length} cluster(s)`,
+    );
   }
 
   /** Mark scan as failed. */
   fail(scanId: string, error: string): void {
     const scan = this.scans.get(scanId);
     if (!scan) return;
-    scan.phase = 'error';
-    scan.phaseName = 'Scan failed';
+    scan.phase = "error";
+    scan.phaseName = "Scan failed";
     scan.error = error;
     scan.completedAt = new Date().toISOString();
     this.processing = false;
     this.emit(scanId, scan);
-    log.error('DedupeQueue', `Scan ${scanId} failed — ${error}`);
+    log.error("DedupeQueue", `Scan ${scanId} failed — ${error}`);
   }
 
   /** Cleanup completed/failed scans older than GC_TTL_MS. */
@@ -140,7 +144,7 @@ class DedupeJobQueue extends EventEmitter {
     const now = Date.now();
     let cleaned = 0;
     for (const [id, scan] of this.scans) {
-      if (scan.phase === 'complete' || scan.phase === 'error') {
+      if (scan.phase === "complete" || scan.phase === "error") {
         const scanTime = new Date(scan.startedAt).getTime();
         if (now - scanTime > GC_TTL_MS) {
           this.scans.delete(id);
@@ -150,7 +154,7 @@ class DedupeJobQueue extends EventEmitter {
       }
     }
     if (cleaned > 0) {
-      log.debug('DedupeQueue', `GC: cleaned ${cleaned} stale scan(s)`);
+      log.debug("DedupeQueue", `GC: cleaned ${cleaned} stale scan(s)`);
     }
   }
 }

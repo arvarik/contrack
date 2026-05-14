@@ -81,6 +81,7 @@ contrack/
 ### Testing
 
 Run the full test suite:
+
 ```bash
 npm test              # Watch mode
 npx vitest run        # Single run (180 tests, <600ms)

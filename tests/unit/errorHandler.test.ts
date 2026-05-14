@@ -18,7 +18,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ZodError, z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
-import { errorHandler, notFoundHandler } from "../../server/middleware/errorHandler.ts";
+import {
+  errorHandler,
+  notFoundHandler,
+} from "../../server/middleware/errorHandler.ts";
 import {
   AppError,
   NotFoundError,
@@ -79,7 +82,12 @@ describe("errorHandler — AppError translation", () => {
     const res = mockResponse();
     const next = vi.fn();
 
-    errorHandler(new NotFoundError("Contact", "c_123"), req, res, next as NextFunction);
+    errorHandler(
+      new NotFoundError("Contact", "c_123"),
+      req,
+      res,
+      next as NextFunction,
+    );
 
     expect(res.status).toHaveBeenCalledWith(404);
     const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -93,7 +101,12 @@ describe("errorHandler — AppError translation", () => {
     const res = mockResponse();
     const issues = [{ path: ["email"], message: "Invalid email" }];
 
-    errorHandler(new ValidationError("Bad body", issues), req, res, vi.fn() as NextFunction);
+    errorHandler(
+      new ValidationError("Bad body", issues),
+      req,
+      res,
+      vi.fn() as NextFunction,
+    );
 
     expect(res.status).toHaveBeenCalledWith(400);
     const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -105,7 +118,12 @@ describe("errorHandler — AppError translation", () => {
     const req = mockRequest();
     const res = mockResponse();
 
-    errorHandler(new RateLimitedError("too many"), req, res, vi.fn() as NextFunction);
+    errorHandler(
+      new RateLimitedError("too many"),
+      req,
+      res,
+      vi.fn() as NextFunction,
+    );
 
     expect(res.status).toHaveBeenCalledWith(429);
     const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -178,22 +196,29 @@ describe("errorHandler — express/sqlite parse errors", () => {
   it("maps SQLITE_CONSTRAINT to 400 DB_CONSTRAINT", () => {
     const req = mockRequest();
     const res = mockResponse();
-    const sqliteErr = Object.assign(new Error("UNIQUE constraint failed: contacts.email"), {
-      code: "SQLITE_CONSTRAINT",
-    });
+    const sqliteErr = Object.assign(
+      new Error("UNIQUE constraint failed: contacts.email"),
+      {
+        code: "SQLITE_CONSTRAINT",
+      },
+    );
 
     errorHandler(sqliteErr, req, res, vi.fn() as NextFunction);
 
     expect(res.status).toHaveBeenCalledWith(400);
     const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(body.error.code).toBe("DB_CONSTRAINT");
-    expect(body.error.details).toMatchObject({ sqliteMessage: expect.stringContaining("UNIQUE") });
+    expect(body.error.details).toMatchObject({
+      sqliteMessage: expect.stringContaining("UNIQUE"),
+    });
   });
 
   it("maps SQLITE_BUSY to 503 DB_BUSY", () => {
     const req = mockRequest();
     const res = mockResponse();
-    const sqliteErr = Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" });
+    const sqliteErr = Object.assign(new Error("database is locked"), {
+      code: "SQLITE_BUSY",
+    });
 
     errorHandler(sqliteErr, req, res, vi.fn() as NextFunction);
 
@@ -248,7 +273,12 @@ describe("errorHandler — already-sent headers", () => {
     const res = mockResponse();
     res.setHeadersSent(true);
 
-    errorHandler(new AppError("late error", 500), req, res, vi.fn() as NextFunction);
+    errorHandler(
+      new AppError("late error", 500),
+      req,
+      res,
+      vi.fn() as NextFunction,
+    );
 
     expect(res.end).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();

@@ -15,7 +15,10 @@
 import type { AIProvider } from "../../../ai/provider.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
-import { aiSearchOutputSchema, extractionJsonSchema } from "../promptTemplate.ts";
+import {
+  aiSearchOutputSchema,
+  extractionJsonSchema,
+} from "../promptTemplate.ts";
 import { recordInvocation } from "../../../services/aiStatsService.ts";
 import { log } from "../../../utils/logger.ts";
 import { getErrorMessage } from "../../../utils/helpers.ts";

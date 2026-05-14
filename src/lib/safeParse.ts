@@ -13,7 +13,8 @@ export function parseBriefingPoints(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.filter((p): p is string => typeof p === 'string');
+    if (Array.isArray(parsed))
+      return parsed.filter((p): p is string => typeof p === "string");
     return [];
   } catch {
     return [];

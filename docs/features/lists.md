@@ -86,6 +86,7 @@ curl -X DELETE http://localhost:3000/api/lists/list123
 ## Sidebar Integration
 
 Lists appear in the left sidebar with:
+
 - Custom icon
 - List name
 - Member count badge
@@ -99,6 +100,7 @@ Click a list in the sidebar to filter the contact list to only show members of t
 ## Merge Behavior
 
 When contacts are merged via the deduplication engine:
+
 - The primary contact inherits all list memberships from the duplicate
 - Duplicate membership entries are removed
 - List member counts update automatically

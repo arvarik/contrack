@@ -6,7 +6,11 @@
 // never against SDK-specific classes.
 // =============================================================================
 
-import type { AIGenerateOptions, AIGenerateResult, DiagnosticsSnapshot } from "./types.ts";
+import type {
+  AIGenerateOptions,
+  AIGenerateResult,
+  DiagnosticsSnapshot,
+} from "./types.ts";
 
 /**
  * Abstract interface for an LLM provider.

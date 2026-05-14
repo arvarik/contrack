@@ -1,9 +1,9 @@
-import React from 'react';
-import { motion } from 'motion/react';
-import { ArrowRight, ChevronLeft, Shield, AlertTriangle } from 'lucide-react';
-import { ContactCard } from '../shared/ContactCard';
-import type { Contact } from '../../../../types';
-import { cn } from '../../../../lib/utils';
+import React from "react";
+import { motion } from "motion/react";
+import { ArrowRight, ChevronLeft, Shield, AlertTriangle } from "lucide-react";
+import { ContactCard } from "../shared/ContactCard";
+import type { Contact } from "../../../../types";
+import { cn } from "../../../../lib/utils";
 
 interface CompareStageProps {
   selected: Contact[];
@@ -13,7 +13,13 @@ interface CompareStageProps {
   onNext: () => void;
 }
 
-export const CompareStage = ({ selected, primaryId, setPrimaryId, onBack, onNext }: CompareStageProps) => {
+export const CompareStage = ({
+  selected,
+  primaryId,
+  setPrimaryId,
+  onBack,
+  onNext,
+}: CompareStageProps) => {
   return (
     <motion.div
       key="compare"
@@ -36,20 +42,27 @@ export const CompareStage = ({ selected, primaryId, setPrimaryId, onBack, onNext
       </div>
 
       {/* Comparison cards */}
-      <div className={cn(
-        "grid gap-4 mb-6",
-        selected.length === 2 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1 lg:grid-cols-3"
-      )}>
+      <div
+        className={cn(
+          "grid gap-4 mb-6",
+          selected.length === 2
+            ? "grid-cols-1 lg:grid-cols-2"
+            : "grid-cols-1 lg:grid-cols-3",
+        )}
+      >
         {selected.map((contact) => (
           <ContactCard
             key={contact.id}
             contact={contact}
-            label={contact.id === primaryId ? 'Primary (Keeper)' : 'Will Merge In'}
-            labelColor={contact.id === primaryId
-              ? 'text-emerald-600 bg-emerald-500/10'
-              : 'text-amber-600 bg-amber-500/10'
+            label={
+              contact.id === primaryId ? "Primary (Keeper)" : "Will Merge In"
             }
-            other={selected.find(c => c.id !== contact.id)}
+            labelColor={
+              contact.id === primaryId
+                ? "text-emerald-600 bg-emerald-500/10"
+                : "text-amber-600 bg-amber-500/10"
+            }
+            other={selected.find((c) => c.id !== contact.id)}
             isPrimary={contact.id === primaryId}
             onSetPrimary={() => setPrimaryId(contact.id)}
           />
@@ -61,10 +74,12 @@ export const CompareStage = ({ selected, primaryId, setPrimaryId, onBack, onNext
         <div className="flex items-start gap-3 p-4 bg-amber-500/8 rounded-xl mb-6">
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
-            <div className="text-sm font-bold text-amber-600 mb-1">3-Way Merge</div>
+            <div className="text-sm font-bold text-amber-600 mb-1">
+              3-Way Merge
+            </div>
             <p className="text-xs text-on-surface-variant">
-              Two contacts will be merged sequentially into the primary. All data from both
-              duplicates will be preserved and combined.
+              Two contacts will be merged sequentially into the primary. All
+              data from both duplicates will be preserved and combined.
             </p>
           </div>
         </div>

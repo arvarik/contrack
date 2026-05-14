@@ -21,11 +21,30 @@
  * a generic `readonly string[]`.
  */
 const UPDATABLE_CONTACT_FIELDS = [
-  'name', 'firstName', 'lastName', 'headline', 'role', 'company',
-  'location', 'birthday', 'preferences', 'avatarUrl', 'cadenceDays',
-  'lastContactedAt', 'nextFollowUpAt', 'themeColor', 'about',
-  'pronouns', 'industry', 'website', 'isArchived', 'aiBriefing', 'aiBriefingAt',
-  'aiBackground', 'aiSummary', 'aiHydratedAt',
+  "name",
+  "firstName",
+  "lastName",
+  "headline",
+  "role",
+  "company",
+  "location",
+  "birthday",
+  "preferences",
+  "avatarUrl",
+  "cadenceDays",
+  "lastContactedAt",
+  "nextFollowUpAt",
+  "themeColor",
+  "about",
+  "pronouns",
+  "industry",
+  "website",
+  "isArchived",
+  "aiBriefing",
+  "aiBriefingAt",
+  "aiBackground",
+  "aiSummary",
+  "aiHydratedAt",
 ] as const;
 
 /**
@@ -54,12 +73,16 @@ const UPDATABLE_CONTACT_FIELDS = [
  * // → { name: "Alex", isArchived: 1, updatedAt: "2026-05-14T…Z" }
  * ```
  */
-export function buildContactUpdate(body: Record<string, unknown>): Record<string, unknown> {
-  const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+export function buildContactUpdate(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const update: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
   for (const f of UPDATABLE_CONTACT_FIELDS) {
     if (body[f] !== undefined) {
       // SQLite can't bind JS booleans — coerce to 0/1
-      update[f] = typeof body[f] === 'boolean' ? (body[f] ? 1 : 0) : body[f];
+      update[f] = typeof body[f] === "boolean" ? (body[f] ? 1 : 0) : body[f];
     }
   }
   return update;

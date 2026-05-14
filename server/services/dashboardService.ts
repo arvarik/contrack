@@ -40,7 +40,9 @@ export const dashboardService = {
     }
 
     // 2. Ghosts
-    const ghosts = sqlite.prepare(`
+    const ghosts = sqlite
+      .prepare(
+        `
       SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor,
              COUNT(DISTINCT im.interactionId) as mentionCount
       FROM contacts c
@@ -49,24 +51,32 @@ export const dashboardService = {
       GROUP BY c.id
       ORDER BY mentionCount DESC
       LIMIT 5
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     // 3. Metrics
-    const metrics = sqlite.prepare(`
+    const metrics = sqlite
+      .prepare(
+        `
       SELECT 
         (SELECT COUNT(*) FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
         (SELECT ROUND(AVG(CAST(julianday('now') - julianday(lastContactedAt) AS REAL))) FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL) as avgDaysSinceInteraction,
         (SELECT COUNT(*) FROM contacts WHERE relationshipScore < 40 AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
         (SELECT COUNT(*) FROM interactions WHERE date >= date('now', '-30 days')) as totalInteractions30d,
         (SELECT COUNT(*) FROM contacts WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
-    `).get() as any;
+    `,
+      )
+      .get() as any;
 
     if (metrics.avgDaysSinceInteraction === null) {
       metrics.avgDaysSinceInteraction = 0;
     }
 
     // 4. At Risk
-    const atRisk = sqlite.prepare(`
+    const atRisk = sqlite
+      .prepare(
+        `
       SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.relationshipScore,
              CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
              (SELECT title FROM interactions WHERE contactId = c.id ORDER BY date DESC LIMIT 1) as lastInteractionTitle
@@ -77,64 +87,90 @@ export const dashboardService = {
         AND c.lastContactedAt IS NOT NULL
       ORDER BY c.relationshipScore ASC
       LIMIT 10
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     // 5. Recently Added
-    const recentlyAdded = sqlite.prepare(`
+    const recentlyAdded = sqlite
+      .prepare(
+        `
       SELECT id, name, company, avatarUrl, themeColor, addedAt
       FROM contacts
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       ORDER BY addedAt DESC
       LIMIT 5
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     // 6. Industry Composition
-    const industryComposition = sqlite.prepare(`
+    const industryComposition = sqlite
+      .prepare(
+        `
       SELECT industry, COUNT(*) as count 
       FROM contacts 
       WHERE isArchived = 0 AND isGhost = 0 AND industry IS NOT NULL AND industry != ''
       GROUP BY industry 
       ORDER BY count DESC 
       LIMIT 8
-    `).all() as { industry: string, count: number }[];
+    `,
+      )
+      .all() as { industry: string; count: number }[];
 
     // 7. Location Composition
-    const locationComposition = sqlite.prepare(`
+    const locationComposition = sqlite
+      .prepare(
+        `
       SELECT location, COUNT(*) as count 
       FROM contacts 
       WHERE isArchived = 0 AND isGhost = 0 AND location IS NOT NULL AND location != ''
       GROUP BY location 
       ORDER BY count DESC 
       LIMIT 8
-    `).all() as { location: string, count: number }[];
+    `,
+      )
+      .all() as { location: string; count: number }[];
 
     // 8. Role Composition
-    const roleComposition = sqlite.prepare(`
+    const roleComposition = sqlite
+      .prepare(
+        `
       SELECT role, COUNT(*) as count 
       FROM contacts 
       WHERE isArchived = 0 AND isGhost = 0 AND role IS NOT NULL AND role != ''
       GROUP BY role 
       ORDER BY count DESC 
       LIMIT 8
-    `).all() as { role: string, count: number }[];
+    `,
+      )
+      .all() as { role: string; count: number }[];
 
     // 9. Interaction Breakdown (30d)
-    const interactionBreakdown30d = sqlite.prepare(`
+    const interactionBreakdown30d = sqlite
+      .prepare(
+        `
       SELECT type, COUNT(*) as count
       FROM interactions
       WHERE date >= date('now', '-30 days')
       GROUP BY type
       ORDER BY count DESC
-    `).all() as { type: string, count: number }[];
+    `,
+      )
+      .all() as { type: string; count: number }[];
 
     // 10. Network Growth Timeline (30d)
-    const networkGrowthTimeline30d = sqlite.prepare(`
+    const networkGrowthTimeline30d = sqlite
+      .prepare(
+        `
       SELECT id, name, company, avatarUrl, themeColor, addedAt
       FROM contacts
       WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       ORDER BY addedAt DESC
       LIMIT 20
-    `).all() as any[];
+    `,
+      )
+      .all() as any[];
 
     const elapsed = Date.now() - startMs;
     log.info("Dashboard", `Assembled dashboard payload in ${elapsed}ms`);
@@ -151,7 +187,7 @@ export const dashboardService = {
       locationComposition,
       roleComposition,
       interactionBreakdown30d,
-      networkGrowthTimeline30d
+      networkGrowthTimeline30d,
     };
   },
 
@@ -160,52 +196,88 @@ export const dashboardService = {
     const cached = aiCache.get<DailyInsight>("dailyInsight", "singleton");
     if (cached) {
       import("./aiStatsService.ts").then(({ recordInvocation }) => {
-        recordInvocation({ operation: "dailyInsight", latencyMs: 0, cached: true, description: "Daily Insight cache hit" });
+        recordInvocation({
+          operation: "dailyInsight",
+          latencyMs: 0,
+          cached: true,
+          description: "Daily Insight cache hit",
+        });
       });
       return cached;
     }
 
-    log.info("Dashboard", "Cache miss for Daily Insight. Generating new insight...");
+    log.info(
+      "Dashboard",
+      "Cache miss for Daily Insight. Generating new insight...",
+    );
 
-    const totalActive = (sqlite.prepare(`SELECT COUNT(*) as count FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`).get() as any).count;
-    
-    const industryRows = sqlite.prepare(`
+    const totalActive = (
+      sqlite
+        .prepare(
+          `SELECT COUNT(*) as count FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
+        )
+        .get() as any
+    ).count;
+
+    const industryRows = sqlite
+      .prepare(
+        `
       SELECT industry, COUNT(*) as count 
       FROM contacts 
       WHERE industry IS NOT NULL AND industry != '' AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       GROUP BY industry
-    `).all() as { industry: string, count: number }[];
+    `,
+      )
+      .all() as { industry: string; count: number }[];
     const industryDistribution: Record<string, number> = {};
     for (const r of industryRows) industryDistribution[r.industry] = r.count;
 
-    const notReached = sqlite.prepare(`
+    const notReached = sqlite
+      .prepare(
+        `
       SELECT name FROM contacts 
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) 
         AND lastContactedAt < date('now', '-60 days')
       LIMIT 10
-    `).all() as { name: string }[];
+    `,
+      )
+      .all() as { name: string }[];
 
-    const newContacts30d = (sqlite.prepare(`
+    const newContacts30d = (
+      sqlite
+        .prepare(
+          `
       SELECT COUNT(*) as count FROM contacts 
       WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-    `).get() as any).count;
+    `,
+        )
+        .get() as any
+    ).count;
 
-    const topRel = sqlite.prepare(`
+    const topRel = sqlite
+      .prepare(
+        `
       SELECT name FROM contacts 
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       ORDER BY relationshipScore DESC
       LIMIT 3
-    `).all() as { name: string }[];
+    `,
+      )
+      .all() as { name: string }[];
 
-    const bottomRel = sqlite.prepare(`
+    const bottomRel = sqlite
+      .prepare(
+        `
       SELECT name FROM contacts 
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
       ORDER BY relationshipScore ASC
       LIMIT 3
-    `).all() as { name: string }[];
+    `,
+      )
+      .all() as { name: string }[];
 
     const numContacts = totalActive;
-    
+
     // Check if we have enough data so the AI doesn't hallucinate weird stuff
     if (numContacts === 0) return null;
 
@@ -222,7 +294,7 @@ export const dashboardService = {
     if (insight) {
       aiCache.set("dailyInsight", "singleton", insight);
     }
-    
+
     return insight;
-  }
+  },
 };

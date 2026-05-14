@@ -114,7 +114,11 @@ describe("QuotaTracker", () => {
     });
 
     it("adds overhead for JSON responses", () => {
-      const textTokens = tracker.estimateTokens("Test prompt", undefined, false);
+      const textTokens = tracker.estimateTokens(
+        "Test prompt",
+        undefined,
+        false,
+      );
       const jsonTokens = tracker.estimateTokens("Test prompt", undefined, true);
       // JSON overhead is +50 tokens on top of the base estimate
       expect(jsonTokens).toBe(textTokens + 50);
@@ -122,7 +126,10 @@ describe("QuotaTracker", () => {
 
     it("includes system prompt in estimate", () => {
       const withoutSystem = tracker.estimateTokens("Prompt");
-      const withSystem = tracker.estimateTokens("Prompt", "System instructions");
+      const withSystem = tracker.estimateTokens(
+        "Prompt",
+        "System instructions",
+      );
       expect(withSystem).toBeGreaterThan(withoutSystem);
     });
   });
@@ -342,9 +349,9 @@ describe("SmartRouter", () => {
     const router = new SmartRouter(tracker, "PAID");
 
     // Deny all stable models to force preview selection
-    const stableIds = GEMINI_REGISTRY
-      .filter((m) => m.stability === "stable")
-      .map((m) => m.id);
+    const stableIds = GEMINI_REGISTRY.filter(
+      (m) => m.stability === "stable",
+    ).map((m) => m.id);
 
     const route = router.getNextAvailableRoute(
       100,
@@ -363,9 +370,9 @@ describe("SmartRouter", () => {
     const freeModels = GEMINI_REGISTRY.filter((m) => m.hasFreeTier);
     const allBroken = new Set(freeModels.map((m) => m.id));
 
-    expect(() =>
-      router.getNextAvailableRoute(100, {}, allBroken),
-    ).toThrow("No models match routing criteria");
+    expect(() => router.getNextAvailableRoute(100, {}, allBroken)).toThrow(
+      "No models match routing criteria",
+    );
   });
 
   // ── Model Preference Routing ────────────────────────────────────────
@@ -404,9 +411,9 @@ describe("SmartRouter", () => {
     const router = new SmartRouter(tracker, "PAID");
 
     // Circuit-break ALL pro models
-    const proIds = GEMINI_REGISTRY
-      .filter((m) => m.modelClass === "pro")
-      .map((m) => m.id);
+    const proIds = GEMINI_REGISTRY.filter((m) => m.modelClass === "pro").map(
+      (m) => m.id,
+    );
     const breakers = new Set(proIds);
 
     // Prefer pro — all pro models broken, should fall back to another class
@@ -427,9 +434,9 @@ describe("SmartRouter", () => {
 
     // Deny all stable models — without auto-preview, this would throw.
     // With prefer set, preview models are automatically allowed.
-    const stableIds = GEMINI_REGISTRY
-      .filter((m) => m.stability === "stable")
-      .map((m) => m.id);
+    const stableIds = GEMINI_REGISTRY.filter(
+      (m) => m.stability === "stable",
+    ).map((m) => m.id);
 
     const route = router.getNextAvailableRoute(
       100,

@@ -12,11 +12,11 @@
  *
  * @module api/dedupe
  */
-import { useEffect, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { DedupeScanMode, DedupeScanProgress } from '../types';
+import { useEffect, useRef } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { DedupeScanMode, DedupeScanProgress } from "../types";
 
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 // =============================================================================
 // Start dedupe scan mutation
@@ -24,15 +24,21 @@ const API_BASE = '/api';
 
 export const useStartDedupeScan = () => {
   return useMutation({
-    mutationFn: async (opts: { mode: DedupeScanMode; autoMergeThreshold?: number }) => {
+    mutationFn: async (opts: {
+      mode: DedupeScanMode;
+      autoMergeThreshold?: number;
+    }) => {
       const res = await fetch(`${API_BASE}/dedupe/scan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: opts.mode, autoMergeThreshold: opts.autoMergeThreshold }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: opts.mode,
+          autoMergeThreshold: opts.autoMergeThreshold,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Failed to start scan');
+        throw new Error(err.error ?? "Failed to start scan");
       }
       return res.json() as Promise<{ scanId: string; mode: DedupeScanMode }>;
     },
@@ -98,9 +104,9 @@ export const useDedupeStream = (
           const scan: DedupeScanProgress = JSON.parse(event.data);
           retries = 0; // Reset retry count on successful message
           onUpdateRef.current(scan);
-          if (scan.phase === 'complete' || scan.phase === 'error') {
+          if (scan.phase === "complete" || scan.phase === "error") {
             // Invalidate contacts cache so merged data appears everywhere
-            queryClient.invalidateQueries({ queryKey: ['contacts'] });
+            queryClient.invalidateQueries({ queryKey: ["contacts"] });
             source?.close();
             closed = true;
           }
@@ -135,20 +141,26 @@ export const useDedupeStream = (
 export const useMergeContacts = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ primaryId, duplicateId }: { primaryId: string; duplicateId: string }) => {
+    mutationFn: async ({
+      primaryId,
+      duplicateId,
+    }: {
+      primaryId: string;
+      duplicateId: string;
+    }) => {
       const res = await fetch(`${API_BASE}/contacts/merge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ primaryId, duplicateId }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Merge failed');
+        throw new Error(err.error || "Merge failed");
       }
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };
@@ -156,24 +168,31 @@ export const useMergeContacts = () => {
 export const useMergeBatch = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (merges: { primaryId: string; duplicateId: string }[]) => {
+    mutationFn: async (
+      merges: { primaryId: string; duplicateId: string }[],
+    ) => {
       const res = await fetch(`${API_BASE}/contacts/merge-batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merges }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Batch merge failed');
+        throw new Error(err.error || "Batch merge failed");
       }
       return res.json() as Promise<{
-        results: { primaryId: string; duplicateId: string; success: boolean; error?: string }[];
+        results: {
+          primaryId: string;
+          duplicateId: string;
+          success: boolean;
+          error?: string;
+        }[];
         succeeded: number;
         total: number;
       }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };
@@ -189,15 +208,21 @@ export const useMergeBatch = () => {
 export const useMergeCluster = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ primaryId, duplicateIds }: { primaryId: string; duplicateIds: string[] }) => {
+    mutationFn: async ({
+      primaryId,
+      duplicateIds,
+    }: {
+      primaryId: string;
+      duplicateIds: string[];
+    }) => {
       const res = await fetch(`${API_BASE}/contacts/merge-cluster`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ primaryId, duplicateIds }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Cluster merge failed');
+        throw new Error(err.error || "Cluster merge failed");
       }
       return res.json() as Promise<{
         success: boolean;
@@ -207,7 +232,7 @@ export const useMergeCluster = () => {
       }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };
@@ -219,15 +244,17 @@ export const useMergeCluster = () => {
 export const useMergeClusters = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (clusters: { primaryId: string; duplicateIds: string[] }[]) => {
+    mutationFn: async (
+      clusters: { primaryId: string; duplicateIds: string[] }[],
+    ) => {
       const res = await fetch(`${API_BASE}/contacts/merge-clusters`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clusters }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Batch cluster merge failed');
+        throw new Error(err.error || "Batch cluster merge failed");
       }
       return res.json() as Promise<{
         results: { primaryId: string; merged: number; failed: number }[];
@@ -236,7 +263,7 @@ export const useMergeClusters = () => {
       }>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };
@@ -249,12 +276,14 @@ export const useSeedDuplicates = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/dev/seed-duplicates`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to seed duplicates');
+      const res = await fetch(`${API_BASE}/dev/seed-duplicates`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to seed duplicates");
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 };

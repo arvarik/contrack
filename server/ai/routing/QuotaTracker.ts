@@ -242,7 +242,8 @@ export class QuotaTracker {
     grounding: { rpd: number; limit: number; remaining: number };
   } {
     const now = Date.now();
-    const models: Record<string, { rpm: number; tpm: number; rpd: number }> = {};
+    const models: Record<string, { rpm: number; tpm: number; rpd: number }> =
+      {};
 
     for (const [modelId, window] of this.usage) {
       this.cleanup(window, now);
@@ -258,7 +259,10 @@ export class QuotaTracker {
       grounding: {
         rpd: this.groundingUsage.rpd,
         limit: this.groundingRPDLimit,
-        remaining: Math.max(0, this.groundingRPDLimit - this.groundingUsage.rpd),
+        remaining: Math.max(
+          0,
+          this.groundingRPDLimit - this.groundingUsage.rpd,
+        ),
       },
     };
   }

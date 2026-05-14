@@ -74,7 +74,11 @@ export const useSearchHistory = () => {
   // Stash the user's typed text before they started ↑/↓ so we can restore it on ↓ past 0
   const stashedInputRef = useRef<string>("");
   // Track last meaningful query for 30s re-populate on modal reopen
-  const lastQueryRef = useRef<{ query: string; mode: string; timestamp: number } | null>(null);
+  const lastQueryRef = useRef<{
+    query: string;
+    mode: string;
+    timestamp: number;
+  } | null>(null);
 
   /**
    * Record a successful search. Deduplicates case-insensitively and caps at MAX_STORED.
@@ -165,7 +169,10 @@ export const useSearchHistory = () => {
    * Used to pre-fill the input when the modal is reopened quickly (flow-state preservation).
    * Returns null if no recent query exists or the window has expired.
    */
-  const getLastQuery = useCallback((): { query: string; mode: string } | null => {
+  const getLastQuery = useCallback((): {
+    query: string;
+    mode: string;
+  } | null => {
     const last = lastQueryRef.current;
     if (!last) return null;
     if (Date.now() - last.timestamp > REPOPULATE_WINDOW_MS) return null;

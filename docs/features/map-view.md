@@ -11,6 +11,7 @@ Access via the **Map** tab in the navigation or `Cmd+Shift+M`.
 ### Cluster Markers
 
 Contacts are grouped into clusters using React Leaflet Cluster. As you zoom in:
+
 - Large clusters break into smaller groups
 - Individual pins appear at high zoom levels
 - Cluster badges show the number of contacts in each group
@@ -18,6 +19,7 @@ Contacts are grouped into clusters using React Leaflet Cluster. As you zoom in:
 ### Contact Pins
 
 Each pin on the map represents a geocoded contact:
+
 - Click a pin to open the contact's detail panel as a slide-over overlay
 - The overlay supports full profile editing, timeline viewing, and interaction logging
 - Press `Escape` or click outside to close
@@ -25,6 +27,7 @@ Each pin on the map represents a geocoded contact:
 ### Map Overlay Detail
 
 When you click a contact on the map, their profile slides in from the right as an overlay:
+
 - Full contact detail view (same as the Network view)
 - Animated entry with spring physics
 - Responsive width (full on mobile, 760px on tablet, 860px on desktop)
@@ -37,10 +40,10 @@ Contrack automatically geocodes contact addresses to latitude/longitude coordina
 
 ### Providers
 
-| Provider | Priority | Accuracy | API Key Required |
-|----------|----------|----------|-----------------|
-| **Mapbox** | Primary (if configured) | High | Yes (`MAPBOX_API_KEY`) |
-| **Nominatim** | Fallback | Medium | No (free, no key) |
+| Provider      | Priority                | Accuracy | API Key Required       |
+| ------------- | ----------------------- | -------- | ---------------------- |
+| **Mapbox**    | Primary (if configured) | High     | Yes (`MAPBOX_API_KEY`) |
+| **Nominatim** | Fallback                | Medium   | No (free, no key)      |
 
 ### How It Works
 

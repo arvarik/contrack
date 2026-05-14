@@ -169,8 +169,8 @@ export interface Contact {
   tags: ContactTag[];
   lists: ContactList[];
   addresses: ContactAddress[];
-  interests: { id: string; interest: string; isAiGenerated?: boolean; }[];
-  attributes: { id: string; name: string; value: string; }[];
+  interests: { id: string; interest: string; isAiGenerated?: boolean }[];
+  attributes: { id: string; name: string; value: string }[];
   interactionCount?: number;
   relationshipScore?: number;
   /** Computed by API — number of social links (available in slim view) */
@@ -184,10 +184,22 @@ export interface Contact {
  * partial child entities (e.g., emails without `id`, addresses without
  * `source`), which TypeScript's strict Partial<ContactEmail>[] rejects.
  */
-export type ContactUpdateData = Partial<Omit<Contact,
-  'emails' | 'phones' | 'addresses' | 'socialLinks' | 'interests' | 'attributes' |
-  'education' | 'experience' | 'sources' | 'tags' | 'lists'
->> & {
+export type ContactUpdateData = Partial<
+  Omit<
+    Contact,
+    | "emails"
+    | "phones"
+    | "addresses"
+    | "socialLinks"
+    | "interests"
+    | "attributes"
+    | "education"
+    | "experience"
+    | "sources"
+    | "tags"
+    | "lists"
+  >
+> & {
   emails?: Partial<ContactEmail>[];
   phones?: Partial<ContactPhone>[];
   addresses?: Partial<ContactAddress>[];
@@ -264,8 +276,6 @@ export interface ActionItem {
   contactThemeColor?: string;
 }
 
-
-
 // =============================================================================
 // Dedupe Engine Types
 // =============================================================================
@@ -275,7 +285,7 @@ export interface DedupeSuggestion {
   id: string;
   contactA: Contact;
   contactB: Contact;
-  matchType: 'email' | 'phone' | 'ai';
+  matchType: "email" | "phone" | "ai";
   confidence: number;
   reasoning: string;
   matchedField?: string;
@@ -285,7 +295,15 @@ export interface DedupeSuggestion {
 export interface ClusterPair {
   contactIdA: string;
   contactIdB: string;
-  matchType: 'email' | 'phone' | 'name' | 'name_company' | 'nickname' | 'cross_source' | 'fuzzy' | 'ai';
+  matchType:
+    | "email"
+    | "phone"
+    | "name"
+    | "name_company"
+    | "nickname"
+    | "cross_source"
+    | "fuzzy"
+    | "ai";
   confidence: number;
   reasoning: string;
   matchedField?: string;
@@ -306,8 +324,24 @@ export interface DedupeCluster {
   requiresConfirmation: boolean;
 }
 
-export type DedupeScanMode = 'deterministic' | 'ai' | 'both' | 'quick' | 'deep' | 'full';
-export type DedupeScanPhase = 'starting' | 'normalizing' | 'deterministic' | 'blocking' | 'scoring' | 'ai' | 'clustering' | 'persisting' | 'complete' | 'error';
+export type DedupeScanMode =
+  | "deterministic"
+  | "ai"
+  | "both"
+  | "quick"
+  | "deep"
+  | "full";
+export type DedupeScanPhase =
+  | "starting"
+  | "normalizing"
+  | "deterministic"
+  | "blocking"
+  | "scoring"
+  | "ai"
+  | "clustering"
+  | "persisting"
+  | "complete"
+  | "error";
 
 export interface DedupeScanProgress {
   scanId: string;
@@ -323,7 +357,7 @@ export interface DedupeScanProgress {
   scoringAutoMerge: number;
   scoringAiQueue: number;
   scoringDiscarded: number;
-  suggestions: DedupeSuggestion[];    // Deprecated — kept for backward compat only
+  suggestions: DedupeSuggestion[]; // Deprecated — kept for backward compat only
   clustersFound: number;
   totalPairs: number;
   autoMerged: number;
@@ -363,16 +397,21 @@ export interface SemanticSearchResult {
 // =============================================================================
 
 /** Status lifecycle: queued → searching → merging → success | error */
-export type AISearchJobStatus = 'queued' | 'searching' | 'merging' | 'success' | 'error';
+export type AISearchJobStatus =
+  | "queued"
+  | "searching"
+  | "merging"
+  | "success"
+  | "error";
 
 /** Error classification for contextual UI messages. */
 export type AISearchErrorType =
-  | 'rate_limit'
-  | 'validation'
-  | 'network'
-  | 'auth'
-  | 'ambiguous'
-  | 'unknown';
+  | "rate_limit"
+  | "validation"
+  | "network"
+  | "auth"
+  | "ambiguous"
+  | "unknown";
 
 export interface AISearchJob {
   id: string;
@@ -392,7 +431,7 @@ export interface AISearchBatch {
   strategy: string;
   jobs: AISearchJob[];
   createdAt: string;
-  status: 'processing' | 'complete' | 'cancelled';
+  status: "processing" | "complete" | "cancelled";
   totalTokens: number;
 }
 
@@ -402,7 +441,7 @@ export interface AISearchBatch {
 
 /** A single CRM intelligence signal for the Cmd+K zero-state. */
 export interface ZeroStateInsight {
-  type: 'action_items' | 'at_risk' | 'ghost' | 'stale_data' | 'dedupe';
+  type: "action_items" | "at_risk" | "ghost" | "stale_data" | "dedupe";
   label: string;
   count?: number;
   contact?: {

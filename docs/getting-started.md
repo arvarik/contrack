@@ -60,16 +60,16 @@ NODE_ENV=production npx tsx server.ts
 
 ## Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start Vite + Express dev server with HMR |
-| `npm run build` | Compile production bundle via Vite |
-| `npm run preview` | Preview production build locally |
-| `npm run seed` | Clear DB and repopulate with demo data |
-| `npm run lint` | TypeScript type-check (`tsc --noEmit`) |
-| `npm test` | Run Vitest test suite (113 tests, <500ms) |
+| Script                | Description                                           |
+| --------------------- | ----------------------------------------------------- |
+| `npm run dev`         | Start Vite + Express dev server with HMR              |
+| `npm run build`       | Compile production bundle via Vite                    |
+| `npm run preview`     | Preview production build locally                      |
+| `npm run seed`        | Clear DB and repopulate with demo data                |
+| `npm run lint`        | TypeScript type-check (`tsc --noEmit`)                |
+| `npm test`            | Run Vitest test suite (113 tests, <500ms)             |
 | `npm run db:generate` | Generate a Drizzle Kit migration after schema changes |
-| `npm run clean` | Purge `dist/` build cache |
+| `npm run clean`       | Purge `dist/` build cache                             |
 
 ---
 
@@ -77,63 +77,63 @@ NODE_ENV=production npx tsx server.ts
 
 ### Global
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+K` / `Ctrl+K` | Toggle Command Palette |
-| `Cmd+Shift+I` | Quick Note Modal |
-| `Cmd+Shift+N` | Navigate to Network |
-| `Cmd+Shift+P` | Navigate to Pulse |
-| `Cmd+Shift+M` | Navigate to Map |
-| `Cmd+Shift+S` | Navigate to AI Search |
-| `Cmd+Shift+,` | Navigate to Settings |
-| `Cmd+[` / `Cmd+]` | Browser back / forward |
-| `/` | Focus active search bar |
-| `?` | Toggle Keyboard Shortcuts Reference |
-| `Escape` | Unfocus / close modals |
+| Shortcut           | Action                              |
+| ------------------ | ----------------------------------- |
+| `Cmd+K` / `Ctrl+K` | Toggle Command Palette              |
+| `Cmd+Shift+I`      | Quick Note Modal                    |
+| `Cmd+Shift+N`      | Navigate to Network                 |
+| `Cmd+Shift+P`      | Navigate to Pulse                   |
+| `Cmd+Shift+M`      | Navigate to Map                     |
+| `Cmd+Shift+S`      | Navigate to AI Search               |
+| `Cmd+Shift+,`      | Navigate to Settings                |
+| `Cmd+[` / `Cmd+]`  | Browser back / forward              |
+| `/`                | Focus active search bar             |
+| `?`                | Toggle Keyboard Shortcuts Reference |
+| `Escape`           | Unfocus / close modals              |
 
 ### Command Palette
 
-| Shortcut | Action |
-|----------|--------|
-| `↑ / ↓` | Navigate results |
-| `Enter` | Select / navigate to contact |
-| `→` | Open Action Sub-Menu for focused contact |
-| `←` or `Escape` | Go back one layer (sub-menu → results → close) |
-| `Space` (hold) | Peek contact details (200ms delay) |
-| `↑ / ↓` (empty input) | Browse search history |
-| `Backspace` (empty input) | Remove last facet filter pill |
-| `role:`, `company:`, etc. | Activate faceted filter autocomplete |
+| Shortcut                  | Action                                         |
+| ------------------------- | ---------------------------------------------- |
+| `↑ / ↓`                   | Navigate results                               |
+| `Enter`                   | Select / navigate to contact                   |
+| `→`                       | Open Action Sub-Menu for focused contact       |
+| `←` or `Escape`           | Go back one layer (sub-menu → results → close) |
+| `Space` (hold)            | Peek contact details (200ms delay)             |
+| `↑ / ↓` (empty input)     | Browse search history                          |
+| `Backspace` (empty input) | Remove last facet filter pill                  |
+| `role:`, `company:`, etc. | Activate faceted filter autocomplete           |
 
 ### Action Sub-Menu (inside Command Palette)
 
-| Shortcut | Action |
-|----------|--------|
-| `↵` Enter | View Profile |
-| `N` | Log Note (inline composer) |
-| `C` | Log Call (inline composer) |
-| `B` | Catch Me Up (AI briefing) |
-| `L` | Add to List (inline picker) |
+| Shortcut  | Action                      |
+| --------- | --------------------------- |
+| `↵` Enter | View Profile                |
+| `N`       | Log Note (inline composer)  |
+| `C`       | Log Call (inline composer)  |
+| `B`       | Catch Me Up (AI briefing)   |
+| `L`       | Add to List (inline picker) |
 
 ### Contact List
 
-| Shortcut | Action |
-|----------|--------|
-| `↓` or `j` | Next contact |
-| `↑` or `k` | Previous contact |
-| `c` | New Contact modal |
-| `v` | Magic Paste (AI extraction) |
-| `Enter` | Focus interaction composer |
+| Shortcut   | Action                      |
+| ---------- | --------------------------- |
+| `↓` or `j` | Next contact                |
+| `↑` or `k` | Previous contact            |
+| `c`        | New Contact modal           |
+| `v`        | Magic Paste (AI extraction) |
+| `Enter`    | Focus interaction composer  |
 
 ### Rich Interaction Composer
 
-| Shortcut | Action |
-|----------|--------|
+| Shortcut    | Action           |
+| ----------- | ---------------- |
 | `Cmd+Enter` | Save interaction |
 
 ### @Mentions
 
-| Shortcut | Action |
-|----------|--------|
-| `↑ / ↓` | Navigate suggestions |
-| `Enter` | Select contact |
-| `Escape` | Close dropdown |
+| Shortcut | Action               |
+| -------- | -------------------- |
+| `↑ / ↓`  | Navigate suggestions |
+| `Enter`  | Select contact       |
+| `Escape` | Close dropdown       |

@@ -49,16 +49,26 @@ export class AppError extends Error {
 
 function defaultCodeForStatus(status: number): string {
   switch (status) {
-    case 400: return "BAD_REQUEST";
-    case 401: return "UNAUTHORIZED";
-    case 403: return "FORBIDDEN";
-    case 404: return "NOT_FOUND";
-    case 409: return "CONFLICT";
-    case 422: return "UNPROCESSABLE";
-    case 429: return "RATE_LIMITED";
-    case 503: return "SERVICE_UNAVAILABLE";
-    case 504: return "TIMEOUT";
-    default:  return status >= 500 ? "INTERNAL" : "ERROR";
+    case 400:
+      return "BAD_REQUEST";
+    case 401:
+      return "UNAUTHORIZED";
+    case 403:
+      return "FORBIDDEN";
+    case 404:
+      return "NOT_FOUND";
+    case 409:
+      return "CONFLICT";
+    case 422:
+      return "UNPROCESSABLE";
+    case 429:
+      return "RATE_LIMITED";
+    case 503:
+      return "SERVICE_UNAVAILABLE";
+    case 504:
+      return "TIMEOUT";
+    default:
+      return status >= 500 ? "INTERNAL" : "ERROR";
   }
 }
 
@@ -68,11 +78,10 @@ function defaultCodeForStatus(status: number): string {
 
 export class NotFoundError extends AppError {
   constructor(entity: string, id?: string) {
-    super(
-      id ? `${entity} ${id} not found` : `${entity} not found`,
-      404,
-      { code: "NOT_FOUND", details: { entity, id } },
-    );
+    super(id ? `${entity} ${id} not found` : `${entity} not found`, 404, {
+      code: "NOT_FOUND",
+      details: { entity, id },
+    });
   }
 }
 

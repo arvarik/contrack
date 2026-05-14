@@ -2,7 +2,11 @@ import { sqlite } from "./server/db.ts";
 import { contactRepo } from "./server/repositories/contactRepository.ts";
 
 const start = performance.now();
-const all = sqlite.prepare("SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) ORDER BY addedAt DESC").all();
+const all = sqlite
+  .prepare(
+    "SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) ORDER BY addedAt DESC",
+  )
+  .all();
 const fetchMs = performance.now() - start;
 
 const hStart = performance.now();

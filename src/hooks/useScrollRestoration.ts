@@ -10,12 +10,14 @@
  * Position is saved on scroll (debounced) and on unmount for safety.
  * Restored after a single animation frame to allow layout to settle.
  */
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect } from "react";
 
-const STORAGE_PREFIX = 'contrack_scroll_';
+const STORAGE_PREFIX = "contrack_scroll_";
 const DEBOUNCE_MS = 150;
 
-export const useScrollRestoration = <T extends HTMLElement = HTMLDivElement>(key: string) => {
+export const useScrollRestoration = <T extends HTMLElement = HTMLDivElement>(
+  key: string,
+) => {
   const ref = useRef<T>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -37,19 +39,25 @@ export const useScrollRestoration = <T extends HTMLElement = HTMLDivElement>(key
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         if (ref.current) {
-          sessionStorage.setItem(`${STORAGE_PREFIX}${key}`, String(ref.current.scrollTop));
+          sessionStorage.setItem(
+            `${STORAGE_PREFIX}${key}`,
+            String(ref.current.scrollTop),
+          );
         }
       }, DEBOUNCE_MS);
     };
 
-    el.addEventListener('scroll', onScroll, { passive: true });
+    el.addEventListener("scroll", onScroll, { passive: true });
 
     return () => {
-      el.removeEventListener('scroll', onScroll);
+      el.removeEventListener("scroll", onScroll);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       // Also save on unmount (catch cases where scroll didn't fire)
       if (ref.current) {
-        sessionStorage.setItem(`${STORAGE_PREFIX}${key}`, String(ref.current.scrollTop));
+        sessionStorage.setItem(
+          `${STORAGE_PREFIX}${key}`,
+          String(ref.current.scrollTop),
+        );
       }
     };
   }, [key]);

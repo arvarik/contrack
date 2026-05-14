@@ -44,14 +44,14 @@ curl -X POST http://localhost:3000/api/dedupe/scan \
 
 **Scan modes:**
 
-| Mode | What it does |
-|------|-------------|
-| `quick` | Deterministic passes only (fast) |
-| `deep` | Deterministic + fuzzy scoring |
-| `full` | All passes including AI embedding comparison |
-| `deterministic` | Only exact-match passes |
-| `ai` | Only AI-powered passes |
-| `both` | Deterministic + AI |
+| Mode            | What it does                                 |
+| --------------- | -------------------------------------------- |
+| `quick`         | Deterministic passes only (fast)             |
+| `deep`          | Deterministic + fuzzy scoring                |
+| `full`          | All passes including AI embedding comparison |
+| `deterministic` | Only exact-match passes                      |
+| `ai`            | Only AI-powered passes                       |
+| `both`          | Deterministic + AI                           |
 
 The scan streams progress via SSE through these phases:
 `starting` → `normalizing` → `deterministic` → `blocking` → `scoring` → `ai` → `clustering` → `persisting` → `complete`
@@ -62,22 +62,22 @@ The scan streams progress via SSE through these phases:
 
 ### Deterministic Matching
 
-| Algorithm | Confidence | What it detects |
-|-----------|-----------|----------------|
-| Email overlap | 99% | Contacts sharing an email address |
-| Phone overlap (E.164) | 95% | Contacts sharing a phone number (normalized to international format) |
-| Exact name match | 92% | Contacts with identical normalized names |
-| Name + Company | 90% | Same name at the same company |
-| Nickname match | 88% | Common nickname variations ("Bob" ↔ "Robert", "Mike" ↔ "Michael") |
+| Algorithm             | Confidence | What it detects                                                      |
+| --------------------- | ---------- | -------------------------------------------------------------------- |
+| Email overlap         | 99%        | Contacts sharing an email address                                    |
+| Phone overlap (E.164) | 95%        | Contacts sharing a phone number (normalized to international format) |
+| Exact name match      | 92%        | Contacts with identical normalized names                             |
+| Name + Company        | 90%        | Same name at the same company                                        |
+| Nickname match        | 88%        | Common nickname variations ("Bob" ↔ "Robert", "Mike" ↔ "Michael")    |
 
 ### Fuzzy / Probabilistic Matching
 
-| Algorithm | Use case |
-|-----------|----------|
-| **Double Metaphone** | Phonetic similarity ("Smith" ≈ "Smyth") |
-| **Levenshtein distance** | Character-level edit distance for typos |
-| **Jaccard similarity** | Token overlap between names |
-| **Gemini embeddings** | 768-dim cosine similarity for semantic matching |
+| Algorithm                | Use case                                        |
+| ------------------------ | ----------------------------------------------- |
+| **Double Metaphone**     | Phonetic similarity ("Smith" ≈ "Smyth")         |
+| **Levenshtein distance** | Character-level edit distance for typos         |
+| **Jaccard similarity**   | Token overlap between names                     |
+| **Gemini embeddings**    | 768-dim cosine similarity for semantic matching |
 
 ---
 
@@ -85,11 +85,11 @@ The scan streams progress via SSE through these phases:
 
 Configure auto-merge behavior in **Settings → Dedupe Engine**:
 
-| Preset | Auto-merge threshold | Behavior |
-|--------|---------------------|----------|
-| **Conservative** | ≥99% confidence | Only near-certain matches merge automatically |
-| **Default** | ≥95% confidence | High-confidence matches auto-merge |
-| **Aggressive** | ≥90% confidence | More auto-merges, fewer manual reviews |
+| Preset           | Auto-merge threshold | Behavior                                      |
+| ---------------- | -------------------- | --------------------------------------------- |
+| **Conservative** | ≥99% confidence      | Only near-certain matches merge automatically |
+| **Default**      | ≥95% confidence      | High-confidence matches auto-merge            |
+| **Aggressive**   | ≥90% confidence      | More auto-merges, fewer manual reviews        |
 
 Matches below the auto-merge threshold are sent to the manual review queue.
 
@@ -102,6 +102,7 @@ Duplicate clusters appear as **swipeable cards** in the dedupe view:
 <!-- Screenshot: dedupe-review.png -->
 
 Each cluster card shows:
+
 - All contacts in the cluster
 - The **suggested primary** (the most complete contact, determined by a scoring algorithm)
 - **Evidence pairs** — what matched and why (e.g., "Shared email: jane@acme.com")
@@ -109,11 +110,11 @@ Each cluster card shows:
 
 ### Actions
 
-| Action | Description |
-|--------|-------------|
-| **Merge** | Merge all contacts into the primary. Data is combined (not lost). |
-| **Dismiss** | Mark as not-duplicates. These contacts won't be suggested again. |
-| **Change Primary** | Select a different contact as the merge target |
+| Action             | Description                                                       |
+| ------------------ | ----------------------------------------------------------------- |
+| **Merge**          | Merge all contacts into the primary. Data is combined (not lost). |
+| **Dismiss**        | Mark as not-duplicates. These contacts won't be suggested again.  |
+| **Change Primary** | Select a different contact as the merge target                    |
 
 Large clusters (>10 contacts) require explicit confirmation before merging.
 
@@ -139,6 +140,7 @@ View the merge audit trail in the dedupe view's **History** tab:
 <!-- Screenshot: merge-log.png -->
 
 Each merge log entry shows:
+
 - Who was merged into whom
 - When the merge occurred
 - The match type and confidence
@@ -147,6 +149,7 @@ Each merge log entry shows:
 **Undo** restores the duplicate contact and reverses the data merge.
 
 **APIs:**
+
 - `GET /api/dedupe/merge-log` — Fetch merge history
 - `POST /api/dedupe/merge-log/:id/undo` — Undo a merge
 

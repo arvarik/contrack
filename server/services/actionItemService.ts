@@ -17,7 +17,9 @@ export const actionItemService = {
    * enriched with contact info. Sorted by dueAt ascending (most urgent first).
    */
   getAllPending() {
-    return sqlite.prepare(`
+    return sqlite
+      .prepare(
+        `
       SELECT ai.*, 
              c.name as contactName, c.company as contactCompany,
              c.avatarUrl as contactAvatarUrl, c.themeColor as contactThemeColor
@@ -26,14 +28,18 @@ export const actionItemService = {
       WHERE ai.completedAt IS NULL
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
       ORDER BY ai.dueAt ASC
-    `).all();
+    `,
+      )
+      .all();
   },
 
   /**
    * Get recently completed action items (last 50).
    */
   getRecentlyCompleted() {
-    return sqlite.prepare(`
+    return sqlite
+      .prepare(
+        `
       SELECT ai.*, 
              c.name as contactName, c.company as contactCompany,
              c.avatarUrl as contactAvatarUrl, c.themeColor as contactThemeColor
@@ -43,7 +49,9 @@ export const actionItemService = {
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
       ORDER BY ai.completedAt DESC
       LIMIT 50
-    `).all();
+    `,
+      )
+      .all();
   },
 
   /**
@@ -51,14 +59,18 @@ export const actionItemService = {
    * Only counts items where dueAt <= today (inclusive).
    */
   getUrgentCount(): number {
-    const row = sqlite.prepare(`
+    const row = sqlite
+      .prepare(
+        `
       SELECT COUNT(*) as count
       FROM action_items ai
       JOIN contacts c ON ai.contactId = c.id
       WHERE ai.completedAt IS NULL
         AND date(ai.dueAt) <= date('now')
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
-    `).get() as { count: number };
+    `,
+      )
+      .get() as { count: number };
     return row.count;
   },
 
@@ -66,11 +78,15 @@ export const actionItemService = {
    * Get all action items for a specific contact (pending first, then completed).
    */
   getByContactId(contactId: string) {
-    return sqlite.prepare(`
+    return sqlite
+      .prepare(
+        `
       SELECT * FROM action_items
       WHERE contactId = ?
       ORDER BY completedAt IS NULL DESC, dueAt ASC
-    `).all(contactId);
+    `,
+      )
+      .all(contactId);
   },
 
   /**
@@ -78,12 +94,19 @@ export const actionItemService = {
    */
   create(contactId: string, title: string, dueAt: string) {
     const id = crypto.randomUUID();
-    sqlite.prepare(`
+    sqlite
+      .prepare(
+        `
       INSERT INTO action_items (id, contactId, title, dueAt)
       VALUES (?, ?, ?, ?)
-    `).run(id, contactId, title, dueAt);
+    `,
+      )
+      .run(id, contactId, title, dueAt);
 
-    log.info("ActionItems", `Created "${title}" for contact ${contactId} due ${dueAt}`);
+    log.info(
+      "ActionItems",
+      `Created "${title}" for contact ${contactId} due ${dueAt}`,
+    );
     return sqlite.prepare("SELECT * FROM action_items WHERE id = ?").get(id);
   },
 
@@ -92,7 +115,9 @@ export const actionItemService = {
    * The sync trigger recomputes contacts.nextFollowUpAt automatically.
    */
   update(id: string, updates: { dueAt?: string; title?: string }) {
-    const existing = sqlite.prepare("SELECT * FROM action_items WHERE id = ?").get(id) as any;
+    const existing = sqlite
+      .prepare("SELECT * FROM action_items WHERE id = ?")
+      .get(id) as any;
     if (!existing) return null;
 
     const setClauses: string[] = [];
@@ -112,9 +137,14 @@ export const actionItemService = {
     setClauses.push("updatedAt = datetime('now')");
     values.push(id);
 
-    sqlite.prepare(`UPDATE action_items SET ${setClauses.join(", ")} WHERE id = ?`).run(...values);
+    sqlite
+      .prepare(`UPDATE action_items SET ${setClauses.join(", ")} WHERE id = ?`)
+      .run(...values);
 
-    log.info("ActionItems", `Updated ${id}${updates.dueAt ? ` → due ${updates.dueAt}` : ""}`);
+    log.info(
+      "ActionItems",
+      `Updated ${id}${updates.dueAt ? ` → due ${updates.dueAt}` : ""}`,
+    );
     return sqlite.prepare("SELECT * FROM action_items WHERE id = ?").get(id);
   },
 
@@ -123,14 +153,20 @@ export const actionItemService = {
    * The sync trigger recomputes contacts.nextFollowUpAt to the next pending item.
    */
   complete(id: string) {
-    const existing = sqlite.prepare("SELECT * FROM action_items WHERE id = ?").get(id) as any;
+    const existing = sqlite
+      .prepare("SELECT * FROM action_items WHERE id = ?")
+      .get(id) as any;
     if (!existing) return null;
     if (existing.completedAt) return existing; // Already completed — idempotent
 
-    sqlite.prepare(`
+    sqlite
+      .prepare(
+        `
       UPDATE action_items SET completedAt = datetime('now'), updatedAt = datetime('now')
       WHERE id = ?
-    `).run(id);
+    `,
+      )
+      .run(id);
 
     log.info("ActionItems", `Completed "${existing.title}" (${id})`);
     return sqlite.prepare("SELECT * FROM action_items WHERE id = ?").get(id);
@@ -140,7 +176,9 @@ export const actionItemService = {
    * Permanently delete an action item. Trigger recomputes the cache.
    */
   delete(id: string): boolean {
-    const existing = sqlite.prepare("SELECT * FROM action_items WHERE id = ?").get(id) as any;
+    const existing = sqlite
+      .prepare("SELECT * FROM action_items WHERE id = ?")
+      .get(id) as any;
     if (!existing) return false;
 
     sqlite.prepare("DELETE FROM action_items WHERE id = ?").run(id);

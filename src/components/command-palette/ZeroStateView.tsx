@@ -9,19 +9,34 @@
  *
  * All items are Command.Item elements — fully keyboard-navigable with ↑/↓/Enter.
  */
-import React from 'react';
-import { Command } from 'cmdk';
+import React from "react";
+import { Command } from "cmdk";
 import {
-  Clock, Search, Sparkles, Zap, ClipboardList, AlertTriangle,
-  Ghost, LayoutDashboard, Activity, Map, Settings, ArrowRight,
-  Satellite, RefreshCw,
-} from 'lucide-react';
-import { GROUP_HEADING_DEFAULT, GROUP_HEADING_PRIMARY, stripModePrefix } from './utils';
-import { fallbackAvatarUrl } from '../../lib/avatar';
-import { KBD_SM } from '../../lib/styles';
-import { NAV_SHORTCUTS } from '../../hooks/useGlobalNavShortcuts';
-import type { SearchHistoryEntry } from '../../hooks/useSearchHistory';
-import type { ZeroStateInsight } from '../../types';
+  Clock,
+  Search,
+  Sparkles,
+  Zap,
+  ClipboardList,
+  AlertTriangle,
+  Ghost,
+  LayoutDashboard,
+  Activity,
+  Map,
+  Settings,
+  ArrowRight,
+  Satellite,
+  RefreshCw,
+} from "lucide-react";
+import {
+  GROUP_HEADING_DEFAULT,
+  GROUP_HEADING_PRIMARY,
+  stripModePrefix,
+} from "./utils";
+import { fallbackAvatarUrl } from "../../lib/avatar";
+import { KBD_SM } from "../../lib/styles";
+import { NAV_SHORTCUTS } from "../../hooks/useGlobalNavShortcuts";
+import type { SearchHistoryEntry } from "../../hooks/useSearchHistory";
+import type { ZeroStateInsight } from "../../types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,40 +54,80 @@ interface ZeroStateViewProps {
 
 const modeIcon = (mode: string) => {
   switch (mode) {
-    case 'ai': return <Sparkles className="w-3 h-3 text-primary" />;
-    case 'action': return <Zap className="w-3 h-3 text-emerald-500" />;
-    default: return <Search className="w-3 h-3 text-on-surface-variant" />;
+    case "ai":
+      return <Sparkles className="w-3 h-3 text-primary" />;
+    case "action":
+      return <Zap className="w-3 h-3 text-emerald-500" />;
+    default:
+      return <Search className="w-3 h-3 text-on-surface-variant" />;
   }
 };
 
 const insightIcon = (type: string) => {
   switch (type) {
-    case 'action_items': return <ClipboardList className="w-3.5 h-3.5 text-amber-500" />;
-    case 'at_risk': return <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />;
-    case 'ghost': return <Ghost className="w-3.5 h-3.5 text-purple-500" />;
-    case 'stale_data': return <Satellite className="w-3.5 h-3.5 text-sky-500" />;
-    case 'dedupe': return <RefreshCw className="w-3.5 h-3.5 text-teal-500" />;
-    default: return <Activity className="w-3.5 h-3.5 text-on-surface-variant" />;
+    case "action_items":
+      return <ClipboardList className="w-3.5 h-3.5 text-amber-500" />;
+    case "at_risk":
+      return <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />;
+    case "ghost":
+      return <Ghost className="w-3.5 h-3.5 text-purple-500" />;
+    case "stale_data":
+      return <Satellite className="w-3.5 h-3.5 text-sky-500" />;
+    case "dedupe":
+      return <RefreshCw className="w-3.5 h-3.5 text-teal-500" />;
+    default:
+      return <Activity className="w-3.5 h-3.5 text-on-surface-variant" />;
   }
 };
 
 const insightBg = (type: string) => {
   switch (type) {
-    case 'action_items': return 'bg-amber-500/10 aria-selected:bg-amber-500/15';
-    case 'at_risk': return 'bg-rose-500/8 aria-selected:bg-rose-500/12';
-    case 'ghost': return 'bg-purple-500/8 aria-selected:bg-purple-500/12';
-    case 'stale_data': return 'bg-sky-500/8 aria-selected:bg-sky-500/12';
-    case 'dedupe': return 'bg-teal-500/8 aria-selected:bg-teal-500/12';
-    default: return 'bg-surface-container-low';
+    case "action_items":
+      return "bg-amber-500/10 aria-selected:bg-amber-500/15";
+    case "at_risk":
+      return "bg-rose-500/8 aria-selected:bg-rose-500/12";
+    case "ghost":
+      return "bg-purple-500/8 aria-selected:bg-purple-500/12";
+    case "stale_data":
+      return "bg-sky-500/8 aria-selected:bg-sky-500/12";
+    case "dedupe":
+      return "bg-teal-500/8 aria-selected:bg-teal-500/12";
+    default:
+      return "bg-surface-container-low";
   }
 };
 
 const NAV_ITEMS = [
-  { label: 'Network', icon: LayoutDashboard, path: '/', shortcut: NAV_SHORTCUTS['/']?.keys },
-  { label: 'Relationship Pulse', icon: Activity, path: '/pulse', shortcut: NAV_SHORTCUTS['/pulse']?.keys },
-  { label: 'Map', icon: Map, path: '/map', shortcut: NAV_SHORTCUTS['/map']?.keys },
-  { label: 'AI Search', icon: Sparkles, path: '/search', shortcut: NAV_SHORTCUTS['/search']?.keys },
-  { label: 'Settings', icon: Settings, path: '/settings', shortcut: NAV_SHORTCUTS['/settings']?.keys },
+  {
+    label: "Network",
+    icon: LayoutDashboard,
+    path: "/",
+    shortcut: NAV_SHORTCUTS["/"]?.keys,
+  },
+  {
+    label: "Relationship Pulse",
+    icon: Activity,
+    path: "/pulse",
+    shortcut: NAV_SHORTCUTS["/pulse"]?.keys,
+  },
+  {
+    label: "Map",
+    icon: Map,
+    path: "/map",
+    shortcut: NAV_SHORTCUTS["/map"]?.keys,
+  },
+  {
+    label: "AI Search",
+    icon: Sparkles,
+    path: "/search",
+    shortcut: NAV_SHORTCUTS["/search"]?.keys,
+  },
+  {
+    label: "Settings",
+    icon: Settings,
+    path: "/settings",
+    shortcut: NAV_SHORTCUTS["/settings"]?.keys,
+  },
 ] as const;
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -94,7 +149,10 @@ export const ZeroStateView = ({
     <>
       {/* ── Recently Viewed ── */}
       {hasRecent && (
-        <Command.Group heading="Recently Viewed" className={GROUP_HEADING_DEFAULT}>
+        <Command.Group
+          heading="Recently Viewed"
+          className={GROUP_HEADING_DEFAULT}
+        >
           <div className="flex gap-2 px-3 py-1">
             {recentContacts.map((c) => (
               <Command.Item
@@ -108,7 +166,9 @@ export const ZeroStateView = ({
                   alt=""
                   className="w-6 h-6 rounded-full bg-surface-container-highest object-cover"
                 />
-                <span className="text-xs font-bold truncate max-w-[100px]">{c.name}</span>
+                <span className="text-xs font-bold truncate max-w-[100px]">
+                  {c.name}
+                </span>
               </Command.Item>
             ))}
           </div>
@@ -117,7 +177,10 @@ export const ZeroStateView = ({
 
       {/* ── Search History ── */}
       {hasHistory && (
-        <Command.Group heading="Recent Searches" className={GROUP_HEADING_DEFAULT}>
+        <Command.Group
+          heading="Recent Searches"
+          className={GROUP_HEADING_DEFAULT}
+        >
           {historyEntries.map((entry, i) => (
             <Command.Item
               key={`history_${i}_${entry.timestamp}`}
@@ -128,7 +191,9 @@ export const ZeroStateView = ({
               <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">
                 {modeIcon(entry.mode)}
               </div>
-              <span className="text-sm truncate flex-1">{stripModePrefix(entry.query)}</span>
+              <span className="text-sm truncate flex-1">
+                {stripModePrefix(entry.query)}
+              </span>
               <Clock className="w-3 h-3 text-on-surface-variant/40 shrink-0" />
             </Command.Item>
           ))}
@@ -167,7 +232,11 @@ export const ZeroStateView = ({
             <item.icon className="w-4 h-4 shrink-0" />
             <span className="text-sm flex-1">{item.label}</span>
             {item.shortcut && (
-              <kbd className={`${KBD_SM} text-on-surface-variant/40 hidden sm:inline-flex`}>{item.shortcut}</kbd>
+              <kbd
+                className={`${KBD_SM} text-on-surface-variant/40 hidden sm:inline-flex`}
+              >
+                {item.shortcut}
+              </kbd>
             )}
           </Command.Item>
         ))}

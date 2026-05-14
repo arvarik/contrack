@@ -50,7 +50,8 @@ export async function initLocalEmbeddings(): Promise<void> {
   initPromise = (async () => {
     try {
       const t0 = Date.now();
-      const { pipeline: createPipeline } = await import("@huggingface/transformers");
+      const { pipeline: createPipeline } =
+        await import("@huggingface/transformers");
       pipelineFactory = createPipeline;
 
       extractor = await pipelineFactory("feature-extraction", MODEL_ID, {
@@ -58,9 +59,15 @@ export async function initLocalEmbeddings(): Promise<void> {
       });
 
       modelReady = true;
-      log.info("LocalEmbeddings", `Model ${MODEL_ID} loaded in ${Date.now() - t0}ms (384-dim, q8)`);
+      log.info(
+        "LocalEmbeddings",
+        `Model ${MODEL_ID} loaded in ${Date.now() - t0}ms (384-dim, q8)`,
+      );
     } catch (err: unknown) {
-      log.warn("LocalEmbeddings", `Failed to load local embedding model: ${getErrorMessage(err)}`);
+      log.warn(
+        "LocalEmbeddings",
+        `Failed to load local embedding model: ${getErrorMessage(err)}`,
+      );
       modelReady = false;
     }
   })();
@@ -92,7 +99,9 @@ export async function embedText(text: string): Promise<Float32Array | null> {
   // Sanity check: ensure the model produced the expected dimensionality.
   // This guards against silent model swaps by contributors.
   if (vec.length !== EMBED_DIMENSIONS) {
-    throw new Error(`Expected ${EMBED_DIMENSIONS}-dim vector, got ${vec.length}`);
+    throw new Error(
+      `Expected ${EMBED_DIMENSIONS}-dim vector, got ${vec.length}`,
+    );
   }
 
   return vec;
@@ -102,12 +111,14 @@ export async function embedText(text: string): Promise<Float32Array | null> {
  * Embed multiple texts in a single batch. More efficient than
  * calling embedText() in a loop.
  */
-export async function embedBatch(texts: string[]): Promise<(Float32Array | null)[]> {
+export async function embedBatch(
+  texts: string[],
+): Promise<(Float32Array | null)[]> {
   if (!modelReady || !extractor || texts.length === 0) return [];
 
   const output = await extractor(texts, { pooling: "mean", normalize: true });
   const allVecs = output.tolist() as number[][];
-  return allVecs.map(v => new Float32Array(v));
+  return allVecs.map((v) => new Float32Array(v));
 }
 
 // =============================================================================
@@ -121,11 +132,20 @@ export async function embedBatch(texts: string[]): Promise<(Float32Array | null)
 // Wrapping in a transaction prevents a concurrent KNN query from seeing a gap
 // between the DELETE and INSERT, and gives a minor perf boost (single journal entry).
 const _upsertTxn = sqlite.transaction((contactId: string, buf: Buffer) => {
-  sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?").run(contactId);
-  sqlite.prepare("INSERT INTO search_embeddings (contactId, embedding) VALUES (?, ?)").run(contactId, buf);
+  sqlite
+    .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
+    .run(contactId);
+  sqlite
+    .prepare(
+      "INSERT INTO search_embeddings (contactId, embedding) VALUES (?, ?)",
+    )
+    .run(contactId, buf);
 });
 
-export function upsertSearchEmbedding(contactId: string, embedding: Float32Array): void {
+export function upsertSearchEmbedding(
+  contactId: string,
+  embedding: Float32Array,
+): void {
   // Defensive copy — Buffer.from(arrayBuffer) is zero-copy, which risks
   // corruption if Transformers.js reclaims the underlying ArrayBuffer.
   const buf = Buffer.from(embedding.buffer.slice(0));
@@ -145,17 +165,21 @@ export function findSearchNeighbors(
   // Brute-force KNN via sqlite-vec — perfect for ~960 rows (<0.5ms).
   // NOTE: If the dataset exceeds ~10K contacts, consider switching to an
   // approximate nearest neighbor index (e.g., HNSW) or pre-filtering in SQL.
-  const rows = sqlite.prepare(`
+  const rows = sqlite
+    .prepare(
+      `
     SELECT contactId, distance
     FROM search_embeddings
     WHERE embedding MATCH ?
     ORDER BY distance
     LIMIT ?
-  `).all(buf, Math.min(k, 500)) as { contactId: string; distance: number }[];
+  `,
+    )
+    .all(buf, Math.min(k, 500)) as { contactId: string; distance: number }[];
 
   // Apply pre-filter if provided
   if (preFilterIds) {
-    return rows.filter(r => preFilterIds.has(r.contactId));
+    return rows.filter((r) => preFilterIds.has(r.contactId));
   }
 
   return rows;
@@ -163,7 +187,9 @@ export function findSearchNeighbors(
 
 /** Count of contacts with search embeddings. */
 export function getSearchEmbeddingCount(): number {
-  const row = sqlite.prepare("SELECT COUNT(*) as c FROM search_embeddings").get() as { c: number };
+  const row = sqlite
+    .prepare("SELECT COUNT(*) as c FROM search_embeddings")
+    .get() as { c: number };
   return row.c;
 }
 
@@ -185,14 +211,18 @@ export async function backfillSearchEmbeddings(): Promise<number> {
   const t0 = Date.now();
 
   // Find contacts missing search embeddings
-  const missing = sqlite.prepare(`
+  const missing = sqlite
+    .prepare(
+      `
     SELECT c.id, c.name, c.company, c.role, c.location, c.industry,
            c.headline, c.about, c.preferences, c.searchExpansion
     FROM contacts c
     WHERE c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL)
       AND c.canonicalId IS NULL
       AND c.id NOT IN (SELECT contactId FROM search_embeddings)
-  `).all() as any[];
+  `,
+    )
+    .all() as any[];
 
   if (missing.length === 0) {
     log.debug("LocalEmbeddings", "All contacts already have search embeddings");
@@ -200,10 +230,18 @@ export async function backfillSearchEmbeddings(): Promise<number> {
   }
 
   // Get tags and interests for each contact
-  const tagsStmt = sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?");
-  const interestsStmt = sqlite.prepare("SELECT interest FROM contact_interests WHERE contactId = ?");
-  const deleteStmt = sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?");
-  const insertStmt = sqlite.prepare("INSERT INTO search_embeddings (contactId, embedding) VALUES (?, ?)");
+  const tagsStmt = sqlite.prepare(
+    "SELECT tag FROM contact_tags WHERE contactId = ?",
+  );
+  const interestsStmt = sqlite.prepare(
+    "SELECT interest FROM contact_interests WHERE contactId = ?",
+  );
+  const deleteStmt = sqlite.prepare(
+    "DELETE FROM search_embeddings WHERE contactId = ?",
+  );
+  const insertStmt = sqlite.prepare(
+    "INSERT INTO search_embeddings (contactId, embedding) VALUES (?, ?)",
+  );
 
   let embedded = 0;
 
@@ -212,9 +250,11 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     const batch = missing.slice(i, i + BACKFILL_BATCH_SIZE);
 
     // Build text for each contact
-    const texts = batch.map(c => {
-      const tags = (tagsStmt.all(c.id) as { tag: string }[]).map(t => t.tag);
-      const interests = (interestsStmt.all(c.id) as { interest: string }[]).map(t => t.interest);
+    const texts = batch.map((c) => {
+      const tags = (tagsStmt.all(c.id) as { tag: string }[]).map((t) => t.tag);
+      const interests = (interestsStmt.all(c.id) as { interest: string }[]).map(
+        (t) => t.interest,
+      );
       return contactToSearchText(c, tags, interests);
     });
 
@@ -234,7 +274,10 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     txn();
   }
 
-  log.info("LocalEmbeddings", `Backfilled ${embedded} search embeddings in ${Date.now() - t0}ms`);
+  log.info(
+    "LocalEmbeddings",
+    `Backfilled ${embedded} search embeddings in ${Date.now() - t0}ms`,
+  );
   return embedded;
 }
 
@@ -245,15 +288,27 @@ export async function backfillSearchEmbeddings(): Promise<number> {
 export async function embedContact(contactId: string): Promise<void> {
   if (!modelReady) return;
 
-  const row = sqlite.prepare(`
+  const row = sqlite
+    .prepare(
+      `
     SELECT id, name, company, role, location, industry, headline, about, preferences, searchExpansion
     FROM contacts WHERE id = ?
-  `).get(contactId) as any;
+  `,
+    )
+    .get(contactId) as any;
 
   if (!row) return;
 
-  const tags = (sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?").all(contactId) as { tag: string }[]).map(t => t.tag);
-  const interests = (sqlite.prepare("SELECT interest FROM contact_interests WHERE contactId = ?").all(contactId) as { interest: string }[]).map(t => t.interest);
+  const tags = (
+    sqlite
+      .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+      .all(contactId) as { tag: string }[]
+  ).map((t) => t.tag);
+  const interests = (
+    sqlite
+      .prepare("SELECT interest FROM contact_interests WHERE contactId = ?")
+      .all(contactId) as { interest: string }[]
+  ).map((t) => t.interest);
 
   const text = contactToSearchText(row, tags, interests);
   const vec = await embedText(text);

@@ -32,10 +32,12 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const toneClasses: Record<Tone, string> = {
-  ghost:   "text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest",
-  subtle:  "text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest",
+  ghost:
+    "text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest",
+  subtle:
+    "text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest",
   primary: "text-primary hover:bg-primary/10 active:bg-primary/20",
-  danger:  "text-error hover:bg-error/10 active:bg-error/20",
+  danger: "text-error hover:bg-error/10 active:bg-error/20",
 };
 
 // Visible "padding-bubble" sizes. Each is paired with a guaranteed minimum

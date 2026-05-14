@@ -1,9 +1,16 @@
-import React, { useMemo } from 'react';
-import { Undo2, Sparkles, User, Loader2, Clock, CheckCircle2 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { toast } from 'sonner';
-import { useMergeLog, useUndoMerge } from '../../../api';
-import { cn } from '../../../lib/utils';
+import React, { useMemo } from "react";
+import {
+  Undo2,
+  Sparkles,
+  User,
+  Loader2,
+  Clock,
+  CheckCircle2,
+} from "lucide-react";
+import { motion } from "motion/react";
+import { toast } from "sonner";
+import { useMergeLog, useUndoMerge } from "../../../api";
+import { cn } from "../../../lib/utils";
 
 // =============================================================================
 // ActivityFeed — Merge audit log with undo capability
@@ -21,10 +28,10 @@ function groupByDate(entries: any[]): { label: string; items: any[] }[] {
   for (const entry of entries) {
     const date = new Date(entry.mergedAt);
     let label: string;
-    if (date >= today) label = 'Today';
-    else if (date >= yesterday) label = 'Yesterday';
-    else if (date >= thisWeek) label = 'This Week';
-    else label = 'Older';
+    if (date >= today) label = "Today";
+    else if (date >= yesterday) label = "Yesterday";
+    else if (date >= thisWeek) label = "This Week";
+    else label = "Older";
 
     const existing = groups.get(label) ?? [];
     existing.push(entry);
@@ -32,10 +39,10 @@ function groupByDate(entries: any[]): { label: string; items: any[] }[] {
   }
 
   // Preserve chronological group ordering
-  const order = ['Today', 'Yesterday', 'This Week', 'Older'];
+  const order = ["Today", "Yesterday", "This Week", "Older"];
   return order
-    .filter(label => groups.has(label))
-    .map(label => ({ label, items: groups.get(label)! }));
+    .filter((label) => groups.has(label))
+    .map((label) => ({ label, items: groups.get(label)! }));
 }
 
 export const ActivityFeed = () => {
@@ -49,7 +56,9 @@ export const ActivityFeed = () => {
       await undoMerge.mutateAsync(id);
       toast.success(`Restored "${name}"`);
     } catch (err: unknown) {
-      toast.error(`Undo failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Undo failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -65,24 +74,28 @@ export const ActivityFeed = () => {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Clock className="w-10 h-10 text-on-surface-variant/30 mb-3" />
-        <p className="text-sm text-on-surface-variant">No merge activity yet.</p>
-        <p className="text-xs text-on-surface-variant/60 mt-1">Merged contacts will appear here.</p>
+        <p className="text-sm text-on-surface-variant">
+          No merge activity yet.
+        </p>
+        <p className="text-xs text-on-surface-variant/60 mt-1">
+          Merged contacts will appear here.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {groups.map(group => (
+      {groups.map((group) => (
         <div key={group.label}>
           <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1 mb-2">
             {group.label}
           </div>
           <div className="space-y-1.5">
             {group.items.map((entry, i) => {
-              const isAuto = entry.mergedBy === 'auto';
+              const isAuto = entry.mergedBy === "auto";
               const isUndone = !!entry.undoneAt;
-              const canUndo = entry.mergeType === 'soft' && !isUndone;
+              const canUndo = entry.mergeType === "soft" && !isUndone;
 
               return (
                 <motion.div
@@ -94,15 +107,20 @@ export const ActivityFeed = () => {
                     "flex items-center gap-3 px-4 py-3 rounded-xl transition-colors",
                     isUndone
                       ? "bg-surface-container-low/50 opacity-60"
-                      : "bg-surface-container-lowest"
+                      : "bg-surface-container-lowest",
                   )}
                 >
                   {/* Icon */}
-                  <div className={cn(
-                    "p-1.5 rounded-lg shrink-0",
-                    isUndone ? "bg-surface-container-high" :
-                    isAuto ? "bg-primary/10" : "bg-emerald-500/10"
-                  )}>
+                  <div
+                    className={cn(
+                      "p-1.5 rounded-lg shrink-0",
+                      isUndone
+                        ? "bg-surface-container-high"
+                        : isAuto
+                          ? "bg-primary/10"
+                          : "bg-emerald-500/10",
+                    )}
+                  >
                     {isUndone ? (
                       <Undo2 className="w-3.5 h-3.5 text-on-surface-variant" />
                     ) : isAuto ? (
@@ -122,19 +140,31 @@ export const ActivityFeed = () => {
                       ) : (
                         <>
                           {isAuto ? (
-                            <span className="text-primary font-bold">Auto-merged </span>
+                            <span className="text-primary font-bold">
+                              Auto-merged{" "}
+                            </span>
                           ) : (
-                            <span className="text-emerald-600 font-bold">Merged </span>
+                            <span className="text-emerald-600 font-bold">
+                              Merged{" "}
+                            </span>
                           )}
-                          <span className="font-bold">"{entry.duplicateName}"</span>
+                          <span className="font-bold">
+                            "{entry.duplicateName}"
+                          </span>
                           <span className="text-on-surface-variant"> → </span>
-                          <span className="font-bold">"{entry.primaryName}"</span>
+                          <span className="font-bold">
+                            "{entry.primaryName}"
+                          </span>
                         </>
                       )}
                     </p>
                     <p className="text-[11px] text-on-surface-variant mt-0.5">
-                      {isUndone ? 'Undone' : `${(entry.confidence * 100).toFixed(0)}% confidence`}
-                      {entry.reasoning && !isUndone && ` · ${entry.reasoning.slice(0, 60)}${entry.reasoning.length > 60 ? '…' : ''}`}
+                      {isUndone
+                        ? "Undone"
+                        : `${(entry.confidence * 100).toFixed(0)}% confidence`}
+                      {entry.reasoning &&
+                        !isUndone &&
+                        ` · ${entry.reasoning.slice(0, 60)}${entry.reasoning.length > 60 ? "…" : ""}`}
                     </p>
                   </div>
 

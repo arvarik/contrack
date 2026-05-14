@@ -11,7 +11,11 @@ import type { Request, Response, NextFunction, RequestHandler } from "express";
  *   the handler is invoked outside the awaited promise chain).
  */
 export const asyncHandler = (
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown> | unknown,
+  fn: (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => Promise<unknown> | unknown,
 ): RequestHandler => {
   return (req, res, next) => {
     try {

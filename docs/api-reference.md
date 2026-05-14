@@ -28,7 +28,7 @@ curl "http://localhost:3000/api/contacts?view=slim"
 ```
 
 ```javascript
-const contacts = await fetch('/api/contacts?view=slim').then(r => r.json());
+const contacts = await fetch("/api/contacts?view=slim").then((r) => r.json());
 ```
 
 ---
@@ -42,14 +42,24 @@ curl http://localhost:3000/api/contacts/abc123
 ```
 
 **Response shape:**
+
 ```json
 {
   "id": "abc123",
   "name": "Jane Smith",
   "company": "Acme Corp",
   "role": "VP Engineering",
-  "emails": [{ "id": "e1", "email": "jane@acme.com", "label": "work", "isPrimary": true }],
-  "phones": [{ "id": "p1", "phone": "+14155551234", "label": "mobile", "isPrimary": true }],
+  "emails": [
+    { "id": "e1", "email": "jane@acme.com", "label": "work", "isPrimary": true }
+  ],
+  "phones": [
+    {
+      "id": "p1",
+      "phone": "+14155551234",
+      "label": "mobile",
+      "isPrimary": true
+    }
+  ],
   "tags": [{ "id": "t1", "tag": "investor" }],
   "lists": [{ "id": "l1", "name": "Board Members", "icon": "👥" }],
   "interactionCount": 12,
@@ -65,6 +75,7 @@ curl http://localhost:3000/api/contacts/abc123
 Create a new contact.
 
 **Request Body:**
+
 ```json
 {
   "name": "Jane Smith",
@@ -84,15 +95,15 @@ curl -X POST http://localhost:3000/api/contacts \
 ```
 
 ```javascript
-const contact = await fetch('/api/contacts', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+const contact = await fetch("/api/contacts", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    name: 'Jane Smith',
-    company: 'Acme Corp',
-    role: 'VP Engineering',
+    name: "Jane Smith",
+    company: "Acme Corp",
+    role: "VP Engineering",
   }),
-}).then(r => r.json());
+}).then((r) => r.json());
 ```
 
 **Returns:** `201` with the created contact object.
@@ -138,6 +149,7 @@ curl -X DELETE http://localhost:3000/api/contacts/abc123
 Bulk create contacts from an import. Supports SSE streaming for multi-phase import progress.
 
 **Request Body:**
+
 ```json
 {
   "contacts": [
@@ -148,6 +160,7 @@ Bulk create contacts from an import. Supports SSE streaming for multi-phase impo
 ```
 
 **Standard mode:**
+
 ```bash
 curl -X POST http://localhost:3000/api/contacts/bulk \
   -H "Content-Type: application/json" \
@@ -155,6 +168,7 @@ curl -X POST http://localhost:3000/api/contacts/bulk \
 ```
 
 **SSE streaming mode** (for progress tracking):
+
 ```bash
 curl -X POST http://localhost:3000/api/contacts/bulk \
   -H "Content-Type: application/json" \
@@ -163,6 +177,7 @@ curl -X POST http://localhost:3000/api/contacts/bulk \
 ```
 
 The SSE stream sends progress events through 4 phases:
+
 1. `importing` — Contact creation progress
 2. `embedding` — Generating contact fingerprints
 3. `scanning` — Looking for duplicates
@@ -205,6 +220,7 @@ curl -X POST http://localhost:3000/api/parse-contact \
 ```
 
 **Response:**
+
 ```json
 {
   "name": "Jane Smith",
@@ -257,6 +273,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/enrich
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -288,6 +305,7 @@ curl http://localhost:3000/api/contacts/abc123/timeline
 Log a new interaction. Triggers async @mention extraction.
 
 **Request Body:**
+
 ```json
 {
   "type": "note",
@@ -300,6 +318,7 @@ Log a new interaction. Triggers async @mention extraction.
 Supported types: `note`, `call`, `meeting`, `email`, `message`, `sms`.
 
 Optional `actionItem` field to create a linked follow-up:
+
 ```json
 {
   "type": "call",
@@ -352,6 +371,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/briefing
 ```
 
 **Response:**
+
 ```json
 {
   "briefing": "**Wins:** Closed Series B at $12M valuation...\n**Projects:** Building out the platform team...\n**Open Loops:** Waiting on legal review for partnership agreement..."
@@ -398,6 +418,7 @@ curl "http://localhost:3000/api/search?q=engineer+san+francisco"
 Hybrid semantic search (Ask Contrack v3). Supports NDJSON streaming for progressive results.
 
 **Request Body:**
+
 ```json
 {
   "query": "who works in fintech and I haven't talked to recently"
@@ -405,6 +426,7 @@ Hybrid semantic search (Ask Contrack v3). Supports NDJSON streaming for progress
 ```
 
 **Standard JSON response:**
+
 ```bash
 curl -X POST http://localhost:3000/api/search/semantic \
   -H "Content-Type: application/json" \
@@ -412,6 +434,7 @@ curl -X POST http://localhost:3000/api/search/semantic \
 ```
 
 **NDJSON streaming** (two-phase progressive results):
+
 ```bash
 curl -X POST http://localhost:3000/api/search/semantic \
   -H "Content-Type: application/json" \
@@ -444,6 +467,7 @@ curl -X POST http://localhost:3000/api/search/synthesize \
 Start a batch enrichment job for selected contacts.
 
 **Request Body:**
+
 ```json
 {
   "contactIds": ["abc123", "def456", "ghi789"],
@@ -460,6 +484,7 @@ curl -X POST http://localhost:3000/api/ai-search \
 ```
 
 **Response:**
+
 ```json
 {
   "batchId": "batch-abc123",
@@ -492,7 +517,7 @@ const eventSource = new EventSource(`/api/ai-search/stream?batchId=${batchId}`);
 eventSource.onmessage = (event) => {
   const batch = JSON.parse(event.data);
   console.log(`Status: ${batch.status}, Jobs: ${batch.jobs.length}`);
-  if (batch.status === 'complete') eventSource.close();
+  if (batch.status === "complete") eventSource.close();
 };
 ```
 
@@ -505,6 +530,7 @@ eventSource.onmessage = (event) => {
 Trigger a full deduplication scan. Streams progress via SSE.
 
 **Request Body:**
+
 ```json
 {
   "mode": "full"
@@ -547,6 +573,7 @@ curl http://localhost:3000/api/dedupe/suggestions/count
 Merge a suggestion cluster.
 
 **Request Body:**
+
 ```json
 {
   "primaryId": "abc123"
@@ -732,12 +759,23 @@ curl http://localhost:3000/api/command-palette/zero-state
 ```
 
 **Response:**
+
 ```json
 {
   "insights": [
     { "type": "action_items", "label": "3 action items due today", "count": 3 },
-    { "type": "at_risk", "label": "Haven't contacted Sarah Chen in 45 days", "contact": { "id": "...", "name": "Sarah Chen" }, "daysSince": 45 },
-    { "type": "ghost", "label": "John mentioned 5 times but not in contacts", "contact": { "id": "...", "name": "John" }, "mentionCount": 5 }
+    {
+      "type": "at_risk",
+      "label": "Haven't contacted Sarah Chen in 45 days",
+      "contact": { "id": "...", "name": "Sarah Chen" },
+      "daysSince": 45
+    },
+    {
+      "type": "ghost",
+      "label": "John mentioned 5 times but not in contacts",
+      "contact": { "id": "...", "name": "John" },
+      "mentionCount": 5
+    }
   ]
 }
 ```

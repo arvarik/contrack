@@ -11,9 +11,9 @@
  *
  * @module components/command-palette/SynthesisBar
  */
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Sparkles, X, Loader2, AlertTriangle } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { Sparkles, X, Loader2, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,12 +32,12 @@ interface SynthesisBarProps {
   compact?: boolean;
 }
 
-type SynthesisPhase = 'idle' | 'loading' | 'complete' | 'error';
+type SynthesisPhase = "idle" | "loading" | "complete" | "error";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MIN_RESULTS_FOR_SYNTHESIS = 3;
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -47,16 +47,16 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   resultCount,
   compact = false,
 }) => {
-  const [phase, setPhase] = useState<SynthesisPhase>('idle');
-  const [synthesisText, setSynthesisText] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [phase, setPhase] = useState<SynthesisPhase>("idle");
+  const [synthesisText, setSynthesisText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   // Reset when query or contacts change (new search)
   useEffect(() => {
-    setPhase('idle');
-    setSynthesisText('');
-    setErrorMessage('');
+    setPhase("idle");
+    setSynthesisText("");
+    setErrorMessage("");
     abortRef.current?.abort();
   }, [query, resultCount]);
 
@@ -66,14 +66,14 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setPhase('loading');
-    setSynthesisText('');
-    setErrorMessage('');
+    setPhase("loading");
+    setSynthesisText("");
+    setErrorMessage("");
 
     try {
       const payload = {
         query,
-        contacts: contacts.slice(0, 30).map(c => ({
+        contacts: contacts.slice(0, 30).map((c) => ({
           name: c.name,
           role: c.role || undefined,
           company: c.company || undefined,
@@ -82,10 +82,10 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       };
 
       const res = await fetch(`${API_BASE}/search/synthesize`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/x-ndjson',
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson",
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -94,29 +94,29 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       if (!res.ok) throw new Error(`Synthesis failed (${res.status})`);
 
       const reader = res.body?.getReader();
-      if (!reader) throw new Error('No response body');
+      if (!reader) throw new Error("No response body");
 
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (!line.trim()) continue;
           try {
             const chunk = JSON.parse(line);
-            if (chunk.phase === 'complete' && chunk.text) {
+            if (chunk.phase === "complete" && chunk.text) {
               setSynthesisText(chunk.text);
-              setPhase('complete');
-            } else if (chunk.phase === 'error') {
-              setErrorMessage(chunk.error || 'Unknown error');
-              setPhase('error');
+              setPhase("complete");
+            } else if (chunk.phase === "error") {
+              setErrorMessage(chunk.error || "Unknown error");
+              setPhase("error");
             }
           } catch {
             // Ignore malformed lines
@@ -124,37 +124,40 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         }
       }
     } catch (err: unknown) {
-      if (!(err instanceof Error && err.name === 'AbortError')) {
-        setErrorMessage((err instanceof Error ? err.message : String(err)) || 'Synthesis failed');
-        setPhase('error');
+      if (!(err instanceof Error && err.name === "AbortError")) {
+        setErrorMessage(
+          (err instanceof Error ? err.message : String(err)) ||
+            "Synthesis failed",
+        );
+        setPhase("error");
       }
     }
   }, [query, contacts]);
 
   const handleDismiss = useCallback(() => {
     abortRef.current?.abort();
-    setPhase('idle');
-    setSynthesisText('');
-    setErrorMessage('');
+    setPhase("idle");
+    setSynthesisText("");
+    setErrorMessage("");
   }, []);
 
   // Don't render if not enough results (AFTER all hooks)
   if (resultCount < MIN_RESULTS_FOR_SYNTHESIS) return null;
 
-  const px = compact ? 'px-3 py-2' : 'px-4 py-3';
-  const textSize = compact ? 'text-xs' : 'text-sm';
+  const px = compact ? "px-3 py-2" : "px-4 py-3";
+  const textSize = compact ? "text-xs" : "text-sm";
 
   return (
     <AnimatePresence mode="wait">
       {/* ── Idle: Show synthesize button ── */}
-      {phase === 'idle' && (
+      {phase === "idle" && (
         <motion.div
           key="idle"
           initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
+          animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.2 }}
-          className={compact ? 'px-1' : ''}
+          className={compact ? "px-1" : ""}
         >
           <button
             onClick={handleSynthesize}
@@ -164,7 +167,9 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
               ${textSize} text-primary/70 hover:text-primary cursor-pointer
             `}
           >
-            <Sparkles className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} group-hover:scale-110 transition-transform`} />
+            <Sparkles
+              className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} group-hover:scale-110 transition-transform`}
+            />
             <span className="font-semibold">Synthesize these results</span>
             <span className="text-on-surface-variant/50 ml-auto">
               {resultCount} contacts
@@ -174,18 +179,22 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       )}
 
       {/* ── Loading: Shimmer skeleton ── */}
-      {phase === 'loading' && (
+      {phase === "loading" && (
         <motion.div
           key="loading"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className={`${compact ? 'mx-1' : ''} rounded-xl bg-primary/5 ${px} space-y-2`}
-          style={{ minHeight: compact ? '60px' : '80px' }}
+          className={`${compact ? "mx-1" : ""} rounded-xl bg-primary/5 ${px} space-y-2`}
+          style={{ minHeight: compact ? "60px" : "80px" }}
         >
-          <div className={`flex items-center gap-2 ${textSize} text-primary/60`}>
-            <Loader2 className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} animate-spin`} />
+          <div
+            className={`flex items-center gap-2 ${textSize} text-primary/60`}
+          >
+            <Loader2
+              className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} animate-spin`}
+            />
             <span className="font-semibold">Synthesizing…</span>
           </div>
           <div className="space-y-1.5">
@@ -196,7 +205,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       )}
 
       {/* ── Complete: Show synthesis text ── */}
-      {phase === 'complete' && synthesisText && (
+      {phase === "complete" && synthesisText && (
         <motion.div
           key="complete"
           initial={{ opacity: 0, y: -4 }}
@@ -204,13 +213,17 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
           className={`
-            ${compact ? 'mx-1' : ''} rounded-xl bg-primary/5
+            ${compact ? "mx-1" : ""} rounded-xl bg-primary/5
             ${px} relative group
           `}
         >
           <div className={`flex items-start gap-2 ${textSize}`}>
-            <Sparkles className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-primary shrink-0 mt-0.5`} />
-            <p className="text-on-surface leading-relaxed flex-1">{synthesisText}</p>
+            <Sparkles
+              className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} text-primary shrink-0 mt-0.5`}
+            />
+            <p className="text-on-surface leading-relaxed flex-1">
+              {synthesisText}
+            </p>
           </div>
           <button
             onClick={handleDismiss}
@@ -223,19 +236,19 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       )}
 
       {/* ── Error state ── */}
-      {phase === 'error' && (
+      {phase === "error" && (
         <motion.div
           key="error"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className={`${compact ? 'mx-1' : ''} rounded-xl bg-rose-500/5 ${px}`}
+          className={`${compact ? "mx-1" : ""} rounded-xl bg-rose-500/5 ${px}`}
         >
           <div className={`flex items-center gap-2 ${textSize}`}>
             <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
             <span className="text-rose-600">
-              Synthesis failed{errorMessage ? `: ${errorMessage}` : ''}
+              Synthesis failed{errorMessage ? `: ${errorMessage}` : ""}
             </span>
             <button
               onClick={handleSynthesize}

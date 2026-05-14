@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
@@ -18,11 +18,11 @@
    * =================================================================== */
 
   /* ── Primary Palette ────────────────────────────────────────────── */
-  --color-primary: #009EDB;
+  --color-primary: #009edb;
   --color-primary-dim: #00628a;
   --color-primary-container: #47befd;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #001E2F;
+  --color-on-primary-container: #001e2f;
 
   /* ── Secondary / Neutral ────────────────────────────────────────── */
   --color-secondary: #4d626c;
@@ -34,15 +34,15 @@
   --color-on-error: #ffffff;
 
   /* ── Surface Hierarchy (paper-stack) ────────────────────────────── */
-  --color-surface: #f5f6f9;                     /* Base layer */
+  --color-surface: #f5f6f9; /* Base layer */
   --color-on-surface: #2a3437;
   --color-surface-variant: #d9e4e8;
   --color-on-surface-variant: #566164;
 
-  --color-surface-container-lowest: #ffffff;     /* Interactive/card */
-  --color-surface-container-low: #eff1f4;        /* Sectional */
+  --color-surface-container-lowest: #ffffff; /* Interactive/card */
+  --color-surface-container-low: #eff1f4; /* Sectional */
   --color-surface-container: #e8eff1;
-  --color-surface-container-high: #e0e3e6;       /* Elevated/emphasis */
+  --color-surface-container-high: #e0e3e6; /* Elevated/emphasis */
   --color-surface-container-highest: #d9e4e8;
 
   /* ── Radii ─────────────────────────────────────────────────────── */
@@ -60,12 +60,20 @@
     @apply bg-surface text-on-surface font-body antialiased;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-headline tracking-tight;
   }
 
   /* Kill default border on focusable elements — we use ring instead  */
-  input, textarea, select, button {
+  input,
+  textarea,
+  select,
+  button {
     outline: none;
   }
 }
@@ -77,7 +85,7 @@
 @layer components {
   /* ── Glass Panel (modals, dropdowns, floating nav) ──────────────── */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.80);
+    background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }
@@ -85,7 +93,11 @@
   /* ── Signature Gradient (BRANDING ONLY — sidebar logo text) ─────── */
   /* For buttons use bg-primary text-on-primary instead.               */
   .signature-gradient {
-    background: linear-gradient(135deg, var(--color-primary-dim) 0%, var(--color-primary-container) 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-primary-dim) 0%,
+      var(--color-primary-container) 100%
+    );
   }
 
   /* ── Card — borderless surface elevation ────────────────────────── */
@@ -159,10 +171,18 @@
 
   /* ── Swipe Card Overlays (Dedupe Tinder-style) ─────────────────── */
   .swipe-approve-overlay {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.03) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(16, 185, 129, 0.12) 0%,
+      rgba(16, 185, 129, 0.03) 100%
+    );
   }
   .swipe-reject-overlay {
-    background: linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(244, 63, 94, 0.03) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(244, 63, 94, 0.12) 0%,
+      rgba(244, 63, 94, 0.03) 100%
+    );
   }
   .card-stack-behind {
     transform: scale(0.96) translateY(10px);
@@ -186,8 +206,14 @@
 
   /** Fade-in for transient confirmations (e.g. EditableField save ✓) */
   @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.7); }
-    to   { opacity: 1; transform: scale(1);   }
+    from {
+      opacity: 0;
+      transform: scale(0.7);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
   .animate-fade-in {
     animation: fadeIn 0.15s ease-out forwards;
@@ -205,8 +231,12 @@
    * fill-mode: both ensures the card starts fully transparent before its delay fires.
    */
   @keyframes resultCardIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
   .result-card-enter {
     animation: resultCardIn 0.22s ease-out both;
@@ -220,8 +250,14 @@
    * not when new interactions are added to the list.
    */
   @keyframes timelineEntryIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   .timeline-enter {
     animation: resultCardIn 0.3s ease-out both;

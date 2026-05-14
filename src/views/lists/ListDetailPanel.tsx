@@ -7,25 +7,70 @@
  *  - "View in Network" deep-link: navigates to /?list=<id>
  *  - Danger zone: delete list with inline confirmation
  */
-import React, { useState, useEffect, useRef } from 'react';
-import { X, ExternalLink, Trash2, Check, UserMinus } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { toast } from 'sonner';
-import { useUpdateList, useDeleteList, useListContacts, useRemoveFromList } from '../../api';
-import { ContactList } from '../../types';
-import { ListIcon } from '../contact-list/CreateListModal';
-import { cn } from '../../lib/utils';
-import { SECTION_HEADING, ICON_BTN } from '../../lib/styles';
+import React, { useState, useEffect, useRef } from "react";
+import { X, ExternalLink, Trash2, Check, UserMinus } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
+import {
+  useUpdateList,
+  useDeleteList,
+  useListContacts,
+  useRemoveFromList,
+} from "../../api";
+import { ContactList } from "../../types";
+import { ListIcon } from "../contact-list/CreateListModal";
+import { cn } from "../../lib/utils";
+import { SECTION_HEADING, ICON_BTN } from "../../lib/styles";
 
 // Icon options (same set as CreateListModal)
-import { Star, Heart, Crown, Flame, Rocket, Target, Gem, Award, Briefcase, Users, Globe, Zap, Shield, Coffee, Music, Camera, BookOpen, TrendingUp, Anchor, Flag, Sparkles, Sun } from 'lucide-react';
+import {
+  Star,
+  Heart,
+  Crown,
+  Flame,
+  Rocket,
+  Target,
+  Gem,
+  Award,
+  Briefcase,
+  Users,
+  Globe,
+  Zap,
+  Shield,
+  Coffee,
+  Music,
+  Camera,
+  BookOpen,
+  TrendingUp,
+  Anchor,
+  Flag,
+  Sparkles,
+  Sun,
+} from "lucide-react";
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  star: Star, heart: Heart, crown: Crown, flame: Flame, rocket: Rocket,
-  target: Target, gem: Gem, award: Award, briefcase: Briefcase, users: Users,
-  globe: Globe, zap: Zap, shield: Shield, coffee: Coffee, music: Music,
-  camera: Camera, 'book-open': BookOpen, 'trending-up': TrendingUp,
-  anchor: Anchor, flag: Flag, sparkles: Sparkles, sun: Sun,
+  star: Star,
+  heart: Heart,
+  crown: Crown,
+  flame: Flame,
+  rocket: Rocket,
+  target: Target,
+  gem: Gem,
+  award: Award,
+  briefcase: Briefcase,
+  users: Users,
+  globe: Globe,
+  zap: Zap,
+  shield: Shield,
+  coffee: Coffee,
+  music: Music,
+  camera: Camera,
+  "book-open": BookOpen,
+  "trending-up": TrendingUp,
+  anchor: Anchor,
+  flag: Flag,
+  sparkles: Sparkles,
+  sun: Sun,
 };
 const ICON_OPTIONS = Object.keys(ICON_MAP);
 
@@ -38,11 +83,19 @@ interface ListDetailPanelProps {
   hideMobileHeader?: boolean;
 }
 
-export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hideMobileHeader = false }: ListDetailPanelProps) => {
+export const ListDetailPanel = ({
+  list,
+  onClose,
+  onDeleted,
+  onViewInNetwork,
+  hideMobileHeader = false,
+}: ListDetailPanelProps) => {
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
   const removeFromList = useRemoveFromList();
-  const { data: members = [], isLoading: membersLoading } = useListContacts(list.id);
+  const { data: members = [], isLoading: membersLoading } = useListContacts(
+    list.id,
+  );
 
   const [editName, setEditName] = useState(list.name);
   const [editIcon, setEditIcon] = useState(list.icon);
@@ -59,17 +112,26 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
     setShowDeleteConfirm(false);
   }, [list.id]);
 
-  const handleNameChange = (v: string) => { setEditName(v); setIsDirty(true); };
-  const handleIconChange = (icon: string) => { setEditIcon(icon); setIsDirty(true); };
+  const handleNameChange = (v: string) => {
+    setEditName(v);
+    setIsDirty(true);
+  };
+  const handleIconChange = (icon: string) => {
+    setEditIcon(icon);
+    setIsDirty(true);
+  };
 
   const handleSave = async () => {
     if (!editName.trim()) return;
     try {
-      await updateList.mutateAsync({ id: list.id, data: { name: editName.trim(), icon: editIcon } });
+      await updateList.mutateAsync({
+        id: list.id,
+        data: { name: editName.trim(), icon: editIcon },
+      });
       setIsDirty(false);
-      toast.success('List updated');
+      toast.success("List updated");
     } catch {
-      toast.error('Failed to update list');
+      toast.error("Failed to update list");
     }
   };
 
@@ -79,7 +141,7 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
       toast.success(`Deleted "${list.name}"`);
       onDeleted();
     } catch {
-      toast.error('Failed to delete list');
+      toast.error("Failed to delete list");
     }
   };
 
@@ -88,7 +150,7 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
     try {
       await removeFromList.mutateAsync({ listId: list.id, contactId });
     } catch {
-      toast.error('Failed to remove contact');
+      toast.error("Failed to remove contact");
     } finally {
       setRemovingId(null);
     }
@@ -103,9 +165,11 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
             <X className="w-5 h-5" />
           </button>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold font-headline text-base leading-tight truncate">{list.name}</h3>
+            <h3 className="font-bold font-headline text-base leading-tight truncate">
+              {list.name}
+            </h3>
             <p className="text-xs text-on-surface-variant mt-0.5">
-              {members.length} {members.length === 1 ? 'contact' : 'contacts'}
+              {members.length} {members.length === 1 ? "contact" : "contacts"}
             </p>
           </div>
           <button
@@ -124,9 +188,11 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
       {hideMobileHeader && (
         <div className="px-4 pb-3 bg-surface-container-low shrink-0 flex items-center justify-between">
           <div className="min-w-0">
-            <h3 className="font-bold font-headline text-sm truncate">{list.name}</h3>
+            <h3 className="font-bold font-headline text-sm truncate">
+              {list.name}
+            </h3>
             <p className="text-xs text-on-surface-variant">
-              {members.length} {members.length === 1 ? 'contact' : 'contacts'}
+              {members.length} {members.length === 1 ? "contact" : "contacts"}
             </p>
           </div>
           <button
@@ -148,7 +214,7 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
           </h4>
 
           <div className="grid grid-cols-8 gap-1.5">
-            {ICON_OPTIONS.map(key => {
+            {ICON_OPTIONS.map((key) => {
               const Icon = ICON_MAP[key];
               const active = editIcon === key;
               return (
@@ -160,7 +226,7 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
                     "p-2 rounded-xl transition-all flex items-center justify-center",
                     active
                       ? "bg-primary/15 text-primary ring-2 ring-primary/30 shadow-sm scale-110"
-                      : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+                      : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
                   )}
                   title={key}
                 >
@@ -175,8 +241,10 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
               ref={nameInputRef}
               type="text"
               value={editName}
-              onChange={e => handleNameChange(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+              }}
               className="flex-1 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none font-bold"
               placeholder="List name"
             />
@@ -200,24 +268,27 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
 
         {/* ── Members ──────────────────────────────────────────────────────── */}
         <section className="px-5 pb-5 space-y-3">
-          <h4 className={cn(SECTION_HEADING)}>
-            Members · {members.length}
-          </h4>
+          <h4 className={cn(SECTION_HEADING)}>Members · {members.length}</h4>
 
           {membersLoading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-12 bg-surface-container-low rounded-xl animate-pulse" />
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-12 bg-surface-container-low rounded-xl animate-pulse"
+                />
               ))}
             </div>
           ) : members.length === 0 ? (
             <div className="text-center py-8 text-on-surface-variant text-sm bg-surface-container-low rounded-2xl">
               <p className="font-bold text-xs opacity-60">No members yet</p>
-              <p className="text-xs opacity-40 mt-1">Add contacts from the Network page</p>
+              <p className="text-xs opacity-40 mt-1">
+                Add contacts from the Network page
+              </p>
             </div>
           ) : (
             <div className="space-y-1.5">
-              {members.map(contact => (
+              {members.map((contact) => (
                 <motion.div
                   key={contact.id}
                   layout
@@ -229,7 +300,11 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-surface-container-low">
                     {contact.avatarUrl ? (
-                      <img src={contact.avatarUrl} alt={contact.name} className="w-full h-full object-cover" />
+                      <img
+                        src={contact.avatarUrl}
+                        alt={contact.name}
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs font-bold text-primary bg-primary/10">
                         {contact.name.charAt(0)}
@@ -242,7 +317,9 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
                     <p className="font-bold text-sm truncate">{contact.name}</p>
                     {(contact.role || contact.company) && (
                       <p className="text-xs text-on-surface-variant truncate">
-                        {[contact.role, contact.company].filter(Boolean).join(' · ')}
+                        {[contact.role, contact.company]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     )}
                   </div>
@@ -279,7 +356,9 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
                   exit={{ opacity: 0 }}
                   className="flex items-center justify-between flex-1 gap-3"
                 >
-                  <span className="text-xs text-rose-400/80 font-medium">Delete this list</span>
+                  <span className="text-xs text-rose-400/80 font-medium">
+                    Delete this list
+                  </span>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
                     className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 transition-colors shrink-0"
@@ -296,7 +375,11 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
                   className="flex items-center justify-between flex-1 gap-3"
                 >
                   <span className="text-xs text-on-surface-variant">
-                    Remove <span className="font-bold text-on-surface">"{list.name}"</span>? Contacts kept.
+                    Remove{" "}
+                    <span className="font-bold text-on-surface">
+                      "{list.name}"
+                    </span>
+                    ? Contacts kept.
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
@@ -310,7 +393,7 @@ export const ListDetailPanel = ({ list, onClose, onDeleted, onViewInNetwork, hid
                       disabled={deleteList.isPending}
                       className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
                     >
-                      {deleteList.isPending ? '…' : 'Delete'}
+                      {deleteList.isPending ? "…" : "Delete"}
                     </button>
                   </div>
                 </motion.div>

@@ -39,11 +39,16 @@ function getFreshness(updatedAt: string | null | undefined): FreshnessLevel {
   return "stale";
 }
 
-function getTooltip(updatedAt: string | null | undefined, level: FreshnessLevel): string {
+function getTooltip(
+  updatedAt: string | null | undefined,
+  level: FreshnessLevel,
+): string {
   if (!updatedAt) return "No update date available";
 
   try {
-    const distance = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
+    const distance = formatDistanceToNow(new Date(updatedAt), {
+      addSuffix: true,
+    });
     if (level === "stale") return `Data may be stale — updated ${distance}`;
     return `Updated ${distance}`;
   } catch {
@@ -51,7 +56,11 @@ function getTooltip(updatedAt: string | null | undefined, level: FreshnessLevel)
   }
 }
 
-export const DataAgeHalo = ({ updatedAt, size = "md", children }: DataAgeHaloProps) => {
+export const DataAgeHalo = ({
+  updatedAt,
+  size = "md",
+  children,
+}: DataAgeHaloProps) => {
   const level = getFreshness(updatedAt);
   const tooltip = getTooltip(updatedAt, level);
   const ringClass = RING_COLORS[level];

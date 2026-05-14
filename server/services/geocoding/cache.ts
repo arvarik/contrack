@@ -14,7 +14,9 @@ sqlite.exec(`
 `);
 
 const cacheStmts = {
-  get: sqlite.prepare(`SELECT lat, lng, success, createdAt FROM geocode_cache WHERE key = ?`),
+  get: sqlite.prepare(
+    `SELECT lat, lng, success, createdAt FROM geocode_cache WHERE key = ?`,
+  ),
   upsert: sqlite.prepare(`
     INSERT INTO geocode_cache (key, lat, lng, provider, success)
     VALUES (?, ?, ?, ?, ?)
@@ -27,9 +29,9 @@ export function normalizeLocationKey(location: string): string {
   return location
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/\s*,\s*/g, ', ')
-    .replace(/^,+|,+$/g, '');
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/^,+|,+$/g, "");
 }
 
 interface CacheEntry {
@@ -39,7 +41,9 @@ interface CacheEntry {
   createdAt: string;
 }
 
-export function getCachedGeocode(key: string): { lat: number; lng: number } | null {
+export function getCachedGeocode(
+  key: string,
+): { lat: number; lng: number } | null {
   const row = cacheStmts.get.get(key) as CacheEntry | undefined;
   if (!row) return null;
 
@@ -48,7 +52,7 @@ export function getCachedGeocode(key: string): { lat: number; lng: number } | nu
   }
 
   if (!row.success) {
-    const ageMs = Date.now() - new Date(row.createdAt + 'Z').getTime();
+    const ageMs = Date.now() - new Date(row.createdAt + "Z").getTime();
     const ageDays = ageMs / (1000 * 60 * 60 * 24);
     if (ageDays < FAILURE_TTL_DAYS) {
       return null;
@@ -61,10 +65,16 @@ export function getCachedGeocode(key: string): { lat: number; lng: number } | nu
 export function isRecentFailure(key: string): boolean {
   const row = cacheStmts.get.get(key) as CacheEntry | undefined;
   if (!row || row.success) return false;
-  const ageMs = Date.now() - new Date(row.createdAt + 'Z').getTime();
+  const ageMs = Date.now() - new Date(row.createdAt + "Z").getTime();
   return ageMs / (1000 * 60 * 60 * 24) < FAILURE_TTL_DAYS;
 }
 
-export function cacheGeocode(key: string, lat: number | null, lng: number | null, provider: string, success: boolean): void {
+export function cacheGeocode(
+  key: string,
+  lat: number | null,
+  lng: number | null,
+  provider: string,
+  success: boolean,
+): void {
   cacheStmts.upsert.run(key, lat, lng, provider, success ? 1 : 0);
 }

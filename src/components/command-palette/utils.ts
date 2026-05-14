@@ -1,15 +1,15 @@
-export function getMode(search: string): 'normal' | 'action' | 'ai' {
+export function getMode(search: string): "normal" | "action" | "ai" {
   const trimmed = search.trim();
-  if (trimmed.startsWith('?')) return 'ai';
-  if (trimmed.startsWith('>')) return 'action';
-  return 'normal';
+  if (trimmed.startsWith("?")) return "ai";
+  if (trimmed.startsWith(">")) return "action";
+  return "normal";
 }
 
 export const EXAMPLE_QUERIES = [
-  'Who do I know in London working in FinTech?',
-  'Who likes espresso?',
+  "Who do I know in London working in FinTech?",
+  "Who likes espresso?",
   "Who haven't I contacted in over 3 months?",
-  'Who works at a startup as a designer?',
+  "Who works at a startup as a designer?",
 ];
 
 /** cmdk group heading style — reused across all Command.Group instances */
@@ -23,5 +23,5 @@ export const GROUP_HEADING_EMERALD = `${GROUP_HEADING} [&_[cmdk-group-heading]]:
 
 /** Strip the mode prefix from a search query for display purposes */
 export function stripModePrefix(query: string): string {
-  return query.replace(/^[?>]\s*/, '').trim();
+  return query.replace(/^[?>]\s*/, "").trim();
 }

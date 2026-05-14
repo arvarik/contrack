@@ -10,17 +10,24 @@
  *
  * @module hooks/useQueryTokenizer
  */
-import { useMemo, useCallback, useRef } from 'react';
+import { useMemo, useCallback, useRef } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type FacetField = 'role' | 'company' | 'location' | 'industry' | 'tag' | 'score' | 'updated';
+export type FacetField =
+  | "role"
+  | "company"
+  | "location"
+  | "industry"
+  | "tag"
+  | "score"
+  | "updated";
 
 export interface FacetFilter {
   field: FacetField;
   value: string;
   /** For score: and updated: operators (e.g., >80, <40) */
-  operator?: '>' | '<';
+  operator?: ">" | "<";
 }
 
 export interface ParsedQuery {
@@ -36,7 +43,13 @@ export interface ParsedQuery {
 
 /** Valid facet field names */
 const FACET_FIELDS: ReadonlySet<string> = new Set([
-  'role', 'company', 'location', 'industry', 'tag', 'score', 'updated',
+  "role",
+  "company",
+  "location",
+  "industry",
+  "tag",
+  "score",
+  "updated",
 ]);
 
 /**
@@ -44,13 +57,15 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
  * Captures: field name, colon, value, then whitespace.
  * Non-greedy value match stops at whitespace boundary.
  */
-const COMPLETED_FACET_REGEX = /\b(role|company|location|industry|tag|score|updated):(\S+)\s/gi;
+const COMPLETED_FACET_REGEX =
+  /\b(role|company|location|industry|tag|score|updated):(\S+)\s/gi;
 
 /**
  * Regex to detect an in-progress facet at the end of input.
  * e.g., "role:" or "role:eng" (no trailing space).
  */
-const ACTIVE_PREFIX_REGEX = /\b(role|company|location|industry|tag|score|updated):(\S*)$/i;
+const ACTIVE_PREFIX_REGEX =
+  /\b(role|company|location|industry|tag|score|updated):(\S*)$/i;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -74,9 +89,10 @@ export function useQueryTokenizer(
     let remaining = rawInput;
 
     // Extract completed facet tokens (must have trailing space)
-    const completedMatches: { full: string; field: string; value: string }[] = [];
+    const completedMatches: { full: string; field: string; value: string }[] =
+      [];
     let match: RegExpExecArray | null;
-    const regex = new RegExp(COMPLETED_FACET_REGEX.source, 'gi');
+    const regex = new RegExp(COMPLETED_FACET_REGEX.source, "gi");
 
     while ((match = regex.exec(rawInput)) !== null) {
       completedMatches.push({
@@ -93,26 +109,30 @@ export function useQueryTokenizer(
       const filter = parseFilterValue(cm.field as FacetField, cm.value);
       if (filter) {
         // Don't add duplicates
-        if (!filters.some(f => f.field === filter.field && f.value === filter.value)) {
+        if (
+          !filters.some(
+            (f) => f.field === filter.field && f.value === filter.value,
+          )
+        ) {
           filters.push(filter);
           lockedFiltersRef.current = [...lockedFiltersRef.current, filter];
         }
       }
 
       // Remove the token from the raw input
-      remaining = remaining.replace(cm.full, '');
+      remaining = remaining.replace(cm.full, "");
     }
 
     // Check for active prefix at end of input
-    let activePrefix: ParsedQuery['activePrefix'] = null;
+    let activePrefix: ParsedQuery["activePrefix"] = null;
     const activePrefixMatch = remaining.match(ACTIVE_PREFIX_REGEX);
     if (activePrefixMatch) {
       activePrefix = {
         field: activePrefixMatch[1].toLowerCase() as FacetField,
-        partial: activePrefixMatch[2] || '',
+        partial: activePrefixMatch[2] || "",
       };
       // Remove the active prefix from freeText
-      remaining = remaining.replace(ACTIVE_PREFIX_REGEX, '');
+      remaining = remaining.replace(ACTIVE_PREFIX_REGEX, "");
     }
 
     return {
@@ -123,23 +143,35 @@ export function useQueryTokenizer(
   }, [rawInput]);
 
   /** Add a filter manually (from autocomplete selection) */
-  const addFilter = useCallback((filter: FacetFilter) => {
-    // Don't add duplicates
-    if (lockedFiltersRef.current.some(f => f.field === filter.field && f.value === filter.value)) {
-      return;
-    }
-    lockedFiltersRef.current = [...lockedFiltersRef.current, filter];
+  const addFilter = useCallback(
+    (filter: FacetFilter) => {
+      // Don't add duplicates
+      if (
+        lockedFiltersRef.current.some(
+          (f) => f.field === filter.field && f.value === filter.value,
+        )
+      ) {
+        return;
+      }
+      lockedFiltersRef.current = [...lockedFiltersRef.current, filter];
 
-    // Remove the active prefix from the raw input
-    setRawInput(rawInput.replace(ACTIVE_PREFIX_REGEX, '').trim());
-  }, [rawInput, setRawInput]);
+      // Remove the active prefix from the raw input
+      setRawInput(rawInput.replace(ACTIVE_PREFIX_REGEX, "").trim());
+    },
+    [rawInput, setRawInput],
+  );
 
   /** Remove a locked filter (pill dismiss) */
-  const removeFilter = useCallback((index: number) => {
-    lockedFiltersRef.current = lockedFiltersRef.current.filter((_, i) => i !== index);
-    // Force re-parse by setting input to itself
-    setRawInput(rawInput);
-  }, [rawInput, setRawInput]);
+  const removeFilter = useCallback(
+    (index: number) => {
+      lockedFiltersRef.current = lockedFiltersRef.current.filter(
+        (_, i) => i !== index,
+      );
+      // Force re-parse by setting input to itself
+      setRawInput(rawInput);
+    },
+    [rawInput, setRawInput],
+  );
 
   /** Remove the last locked filter (Backspace on empty input) */
   const removeLastFilter = useCallback(() => {
@@ -167,26 +199,29 @@ export function useQueryTokenizer(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Parse a raw value string into a structured filter, handling operators for score/updated */
-function parseFilterValue(field: FacetField, rawValue: string): FacetFilter | null {
+function parseFilterValue(
+  field: FacetField,
+  rawValue: string,
+): FacetFilter | null {
   if (!rawValue) return null;
 
-  if (field === 'score') {
+  if (field === "score") {
     const opMatch = rawValue.match(/^([><]?)(\d+)$/);
     if (!opMatch) return null;
     return {
       field,
       value: opMatch[2],
-      operator: (opMatch[1] as '>' | '<') || '>',
+      operator: (opMatch[1] as ">" | "<") || ">",
     };
   }
 
-  if (field === 'updated') {
+  if (field === "updated") {
     const opMatch = rawValue.match(/^([><]?)(\d+[dwmy])$/i);
     if (!opMatch) return null;
     return {
       field,
       value: opMatch[2],
-      operator: (opMatch[1] as '>' | '<') || '>',
+      operator: (opMatch[1] as ">" | "<") || ">",
     };
   }
 

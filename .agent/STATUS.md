@@ -1,4 +1,5 @@
 # Contrack CRM — Project Status
+
 [STATE: IDLE]
 
 ## Current Focus
@@ -10,6 +11,7 @@ _No active feature — ready for next cycle._
 _Empty — start a new feature with `/step1-spec`._
 
 ## Current State
+
 **Phase:** Idle
 
 **Test Suite:** 180 tests (180 passing) — full suite, 0 regressions, <600ms run time
@@ -17,11 +19,13 @@ _Empty — start a new feature with `/step1-spec`._
 The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
 
 ## Relevant Files for Current Task
+
 _None — next feature not started._
 
 ## Stabilization & Polish Sweep (Phase 2–4, 2026-05-14)
 
 **Phase 2 — Backend Stabilization & Robustness:**
+
 - `server/utils/AppError.ts` — added `code`, `details`, `cause` fields + named subclasses (`NotFoundError`, `ValidationError`, `ConflictError`, `RateLimitedError`, `ServiceUnavailableError`, `UpstreamTimeoutError`)
 - `server/utils/asyncHandler.ts` — strict typing; catches synchronous throws
 - `server/middleware/errorHandler.ts` (NEW) — central translation for AppError / ZodError / Express parse errors / SQLite errors; production stack stripping; `notFoundHandler` for `/api/*` 404s
@@ -32,6 +36,7 @@ _None — next feature not started._
 - `server/services/dedupe/merging.ts` + `suggestions.ts` — merge + audit log now atomic; `throw new Error` replaced with typed `AppError` subclasses
 
 **Phase 3 — Frontend Consistency & Mobile Responsiveness:**
+
 - `src/contexts/SessionContext.tsx` — split into `RecentContext` + `AISearchSessionContext`; both provider values memoized
 - `src/contexts/AISearchContext.tsx` + `DedupeContext.tsx` — provider values memoized to stop value-recreation cascades
 - `src/components/ui/Modal.tsx` — responsive bottom-sheet on mobile (full-width, slide-up); 44px close-button hit area; safe-area inset
@@ -40,6 +45,7 @@ _None — next feature not started._
 - `src/components/BulkEditFieldModal.tsx` — fixed hard-coded dark dropdown (was `bg-[#242424]`); added click-outside; 44px touch targets
 
 **Phase 4 — Open Source Polish & Test Coverage:**
+
 - TSDoc enrichment for `src/lib/utils.ts`, `server/utils/helpers.ts`, `src/types.ts`, `server/repositories/types.ts`
 - New test file `tests/unit/resilience.test.ts` (35 tests) — full coverage of timeout, retry, classifier, JSON parser
 - New test file `tests/unit/appError.test.ts` (14 tests) — AppError contract + every subclass
@@ -50,6 +56,7 @@ _None — next feature not started._
 ## Recently Completed
 
 **Multi-Provider AI** (2026-04-24) — Shipped to main.
+
 - OpenAI (`gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4`) and Anthropic (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.6`) as first-class providers alongside Gemini
 - Provider-agnostic `AIProvider` interface with adapters in `server/ai/adapters/`
 - Singleton factory resolves provider from `AI_PROVIDER` env var
@@ -61,6 +68,7 @@ _None — next feature not started._
 - Archived to `docs/archive/multi-provider-ai/`
 
 **AI Stats Page** (2026-04-14) — Shipped to main.
+
 - Invocation tracking across all 10 AI functions + 2 cache-hit paths
 - `/settings/ai-stats` dashboard with SummaryBar, KPI cards, filtered feed, cache tiers accordion
 - `GET /api/ai/stats/summary` and `GET /api/ai/stats/feed` endpoints
@@ -69,12 +77,14 @@ _None — next feature not started._
 - Archived to `docs/archive/ai-stats-page/`
 
 ## Known Issues Carried Forward
+
 - B-02: Feed pagination replaces pages instead of appending (design decision needed)
 - S-02: Error messages reflect raw user input in JSON (low risk, React escapes)
 - S-03: No `Cache-Control: no-store` header on stats endpoints (low risk)
 - D-02: ~~OpenAI/Anthropic adapters lack retry/error handling~~ — **resolved 2026-05-14** via the shared `server/ai/resilience.ts` module (`withTimeout` + `withRetry` + `parseAIJson` integrated into all three adapters)
 
 ## Carried Tech Debt (not blocking ship)
+
 - `server/services/dedupe/` retains ~30 `any` casts on raw SQLite row access. These are pragmatic — the row shapes are joined-ad-hoc rather than `$inferSelect`-able — but should be narrowed to local row interfaces when next touched. (Out of scope for the polish sweep per the negative constraint "do not change feature logic".)
 - `src/views/dedupe/DedupeView.tsx` (742 LOC), `src/views/dedupe/components/SuggestionReviewQueue.tsx` (802 LOC), and `src/components/command-palette/CommandPalette.tsx` (850 LOC) remain "god components". They were flagged in the Phase 1 audit but not decomposed in Phase 3 — each warrants its own focused refactor.
 
@@ -84,18 +94,18 @@ _None — next feature not started._
 
 _Track mock/stub status across the frontend. Populated during Build phase, cleared during Ship._
 
-| Stub Location | Type | Real API Endpoint | Status |
-|---------------|------|-------------------|--------|
-| `server/ai/aiService.ts:76` — `parseContactRecord()` | isMockMode guard | Throws error (no mock data) | Production — graceful degradation |
-| `server/ai/aiService.ts:199` — `generateCatchMeUpBriefing()` | isMockMode mock data | `POST /api/contacts/:id/briefing` | Production — returns hardcoded 3-bullet briefing |
-| `server/ai/aiService.ts:262` — `extractMentions()` | isMockMode mock data | Inline AI call | Production — returns empty array |
-| `server/ai/aiService.ts:340` — `summarizeEmlEmail()` | isMockMode mock data | `POST /api/contacts/:id/interactions` | Production — returns hardcoded HTML summary |
-| `server/ai/aiService.ts:401` — `rerankCandidates()` | isMockMode mock data | `POST /api/search/semantic` | Production — returns first candidate |
-| `server/ai/aiService.ts:509` — `generateDailyInsight()` | isMockMode mock data | `GET /api/dashboard/insight` | Production — returns null |
-| `server/ai/aiService.ts:592` — `bulkParseContacts()` | isMockMode guard | Throws error (no mock data) | Production — graceful degradation |
-| `server/ai/aiService.ts:664` — `generateSearchExpansion()` | isMockMode guard | Inline AI call | Production — returns null |
-| `server/ai/aiService.ts:715` — `synthesizeSearchResults()` | isMockMode mock data | `POST /api/search/synthesize` | Production — returns templated string |
-| `src/views/ai-stats/components/SummaryBar.tsx:20` | Tier badge label | N/A (UI label) | Production — displays "Mock Mode" tier badge |
+| Stub Location                                                | Type                 | Real API Endpoint                     | Status                                           |
+| ------------------------------------------------------------ | -------------------- | ------------------------------------- | ------------------------------------------------ |
+| `server/ai/aiService.ts:76` — `parseContactRecord()`         | isMockMode guard     | Throws error (no mock data)           | Production — graceful degradation                |
+| `server/ai/aiService.ts:199` — `generateCatchMeUpBriefing()` | isMockMode mock data | `POST /api/contacts/:id/briefing`     | Production — returns hardcoded 3-bullet briefing |
+| `server/ai/aiService.ts:262` — `extractMentions()`           | isMockMode mock data | Inline AI call                        | Production — returns empty array                 |
+| `server/ai/aiService.ts:340` — `summarizeEmlEmail()`         | isMockMode mock data | `POST /api/contacts/:id/interactions` | Production — returns hardcoded HTML summary      |
+| `server/ai/aiService.ts:401` — `rerankCandidates()`          | isMockMode mock data | `POST /api/search/semantic`           | Production — returns first candidate             |
+| `server/ai/aiService.ts:509` — `generateDailyInsight()`      | isMockMode mock data | `GET /api/dashboard/insight`          | Production — returns null                        |
+| `server/ai/aiService.ts:592` — `bulkParseContacts()`         | isMockMode guard     | Throws error (no mock data)           | Production — graceful degradation                |
+| `server/ai/aiService.ts:664` — `generateSearchExpansion()`   | isMockMode guard     | Inline AI call                        | Production — returns null                        |
+| `server/ai/aiService.ts:715` — `synthesizeSearchResults()`   | isMockMode mock data | `POST /api/search/synthesize`         | Production — returns templated string            |
+| `src/views/ai-stats/components/SummaryBar.tsx:20`            | Tier badge label     | N/A (UI label)                        | Production — displays "Mock Mode" tier badge     |
 
 _All stubs are production-grade graceful degradation paths (triggered when the active provider's API key is absent). No MSW mocking or dev-only fake data detected._
 
@@ -105,15 +115,15 @@ _All stubs are production-grade graceful degradation paths (triggered when the a
 
 _Track changes to LLM prompts so we can diff versions and rollback if evals degrade._
 
-| Version | Date | Change Description | Eval Score | Delta | File |
-|---------|------|--------------------|------------|-------|------|
-| v1.0 | 2026-04-16 | Baseline — contact record parsing (structured extraction from unstructured text) | — | — | `server/ai/aiService.ts:80-95` |
-| v1.0 | 2026-04-16 | Baseline — catch-me-up briefing (3-bullet executive brief from contact+timeline) | — | — | `server/ai/aiService.ts:209-230` |
-| v1.0 | 2026-04-16 | Baseline — mention extraction (NER for people in CRM notes) | — | — | `server/ai/aiService.ts:277-294` |
-| v1.0 | 2026-04-16 | Baseline — EML email summarization (raw .eml → HTML digest) | — | — | `server/ai/aiService.ts:346-360` |
-| v1.0 | 2026-04-16 | Baseline — reranker (precision-focused candidate filtering for Ask Contrack) | — | — | `server/ai/aiService.ts:412-427` |
-| v1.0 | 2026-04-16 | Baseline — daily insight (actionable CRM network insight from stats) | — | — | `server/ai/aiService.ts:515-529` |
-| v1.0 | 2026-04-16 | Baseline — search expansion / Doc2Query (write-time synonym generation) | — | — | `server/ai/aiService.ts:680` |
-| v1.0 | 2026-04-16 | Baseline — synthesis brief (executive summary of search results) | — | — | `server/ai/aiService.ts:739-753` |
-| v1.0 | 2026-04-16 | Baseline — AI Search research prompt (grounded contact research with disambiguation) | — | — | `server/services/aiSearch/promptTemplate.ts:31-188` |
-| v1.0 | 2026-04-16 | Baseline — AI Search extraction prompt (Pass 2 structured JSON extraction) | — | — | `server/services/aiSearch/strategies/twoPass.ts:120-140` |
+| Version | Date       | Change Description                                                                   | Eval Score | Delta | File                                                     |
+| ------- | ---------- | ------------------------------------------------------------------------------------ | ---------- | ----- | -------------------------------------------------------- |
+| v1.0    | 2026-04-16 | Baseline — contact record parsing (structured extraction from unstructured text)     | —          | —     | `server/ai/aiService.ts:80-95`                           |
+| v1.0    | 2026-04-16 | Baseline — catch-me-up briefing (3-bullet executive brief from contact+timeline)     | —          | —     | `server/ai/aiService.ts:209-230`                         |
+| v1.0    | 2026-04-16 | Baseline — mention extraction (NER for people in CRM notes)                          | —          | —     | `server/ai/aiService.ts:277-294`                         |
+| v1.0    | 2026-04-16 | Baseline — EML email summarization (raw .eml → HTML digest)                          | —          | —     | `server/ai/aiService.ts:346-360`                         |
+| v1.0    | 2026-04-16 | Baseline — reranker (precision-focused candidate filtering for Ask Contrack)         | —          | —     | `server/ai/aiService.ts:412-427`                         |
+| v1.0    | 2026-04-16 | Baseline — daily insight (actionable CRM network insight from stats)                 | —          | —     | `server/ai/aiService.ts:515-529`                         |
+| v1.0    | 2026-04-16 | Baseline — search expansion / Doc2Query (write-time synonym generation)              | —          | —     | `server/ai/aiService.ts:680`                             |
+| v1.0    | 2026-04-16 | Baseline — synthesis brief (executive summary of search results)                     | —          | —     | `server/ai/aiService.ts:739-753`                         |
+| v1.0    | 2026-04-16 | Baseline — AI Search research prompt (grounded contact research with disambiguation) | —          | —     | `server/services/aiSearch/promptTemplate.ts:31-188`      |
+| v1.0    | 2026-04-16 | Baseline — AI Search extraction prompt (Pass 2 structured JSON extraction)           | —          | —     | `server/services/aiSearch/strategies/twoPass.ts:120-140` |

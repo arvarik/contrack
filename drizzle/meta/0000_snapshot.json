@@ -72,12 +72,8 @@
           "name": "action_items_contactId_contacts_id_fk",
           "tableFrom": "action_items",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -85,12 +81,8 @@
           "name": "action_items_interactionId_interactions_id_fk",
           "tableFrom": "action_items",
           "tableTo": "interactions",
-          "columnsFrom": [
-            "interactionId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["interactionId"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -166,10 +158,7 @@
       "indexes": {
         "contact_addresses_contactId_address_unique": {
           "name": "contact_addresses_contactId_address_unique",
-          "columns": [
-            "contactId",
-            "address"
-          ],
+          "columns": ["contactId", "address"],
           "isUnique": true
         }
       },
@@ -178,12 +167,8 @@
           "name": "contact_addresses_contactId_contacts_id_fk",
           "tableFrom": "contact_addresses",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -235,10 +220,7 @@
       "indexes": {
         "contact_attributes_contactId_name_unique": {
           "name": "contact_attributes_contactId_name_unique",
-          "columns": [
-            "contactId",
-            "name"
-          ],
+          "columns": ["contactId", "name"],
           "isUnique": true
         }
       },
@@ -247,12 +229,8 @@
           "name": "contact_attributes_contactId_contacts_id_fk",
           "tableFrom": "contact_attributes",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -342,12 +320,8 @@
           "name": "contact_education_contactId_contacts_id_fk",
           "tableFrom": "contact_education",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -426,12 +400,8 @@
           "name": "contact_emails_contactId_contacts_id_fk",
           "tableFrom": "contact_emails",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -529,12 +499,8 @@
           "name": "contact_experience_contactId_contacts_id_fk",
           "tableFrom": "contact_experience",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -587,10 +553,7 @@
       "indexes": {
         "contact_interests_contactId_interest_unique": {
           "name": "contact_interests_contactId_interest_unique",
-          "columns": [
-            "contactId",
-            "interest"
-          ],
+          "columns": ["contactId", "interest"],
           "isUnique": true
         }
       },
@@ -599,12 +562,8 @@
           "name": "contact_interests_contactId_contacts_id_fk",
           "tableFrom": "contact_interests",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -683,12 +642,8 @@
           "name": "contact_phones_contactId_contacts_id_fk",
           "tableFrom": "contact_phones",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -757,12 +712,8 @@
           "name": "contact_social_links_contactId_contacts_id_fk",
           "tableFrom": "contact_social_links",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -831,12 +782,8 @@
           "name": "contact_sources_contactId_contacts_id_fk",
           "tableFrom": "contact_sources",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -884,12 +831,8 @@
           "name": "contact_tags_contactId_contacts_id_fk",
           "tableFrom": "contact_tags",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1156,12 +1099,8 @@
           "name": "interaction_mentions_interactionId_interactions_id_fk",
           "tableFrom": "interaction_mentions",
           "tableTo": "interactions",
-          "columnsFrom": [
-            "interactionId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["interactionId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1169,22 +1108,15 @@
           "name": "interaction_mentions_contactId_contacts_id_fk",
           "tableFrom": "interaction_mentions",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "interaction_mentions_interactionId_contactId_pk": {
-          "columns": [
-            "interactionId",
-            "contactId"
-          ],
+          "columns": ["interactionId", "contactId"],
           "name": "interaction_mentions_interactionId_contactId_pk"
         }
       },
@@ -1294,12 +1226,8 @@
           "name": "interactions_contactId_contacts_id_fk",
           "tableFrom": "interactions",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1340,12 +1268,8 @@
           "name": "list_members_listId_lists_id_fk",
           "tableFrom": "list_members",
           "tableTo": "lists",
-          "columnsFrom": [
-            "listId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["listId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1353,22 +1277,15 @@
           "name": "list_members_contactId_contacts_id_fk",
           "tableFrom": "list_members",
           "tableTo": "contacts",
-          "columnsFrom": [
-            "contactId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["contactId"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "list_members_listId_contactId_pk": {
-          "columns": [
-            "listId",
-            "contactId"
-          ],
+          "columns": ["listId", "contactId"],
           "name": "list_members_listId_contactId_pk"
         }
       },

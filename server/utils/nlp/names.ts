@@ -7,9 +7,30 @@ import { areNicknameEquivalent } from "./nicknames.ts";
 
 /** Titles and suffixes to strip from name tokens before comparison */
 const TITLE_SUFFIXES = new Set([
-  "dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.",
-  "sir", "jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "phd", "md", "esq",
-  "cpa", "dds", "dvm",
+  "dr",
+  "dr.",
+  "mr",
+  "mr.",
+  "mrs",
+  "mrs.",
+  "ms",
+  "ms.",
+  "prof",
+  "prof.",
+  "sir",
+  "jr",
+  "jr.",
+  "sr",
+  "sr.",
+  "ii",
+  "iii",
+  "iv",
+  "phd",
+  "md",
+  "esq",
+  "cpa",
+  "dds",
+  "dvm",
 ]);
 
 /**
@@ -19,16 +40,20 @@ const TITLE_SUFFIXES = new Set([
 export function tokenizeName(name: string): string[] {
   return name
     .toLowerCase()
-    .replace(/[''`]/g, "'")         
-    .replace(/[^\w\s'-]/g, " ")     
+    .replace(/[''`]/g, "'")
+    .replace(/[^\w\s'-]/g, " ")
     .split(/\s+/)
-    .map(t => t.replace(/^[.\\-]+|[.\\-]+$/g, "")) 
-    .filter(t => t.length > 0 && !TITLE_SUFFIXES.has(t) && !TITLE_SUFFIXES.has(t + "."));
+    .map((t) => t.replace(/^[.\\-]+|[.\\-]+$/g, ""))
+    .filter(
+      (t) =>
+        t.length > 0 && !TITLE_SUFFIXES.has(t) && !TITLE_SUFFIXES.has(t + "."),
+    );
 }
 
 function asInitial(token: string): string | null {
   if (token.length === 1 && /[a-z]/.test(token)) return token;
-  if (token.length === 2 && token[1] === "." && /[a-z]/.test(token[0])) return token[0];
+  if (token.length === 2 && token[1] === "." && /[a-z]/.test(token[0]))
+    return token[0];
   return null;
 }
 
@@ -38,8 +63,8 @@ function tokenSimilarity(tokensA: string[], tokensB: string[]): number {
     return singleTokenScore(tokensA[0], tokensB[0]);
   }
 
-  const [shorter, longer] = tokensA.length <= tokensB.length
-    ? [tokensA, tokensB] : [tokensB, tokensA];
+  const [shorter, longer] =
+    tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
 
   const used = new Set<number>();
   let totalScore = 0;

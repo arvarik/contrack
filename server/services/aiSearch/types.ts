@@ -13,37 +13,42 @@ import type { AIProvider } from "../../ai/provider.ts";
 // =============================================================================
 
 /** Status lifecycle: queued → searching → merging → success | error */
-export type AISearchJobStatus = 'queued' | 'searching' | 'merging' | 'success' | 'error';
+export type AISearchJobStatus =
+  | "queued"
+  | "searching"
+  | "merging"
+  | "success"
+  | "error";
 
 /** Error classification for contextual UI messages and future retry logic. */
 export type AISearchErrorType =
-  | 'rate_limit'    // 429 / quota — retryable
-  | 'validation'    // Zod parse failure — not retryable
-  | 'network'       // Timeout / connection — retryable once
-  | 'auth'          // API key invalid — fatal
-  | 'ambiguous'     // LLM couldn't identify unique person — not retryable
-  | 'unknown';      // Catch-all
+  | "rate_limit" // 429 / quota — retryable
+  | "validation" // Zod parse failure — not retryable
+  | "network" // Timeout / connection — retryable once
+  | "auth" // API key invalid — fatal
+  | "ambiguous" // LLM couldn't identify unique person — not retryable
+  | "unknown"; // Catch-all
 
 export interface AISearchJob {
-  id: string;                      // UUID
-  contactId: string;               // FK → contacts.id
-  contactName: string;             // Denormalized for UI
+  id: string; // UUID
+  contactId: string; // FK → contacts.id
+  contactName: string; // Denormalized for UI
   status: AISearchJobStatus;
-  error?: string;                  // Human-readable error message
-  errorType?: AISearchErrorType;   // Classified error type
-  fieldsUpdated: number;           // Count of fields/records merged
-  startedAt?: string;              // ISO timestamp
-  completedAt?: string;            // ISO timestamp
-  latencyMs?: number;              // Wall-clock time for this job
+  error?: string; // Human-readable error message
+  errorType?: AISearchErrorType; // Classified error type
+  fieldsUpdated: number; // Count of fields/records merged
+  startedAt?: string; // ISO timestamp
+  completedAt?: string; // ISO timestamp
+  latencyMs?: number; // Wall-clock time for this job
 }
 
 export interface AISearchBatch {
-  id: string;                      // Batch UUID
-  strategy: string;                // e.g., 'two-pass'
-  jobs: AISearchJob[];             // Ordered list
-  createdAt: string;               // ISO timestamp
-  status: 'processing' | 'complete' | 'cancelled';
-  totalTokens: number;             // Accumulated token usage across all jobs
+  id: string; // Batch UUID
+  strategy: string; // e.g., 'two-pass'
+  jobs: AISearchJob[]; // Ordered list
+  createdAt: string; // ISO timestamp
+  status: "processing" | "complete" | "cancelled";
+  totalTokens: number; // Accumulated token usage across all jobs
 }
 
 // =============================================================================

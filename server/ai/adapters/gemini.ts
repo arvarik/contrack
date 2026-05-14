@@ -12,10 +12,19 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AIProvider } from "../provider.ts";
-import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode, DiagnosticsSnapshot } from "../types.ts";
+import type {
+  AIGenerateOptions,
+  AIGenerateResult,
+  JsonSchemaNode,
+  DiagnosticsSnapshot,
+} from "../types.ts";
 import { QuotaTracker } from "../routing/QuotaTracker.ts";
 import { SmartRouter } from "../routing/SmartRouter.ts";
-import { getAITier, getGroundingRPDLimit, type AITier } from "../routing/registry.ts";
+import {
+  getAITier,
+  getGroundingRPDLimit,
+  type AITier,
+} from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { withTimeout, parseAIJson, AI_DEFAULTS } from "../resilience.ts";
@@ -85,8 +94,12 @@ function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
  */
 function isRetryableError(error: unknown): boolean {
   const errObj = error as Record<string, unknown> | null;
-  const msg = (typeof errObj?.message === 'string' ? errObj.message : '').toLowerCase();
-  const status = (typeof errObj?.status === 'number' ? errObj.status : errObj?.statusCode) as number | undefined;
+  const msg = (
+    typeof errObj?.message === "string" ? errObj.message : ""
+  ).toLowerCase();
+  const status = (
+    typeof errObj?.status === "number" ? errObj.status : errObj?.statusCode
+  ) as number | undefined;
   return (
     status === 429 ||
     status === 503 ||
@@ -171,7 +184,9 @@ export class GeminiAdapter implements AIProvider {
 
     // Early bail-out for already-cancelled callers — saves a routing lookup.
     if (options.signal?.aborted) {
-      throw new AppError("AI call cancelled by caller", 499, { code: "CANCELLED" });
+      throw new AppError("AI call cancelled by caller", 499, {
+        code: "CANCELLED",
+      });
     }
 
     // ── Explicit model override: bypass routing entirely ──────────────
@@ -206,8 +221,14 @@ export class GeminiAdapter implements AIProvider {
           requiresGrounding,
         );
       } catch (routeError: unknown) {
-        lastError = routeError instanceof Error ? routeError : new Error(getErrorMessage(routeError));
-        log.warn("GeminiAdapter", `Router exhausted on attempt ${attempt}: ${getErrorMessage(routeError)}`);
+        lastError =
+          routeError instanceof Error
+            ? routeError
+            : new Error(getErrorMessage(routeError));
+        log.warn(
+          "GeminiAdapter",
+          `Router exhausted on attempt ${attempt}: ${getErrorMessage(routeError)}`,
+        );
         break; // No point retrying if no models are available
       }
 
@@ -220,7 +241,11 @@ export class GeminiAdapter implements AIProvider {
       }
 
       try {
-        const result = await this.executeWithModel(options, route.modelId, startMs);
+        const result = await this.executeWithModel(
+          options,
+          route.modelId,
+          startMs,
+        );
 
         // Reconcile estimated vs actual tokens to keep the ledger accurate
         const actualTokens = result.tokenCount ?? estimatedTokens;
@@ -234,7 +259,8 @@ export class GeminiAdapter implements AIProvider {
 
         return result;
       } catch (error: unknown) {
-        lastError = error instanceof Error ? error : new Error(getErrorMessage(error));
+        lastError =
+          error instanceof Error ? error : new Error(getErrorMessage(error));
 
         // Rollback the optimistic reservation — this request didn't consume quota
         this.tracker.rollback(route.modelId);
@@ -265,12 +291,18 @@ export class GeminiAdapter implements AIProvider {
         }
 
         // Hard error (bad request, auth, schema) — do not retry
-        log.error("GeminiAdapter", `${route.modelId} hard error: ${getErrorMessage(error)}`);
+        log.error(
+          "GeminiAdapter",
+          `${route.modelId} hard error: ${getErrorMessage(error)}`,
+        );
         throw error;
       }
     }
 
-    log.error("GeminiAdapter", "All retry attempts exhausted across all available models.");
+    log.error(
+      "GeminiAdapter",
+      "All retry attempts exhausted across all available models.",
+    );
     throw lastError ?? new Error("Max API retries exceeded.");
   }
 
@@ -317,7 +349,12 @@ export class GeminiAdapter implements AIProvider {
     // retry loop (or the caller) treats as a transient failure.
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
     const response = await withTimeout(
-      async () => this.client.models.generateContent({ model, contents: options.prompt, config }),
+      async () =>
+        this.client.models.generateContent({
+          model,
+          contents: options.prompt,
+          config,
+        }),
       timeoutMs,
       options.signal,
     );

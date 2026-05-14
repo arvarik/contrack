@@ -17,9 +17,18 @@
 
 import OpenAI from "openai";
 import type { AIProvider } from "../provider.ts";
-import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode } from "../types.ts";
+import type {
+  AIGenerateOptions,
+  AIGenerateResult,
+  JsonSchemaNode,
+} from "../types.ts";
 import { log } from "../../utils/logger.ts";
-import { withTimeout, withRetry, parseAIJson, AI_DEFAULTS } from "../resilience.ts";
+import {
+  withTimeout,
+  withRetry,
+  parseAIJson,
+  AI_DEFAULTS,
+} from "../resilience.ts";
 
 // ---------------------------------------------------------------------------
 // Model Class Mapping
@@ -51,7 +60,8 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
   if (node.properties) {
     result.properties = {};
     for (const [key, value] of Object.entries(node.properties)) {
-      (result.properties as Record<string, unknown>)[key] = translateSchemaNode(value);
+      (result.properties as Record<string, unknown>)[key] =
+        translateSchemaNode(value);
     }
     result.additionalProperties = false;
   }
@@ -76,16 +86,26 @@ export class OpenAIAdapter implements AIProvider {
 
   resolveModel(prefer?: string, modelOverride?: string): string {
     if (modelOverride) return modelOverride;
-    return MODEL_MAP[prefer ?? DEFAULT_MODEL_CLASS] ?? MODEL_MAP[DEFAULT_MODEL_CLASS];
+    return (
+      MODEL_MAP[prefer ?? DEFAULT_MODEL_CLASS] ?? MODEL_MAP[DEFAULT_MODEL_CLASS]
+    );
   }
 
   translateSchema(schema: JsonSchemaNode): {
     type: "json_schema";
-    json_schema: { name: string; strict: true; schema: Record<string, unknown> };
+    json_schema: {
+      name: string;
+      strict: true;
+      schema: Record<string, unknown>;
+    };
   } {
     return {
       type: "json_schema",
-      json_schema: { name: "response", strict: true, schema: translateSchemaNode(schema) },
+      json_schema: {
+        name: "response",
+        strict: true,
+        schema: translateSchemaNode(schema),
+      },
     };
   }
 
@@ -93,35 +113,44 @@ export class OpenAIAdapter implements AIProvider {
     const model = options.model ?? this.resolveModel(options.routing?.prefer);
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
 
-    return withRetry(async (attempt) => {
-      const startMs = Date.now();
-      const result = await withTimeout(
-        async (signal) => {
-          return options.enableSearchGrounding
-            ? this.runResponsesAPI(options, model, signal, startMs)
-            : this.runChatCompletion(options, model, signal, startMs);
-        },
-        timeoutMs,
-        options.signal,
-      );
+    return withRetry(
+      async (attempt) => {
+        const startMs = Date.now();
+        const result = await withTimeout(
+          async (signal) => {
+            return options.enableSearchGrounding
+              ? this.runResponsesAPI(options, model, signal, startMs)
+              : this.runChatCompletion(options, model, signal, startMs);
+          },
+          timeoutMs,
+          options.signal,
+        );
 
-      // JSON validation lives at the adapter boundary so every business
-      // caller can rely on `result.text` being parseable when requested.
-      if (options.responseFormat === "json") {
-        parseAIJson(result.text, `OpenAIAdapter.generate(${model})`);
-      }
+        // JSON validation lives at the adapter boundary so every business
+        // caller can rely on `result.text` being parseable when requested.
+        if (options.responseFormat === "json") {
+          parseAIJson(result.text, `OpenAIAdapter.generate(${model})`);
+        }
 
-      if (attempt > 1) {
-        log.info("OpenAIAdapter", `${model} succeeded on attempt ${attempt}/${AI_DEFAULTS.maxAttempts}`);
-      }
-      return result;
-    }, {
-      signal: options.signal,
-      onRetry: (attempt, err) => {
-        const msg = (err as Error)?.message ?? String(err);
-        log.warn("OpenAIAdapter", `${model} attempt ${attempt} failed (will retry): ${msg.slice(0, 200)}`);
+        if (attempt > 1) {
+          log.info(
+            "OpenAIAdapter",
+            `${model} succeeded on attempt ${attempt}/${AI_DEFAULTS.maxAttempts}`,
+          );
+        }
+        return result;
       },
-    });
+      {
+        signal: options.signal,
+        onRetry: (attempt, err) => {
+          const msg = (err as Error)?.message ?? String(err);
+          log.warn(
+            "OpenAIAdapter",
+            `${model} attempt ${attempt} failed (will retry): ${msg.slice(0, 200)}`,
+          );
+        },
+      },
+    );
   }
 
   // ── Standard chat completion ──────────────────────────────────────────
@@ -132,7 +161,8 @@ export class OpenAIAdapter implements AIProvider {
     startMs: number,
   ): Promise<AIGenerateResult> {
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
-    if (options.systemPrompt) messages.push({ role: "system", content: options.systemPrompt });
+    if (options.systemPrompt)
+      messages.push({ role: "system", content: options.systemPrompt });
     messages.push({ role: "user", content: options.prompt });
 
     const requestParams: Record<string, unknown> = { model, messages };
@@ -150,7 +180,9 @@ export class OpenAIAdapter implements AIProvider {
       usage?: { total_tokens?: number };
     }
     const response = (await this.client.chat.completions.create(
-      requestParams as unknown as Parameters<typeof this.client.chat.completions.create>[0],
+      requestParams as unknown as Parameters<
+        typeof this.client.chat.completions.create
+      >[0],
       { signal },
     )) as unknown as ChatCompletionResponse;
 
@@ -158,7 +190,10 @@ export class OpenAIAdapter implements AIProvider {
     const tokenCount = response.usage?.total_tokens;
     const latencyMs = Date.now() - startMs;
 
-    log.info("OpenAIAdapter", `${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`);
+    log.info(
+      "OpenAIAdapter",
+      `${model} | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
+    );
     return { text, model, tokenCount, latencyMs };
   }
 
@@ -170,7 +205,8 @@ export class OpenAIAdapter implements AIProvider {
     startMs: number,
   ): Promise<AIGenerateResult> {
     const input: Array<{ role: "system" | "user"; content: string }> = [];
-    if (options.systemPrompt) input.push({ role: "system", content: options.systemPrompt });
+    if (options.systemPrompt)
+      input.push({ role: "system", content: options.systemPrompt });
     input.push({ role: "user", content: options.prompt });
 
     const requestParams: Record<string, unknown> = {
@@ -193,7 +229,9 @@ export class OpenAIAdapter implements AIProvider {
       usage?: { total_tokens?: number };
     }
     const response = (await this.client.responses.create(
-      requestParams as unknown as Parameters<typeof this.client.responses.create>[0],
+      requestParams as unknown as Parameters<
+        typeof this.client.responses.create
+      >[0],
       { signal },
     )) as unknown as ResponsesAPIResponse;
 
@@ -202,7 +240,10 @@ export class OpenAIAdapter implements AIProvider {
       for (const item of response.output) {
         if (item.type === "message" && Array.isArray(item.content)) {
           for (const block of item.content) {
-            if (block.type === "output_text" && typeof block.text === "string") {
+            if (
+              block.type === "output_text" &&
+              typeof block.text === "string"
+            ) {
               text += block.text;
             }
           }
@@ -213,7 +254,10 @@ export class OpenAIAdapter implements AIProvider {
     const tokenCount = response.usage?.total_tokens;
     const latencyMs = Date.now() - startMs;
 
-    log.info("OpenAIAdapter", `${model} (search) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`);
+    log.info(
+      "OpenAIAdapter",
+      `${model} (search) | ${latencyMs}ms | ${tokenCount ?? "?"} tokens`,
+    );
     return { text, model, tokenCount, latencyMs };
   }
 }

@@ -33,7 +33,10 @@ import { log } from "../utils/logger.ts";
  *
  * Falls back to Gemini for unknown provider names with a warning.
  */
-export function createProvider(providerName: string, apiKey: string): AIProvider {
+export function createProvider(
+  providerName: string,
+  apiKey: string,
+): AIProvider {
   switch (providerName.toLowerCase()) {
     case "gemini":
       return new GeminiAdapter(apiKey);
@@ -42,7 +45,10 @@ export function createProvider(providerName: string, apiKey: string): AIProvider
     case "anthropic":
       return new AnthropicAdapter(apiKey);
     default:
-      log.warn("AIService", `Unknown AI_PROVIDER "${providerName}", falling back to Gemini`);
+      log.warn(
+        "AIService",
+        `Unknown AI_PROVIDER "${providerName}", falling back to Gemini`,
+      );
       return new GeminiAdapter(apiKey);
   }
 }
@@ -73,7 +79,10 @@ const _apiKey = getApiKeyForProvider(_providerName);
 /**
  * Determine if the active provider is properly configured with a valid API key.
  */
-function _isConfigured(providerName: string, apiKey: string | undefined): boolean {
+function _isConfigured(
+  providerName: string,
+  apiKey: string | undefined,
+): boolean {
   if (!apiKey) return false;
   // Gemini has a special "dummy_key" sentinel value
   if (providerName === "gemini" && apiKey === "dummy_key") return false;
@@ -84,8 +93,10 @@ const _configured = _isConfigured(_providerName, _apiKey);
 
 if (!_configured) {
   const keyVarName =
-    _providerName === "openai" ? "OPENAI_API_KEY"
-      : _providerName === "anthropic" ? "ANTHROPIC_API_KEY"
+    _providerName === "openai"
+      ? "OPENAI_API_KEY"
+      : _providerName === "anthropic"
+        ? "ANTHROPIC_API_KEY"
         : "GEMINI_API_KEY";
   log.warn(
     "AIService",
@@ -105,9 +116,15 @@ if (!_configured) {
  * ensures a single QuotaTracker, single SmartRouter, and single set of
  * circuit breakers for accurate quota management.
  */
-export const sharedProvider = createProvider(_providerName, _apiKey || "dummy_key");
+export const sharedProvider = createProvider(
+  _providerName,
+  _apiKey || "dummy_key",
+);
 
 /** Whether the provider is properly configured with a valid API key. */
 export const isProviderConfigured = _configured;
 
-log.info("AIService", `Initialized with provider: ${sharedProvider.name} (AI_PROVIDER=${_providerName})`);
+log.info(
+  "AIService",
+  `Initialized with provider: ${sharedProvider.name} (AI_PROVIDER=${_providerName})`,
+);

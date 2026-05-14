@@ -1,6 +1,6 @@
-import React, { useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X } from 'lucide-react';
+import React, { useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { X } from "lucide-react";
 import { ContactProfile } from "../views/contact-detail/components/ContactProfile";
 
 interface FloatingContactCardProps {
@@ -16,17 +16,20 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
   onClose,
   showNetworkButton = false,
 }) => {
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-  }, [onClose]);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    },
+    [onClose],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
-    window.addEventListener('keydown', handleKeyDown);
-    document.body.style.overflow = 'hidden';
+    window.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
     };
   }, [isOpen, handleKeyDown]);
 
@@ -47,7 +50,12 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
             initial={{ opacity: 0, scale: 0.92, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 380, mass: 0.8 }}
+            transition={{
+              type: "spring",
+              damping: 28,
+              stiffness: 380,
+              mass: 0.8,
+            }}
             className="fixed inset-4 md:inset-8 lg:inset-12 xl:inset-x-[10%] xl:inset-y-8 z-[101] flex flex-col overflow-hidden rounded-3xl bg-surface shadow-2xl ring-1 ring-surface-container-highest/50"
           >
             <button
@@ -59,11 +67,11 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
             </button>
 
             <div className="flex-1 min-h-0 overflow-hidden">
-               <ContactProfile 
-                 contactId={contactId} 
-                 onClose={onClose} 
-                 showNetworkButton={showNetworkButton} 
-               />
+              <ContactProfile
+                contactId={contactId}
+                onClose={onClose}
+                showNetworkButton={showNetworkButton}
+              />
             </div>
           </motion.div>
         </>

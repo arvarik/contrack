@@ -123,14 +123,14 @@ for (const model of GEMINI_REGISTRY) {
 
 // OpenAI models — average of (input + output) cost per 1M tokens
 // Source: ARCHITECTURE.md §2 Model Ledger
-costPerMMap.set("gpt-4o-mini", 0.375);       // avg($0.15 in, $0.60 out)
-costPerMMap.set("gpt-5.4-mini", 2.625);      // avg($0.75 in, $4.50 out)
-costPerMMap.set("gpt-5.4", 8.75);            // avg($2.50 in, $15.00 out)
+costPerMMap.set("gpt-4o-mini", 0.375); // avg($0.15 in, $0.60 out)
+costPerMMap.set("gpt-5.4-mini", 2.625); // avg($0.75 in, $4.50 out)
+costPerMMap.set("gpt-5.4", 8.75); // avg($2.50 in, $15.00 out)
 
 // Anthropic models — average of (input + output) cost per 1M tokens
-costPerMMap.set("claude-haiku-4.5", 3.0);    // avg($1.00 in, $5.00 out)
-costPerMMap.set("claude-sonnet-4.6", 9.0);   // avg($3.00 in, $15.00 out)
-costPerMMap.set("claude-opus-4.6", 15.0);    // avg($5.00 in, $25.00 out)
+costPerMMap.set("claude-haiku-4.5", 3.0); // avg($1.00 in, $5.00 out)
+costPerMMap.set("claude-sonnet-4.6", 9.0); // avg($3.00 in, $15.00 out)
+costPerMMap.set("claude-opus-4.6", 15.0); // avg($5.00 in, $25.00 out)
 
 // =============================================================================
 // Public API
@@ -152,10 +152,16 @@ export function recordInvocation(entry: InvocationEntry): void {
       entry.cached ? 1 : 0,
       entry.description ?? null,
     );
-    log.debug("AIStats", `Recorded invocation: ${entry.operation} (id: ${id.slice(0, 8)}, cached: ${entry.cached})`);
+    log.debug(
+      "AIStats",
+      `Recorded invocation: ${entry.operation} (id: ${id.slice(0, 8)}, cached: ${entry.cached})`,
+    );
   } catch (err: unknown) {
     // Log but NEVER throw — recording failures must not break AI operations
-    log.error("AIStats", `Failed to record invocation: ${(err as Error).message}`);
+    log.error(
+      "AIStats",
+      `Failed to record invocation: ${(err as Error).message}`,
+    );
   }
 }
 
@@ -173,7 +179,10 @@ export function getSummary() {
   };
 
   // 2. Cost estimation: sum (tokens / 1M * costPerM) per model
-  const costRows = costBreakdownStmt.all() as { model: string; tokens: number }[];
+  const costRows = costBreakdownStmt.all() as {
+    model: string;
+    tokens: number;
+  }[];
   let estimatedCostUsd = 0;
   for (const row of costRows) {
     const costPerM = costPerMMap.get(row.model) ?? 0;
@@ -181,9 +190,8 @@ export function getSummary() {
   }
 
   // 3. Cache hit rate
-  const cacheHitRate = agg.totalInvocations > 0
-    ? agg.cachedCalls / agg.totalInvocations
-    : 0;
+  const cacheHitRate =
+    agg.totalInvocations > 0 ? agg.cachedCalls / agg.totalInvocations : 0;
 
   // 4. Tier — provider-aware (F-07)
   // For Gemini: show FREE/PAID tier from AI_TIER env var
@@ -206,15 +214,18 @@ export function getSummary() {
 
   // 6. Cache tier stats (in-memory, from aiCache)
   const rawCacheStats = aiCache.getStats();
-  const cacheTiers: Record<string, {
-    entries: number;
-    hits: number;
-    misses: number;
-    evictions: number;
-    hitRate: number;
-    ttlMs: number;
-    maxEntries: number;
-  }> = {};
+  const cacheTiers: Record<
+    string,
+    {
+      entries: number;
+      hits: number;
+      misses: number;
+      evictions: number;
+      hitRate: number;
+      ttlMs: number;
+      maxEntries: number;
+    }
+  > = {};
 
   for (const [tierName, tierData] of Object.entries(rawCacheStats)) {
     if (tierName === "batchMode") continue; // skip batch mode metadata
@@ -276,9 +287,8 @@ export function getFeed(params: FeedParams) {
     bindValues.push(cached ? 1 : 0);
   }
 
-  const whereClause = conditions.length > 0
-    ? `WHERE ${conditions.join(" AND ")}`
-    : "";
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const orderDirection = sort === "oldest" ? "ASC" : "DESC";
 
@@ -336,7 +346,10 @@ export function cleanupOldInvocations(): number {
   try {
     const result = cleanupStmt.run();
     if (result.changes > 0) {
-      log.info("AIStats", `Retention cleanup: deleted ${result.changes} invocations older than 30 days`);
+      log.info(
+        "AIStats",
+        `Retention cleanup: deleted ${result.changes} invocations older than 30 days`,
+      );
     }
     return result.changes;
   } catch (err: unknown) {

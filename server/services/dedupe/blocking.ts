@@ -98,7 +98,10 @@ export function generateCandidatePairs(
     }
     if (ids.length > MEGA_BLOCK_THRESHOLD) {
       skippedMega++;
-      log.debug("DedupeBlocking", `Skipping mega-block "${key}" with ${ids.length} contacts`);
+      log.debug(
+        "DedupeBlocking",
+        `Skipping mega-block "${key}" with ${ids.length} contacts`,
+      );
       continue;
     }
 
@@ -155,7 +158,10 @@ export function addEmbeddingCandidates(
 ): { idA: string; idB: string }[] {
   const embeddingCount = getEmbeddingCount();
   if (embeddingCount === 0) {
-    log.debug("DedupeBlocking", "No embeddings available — skipping KNN candidates");
+    log.debug(
+      "DedupeBlocking",
+      "No embeddings available — skipping KNN candidates",
+    );
     return [];
   }
 
@@ -174,7 +180,10 @@ export function addEmbeddingCandidates(
 
   for (const id of contactIds) {
     try {
-      const neighbors = knnStmt.all(id, KNN_NEIGHBORS + 1) as { contactId: string; distance: number }[];
+      const neighbors = knnStmt.all(id, KNN_NEIGHBORS + 1) as {
+        contactId: string;
+        distance: number;
+      }[];
 
       for (const n of neighbors) {
         if (n.contactId === id) continue; // skip self-match
@@ -189,7 +198,10 @@ export function addEmbeddingCandidates(
     }
   }
 
-  log.info("DedupeBlocking", `KNN: queried ${queriedCount} contacts → ${candidates.length} new candidate pairs`);
+  log.info(
+    "DedupeBlocking",
+    `KNN: queried ${queriedCount} contacts → ${candidates.length} new candidate pairs`,
+  );
   return candidates;
 }
 
@@ -212,37 +224,60 @@ export function loadNegativeConstraints(): Set<string> {
 
   // 1. Co-occurrence in interactions
   try {
-    const coOccurrences = sqlite.prepare(`
+    const coOccurrences = sqlite
+      .prepare(
+        `
       SELECT DISTINCT im1.contactId AS id1, im2.contactId AS id2
       FROM interaction_mentions im1
       JOIN interaction_mentions im2
         ON im1.interactionId = im2.interactionId
         AND im1.contactId < im2.contactId
-    `).all() as { id1: string; id2: string }[];
+    `,
+      )
+      .all() as { id1: string; id2: string }[];
 
     for (const row of coOccurrences) {
       distinctPairs.add(pairKey(row.id1, row.id2));
     }
-    log.debug("DedupeBlocking", `Loaded ${coOccurrences.length} co-occurrence constraints`);
+    log.debug(
+      "DedupeBlocking",
+      `Loaded ${coOccurrences.length} co-occurrence constraints`,
+    );
   } catch (err: unknown) {
-    log.warn("DedupeBlocking", `Failed to load co-occurrences: ${getErrorMessage(err)}`);
+    log.warn(
+      "DedupeBlocking",
+      `Failed to load co-occurrences: ${getErrorMessage(err)}`,
+    );
   }
 
   // 2. User-dismissed exclusions
   try {
-    const exclusions = sqlite.prepare(`
+    const exclusions = sqlite
+      .prepare(
+        `
       SELECT contactIdA, contactIdB FROM dedupe_exclusions
-    `).all() as { contactIdA: string; contactIdB: string }[];
+    `,
+      )
+      .all() as { contactIdA: string; contactIdB: string }[];
 
     for (const row of exclusions) {
       distinctPairs.add(pairKey(row.contactIdA, row.contactIdB));
     }
-    log.debug("DedupeBlocking", `Loaded ${exclusions.length} user exclusion constraints`);
+    log.debug(
+      "DedupeBlocking",
+      `Loaded ${exclusions.length} user exclusion constraints`,
+    );
   } catch (err: unknown) {
-    log.warn("DedupeBlocking", `Failed to load exclusions: ${getErrorMessage(err)}`);
+    log.warn(
+      "DedupeBlocking",
+      `Failed to load exclusions: ${getErrorMessage(err)}`,
+    );
   }
 
-  log.info("DedupeBlocking", `Total negative constraints: ${distinctPairs.size}`);
+  log.info(
+    "DedupeBlocking",
+    `Total negative constraints: ${distinctPairs.size}`,
+  );
   return distinctPairs;
 }
 

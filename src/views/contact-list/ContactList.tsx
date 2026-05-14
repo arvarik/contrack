@@ -10,31 +10,63 @@
  * The component itself handles only layout rendering and UX hooks
  * (scroll restoration, pull-to-refresh, context menus, drag-to-reorder).
  */
-import React, { useState, useRef, useCallback, useMemo, useDeferredValue, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useDeferredValue,
+  useEffect,
+} from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
-  Search, Plus, Users, Upload, UserPlus, ListPlus,
-  CheckSquare, Square, FileText, Sparkles,
-  ArrowDownAZ, ArrowUpAZ, CalendarArrowDown, CalendarArrowUp, Clock,
-  Archive, Copy,
+  Search,
+  Plus,
+  Users,
+  Upload,
+  UserPlus,
+  ListPlus,
+  CheckSquare,
+  Square,
+  FileText,
+  Sparkles,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  CalendarArrowDown,
+  CalendarArrowUp,
+  Clock,
+  Archive,
+  Copy,
 } from "lucide-react";
 import {
-  useContacts, useLists, useCreateList, useReorderLists, useArchiveContact,
+  useContacts,
+  useLists,
+  useCreateList,
+  useReorderLists,
+  useArchiveContact,
   useBulkUpdateContacts,
 } from "../../api";
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { ICON_BTN, SEARCH_INPUT, filterPill, PAGE_TITLE } from "../../lib/styles";
+import {
+  ICON_BTN,
+  SEARCH_INPUT,
+  filterPill,
+  PAGE_TITLE,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullIndicator } from "../../components/ui/PullIndicator";
-import { useRecentContacts, useRecentContactsLimit } from "../../hooks/useRecentContacts";
+import {
+  useRecentContacts,
+  useRecentContactsLimit,
+} from "../../hooks/useRecentContacts";
 import { useLongPress } from "../../hooks/useLongPress";
 
 import { ContactListItem } from "./ContactListItem";
@@ -49,17 +81,32 @@ import { useContactListKeyboard } from "./hooks/useContactListKeyboard";
 // FilterButton — Pill-style filter tab for the contact list header
 // ---------------------------------------------------------------------------
 
-const FilterButton = ({ label, icon, count, active, onClick }: {
+const FilterButton = ({
+  label,
+  icon,
+  count,
+  active,
+  onClick,
+}: {
   label: string;
   icon: React.ReactNode;
   count: number;
   active: boolean;
   onClick: () => void;
 }) => (
-  <button onClick={onClick} className={filterPill(active)} aria-label={`Filter: ${label} (${count})`} aria-pressed={active}>
+  <button
+    onClick={onClick}
+    className={filterPill(active)}
+    aria-label={`Filter: ${label} (${count})`}
+    aria-pressed={active}
+  >
     {icon}
     {label}
-    <span className={`ml-0.5 text-[10px] ${active ? 'text-primary/70' : 'opacity-50'}`}>{count}</span>
+    <span
+      className={`ml-0.5 text-[10px] ${active ? "text-primary/70" : "opacity-50"}`}
+    >
+      {count}
+    </span>
   </button>
 );
 
@@ -74,80 +121,86 @@ interface ContactRowWrapperProps {
   isSelectMode: boolean;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
-  handleContextMenu: ReturnType<typeof useContextMenu>['handleContextMenu'];
+  handleContextMenu: ReturnType<typeof useContextMenu>["handleContextMenu"];
   recordVisit: (id: string) => void;
   archiveContact: () => Promise<void>;
   navigate: (path: string) => void;
 }
 
-const ContactRowWrapper = React.memo(({
-  contact,
-  active,
-  isFlashing,
-  isSelectMode,
-  isSelected,
-  onToggleSelect,
-  handleContextMenu,
-  recordVisit,
-  archiveContact,
-  navigate,
-}: ContactRowWrapperProps) => {
-  const contextItems = useMemo(() => [
-    {
-      id: 'view',
-      label: 'View Contact',
-      icon: <UserPlus className="w-3.5 h-3.5" />,
-      onClick: () => navigate(`/contact/${contact.id}`),
-    },
-    {
-      id: 'copy-email',
-      label: contact.emails?.[0]?.email ? `Copy Email` : 'No email',
-      icon: <Copy className="w-3.5 h-3.5" />,
-      disabled: !contact.emails?.[0]?.email,
-      onClick: () => {
-        navigator.clipboard.writeText(contact.emails![0].email);
-        toast.success('Email copied');
-      },
-    },
-    { id: 'sep1', label: '', separator: true as const },
-    {
-      id: 'archive',
-      label: 'Archive',
-      icon: <Archive className="w-3.5 h-3.5" />,
-      onClick: archiveContact,
-    },
-  ], [contact.id, contact.name, contact.emails, navigate, archiveContact]);
+const ContactRowWrapper = React.memo(
+  ({
+    contact,
+    active,
+    isFlashing,
+    isSelectMode,
+    isSelected,
+    onToggleSelect,
+    handleContextMenu,
+    recordVisit,
+    archiveContact,
+    navigate,
+  }: ContactRowWrapperProps) => {
+    const contextItems = useMemo(
+      () => [
+        {
+          id: "view",
+          label: "View Contact",
+          icon: <UserPlus className="w-3.5 h-3.5" />,
+          onClick: () => navigate(`/contact/${contact.id}`),
+        },
+        {
+          id: "copy-email",
+          label: contact.emails?.[0]?.email ? `Copy Email` : "No email",
+          icon: <Copy className="w-3.5 h-3.5" />,
+          disabled: !contact.emails?.[0]?.email,
+          onClick: () => {
+            navigator.clipboard.writeText(contact.emails![0].email);
+            toast.success("Email copied");
+          },
+        },
+        { id: "sep1", label: "", separator: true as const },
+        {
+          id: "archive",
+          label: "Archive",
+          icon: <Archive className="w-3.5 h-3.5" />,
+          onClick: archiveContact,
+        },
+      ],
+      [contact.id, contact.name, contact.emails, navigate, archiveContact],
+    );
 
-  const longPress = useLongPress(({ clientX, clientY }) => {
-    const syntheticEvent = {
-      preventDefault: () => {},
-      clientX,
-      clientY,
-    } as unknown as React.MouseEvent;
-    handleContextMenu(syntheticEvent, contextItems);
-  });
+    const longPress = useLongPress(({ clientX, clientY }) => {
+      const syntheticEvent = {
+        preventDefault: () => {},
+        clientX,
+        clientY,
+      } as unknown as React.MouseEvent;
+      handleContextMenu(syntheticEvent, contextItems);
+    });
 
-  return (
-    <div
-      onContextMenu={(e) => handleContextMenu(e, contextItems)}
-      onClick={() => recordVisit(contact.id)}
-      {...longPress}
-      className={cn(
-        "rounded-xl transition-all duration-300",
-        isFlashing && "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,158,219,0.2)]"
-      )}
-      style={{ contentVisibility: 'auto', containIntrinsicSize: '1px 72px' }}
-    >
-      <ContactListItem
-        contact={contact}
-        active={active}
-        isSelectMode={isSelectMode}
-        isSelected={isSelected}
-        onToggleSelect={onToggleSelect}
-      />
-    </div>
-  );
-});
+    return (
+      <div
+        onContextMenu={(e) => handleContextMenu(e, contextItems)}
+        onClick={() => recordVisit(contact.id)}
+        {...longPress}
+        className={cn(
+          "rounded-xl transition-all duration-300",
+          isFlashing &&
+            "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,158,219,0.2)]",
+        )}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "1px 72px" }}
+      >
+        <ContactListItem
+          contact={contact}
+          active={active}
+          isSelectMode={isSelectMode}
+          isSelected={isSelected}
+          onToggleSelect={onToggleSelect}
+        />
+      </div>
+    );
+  },
+);
 
 // ---------------------------------------------------------------------------
 // ContactList — Main component
@@ -157,7 +210,9 @@ export const ContactList = () => {
   const mountStart = useRef(performance.now());
   useEffect(() => {
     if (import.meta.env.DEV) {
-      console.log(`[Perf] ContactList mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`);
+      console.log(
+        `[Perf] ContactList mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
+      );
     }
   }, []);
 
@@ -165,7 +220,9 @@ export const ContactList = () => {
 
   useEffect(() => {
     if (!isLoading && contacts.length > 0 && import.meta.env.DEV) {
-      console.log(`[Perf] ContactList data ready: items=${contacts.length}, time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`);
+      console.log(
+        `[Perf] ContactList data ready: items=${contacts.length}, time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`,
+      );
     }
   }, [isLoading, contacts.length]);
 
@@ -180,11 +237,19 @@ export const ContactList = () => {
   const bulkUpdate = useBulkUpdateContacts();
 
   // ── UX hooks ────────────────────────────────────────────────────────
-  usePageTitle('Network');
-  const scrollRef = useScrollRestoration<HTMLDivElement>('contact-list');
-  const { containerRef: pullRef, isPulling, pullProgress, isRefreshing, pullDistance } = usePullToRefresh(
-    async () => { await refetch(); },
-    { disabled: typeof window !== 'undefined' && window.innerWidth >= 768 }
+  usePageTitle("Network");
+  const scrollRef = useScrollRestoration<HTMLDivElement>("contact-list");
+  const {
+    containerRef: pullRef,
+    isPulling,
+    pullProgress,
+    isRefreshing,
+    pullDistance,
+  } = usePullToRefresh(
+    async () => {
+      await refetch();
+    },
+    { disabled: typeof window !== "undefined" && window.innerWidth >= 768 },
   );
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
   const archiveContact = useArchiveContact();
@@ -195,10 +260,13 @@ export const ContactList = () => {
   const [flashId, setFlashId] = useState<string | null>(null);
 
   // Merge containerRefs — both pullRef and scrollRef point to the same element
-  const listScrollRef = useCallback((el: HTMLDivElement | null) => {
-    (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-    (pullRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-  }, [scrollRef, pullRef]);
+  const listScrollRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+      (pullRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    },
+    [scrollRef, pullRef],
+  );
 
   // ── Modal visibility state ──────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -239,18 +307,45 @@ export const ContactList = () => {
     setDragOverIdx(idx);
   };
   const handleDrop = (idx: number) => {
-    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setDragOverIdx(null); return; }
+    if (dragIdx === null || dragIdx === idx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
     const newOrder = [...lists];
     const [moved] = newOrder.splice(dragIdx, 1);
     newOrder.splice(idx, 0, moved);
-    reorderLists.mutate(newOrder.map(l => l.id));
-    setDragIdx(null); setDragOverIdx(null);
+    reorderLists.mutate(newOrder.map((l) => l.id));
+    setDragIdx(null);
+    setDragOverIdx(null);
   };
-  const handleDragEnd = () => { setDragIdx(null); setDragOverIdx(null); };
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
 
   // ── Shorthand refs ──────────────────────────────────────────────────
-  const { filteredContacts, inputValue, searchQuery, setSearchQuery, filterMode, setFilterMode, sortBy, sortDir, cycleSortMode } = filters;
-  const { isSelectMode, selectedIds, selectedCount, toggleSelect, enterSelectMode, exitSelectMode, selectAll, isPending } = multiSelect;
+  const {
+    filteredContacts,
+    inputValue,
+    searchQuery,
+    setSearchQuery,
+    filterMode,
+    setFilterMode,
+    sortBy,
+    sortDir,
+    cycleSortMode,
+  } = filters;
+  const {
+    isSelectMode,
+    selectedIds,
+    selectedCount,
+    toggleSelect,
+    enterSelectMode,
+    exitSelectMode,
+    selectAll,
+    isPending,
+  } = multiSelect;
 
   // ── Virtualization ──────────────────────────────────────────────────
   const rowVirtualizer = useVirtualizer({
@@ -261,7 +356,9 @@ export const ContactList = () => {
   });
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">      <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
+    <div className="flex flex-col h-full overflow-hidden">
+      {" "}
+      <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
         <div className="flex justify-between items-center">
           <h2 className={PAGE_TITLE}>Network</h2>
           <div className="flex items-center gap-1.5">
@@ -270,16 +367,25 @@ export const ContactList = () => {
               onClick={isSelectMode ? exitSelectMode : enterSelectMode}
               className={cn(
                 ICON_BTN,
-                isSelectMode && "text-primary bg-primary/10"
+                isSelectMode && "text-primary bg-primary/10",
               )}
               title={isSelectMode ? "Exit Select Mode" : "Multi-Select"}
             >
-              {isSelectMode ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+              {isSelectMode ? (
+                <CheckSquare className="w-5 h-5" />
+              ) : (
+                <Square className="w-5 h-5" />
+              )}
             </button>
 
             {!isSelectMode && (
               <>
-                <button onClick={() => setIsImportOpen(true)} className={ICON_BTN} title="Import Contacts" aria-label="Import contacts">
+                <button
+                  onClick={() => setIsImportOpen(true)}
+                  className={ICON_BTN}
+                  title="Import Contacts"
+                  aria-label="Import contacts"
+                >
                   <Upload className="w-5 h-5" />
                 </button>
                 <div className="relative" ref={addMenuRef}>
@@ -301,22 +407,33 @@ export const ContactList = () => {
                         className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 overflow-hidden min-w-[190px]"
                       >
                         <button
-                          onClick={() => { setIsModalOpen(true); setShowAddMenu(false); }}
+                          onClick={() => {
+                            setIsModalOpen(true);
+                            setShowAddMenu(false);
+                          }}
                           className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <UserPlus className="w-4 h-4 text-primary shrink-0" />
                           Add Contact
                         </button>
                         <button
-                          onClick={() => { setIsSmartPasteOpen(true); setShowAddMenu(false); }}
+                          onClick={() => {
+                            setIsSmartPasteOpen(true);
+                            setShowAddMenu(false);
+                          }}
                           className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <FileText className="w-4 h-4 text-primary shrink-0" />
                           Add from Text
-                          <span className="ml-auto text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">AI</span>
+                          <span className="ml-auto text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                            AI
+                          </span>
                         </button>
                         <button
-                          onClick={() => { setIsCreateListOpen(true); setShowAddMenu(false); }}
+                          onClick={() => {
+                            setIsCreateListOpen(true);
+                            setShowAddMenu(false);
+                          }}
                           className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <ListPlus className="w-4 h-4 text-primary shrink-0" />
@@ -332,10 +449,16 @@ export const ContactList = () => {
             {/* Select mode: select all / deselect count badge */}
             {isSelectMode && (
               <button
-                onClick={selectedCount === filteredContacts.length ? () => multiSelect.selectAll() : selectAll}
+                onClick={
+                  selectedCount === filteredContacts.length
+                    ? () => multiSelect.selectAll()
+                    : selectAll
+                }
                 className="text-xs font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
               >
-                {selectedCount === filteredContacts.length ? 'Deselect All' : 'Select All'}
+                {selectedCount === filteredContacts.length
+                  ? "Deselect All"
+                  : "Select All"}
               </button>
             )}
           </div>
@@ -347,11 +470,18 @@ export const ContactList = () => {
             <input
               id="search-input"
               type="text"
-              placeholder={isSelectMode ? `${selectedCount} selected — search to filter` : "Search..."}
+              placeholder={
+                isSelectMode
+                  ? `${selectedCount} selected — search to filter`
+                  : "Search..."
+              }
               value={inputValue}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") { setSearchQuery(""); e.currentTarget.blur(); }
+                if (e.key === "Escape") {
+                  setSearchQuery("");
+                  e.currentTarget.blur();
+                }
               }}
               className={SEARCH_INPUT}
             />
@@ -372,13 +502,20 @@ export const ContactList = () => {
               "p-2 rounded-xl transition-all shrink-0 flex items-center justify-center group relative",
               "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
             )}
-            title={`Sort: ${sortBy === 'name' ? 'Name' : 'Date Added'} ${sortDir === 'asc' ? '↑' : '↓'}`}
-            aria-label={`Sort by ${sortBy === 'name' ? 'name' : 'date added'}, ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
+            title={`Sort: ${sortBy === "name" ? "Name" : "Date Added"} ${sortDir === "asc" ? "↑" : "↓"}`}
+            aria-label={`Sort by ${sortBy === "name" ? "name" : "date added"}, ${sortDir === "asc" ? "ascending" : "descending"}`}
           >
-            {sortBy === 'name'
-              ? (sortDir === 'asc' ? <ArrowDownAZ className="w-4 h-4" /> : <ArrowUpAZ className="w-4 h-4" />)
-              : (sortDir === 'desc' ? <CalendarArrowDown className="w-4 h-4" /> : <CalendarArrowUp className="w-4 h-4" />)
-            }
+            {sortBy === "name" ? (
+              sortDir === "asc" ? (
+                <ArrowDownAZ className="w-4 h-4" />
+              ) : (
+                <ArrowUpAZ className="w-4 h-4" />
+              )
+            ) : sortDir === "desc" ? (
+              <CalendarArrowDown className="w-4 h-4" />
+            ) : (
+              <CalendarArrowUp className="w-4 h-4" />
+            )}
           </button>
         </div>
 
@@ -393,9 +530,9 @@ export const ContactList = () => {
               <FilterButton
                 label="All"
                 icon={<Users className="w-3.5 h-3.5" />}
-                count={contacts.filter(c => !c.isArchived).length}
-                active={filterMode === 'all'}
-                onClick={() => setFilterMode('all')}
+                count={contacts.filter((c) => !c.isArchived).length}
+                active={filterMode === "all"}
+                onClick={() => setFilterMode("all")}
               />
               {lists.map((list, idx) => (
                 <div
@@ -407,8 +544,10 @@ export const ContactList = () => {
                   onDragEnd={handleDragEnd}
                   className={cn(
                     "transition-all cursor-grab active:cursor-grabbing shrink-0",
-                    dragOverIdx === idx && dragIdx !== idx && "ring-2 ring-primary/40 rounded-xl",
-                    dragIdx === idx && "opacity-40"
+                    dragOverIdx === idx &&
+                      dragIdx !== idx &&
+                      "ring-2 ring-primary/40 rounded-xl",
+                    dragIdx === idx && "opacity-40",
                   )}
                 >
                   <FilterButton
@@ -416,7 +555,9 @@ export const ContactList = () => {
                     icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
                     count={list.memberCount ?? 0}
                     active={filterMode === list.id}
-                    onClick={() => setFilterMode(filterMode === list.id ? 'all' : list.id)}
+                    onClick={() =>
+                      setFilterMode(filterMode === list.id ? "all" : list.id)
+                    }
                   />
                 </div>
               ))}
@@ -425,7 +566,6 @@ export const ContactList = () => {
           </div>
         )}
       </div>
-
       {/* Contact list */}
       <div
         ref={listScrollRef}
@@ -442,7 +582,11 @@ export const ContactList = () => {
         {isLoading && (
           <div className="px-2 py-3 space-y-1">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-xl animate-pulse" style={{ animationDelay: `${i * 60}ms` }}>
+              <div
+                key={i}
+                className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
                 <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
@@ -454,7 +598,7 @@ export const ContactList = () => {
         )}
 
         {/* Empty state: 0 contacts total (onboarding) */}
-        {!isLoading && contacts.filter(c => !c.isArchived).length === 0 && (
+        {!isLoading && contacts.filter((c) => !c.isArchived).length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 text-center gap-4 p-6">
             <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
               <Users className="w-8 h-8 text-primary/60" />
@@ -471,48 +615,65 @@ export const ContactList = () => {
                 className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
               >
                 <UserPlus className="w-4 h-4" />
-                Add Contact  <kbd className="hidden sm:inline text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">N</kbd>
+                Add Contact{" "}
+                <kbd className="hidden sm:inline text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">
+                  N
+                </kbd>
               </button>
               <button
                 onClick={() => setIsSmartPasteOpen(true)}
                 className="btn-secondary flex items-center justify-center gap-2 text-sm py-2.5"
               >
                 <Sparkles className="w-4 h-4" />
-                Smart Paste  <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">V</kbd>
+                Smart Paste{" "}
+                <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">
+                  V
+                </kbd>
               </button>
             </div>
           </div>
         )}
 
         {/* Empty state: search/filter has no results */}
-        {!isLoading && contacts.filter(c => !c.isArchived).length > 0 && filteredContacts.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
-            <Search className="w-8 h-8 text-on-surface-variant/30" />
-            <div>
-              <p className="font-bold text-sm">
-                {searchQuery ? `No results for "${searchQuery}"` : 'No contacts in this list'}
-              </p>
+        {!isLoading &&
+          contacts.filter((c) => !c.isArchived).length > 0 &&
+          filteredContacts.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
+              <Search className="w-8 h-8 text-on-surface-variant/30" />
+              <div>
+                <p className="font-bold text-sm">
+                  {searchQuery
+                    ? `No results for "${searchQuery}"`
+                    : "No contacts in this list"}
+                </p>
+                {searchQuery && (
+                  <p className="text-xs text-on-surface-variant mt-1">
+                    Try the AI search for deeper results
+                  </p>
+                )}
+              </div>
               {searchQuery && (
-                <p className="text-xs text-on-surface-variant mt-1">Try the AI search for deeper results</p>
+                <button
+                  onClick={() =>
+                    navigate(`/search?q=${encodeURIComponent(searchQuery)}`)
+                  }
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Search with AI
+                </button>
               )}
             </div>
-            {searchQuery && (
-              <button
-                onClick={() => navigate(`/search?q=${encodeURIComponent(searchQuery)}`)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Search with AI
-              </button>
-            )}
-          </div>
-        )}
+          )}
 
         {/* ── Recent contacts strip ─────────────────────────────────────── */}
-        {!isLoading && !searchQuery && filterMode === 'all' && recentIds.length > 0 && (
+        {!isLoading &&
+          !searchQuery &&
+          filterMode === "all" &&
+          recentIds.length > 0 &&
           (() => {
             const recentContacts = recentIds
-              .map(rid => contacts.find(c => c.id === rid && !c.isArchived))
+              .map((rid) => contacts.find((c) => c.id === rid && !c.isArchived))
               .filter(Boolean)
               .slice(0, recentLimit) as typeof contacts;
             if (recentContacts.length === 0) return null;
@@ -520,10 +681,12 @@ export const ContactList = () => {
               <div className="mb-3">
                 <div className="flex items-center gap-1.5 px-1 mb-1.5">
                   <Clock className="w-3 h-3 text-on-surface-variant/50" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">Recent</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
+                    Recent
+                  </span>
                 </div>
                 <div className="space-y-1">
-                  {recentContacts.map(contact => (
+                  {recentContacts.map((contact) => (
                     <ContactListItem
                       key={`recent-${contact.id}`}
                       contact={contact}
@@ -537,14 +700,13 @@ export const ContactList = () => {
                 <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
               </div>
             );
-          })()
-        )}
+          })()}
 
         <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
+            width: "100%",
+            position: "relative",
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualItem) => {
@@ -555,12 +717,12 @@ export const ContactList = () => {
                 data-index={virtualItem.index}
                 ref={rowVirtualizer.measureElement}
                 style={{
-                  position: 'absolute',
+                  position: "absolute",
                   top: 0,
                   left: 0,
-                  width: '100%',
+                  width: "100%",
                   transform: `translateY(${virtualItem.start}px)`,
-                  paddingBottom: '8px', // Replaces space-y-2
+                  paddingBottom: "8px", // Replaces space-y-2
                 }}
               >
                 <ContactRowWrapper
@@ -586,7 +748,6 @@ export const ContactList = () => {
         {/* Context menu — portal-rendered, shared across all rows */}
         <ContextMenu {...contextMenu} onClose={closeContextMenu} />
       </div>
-
       <AnimatePresence>
         {isSelectMode && selectedCount > 0 && (
           <BulkActionToolbar
@@ -601,7 +762,6 @@ export const ContactList = () => {
           />
         )}
       </AnimatePresence>
-
       {/* ── All Modals ───────────────────────────────────────────────── */}
       <ContactListModals
         isBulkDeleteConfirm={isBulkDeleteConfirm}
@@ -624,14 +784,22 @@ export const ContactList = () => {
         onCloseBulkEdit={() => setIsBulkEditOpen(false)}
         onBulkEditApply={(field, value) => {
           const ids = Array.from(selectedIds) as string[];
-          bulkUpdate.mutate({ ids, data: { [field]: value } as ContactUpdateData }, {
-            onSuccess: ({ count }) => {
-              toast.success(`Updated ${count} contact${count !== 1 ? 's' : ''}`);
-              setIsBulkEditOpen(false);
-              exitSelectMode();
+          bulkUpdate.mutate(
+            { ids, data: { [field]: value } as ContactUpdateData },
+            {
+              onSuccess: ({ count }) => {
+                toast.success(
+                  `Updated ${count} contact${count !== 1 ? "s" : ""}`,
+                );
+                setIsBulkEditOpen(false);
+                exitSelectMode();
+              },
+              onError: (err) =>
+                toast.error(
+                  `Update failed: ${err instanceof Error ? err.message : String(err)}`,
+                ),
             },
-            onError: (err) => toast.error(`Update failed: ${(err instanceof Error ? err.message : String(err))}`),
-          });
+          );
         }}
         isBulkEditPending={bulkUpdate.isPending}
         isModalOpen={isModalOpen}

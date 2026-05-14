@@ -5,7 +5,15 @@
 import type { NormalizedContact } from "./normalization.ts";
 export type { NormalizedContact };
 
-export type MatchType = 'email' | 'phone' | 'name' | 'name_company' | 'nickname' | 'cross_source' | 'fuzzy' | 'ai';
+export type MatchType =
+  | "email"
+  | "phone"
+  | "name"
+  | "name_company"
+  | "nickname"
+  | "cross_source"
+  | "fuzzy"
+  | "ai";
 
 export interface RawPair {
   idA: string;
@@ -47,8 +55,24 @@ export interface MatchSignals {
   embeddingSimilarity: number;
 }
 
-export type DedupeScanMode = 'deterministic' | 'ai' | 'both' | 'quick' | 'deep' | 'full';
-export type DedupeScanPhase = 'starting' | 'normalizing' | 'deterministic' | 'blocking' | 'scoring' | 'ai' | 'clustering' | 'persisting' | 'complete' | 'error';
+export type DedupeScanMode =
+  | "deterministic"
+  | "ai"
+  | "both"
+  | "quick"
+  | "deep"
+  | "full";
+export type DedupeScanPhase =
+  | "starting"
+  | "normalizing"
+  | "deterministic"
+  | "blocking"
+  | "scoring"
+  | "ai"
+  | "clustering"
+  | "persisting"
+  | "complete"
+  | "error";
 
 export interface DedupeScanProgress {
   scanId: string;
@@ -85,7 +109,7 @@ export interface ClusterPair {
 
 export interface DedupeCluster {
   id: string;
-  contacts: any[];           
+  contacts: any[];
   suggestedPrimaryId: string;
   pairs: ClusterPair[];
   aggregateConfidence: number;

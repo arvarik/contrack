@@ -5,17 +5,24 @@
  *  - Mobile: shows list OR detail panel (never both), with slide transitions
  *  - Desktop (md+): side-by-side — narrow list panel + full detail panel
  */
-import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { GripVertical, Plus, List, Users, ChevronLeft, ArrowLeft } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useLists, useReorderLists, useCreateList } from '../../api';
-import { ContactList as ContactListType } from '../../types';
-import { ListIcon, CreateListModal } from '../contact-list/CreateListModal';
-import { ListDetailPanel } from './ListDetailPanel';
-import { cn } from '../../lib/utils';
-import { SECTION_HEADING } from '../../lib/styles';
-import { toast } from 'sonner';
+import React, { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  GripVertical,
+  Plus,
+  List,
+  Users,
+  ChevronLeft,
+  ArrowLeft,
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { useLists, useReorderLists, useCreateList } from "../../api";
+import { ContactList as ContactListType } from "../../types";
+import { ListIcon, CreateListModal } from "../contact-list/CreateListModal";
+import { ListDetailPanel } from "./ListDetailPanel";
+import { cn } from "../../lib/utils";
+import { SECTION_HEADING } from "../../lib/styles";
+import { toast } from "sonner";
 
 export const ListManagerView = () => {
   const { data: lists = [], isLoading } = useLists();
@@ -30,11 +37,11 @@ export const ListManagerView = () => {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  const selectedList = lists.find(l => l.id === selectedListId) ?? null;
+  const selectedList = lists.find((l) => l.id === selectedListId) ?? null;
 
   const handleDragStart = (e: React.DragEvent, idx: number) => {
     setDragIdx(idx);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = "move";
   };
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
@@ -43,24 +50,35 @@ export const ListManagerView = () => {
   };
   const handleDrop = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    if (dragIdx === null || dragIdx === idx) { setDragIdx(null); setDragOverIdx(null); return; }
+    if (dragIdx === null || dragIdx === idx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
     const newOrder = [...lists];
     const [moved] = newOrder.splice(dragIdx, 1);
     newOrder.splice(idx, 0, moved);
-    reorderLists.mutate(newOrder.map(l => l.id));
-    setDragIdx(null); setDragOverIdx(null);
+    reorderLists.mutate(newOrder.map((l) => l.id));
+    setDragIdx(null);
+    setDragOverIdx(null);
   };
-  const handleDragEnd = () => { setDragIdx(null); setDragOverIdx(null); };
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
 
-  const handleCreate = useCallback(async (name: string, icon: string) => {
-    try {
-      await createList.mutateAsync({ name, icon });
-      setIsCreateOpen(false);
-      toast.success(`List "${name}" created`);
-    } catch {
-      toast.error('Failed to create list');
-    }
-  }, [createList]);
+  const handleCreate = useCallback(
+    async (name: string, icon: string) => {
+      try {
+        await createList.mutateAsync({ name, icon });
+        setIsCreateOpen(false);
+        toast.success(`List "${name}" created`);
+      } catch {
+        toast.error("Failed to create list");
+      }
+    },
+    [createList],
+  );
 
   const handleListDeleted = (id: string) => {
     if (selectedListId === id) setSelectedListId(null);
@@ -77,8 +95,8 @@ export const ListManagerView = () => {
             Your Lists
           </h2>
           <p className="text-xs text-on-surface-variant">
-            {lists.length} {lists.length === 1 ? 'list' : 'lists'}
-            {lists.length > 1 && ' · drag to reorder'}
+            {lists.length} {lists.length === 1 ? "list" : "lists"}
+            {lists.length > 1 && " · drag to reorder"}
           </p>
         </div>
         <button
@@ -95,8 +113,11 @@ export const ListManagerView = () => {
       <div className="flex-1 overflow-y-auto p-3 space-y-1.5 nice-scrollbar">
         {isLoading ? (
           <div className="space-y-2 p-1">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-16 bg-surface-container-low rounded-xl animate-pulse" />
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-16 bg-surface-container-low rounded-xl animate-pulse"
+              />
             ))}
           </div>
         ) : lists.length === 0 ? (
@@ -106,7 +127,9 @@ export const ListManagerView = () => {
             </div>
             <div>
               <p className="font-bold text-sm">No lists yet</p>
-              <p className="text-xs mt-1 opacity-60">Create a list to group your contacts</p>
+              <p className="text-xs mt-1 opacity-60">
+                Create a list to group your contacts
+              </p>
             </div>
             <button
               onClick={() => setIsCreateOpen(true)}
@@ -125,9 +148,9 @@ export const ListManagerView = () => {
               <div
                 key={list.id}
                 draggable
-                onDragStart={e => handleDragStart(e, idx)}
-                onDragOver={e => handleDragOver(e, idx)}
-                onDrop={e => handleDrop(e, idx)}
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDrop={(e) => handleDrop(e, idx)}
                 onDragEnd={handleDragEnd}
                 className={cn(
                   "group flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer select-none",
@@ -135,44 +158,71 @@ export const ListManagerView = () => {
                   isDragTarget && "ring-2 ring-primary/40 bg-primary/5",
                   isSelected
                     ? "bg-primary/10 ring-2 ring-primary/20"
-                    : "bg-surface-container-lowest hover:bg-surface-container-low shadow-sm"
+                    : "bg-surface-container-lowest hover:bg-surface-container-low shadow-sm",
                 )}
                 onClick={() => setSelectedListId(isSelected ? null : list.id)}
               >
                 {/* Grip handle — visible on hover on desktop, always subtle on mobile */}
                 <div
                   className="text-on-surface-variant/25 group-hover:text-on-surface-variant/60 transition-colors cursor-grab active:cursor-grabbing shrink-0 touch-none"
-                  onMouseDown={e => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
                   <GripVertical className="w-4 h-4" />
                 </div>
 
                 {/* Icon */}
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                  isSelected ? "bg-primary/20 text-primary" : "bg-surface-container-low text-on-surface-variant"
-                )}>
+                <div
+                  className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                    isSelected
+                      ? "bg-primary/20 text-primary"
+                      : "bg-surface-container-low text-on-surface-variant",
+                  )}
+                >
                   <ListIcon icon={list.icon} className="w-5 h-5" />
                 </div>
 
                 {/* Name + count */}
                 <div className="flex-1 min-w-0">
-                  <p className={cn("font-bold text-sm truncate", isSelected && "text-primary")}>
+                  <p
+                    className={cn(
+                      "font-bold text-sm truncate",
+                      isSelected && "text-primary",
+                    )}
+                  >
                     {list.name}
                   </p>
                   <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
                     <Users className="w-3 h-3" />
-                    {(list as any).memberCount ?? 0} {(list as any).memberCount === 1 ? 'contact' : 'contacts'}
+                    {(list as any).memberCount ?? 0}{" "}
+                    {(list as any).memberCount === 1 ? "contact" : "contacts"}
                   </p>
                 </div>
 
                 {/* Chevron */}
-                <div className={cn(
-                  "transition-all shrink-0",
-                  isSelected ? "text-primary" : "text-on-surface-variant/30 group-hover:text-on-surface-variant/60"
-                )}>
-                  <svg className={cn("w-4 h-4 transition-transform", isSelected && "md:rotate-90")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <div
+                  className={cn(
+                    "transition-all shrink-0",
+                    isSelected
+                      ? "text-primary"
+                      : "text-on-surface-variant/30 group-hover:text-on-surface-variant/60",
+                  )}
+                >
+                  <svg
+                    className={cn(
+                      "w-4 h-4 transition-transform",
+                      isSelected && "md:rotate-90",
+                    )}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 </div>
               </div>
@@ -188,10 +238,12 @@ export const ListManagerView = () => {
       {/* ── DESKTOP layout: side-by-side ───────────────────────────────────── */}
       <div className="hidden md:flex h-full overflow-hidden">
         {/* Left panel — fixed width when detail open, full width otherwise */}
-        <div className={cn(
-          "h-full flex flex-col overflow-hidden transition-all duration-300 bg-surface-container-lowest",
-          selectedListId ? "w-80 shrink-0" : "flex-1"
-        )}>
+        <div
+          className={cn(
+            "h-full flex flex-col overflow-hidden transition-all duration-300 bg-surface-container-lowest",
+            selectedListId ? "w-80 shrink-0" : "flex-1",
+          )}
+        >
           {ListPanel}
         </div>
 
@@ -203,7 +255,7 @@ export const ListManagerView = () => {
               initial={{ opacity: 0, x: 32 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 32 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
               className="flex-1 h-full overflow-hidden bg-surface"
             >
               <ListDetailPanel
@@ -224,10 +276,10 @@ export const ListManagerView = () => {
             /* Mobile: List view */
             <motion.div
               key="mobile-list"
-              initial={{ x: '-100%' }}
+              initial={{ x: "-100%" }}
               animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
               className="absolute inset-0 bg-surface-container-lowest"
             >
               {ListPanel}
@@ -236,10 +288,10 @@ export const ListManagerView = () => {
             /* Mobile: Detail view — slides in from right */
             <motion.div
               key={`mobile-detail-${selectedList.id}`}
-              initial={{ x: '100%' }}
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
               className="absolute inset-0 bg-surface"
             >
               {/* Mobile back button row */}

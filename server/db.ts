@@ -21,7 +21,9 @@ import crypto from "crypto";
 // =============================================================================
 
 import path from "path";
-const DB_PATH = process.env.DATA_DIR ? path.join(process.env.DATA_DIR, "curator.db") : "curator.db";
+const DB_PATH = process.env.DATA_DIR
+  ? path.join(process.env.DATA_DIR, "curator.db")
+  : "curator.db";
 export const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
@@ -63,21 +65,43 @@ sqlite.pragma("temp_store = MEMORY");
 import fs from "fs";
 
 const dbSizeBytes = (() => {
-  try { return fs.statSync(DB_PATH).size; }
-  catch { return 0; }
+  try {
+    return fs.statSync(DB_PATH).size;
+  } catch {
+    return 0;
+  }
 })();
 const dbSizeMB = (dbSizeBytes / (1024 * 1024)).toFixed(2);
 
 // Read back actual PRAGMA values (what SQLite accepted, not what we set)
-const appliedCacheSize = (sqlite.pragma("cache_size") as { cache_size: number }[])[0]?.cache_size;
-const appliedMmapSize = (sqlite.pragma("mmap_size") as { mmap_size: number }[])[0]?.mmap_size;
-const appliedSynchronous = (sqlite.pragma("synchronous") as { synchronous: number }[])[0]?.synchronous;
-const appliedTempStore = (sqlite.pragma("temp_store") as { temp_store: number }[])[0]?.temp_store;
-const pageSize = (sqlite.pragma("page_size") as { page_size: number }[])[0]?.page_size;
-const pageCount = (sqlite.pragma("page_count") as { page_count: number }[])[0]?.page_count;
+const appliedCacheSize = (
+  sqlite.pragma("cache_size") as { cache_size: number }[]
+)[0]?.cache_size;
+const appliedMmapSize = (
+  sqlite.pragma("mmap_size") as { mmap_size: number }[]
+)[0]?.mmap_size;
+const appliedSynchronous = (
+  sqlite.pragma("synchronous") as { synchronous: number }[]
+)[0]?.synchronous;
+const appliedTempStore = (
+  sqlite.pragma("temp_store") as { temp_store: number }[]
+)[0]?.temp_store;
+const pageSize = (sqlite.pragma("page_size") as { page_size: number }[])[0]
+  ?.page_size;
+const pageCount = (sqlite.pragma("page_count") as { page_count: number }[])[0]
+  ?.page_count;
 
-const syncModeNames: Record<number, string> = { 0: "OFF", 1: "NORMAL", 2: "FULL", 3: "EXTRA" };
-const tempStoreNames: Record<number, string> = { 0: "DEFAULT", 1: "FILE", 2: "MEMORY" };
+const syncModeNames: Record<number, string> = {
+  0: "OFF",
+  1: "NORMAL",
+  2: "FULL",
+  3: "EXTRA",
+};
+const tempStoreNames: Record<number, string> = {
+  0: "DEFAULT",
+  1: "FILE",
+  2: "MEMORY",
+};
 
 log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`, {
   fileSizeMB: dbSizeMB,
@@ -85,7 +109,8 @@ log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`, {
   pageCount,
   cacheSize: `${appliedCacheSize} (${Math.abs(appliedCacheSize as number)} KB)`,
   mmapSize: `${appliedMmapSize} (${((appliedMmapSize as number) / (1024 * 1024)).toFixed(0)} MB ceiling)`,
-  synchronous: syncModeNames[appliedSynchronous as number] ?? appliedSynchronous,
+  synchronous:
+    syncModeNames[appliedSynchronous as number] ?? appliedSynchronous,
   tempStore: tempStoreNames[appliedTempStore as number] ?? appliedTempStore,
 });
 
@@ -98,7 +123,9 @@ log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`, {
 
 import * as sqliteVec from "sqlite-vec";
 sqliteVec.load(sqlite);
-const { vec_version } = sqlite.prepare("SELECT vec_version() AS vec_version").get() as { vec_version: string };
+const { vec_version } = sqlite
+  .prepare("SELECT vec_version() AS vec_version")
+  .get() as { vec_version: string };
 log.info("Database", `sqlite-vec loaded (version ${vec_version})`);
 
 export const db = drizzle(sqlite, { schema });
@@ -126,23 +153,53 @@ log.info("Database", "Drizzle migrations applied successfully");
 try {
   // Fix interests: any interest on a contact that has AI-search-sourced data
   // should be marked as AI-generated (it was inserted by the merge engine)
-  const fixedInterests = sqlite.prepare(`
+  const fixedInterests = sqlite
+    .prepare(
+      `
     UPDATE contact_interests SET isAiGenerated = 1
     WHERE isAiGenerated = 0
     AND contactId IN (SELECT DISTINCT contactId FROM contact_experience WHERE source = 'ai-search')
-  `).run();
+  `,
+    )
+    .run();
   if (fixedInterests.changes > 0) {
-    log.info("Database", `Fixed ${fixedInterests.changes} AI-search interests missing isAiGenerated flag`);
+    log.info(
+      "Database",
+      `Fixed ${fixedInterests.changes} AI-search interests missing isAiGenerated flag`,
+    );
   }
 
   // Scrub 'null' strings from experience dates
-  const fixedExpStart = sqlite.prepare(`UPDATE contact_experience SET startDate = NULL WHERE startDate = 'null'`).run();
-  const fixedExpEnd = sqlite.prepare(`UPDATE contact_experience SET endDate = NULL WHERE endDate = 'null'`).run();
-  const fixedEduStart = sqlite.prepare(`UPDATE contact_education SET startDate = NULL WHERE startDate = 'null'`).run();
-  const fixedEduEnd = sqlite.prepare(`UPDATE contact_education SET endDate = NULL WHERE endDate = 'null'`).run();
-  const totalDateFixes = fixedExpStart.changes + fixedExpEnd.changes + fixedEduStart.changes + fixedEduEnd.changes;
+  const fixedExpStart = sqlite
+    .prepare(
+      `UPDATE contact_experience SET startDate = NULL WHERE startDate = 'null'`,
+    )
+    .run();
+  const fixedExpEnd = sqlite
+    .prepare(
+      `UPDATE contact_experience SET endDate = NULL WHERE endDate = 'null'`,
+    )
+    .run();
+  const fixedEduStart = sqlite
+    .prepare(
+      `UPDATE contact_education SET startDate = NULL WHERE startDate = 'null'`,
+    )
+    .run();
+  const fixedEduEnd = sqlite
+    .prepare(
+      `UPDATE contact_education SET endDate = NULL WHERE endDate = 'null'`,
+    )
+    .run();
+  const totalDateFixes =
+    fixedExpStart.changes +
+    fixedExpEnd.changes +
+    fixedEduStart.changes +
+    fixedEduEnd.changes;
   if (totalDateFixes > 0) {
-    log.info("Database", `Scrubbed ${totalDateFixes} 'null' string date value(s) from experience/education`);
+    log.info(
+      "Database",
+      `Scrubbed ${totalDateFixes} 'null' string date value(s) from experience/education`,
+    );
   }
 } catch (err: any) {
   log.warn("Database", `Data cleanup skipped: ${err.message}`);
@@ -166,7 +223,11 @@ try {
   // Column already exists — expected on subsequent runs
 }
 
-try { sqlite.exec(`DROP TABLE IF EXISTS contacts_fts`); } catch { /* may not exist */ }
+try {
+  sqlite.exec(`DROP TABLE IF EXISTS contacts_fts`);
+} catch {
+  /* may not exist */
+}
 
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
@@ -369,7 +430,10 @@ sqlite.exec(`
   END;
 `);
 
-log.info("Database", "updatedAt triggers installed (contacts, interactions, action_items)");
+log.info(
+  "Database",
+  "updatedAt triggers installed (contacts, interactions, action_items)",
+);
 
 // =============================================================================
 // 6. Action Items Table + Sync Triggers
@@ -429,7 +493,9 @@ log.info("Database", "action_items table + sync triggers installed");
 // =============================================================================
 
 try {
-  sqlite.exec(`ALTER TABLE contacts ADD COLUMN relationshipScore INTEGER DEFAULT 50`);
+  sqlite.exec(
+    `ALTER TABLE contacts ADD COLUMN relationshipScore INTEGER DEFAULT 50`,
+  );
   log.info("Database", "Added relationshipScore column to contacts");
 } catch {
   // Column already exists — expected on subsequent runs
@@ -442,11 +508,15 @@ try {
 // rows, create a default "Follow up" action item so the trigger system takes over.
 // =============================================================================
 
-const orphanedFollowUps = sqlite.prepare(`
+const orphanedFollowUps = sqlite
+  .prepare(
+    `
   SELECT id, nextFollowUpAt FROM contacts
   WHERE nextFollowUpAt IS NOT NULL
     AND id NOT IN (SELECT DISTINCT contactId FROM action_items WHERE completedAt IS NULL)
-`).all() as { id: string; nextFollowUpAt: string }[];
+`,
+  )
+  .all() as { id: string; nextFollowUpAt: string }[];
 
 if (orphanedFollowUps.length > 0) {
   const insertStmt = sqlite.prepare(`
@@ -459,7 +529,10 @@ if (orphanedFollowUps.length > 0) {
     }
   });
   txn();
-  log.info("Database", `Backfilled ${orphanedFollowUps.length} action_items from legacy nextFollowUpAt`);
+  log.info(
+    "Database",
+    `Backfilled ${orphanedFollowUps.length} action_items from legacy nextFollowUpAt`,
+  );
 }
 
 // =============================================================================
@@ -485,7 +558,9 @@ try {
 } catch {
   // Column already exists — expected on subsequent runs
 }
-sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_contacts_phonetic ON contacts(phoneticHash)`);
+sqlite.exec(
+  `CREATE INDEX IF NOT EXISTS idx_contacts_phonetic ON contacts(phoneticHash)`,
+);
 
 // 9c. Persistent suggestion storage
 sqlite.exec(`
@@ -533,7 +608,10 @@ sqlite.exec(`
   );
 `);
 
-log.info("Database", "Dedupe schema ready (suggestions, exclusions, merge_log)");
+log.info(
+  "Database",
+  "Dedupe schema ready (suggestions, exclusions, merge_log)",
+);
 
 // 9f. Contact embedding vector storage (requires sqlite-vec loaded above)
 sqlite.exec(`
@@ -554,7 +632,10 @@ sqlite.exec(`
   );
 `);
 
-log.info("Database", "search_embeddings vec0 table ready (384-dim, local model)");
+log.info(
+  "Database",
+  "search_embeddings vec0 table ready (384-dim, local model)",
+);
 
 // 9g. Embedding metadata: tracks when each contact was last embedded
 //     Used for staleness detection — if contact.updatedAt > embeddedAt, re-embed
@@ -574,12 +655,18 @@ sqlite.exec(`
 
 import { doubleMetaphone } from "./utils/nlp/index.ts";
 
-const contactsMissingHash = sqlite.prepare(`
+const contactsMissingHash = sqlite
+  .prepare(
+    `
   SELECT id, name FROM contacts WHERE phoneticHash IS NULL AND name IS NOT NULL
-`).all() as { id: string; name: string }[];
+`,
+  )
+  .all() as { id: string; name: string }[];
 
 if (contactsMissingHash.length > 0) {
-  const updateStmt = sqlite.prepare(`UPDATE contacts SET phoneticHash = ? WHERE id = ?`);
+  const updateStmt = sqlite.prepare(
+    `UPDATE contacts SET phoneticHash = ? WHERE id = ?`,
+  );
   const backfillTxn = sqlite.transaction(() => {
     for (const c of contactsMissingHash) {
       const { primary } = doubleMetaphone(c.name);
@@ -587,6 +674,8 @@ if (contactsMissingHash.length > 0) {
     }
   });
   backfillTxn();
-  log.info("Database", `Backfilled phoneticHash for ${contactsMissingHash.length} contacts`);
+  log.info(
+    "Database",
+    `Backfilled phoneticHash for ${contactsMissingHash.length} contacts`,
+  );
 }
-

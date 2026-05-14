@@ -1,1 +1,1 @@
-export { DedupeView } from './DedupeView';
+export { DedupeView } from "./DedupeView";

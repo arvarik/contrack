@@ -27,7 +27,7 @@ export interface LongPressCoords {
 
 export const useLongPress = (
   callback: (coords: LongPressCoords) => void,
-  delay: number = DEFAULT_DELAY_MS
+  delay: number = DEFAULT_DELAY_MS,
 ) => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startCoordsRef = useRef<LongPressCoords | null>(null);
@@ -50,7 +50,10 @@ export const useLongPress = (
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
       const touch = e.touches[0];
-      startCoordsRef.current = { clientX: touch.clientX, clientY: touch.clientY };
+      startCoordsRef.current = {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+      };
 
       timerRef.current = setTimeout(() => {
         // Haptic feedback on Android (Vibration API) — silently ignored on iOS
@@ -63,7 +66,7 @@ export const useLongPress = (
         startCoordsRef.current = null;
       }, delay);
     },
-    [callback, delay]
+    [callback, delay],
   );
 
   const onTouchMove = useCallback(
@@ -77,7 +80,7 @@ export const useLongPress = (
         cancel();
       }
     },
-    [cancel]
+    [cancel],
   );
 
   return {

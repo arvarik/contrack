@@ -25,9 +25,9 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 // =============================================================================
 
 const EMBED_MODEL = "gemini-embedding-2-preview";
-const EMBED_DIMENSIONS = 768;     // MRL truncation: 3072 → 768 (~2% quality loss, 4× storage savings)
-const EMBED_BATCH_SIZE = 100;     // Gemini limit per request
-const MAX_RETRIES = 4;            // Exponential backoff: 1s → 2s → 4s → 8s
+const EMBED_DIMENSIONS = 768; // MRL truncation: 3072 → 768 (~2% quality loss, 4× storage savings)
+const EMBED_BATCH_SIZE = 100; // Gemini limit per request
+const MAX_RETRIES = 4; // Exponential backoff: 1s → 2s → 4s → 8s
 const BASE_RETRY_MS = 1000;
 
 // =============================================================================
@@ -40,7 +40,9 @@ function getClient(): GoogleGenAI {
   if (!_client) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === "dummy_key") {
-      throw new Error("GEMINI_API_KEY not configured — cannot generate embeddings");
+      throw new Error(
+        "GEMINI_API_KEY not configured — cannot generate embeddings",
+      );
     }
     _client = new GoogleGenAI({ apiKey });
   }
@@ -117,7 +119,7 @@ export async function generateBatchEmbeddings(
 
   for (let i = 0; i < items.length; i += EMBED_BATCH_SIZE) {
     const batch = items.slice(i, i + EMBED_BATCH_SIZE);
-    const texts = batch.map(b => b.text);
+    const texts = batch.map((b) => b.text);
 
     let response: any = null;
     let lastError: Error | null = null;
@@ -132,11 +134,15 @@ export async function generateBatchEmbeddings(
         });
         break; // success
       } catch (err: unknown) {
-        lastError = err instanceof Error ? err : new Error(getErrorMessage(err));
+        lastError =
+          err instanceof Error ? err : new Error(getErrorMessage(err));
         if (isRetryableError(err) && attempt < MAX_RETRIES) {
           const delayMs = BASE_RETRY_MS * Math.pow(2, attempt);
-          log.warn("DedupeEmbeddings", `Rate limited on batch ${Math.floor(i / EMBED_BATCH_SIZE) + 1}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-          await new Promise(r => setTimeout(r, delayMs));
+          log.warn(
+            "DedupeEmbeddings",
+            `Rate limited on batch ${Math.floor(i / EMBED_BATCH_SIZE) + 1}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+          );
+          await new Promise((r) => setTimeout(r, delayMs));
         } else {
           throw err;
         }
@@ -144,7 +150,10 @@ export async function generateBatchEmbeddings(
     }
 
     if (!response?.embeddings) {
-      log.error("DedupeEmbeddings", `Failed to embed batch starting at index ${i}: ${lastError?.message}`);
+      log.error(
+        "DedupeEmbeddings",
+        `Failed to embed batch starting at index ${i}: ${lastError?.message}`,
+      );
       continue; // skip this batch, process rest
     }
 
@@ -166,7 +175,9 @@ export async function generateBatchEmbeddings(
  * Generate a single embedding for one text string.
  * Used for incremental contact create/update.
  */
-export async function generateSingleEmbedding(text: string): Promise<Float32Array> {
+export async function generateSingleEmbedding(
+  text: string,
+): Promise<Float32Array> {
   const client = getClient();
 
   const response = await client.models.embedContent({
@@ -192,7 +203,9 @@ export async function generateSingleEmbedding(text: string): Promise<Float32Arra
  *
  * Using the correct task prefix significantly improves recall in search.
  */
-export async function generateQueryEmbedding(queryText: string): Promise<Float32Array> {
+export async function generateQueryEmbedding(
+  queryText: string,
+): Promise<Float32Array> {
   const text = `task: retrieval | query: ${queryText}`;
   return generateSingleEmbedding(text);
 }
@@ -204,19 +217,15 @@ export async function generateQueryEmbedding(queryText: string): Promise<Float32
 // Pre-compiled statements for performance
 const _stmts = {
   upsert: sqlite.prepare(
-    "INSERT OR REPLACE INTO contact_embeddings (contactId, embedding) VALUES (?, ?)"
+    "INSERT OR REPLACE INTO contact_embeddings (contactId, embedding) VALUES (?, ?)",
   ),
-  delete: sqlite.prepare(
-    "DELETE FROM contact_embeddings WHERE contactId = ?"
-  ),
-  count: sqlite.prepare(
-    "SELECT COUNT(*) AS cnt FROM contact_embeddings"
-  ),
+  delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
+  count: sqlite.prepare("SELECT COUNT(*) AS cnt FROM contact_embeddings"),
   exists: sqlite.prepare(
-    "SELECT 1 FROM contact_embeddings WHERE contactId = ?"
+    "SELECT 1 FROM contact_embeddings WHERE contactId = ?",
   ),
   get: sqlite.prepare(
-    "SELECT embedding FROM contact_embeddings WHERE contactId = ?"
+    "SELECT embedding FROM contact_embeddings WHERE contactId = ?",
   ),
   knn: sqlite.prepare(`
     SELECT contactId, distance
@@ -227,24 +236,27 @@ const _stmts = {
   `),
   // Embedding metadata for staleness tracking
   upsertMeta: sqlite.prepare(
-    "INSERT OR REPLACE INTO dedupe_embedding_meta (contactId, embeddedAt) VALUES (?, ?)"
+    "INSERT OR REPLACE INTO dedupe_embedding_meta (contactId, embeddedAt) VALUES (?, ?)",
   ),
-  clearMeta: sqlite.prepare(
-    "DELETE FROM dedupe_embedding_meta"
-  ),
+  clearMeta: sqlite.prepare("DELETE FROM dedupe_embedding_meta"),
   deleteMeta: sqlite.prepare(
-    "DELETE FROM dedupe_embedding_meta WHERE contactId = ?"
+    "DELETE FROM dedupe_embedding_meta WHERE contactId = ?",
   ),
 };
 
 /** Store a single embedding in sqlite-vec and record its timestamp. */
-export function storeEmbedding(contactId: string, embedding: Float32Array): void {
+export function storeEmbedding(
+  contactId: string,
+  embedding: Float32Array,
+): void {
   _stmts.upsert.run(contactId, Buffer.from(embedding.buffer));
   _stmts.upsertMeta.run(contactId, new Date().toISOString());
 }
 
 /** Store multiple embeddings in a single transaction. */
-export function storeEmbeddings(entries: { contactId: string; embedding: Float32Array }[]): void {
+export function storeEmbeddings(
+  entries: { contactId: string; embedding: Float32Array }[],
+): void {
   const now = new Date().toISOString();
   const txn = sqlite.transaction(() => {
     for (const { contactId, embedding } of entries) {
@@ -283,7 +295,11 @@ export function hasEmbedding(contactId: string): boolean {
 export function getEmbedding(contactId: string): Float32Array | null {
   const row = _stmts.get.get(contactId) as { embedding: Buffer } | undefined;
   if (!row) return null;
-  return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4);
+  return new Float32Array(
+    row.embedding.buffer,
+    row.embedding.byteOffset,
+    row.embedding.byteLength / 4,
+  );
 }
 
 /**
@@ -302,13 +318,13 @@ export function findNearestNeighbors(
   // sqlite-vec KNN: fetch extra results to account for potential self-match exclusion
   const fetchLimit = excludeId ? limit + 1 : limit;
 
-  const rows = _stmts.knn.all(
-    Buffer.from(embedding.buffer),
-    fetchLimit,
-  ) as { contactId: string; distance: number }[];
+  const rows = _stmts.knn.all(Buffer.from(embedding.buffer), fetchLimit) as {
+    contactId: string;
+    distance: number;
+  }[];
 
   if (excludeId) {
-    return rows.filter(r => r.contactId !== excludeId).slice(0, limit);
+    return rows.filter((r) => r.contactId !== excludeId).slice(0, limit);
   }
   return rows;
 }
@@ -323,7 +339,9 @@ export function findNearestNeighbors(
  * should be re-embedded to reflect current data.
  */
 function findStaleEmbeddings(): string[] {
-  const rows = sqlite.prepare(`
+  const rows = sqlite
+    .prepare(
+      `
     SELECT m.contactId
     FROM dedupe_embedding_meta m
     JOIN contacts c ON c.id = m.contactId
@@ -331,14 +349,16 @@ function findStaleEmbeddings(): string[] {
       AND c.isGhost = 0
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
       AND c.canonicalId IS NULL
-  `).all() as { contactId: string }[];
-  return rows.map(r => r.contactId);
+  `,
+    )
+    .all() as { contactId: string }[];
+  return rows.map((r) => r.contactId);
 }
 
 /**
  * Re-embed contacts whose data has changed since their last embedding.
  * Called during non-full scans when embeddings already exist.
- * 
+ *
  * @returns Number of contacts re-embedded
  */
 export async function reEmbedStaleContacts(): Promise<number> {
@@ -350,7 +370,10 @@ export async function reEmbedStaleContacts(): Promise<number> {
     return 0;
   }
 
-  log.info("DedupeEmbeddings", `Found ${staleIds.length} stale embedding(s) — re-generating`);
+  log.info(
+    "DedupeEmbeddings",
+    `Found ${staleIds.length} stale embedding(s) — re-generating`,
+  );
 
   const items: { id: string; text: string }[] = [];
   for (const id of staleIds) {
@@ -369,7 +392,10 @@ export async function reEmbedStaleContacts(): Promise<number> {
   }
   storeEmbeddings(entries);
 
-  log.info("DedupeEmbeddings", `Re-embedded ${entries.length} stale contact(s)`);
+  log.info(
+    "DedupeEmbeddings",
+    `Re-embedded ${entries.length} stale contact(s)`,
+  );
   return entries.length;
 }
 
@@ -396,7 +422,10 @@ export async function backfillEmbeddings(
   }
 
   if (!isEmbeddingAvailable()) {
-    log.warn("DedupeEmbeddings", "Gemini API key not configured — skipping embedding backfill");
+    log.warn(
+      "DedupeEmbeddings",
+      "Gemini API key not configured — skipping embedding backfill",
+    );
     return 0;
   }
 
@@ -405,31 +434,44 @@ export async function backfillEmbeddings(
     // 1. Normalize all active contacts
     onProgress?.(0, 0, "Normalizing contacts...");
     const normalized = normalizeContacts();
-    log.info("DedupeEmbeddings", `Normalized ${normalized.length} contacts for embedding`);
+    log.info(
+      "DedupeEmbeddings",
+      `Normalized ${normalized.length} contacts for embedding`,
+    );
 
     // 2. Filter to contacts missing embeddings
     const existingIds = new Set<string>();
-    const allEmbedded = sqlite.prepare(
-      "SELECT contactId FROM contact_embeddings"
-    ).all() as { contactId: string }[];
+    const allEmbedded = sqlite
+      .prepare("SELECT contactId FROM contact_embeddings")
+      .all() as { contactId: string }[];
     for (const row of allEmbedded) existingIds.add(row.contactId);
 
-    const toEmbed = normalized.filter(c => !existingIds.has(c.id));
+    const toEmbed = normalized.filter((c) => !existingIds.has(c.id));
     if (toEmbed.length === 0) {
-      log.info("DedupeEmbeddings", "All contacts already have embeddings — nothing to backfill");
+      log.info(
+        "DedupeEmbeddings",
+        "All contacts already have embeddings — nothing to backfill",
+      );
       onProgress?.(normalized.length, normalized.length, "Complete");
       return 0;
     }
 
-    log.info("DedupeEmbeddings", `${toEmbed.length} contacts need embeddings (${existingIds.size} already done)`);
+    log.info(
+      "DedupeEmbeddings",
+      `${toEmbed.length} contacts need embeddings (${existingIds.size} already done)`,
+    );
 
     // 3. Build embedding text inputs
-    const items = toEmbed.map(c => ({ id: c.id, text: c.embeddingText }));
+    const items = toEmbed.map((c) => ({ id: c.id, text: c.embeddingText }));
 
     // 4. Generate embeddings in batches
     onProgress?.(0, items.length, "Generating embeddings...");
     const embeddings = await generateBatchEmbeddings(items, (done, total) => {
-      onProgress?.(done, total, `Embedding batch ${Math.ceil(done / EMBED_BATCH_SIZE)}/${Math.ceil(total / EMBED_BATCH_SIZE)}`);
+      onProgress?.(
+        done,
+        total,
+        `Embedding batch ${Math.ceil(done / EMBED_BATCH_SIZE)}/${Math.ceil(total / EMBED_BATCH_SIZE)}`,
+      );
     });
 
     // 5. Store all embeddings in a single transaction
@@ -440,10 +482,12 @@ export async function backfillEmbeddings(
     }
     storeEmbeddings(entries);
 
-    log.info("DedupeEmbeddings", `Backfill complete: embedded ${entries.length} contacts`);
+    log.info(
+      "DedupeEmbeddings",
+      `Backfill complete: embedded ${entries.length} contacts`,
+    );
     onProgress?.(items.length, items.length, "Complete");
     return entries.length;
-
   } finally {
     _backfillRunning = false;
   }
@@ -464,7 +508,9 @@ const _inFlightIds = new Set<string>();
  * @param contactId - The contact to embed
  * @returns true if successful, false if skipped/failed
  */
-export async function generateAndStoreEmbedding(contactId: string): Promise<boolean> {
+export async function generateAndStoreEmbedding(
+  contactId: string,
+): Promise<boolean> {
   if (!isEmbeddingAvailable()) return false;
   if (_inFlightIds.has(contactId)) {
     log.debug("DedupeEmbeddings", `Skipping ${contactId} — already in-flight`);
@@ -475,16 +521,25 @@ export async function generateAndStoreEmbedding(contactId: string): Promise<bool
   try {
     const normalized = normalizeContactById(contactId);
     if (!normalized) {
-      log.warn("DedupeEmbeddings", `Contact ${contactId} not found or has no name — skipping embedding`);
+      log.warn(
+        "DedupeEmbeddings",
+        `Contact ${contactId} not found or has no name — skipping embedding`,
+      );
       return false;
     }
 
     const embedding = await generateSingleEmbedding(normalized.embeddingText);
     storeEmbedding(contactId, embedding);
-    log.debug("DedupeEmbeddings", `Embedded contact ${contactId} (${normalized.nameNorm})`);
+    log.debug(
+      "DedupeEmbeddings",
+      `Embedded contact ${contactId} (${normalized.nameNorm})`,
+    );
     return true;
   } catch (err: unknown) {
-    log.warn("DedupeEmbeddings", `Failed to embed contact ${contactId}: ${getErrorMessage(err)}`);
+    log.warn(
+      "DedupeEmbeddings",
+      `Failed to embed contact ${contactId}: ${getErrorMessage(err)}`,
+    );
     return false;
   } finally {
     _inFlightIds.delete(contactId);
@@ -495,7 +550,9 @@ export async function generateAndStoreEmbedding(contactId: string): Promise<bool
  * Generate and store embeddings for multiple contacts (bulk import).
  * Used as a fire-and-forget background task after bulk contact creation.
  */
-export async function generateAndStoreBulkEmbeddings(contactIds: string[]): Promise<number> {
+export async function generateAndStoreBulkEmbeddings(
+  contactIds: string[],
+): Promise<number> {
   if (!isEmbeddingAvailable() || contactIds.length === 0) return 0;
 
   try {
@@ -517,10 +574,16 @@ export async function generateAndStoreBulkEmbeddings(contactIds: string[]): Prom
     }
     storeEmbeddings(entries);
 
-    log.info("DedupeEmbeddings", `Bulk embedded ${entries.length}/${contactIds.length} contacts`);
+    log.info(
+      "DedupeEmbeddings",
+      `Bulk embedded ${entries.length}/${contactIds.length} contacts`,
+    );
     return entries.length;
   } catch (err: unknown) {
-    log.warn("DedupeEmbeddings", `Bulk embedding failed: ${getErrorMessage(err)}`);
+    log.warn(
+      "DedupeEmbeddings",
+      `Bulk embedding failed: ${getErrorMessage(err)}`,
+    );
     return 0;
   }
 }

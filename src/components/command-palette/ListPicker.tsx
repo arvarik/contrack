@@ -6,12 +6,17 @@
  *
  * @module components/command-palette/ListPicker
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion } from 'motion/react';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { useLists, useAddToList, useRemoveFromList, useContacts } from '../../api';
-import { KBD_SM } from '../../lib/styles';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { motion } from "motion/react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  useLists,
+  useAddToList,
+  useRemoveFromList,
+  useContacts,
+} from "../../api";
+import { KBD_SM } from "../../lib/styles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,68 +42,76 @@ export const ListPicker: React.FC<ListPickerProps> = ({
 
   // ── Get current list memberships for this contact ───────────────────────
   const memberListIds = useMemo(() => {
-    const contact = contacts.find(c => c.id === contactId);
+    const contact = contacts.find((c) => c.id === contactId);
     if (!contact?.lists) return new Set<string>();
-    return new Set(contact.lists.map(l => l.id));
+    return new Set(contact.lists.map((l) => l.id));
   }, [contacts, contactId]);
 
   // ── Toggle membership ──────────────────────────────────────────────────
-  const handleToggle = useCallback(async (listId: string) => {
-    const listName = lists.find(l => l.id === listId)?.name ?? 'list';
-    setPendingListId(listId);
+  const handleToggle = useCallback(
+    async (listId: string) => {
+      const listName = lists.find((l) => l.id === listId)?.name ?? "list";
+      setPendingListId(listId);
 
-    try {
-      if (memberListIds.has(listId)) {
-        await removeFromList.mutateAsync({ listId, contactId });
-        toast.success(`Removed ${contactName} from "${listName}"`);
-      } else {
-        await addToList.mutateAsync({ listId, contactId });
-        toast.success(`Added ${contactName} to "${listName}"`);
+      try {
+        if (memberListIds.has(listId)) {
+          await removeFromList.mutateAsync({ listId, contactId });
+          toast.success(`Removed ${contactName} from "${listName}"`);
+        } else {
+          await addToList.mutateAsync({ listId, contactId });
+          toast.success(`Added ${contactName} to "${listName}"`);
+        }
+      } catch (err: unknown) {
+        toast.error(
+          `Failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        setPendingListId(null);
       }
-    } catch (err: unknown) {
-      toast.error(`Failed: ${(err instanceof Error ? err.message : String(err))}`);
-    } finally {
-      setPendingListId(null);
-    }
-  }, [lists, memberListIds, contactId, contactName, addToList, removeFromList]);
+    },
+    [lists, memberListIds, contactId, contactName, addToList, removeFromList],
+  );
 
   // ── Keyboard navigation ─────────────────────────────────────────────────
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % lists.length);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + lists.length) % lists.length);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (lists[selectedIndex]) handleToggle(lists[selectedIndex].id);
-        break;
-      case 'Escape':
-      case 'ArrowLeft':
-        e.preventDefault();
-        e.stopPropagation();
-        onBack();
-        break;
-    }
-  }, [lists, selectedIndex, handleToggle, onBack]);
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev + 1) % lists.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev - 1 + lists.length) % lists.length);
+          break;
+        case "Enter":
+          e.preventDefault();
+          if (lists[selectedIndex]) handleToggle(lists[selectedIndex].id);
+          break;
+        case "Escape":
+        case "ArrowLeft":
+          e.preventDefault();
+          e.stopPropagation();
+          onBack();
+          break;
+      }
+    },
+    [lists, selectedIndex, handleToggle, onBack],
+  );
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown]);
 
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
       className="p-2"
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -116,7 +129,9 @@ export const ListPicker: React.FC<ListPickerProps> = ({
           <p className="text-sm font-bold text-on-surface truncate">
             Lists for {contactName}
           </p>
-          <p className="text-[10px] text-on-surface-variant">Toggle membership</p>
+          <p className="text-[10px] text-on-surface-variant">
+            Toggle membership
+          </p>
         </div>
       </div>
 
@@ -140,18 +155,23 @@ export const ListPicker: React.FC<ListPickerProps> = ({
                 disabled={isPending}
                 className={`
                   w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all
-                  ${i === selectedIndex
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-on-surface hover:bg-surface-container-low'
+                  ${
+                    i === selectedIndex
+                      ? "bg-primary/10 text-primary"
+                      : "text-on-surface hover:bg-surface-container-low"
                   }
-                  ${isPending ? 'opacity-50' : ''}
+                  ${isPending ? "opacity-50" : ""}
                 `}
               >
                 {/* List icon */}
-                <span className="text-base w-6 text-center">{list.icon || '📋'}</span>
+                <span className="text-base w-6 text-center">
+                  {list.icon || "📋"}
+                </span>
 
                 {/* List name */}
-                <span className="flex-1 text-left font-medium truncate">{list.name}</span>
+                <span className="flex-1 text-left font-medium truncate">
+                  {list.name}
+                </span>
 
                 {/* Membership indicator */}
                 {isPending ? (

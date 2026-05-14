@@ -25,12 +25,14 @@ const PRESETS = {
   male: {
     top: "shortFlat,shortRound,shortWaved,shortCurly,theCaesar,theCaesarAndSidePart,sides,shavedSides,dreads01,frizzle",
     facialHairProbability: "33",
-    clothing: "blazerAndShirt,blazerAndSweater,collarAndSweater,hoodie,shirtCrewNeck,shirtVNeck",
+    clothing:
+      "blazerAndShirt,blazerAndSweater,collarAndSweater,hoodie,shirtCrewNeck,shirtVNeck",
   },
   female: {
     top: "longButNotTooLong,straight01,straight02,straightAndStrand,bob,bun,curly,curvy,bigHair,miaWallace",
     facialHairProbability: "0",
-    clothing: "blazerAndShirt,blazerAndSweater,collarAndSweater,shirtScoopNeck,shirtCrewNeck,shirtVNeck",
+    clothing:
+      "blazerAndShirt,blazerAndSweater,collarAndSweater,shirtScoopNeck,shirtCrewNeck,shirtVNeck",
   },
   unknown: {
     // No top/clothing constraints — full PRNG diversity

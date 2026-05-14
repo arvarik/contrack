@@ -19,7 +19,10 @@ import { useEffect, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 
 /** Shortcut definitions — exported for reuse in ZeroStateView KBD hints */
-export const NAV_SHORTCUTS: Record<string, { path: string; label: string; keys: string }> = {
+export const NAV_SHORTCUTS: Record<
+  string,
+  { path: string; label: string; keys: string }
+> = {
   "/": { path: "/", label: "Network", keys: "⌘⇧H" },
   "/pulse": { path: "/pulse", label: "Relationship Pulse", keys: "⌘⇧P" },
   "/map": { path: "/map", label: "Map", keys: "⌘⇧M" },

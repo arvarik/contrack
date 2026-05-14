@@ -1,1 +1,1 @@
-export { ListManagerView } from './ListManagerView';
+export { ListManagerView } from "./ListManagerView";

@@ -13,9 +13,18 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider } from "../provider.ts";
-import type { AIGenerateOptions, AIGenerateResult, JsonSchemaNode } from "../types.ts";
+import type {
+  AIGenerateOptions,
+  AIGenerateResult,
+  JsonSchemaNode,
+} from "../types.ts";
 import { log } from "../../utils/logger.ts";
-import { withTimeout, withRetry, parseAIJson, AI_DEFAULTS } from "../resilience.ts";
+import {
+  withTimeout,
+  withRetry,
+  parseAIJson,
+  AI_DEFAULTS,
+} from "../resilience.ts";
 
 // ---------------------------------------------------------------------------
 // Model Class Mapping
@@ -45,7 +54,8 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
   if (node.properties) {
     result.properties = {};
     for (const [key, value] of Object.entries(node.properties)) {
-      (result.properties as Record<string, unknown>)[key] = translateSchemaNode(value);
+      (result.properties as Record<string, unknown>)[key] =
+        translateSchemaNode(value);
     }
   }
   if (node.items) result.items = translateSchemaNode(node.items);
@@ -68,7 +78,9 @@ export class AnthropicAdapter implements AIProvider {
 
   resolveModel(prefer?: string, modelOverride?: string): string {
     if (modelOverride) return modelOverride;
-    return MODEL_MAP[prefer ?? DEFAULT_MODEL_CLASS] ?? MODEL_MAP[DEFAULT_MODEL_CLASS];
+    return (
+      MODEL_MAP[prefer ?? DEFAULT_MODEL_CLASS] ?? MODEL_MAP[DEFAULT_MODEL_CLASS]
+    );
   }
 
   translateSchema(schema: JsonSchemaNode): {
@@ -84,31 +96,43 @@ export class AnthropicAdapter implements AIProvider {
   async generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
     const model = options.model ?? this.resolveModel(options.routing?.prefer);
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
-    const maxTokens = options.enableSearchGrounding ? SEARCH_MAX_TOKENS : DEFAULT_MAX_TOKENS;
+    const maxTokens = options.enableSearchGrounding
+      ? SEARCH_MAX_TOKENS
+      : DEFAULT_MAX_TOKENS;
 
-    return withRetry(async (attempt) => {
-      const startMs = Date.now();
-      const result = await withTimeout(
-        (signal) => this.runMessages(options, model, maxTokens, signal, startMs),
-        timeoutMs,
-        options.signal,
-      );
+    return withRetry(
+      async (attempt) => {
+        const startMs = Date.now();
+        const result = await withTimeout(
+          (signal) =>
+            this.runMessages(options, model, maxTokens, signal, startMs),
+          timeoutMs,
+          options.signal,
+        );
 
-      if (options.responseFormat === "json") {
-        parseAIJson(result.text, `AnthropicAdapter.generate(${model})`);
-      }
+        if (options.responseFormat === "json") {
+          parseAIJson(result.text, `AnthropicAdapter.generate(${model})`);
+        }
 
-      if (attempt > 1) {
-        log.info("AnthropicAdapter", `${model} succeeded on attempt ${attempt}/${AI_DEFAULTS.maxAttempts}`);
-      }
-      return result;
-    }, {
-      signal: options.signal,
-      onRetry: (attempt, err) => {
-        const msg = (err as Error)?.message ?? String(err);
-        log.warn("AnthropicAdapter", `${model} attempt ${attempt} failed (will retry): ${msg.slice(0, 200)}`);
+        if (attempt > 1) {
+          log.info(
+            "AnthropicAdapter",
+            `${model} succeeded on attempt ${attempt}/${AI_DEFAULTS.maxAttempts}`,
+          );
+        }
+        return result;
       },
-    });
+      {
+        signal: options.signal,
+        onRetry: (attempt, err) => {
+          const msg = (err as Error)?.message ?? String(err);
+          log.warn(
+            "AnthropicAdapter",
+            `${model} attempt ${attempt} failed (will retry): ${msg.slice(0, 200)}`,
+          );
+        },
+      },
+    );
   }
 
   private async runMessages(
@@ -128,9 +152,12 @@ export class AnthropicAdapter implements AIProvider {
       max_tokens: maxTokens,
     };
     if (options.systemPrompt) requestParams.system = options.systemPrompt;
-    if (options.enableSearchGrounding) requestParams.tools = [{ type: "web_search" }];
+    if (options.enableSearchGrounding)
+      requestParams.tools = [{ type: "web_search" }];
     if (options.responseFormat === "json" && options.jsonSchema) {
-      requestParams.output_config = { format: this.translateSchema(options.jsonSchema) };
+      requestParams.output_config = {
+        format: this.translateSchema(options.jsonSchema),
+      };
     }
 
     // Local response shape — the SDK's `Message` union (text / tool_use /
@@ -140,7 +167,9 @@ export class AnthropicAdapter implements AIProvider {
       usage?: { input_tokens?: number; output_tokens?: number };
     }
     const response = (await this.client.messages.create(
-      requestParams as unknown as Parameters<typeof this.client.messages.create>[0],
+      requestParams as unknown as Parameters<
+        typeof this.client.messages.create
+      >[0],
       { signal },
     )) as unknown as ClaudeMessageResponse;
 
@@ -154,10 +183,14 @@ export class AnthropicAdapter implements AIProvider {
     }
 
     const tokenCount =
-      (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
+      (response.usage?.input_tokens ?? 0) +
+      (response.usage?.output_tokens ?? 0);
     const latencyMs = Date.now() - startMs;
 
-    log.info("AnthropicAdapter", `${model} | ${latencyMs}ms | ${tokenCount} tokens`);
+    log.info(
+      "AnthropicAdapter",
+      `${model} | ${latencyMs}ms | ${tokenCount} tokens`,
+    );
     return { text, model, tokenCount, latencyMs };
   }
 }

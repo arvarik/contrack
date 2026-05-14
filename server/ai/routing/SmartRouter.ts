@@ -59,15 +59,13 @@ export class SmartRouter {
     circuitBreakers: Set<string>,
     requiresGrounding: boolean = false,
   ): RouteDecision {
-
     // ── Resolve effective defaults ────────────────────────────────────
     // Paid spillover: FREE defaults to NO, PAID defaults to YES.
     // Preview: auto-enable when a model preference is set, since
     // Gemini 3.x models (the newest generation) are all preview-stability.
     const effectiveAllowPaidSpillover =
-      policy.allowPaidSpillover ?? (this.aiTier === "PAID");
-    const effectiveAllowPreview =
-      policy.allowPreview ?? !!policy.prefer;
+      policy.allowPaidSpillover ?? this.aiTier === "PAID";
+    const effectiveAllowPreview = policy.allowPreview ?? !!policy.prefer;
 
     // ── Pass 1: Filter ────────────────────────────────────────────────
     const candidates = GEMINI_REGISTRY.filter((m) => {
@@ -154,7 +152,9 @@ export class SmartRouter {
     // when free-tier capacity is exhausted.
     if (effectiveAllowPaidSpillover && this.aiTier === "FREE") {
       for (const model of candidates) {
-        if (this.tracker.hasCapacity(model.id, estimatedTokens, model.paidLimits)) {
+        if (
+          this.tracker.hasCapacity(model.id, estimatedTokens, model.paidLimits)
+        ) {
           log.warn(
             "SmartRouter",
             `Free tier exhausted. Overflowing to PAID limits → ${model.id} ` +

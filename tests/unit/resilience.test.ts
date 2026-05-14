@@ -62,19 +62,33 @@ describe("isRetryableError", () => {
   });
 
   it("matches transient keywords in error messages", () => {
-    expect(isRetryableError({ message: "rate limit reached" }, false)).toBe(true);
+    expect(isRetryableError({ message: "rate limit reached" }, false)).toBe(
+      true,
+    );
     expect(isRetryableError({ message: "Quota exceeded" }, false)).toBe(true);
-    expect(isRetryableError({ message: "Resource exhausted." }, false)).toBe(true);
-    expect(isRetryableError({ message: "Model overloaded, please retry" }, false)).toBe(true);
-    expect(isRetryableError({ message: "Temporarily unavailable" }, false)).toBe(true);
-    expect(isRetryableError({ message: "Deadline exceeded" }, false)).toBe(true);
+    expect(isRetryableError({ message: "Resource exhausted." }, false)).toBe(
+      true,
+    );
+    expect(
+      isRetryableError({ message: "Model overloaded, please retry" }, false),
+    ).toBe(true);
+    expect(
+      isRetryableError({ message: "Temporarily unavailable" }, false),
+    ).toBe(true);
+    expect(isRetryableError({ message: "Deadline exceeded" }, false)).toBe(
+      true,
+    );
     expect(isRetryableError({ message: "Request timeout" }, false)).toBe(true);
   });
 
   it("does NOT classify permanent client errors as retryable", () => {
     expect(isRetryableError({ message: "Invalid API key" }, false)).toBe(false);
-    expect(isRetryableError({ message: "Schema validation failed" }, false)).toBe(false);
-    expect(isRetryableError({ message: "Content blocked by safety filter" }, false)).toBe(false);
+    expect(
+      isRetryableError({ message: "Schema validation failed" }, false),
+    ).toBe(false);
+    expect(
+      isRetryableError({ message: "Content blocked by safety filter" }, false),
+    ).toBe(false);
   });
 
   it("treats `abortedByTimeout=true` as retryable regardless of error shape", () => {
@@ -149,7 +163,9 @@ describe("withTimeout", () => {
     const parentCtl = new AbortController();
     parentCtl.abort();
     const op = async () => "still ok";
-    await expect(withTimeout(op, 1_000, parentCtl.signal)).resolves.toBe("still ok");
+    await expect(withTimeout(op, 1_000, parentCtl.signal)).resolves.toBe(
+      "still ok",
+    );
   });
 });
 
@@ -169,7 +185,8 @@ describe("withRetry", () => {
   });
 
   it("retries a retryable error and eventually succeeds", async () => {
-    const op = vi.fn()
+    const op = vi
+      .fn()
       .mockRejectedValueOnce({ status: 503, message: "Service Unavailable" })
       .mockRejectedValueOnce({ status: 503, message: "Service Unavailable" })
       .mockResolvedValueOnce("third-try");
@@ -183,14 +200,17 @@ describe("withRetry", () => {
   });
 
   it("does NOT retry a non-retryable error", async () => {
-    const op = vi.fn().mockRejectedValue({ status: 400, message: "Bad Request" });
+    const op = vi
+      .fn()
+      .mockRejectedValue({ status: 400, message: "Bad Request" });
     await expect(withRetry(op)).rejects.toBeDefined();
     expect(op).toHaveBeenCalledTimes(1);
   });
 
   it("invokes onRetry exactly once per retryable failure (not on the final attempt)", async () => {
     const onRetry = vi.fn();
-    const op = vi.fn()
+    const op = vi
+      .fn()
       .mockRejectedValueOnce({ status: 503 })
       .mockRejectedValueOnce({ status: 503 })
       .mockResolvedValueOnce("done");
@@ -206,7 +226,9 @@ describe("withRetry", () => {
   });
 
   it("converts an exhausted-retry 429 into a RateLimitedError", async () => {
-    const op = vi.fn().mockRejectedValue({ status: 429, message: "rate limited" });
+    const op = vi
+      .fn()
+      .mockRejectedValue({ status: 429, message: "rate limited" });
     // Catch once and assert on the captured value so vitest only ever sees a single rejection.
     const captured = withRetry(op, { maxAttempts: 2 }).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
@@ -216,7 +238,9 @@ describe("withRetry", () => {
   });
 
   it("converts an exhausted-retry 5xx into a ServiceUnavailableError", async () => {
-    const op = vi.fn().mockRejectedValue({ status: 502, message: "Bad Gateway" });
+    const op = vi
+      .fn()
+      .mockRejectedValue({ status: 502, message: "Bad Gateway" });
     const captured = withRetry(op, { maxAttempts: 2 }).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
     const err = await captured;
@@ -237,14 +261,18 @@ describe("withRetry", () => {
     const ctl = new AbortController();
     ctl.abort();
     const op = vi.fn().mockResolvedValue("never");
-    await expect(withRetry(op, { signal: ctl.signal })).rejects.toBeInstanceOf(AppError);
+    await expect(withRetry(op, { signal: ctl.signal })).rejects.toBeInstanceOf(
+      AppError,
+    );
     expect(op).not.toHaveBeenCalled();
   });
 
   it("re-throws an AppError unchanged when retries are exhausted", async () => {
     // AppError is the contract surface, so wrapping it again would create a
     // double-wrapped error and lose the original code.
-    const op = vi.fn().mockRejectedValue(new RateLimitedError("custom message"));
+    const op = vi
+      .fn()
+      .mockRejectedValue(new RateLimitedError("custom message"));
     const captured = withRetry(op, { maxAttempts: 2 }).catch((e) => e);
     await vi.advanceTimersByTimeAsync(5_000);
     const err = await captured;
@@ -253,7 +281,8 @@ describe("withRetry", () => {
   });
 
   it("retries an UpstreamTimeoutError (sentinel from withTimeout)", async () => {
-    const op = vi.fn()
+    const op = vi
+      .fn()
       .mockRejectedValueOnce(new UpstreamTimeoutError("timeout 1"))
       .mockResolvedValueOnce("recovered");
     const promise = withRetry(op);
@@ -290,12 +319,13 @@ describe("parseAIJson", () => {
   });
 
   it("recovers when the model wraps JSON in prose", () => {
-    const raw = 'Here is the JSON you asked for: {"verdict":"merge","confidence":0.92} — let me know.';
+    const raw =
+      'Here is the JSON you asked for: {"verdict":"merge","confidence":0.92} — let me know.';
     expect(parseAIJson(raw)).toEqual({ verdict: "merge", confidence: 0.92 });
   });
 
   it("recovers a JSON array embedded in prose", () => {
-    const raw = "Top candidates are [\"alice\",\"bob\"] in that order.";
+    const raw = 'Top candidates are ["alice","bob"] in that order.';
     expect(parseAIJson(raw)).toEqual(["alice", "bob"]);
   });
 

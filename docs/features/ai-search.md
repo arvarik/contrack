@@ -34,7 +34,7 @@ Results stream to the UI in two phases:
 
 1. **Phase 1 — Instant Retrieval (<15ms):** FTS5 keyword matches and vector KNN results are fused via Reciprocal Rank Fusion and sent immediately. These appear with no AI reason.
 
-2. **Phase 2 — AI Enrichment (~500ms):** The AI provider re-ranks results and generates contextual reasons explaining *why* each contact matches the query. These stream in via NDJSON and replace the Phase 1 results.
+2. **Phase 2 — AI Enrichment (~500ms):** The AI provider re-ranks results and generates contextual reasons explaining _why_ each contact matches the query. These stream in via NDJSON and replace the Phase 1 results.
 
 This progressive approach ensures the UI feels instant while AI enrichment loads in the background.
 
@@ -42,13 +42,13 @@ This progressive approach ensures the UI feels instant while AI enrichment loads
 
 ### Query Examples
 
-| Query | What it finds |
-|-------|--------------|
-| "fintech contacts in SF" | Contacts at fintech companies located in San Francisco |
-| "people I haven't talked to in 3 months" | Contacts with stale interaction history |
-| "investors who might be interested in AI" | Investor-tagged contacts with AI-related interests |
-| "Jane's coworkers at Stripe" | Contacts who share Stripe as their company |
-| "engineers who went to Stanford" | Contacts with matching education + role |
+| Query                                     | What it finds                                          |
+| ----------------------------------------- | ------------------------------------------------------ |
+| "fintech contacts in SF"                  | Contacts at fintech companies located in San Francisco |
+| "people I haven't talked to in 3 months"  | Contacts with stale interaction history                |
+| "investors who might be interested in AI" | Investor-tagged contacts with AI-related interests     |
+| "Jane's coworkers at Stripe"              | Contacts who share Stripe as their company             |
+| "engineers who went to Stanford"          | Contacts with matching education + role                |
 
 **API:** `POST /api/search/semantic`
 
@@ -69,9 +69,9 @@ Every contact gets a 384-dimension vector embedding generated locally using Tran
 
 When contacts are created or updated, an async background job generates synthetic search terms using the AI provider's Lite model. For example:
 
-| Contact | Generated Expansion |
-|---------|-------------------|
-| "Jane Smith, Stripe Engineer" | `fintech, payments, developer, saas, api` |
+| Contact                             | Generated Expansion                        |
+| ----------------------------------- | ------------------------------------------ |
+| "Jane Smith, Stripe Engineer"       | `fintech, payments, developer, saas, api`  |
 | "Dr. Sarah Chen, Stanford Hospital" | `healthcare, medicine, research, academic` |
 
 These terms are stored in a `searchExpansion` column indexed by FTS5, dramatically improving search recall for natural language queries.
@@ -95,11 +95,11 @@ The AI Search feature (Settings → AI Search) enriches contact profiles with in
 
 The enrichment strategy varies by AI provider:
 
-| Provider | Strategy | How it works |
-|----------|----------|-------------|
-| Gemini | Two-Pass | **Pass 1:** Discover facts via grounding-based web search. **Pass 2:** Merge and validate discovered data. |
-| OpenAI | Single-Pass | Single prompt with context to generate enrichment data |
-| Anthropic | Single-Pass | Single prompt with context to generate enrichment data |
+| Provider  | Strategy    | How it works                                                                                               |
+| --------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| Gemini    | Two-Pass    | **Pass 1:** Discover facts via grounding-based web search. **Pass 2:** Merge and validate discovered data. |
+| OpenAI    | Single-Pass | Single prompt with context to generate enrichment data                                                     |
+| Anthropic | Single-Pass | Single prompt with context to generate enrichment data                                                     |
 
 ### What Gets Enriched
 
@@ -129,6 +129,7 @@ Each batch job streams real-time progress via SSE (`GET /api/ai-search/stream`):
 - Provider-specific RPM limits are respected via the Parallel Queue
 
 **APIs:**
+
 - `POST /api/ai-search` — Start a batch
 - `GET /api/ai-search/status?batchId=` — Poll status
 - `GET /api/ai-search/stream?batchId=` — SSE stream

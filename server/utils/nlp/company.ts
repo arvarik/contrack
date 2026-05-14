@@ -8,13 +8,38 @@
  * before "Company". Covers US, UK, EU, and APAC legal forms.
  */
 const COMPANY_SUFFIXES = [
-  "limited liability company", "limited liability partnership",
-  "incorporated", "corporation", "enterprises", "technologies",
-  "holdings", "partners", "solutions", "consulting", "services",
-  "company", "limited", "group",
-  "inc", "corp", "llc", "llp", "ltd", "co", "lp", "plc",
-  "gmbh", "ag", "sa", "sas", "sarl", "nv", "bv", "pty",
-  "pvt", "pte",
+  "limited liability company",
+  "limited liability partnership",
+  "incorporated",
+  "corporation",
+  "enterprises",
+  "technologies",
+  "holdings",
+  "partners",
+  "solutions",
+  "consulting",
+  "services",
+  "company",
+  "limited",
+  "group",
+  "inc",
+  "corp",
+  "llc",
+  "llp",
+  "ltd",
+  "co",
+  "lp",
+  "plc",
+  "gmbh",
+  "ag",
+  "sa",
+  "sas",
+  "sarl",
+  "nv",
+  "bv",
+  "pty",
+  "pvt",
+  "pte",
 ];
 
 /**
@@ -28,9 +53,9 @@ export function normalizeCompany(name: string): string {
   if (!name) return "";
   let norm = name
     .toLowerCase()
-    .replace(/[.,;:!?]+/g, " ")   
-    .replace(/['"""'']/g, "")      
-    .replace(/&/g, "and")          
+    .replace(/[.,;:!?]+/g, " ")
+    .replace(/['"""'']/g, "")
+    .replace(/&/g, "and")
     .trim();
 
   let changed = true;
@@ -42,7 +67,7 @@ export function normalizeCompany(name: string): string {
       if (next !== norm && next.length > 0) {
         norm = next;
         changed = true;
-        break; 
+        break;
       }
     }
   }

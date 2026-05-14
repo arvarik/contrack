@@ -1,16 +1,38 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+} from "react";
 import {
-  CheckCircle2, X, Loader2, ArrowLeftRight, Sparkles,
-  ChevronDown, ChevronUp, Shield, Inbox, Crown,
-  AlertTriangle, Link2, Square, CheckSquare, GitMerge,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { toast } from 'sonner';
-import { usePendingSuggestions, useMergeSuggestion, useDismissSuggestion } from '../../../api';
-import { ContactCard } from './shared/ContactCard';
-import { MatchBadge } from './shared/MatchBadge';
-import { cn } from '../../../lib/utils';
-import { fallbackAvatarUrl } from '../../../lib/avatar';
+  CheckCircle2,
+  X,
+  Loader2,
+  ArrowLeftRight,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  Inbox,
+  Crown,
+  AlertTriangle,
+  Link2,
+  Square,
+  CheckSquare,
+  GitMerge,
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
+import {
+  usePendingSuggestions,
+  useMergeSuggestion,
+  useDismissSuggestion,
+} from "../../../api";
+import { ContactCard } from "./shared/ContactCard";
+import { MatchBadge } from "./shared/MatchBadge";
+import { cn } from "../../../lib/utils";
+import { fallbackAvatarUrl } from "../../../lib/avatar";
 
 // =============================================================================
 // Lightweight Union-Find for frontend cluster grouping
@@ -37,13 +59,17 @@ class SimpleUnionFind {
   }
 
   union(a: string, b: string): void {
-    const ra = this.find(a), rb = this.find(b);
+    const ra = this.find(a),
+      rb = this.find(b);
     if (ra === rb) return;
     const rankA = this.rank.get(ra) ?? 0;
     const rankB = this.rank.get(rb) ?? 0;
     if (rankA < rankB) this.parent.set(ra, rb);
     else if (rankA > rankB) this.parent.set(rb, ra);
-    else { this.parent.set(rb, ra); this.rank.set(ra, rankA + 1); }
+    else {
+      this.parent.set(rb, ra);
+      this.rank.set(ra, rankA + 1);
+    }
   }
 
   getClusters(): Map<string, string[]> {
@@ -80,14 +106,17 @@ function pickBestPrimary(contacts: any[]): any {
   let bestScore = scorePrimary(best);
   for (let i = 1; i < contacts.length; i++) {
     const s = scorePrimary(contacts[i]);
-    if (s > bestScore) { best = contacts[i]; bestScore = s; }
+    if (s > bestScore) {
+      best = contacts[i];
+      bestScore = s;
+    }
   }
   return best;
 }
 
 function scorePrimary(c: any): number {
   let score = 0;
-  if (c.avatarUrl?.startsWith('/uploads/avatars/')) score += 100;
+  if (c.avatarUrl?.startsWith("/uploads/avatars/")) score += 100;
   else if (c.avatarUrl) score += 5;
   if (c.about) score += 5;
   if (c.role) score += 3;
@@ -96,7 +125,7 @@ function scorePrimary(c: any): number {
   score += (c.emails?.length ?? 0) * 3;
   score += (c.phones?.length ?? 0) * 3;
   score += (c.socialLinks?.length ?? 0) * 2;
-  score += (c.tags?.length ?? 0);
+  score += c.tags?.length ?? 0;
   return score;
 }
 
@@ -131,16 +160,14 @@ function buildSuggestionClusters(suggestions: any[]): SuggestionCluster[] {
   const result: SuggestionCluster[] = [];
 
   for (const [root, memberIds] of clusterGroups) {
-    const contacts = memberIds
-      .map(id => contactMap.get(id))
-      .filter(Boolean);
+    const contacts = memberIds.map((id) => contactMap.get(id)).filter(Boolean);
 
     if (contacts.length < 2) continue;
 
     const clusterSuggestions = clusterSuggestionMap.get(root) ?? [];
     if (clusterSuggestions.length === 0) continue;
 
-    const confidences = clusterSuggestions.map(s => s.confidence);
+    const confidences = clusterSuggestions.map((s) => s.confidence);
     const primary = pickBestPrimary(contacts);
 
     result.push({
@@ -149,7 +176,7 @@ function buildSuggestionClusters(suggestions: any[]): SuggestionCluster[] {
       suggestions: clusterSuggestions,
       bestPrimaryId: primary.id,
       maxConfidence: Math.max(...confidences),
-      hasWeakLink: Math.min(...confidences) < 0.60,
+      hasWeakLink: Math.min(...confidences) < 0.6,
     });
   }
 
@@ -166,14 +193,17 @@ export const SuggestionReviewQueue = () => {
   const mergeSuggestion = useMergeSuggestion();
   const dismissSuggestion = useDismissSuggestion();
 
-  const clusters = useMemo(() => buildSuggestionClusters(suggestions), [suggestions]);
+  const clusters = useMemo(
+    () => buildSuggestionClusters(suggestions),
+    [suggestions],
+  );
 
   // Multi-select state
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 
   const toggleSelect = useCallback((id: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -182,7 +212,7 @@ export const SuggestionReviewQueue = () => {
   }, []);
 
   const selectAll = useCallback(() => {
-    setSelected(new Set(clusters.map(c => c.id)));
+    setSelected(new Set(clusters.map((c) => c.id)));
   }, [clusters]);
 
   const selectNone = useCallback(() => {
@@ -190,7 +220,7 @@ export const SuggestionReviewQueue = () => {
   }, []);
 
   const selectedClusters = useMemo(
-    () => clusters.filter(c => selected.has(c.id)),
+    () => clusters.filter((c) => selected.has(c.id)),
     [clusters, selected],
   );
 
@@ -200,13 +230,20 @@ export const SuggestionReviewQueue = () => {
     try {
       for (const cluster of selectedClusters) {
         for (const s of cluster.suggestions) {
-          await mergeSuggestion.mutateAsync({ suggestionId: s.id, primaryId: cluster.bestPrimaryId });
+          await mergeSuggestion.mutateAsync({
+            suggestionId: s.id,
+            primaryId: cluster.bestPrimaryId,
+          });
         }
       }
-      toast.success(`Merged ${selectedClusters.length} group${selectedClusters.length !== 1 ? 's' : ''}`);
+      toast.success(
+        `Merged ${selectedClusters.length} group${selectedClusters.length !== 1 ? "s" : ""}`,
+      );
       setSelected(new Set());
     } catch (err: unknown) {
-      toast.error(`Batch merge failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Batch merge failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setIsBatchProcessing(false);
     }
@@ -221,12 +258,20 @@ export const SuggestionReviewQueue = () => {
           await dismissSuggestion.mutateAsync(s.id);
         }
       }
-      toast('Dismissed ' + selectedClusters.length + ' group' + (selectedClusters.length !== 1 ? 's' : ''), {
-        icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
-      });
+      toast(
+        "Dismissed " +
+          selectedClusters.length +
+          " group" +
+          (selectedClusters.length !== 1 ? "s" : ""),
+        {
+          icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
+        },
+      );
       setSelected(new Set());
     } catch (err: unknown) {
-      toast.error(`Batch dismiss failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Batch dismiss failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setIsBatchProcessing(false);
     }
@@ -236,10 +281,13 @@ export const SuggestionReviewQueue = () => {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const clusterRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  const setClusterRef = useCallback((index: number, el: HTMLDivElement | null) => {
-    if (el) clusterRefs.current.set(index, el);
-    else clusterRefs.current.delete(index);
-  }, []);
+  const setClusterRef = useCallback(
+    (index: number, el: HTMLDivElement | null) => {
+      if (el) clusterRefs.current.set(index, el);
+      else clusterRefs.current.delete(index);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (clusters.length === 0) return;
@@ -247,56 +295,66 @@ export const SuggestionReviewQueue = () => {
     const handler = (e: KeyboardEvent) => {
       // Don't intercept when typing in inputs
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement)?.isContentEditable) return;
 
       switch (e.key) {
-        case 'j':
-        case 'ArrowDown': {
+        case "j":
+        case "ArrowDown": {
           e.preventDefault();
-          setFocusedIndex(prev => {
+          setFocusedIndex((prev) => {
             const next = Math.min(prev + 1, clusters.length - 1);
-            clusterRefs.current.get(next)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            clusterRefs.current
+              .get(next)
+              ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
             return next;
           });
           break;
         }
-        case 'k':
-        case 'ArrowUp': {
+        case "k":
+        case "ArrowUp": {
           e.preventDefault();
-          setFocusedIndex(prev => {
+          setFocusedIndex((prev) => {
             const next = Math.max(prev - 1, 0);
-            clusterRefs.current.get(next)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            clusterRefs.current
+              .get(next)
+              ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
             return next;
           });
           break;
         }
-        case 'l':
-        case 'ArrowRight': {
+        case "l":
+        case "ArrowRight": {
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < clusters.length) {
             const cluster = clusters[focusedIndex];
             for (const s of cluster.suggestions) {
-              mergeSuggestion.mutateAsync({ suggestionId: s.id, primaryId: cluster.bestPrimaryId })
+              mergeSuggestion
+                .mutateAsync({
+                  suggestionId: s.id,
+                  primaryId: cluster.bestPrimaryId,
+                })
                 .catch(() => {});
             }
-            toast.success('Merged');
+            toast.success("Merged");
           }
           break;
         }
-        case 'h':
-        case 'ArrowLeft': {
+        case "h":
+        case "ArrowLeft": {
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < clusters.length) {
             const cluster = clusters[focusedIndex];
             for (const s of cluster.suggestions) {
               dismissSuggestion.mutateAsync(s.id).catch(() => {});
             }
-            toast('Kept separate', { icon: <Shield className="w-4 h-4 text-on-surface-variant" /> });
+            toast("Kept separate", {
+              icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
+            });
           }
           break;
         }
-        case ' ': {
+        case " ": {
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < clusters.length) {
             toggleSelect(clusters[focusedIndex].id);
@@ -306,9 +364,15 @@ export const SuggestionReviewQueue = () => {
       }
     };
 
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [clusters, focusedIndex, mergeSuggestion, dismissSuggestion, toggleSelect]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    clusters,
+    focusedIndex,
+    mergeSuggestion,
+    dismissSuggestion,
+    toggleSelect,
+  ]);
 
   if (isLoading) {
     return (
@@ -325,8 +389,12 @@ export const SuggestionReviewQueue = () => {
           <CheckCircle2 className="w-10 h-10 text-emerald-500" />
         </div>
         <h3 className="text-lg font-headline font-bold mb-1">All caught up!</h3>
-        <p className="text-sm text-on-surface-variant">No pending suggestions to review.</p>
-        <p className="text-xs text-on-surface-variant/60 mt-1">Run a Smart Scan to find new duplicates.</p>
+        <p className="text-sm text-on-surface-variant">
+          No pending suggestions to review.
+        </p>
+        <p className="text-xs text-on-surface-variant/60 mt-1">
+          Run a Smart Scan to find new duplicates.
+        </p>
       </div>
     );
   }
@@ -339,7 +407,11 @@ export const SuggestionReviewQueue = () => {
       <div className="flex items-center gap-3 mb-3 px-1">
         {/* Select all / none toggle */}
         <button
-          onClick={hasSelection && selected.size === clusters.length ? selectNone : selectAll}
+          onClick={
+            hasSelection && selected.size === clusters.length
+              ? selectNone
+              : selectAll
+          }
           className="flex items-center gap-2 text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
         >
           {hasSelection && selected.size === clusters.length ? (
@@ -347,7 +419,9 @@ export const SuggestionReviewQueue = () => {
           ) : (
             <Square className="w-4 h-4" />
           )}
-          {hasSelection ? `${selected.size} selected` : `${clusters.length} pending`}
+          {hasSelection
+            ? `${selected.size} selected`
+            : `${clusters.length} pending`}
         </button>
 
         <div className="flex-1" />
@@ -396,7 +470,8 @@ export const SuggestionReviewQueue = () => {
           transition={{ delay: Math.min(i * 0.04, 0.3) }}
           className={cn(
             "rounded-2xl transition-shadow",
-            focusedIndex === i && "ring-2 ring-inset ring-primary/40 shadow-md shadow-primary/5",
+            focusedIndex === i &&
+              "ring-2 ring-inset ring-primary/40 shadow-md shadow-primary/5",
           )}
           onClick={() => setFocusedIndex(i)}
         >
@@ -444,15 +519,24 @@ function PairRow({
   const [swapped, setSwapped] = useState(false);
   const suggestion = cluster.suggestions[0];
 
-  const primary = swapped ? cluster.contacts[1] : cluster.contacts.find(c => c.id === cluster.bestPrimaryId) ?? cluster.contacts[0];
-  const duplicate = cluster.contacts.find(c => c.id !== primary.id) ?? cluster.contacts[1];
+  const primary = swapped
+    ? cluster.contacts[1]
+    : (cluster.contacts.find((c) => c.id === cluster.bestPrimaryId) ??
+      cluster.contacts[0]);
+  const duplicate =
+    cluster.contacts.find((c) => c.id !== primary.id) ?? cluster.contacts[1];
 
   const handleMerge = async () => {
     try {
-      await mergeSuggestion.mutateAsync({ suggestionId: suggestion.id, primaryId: primary.id });
-      toast.success('Merged successfully');
+      await mergeSuggestion.mutateAsync({
+        suggestionId: suggestion.id,
+        primaryId: primary.id,
+      });
+      toast.success("Merged successfully");
     } catch (err: unknown) {
-      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -461,24 +545,33 @@ function PairRow({
       for (const s of cluster.suggestions) {
         await dismissSuggestion.mutateAsync(s.id);
       }
-      toast('Kept separate', { icon: <Shield className="w-4 h-4 text-on-surface-variant" /> });
+      toast("Kept separate", {
+        icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
+      });
     } catch (err: unknown) {
-      toast.error(`Dismiss failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Dismiss failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
   return (
-    <div className={cn(
-      "bg-surface-container-lowest rounded-2xl shadow-sm transition-all ring-2 ring-inset",
-      isSelected ? "ring-primary/40" : "ring-transparent"
-    )}>
+    <div
+      className={cn(
+        "bg-surface-container-lowest rounded-2xl shadow-sm transition-all ring-2 ring-inset",
+        isSelected ? "ring-primary/40" : "ring-transparent",
+      )}
+    >
       <div
         className="flex items-center gap-3 px-5 py-4 cursor-pointer group"
-        onClick={() => setExpanded(e => !e)}
+        onClick={() => setExpanded((e) => !e)}
       >
         {/* Checkbox */}
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
           className="shrink-0 text-on-surface-variant/40 hover:text-primary transition-colors"
         >
           {isSelected ? (
@@ -497,7 +590,11 @@ function PairRow({
           />
           <div className="min-w-0">
             <div className="text-sm font-bold truncate">{primary.name}</div>
-            {primary.company && <div className="text-[11px] text-on-surface-variant truncate">{primary.company}</div>}
+            {primary.company && (
+              <div className="text-[11px] text-on-surface-variant truncate">
+                {primary.company}
+              </div>
+            )}
           </div>
         </div>
 
@@ -512,26 +609,39 @@ function PairRow({
           />
           <div className="min-w-0">
             <div className="text-sm font-bold truncate">{duplicate.name}</div>
-            {duplicate.company && <div className="text-[11px] text-on-surface-variant truncate">{duplicate.company}</div>}
+            {duplicate.company && (
+              <div className="text-[11px] text-on-surface-variant truncate">
+                {duplicate.company}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Badge */}
         <div className="shrink-0 hidden sm:block">
-          <MatchBadge type={suggestion.matchType} confidence={suggestion.confidence} />
+          <MatchBadge
+            type={suggestion.matchType}
+            confidence={suggestion.confidence}
+          />
         </div>
 
         {/* Actions */}
         <div className="shrink-0 flex items-center gap-1.5">
           <button
-            onClick={(e) => { e.stopPropagation(); handleMerge(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMerge();
+            }}
             disabled={mergeSuggestion.isPending}
             className="px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full transition-all disabled:opacity-50 hover:shadow-md hover:shadow-primary/20"
           >
             Merge
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDismiss();
+            }}
             disabled={dismissSuggestion.isPending}
             className="p-1.5 text-on-surface-variant/50 hover:text-rose-500 hover:bg-rose-500/8 rounded-lg transition-colors"
             title="Not the same person"
@@ -541,7 +651,11 @@ function PairRow({
         </div>
 
         <div className="shrink-0 text-on-surface-variant/40">
-          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {expanded ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
         </div>
       </div>
 
@@ -549,37 +663,49 @@ function PairRow({
         {expanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 space-y-4">
               {suggestion.reasoning && (
                 <div className="flex items-start gap-2.5 bg-primary/5 rounded-xl p-3">
                   <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-sm text-on-surface leading-relaxed">{suggestion.reasoning}</p>
+                  <p className="text-sm text-on-surface leading-relaxed">
+                    {suggestion.reasoning}
+                  </p>
                 </div>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 relative">
                 <div className="min-w-0">
-                  <ContactCard contact={primary} label="Primary (Keeper)" labelColor="text-emerald-600 bg-emerald-500/10" other={duplicate} />
+                  <ContactCard
+                    contact={primary}
+                    label="Primary (Keeper)"
+                    labelColor="text-emerald-600 bg-emerald-500/10"
+                    other={duplicate}
+                  />
                 </div>
                 <button
-                  onClick={() => setSwapped(s => !s)}
+                  onClick={() => setSwapped((s) => !s)}
                   className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface-container-lowest rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center"
                   title="Swap primary / duplicate"
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-on-surface-variant hover:text-primary transition-colors" />
                 </button>
                 <div className="min-w-0">
-                  <ContactCard contact={duplicate} label="Duplicate (Merges In)" labelColor="text-amber-600 bg-amber-500/10" other={primary} />
+                  <ContactCard
+                    contact={duplicate}
+                    label="Duplicate (Merges In)"
+                    labelColor="text-amber-600 bg-amber-500/10"
+                    other={primary}
+                  />
                 </div>
               </div>
 
               <button
-                onClick={() => setSwapped(s => !s)}
+                onClick={() => setSwapped((s) => !s)}
                 className="lg:hidden w-full flex items-center justify-center gap-2 py-2 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -610,23 +736,32 @@ function ClusterCard({
   isSelected: boolean;
   onToggleSelect: () => void;
 }) {
-  const [selectedPrimaryId, setSelectedPrimaryId] = useState(cluster.bestPrimaryId);
+  const [selectedPrimaryId, setSelectedPrimaryId] = useState(
+    cluster.bestPrimaryId,
+  );
   const [showEvidence, setShowEvidence] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
 
-  const primary = cluster.contacts.find(c => c.id === selectedPrimaryId) ?? cluster.contacts[0];
-  const duplicates = cluster.contacts.filter(c => c.id !== selectedPrimaryId);
+  const primary =
+    cluster.contacts.find((c) => c.id === selectedPrimaryId) ??
+    cluster.contacts[0];
+  const duplicates = cluster.contacts.filter((c) => c.id !== selectedPrimaryId);
 
   const handleMergeAll = async () => {
     if (isMerging) return;
     setIsMerging(true);
     try {
       for (const s of cluster.suggestions) {
-        await mergeSuggestion.mutateAsync({ suggestionId: s.id, primaryId: selectedPrimaryId });
+        await mergeSuggestion.mutateAsync({
+          suggestionId: s.id,
+          primaryId: selectedPrimaryId,
+        });
       }
       toast.success(`Merged ${cluster.contacts.length} contacts into one`);
     } catch (err: unknown) {
-      toast.error(`Merge failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setIsMerging(false);
     }
@@ -637,17 +772,23 @@ function ClusterCard({
       for (const s of cluster.suggestions) {
         await dismissSuggestion.mutateAsync(s.id);
       }
-      toast('Kept all separate', { icon: <Shield className="w-4 h-4 text-on-surface-variant" /> });
+      toast("Kept all separate", {
+        icon: <Shield className="w-4 h-4 text-on-surface-variant" />,
+      });
     } catch (err: unknown) {
-      toast.error(`Dismiss failed: ${(err instanceof Error ? err.message : String(err))}`);
+      toast.error(
+        `Dismiss failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
   return (
-    <div className={cn(
-      "bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-4 ring-2 ring-inset",
-      isSelected ? "ring-primary/40" : "ring-transparent"
-    )}>
+    <div
+      className={cn(
+        "bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-4 ring-2 ring-inset",
+        isSelected ? "ring-primary/40" : "ring-transparent",
+      )}
+    >
       {/* Cluster header with checkbox */}
       <div className="flex items-start gap-3">
         <button
@@ -664,7 +805,8 @@ function ClusterCard({
           <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm text-on-surface leading-relaxed">
-              These {cluster.contacts.length} contacts may represent the same person.
+              These {cluster.contacts.length} contacts may represent the same
+              person.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -682,22 +824,31 @@ function ClusterCard({
 
       {/* Large cluster warning */}
       {cluster.contacts.length > 5 && (
-        <div className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3 ml-7" role="alert">
+        <div
+          className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3 ml-7"
+          role="alert"
+        >
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700 leading-relaxed">
-            <span className="font-bold">Large cluster ({cluster.contacts.length} contacts).</span>{' '}
+            <span className="font-bold">
+              Large cluster ({cluster.contacts.length} contacts).
+            </span>{" "}
             Review carefully — merging many contacts is harder to undo.
           </p>
         </div>
       )}
 
       {/* Primary selection strip */}
-      <div className="space-y-2 ml-7" role="radiogroup" aria-label="Select primary contact">
+      <div
+        className="space-y-2 ml-7"
+        role="radiogroup"
+        aria-label="Select primary contact"
+      >
         <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">
           Select Primary Contact
         </div>
         <div className="flex gap-2 overflow-x-auto p-1 nice-scrollbar">
-          {cluster.contacts.map(contact => {
+          {cluster.contacts.map((contact) => {
             const isContactSelected = contact.id === selectedPrimaryId;
             return (
               <button
@@ -709,7 +860,7 @@ function ClusterCard({
                   "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all min-w-0",
                   isContactSelected
                     ? "bg-emerald-500/10 ring-2 ring-emerald-500/50 shadow-sm"
-                    : "bg-surface-container-low hover:bg-surface-container-high"
+                    : "bg-surface-container-low hover:bg-surface-container-high",
                 )}
               >
                 <img
@@ -718,12 +869,18 @@ function ClusterCard({
                   className="w-9 h-9 rounded-full object-cover bg-surface-container-high shrink-0"
                 />
                 <div className="min-w-0 text-left">
-                  <div className="text-sm font-bold truncate max-w-[140px]">{contact.name}</div>
+                  <div className="text-sm font-bold truncate max-w-[140px]">
+                    {contact.name}
+                  </div>
                   {contact.company && (
-                    <div className="text-[11px] text-on-surface-variant truncate max-w-[140px]">{contact.company}</div>
+                    <div className="text-[11px] text-on-surface-variant truncate max-w-[140px]">
+                      {contact.company}
+                    </div>
                   )}
                 </div>
-                {isContactSelected && <Crown className="w-4 h-4 text-emerald-600 shrink-0" />}
+                {isContactSelected && (
+                  <Crown className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
               </button>
             );
           })}
@@ -733,10 +890,15 @@ function ClusterCard({
       {/* Side-by-side comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 ml-7">
         <div className="min-w-0">
-          <ContactCard contact={primary} label="Primary (Keeper)" labelColor="text-emerald-600 bg-emerald-500/10" isPrimary />
+          <ContactCard
+            contact={primary}
+            label="Primary (Keeper)"
+            labelColor="text-emerald-600 bg-emerald-500/10"
+            isPrimary
+          />
         </div>
         <div className="space-y-3 min-w-0">
-          {duplicates.map(dup => (
+          {duplicates.map((dup) => (
             <ContactCard
               key={dup.id}
               contact={dup}
@@ -751,24 +913,40 @@ function ClusterCard({
 
       {/* Evidence toggle */}
       <button
-        onClick={() => setShowEvidence(s => !s)}
+        onClick={() => setShowEvidence((s) => !s)}
         className="w-full flex items-center justify-center gap-2 py-2 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant transition-colors ml-7 max-w-[calc(100%-1.75rem)]"
       >
         <Link2 className="w-3.5 h-3.5" />
-        {showEvidence ? 'Hide' : 'Show'} Evidence ({cluster.suggestions.length} link{cluster.suggestions.length !== 1 ? 's' : ''})
-        {showEvidence ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        {showEvidence ? "Hide" : "Show"} Evidence ({cluster.suggestions.length}{" "}
+        link{cluster.suggestions.length !== 1 ? "s" : ""})
+        {showEvidence ? (
+          <ChevronUp className="w-3.5 h-3.5" />
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5" />
+        )}
       </button>
 
       {showEvidence && (
-        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="space-y-2 overflow-hidden ml-7">
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          className="space-y-2 overflow-hidden ml-7"
+        >
           {cluster.suggestions.map((s, i) => {
-            const a = cluster.contacts.find(c => c.id === s.contactIdA);
-            const b = cluster.contacts.find(c => c.id === s.contactIdB);
+            const a = cluster.contacts.find((c) => c.id === s.contactIdA);
+            const b = cluster.contacts.find((c) => c.id === s.contactIdB);
             return (
-              <div key={i} className="flex items-center gap-3 bg-surface-container-low rounded-xl px-3 py-2.5 text-sm">
-                <span className="font-bold text-on-surface truncate min-w-0 flex-1 text-right">{a?.name ?? 'Unknown'}</span>
+              <div
+                key={i}
+                className="flex items-center gap-3 bg-surface-container-low rounded-xl px-3 py-2.5 text-sm"
+              >
+                <span className="font-bold text-on-surface truncate min-w-0 flex-1 text-right">
+                  {a?.name ?? "Unknown"}
+                </span>
                 <MatchBadge type={s.matchType} confidence={s.confidence} />
-                <span className="font-bold text-on-surface truncate min-w-0 flex-1">{b?.name ?? 'Unknown'}</span>
+                <span className="font-bold text-on-surface truncate min-w-0 flex-1">
+                  {b?.name ?? "Unknown"}
+                </span>
               </div>
             );
           })}
@@ -792,9 +970,15 @@ function ClusterCard({
           className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 w-full sm:w-auto justify-center"
         >
           <div className="text-right">
-            <div className="text-sm font-bold">{isMerging ? 'Merging...' : `Merge ${cluster.contacts.length}`}</div>
+            <div className="text-sm font-bold">
+              {isMerging ? "Merging..." : `Merge ${cluster.contacts.length}`}
+            </div>
           </div>
-          {isMerging ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+          {isMerging ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5" />
+          )}
         </button>
       </div>
     </div>

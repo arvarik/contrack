@@ -9,11 +9,11 @@
  * - NEW: never searched (gray pill)
  * - 🔴 Error: last batch errored for this contact
  */
-import React from 'react';
-import { Sparkles, CheckCheck, AlertCircle } from 'lucide-react';
-import { HealthRingAvatar } from '../../../components/HealthRingAvatar';
-import { cn } from '../../../lib/utils';
-import type { Contact } from '../../../types';
+import React from "react";
+import { Sparkles, CheckCheck, AlertCircle } from "lucide-react";
+import { HealthRingAvatar } from "../../../components/HealthRingAvatar";
+import { cn } from "../../../lib/utils";
+import type { Contact } from "../../../types";
 
 // ---------------------------------------------------------------------------
 // Contact Row
@@ -27,7 +27,12 @@ interface ContactRowProps {
   onToggle: () => void;
 }
 
-export function ContactRow({ contact, isSelected, hasError, onToggle }: ContactRowProps) {
+export function ContactRow({
+  contact,
+  isSelected,
+  hasError,
+  onToggle,
+}: ContactRowProps) {
   return (
     <div
       onClick={onToggle}
@@ -38,12 +43,14 @@ export function ContactRow({ contact, isSelected, hasError, onToggle }: ContactR
       )}
     >
       {/* Checkbox */}
-      <div className={cn(
-        "w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0",
-        isSelected
-          ? "bg-primary shadow-sm"
-          : "bg-surface-container-low ring-1 ring-inset ring-on-surface-variant/20",
-      )}>
+      <div
+        className={cn(
+          "w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0",
+          isSelected
+            ? "bg-primary shadow-sm"
+            : "bg-surface-container-low ring-1 ring-inset ring-on-surface-variant/20",
+        )}
+      >
         {isSelected && <CheckCheck className="w-3 h-3 text-white" />}
       </div>
 
@@ -59,7 +66,7 @@ export function ContactRow({ contact, isSelected, hasError, onToggle }: ContactR
         </span>
         {(contact.role || contact.company) && (
           <p className="text-xs text-on-surface-variant mt-0.5 truncate">
-            {[contact.role, contact.company].filter(Boolean).join(' · ')}
+            {[contact.role, contact.company].filter(Boolean).join(" · ")}
           </p>
         )}
       </div>
@@ -91,7 +98,10 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
 
   if (contact.aiHydratedAt) {
     const date = new Date(contact.aiHydratedAt);
-    const label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const label = date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
     return (
       <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
         <Sparkles className="w-3 h-3" />

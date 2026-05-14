@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import { cn } from "../../lib/utils";
 import { CARD_TINTED, SECTION_HEADING } from "../../lib/styles";
 import { Sparkles } from "lucide-react";
@@ -11,7 +11,11 @@ interface DailyInsightCardProps {
   delay?: number;
 }
 
-export const DailyInsightCard = ({ insight, isLoading, delay = 0 }: DailyInsightCardProps) => {
+export const DailyInsightCard = ({
+  insight,
+  isLoading,
+  delay = 0,
+}: DailyInsightCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -21,19 +25,24 @@ export const DailyInsightCard = ({ insight, isLoading, delay = 0 }: DailyInsight
     >
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-primary" />
-        <span className={cn(SECTION_HEADING, "mb-0 text-primary uppercase tracking-widest font-bold")}>
+        <span
+          className={cn(
+            SECTION_HEADING,
+            "mb-0 text-primary uppercase tracking-widest font-bold",
+          )}
+        >
           Network Intelligence
         </span>
         {insight && (
-           <span className="text-[10px] text-primary/60 ml-auto uppercase tracking-widest font-bold bg-primary/5 px-2 py-0.5 rounded-full ring-1 ring-primary/20">
-             {insight.category}
-           </span>
+          <span className="text-[10px] text-primary/60 ml-auto uppercase tracking-widest font-bold bg-primary/5 px-2 py-0.5 rounded-full ring-1 ring-primary/20">
+            {insight.category}
+          </span>
         )}
       </div>
 
       <AnimatePresence mode="wait">
         {isLoading ? (
-          <motion.div 
+          <motion.div
             key="loading"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -45,7 +54,7 @@ export const DailyInsightCard = ({ insight, isLoading, delay = 0 }: DailyInsight
             <div className="h-4 bg-primary/20 rounded animate-pulse w-5/6" />
           </motion.div>
         ) : insight ? (
-          <motion.div 
+          <motion.div
             key="loaded"
             initial={{ opacity: 0, filter: "blur(4px)" }}
             animate={{ opacity: 1, filter: "blur(0px)" }}
@@ -57,8 +66,12 @@ export const DailyInsightCard = ({ insight, isLoading, delay = 0 }: DailyInsight
             </p>
           </motion.div>
         ) : (
-          <motion.div key="empty" className="text-on-surface-variant/70 text-sm">
-            Configure your AI provider API key to receive automated relationship insights.
+          <motion.div
+            key="empty"
+            className="text-on-surface-variant/70 text-sm"
+          >
+            Configure your AI provider API key to receive automated relationship
+            insights.
           </motion.div>
         )}
       </AnimatePresence>

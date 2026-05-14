@@ -10,9 +10,9 @@
  *   usePageTitle('Settings')           // → "Settings — Contrack"
  *   usePageTitle(null)                 // → "Contrack" (fallback)
  */
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
-const APP_NAME = 'Contrack';
+const APP_NAME = "Contrack";
 
 export const usePageTitle = (title: string | null | undefined) => {
   useEffect(() => {

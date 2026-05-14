@@ -76,35 +76,43 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
                 className="w-10 h-10 rounded-full bg-surface-container-high object-cover shrink-0"
               />
               <div className="min-w-0">
-                <div className="font-bold text-sm text-on-surface truncate">{contact.name}</div>
+                <div className="font-bold text-sm text-on-surface truncate">
+                  {contact.name}
+                </div>
                 {(contact.role || contact.company) && (
                   <div className="text-xs text-on-surface-variant truncate">
-                    {[contact.role, contact.company].filter(Boolean).join(" · ")}
+                    {[contact.role, contact.company]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </div>
                 )}
               </div>
             </div>
 
             {/* Score Bar */}
-            {contact.relationshipScore != null && contact.relationshipScore > 0 && (
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-on-surface-variant flex items-center gap-1">
-                    <Activity className="w-3 h-3" />
-                    Relationship
-                  </span>
-                  <span className="font-bold text-on-surface">
-                    {contact.relationshipScore} — {scoreLabel(contact.relationshipScore)}
-                  </span>
+            {contact.relationshipScore != null &&
+              contact.relationshipScore > 0 && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-on-surface-variant flex items-center gap-1">
+                      <Activity className="w-3 h-3" />
+                      Relationship
+                    </span>
+                    <span className="font-bold text-on-surface">
+                      {contact.relationshipScore} —{" "}
+                      {scoreLabel(contact.relationshipScore)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${scoreBarColor(contact.relationshipScore)}`}
+                      style={{
+                        width: `${Math.min(100, contact.relationshipScore)}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${scoreBarColor(contact.relationshipScore)}`}
-                    style={{ width: `${Math.min(100, contact.relationshipScore)}%` }}
-                  />
-                </div>
-              </div>
-            )}
+              )}
 
             {/* Last Contact */}
             {contact.lastContactedAt && (
@@ -114,7 +122,10 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
                   Last contact{" "}
                   {(() => {
                     try {
-                      return formatDistanceToNow(new Date(contact.lastContactedAt), { addSuffix: true });
+                      return formatDistanceToNow(
+                        new Date(contact.lastContactedAt),
+                        { addSuffix: true },
+                      );
                     } catch {
                       return "unknown";
                     }

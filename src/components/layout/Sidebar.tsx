@@ -6,7 +6,13 @@
  * browser `title` tooltip with a polished in-app version.
  */
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Map, Settings as SettingsIcon, Sparkles, Activity } from "lucide-react";
+import {
+  LayoutDashboard,
+  Map,
+  Settings as SettingsIcon,
+  Sparkles,
+  Activity,
+} from "lucide-react";
 import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { navLink, SECTION_BG } from "../../lib/styles";
@@ -18,7 +24,17 @@ import { useRecent } from "../../contexts/SessionContext";
 // SidebarTooltip — styled right-side tooltip with delay
 // ---------------------------------------------------------------------------
 
-const SidebarTooltip = ({ label, shortcut, children, className }: { label: string; shortcut?: string; children: React.ReactNode; className?: string }) => {
+const SidebarTooltip = ({
+  label,
+  shortcut,
+  children,
+  className,
+}: {
+  label: string;
+  shortcut?: string;
+  children: React.ReactNode;
+  className?: string;
+}) => {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -32,7 +48,11 @@ const SidebarTooltip = ({ label, shortcut, children, className }: { label: strin
   }, []);
 
   return (
-    <div className={cn("relative flex items-center", className)} onMouseEnter={show} onMouseLeave={hide}>
+    <div
+      className={cn("relative flex items-center", className)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
       {children}
       <AnimatePresence>
         {visible && (
@@ -46,7 +66,9 @@ const SidebarTooltip = ({ label, shortcut, children, className }: { label: strin
             <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
               {label}
               {shortcut && (
-                <span className="block text-[9px] font-mono font-normal text-on-surface-variant/60 mt-0.5">{shortcut}</span>
+                <span className="block text-[9px] font-mono font-normal text-on-surface-variant/60 mt-0.5">
+                  {shortcut}
+                </span>
               )}
             </div>
             {/* Caret */}
@@ -68,11 +90,16 @@ export const Sidebar = () => {
   // updates, so the sidebar no longer re-renders when the user types in the
   // global search bar.
   const { lastContactId } = useRecent();
-  const isMap = location.pathname.startsWith('/map');
-  const isCleanup = location.pathname.startsWith('/settings');
-  const isSearch = location.pathname.startsWith('/search');
-  const isPulse = location.pathname.startsWith('/pulse');
-  const isHome = !isMap && !isCleanup && !isSearch && !isPulse && (location.pathname === '/' || location.pathname.startsWith('/contact/'));
+  const isMap = location.pathname.startsWith("/map");
+  const isCleanup = location.pathname.startsWith("/settings");
+  const isSearch = location.pathname.startsWith("/search");
+  const isPulse = location.pathname.startsWith("/pulse");
+  const isHome =
+    !isMap &&
+    !isCleanup &&
+    !isSearch &&
+    !isPulse &&
+    (location.pathname === "/" || location.pathname.startsWith("/contact/"));
 
   const { data: badge } = useUrgentActionItemCount();
   const urgentCount = badge?.count || 0;
@@ -81,19 +108,31 @@ export const Sidebar = () => {
   const pendingSuggestions = dedupeCount?.count || 0;
 
   return (
-    <aside className={cn(SECTION_BG, "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20")}>
+    <aside
+      className={cn(
+        SECTION_BG,
+        "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20",
+      )}
+    >
       {/* Contrack wordmark — rotated vertical */}
       <div className="flex items-center justify-center mb-1" title="Contrack">
         <span
           className="text-[9px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.18em' }}
+          style={{
+            writingMode: "vertical-rl",
+            transform: "rotate(180deg)",
+            letterSpacing: "0.18em",
+          }}
         >
           Contrack
         </span>
       </div>
 
       <SidebarTooltip label="Network" shortcut="⌘⇧H">
-        <Link to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"} className={navLink(isHome)}>
+        <Link
+          to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"}
+          className={navLink(isHome)}
+        >
           <LayoutDashboard className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
@@ -110,7 +149,12 @@ export const Sidebar = () => {
           )}
           {/* Pending suggestions — blue dot (top-right, offset left of urgent dot) */}
           {pendingSuggestions > 0 && (
-            <span className={cn("absolute top-1.5 flex h-2 w-2", urgentCount > 0 ? "right-4" : "right-1.5")}>
+            <span
+              className={cn(
+                "absolute top-1.5 flex h-2 w-2",
+                urgentCount > 0 ? "right-4" : "right-1.5",
+              )}
+            >
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
           )}

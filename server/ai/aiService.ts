@@ -33,7 +33,12 @@ import { recordInvocation } from "../services/aiStatsService.ts";
 import { aiCache, contentHash } from "../utils/aiCache.ts";
 
 // Re-export domain types for consumers
-export type { ParsedContact, MentionEntity, CompressedContact, SemanticMatchResult };
+export type {
+  ParsedContact,
+  MentionEntity,
+  CompressedContact,
+  SemanticMatchResult,
+};
 
 // The shared provider instance — same one used by the barrel export in index.ts
 const provider = sharedProvider;
@@ -57,7 +62,10 @@ function safeParseJson<T>(text: string, context: string): T | null {
   try {
     return JSON.parse(text) as T;
   } catch (err: unknown) {
-    log.error("AIService", `[${context}] JSON.parse failed: ${getErrorMessage(err)}. Raw: ${text.slice(0, 200)}`);
+    log.error(
+      "AIService",
+      `[${context}] JSON.parse failed: ${getErrorMessage(err)}. Raw: ${text.slice(0, 200)}`,
+    );
     return null;
   }
 }
@@ -176,11 +184,25 @@ export async function parseContactRecord(text: string): Promise<ParsedContact> {
     },
   });
 
-  const parsed = safeParseJson<ParsedContact>(result.text, "parseContactRecord");
-  if (!parsed) throw new Error("AI returned malformed JSON for contact parsing");
+  const parsed = safeParseJson<ParsedContact>(
+    result.text,
+    "parseContactRecord",
+  );
+  if (!parsed)
+    throw new Error("AI returned malformed JSON for contact parsing");
 
-  log.info("AIService", `parseContactRecord → "${parsed.name}" via ${result.model} in ${result.latencyMs}ms | Tokens: ${result.tokenCount ?? "?"}`);
-  recordInvocation({ operation: "parse", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Parse: ${(parsed.name || text.slice(0, 30)).slice(0, 60)}` });
+  log.info(
+    "AIService",
+    `parseContactRecord → "${parsed.name}" via ${result.model} in ${result.latencyMs}ms | Tokens: ${result.tokenCount ?? "?"}`,
+  );
+  recordInvocation({
+    operation: "parse",
+    model: result.model,
+    tokenCount: result.tokenCount,
+    latencyMs: result.latencyMs,
+    cached: false,
+    description: `Parse: ${(parsed.name || text.slice(0, 30)).slice(0, 60)}`,
+  });
   return parsed;
 }
 
@@ -194,11 +216,14 @@ export async function parseContactRecord(text: string): Promise<ParsedContact> {
  */
 export async function generateCatchMeUpBriefing(
   contact: Record<string, unknown>,
-  interactions: Record<string, unknown>[]
+  interactions: Record<string, unknown>[],
 ): Promise<string[]> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock AI Briefing due to unconfigured AI provider");
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    log.warn(
+      "AIService",
+      "Using mock AI Briefing due to unconfigured AI provider",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     return [
       "Met at the Design Systems Conference last year; he expressed strong interest in component-driven architecture.",
       "Need to close the loop on the draft proposal for the new Nexus design system integration.",
@@ -240,13 +265,26 @@ export async function generateCatchMeUpBriefing(
     },
   });
 
-  const parsed = safeParseJson<string[]>(result.text, "generateCatchMeUpBriefing");
+  const parsed = safeParseJson<string[]>(
+    result.text,
+    "generateCatchMeUpBriefing",
+  );
   if (!parsed || !Array.isArray(parsed)) {
     throw new Error("AI returned malformed response for briefing generation");
   }
 
-  log.info("AIService", `CatchMeUp briefing synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
-  recordInvocation({ operation: "briefing", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Catch-Me-Up for ${(contact as any).name || "contact"}` });
+  log.info(
+    "AIService",
+    `CatchMeUp briefing synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
+  );
+  recordInvocation({
+    operation: "briefing",
+    model: result.model,
+    tokenCount: result.tokenCount,
+    latencyMs: result.latencyMs,
+    cached: false,
+    description: `Catch-Me-Up for ${(contact as any).name || "contact"}`,
+  });
   return parsed;
 }
 
@@ -260,8 +298,11 @@ export async function generateCatchMeUpBriefing(
  */
 export async function extractMentions(text: string): Promise<MentionEntity[]> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock AI Mentions due to unconfigured AI provider");
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    log.warn(
+      "AIService",
+      "Using mock AI Mentions due to unconfigured AI provider",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     return [];
   }
 
@@ -270,7 +311,12 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
   const cacheKey = contentHash(text);
   const cached = aiCache.get<MentionEntity[]>("mentions", cacheKey);
   if (cached) {
-    recordInvocation({ operation: "mentions", latencyMs: 0, cached: true, description: `Mentions: ${text.slice(0, 40)}` });
+    recordInvocation({
+      operation: "mentions",
+      latencyMs: 0,
+      cached: true,
+      description: `Mentions: ${text.slice(0, 40)}`,
+    });
     return cached;
   }
 
@@ -313,17 +359,32 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
       },
     });
 
-    const parsed = safeParseJson<MentionEntity[]>(result.text, "extractMentions");
+    const parsed = safeParseJson<MentionEntity[]>(
+      result.text,
+      "extractMentions",
+    );
     if (!parsed) return [];
 
     // Cache the result — immutable input means this is safe to cache long-term
     aiCache.set("mentions", cacheKey, parsed);
 
-    log.info("AIService", `extractMentions → ${parsed.length} ghost entities in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
-    recordInvocation({ operation: "mentions", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Mentions: ${text.slice(0, 40)}` });
+    log.info(
+      "AIService",
+      `extractMentions → ${parsed.length} ghost entities in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
+    );
+    recordInvocation({
+      operation: "mentions",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: `Mentions: ${text.slice(0, 40)}`,
+    });
     return parsed;
   } catch (error: unknown) {
-    log.error("AIService", "Mention extraction failed", { error: getErrorMessage(error) });
+    log.error("AIService", "Mention extraction failed", {
+      error: getErrorMessage(error),
+    });
     return [];
   }
 }
@@ -338,8 +399,11 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
  */
 export async function summarizeEmlEmail(rawEml: string): Promise<string> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock EML summary due to unconfigured AI provider");
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    log.warn(
+      "AIService",
+      "Using mock EML summary due to unconfigured AI provider",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     return "<p><strong>Re: Q3 Roadmap Planning</strong></p><p>Thread summary:</p><ul><li>Julian proposed pushing the V2 alpha back by two weeks.</li><li>Sarah agreed to coordinate with marketing.</li><li>John provided the final wireframe mocks for the reporting suite.</li></ul>";
   }
 
@@ -367,11 +431,23 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
       routing: { prefer: "flash" },
     });
 
-    log.info("AIService", `EML digest synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`);
-    recordInvocation({ operation: "emlSummary", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: "EML Summary" });
+    log.info(
+      "AIService",
+      `EML digest synthesized in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
+    );
+    recordInvocation({
+      operation: "emlSummary",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: "EML Summary",
+    });
     return result.text || "<p>Email could not be parsed.</p>";
   } catch (error: unknown) {
-    log.error("AIService", "EML summarization failed", { error: getErrorMessage(error) });
+    log.error("AIService", "EML summarization failed", {
+      error: getErrorMessage(error),
+    });
     return "<p><em>Error: Email string mapping structure breached context bounds.</em></p>";
   }
 }
@@ -399,10 +475,18 @@ export async function rerankCandidates(
   candidates: CompressedContact[],
 ): Promise<SemanticMatchResult[]> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock rerank response due to unconfigured AI provider");
-    await new Promise(resolve => setTimeout(resolve, 200));
+    log.warn(
+      "AIService",
+      "Using mock rerank response due to unconfigured AI provider",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 200));
     if (candidates.length > 0) {
-      return [{ contact_id: candidates[0].id, reason: "Mock result: AI provider not configured." }];
+      return [
+        {
+          contact_id: candidates[0].id,
+          reason: "Mock result: AI provider not configured.",
+        },
+      ];
     }
     return [];
   }
@@ -444,19 +528,26 @@ Return a JSON array of contacts that DEFINITIVELY match the query. For each matc
     },
   });
 
-  const parsed = safeParseJson<SemanticMatchResult[]>(result.text, "rerankCandidates");
+  const parsed = safeParseJson<SemanticMatchResult[]>(
+    result.text,
+    "rerankCandidates",
+  );
   if (!parsed) return [];
 
   // ── Server-side false-positive filter ──────────────────────────────────
-  const negativePatterns = /\bdoes not\b|\bdoesn't\b|\bnot a match\b|\bno evidence\b|\bnot start\b|\bunrelated\b|\bnot related\b|\bnot in\b/i;
-  const filtered = parsed.filter(m => {
+  const negativePatterns =
+    /\bdoes not\b|\bdoesn't\b|\bnot a match\b|\bno evidence\b|\bnot start\b|\bunrelated\b|\bnot related\b|\bnot in\b/i;
+  const filtered = parsed.filter((m) => {
     if (negativePatterns.test(m.reason)) {
       log.debug("Reranker", `Filtered false positive: "${m.reason}"`);
       return false;
     }
     // Validate the contact_id actually exists in our candidates
-    if (!candidates.some(c => c.id === m.contact_id)) {
-      log.debug("Reranker", `Filtered hallucinated contact_id: "${m.contact_id}"`);
+    if (!candidates.some((c) => c.id === m.contact_id)) {
+      log.debug(
+        "Reranker",
+        `Filtered hallucinated contact_id: "${m.contact_id}"`,
+      );
       return false;
     }
     return true;
@@ -465,10 +556,17 @@ Return a JSON array of contacts that DEFINITIVELY match the query. For each matc
   log.info(
     "AIService",
     `Reranker "${query}" → ${filtered.length}/${candidates.length} matches ` +
-    `(${parsed.length - filtered.length} filtered) in ${result.latencyMs}ms via ${result.model} | ` +
-    `Tokens: ${result.tokenCount ?? "?"}`,
+      `(${parsed.length - filtered.length} filtered) in ${result.latencyMs}ms via ${result.model} | ` +
+      `Tokens: ${result.tokenCount ?? "?"}`,
   );
-  recordInvocation({ operation: "rerank", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Rerank: ${candidates.length} candidates for "${query.slice(0, 40)}"` });
+  recordInvocation({
+    operation: "rerank",
+    model: result.model,
+    tokenCount: result.tokenCount,
+    latencyMs: result.latencyMs,
+    cached: false,
+    description: `Rerank: ${candidates.length} candidates for "${query.slice(0, 40)}"`,
+  });
 
   return filtered;
 }
@@ -507,7 +605,10 @@ export async function generateDailyInsight(stats: {
   bottomRelationships: string[];
 }): Promise<DailyInsight | null> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock Daily Insight due to unconfigured AI provider");
+    log.warn(
+      "AIService",
+      "Using mock Daily Insight due to unconfigured AI provider",
+    );
     await new Promise((resolve) => setTimeout(resolve, 800));
     return null;
   }
@@ -544,22 +645,34 @@ export async function generateDailyInsight(stats: {
       },
     });
 
-    const parsed = safeParseJson<{ text: string; category: string }>(result.text, "generateDailyInsight");
+    const parsed = safeParseJson<{ text: string; category: string }>(
+      result.text,
+      "generateDailyInsight",
+    );
     if (!parsed) return null;
 
     log.info(
       "AIService",
-      `generateDailyInsight → generated in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`
+      `generateDailyInsight → generated in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
     );
 
-    recordInvocation({ operation: "dailyInsight", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: "Daily Insight" });
+    recordInvocation({
+      operation: "dailyInsight",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: "Daily Insight",
+    });
     return {
       text: parsed.text,
       category: parsed.category,
       generatedAt: new Date().toISOString(),
     };
   } catch (error: unknown) {
-    log.error("AIService", "Daily insight generation failed", { error: getErrorMessage(error) });
+    log.error("AIService", "Daily insight generation failed", {
+      error: getErrorMessage(error),
+    });
     return null;
   }
 }
@@ -600,8 +713,8 @@ export async function bulkParseContacts(
   // that justify the conservative FREE tier concurrency of 2.
   const tier = getAITier();
   const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-  const effectiveConcurrency = concurrency
-    ?? (providerName !== "gemini" ? 10 : tier === "PAID" ? 10 : 2);
+  const effectiveConcurrency =
+    concurrency ?? (providerName !== "gemini" ? 10 : tier === "PAID" ? 10 : 2);
 
   log.info(
     "AIService",
@@ -632,7 +745,12 @@ export async function bulkParseContacts(
     "AIService",
     `bulkParseContacts: ${successes}/${texts.length} succeeded, ${failures} failed in ${Date.now() - startMs}ms`,
   );
-  recordInvocation({ operation: "bulkParse", latencyMs: Date.now() - startMs, cached: false, description: `Bulk Parse: ${texts.length} contacts (${successes} ok, ${failures} failed)` });
+  recordInvocation({
+    operation: "bulkParse",
+    latencyMs: Date.now() - startMs,
+    cached: false,
+    description: `Bulk Parse: ${texts.length} contacts (${successes} ok, ${failures} failed)`,
+  });
 
   return results.map((r) => (r instanceof Error ? null : r));
 }
@@ -673,9 +791,11 @@ export async function generateSearchExpansion(contact: {
   if (contact.company) parts.push(`Company: ${contact.company}`);
   if (contact.industry) parts.push(`Industry: ${contact.industry}`);
   if (contact.about) parts.push(`About: ${contact.about.slice(0, 200)}`);
-  if (contact.preferences) parts.push(`Preferences: ${contact.preferences.slice(0, 200)}`);
+  if (contact.preferences)
+    parts.push(`Preferences: ${contact.preferences.slice(0, 200)}`);
   if (contact.tags?.length) parts.push(`Tags: ${contact.tags.join(", ")}`);
-  if (contact.interests?.length) parts.push(`Interests: ${contact.interests.join(", ")}`);
+  if (contact.interests?.length)
+    parts.push(`Interests: ${contact.interests.join(", ")}`);
 
   if (parts.length <= 1) return null; // Name-only contacts aren't worth expanding
 
@@ -690,11 +810,24 @@ export async function generateSearchExpansion(contact: {
     const expansion = result.text?.trim();
     if (!expansion || expansion.length > 500) return null;
 
-    log.debug("AIService", `Doc2Query for "${contact.name}": "${expansion.slice(0, 80)}..."`);
-    recordInvocation({ operation: "searchExpansion", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Search expansion for ${contact.name}` });
+    log.debug(
+      "AIService",
+      `Doc2Query for "${contact.name}": "${expansion.slice(0, 80)}..."`,
+    );
+    recordInvocation({
+      operation: "searchExpansion",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: `Search expansion for ${contact.name}`,
+    });
     return expansion;
   } catch (err: unknown) {
-    log.debug("AIService", `Doc2Query failed for "${contact.name}": ${getErrorMessage(err)}`);
+    log.debug(
+      "AIService",
+      `Doc2Query failed for "${contact.name}": ${getErrorMessage(err)}`,
+    );
     return null;
   }
 }
@@ -714,31 +847,51 @@ export async function generateSearchExpansion(contact: {
  */
 export async function synthesizeSearchResults(
   query: string,
-  contacts: { name: string; role?: string; company?: string; aiReason?: string }[],
+  contacts: {
+    name: string;
+    role?: string;
+    company?: string;
+    aiReason?: string;
+  }[],
 ): Promise<string> {
   if (isMockMode()) {
-    log.warn("AIService", "Using mock synthesis due to unconfigured AI provider");
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return `You have ${contacts.length} connections matching "${query}". ` +
-      `Key figures include ${contacts.slice(0, 3).map(c => c.name).join(", ")}. ` +
-      `Consider reaching out to strengthen these relationships.`;
+    log.warn(
+      "AIService",
+      "Using mock synthesis due to unconfigured AI provider",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return (
+      `You have ${contacts.length} connections matching "${query}". ` +
+      `Key figures include ${contacts
+        .slice(0, 3)
+        .map((c) => c.name)
+        .join(", ")}. ` +
+      `Consider reaching out to strengthen these relationships.`
+    );
   }
 
   // ── Cache check: same query + same result count → same synthesis
   const cacheKey = query.trim().toLowerCase().replace(/\s+/g, " ");
   const cached = aiCache.get<string>("synthesis", cacheKey);
   if (cached) {
-    recordInvocation({ operation: "synthesis", latencyMs: 0, cached: true, description: `Synthesis: ${query.slice(0, 40)}` });
+    recordInvocation({
+      operation: "synthesis",
+      latencyMs: 0,
+      cached: true,
+      description: `Synthesis: ${query.slice(0, 40)}`,
+    });
     return cached;
   }
 
-  const contactSummaries = contacts.map(c => {
-    const parts = [c.name];
-    if (c.role) parts.push(c.role);
-    if (c.company) parts.push(`at ${c.company}`);
-    if (c.aiReason) parts.push(`— ${c.aiReason}`);
-    return parts.join(", ");
-  }).join("\n");
+  const contactSummaries = contacts
+    .map((c) => {
+      const parts = [c.name];
+      if (c.role) parts.push(c.role);
+      if (c.company) parts.push(`at ${c.company}`);
+      if (c.aiReason) parts.push(`— ${c.aiReason}`);
+      return parts.join(", ");
+    })
+    .join("\n");
 
   const systemPrompt = `You are a CRM intelligence analyst. Given a search query and matching contacts, provide a concise 2-3 sentence executive brief.
 
@@ -774,10 +927,19 @@ Write a 2-3 sentence executive brief.`;
       "AIService",
       `synthesizeSearchResults "${query}" → ${text.length} chars in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
     );
-    recordInvocation({ operation: "synthesis", model: result.model, tokenCount: result.tokenCount, latencyMs: result.latencyMs, cached: false, description: `Synthesis: ${query.slice(0, 40)}` });
+    recordInvocation({
+      operation: "synthesis",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: `Synthesis: ${query.slice(0, 40)}`,
+    });
     return text;
   } catch (error: unknown) {
-    log.error("AIService", "Synthesis failed", { error: getErrorMessage(error) });
+    log.error("AIService", "Synthesis failed", {
+      error: getErrorMessage(error),
+    });
     throw error;
   }
 }

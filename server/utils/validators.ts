@@ -83,7 +83,10 @@ export const sourceSchema = z.union([
   }),
 ]);
 
-export const tagSchema = z.union([z.string(), z.object({ tag: z.string().min(1) })]);
+export const tagSchema = z.union([
+  z.string(),
+  z.object({ tag: z.string().min(1) }),
+]);
 
 export const interestSchema = z.union([
   z.string(),
@@ -205,7 +208,11 @@ export const idParamSchema = z.object({
 // `details`). Routes therefore never reach into `res` from inside a
 // validator — that responsibility belongs to the error middleware.
 
-function runOrThrow<T>(schema: z.ZodTypeAny, value: unknown, where: "body" | "params" | "query"): T {
+function runOrThrow<T>(
+  schema: z.ZodTypeAny,
+  value: unknown,
+  where: "body" | "params" | "query",
+): T {
   const result = schema.safeParse(value);
   if (!result.success) {
     throw new ValidationError(`Invalid request ${where}`, result.error.issues);
@@ -224,7 +231,11 @@ export const validateParams = (schema: z.ZodTypeAny) => {
   return (req: Request, _res: Response, next: NextFunction) => {
     // Express params are a frozen-ish object on the request; mutate via assign
     // rather than replacement so downstream code keeps working.
-    const parsed = runOrThrow<Record<string, string>>(schema, req.params, "params");
+    const parsed = runOrThrow<Record<string, string>>(
+      schema,
+      req.params,
+      "params",
+    );
     Object.assign(req.params, parsed);
     next();
   };
@@ -232,7 +243,11 @@ export const validateParams = (schema: z.ZodTypeAny) => {
 
 export const validateQuery = (schema: z.ZodTypeAny) => {
   return (req: Request, _res: Response, next: NextFunction) => {
-    const parsed = runOrThrow<Record<string, unknown>>(schema, req.query, "query");
+    const parsed = runOrThrow<Record<string, unknown>>(
+      schema,
+      req.query,
+      "query",
+    );
     Object.assign(req.query, parsed);
     next();
   };

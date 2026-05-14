@@ -32,7 +32,10 @@ export const aiSearchRouter = Router();
 const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
 const aiSearchBodySchema = z.object({
   contactIds: z.array(z.string()).min(1).max(100),
-  strategy: z.string().optional().default(getDefaultStrategyForProvider(providerName)),
+  strategy: z
+    .string()
+    .optional()
+    .default(getDefaultStrategyForProvider(providerName)),
 });
 
 // =============================================================================
@@ -40,7 +43,7 @@ const aiSearchBodySchema = z.object({
 // =============================================================================
 
 aiSearchRouter.post(
-  '/ai-search',
+  "/ai-search",
   validateBody(aiSearchBodySchema),
   asyncHandler(async (req, res) => {
     const { contactIds, strategy } = req.body;
@@ -48,7 +51,9 @@ aiSearchRouter.post(
     // Check AI provider is configured
     if (!ai.isConfigured) {
       const KEY_MAP: Record<string, string> = {
-        gemini: "GEMINI_API_KEY", openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY",
+        gemini: "GEMINI_API_KEY",
+        openai: "OPENAI_API_KEY",
+        anthropic: "ANTHROPIC_API_KEY",
       };
       const keyVar = KEY_MAP[providerName] ?? "GEMINI_API_KEY";
       return res.status(503).json({
@@ -69,20 +74,25 @@ aiSearchRouter.post(
       if (contact) {
         contacts.push({ id: contact.id, name: contact.name });
       } else {
-        log.warn('AISearchRoute', `Contact ${id} not found — skipping`);
+        log.warn("AISearchRoute", `Contact ${id} not found — skipping`);
       }
     }
 
     if (contacts.length === 0) {
-      return res.status(400).json({ error: 'None of the selected contacts were found.' });
+      return res
+        .status(400)
+        .json({ error: "None of the selected contacts were found." });
     }
 
     // Create batch
     const batch = jobQueue.createBatch(contacts, strategy);
 
     // Kick off processing async (fire-and-forget — don't await)
-    jobQueue.processBatch(batch.id, ai).catch(err => {
-      log.error('AISearchRoute', `Batch ${batch.id} processing error: ${getErrorMessage(err)}`);
+    jobQueue.processBatch(batch.id, ai).catch((err) => {
+      log.error(
+        "AISearchRoute",
+        `Batch ${batch.id} processing error: ${getErrorMessage(err)}`,
+      );
     });
 
     // Return batch ID immediately
@@ -95,16 +105,18 @@ aiSearchRouter.post(
 // =============================================================================
 
 aiSearchRouter.get(
-  '/ai-search/status',
+  "/ai-search/status",
   asyncHandler(async (req, res) => {
     const batchId = req.query.batchId as string;
     if (!batchId) {
-      return res.status(400).json({ error: 'batchId query parameter is required.' });
+      return res
+        .status(400)
+        .json({ error: "batchId query parameter is required." });
     }
 
     const batch = jobQueue.getBatch(batchId);
     if (!batch) {
-      return res.status(404).json({ error: 'Batch not found.' });
+      return res.status(404).json({ error: "Batch not found." });
     }
 
     res.json(batch);
@@ -115,36 +127,41 @@ aiSearchRouter.get(
 // GET /ai-search/stream — SSE stream for real-time batch updates
 // =============================================================================
 
-aiSearchRouter.get('/ai-search/stream', (req, res) => {
+aiSearchRouter.get("/ai-search/stream", (req, res) => {
   const batchId = req.query.batchId as string;
   if (!batchId) {
-    return res.status(400).json({ error: 'batchId query parameter is required.' });
+    return res
+      .status(400)
+      .json({ error: "batchId query parameter is required." });
   }
 
   // Set up SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
   // Send current state immediately
   const batch = jobQueue.getBatch(batchId);
   if (!batch) {
-    res.write(`data: ${JSON.stringify({ error: 'Batch not found' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: "Batch not found" })}\n\n`);
     return res.end();
   }
 
   res.write(`data: ${JSON.stringify(batch)}\n\n`);
 
   // If already complete, close immediately
-  if (batch.status === 'complete' || batch.status === 'cancelled') {
+  if (batch.status === "complete" || batch.status === "cancelled") {
     return res.end();
   }
 
   // Subscribe to live updates from the job queue EventEmitter
   const handler = (updatedBatch: AISearchBatch) => {
     res.write(`data: ${JSON.stringify(updatedBatch)}\n\n`);
-    if (updatedBatch.status === 'complete' || updatedBatch.status === 'cancelled') {
+    if (
+      updatedBatch.status === "complete" ||
+      updatedBatch.status === "cancelled"
+    ) {
       // Self-cleanup: remove listener before ending response
       jobQueue.off(batchId, handler);
       res.end();
@@ -154,7 +171,7 @@ aiSearchRouter.get('/ai-search/stream', (req, res) => {
   jobQueue.on(batchId, handler);
 
   // Also cleanup on client disconnect
-  req.on('close', () => {
+  req.on("close", () => {
     jobQueue.off(batchId, handler);
   });
 });

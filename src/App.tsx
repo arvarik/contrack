@@ -1,5 +1,19 @@
-import { BrowserRouter as Router, Routes, Route, Link, useMatch, useLocation } from "react-router-dom";
-import { LayoutDashboard, Map, Settings as SettingsIcon, Search, Sparkles, Activity } from "lucide-react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  useMatch,
+  useLocation,
+} from "react-router-dom";
+import {
+  LayoutDashboard,
+  Map,
+  Settings as SettingsIcon,
+  Search,
+  Sparkles,
+  Activity,
+} from "lucide-react";
 import { LayoutGroup, AnimatePresence, motion } from "motion/react";
 import { isTypingTarget } from "./lib/keyboard";
 import { useGlobalNavShortcuts } from "./hooks/useGlobalNavShortcuts";
@@ -8,9 +22,9 @@ import React, { useState, useEffect, Suspense } from "react";
 
 import { ContactList } from "./views/contact-list";
 import { ContactDetail } from "./views/contact-detail";
-import { CommandPalette } from './components/command-palette';
-import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import { QuickInteractionModal } from './components/QuickInteractionModal';
+import { CommandPalette } from "./components/command-palette";
+import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
+import { QuickInteractionModal } from "./components/QuickInteractionModal";
 import { MapView } from "./views/MapView";
 import { SettingsView } from "./views/SettingsView";
 import { SearchView } from "./views/SearchView";
@@ -28,7 +42,11 @@ import { SessionProvider, useRecent } from "./contexts/SessionContext";
 
 // Dev-only: lazy import so the showcase is not in the prod bundle
 const ComponentShowcase = import.meta.env.DEV
-  ? React.lazy(() => import('./views/dev/ComponentShowcase').then(m => ({ default: m.ComponentShowcase })))
+  ? React.lazy(() =>
+      import("./views/dev/ComponentShowcase").then((m) => ({
+        default: m.ComponentShowcase,
+      })),
+    )
   : null;
 
 const ResponsiveLayout = () => {
@@ -48,24 +66,31 @@ const ResponsiveLayout = () => {
     }
   }, [matchContact?.params.id, setLastContactId]);
 
-  const isMapActive = location.pathname.startsWith('/map');
-  const isCleanup = location.pathname.startsWith('/settings');
-  const isSearch = location.pathname.startsWith('/search');
-  const isPulse = location.pathname.startsWith('/pulse');
+  const isMapActive = location.pathname.startsWith("/map");
+  const isCleanup = location.pathname.startsWith("/settings");
+  const isSearch = location.pathname.startsWith("/search");
+  const isPulse = location.pathname.startsWith("/pulse");
 
   const { data: badge } = useUrgentActionItemCount();
   const urgentCount = badge?.count || 0;
 
   const mobileNav = (
     <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-6 pt-2 glass-panel rounded-t-xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]">
-      <Link 
-        to={lastContactId && !isContactSelected ? `/contact/${lastContactId}` : "/"} 
-        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${(!isMapActive && !isPulse && !isCleanup && !isSearch) ? 'text-primary' : 'text-on-surface-variant'}`}
+      <Link
+        to={
+          lastContactId && !isContactSelected
+            ? `/contact/${lastContactId}`
+            : "/"
+        }
+        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${!isMapActive && !isPulse && !isCleanup && !isSearch ? "text-primary" : "text-on-surface-variant"}`}
       >
         <LayoutDashboard className="w-5 h-5" />
         <span className="text-[9px] font-bold tracking-wide">Network</span>
       </Link>
-      <Link to="/pulse" className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors relative ${isPulse ? 'text-primary' : 'text-on-surface-variant'}`}>
+      <Link
+        to="/pulse"
+        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors relative ${isPulse ? "text-primary" : "text-on-surface-variant"}`}
+      >
         <Activity className="w-5 h-5" />
         <span className="text-[9px] font-bold tracking-wide">Pulse</span>
         {urgentCount > 0 && (
@@ -75,22 +100,31 @@ const ResponsiveLayout = () => {
           </span>
         )}
       </Link>
-      <Link to="/map" className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${isMapActive ? 'text-primary' : 'text-on-surface-variant'}`}>
+      <Link
+        to="/map"
+        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${isMapActive ? "text-primary" : "text-on-surface-variant"}`}
+      >
         <Map className="w-5 h-5" />
         <span className="text-[9px] font-bold tracking-wide">Map</span>
       </Link>
-      <Link to="/search" className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${isSearch ? 'text-primary' : 'text-on-surface-variant'}`}>
+      <Link
+        to="/search"
+        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${isSearch ? "text-primary" : "text-on-surface-variant"}`}
+      >
         <Sparkles className="w-5 h-5" />
         <span className="text-[9px] font-bold tracking-wide">AI Search</span>
       </Link>
-      <Link to="/settings" className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${isCleanup ? 'text-primary' : 'text-on-surface-variant'}`}>
+      <Link
+        to="/settings"
+        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors ${isCleanup ? "text-primary" : "text-on-surface-variant"}`}
+      >
         <SettingsIcon className="w-5 h-5" />
         <span className="text-[9px] font-bold tracking-wide">Settings</span>
       </Link>
     </nav>
   );
 
-  const isDev = import.meta.env.DEV && location.pathname.startsWith('/dev');
+  const isDev = import.meta.env.DEV && location.pathname.startsWith("/dev");
 
   // Full-page views (cleanup, search, pulse, dev) take the full main area
   if (isCleanup || isSearch || isPulse || isDev) {
@@ -102,11 +136,45 @@ const ResponsiveLayout = () => {
         <main className="flex-1 h-full overflow-hidden relative flex">
           <div className="flex-1 h-full overflow-hidden">
             <Routes>
-              <Route path="/settings/*" element={<RouteErrorBoundary viewName="Settings"><SettingsView /></RouteErrorBoundary>} />
-              <Route path="/search" element={<RouteErrorBoundary viewName="Search"><SearchView /></RouteErrorBoundary>} />
-              <Route path="/pulse" element={<RouteErrorBoundary viewName="Dashboard"><DashboardView /></RouteErrorBoundary>} />
+              <Route
+                path="/settings/*"
+                element={
+                  <RouteErrorBoundary viewName="Settings">
+                    <SettingsView />
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/search"
+                element={
+                  <RouteErrorBoundary viewName="Search">
+                    <SearchView />
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/pulse"
+                element={
+                  <RouteErrorBoundary viewName="Dashboard">
+                    <DashboardView />
+                  </RouteErrorBoundary>
+                }
+              />
               {ComponentShowcase && (
-                <Route path="/dev" element={<Suspense fallback={<div className="p-12 text-center text-on-surface-variant animate-pulse">Loading showcase...</div>}><ComponentShowcase /></Suspense>} />
+                <Route
+                  path="/dev"
+                  element={
+                    <Suspense
+                      fallback={
+                        <div className="p-12 text-center text-on-surface-variant animate-pulse">
+                          Loading showcase...
+                        </div>
+                      }
+                    >
+                      <ComponentShowcase />
+                    </Suspense>
+                  }
+                />
               )}
             </Routes>
           </div>
@@ -118,32 +186,66 @@ const ResponsiveLayout = () => {
 
   return (
     <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
-      <div className={`${isContactSelected && !isMapActive ? 'hidden lg:flex' : 'hidden md:flex'}`}>
+      <div
+        className={`${isContactSelected && !isMapActive ? "hidden lg:flex" : "hidden md:flex"}`}
+      >
         <Sidebar />
       </div>
-      
+
       {/* Dynamic Middle/Main Panel mapping to either the List or the Map */}
-      <section className={`
-        ${isContactSelected && !isMapActive ? 'hidden lg:flex' : 'flex'}
-        ${isMapActive ? 'flex-1 z-0' : 'w-full lg:w-[350px] shrink-0 bg-surface-container-lowest z-10'}
+      <section
+        className={`
+        ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
+        ${isMapActive ? "flex-1 z-0" : "w-full lg:w-[350px] shrink-0 bg-surface-container-lowest z-10"}
         h-full flex-col relative
-      `}>
+      `}
+      >
         <Routes>
-          <Route path="/map" element={<RouteErrorBoundary viewName="Map"><MapView /></RouteErrorBoundary>} />
-          <Route path="/map/contact/:id" element={<RouteErrorBoundary viewName="Map"><MapView /></RouteErrorBoundary>} />
-          <Route path="*" element={<RouteErrorBoundary viewName="ContactList"><ContactList /></RouteErrorBoundary>} />
+          <Route
+            path="/map"
+            element={
+              <RouteErrorBoundary viewName="Map">
+                <MapView />
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/map/contact/:id"
+            element={
+              <RouteErrorBoundary viewName="Map">
+                <MapView />
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <RouteErrorBoundary viewName="ContactList">
+                <ContactList />
+              </RouteErrorBoundary>
+            }
+          />
         </Routes>
       </section>
 
       {/* Right Pane: Standard Detail View */}
       {!isMapActive && (
-        <main className={`
-          ${isContactSelected ? 'flex' : 'hidden lg:flex'}
+        <main
+          className={`
+          ${isContactSelected ? "flex" : "hidden lg:flex"}
           flex-1 bg-surface z-10 h-full overflow-hidden relative flex-col
-        `}>
+        `}
+        >
           <Routes location={location}>
             <Route path="/" element={<EmptyState />} />
-            <Route path="/contact/:id" element={<RouteErrorBoundary viewName="ContactDetail"><ContactDetail /></RouteErrorBoundary>} />
+            <Route
+              path="/contact/:id"
+              element={
+                <RouteErrorBoundary viewName="ContactDetail">
+                  <ContactDetail />
+                </RouteErrorBoundary>
+              }
+            />
           </Routes>
         </main>
       )}
@@ -160,7 +262,14 @@ const ResponsiveLayout = () => {
               className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
             >
               <Routes location={location}>
-                <Route path="/map/contact/:id" element={<RouteErrorBoundary viewName="ContactDetail"><ContactDetail /></RouteErrorBoundary>} />
+                <Route
+                  path="/map/contact/:id"
+                  element={
+                    <RouteErrorBoundary viewName="ContactDetail">
+                      <ContactDetail />
+                    </RouteErrorBoundary>
+                  }
+                />
               </Routes>
             </motion.main>
           )}
@@ -181,27 +290,29 @@ export default function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // ? → keyboard shortcuts modal
-      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !isTypingTarget(e)) {
+      if (e.key === "?" && !e.metaKey && !e.ctrlKey && !isTypingTarget(e)) {
         e.preventDefault();
-        setShortcutsOpen(prev => !prev);
+        setShortcutsOpen((prev) => !prev);
         return;
       }
 
       // Cmd+Shift+I → quick interaction modal
       // Conflict guard: close Cmd+K if open
-      if (e.key === 'i' && e.metaKey && e.shiftKey) {
+      if (e.key === "i" && e.metaKey && e.shiftKey) {
         e.preventDefault();
         // If Cmd+K is open, close it first
-        const cmdkDialog = document.querySelector('[cmdk-dialog]');
+        const cmdkDialog = document.querySelector("[cmdk-dialog]");
         if (cmdkDialog) {
-          cmdkDialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          cmdkDialog.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+          );
         }
-        setQuickNoteOpen(prev => !prev);
+        setQuickNoteOpen((prev) => !prev);
         return;
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   return (
@@ -214,14 +325,25 @@ export default function App() {
             </DedupeProvider>
           </AISearchProvider>
           <CommandPalette />
-          <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-          <QuickInteractionModal isOpen={quickNoteOpen} onClose={() => setQuickNoteOpen(false)} />
-          <Toaster theme="light" position="bottom-right" className="font-body" toastOptions={{
-            className: 'glass-panel shadow-lg !border-none',
-            style: {
-              color: 'var(--color-on-surface)',
-            }
-          }} />
+          <KeyboardShortcutsModal
+            isOpen={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
+          <QuickInteractionModal
+            isOpen={quickNoteOpen}
+            onClose={() => setQuickNoteOpen(false)}
+          />
+          <Toaster
+            theme="light"
+            position="bottom-right"
+            className="font-body"
+            toastOptions={{
+              className: "glass-panel shadow-lg !border-none",
+              style: {
+                color: "var(--color-on-surface)",
+              },
+            }}
+          />
         </LayoutGroup>
       </SessionProvider>
     </Router>

@@ -10,11 +10,11 @@ Access via the **Pulse** tab in the navigation or `Cmd+Shift+P`.
 
 Every contact gets an automated relationship score (0–100) based on three weighted factors:
 
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| **Frequency** | High | How often you interact (total interaction count) |
-| **Recency** | High | When the last interaction occurred |
-| **Depth** | Medium | Quality signals — meetings and calls score higher than notes |
+| Factor        | Weight | Description                                                  |
+| ------------- | ------ | ------------------------------------------------------------ |
+| **Frequency** | High   | How often you interact (total interaction count)             |
+| **Recency**   | High   | When the last interaction occurred                           |
+| **Depth**     | Medium | Quality signals — meetings and calls score higher than notes |
 
 ### Score Lifecycle
 
@@ -28,12 +28,12 @@ Every contact gets an automated relationship score (0–100) based on three weig
 
 The dashboard header displays key network metrics:
 
-| Metric | Description |
-|--------|-------------|
-| **Total Contacts** | Active (non-archived, non-ghost) contact count |
-| **Avg Score** | Mean relationship score across all contacts |
-| **At-Risk** | Contacts below their interaction cadence |
-| **Interaction Velocity** | Interactions per week (with trend) |
+| Metric                   | Description                                    |
+| ------------------------ | ---------------------------------------------- |
+| **Total Contacts**       | Active (non-archived, non-ghost) contact count |
+| **Avg Score**            | Mean relationship score across all contacts    |
+| **At-Risk**              | Contacts below their interaction cadence       |
+| **Interaction Velocity** | Interactions per week (with trend)             |
 
 Click on any metric card to drill into a detailed modal with charts and breakdowns.
 
@@ -43,13 +43,14 @@ Click on any metric card to drill into a detailed modal with charts and breakdow
 
 Action items are organized into three lanes:
 
-| Lane | Description |
-|------|-------------|
-| **Overdue** | Past-due items (highlighted in red) |
-| **Due Today** | Items due within the next 24 hours |
-| **Upcoming** | Items due in the next 7 days |
+| Lane          | Description                         |
+| ------------- | ----------------------------------- |
+| **Overdue**   | Past-due items (highlighted in red) |
+| **Due Today** | Items due within the next 24 hours  |
+| **Upcoming**  | Items due in the next 7 days        |
 
 Each action item card shows:
+
 - Task title
 - Contact name + avatar
 - Due date
@@ -58,6 +59,7 @@ Each action item card shows:
 The urgent action item count appears as a badge on the Pulse navigation icon.
 
 **APIs:**
+
 - `GET /api/action-items` — Fetch all pending items
 - `PATCH /api/action-items/:id/complete` — Mark complete
 - `GET /api/action-items/count` — Urgent count for badges
@@ -71,6 +73,7 @@ An AI-generated card at the top of the dashboard provides daily observations abo
 <!-- Screenshot: daily-insight.png -->
 
 Examples:
+
 - "You've interacted with 12 contacts this week — 3x your average. Most active relationships: Jane Smith, Bob Chen."
 - "3 contacts haven't been reached in over 60 days. Consider a check-in with Sarah, Mike, and David."
 
@@ -93,6 +96,7 @@ Click the **composition** metric to see:
 ## Network Growth
 
 A timeline chart showing contact additions over time, with:
+
 - Monthly granularity
 - Cumulative vs. net-new views
 - Import spike detection
@@ -110,6 +114,7 @@ A system-wide shortcut for rapid interaction logging from anywhere in the app:
 5. Press `Cmd+Enter` to save
 
 The modal automatically:
+
 - Invalidates the contact's React Query cache
 - Triggers relationship score recomputation
 - Closes with a success toast

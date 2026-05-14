@@ -93,7 +93,13 @@ export const STALE_TIMES = {
 // Enable in browser console: window.__CONTRACK_CACHE_DEBUG = true
 // =============================================================================
 
-type CacheEventType = 'hit' | 'miss' | 'stale' | 'invalidate' | 'prefetch' | 'placeholder';
+type CacheEventType =
+  | "hit"
+  | "miss"
+  | "stale"
+  | "invalidate"
+  | "prefetch"
+  | "placeholder";
 
 interface CacheEvent {
   type: CacheEventType;
@@ -103,12 +109,12 @@ interface CacheEvent {
 
 // Color coding for each event type — makes console output scannable
 const EVENT_COLORS: Record<CacheEventType, string> = {
-  hit:         'color: #10b981; font-weight: bold',  // green
-  miss:        'color: #ef4444; font-weight: bold',  // red
-  stale:       'color: #f59e0b; font-weight: bold',  // amber
-  invalidate:  'color: #8b5cf6; font-weight: bold',  // purple
-  prefetch:    'color: #3b82f6; font-weight: bold',  // blue
-  placeholder: 'color: #6b7280; font-weight: bold',  // gray
+  hit: "color: #10b981; font-weight: bold", // green
+  miss: "color: #ef4444; font-weight: bold", // red
+  stale: "color: #f59e0b; font-weight: bold", // amber
+  invalidate: "color: #8b5cf6; font-weight: bold", // purple
+  prefetch: "color: #3b82f6; font-weight: bold", // blue
+  placeholder: "color: #6b7280; font-weight: bold", // gray
 };
 
 /**
@@ -119,15 +125,16 @@ const EVENT_COLORS: Record<CacheEventType, string> = {
  * logCacheEvent({ type: 'hit', queryKey: "['contacts']", meta: { age: '12s' } });
  */
 export function logCacheEvent(event: CacheEvent): void {
-  if (typeof window === 'undefined') return;
-  if (!(window as unknown as Record<string, unknown>).__CONTRACK_CACHE_DEBUG) return;
+  if (typeof window === "undefined") return;
+  if (!(window as unknown as Record<string, unknown>).__CONTRACK_CACHE_DEBUG)
+    return;
 
   const style = EVENT_COLORS[event.type];
-  const metaStr = event.meta ? ` ${JSON.stringify(event.meta)}` : '';
+  const metaStr = event.meta ? ` ${JSON.stringify(event.meta)}` : "";
   console.log(
     `%c[Cache:${event.type.toUpperCase()}]%c ${event.queryKey}${metaStr}`,
     style,
-    'color: inherit',
+    "color: inherit",
   );
 }
 

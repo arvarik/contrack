@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { cn } from '../../lib/utils';
-import { DROPDOWN_MENU, DROPDOWN_ITEM, EDITABLE_INPUT } from '../../lib/styles';
+import React, { useState } from "react";
+import { cn } from "../../lib/utils";
+import { DROPDOWN_MENU, DROPDOWN_ITEM, EDITABLE_INPUT } from "../../lib/styles";
 
 export const Combobox = ({
   value,
@@ -8,7 +8,7 @@ export const Combobox = ({
   onSave,
   options,
   placeholder,
-  autoFocus
+  autoFocus,
 }: {
   value: string;
   onChange: (val: string) => void;
@@ -20,8 +20,8 @@ export const Combobox = ({
   const [isOpen, setIsOpen] = useState(true);
 
   // Filter out exact matches if they are the only ones, but generally show what matches
-  const filteredOptions = options.filter(o => 
-    o.toLowerCase().includes(value.toLowerCase())
+  const filteredOptions = options.filter((o) =>
+    o.toLowerCase().includes(value.toLowerCase()),
   );
 
   return (
@@ -30,7 +30,7 @@ export const Combobox = ({
         autoFocus={autoFocus}
         className={cn(EDITABLE_INPUT, "text-sm font-medium w-full")}
         value={value}
-        onChange={e => {
+        onChange={(e) => {
           onChange(e.target.value);
           setIsOpen(true);
         }}
@@ -39,22 +39,22 @@ export const Combobox = ({
           setIsOpen(false);
           onSave();
         }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') onSave();
-          if (e.key === 'Escape') onSave();
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSave();
+          if (e.key === "Escape") onSave();
         }}
         placeholder={placeholder}
       />
-      
+
       {isOpen && filteredOptions.length > 0 && (
         <ul className={cn(DROPDOWN_MENU)}>
-          {filteredOptions.map(opt => (
+          {filteredOptions.map((opt) => (
             <li
               key={opt}
               className={DROPDOWN_ITEM}
               onMouseDown={(e) => {
                 // Prevent input blur so we can process the click securely
-                e.preventDefault(); 
+                e.preventDefault();
                 onChange(opt);
                 setIsOpen(false);
                 setTimeout(() => onSave(), 10);

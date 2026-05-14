@@ -50,7 +50,9 @@ describe("AppError (base class)", () => {
   });
 
   it("carries arbitrary structured `details`", () => {
-    const e = new AppError("x", 400, { details: { field: "email", issue: "invalid" } });
+    const e = new AppError("x", 400, {
+      details: { field: "email", issue: "invalid" },
+    });
     expect(e.details).toEqual({ field: "email", issue: "invalid" });
   });
 
@@ -63,7 +65,9 @@ describe("AppError (base class)", () => {
 
   it("marks errors as operational by default", () => {
     expect(new AppError("x").isOperational).toBe(true);
-    expect(new AppError("x", 500, { isOperational: false }).isOperational).toBe(false);
+    expect(new AppError("x", 500, { isOperational: false }).isOperational).toBe(
+      false,
+    );
   });
 
   it("sets `name` to the concrete subclass name (not 'Error')", () => {
@@ -114,12 +118,16 @@ describe("Named subclasses", () => {
 
   it("ServiceUnavailableError → 503", () => {
     expect(new ServiceUnavailableError("AI down").statusCode).toBe(503);
-    expect(new ServiceUnavailableError("AI down").code).toBe("SERVICE_UNAVAILABLE");
+    expect(new ServiceUnavailableError("AI down").code).toBe(
+      "SERVICE_UNAVAILABLE",
+    );
   });
 
   it("UpstreamTimeoutError → 504", () => {
     expect(new UpstreamTimeoutError("call exceeded 60s").statusCode).toBe(504);
-    expect(new UpstreamTimeoutError("call exceeded 60s").code).toBe("UPSTREAM_TIMEOUT");
+    expect(new UpstreamTimeoutError("call exceeded 60s").code).toBe(
+      "UPSTREAM_TIMEOUT",
+    );
   });
 
   it("all subclasses are `instanceof AppError`", () => {
