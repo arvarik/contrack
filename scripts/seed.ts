@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./src/db/schema.ts";
+import * as schema from "../src/db/schema.ts";
 
 const DB_PATH = "curator.db";
 const sqlite = new Database(DB_PATH);

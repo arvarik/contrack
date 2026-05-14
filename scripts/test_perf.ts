@@ -1,5 +1,5 @@
-import { sqlite } from "./server/db.ts";
-import { contactRepo } from "./server/repositories/contactRepository.ts";
+import { sqlite } from "../server/db.ts";
+import { contactRepo } from "../server/repositories/contactRepository.ts";
 
 const start = performance.now();
 const all = sqlite
