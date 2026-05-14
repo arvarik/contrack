@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install production dependencies
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --legacy-peer-deps
+RUN npm pkg delete scripts.prepare && npm ci --omit=dev --legacy-peer-deps
 
 # Install tsx globally to execute TypeScript server
 RUN npm install -g tsx
