@@ -14,12 +14,7 @@
 
 <br/>
 
-<!-- Hero screenshot — contact list + profile detail -->
-<!-- ![Contrack](docs/screenshots/hero.png) -->
-
 Contrack isn't just an address book — it's a **Personal AI Relational Engine**. Paste raw meeting notes, drag in email exports, or brain-dump unstructured text and watch the AI parse it into structured, richly-typed contact profiles. The system autonomously deduplicates, scores relationships, extracts entity networks, and surfaces proactive intelligence so you never lose track of who matters.
-
-**Built for** creative directors, freelancers, founders, and executives who need a CRM that works as fast as they do.
 
 ---
 
@@ -27,62 +22,98 @@ Contrack isn't just an address book — it's a **Personal AI Relational Engine**
 
 <table>
 <tr>
-<td width="50%">
-
-### 🔍 Ask Contrack (AI Search)
-
-Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal Rank Fusion. Results stream in two phases: instant retrieval (<15ms) then AI-enriched reasons (~500ms).
-
-<!-- ![AI Search](docs/screenshots/ai-search-results.png) -->
-
-</td>
-<td width="50%">
-
-### ⌘ Command Palette (Cmd+K)
-
-GitHub-style command center with faceted filters (`role:`, `company:`, `tag:`), action sub-menus, inline note composer, zero-state CRM intelligence, and deep profile peek.
-
-<!-- ![Command Palette](docs/screenshots/command-palette.png) -->
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### ⚡ Intelligent Deduplication
-
-Multi-pass engine using phonetic matching, Levenshtein distance, E.164 phone normalization, and AI embeddings. Swipeable card review with configurable auto-merge thresholds and one-click undo.
-
-<!-- ![Deduplication](docs/screenshots/dedupe-review.png) -->
-
-</td>
-<td width="50%">
-
-### 💓 Relationship Pulse
-
-Proactive intelligence dashboard with automated scoring (frequency × recency × depth), action item swimlanes, network health metrics, and AI-generated daily insights.
-
-<!-- ![Pulse Dashboard](docs/screenshots/pulse-dashboard.png) -->
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🗺️ Geospatial Mapping
-
-Interactive cluster map via React Leaflet with Mapbox/Nominatim geocoding. Click pins to open contact detail overlays.
-
-<!-- ![Map View](docs/screenshots/map-view.png) -->
-
-</td>
-<td width="50%">
+<td width="35%" valign="top">
 
 ### 👤 Rich Contact Profiles
 
-Timeline with @mention network weaving, AI briefings, Ghost entity extraction, multi-value fields, vibe colors, and data age halos.
+Get a complete picture of every connection instantly. View their interaction history, personal details, and relationship context all in one beautifully designed profile card.
 
-<!-- ![Contact Detail](docs/screenshots/contact-detail.png) -->
+Built with a timeline architecture featuring @mention network weaving, AI briefings, Ghost entity extraction, multi-value fields, and data age halos.
+
+</td>
+<td width="65%">
+
+<img src="docs/screenshots/contact-detail.png" alt="Rich Contact Profile Detail" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="35%" valign="top">
+
+### ⌘ Command Palette (Cmd+K)
+
+Navigate your entire network at lightning speed without ever touching your mouse. Instantly search contacts, log new notes, or jump to specific views using keyboard shortcuts.
+
+A GitHub-style command center featuring faceted filters (`role:`, `company:`, `tag:`), action sub-menus, and an inline note composer for zero-state CRM intelligence.
+
+</td>
+<td width="65%">
+
+<img src="docs/screenshots/command-pallette.png" alt="Command Palette" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="35%" valign="top">
+
+### 💓 Relationship Pulse
+
+Never let an important connection slip through the cracks again. This proactive dashboard automatically tracks your network health and suggests who you should reach out to next.
+
+Runs on an automated scoring engine (frequency × recency × depth) to power action item swimlanes and generate daily AI insights.
+
+</td>
+<td width="65%">
+
+<img src="docs/screenshots/pulse-dashboard.png" alt="Relationship Pulse Dashboard" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="35%" valign="top">
+
+### 🗺️ Geospatial Mapping
+
+Visualize your network geographically to plan trips or coordinate local meetups. See exactly where your connections are clustered around the globe at a glance.
+
+Interactive cluster map powered by React Leaflet, utilizing Mapbox and Nominatim for accurate backend geocoding and detail overlays.
+
+</td>
+<td width="65%">
+
+<img src="docs/screenshots/map.png" alt="Geospatial Mapping Dashboard" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="35%" valign="top">
+
+### 🔍 Ask Contrack (AI Search)
+
+Query your CRM using natural language just like you're talking to an assistant. Ask complex questions like "Who do I know in San Francisco that works in tech?" and get precise answers.
+
+Driven by a Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal Rank Fusion, with instant retrieval (<15ms) and streaming AI-enriched reasoning.
+
+</td>
+<td width="65%">
+
+<img src="docs/screenshots/search.png" alt="Ask Contrack AI Search" width="100%" />
+
+</td>
+</tr>
+<tr>
+<td width="35%" valign="top">
+
+### ⚡ Intelligent Deduplication
+
+Keep your database impeccably clean with an automated assistant that spots duplicate contacts for you. Review merged suggestions quickly with an intuitive swipe interface.
+
+Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein distance, E.164 phone normalization, and 768-dim AI embeddings with one-click undo.
+
+</td>
+<td width="65%">
+
+<img src="docs/screenshots/dedupe-engine.png" alt="Intelligent Deduplication Review" width="100%" />
 
 </td>
 </tr>
@@ -107,6 +138,8 @@ Timeline with @mention network weaving, AI briefings, Ghost entity extraction, m
 ---
 
 ## 🚀 Quick Start
+
+**Try it locally in under 60 seconds.**
 
 ### Option 1: Docker (Recommended)
 
