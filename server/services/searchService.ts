@@ -330,7 +330,7 @@ export const searchService = {
       return;
     }
 
-    // ── 6. Phase 2 (async) — LLM reranking ────────────────────────────
+    // ── 6. Phase 2 (async) — LLM verification + rerank ─────────────────
     const compressedCandidates = buildCompressedCandidates(
       candidateIds,
       RERANKER_LIMIT,
@@ -340,6 +340,7 @@ export const searchService = {
       const aiMatches = await rerankCandidates(
         query.trim(),
         compressedCandidates,
+        retrieval.plan,
       );
 
       if (aiMatches.length > 0) {
@@ -443,7 +444,7 @@ export const searchService = {
       return { matches: hydratedPhase1, fallback: false, cached: false };
     }
 
-    // 5. LLM rerank
+    // 5. LLM verify + rerank
     const compressedCandidates = buildCompressedCandidates(
       candidateIds,
       RERANKER_LIMIT,
@@ -454,6 +455,7 @@ export const searchService = {
       const aiMatches = await rerankCandidates(
         query.trim(),
         compressedCandidates,
+        retrieval.plan,
       );
 
       if (aiMatches.length > 0) {

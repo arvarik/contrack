@@ -1,6 +1,6 @@
 <div align="center">
   <h1>🤝 Contrack</h1>
-  <p><b>The Personal AI Relational Engine for High-Leverage Individuals</b></p>
+  <p><b>People Relationship Manager for Proactive Networking</b></p>
   
   [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
   [![Node.js Version](https://img.shields.io/badge/Node.js-22+-success)](https://nodejs.org/)
@@ -14,7 +14,9 @@
 
 <br/>
 
-Contrack isn't just an address book — it's a **Personal AI Relational Engine**. Paste raw meeting notes, drag in email exports, or brain-dump unstructured text and watch the AI parse it into structured, richly-typed contact profiles. The system autonomously deduplicates, scores relationships, extracts entity networks, and surfaces proactive intelligence so you never lose track of who matters.
+Relationships are your most valuable asset, but they're also the hardest thing to keep track of. Contacts scattered across Apple, Google, and LinkedIn. Names you recognize but can't quite place. Introductions you meant to follow up on but never did. **Contrack fixes that.**
+
+Sync your contacts from every source into one unified network with automatic dedupe across platforms. Let AI enrichment research your connections across the web and fill in the context you never had time to enter. Behind the scenes, proactive intelligence keeps watch over your network and nudges you to reconnect before important relationships go quiet.
 
 ---
 
@@ -22,7 +24,7 @@ Contrack isn't just an address book — it's a **Personal AI Relational Engine**
 
 <table>
 <tr>
-<td width="35%" valign="top">
+<td width="30%" valign="top">
 
 ### 👤 Rich Contact Profiles
 
@@ -31,14 +33,14 @@ Get a complete picture of every connection instantly. View their interaction his
 Built with a timeline architecture featuring @mention network weaving, AI briefings, Ghost entity extraction, multi-value fields, and data age halos.
 
 </td>
-<td width="65%">
+<td width="70%">
 
 <img src="docs/screenshots/contact-detail.png" alt="Rich Contact Profile Detail" width="100%" />
 
 </td>
 </tr>
 <tr>
-<td width="35%" valign="top">
+<td width="30%" valign="top">
 
 ### ⌘ Command Palette (Cmd+K)
 
@@ -47,14 +49,14 @@ Navigate your entire network at lightning speed without ever touching your mouse
 A GitHub-style command center featuring faceted filters (`role:`, `company:`, `tag:`), action sub-menus, and an inline note composer for zero-state CRM intelligence.
 
 </td>
-<td width="65%">
+<td width="70%">
 
 <img src="docs/screenshots/command-pallette.png" alt="Command Palette" width="100%" />
 
 </td>
 </tr>
 <tr>
-<td width="35%" valign="top">
+<td width="30%" valign="top">
 
 ### 💓 Relationship Pulse
 
@@ -63,14 +65,14 @@ Never let an important connection slip through the cracks again. This proactive 
 Runs on an automated scoring engine (frequency × recency × depth) to power action item swimlanes and generate daily AI insights.
 
 </td>
-<td width="65%">
+<td width="70%">
 
 <img src="docs/screenshots/pulse-dashboard.png" alt="Relationship Pulse Dashboard" width="100%" />
 
 </td>
 </tr>
 <tr>
-<td width="35%" valign="top">
+<td width="30%" valign="top">
 
 ### 🗺️ Geospatial Mapping
 
@@ -79,14 +81,14 @@ Visualize your network geographically to plan trips or coordinate local meetups.
 Interactive cluster map powered by React Leaflet, utilizing Mapbox and Nominatim for accurate backend geocoding and detail overlays.
 
 </td>
-<td width="65%">
+<td width="70%">
 
 <img src="docs/screenshots/map.png" alt="Geospatial Mapping Dashboard" width="100%" />
 
 </td>
 </tr>
 <tr>
-<td width="35%" valign="top">
+<td width="30%" valign="top">
 
 ### 🔍 Ask Contrack (AI Search)
 
@@ -95,14 +97,14 @@ Query your CRM using natural language just like you're talking to an assistant. 
 Driven by a Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal Rank Fusion, with instant retrieval (<15ms) and streaming AI-enriched reasoning.
 
 </td>
-<td width="65%">
+<td width="70%">
 
 <img src="docs/screenshots/search.png" alt="Ask Contrack AI Search" width="100%" />
 
 </td>
 </tr>
 <tr>
-<td width="35%" valign="top">
+<td width="30%" valign="top">
 
 ### ⚡ Intelligent Deduplication
 
@@ -111,7 +113,7 @@ Keep your database impeccably clean with an automated assistant that spots dupli
 Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein distance, E.164 phone normalization, and 768-dim AI embeddings with one-click undo.
 
 </td>
-<td width="65%">
+<td width="70%">
 
 <img src="docs/screenshots/dedupe-engine.png" alt="Intelligent Deduplication Review" width="100%" />
 

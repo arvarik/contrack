@@ -23,6 +23,8 @@ import type {
   MentionEntity,
   CompressedContact,
   SemanticMatchResult,
+  ParsedSearchQuery,
+  QueryPlan,
 } from "./types.ts";
 import { sharedProvider, isProviderConfigured } from "./singleton.ts";
 import { ParallelQueue } from "./routing/ParallelQueue.ts";
@@ -38,6 +40,8 @@ export type {
   MentionEntity,
   CompressedContact,
   SemanticMatchResult,
+  ParsedSearchQuery,
+  QueryPlan,
 };
 
 // The shared provider instance — same one used by the barrel export in index.ts
@@ -473,6 +477,7 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
 export async function rerankCandidates(
   query: string,
   candidates: CompressedContact[],
+  plan?: QueryPlan | null,
 ): Promise<SemanticMatchResult[]> {
   if (isMockMode()) {
     log.warn(
@@ -493,22 +498,77 @@ export async function rerankCandidates(
 
   if (candidates.length === 0) return [];
 
-  const systemPrompt = `You are a precise CRM data analyst. Given a set of candidate contacts and a natural-language query, identify which contacts DEFINITIVELY match the query.
+  // Build a human-readable description of the QueryPlan that the reranker
+  // must verify against. Each must.* dimension becomes an explicit
+  // verification checklist item, and the reranker is told to refuse any
+  // candidate it cannot ground in a literal field value.
+  const planDirectives: string[] = [];
+  if (plan?.must.locationMatchers?.length) {
+    planDirectives.push(
+      `LOCATION: contact.location must mention one of these strings (case-insensitive, word-boundary): ${plan.must.locationMatchers.slice(0, 60).join(", ")}`,
+    );
+  }
+  if (plan?.must.companyMatchers?.length) {
+    planDirectives.push(
+      `COMPANY: contact.company must mention one of: ${plan.must.companyMatchers.join(", ")}`,
+    );
+  }
+  if (plan?.must.roleMatchers?.length) {
+    planDirectives.push(
+      `ROLE: contact.role or contact.headline must mention one of: ${plan.must.roleMatchers.join(", ")}`,
+    );
+  }
+  if (plan?.must.industryMatchers?.length) {
+    planDirectives.push(
+      `INDUSTRY: contact.industry or interests must mention one of: ${plan.must.industryMatchers.join(", ")}`,
+    );
+  }
+  const hasHardConstraints = planDirectives.length > 0;
 
-These contacts have already been pre-filtered by a retrieval system — your job is to verify each one and return only the true matches with evidence-based reasons.
+  const systemPrompt = `You are a precise CRM data analyst. You verify whether each candidate contact DEFINITIVELY matches a user query, and you cite the specific field value that proves it.
 
-CRITICAL RULES:
-1. PRECISION OVER RECALL: It is far better to miss a match than to include a false positive.
-2. EVIDENCE REQUIRED: Every match must cite a specific field value from the contact data. No guessing.
-3. SELF-VERIFICATION: Before including a contact, verify it truly satisfies the query. If your reason uses words like "does not", "doesn't", "no evidence", then EXCLUDE that contact.
-4. NO INVENTION: Only use data present in the contact fields. Never infer or hallucinate.`;
+These contacts have already been pre-filtered by a retrieval system — your job is the LAST line of defense against false positives. Be ruthlessly precise.
+
+OUTPUT SHAPE (per match):
+  {
+    "contact_id": "<id from candidate>",
+    "verified_field": "<exact field name like 'location' or 'company'>",
+    "verified_value": "<EXACT substring from that field that proves the match>",
+    "reason": "<one short third-person sentence ABOUT the contact — never address the user>"
+  }
+
+REASON STYLE:
+- Third person, describing the contact. Start with their name OR an impersonal descriptor.
+- ✓ "John is based in Los Angeles, California."
+- ✓ "Located in Chicago, Illinois — a US city."
+- ✓ "Works as a VC at Sequoia Capital."
+- ✗ "You are located in California..." (wrong subject — this isn't about the user)
+- ✗ "Your contact in California..." (still addresses the user)
+- Keep it under ~15 words.
+
+CRITICAL RULES (in priority order):
+1. EVIDENCE OR EXCLUDE: \`verified_value\` MUST be a literal substring of the named field. If the candidate has no such substring, OMIT them entirely. Do not approximate, do not infer, do not paraphrase.
+2. ${hasHardConstraints ? "EVERY HARD CONSTRAINT must be satisfied — see below. A contact failing ANY constraint must be excluded." : "Match the query intent — common sense applies."}
+3. NO TENSE-DETECTION: prior employment ("ex-Stripe") is NOT a current-company match unless the query asks about ex-employees.
+4. EMPTY FIELDS NEVER QUALIFY: if a candidate has no \`location\`, they cannot match a location query. Exclude them.
+5. PRECISION OVER RECALL: returning 5 verified matches is better than 30 noisy ones.${
+    hasHardConstraints
+      ? `
+
+HARD CONSTRAINTS for THIS QUERY (you must verify EACH for EVERY match):
+${planDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n")}
+
+A contact that fails any hard constraint MUST be excluded, regardless of how well other fields match.`
+      : ""
+  }`;
 
   const prompt = `QUERY: "${query.replace(/"/g, "'")}"
+${plan?.rationale ? `\nPLANNER RATIONALE: ${plan.rationale}` : ""}
 
-CANDIDATES (${candidates.length} pre-filtered contacts):
+CANDIDATES (${candidates.length}):
 ${JSON.stringify(candidates)}
 
-Return a JSON array of contacts that DEFINITIVELY match the query. For each match, provide a brief evidence-based reason citing the specific field value. If no candidates match, return [].`;
+Return a JSON array of VERIFIED matches with field-level evidence. If no candidate can be grounded, return [].`;
 
   const result = await provider.generate({
     systemPrompt,
@@ -521,43 +581,135 @@ Return a JSON array of contacts that DEFINITIVELY match the query. For each matc
         type: "object",
         properties: {
           contact_id: { type: "string" },
+          verified_field: { type: "string" },
+          verified_value: { type: "string" },
           reason: { type: "string" },
         },
-        required: ["contact_id", "reason"],
+        required: ["contact_id", "verified_field", "verified_value", "reason"],
       },
     },
   });
 
-  const parsed = safeParseJson<SemanticMatchResult[]>(
+  interface VerifiedMatch extends SemanticMatchResult {
+    verified_field?: string;
+    verified_value?: string;
+  }
+
+  const parsed = safeParseJson<VerifiedMatch[]>(
     result.text,
     "rerankCandidates",
   );
   if (!parsed) return [];
 
-  // ── Server-side false-positive filter ──────────────────────────────────
-  const negativePatterns =
-    /\bdoes not\b|\bdoesn't\b|\bnot a match\b|\bno evidence\b|\bnot start\b|\bunrelated\b|\bnot related\b|\bnot in\b/i;
-  const filtered = parsed.filter((m) => {
-    if (negativePatterns.test(m.reason)) {
-      log.debug("Reranker", `Filtered false positive: "${m.reason}"`);
-      return false;
+  // ── Server-side evidence verification ───────────────────────────────────
+  // We re-check the LLM's claimed evidence against the actual candidate
+  // data to catch hallucinations and ungrounded matches. Three checks:
+  //  1. contact_id must exist in our candidate set
+  //  2. verified_value must be a literal substring of the named field
+  //  3. if a hard constraint applies to that field, the value must satisfy it
+  const reasonNegativePattern =
+    /\bdoes not\b|\bdoesn't\b|\bno evidence\b|\bunrelated\b|\bnot related\b|\bnot in\b|\bnot a match\b/i;
+
+  const wordBoundaryMatch = (haystack: string, needle: string): boolean => {
+    if (!haystack || !needle) return false;
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$1");
+    return new RegExp(
+      `(?:^|[^a-zA-Z0-9])${escaped}(?=[^a-zA-Z0-9]|$)`,
+      "i",
+    ).test(haystack);
+  };
+
+  const filtered: SemanticMatchResult[] = [];
+  let droppedNoEvidence = 0;
+  let droppedHardConstraint = 0;
+  let droppedNegativeReason = 0;
+  let droppedHallucinated = 0;
+
+  for (const m of parsed) {
+    const cand = candidates.find((c) => c.id === m.contact_id);
+    if (!cand) {
+      droppedHallucinated++;
+      continue;
     }
-    // Validate the contact_id actually exists in our candidates
-    if (!candidates.some((c) => c.id === m.contact_id)) {
+
+    if (reasonNegativePattern.test(m.reason ?? "")) {
+      droppedNegativeReason++;
+      continue;
+    }
+
+    // Verify the claimed evidence: the verified_value must actually appear
+    // in the candidate's named field. This catches the LLM saying "lives
+    // in California" for a contact whose location is "Sydney".
+    const field = (m.verified_field ?? "").toLowerCase();
+    const value = (m.verified_value ?? "").trim();
+    const candAsRecord = cand as unknown as Record<string, unknown>;
+    const fieldVal =
+      typeof candAsRecord[field] === "string"
+        ? (candAsRecord[field] as string)
+        : "";
+
+    if (
+      !value ||
+      !fieldVal ||
+      !fieldVal.toLowerCase().includes(value.toLowerCase())
+    ) {
+      droppedNoEvidence++;
       log.debug(
         "Reranker",
-        `Filtered hallucinated contact_id: "${m.contact_id}"`,
+        `Dropped ${cand.name}: claimed ${field}="${value}" not found in actual ${field}="${fieldVal}"`,
       );
-      return false;
+      continue;
     }
-    return true;
-  });
+
+    // If the query plan has a hard constraint on this field, verify the
+    // candidate's actual field satisfies AT LEAST ONE matcher. This is the
+    // last-mile safety net beyond the pre-filter.
+    if (plan?.must.locationMatchers?.length && cand.location) {
+      const ok = plan.must.locationMatchers.some((mat) =>
+        wordBoundaryMatch(cand.location ?? "", mat),
+      );
+      if (!ok) {
+        droppedHardConstraint++;
+        log.debug(
+          "Reranker",
+          `Dropped ${cand.name}: location "${cand.location}" fails locationMatchers`,
+        );
+        continue;
+      }
+    } else if (plan?.must.locationMatchers?.length && !cand.location) {
+      droppedHardConstraint++;
+      continue;
+    }
+    if (plan?.must.companyMatchers?.length && cand.company) {
+      const ok = plan.must.companyMatchers.some((mat) =>
+        wordBoundaryMatch(cand.company ?? "", mat),
+      );
+      if (!ok) {
+        droppedHardConstraint++;
+        continue;
+      }
+    }
+    if (plan?.must.roleMatchers?.length) {
+      const ok = plan.must.roleMatchers.some(
+        (mat) =>
+          wordBoundaryMatch(cand.role ?? "", mat) ||
+          wordBoundaryMatch((candAsRecord["headline"] as string) ?? "", mat),
+      );
+      if (!ok) {
+        droppedHardConstraint++;
+        continue;
+      }
+    }
+
+    filtered.push({ contact_id: m.contact_id, reason: m.reason });
+  }
 
   log.info(
     "AIService",
-    `Reranker "${query}" → ${filtered.length}/${candidates.length} matches ` +
-      `(${parsed.length - filtered.length} filtered) in ${result.latencyMs}ms via ${result.model} | ` +
-      `Tokens: ${result.tokenCount ?? "?"}`,
+    `Reranker "${query}" → ${filtered.length}/${candidates.length} verified ` +
+      `(LLM said ${parsed.length}, dropped: ${droppedNoEvidence} no-evidence, ` +
+      `${droppedHardConstraint} hard-constraint, ${droppedNegativeReason} negative, ${droppedHallucinated} hallucinated) ` +
+      `in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
   );
   recordInvocation({
     operation: "rerank",
@@ -851,8 +1003,10 @@ export async function synthesizeSearchResults(
     name: string;
     role?: string;
     company?: string;
+    location?: string;
     aiReason?: string;
   }[],
+  plan?: QueryPlan | null,
 ): Promise<string> {
   if (isMockMode()) {
     log.warn(
@@ -860,6 +1014,9 @@ export async function synthesizeSearchResults(
       "Using mock synthesis due to unconfigured AI provider",
     );
     await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (contacts.length === 0) {
+      return `No contacts matched "${query}". Try rephrasing or broadening the search.`;
+    }
     return (
       `You have ${contacts.length} connections matching "${query}". ` +
       `Key figures include ${contacts
@@ -870,7 +1027,6 @@ export async function synthesizeSearchResults(
     );
   }
 
-  // ── Cache check: same query + same result count → same synthesis
   const cacheKey = query.trim().toLowerCase().replace(/\s+/g, " ");
   const cached = aiCache.get<string>("synthesis", cacheKey);
   if (cached) {
@@ -883,31 +1039,72 @@ export async function synthesizeSearchResults(
     return cached;
   }
 
+  if (contacts.length === 0) {
+    return `No contacts matched "${query}". Try rephrasing or broadening the search.`;
+  }
+
+  // Render contacts with location explicitly so the LLM can ground geographic
+  // claims against literal field values rather than vibes.
   const contactSummaries = contacts
     .map((c) => {
       const parts = [c.name];
       if (c.role) parts.push(c.role);
       if (c.company) parts.push(`at ${c.company}`);
+      if (c.location) parts.push(`[location: ${c.location}]`);
       if (c.aiReason) parts.push(`— ${c.aiReason}`);
       return parts.join(", ");
     })
     .join("\n");
 
-  const systemPrompt = `You are a CRM intelligence analyst. Given a search query and matching contacts, provide a concise 2-3 sentence executive brief.
+  // Build a grounding statement from the plan so the LLM understands what
+  // filter actually applies — and is held accountable to it. Without this
+  // the synthesis says things like "30 contacts in America" without
+  // verifying each contact's location.
+  const grounding: string[] = [];
+  if (plan?.must.locationMatchers?.length) {
+    grounding.push(
+      `Every contact in the list has been verified to mention one of these location strings: ${plan.must.locationMatchers.slice(0, 20).join(", ")}${plan.must.locationMatchers.length > 20 ? "..." : ""}.`,
+    );
+  }
+  if (plan?.must.companyMatchers?.length) {
+    grounding.push(
+      `Each contact's company matches one of: ${plan.must.companyMatchers.join(", ")}.`,
+    );
+  }
+  if (plan?.must.roleMatchers?.length) {
+    grounding.push(
+      `Each contact's role matches one of: ${plan.must.roleMatchers.join(", ")}.`,
+    );
+  }
+  if (plan?.must.industryMatchers?.length) {
+    grounding.push(
+      `Each contact's industry matches one of: ${plan.must.industryMatchers.join(", ")}.`,
+    );
+  }
 
-RULES:
-1. Summarize WHO these people are and their commonalities.
-2. Highlight the strongest connections or most notable contacts.
-3. If there are actionable patterns (e.g., many at-risk contacts, industry clusters), mention them.
-4. Be specific — reference actual names and data. Do NOT use generic platitudes.
-5. Write in second person ("You have...", "Your strongest...").`;
+  const systemPrompt = `You are a CRM intelligence analyst. You produce a 2-3 sentence grounded executive brief about a set of contacts that match a query.
+
+CRITICAL GROUNDING RULES:
+1. NEVER make a claim that does not apply to AT LEAST 80% of the contacts shown. If you say "based in America", check every contact's [location:] tag.
+2. NEVER invent fields you can't see. No claims about industries, roles, or seniority unless they appear in the contact summaries.
+3. If contacts span multiple regions, industries, or companies, SAY SO — do not project a false homogeneity.
+4. Write in second person ("You have...", "Your strongest...").
+5. Be specific: cite actual names where useful.
+6. If the contact list is small (≤3) or heterogeneous, just describe each briefly.
+
+BAD example (hallucination):
+  Query: "Who lives in America?" with contacts [Alice (LA), Bob (Sydney)]
+  ❌ "You have 2 contacts based in America..." (Bob isn't)
+GOOD example (grounded):
+  ✓ "You have 2 contacts: Alice in LA and Bob in Sydney. Despite the query, one is outside the US."`;
 
   const prompt = `QUERY: "${query}"
+${grounding.length ? `\nVERIFIED FILTER:\n${grounding.join("\n")}` : ""}
 
 MATCHING CONTACTS (${contacts.length} total):
 ${contactSummaries}
 
-Write a 2-3 sentence executive brief.`;
+Write a 2-3 sentence executive brief. Every claim must be true for the contacts shown.`;
 
   try {
     const result = await provider.generate({
@@ -920,7 +1117,6 @@ Write a 2-3 sentence executive brief.`;
     const text = result.text?.trim();
     if (!text) throw new Error("Empty synthesis response");
 
-    // Cache the synthesis result
     aiCache.set("synthesis", cacheKey, text);
 
     log.info(
@@ -941,5 +1137,328 @@ Write a 2-3 sentence executive brief.`;
       error: getErrorMessage(error),
     });
     throw error;
+  }
+}
+
+// =============================================================================
+// 11. parseSearchQuery (Ask Contrack — Query Understanding, v5 Plan/Filter)
+// =============================================================================
+
+/**
+ * Parse a natural-language Ask Contrack query into a structured QueryPlan.
+ *
+ * Architectural role (v5 Plan → Filter → Rank → Verify):
+ *   The plan is the SOURCE OF TRUTH for what the user wants. The retrieval
+ *   layer enforces `must.*Matchers` as hard pre-filters; the reranker uses
+ *   the plan to verify each candidate; the synthesizer uses the plan to
+ *   stay grounded.
+ *
+ * The LLM is responsible for *expanding* each concept into a synonym set
+ * the retrieval layer can word-boundary match against the relevant column.
+ * Example for "Who lives in America?":
+ *   {
+ *     must: {
+ *       locationMatchers: ["United States","USA","U.S.","U.S.A.","America",
+ *         "Alabama","Alaska",...,"Wyoming","DC","San Francisco","Los Angeles",
+ *         "New York","Chicago","Boston","Miami","Austin","Seattle","CA","NY",
+ *         "TX","FL","IL",...]
+ *     },
+ *     should: {},
+ *     confidence: "high",
+ *     rationale: "Geographic intent: contacts in the United States."
+ *   }
+ *
+ * Returns `null` on mock-mode or LLM failure — callers should treat that
+ * as "no plan available" and run the legacy hybrid search without hard
+ * filters (FTS + vector only).
+ *
+ * Cached by content-hash for 24h — a query parse is a pure function of
+ * the query string.
+ */
+export async function parseSearchQuery(
+  query: string,
+): Promise<QueryPlan | null> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return null;
+
+  const cacheKey = contentHash(trimmed.toLowerCase());
+  const cached = aiCache.get<QueryPlan>("queryParse", cacheKey);
+  if (cached) {
+    recordInvocation({
+      operation: "queryParse",
+      latencyMs: 0,
+      cached: true,
+      description: `QueryParse cache hit: "${trimmed.slice(0, 40)}"`,
+    });
+    return cached;
+  }
+
+  if (isMockMode()) return null;
+
+  const systemPrompt = `You are a query planner for a personal CRM. You convert natural-language queries into a structured QueryPlan that downstream retrieval will use to filter and rank contacts.
+
+Your output drives the retrieval. \`must.*Matchers\` lists are applied as HARD pre-filters via word-boundary substring matching on the named contact field. \`should.traits\` is a soft boost. Be EXHAUSTIVE inside each matcher list — include every reasonable synonym, abbreviation, region member, or canonical form a contact's field might literally contain.
+
+================================
+WHEN TO USE EACH BUCKET
+================================
+- LOCATION (must.locationMatchers): use whenever the query names a place, region, or country. Expand the location into ALL literal strings a contact's \`location\` field could plausibly contain:
+  * Country names + ISO codes ("United States", "USA", "U.S.", "U.S.A.", "America")
+  * Sub-regions for countries (US states with full names AND 2-letter codes; UK constituent countries; etc.)
+  * Major cities in the region
+  * Common nicknames ("the bay" → "San Francisco", "Bay Area")
+  Example "America" → ["United States","USA","U.S.","U.S.A.","America","Alabama","AL","Alaska","AK","Arizona","AZ","Arkansas","AR","California","CA","Colorado","CO","Connecticut","CT","Delaware","DE","Florida","FL","Georgia","GA","Hawaii","HI","Idaho","ID","Illinois","IL","Indiana","IN","Iowa","IA","Kansas","KS","Kentucky","KY","Louisiana","LA","Maine","ME","Maryland","MD","Massachusetts","MA","Michigan","MI","Minnesota","MN","Mississippi","MS","Missouri","MO","Montana","MT","Nebraska","NE","Nevada","NV","New Hampshire","NH","New Jersey","NJ","New Mexico","NM","New York","NY","North Carolina","NC","North Dakota","ND","Ohio","OH","Oklahoma","OK","Oregon","OR","Pennsylvania","PA","Rhode Island","RI","South Carolina","SC","South Dakota","SD","Tennessee","TN","Texas","TX","Utah","UT","Vermont","VT","Virginia","VA","Washington","WA","West Virginia","WV","Wisconsin","WI","Wyoming","WY","DC","District of Columbia","San Francisco","Los Angeles","New York","Chicago","Houston","Phoenix","Philadelphia","San Diego","Dallas","Austin","Jacksonville","Boston","Detroit","Atlanta","Miami","Seattle","Denver","Portland","Nashville","San Antonio"]
+
+- COMPANY (must.companyMatchers): use when the query names a specific employer. Skip generic phrases ("a startup", "some firm").
+
+- ROLE (must.roleMatchers): use when the query names a job function or title. Include synonyms:
+  * "founders" → ["Founder","Co-Founder","Cofounder","CEO","Founding"]
+  * "engineers" → ["Engineer","Developer","SWE","Software Engineer","Programmer","Coder","Engineering"]
+  * "VCs" → ["VC","Venture Capitalist","Investor","Partner","General Partner","GP","Associate","Principal"]
+
+- INDUSTRY (must.industryMatchers): use when the query names a sector or vertical. Include sub-fields:
+  * "fintech" → ["Fintech","FinTech","Finance","Payments","Banking","DeFi","Crypto"]
+  * "climate" → ["Climate","ClimateTech","Sustainability","Green","Cleantech","Renewable","ESG"]
+
+- TEMPORAL (must.temporal): only when the query references recency ("haven't talked to in 6 months" → {type:"lastContact",daysAgo:180}).
+
+- TRAITS (should.traits): use for descriptive intent that doesn't fit above — interests ("loves climbing"), credentials ("PhD"), seniority adjectives ("senior"), personality ("extroverted"). Each trait is its own short phrase.
+
+================================
+CONFIDENCE RULES
+================================
+- "high": the query has clear structured intent ("who lives in X", "VCs at Y", "founders in fintech"). Hard filters will be enforced.
+- "medium": query has structured intent but with ambiguity. Hard filters apply but reranker is more lenient.
+- "low": vague/exploratory ("interesting people", "show me my network"). NO must.* should be populated — return empty must:{} and treat everything as soft signals.
+
+================================
+CRITICAL
+================================
+- For names of people ("Find John", "Tell me about Jane Smith") → confidence: "high", populate NO must.*, leave the FTS layer to handle name matching. (Names are handled by FTS5 keyword match, not by structured filters.)
+- Word-boundary matching is used — emit 2-letter state codes ("CA", "NY") freely; they won't match inside "Casablanca".
+- Be exhaustive. Missing a synonym is worse than including an unlikely one.
+- \`rationale\` is one sentence summarizing what you inferred.`;
+
+  const prompt = `Query: "${trimmed}"
+
+Return the structured QueryPlan JSON.`;
+
+  try {
+    const result = await provider.generate({
+      systemPrompt,
+      prompt,
+      responseFormat: "json",
+      routing: { prefer: "lite" },
+      timeoutMs: 6_000,
+      jsonSchema: {
+        type: "object",
+        properties: {
+          must: {
+            type: "object",
+            properties: {
+              locationMatchers: { type: "array", items: { type: "string" } },
+              companyMatchers: { type: "array", items: { type: "string" } },
+              roleMatchers: { type: "array", items: { type: "string" } },
+              industryMatchers: { type: "array", items: { type: "string" } },
+              temporal: {
+                type: "object",
+                properties: {
+                  type: {
+                    type: "string",
+                    enum: ["lastContact", "neverContacted"],
+                  },
+                  daysAgo: { type: "integer" },
+                },
+                required: ["type"],
+              },
+            },
+          },
+          should: {
+            type: "object",
+            properties: {
+              traits: { type: "array", items: { type: "string" } },
+            },
+          },
+          confidence: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+          },
+          rationale: { type: "string" },
+        },
+        required: ["must", "should", "confidence", "rationale"],
+      },
+    });
+
+    const raw = safeParseJson<QueryPlan>(result.text, "parseSearchQuery");
+    if (!raw) return null;
+
+    // Defensive cleaning — strip empties so downstream can treat presence
+    // as "filter is active". An empty list shouldn't gate anything.
+    const cleanList = (xs: unknown): string[] | undefined => {
+      if (!Array.isArray(xs)) return undefined;
+      const out = xs
+        .map((s) => (typeof s === "string" ? s.trim() : ""))
+        .filter((s) => s.length > 0);
+      return out.length > 0 ? out : undefined;
+    };
+
+    const cleaned: QueryPlan = {
+      must: {},
+      should: {},
+      confidence:
+        raw.confidence === "high" ||
+        raw.confidence === "medium" ||
+        raw.confidence === "low"
+          ? raw.confidence
+          : "medium",
+      rationale:
+        typeof raw.rationale === "string" && raw.rationale.length < 300
+          ? raw.rationale.trim()
+          : "",
+    };
+
+    // Low-confidence queries skip hard filters entirely — they're treated
+    // as exploratory, only the soft boosts remain. This protects against
+    // the planner over-extracting on ambiguous queries.
+    if (cleaned.confidence !== "low" && raw.must) {
+      const loc = cleanList(raw.must.locationMatchers);
+      if (loc) cleaned.must.locationMatchers = loc;
+      const co = cleanList(raw.must.companyMatchers);
+      if (co) cleaned.must.companyMatchers = co;
+      const role = cleanList(raw.must.roleMatchers);
+      if (role) cleaned.must.roleMatchers = role;
+      const ind = cleanList(raw.must.industryMatchers);
+      if (ind) cleaned.must.industryMatchers = ind;
+      if (raw.must.temporal?.type) cleaned.must.temporal = raw.must.temporal;
+    }
+
+    if (raw.should) {
+      const traits = cleanList(raw.should.traits);
+      if (traits) cleaned.should.traits = traits;
+    }
+
+    aiCache.set("queryParse", cacheKey, cleaned);
+
+    log.debug(
+      "AIService",
+      `parseSearchQuery "${trimmed.slice(0, 50)}" → conf=${cleaned.confidence} ` +
+        `loc:${cleaned.must.locationMatchers?.length ?? 0} ` +
+        `co:${cleaned.must.companyMatchers?.length ?? 0} ` +
+        `role:${cleaned.must.roleMatchers?.length ?? 0} ` +
+        `ind:${cleaned.must.industryMatchers?.length ?? 0} ` +
+        `traits:${cleaned.should.traits?.length ?? 0} ` +
+        `in ${result.latencyMs}ms via ${result.model}`,
+    );
+    recordInvocation({
+      operation: "queryParse",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: `QueryParse: "${trimmed.slice(0, 40)}"`,
+    });
+    return cleaned;
+  } catch (err: unknown) {
+    log.warn(
+      "AIService",
+      `parseSearchQuery failed: ${getErrorMessage(err)} — caller should run hybrid search without hard filters`,
+    );
+    return null;
+  }
+}
+
+// =============================================================================
+// 12. expandQueryForEmbedding (HyDE — Hypothetical Document Embeddings)
+// =============================================================================
+
+/**
+ * Rewrite a natural-language query into a short hypothetical contact-shaped
+ * paragraph for the *vector* retrieval channel. This is the HyDE technique
+ * (Gao et al., 2022): instead of embedding the question, we embed an
+ * imagined answer. The hypothetical doc lives in the same semantic space
+ * as real contact profiles, so cosine similarity finds them more reliably
+ * than a bare question would.
+ *
+ * Example:
+ *   "Who lives in America?"
+ *   → "This person is based in the United States. They live in a US city
+ *      like San Francisco, New York, Boston, or Austin. Their profile
+ *      mentions an American state or US-based company."
+ *
+ * The returned string is meant to be fed to `embedText()` in place of the
+ * raw query — the FTS5 channel still uses the original query text.
+ *
+ * Cached by content-hashed query. Returns `null` on mock-mode or failure;
+ * callers MUST fall through to embedding the raw query in that case.
+ */
+export async function expandQueryForEmbedding(
+  query: string,
+): Promise<string | null> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return null;
+
+  const cacheKey = contentHash(trimmed.toLowerCase());
+  const cached = aiCache.get<string>("hyde", cacheKey);
+  if (cached) {
+    recordInvocation({
+      operation: "hyde",
+      latencyMs: 0,
+      cached: true,
+      description: `HyDE cache hit: "${trimmed.slice(0, 40)}"`,
+    });
+    return cached;
+  }
+
+  if (isMockMode()) return null;
+
+  const systemPrompt = `You rewrite CRM search queries as short hypothetical contact profiles.
+
+Given a question about a person, write 2-3 sentences describing someone who would match the query. Use vocabulary that would plausibly appear in a real contact's profile — geographic names, company names, industry terms, job titles, traits. Be concrete, not generic.
+
+Output ONLY the profile text. No preamble, no quotes, no "Here is..." prefix.`;
+
+  const prompt = `Query: "${trimmed}"
+
+Hypothetical matching profile:`;
+
+  try {
+    const result = await provider.generate({
+      systemPrompt,
+      prompt,
+      responseFormat: "text",
+      routing: { prefer: "lite" },
+      timeoutMs: 5_000,
+    });
+
+    const text = result.text?.trim();
+    if (!text || text.length < 10 || text.length > 800) {
+      log.debug(
+        "AIService",
+        `expandQueryForEmbedding rejected output (len=${text?.length ?? 0}) for "${trimmed.slice(0, 40)}"`,
+      );
+      return null;
+    }
+
+    aiCache.set("hyde", cacheKey, text);
+
+    log.debug(
+      "AIService",
+      `HyDE "${trimmed.slice(0, 50)}" → "${text.slice(0, 80)}..." in ${result.latencyMs}ms via ${result.model}`,
+    );
+    recordInvocation({
+      operation: "hyde",
+      model: result.model,
+      tokenCount: result.tokenCount,
+      latencyMs: result.latencyMs,
+      cached: false,
+      description: `HyDE: "${trimmed.slice(0, 40)}"`,
+    });
+    return text;
+  } catch (err: unknown) {
+    log.warn(
+      "AIService",
+      `expandQueryForEmbedding failed: ${getErrorMessage(err)} — caller should embed raw query`,
+    );
+    return null;
   }
 }

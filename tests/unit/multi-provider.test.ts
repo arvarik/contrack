@@ -61,14 +61,15 @@ describe("OpenAIAdapter", () => {
   });
 
   // ── Model Class Mapping ──────────────────────────────────────────────
-  // Contract: lite → gpt-4o-mini, flash → gpt-5.4-mini, pro → gpt-5.4
+  // Contract: lite → gpt-5.4-nano, flash → gpt-5.4-mini, pro → gpt-5.4
+  // (lite was bumped from gpt-4o-mini to gpt-5.4-nano on 2026-03-17 when
+  // OpenAI introduced the nano size tier below mini.)
 
   describe("model class mapping", () => {
-    it("maps 'lite' to gpt-4o-mini", () => {
+    it("maps 'lite' to gpt-5.4-nano", () => {
       const adapter = new OpenAIAdapter("test-key");
-      // The adapter should expose a way to resolve model class, or we test via generate
       const model = adapter.resolveModel("lite");
-      expect(model).toBe("gpt-4o-mini");
+      expect(model).toBe("gpt-5.4-nano");
     });
 
     it("maps 'flash' to gpt-5.4-mini", () => {
@@ -86,7 +87,7 @@ describe("OpenAIAdapter", () => {
     it("defaults to lite when no preference specified", () => {
       const adapter = new OpenAIAdapter("test-key");
       const model = adapter.resolveModel(undefined);
-      expect(model).toBe("gpt-4o-mini");
+      expect(model).toBe("gpt-5.4-nano");
     });
   });
 

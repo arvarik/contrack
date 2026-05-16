@@ -106,6 +106,29 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
     maxEntries: 1,
     label: "DailyInsight",
   },
+
+  /**
+   * Query Parse: Structured filters extracted from a natural-language
+   * Ask Contrack query (location / company / industry / role / traits /
+   * temporal). Pure function of the query text and a small static schema,
+   * so the result is stable across contact mutations — long TTL is safe.
+   * Invalidation: Never (independent of contact data).
+   */
+  queryParse: {
+    ttlMs: 24 * 60 * 60_000,
+    maxEntries: 500,
+    label: "QueryParse",
+  },
+
+  /**
+   * HyDE: Hypothetical-document expansion of a search query, used as the
+   * input text to the local embedding model instead of the bare query.
+   * Like queryParse, this is a pure function of the query — no need to
+   * invalidate on contact mutation (the expansion describes the *kind* of
+   * person, not any specific contact).
+   * Invalidation: Never.
+   */
+  hyde: { ttlMs: 24 * 60 * 60_000, maxEntries: 500, label: "HyDE" },
 };
 
 // =============================================================================

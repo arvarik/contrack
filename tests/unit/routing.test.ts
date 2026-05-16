@@ -394,7 +394,7 @@ describe("SmartRouter", () => {
   it("prefers Gemini 3 over Gemini 2 within the same class", () => {
     const router = new SmartRouter(tracker, "PAID");
 
-    // Prefer lite — should pick gemini-3.1-flash-lite-preview (gen 3)
+    // Prefer lite — should pick gemini-3.1-flash-lite (gen 3)
     // over gemini-2.5-flash-lite (gen 2), despite the latter being cheaper
     const route = router.getNextAvailableRoute(
       100,
@@ -434,6 +434,11 @@ describe("SmartRouter", () => {
 
     // Deny all stable models — without auto-preview, this would throw.
     // With prefer set, preview models are automatically allowed.
+    // (Note: after gemini-3.1-flash-lite went GA on 2026-05-07 the only
+    // remaining preview-class models are flash and pro, so the router
+    // falls back to the cheapest preview rather than a lite. The test
+    // asserts the *behavior* — preview models become eligible — rather
+    // than a specific class to remain robust to future GA promotions.)
     const stableIds = GEMINI_REGISTRY.filter(
       (m) => m.stability === "stable",
     ).map((m) => m.id);
@@ -446,7 +451,6 @@ describe("SmartRouter", () => {
 
     const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
     expect(model?.stability).toBe("preview");
-    expect(model?.modelClass).toBe("lite");
   });
 });
 

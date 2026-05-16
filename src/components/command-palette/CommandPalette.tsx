@@ -67,7 +67,12 @@ export const CommandPalette = () => {
 
   // ── Mode detection ──
   const mode = getMode(search);
-  const debouncedSearch = useDebounce(search, mode === "ai" ? 600 : 200);
+  // AI debounce is intentionally longer than FTS. AI calls cost real money and
+  // produce worse results for partial queries ("Who lives in Ame" is a
+  // qualitatively different question than "Who lives in America"). 900ms is
+  // roughly the median inter-key gap a user produces at the end of a thought,
+  // so this fires when they've stopped composing rather than mid-word.
+  const debouncedSearch = useDebounce(search, mode === "ai" ? 900 : 200);
 
   // ── Faceted filter tokenizer (Feature 5) ──
   const {
@@ -144,11 +149,19 @@ export const CommandPalette = () => {
   // Track last fired query to prevent duplicate calls
   const prevAiQueryRef = useRef<string>("");
 
-  // Track if a successful FTS search was recorded for the current debounced term
-  const lastRecordedFtsRef = useRef<string>("");
+  // Track if a successful AI search was recorded for the current debounced query.
+  // Without this, the recording effect re-fires on every keystroke while
+  // `semanticSearch.isSuccess` stays true, leaving a trail of prefix entries
+  // in "Recent Searches" (e.g. "vent", "ventu", "ventur", "venture").
+  const lastRecordedAiRef = useRef<string>("");
 
   // Derive the raw NL query from the ? prefix
   const aiQuery = mode === "ai" ? search.replace(/^\?+\s*/, "").trim() : "";
+
+  // Debounced counterpart — used as the canonical "settled" query for
+  // recording into history, so we only persist queries the user paused on.
+  const debouncedAiQuery =
+    mode === "ai" ? debouncedSearch.replace(/^\?+\s*/, "").trim() : "";
 
   // Derive AI results directly from mutation data (reactive, no extra useState)
   const aiResults: SemanticMatch[] =
@@ -169,13 +182,19 @@ export const CommandPalette = () => {
     return map;
   }, [instantSearch.results, aiResults, mode]);
 
-  // Fire semantic search when debounced AI query changes and is ≥3 chars
+  // Fire semantic search only when the *debounced* AI query settles.
+  // Previously this read the live `aiQuery` but listed `debouncedSearch` as a
+  // dependency, so the effect re-ran per keystroke and the debounce was a
+  // no-op — every prefix the user typed hit the AI endpoint. Now the effect
+  // genuinely waits for the user to pause before issuing a request, which
+  // both reduces cost and dramatically improves answer quality (partial
+  // queries embed/rerank poorly compared to fully-formed questions).
   useEffect(() => {
-    if (mode !== "ai" || aiQuery.length < 3) return;
-    if (aiQuery === prevAiQueryRef.current) return; // same query, skip
-    prevAiQueryRef.current = aiQuery;
-    semanticSearch.mutate(aiQuery);
-  }, [debouncedSearch, mode, aiQuery]);
+    if (mode !== "ai" || debouncedAiQuery.length < 3) return;
+    if (debouncedAiQuery === prevAiQueryRef.current) return;
+    prevAiQueryRef.current = debouncedAiQuery;
+    semanticSearch.mutate(debouncedAiQuery);
+  }, [mode, debouncedAiQuery]);
 
   // Reset mutation state when mode changes away from AI
   useEffect(() => {
@@ -185,31 +204,29 @@ export const CommandPalette = () => {
     }
   }, [mode]);
 
-  // Record successful FTS searches to history (when results arrive)
-  useEffect(() => {
-    if (
-      mode === "normal" &&
-      instantSearch.results.length > 0 &&
-      !instantSearch.isInstant &&
-      debouncedSearch.trim().length >= 2 &&
-      debouncedSearch !== lastRecordedFtsRef.current
-    ) {
-      lastRecordedFtsRef.current = debouncedSearch;
-      searchHistory.addEntry(debouncedSearch, "normal");
-    }
-  }, [instantSearch.results, instantSearch.isInstant, debouncedSearch, mode]);
+  // Note: normal (FTS) searches are intentionally NOT recorded on debounce.
+  // Debounced recording inevitably leaks prefixes ("Ri", "Ric", "Rich"...) as
+  // the user types past each settled state. Instead we record the *committed*
+  // query inside the contact result `onSelect` handler — matching the
+  // industry-standard "save on selection" pattern (Google, Spotlight, Linear).
+  // AI is different: an AI response is itself valuable even without a click,
+  // so AI searches are recorded once the debounced query settles successfully.
 
-  // Record successful AI searches to history
+  // Record successful AI searches to history.
+  // Gated on the *debounced* query and a dedup ref so we record once per
+  // settled query, not once per keystroke during typing.
   useEffect(() => {
     if (
       mode === "ai" &&
       semanticSearch.isSuccess &&
       aiResults.length > 0 &&
-      aiQuery.length >= 3
+      debouncedAiQuery.length >= 3 &&
+      debouncedAiQuery !== lastRecordedAiRef.current
     ) {
-      searchHistory.addEntry(`? ${aiQuery}`, "ai");
+      lastRecordedAiRef.current = debouncedAiQuery;
+      searchHistory.addEntry(`? ${debouncedAiQuery}`, "ai");
     }
-  }, [semanticSearch.isSuccess, aiResults.length, aiQuery, mode]);
+  }, [semanticSearch.isSuccess, aiResults.length, debouncedAiQuery, mode]);
 
   // Action mode (> prefix)
   const isAction = mode === "action";
@@ -237,22 +254,14 @@ export const CommandPalette = () => {
     return null;
   }, [search, allContacts, isAction]);
 
-  // Global ⌘K / Ctrl+K listener
+  // Global ⌘K / Ctrl+K listener.
+  // Always opens with a fresh empty input — matches Spotlight/Linear/Raycast.
+  // Power-users can press ↑ to recall prior queries from history.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((prev) => {
-          if (!prev) {
-            // Opening — check for 30s re-populate
-            const last = searchHistory.getLastQuery();
-            if (last) {
-              // Schedule after React commits the open state
-              queueMicrotask(() => setSearch(last.query));
-            }
-          }
-          return !prev;
-        });
+        setOpen((prev) => !prev);
       }
     };
     document.addEventListener("keydown", down);
@@ -264,7 +273,7 @@ export const CommandPalette = () => {
     setSearch("");
     semanticSearch.reset();
     prevAiQueryRef.current = "";
-    lastRecordedFtsRef.current = "";
+    lastRecordedAiRef.current = "";
     searchHistory.resetNavigation();
     clearFilters();
     setSubMenuContactId(null);
@@ -352,6 +361,22 @@ export const CommandPalette = () => {
     searchHistory.resetNavigation();
   }, []);
 
+  // Commit-on-selection recording for normal-mode contact picks.
+  // This is the single place a contact-search query becomes a "recent" — no
+  // debounced auto-record, so the user only sees queries they actually acted on.
+  const handleSelectFtsContact = useCallback(
+    (contactId: string) => {
+      const trimmed = search.trim();
+      if (trimmed.length >= 2) {
+        searchHistory.addEntry(trimmed, "normal");
+      }
+      recordVisit(contactId);
+      navigate(`/contact/${contactId}`);
+      handleClose();
+    },
+    [search, searchHistory, recordVisit, navigate, handleClose],
+  );
+
   const handleSelectInsight = useCallback(
     (insight: ZeroStateInsight) => {
       if (insight.type === "action_items") {
@@ -420,12 +445,20 @@ export const CommandPalette = () => {
 
     const handleArrowRight = (e: KeyboardEvent) => {
       if (e.key !== "ArrowRight") return;
-      // Don't intercept when typing in the search input
+      // If the user is mid-edit inside the input, let → move the caret.
+      // Only intercept once the caret has reached the end of the input — at
+      // that point the user has finished typing and → naturally means "expand
+      // into the action sub-menu for the highlighted result".
+      const activeEl = document.activeElement as HTMLInputElement | null;
       if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
-      )
-        return;
+        activeEl &&
+        (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")
+      ) {
+        const end = activeEl.value.length;
+        if (activeEl.selectionStart !== end || activeEl.selectionEnd !== end) {
+          return;
+        }
+      }
       // Only in normal mode with results showing
       if (mode !== "normal" || isEmptyInput) return;
 
@@ -515,21 +548,17 @@ export const CommandPalette = () => {
     return () => observer.disconnect();
   }, [open, resultMap]);
 
-  // Space key handler for peek
+  // Shift-to-peek.
+  // We originally bound this to Space, but the input always has focus inside
+  // cmdk and Space is a valid text character, so the gesture could never fire
+  // without inserting a space. Shift is a modifier that produces no text on
+  // its own, so holding it while the input is focused is safe.
   useEffect(() => {
     if (!open) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
-      // Don't interfere if user is typing in the search input
-      if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
-      )
-        return;
+      if (e.key !== "Shift" || e.repeat) return;
       if (!peekContact) return;
-
-      e.preventDefault();
       if (!peekTimerRef.current) {
         peekTimerRef.current = setTimeout(() => {
           setPeekVisible(true);
@@ -538,7 +567,7 @@ export const CommandPalette = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
+      if (e.key !== "Shift") return;
       if (peekTimerRef.current) {
         clearTimeout(peekTimerRef.current);
         peekTimerRef.current = null;
@@ -581,6 +610,16 @@ export const CommandPalette = () => {
           shouldFilter={
             mode !== "ai" && !isEmptyInput && !subMenuContactId && !hasFilters
           }
+          // Backdrop click-to-dismiss. The dialog content fills the viewport
+          // (inset-0) which means Radix's built-in pointer-down-outside never
+          // fires — there's nothing outside it. We close manually when the
+          // click target is the backdrop itself (not the inner panel, which
+          // stops propagation through its own click handlers / motion.div).
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              handleClose();
+            }
+          }}
           className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40 transition-all duration-200"
         >
           <motion.div
@@ -962,11 +1001,7 @@ export const CommandPalette = () => {
                         <Command.Item
                           key={contact.id}
                           value={contact.id + contact.name}
-                          onSelect={() => {
-                            recordVisit(contact.id);
-                            navigate(`/contact/${contact.id}`);
-                            handleClose();
-                          }}
+                          onSelect={() => handleSelectFtsContact(contact.id)}
                           className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface group/result"
                         >
                           <DataAgeHalo updatedAt={contact.updatedAt}>
@@ -1089,7 +1124,7 @@ export const CommandPalette = () => {
                 )}
                 {!isEmptyInput && peekContact && !subMenuContactId && (
                   <span className="text-on-surface-variant/40 mr-2">
-                    Hold <kbd className={KBD_SM}>Space</kbd> to peek
+                    Hold <kbd className={KBD_SM}>Shift</kbd> to peek
                   </span>
                 )}
                 <kbd className={KBD_SM}>Enter</kbd> to select

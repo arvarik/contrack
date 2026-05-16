@@ -147,18 +147,23 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     supportsGrounding: true,
   },
 
-  // ── Preview Models (opt-in only — typically paid-tier only) ────────
+  // gemini-3.1-flash-lite went GA on 2026-05-07 — promoted from preview.
+  // Still paid-only at launch (no documented free-tier RPM/TPM/RPD).
+  // SmartRouter prefers higher-generation models within a class, so on
+  // AI_TIER=PAID this is now the default lite-class pick.
   {
-    id: "gemini-3.1-flash-lite-preview",
+    id: "gemini-3.1-flash-lite",
     modelClass: "lite",
     generation: 3,
-    stability: "preview",
+    stability: "stable",
     hasFreeTier: false,
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
     paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: 350_000 },
     costPerM: 1.5,
     supportsGrounding: true,
   },
+
+  // ── Preview Models (opt-in only — typically paid-tier only) ────────
   {
     id: "gemini-3-flash-preview",
     modelClass: "flash",

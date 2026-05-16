@@ -1,27 +1,45 @@
 // =============================================================================
-// Hybrid Retrieval Engine v3 — "Spotlight" Architecture
+// Hybrid Retrieval Engine v5 — "Plan → Filter → Rank → Verify"
 // =============================================================================
-// The retrieval backbone of "Ask Contrack". Designed for sub-50ms latency
-// on a ~960 contact local-first CRM.
+// The retrieval backbone of "Ask Contrack" and the command palette AI mode.
+// Designed for sub-1s latency on a ~960 contact local-first CRM.
 //
-// Key changes from v2:
-// - SQL metadata is a PRE-FILTER (not a parallel RRF channel)
-// - chrono-node for robust temporal NLP (not brittle regex)
-// - Local embeddings via Transformers.js (zero API dependency)
+// v5 changes (Plan/Verify architecture):
+// - The LLM query planner emits a QueryPlan with `must` (hard) and `should`
+//   (soft) buckets. `must.*Matchers` arrays are applied as HARD pre-filters
+//   via word-boundary substring matching against the relevant contact field
+//   BEFORE FTS5/vector run. This is the architectural fix for false
+//   positives like "Sydney" surfacing on "Who lives in America?".
+// - The QueryPlan is returned in RetrievalResult so the reranker can
+//   verify per-filter and the synthesizer can ground its claims.
+// - `should.traits` remains a soft RRF boost channel (descriptive intent).
+// - When AI is unavailable OR the planner reports low confidence, we run
+//   pure hybrid search (FTS + HyDE-vector) without hard filters — the
+//   pipeline still produces results.
+// - Removed the legacy regex `extractPreFilters` soft boost — the planner
+//   subsumes it. Regex is no longer in the hot path.
+//
+// Carried over:
+// - Local embeddings via Transformers.js (zero embed-side API dependency)
+// - HyDE-expanded query for vector channel
 // - RRF k=15 for sharper discrimination on small datasets
-// - No hard K cap — returns ALL qualifying candidates
 // - Weighted BM25 for column-priority FTS5 scoring
-// - Short-circuit confidence detection for bypassing LLM reranker
+// - High-confidence FTS short-circuit (skip LLM rerank for exact matches)
 //
 // Pipeline:
-//   1. Pre-filter extraction (chrono-node + regex → SQL WHERE clauses)
-//   2. FTS5 keyword search (weighted BM25, on pre-filtered subset)
-//   3. Local vector KNN (Transformers.js, on pre-filtered subset)
-//   4. RRF fusion (k=15)
-//   5. Confidence score → decides if LLM reranking is needed
+//   1. Parallel LLM augmentation (parseSearchQuery → QueryPlan,
+//      expandQueryForEmbedding → HyDE doc)
+//   2. Build the candidate corpus:
+//        - if plan has hard filters AND confidence != low:
+//            JS-side word-boundary filter on relevant columns → Set<id>
+//        - else: null (= no pre-filter, full corpus)
+//   3. FTS5 weighted search (within filtered corpus, raw query)
+//   4. Vector KNN of HyDE-expanded query (within filtered corpus)
+//   5. should.traits soft boost channels (only over the filtered corpus)
+//   6. RRF fusion (k=15) over all channels
+//   7. Confidence signal → decides if LLM reranker is needed downstream
 // =============================================================================
 
-import * as chrono from "chrono-node";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import {
@@ -31,6 +49,11 @@ import {
   getSearchEmbeddingCount,
 } from "./localEmbeddings.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import {
+  parseSearchQuery,
+  expandQueryForEmbedding,
+} from "../../ai/aiService.ts";
+import type { QueryPlan } from "../../ai/types.ts";
 
 // =============================================================================
 // Types
@@ -48,8 +71,14 @@ export interface RetrievalResult {
   candidates: RetrievalCandidate[];
   /** If true, FTS5 returned high-confidence exact matches — skip LLM reranker */
   highConfidence: boolean;
-  /** Pre-filter summary for debugging */
+  /** Pre-filter summary for logs and debug UI. */
   preFilterSummary: string;
+  /**
+   * The LLM-extracted QueryPlan, or null when AI was unavailable / parse
+   * failed. Downstream stages (rerank, synthesis) consume this to verify
+   * candidates against the user's structured intent.
+   */
+  plan: QueryPlan | null;
 }
 
 interface RankedItem {
@@ -64,10 +93,9 @@ interface RankedItem {
 
 /**
  * RRF smoothing constant.
- * k=60 (industry standard) is for million-row indexes.
- * k=15 provides sharper discrimination for ~960 rows:
- * rank 1 score = 1/16 = 0.0625 vs rank 10 score = 1/25 = 0.04
- * (with k=60: rank 1 = 0.0164 vs rank 10 = 0.0143 — nearly flat)
+ * k=15 provides sharper discrimination than k=60 for ~960 rows:
+ *   top-1 = 1/16 = 0.0625 vs top-10 = 1/25 = 0.04 (~36% drop)
+ *   (k=60: top-1 = 0.0164 vs top-10 = 0.0143 — too flat)
  */
 const RRF_K = 15;
 
@@ -85,209 +113,166 @@ const VECTOR_LIMIT = 100;
 const BM25_WEIGHTS = "10.0, 5.0, 3.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0";
 
 /**
- * High-confidence threshold: if N% or more of candidates came from
+ * High-confidence threshold: if ≥ this fraction of candidates came from
  * the FTS5 channel, the query is likely a keyword/exact match
  * and we can skip the LLM reranker.
  */
 const HIGH_CONFIDENCE_FTS_RATIO = 0.85;
 
-/**
- * Terms that follow "in" but are NOT locations.
- * Prevents false positives like "interested in AI" → location:AI.
- */
-const NON_LOCATIONS = new Set([
-  "ai",
-  "tech",
-  "fintech",
-  "finance",
-  "healthcare",
-  "saas",
-  "crypto",
-  "marketing",
-  "sales",
-  "engineering",
-  "design",
-  "consulting",
-  "trading",
-  "business",
-  "data",
-  "science",
-  "research",
-  "management",
-]);
-
-/**
- * Generic terms that follow "works at" but are NOT specific company names.
- * Prevents false positives like "works at a startup" → company:"a startup".
- */
-const NON_COMPANIES = new Set([
-  "a startup",
-  "a company",
-  "a firm",
-  "a bank",
-  "a school",
-  "a university",
-  "a hospital",
-  "an agency",
-]);
+/** Limit per soft boost channel — keeps RRF math bounded. */
+const BOOST_LIMIT = 50;
 
 // =============================================================================
-// Phase 0: Pre-Filter Extraction
+// Phase 0: Hard Pre-Filter (QueryPlan.must → Set<contactId>)
 // =============================================================================
+// This is the core v5 change. When the planner produces a high-confidence
+// `must.*Matchers` list, we apply it as a HARD constraint against the
+// relevant contact column. Only contacts that pass become candidates for
+// FTS/vector retrieval.
+//
+// Matching is JS-side word-boundary regex (case-insensitive) so we can
+// safely include 2-letter codes ("CA", "NY") without false-matching
+// "Casablanca" or "Anywhere".
 
-interface PreFilter {
-  /** Contact IDs that pass the pre-filter, or null for "no filter" */
-  contactIds: Set<string> | null;
-  /** Human-readable summary */
+interface HardFilterResult {
+  /** Set of contact IDs allowed downstream, or null = "no filter". */
+  allowedIds: Set<string> | null;
+  /** Per-dimension active matcher counts, for logging. */
   summary: string;
 }
 
 /**
- * Extract structured pre-filters from the query using chrono-node
- * for temporal parsing and regex for location/company.
- * Returns a whitelist of contactIds, or null if no filters apply.
+ * Active contacts only — ghosts, archived contacts, and soft-merged
+ * (canonical replaced) contacts are excluded from all search results.
  */
-function extractPreFilters(query: string): PreFilter {
-  const q = query.toLowerCase().trim();
-  const conditions: string[] = [];
-  const params: any[] = [];
-  const summaryParts: string[] = [];
+const ACTIVE_GATE_SQL = `isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL`;
 
-  // ── Temporal: chrono-node parses "last 3 months", "since Christmas", etc. ──
-  const temporalResult = parseTemporalFilter(q);
-  if (temporalResult) {
-    conditions.push(temporalResult.sql);
-    params.push(...temporalResult.params);
-    summaryParts.push(temporalResult.summary);
-  }
-
-  // ── Location: "in London", "from New York", "based in SF" ─────────────────
-  // CAREFUL: "interested in AI" should NOT match "AI" as a location.
-  // We require location-specific prepositions and filter against NON_LOCATIONS.
-  const locationMatch =
-    q.match(
-      /(?:^|\s)(?:located\s+in|based\s+in|live[s]?\s+in|living\s+in|from)\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:who|that|and|working|doing|\?|$))/i,
-    ) ||
-    q.match(
-      /(?:^|\s)(?:located\s+in|based\s+in|live[s]?\s+in|living\s+in|from)\s+([A-Z][a-zA-Z\s,]+)$/i,
-    ) ||
-    q.match(
-      /\b(?:contacts?|people|connections?|friends?|colleagues?|network)\s+in\s+([A-Z][a-zA-Z\s]+?)(?:\s+(?:who|that|and|working|doing|\?|$))/i,
-    );
-  if (locationMatch) {
-    const location = locationMatch[1].trim();
-    if (location.length >= 3 && !NON_LOCATIONS.has(location.toLowerCase())) {
-      conditions.push("location LIKE ?");
-      params.push(`%${location}%`);
-      summaryParts.push(`location:${location}`);
-    }
-  }
-
-  // ── Company: "works at Google", "at Apple" ─────────────────────────────────
-  // Careful: "works at a startup" should NOT become company:"a startup"
-  const companyMatch = q.match(
-    /(?:works?\s+at|at|from|employed\s+(?:at|by))\s+([A-Z][a-zA-Z\s&.]+?)(?:\s+(?:who|as|in|and|\?|$))/i,
+/**
+ * Compile a list of matchers into a single case-insensitive word-boundary
+ * regex. Word boundary uses `(?:^|[^a-zA-Z0-9])` and `(?=[^a-zA-Z0-9]|$)`
+ * (not \b) so that hyphenated/punctuated text matches correctly without
+ * Unicode surprises.
+ */
+function buildMatcherRegex(matchers: string[]): RegExp | null {
+  if (!matchers.length) return null;
+  const parts = matchers
+    .map((m) => m.trim())
+    .filter((m) => m.length > 0)
+    .map((m) => m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!parts.length) return null;
+  // Sort longest-first so the alternation prefers the most specific match
+  parts.sort((a, b) => b.length - a.length);
+  return new RegExp(
+    `(?:^|[^a-zA-Z0-9])(?:${parts.join("|")})(?=[^a-zA-Z0-9]|$)`,
+    "i",
   );
-  if (companyMatch) {
-    const company = companyMatch[1].trim();
-    if (company.length >= 2 && !NON_COMPANIES.has(company.toLowerCase())) {
-      conditions.push("company LIKE ?");
-      params.push(`%${company}%`);
-      summaryParts.push(`company:${company}`);
+}
+
+/**
+ * Apply the QueryPlan's `must` filters as a hard pre-filter against the
+ * active contact corpus. Returns the set of allowed contact IDs, or null
+ * if no filters apply.
+ */
+function applyHardFilters(plan: QueryPlan): HardFilterResult {
+  // Low-confidence parses skip hard filters entirely — exploratory queries
+  // shouldn't get gated on a possibly-wrong extraction.
+  if (plan.confidence === "low") {
+    return { allowedIds: null, summary: "low-confidence (no hard filter)" };
+  }
+
+  const locRe = buildMatcherRegex(plan.must.locationMatchers ?? []);
+  const coRe = buildMatcherRegex(plan.must.companyMatchers ?? []);
+  const roleRe = buildMatcherRegex(plan.must.roleMatchers ?? []);
+  const indRe = buildMatcherRegex(plan.must.industryMatchers ?? []);
+  const temporal = plan.must.temporal;
+
+  if (!locRe && !coRe && !roleRe && !indRe && !temporal) {
+    return { allowedIds: null, summary: "no hard filters" };
+  }
+
+  // Build the temporal predicate as SQL — it's cheaper than streaming
+  // dates through JS and we already have the index.
+  let temporalSql = "";
+  const temporalParams: string[] = [];
+  if (temporal) {
+    if (temporal.type === "neverContacted") {
+      temporalSql = ` AND lastContactedAt IS NULL`;
+    } else {
+      const days = temporal.daysAgo ?? 90;
+      temporalSql = ` AND (lastContactedAt IS NULL OR lastContactedAt < datetime('now', ?))`;
+      temporalParams.push(`-${days} days`);
     }
   }
 
-  if (conditions.length === 0) {
-    return { contactIds: null, summary: "none" };
-  }
-
-  // Execute the pre-filter query
-  try {
-    const whereClause = conditions.join(" AND ");
-    const rows = sqlite
-      .prepare(
-        `
-      SELECT id FROM contacts
-      WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
-        AND ${whereClause}
+  // Fetch only the columns we need to evaluate the matchers; for industry,
+  // we also fetch tags + interests inline as a coalesced text blob.
+  const rows = sqlite
+    .prepare(
+      `
+      SELECT
+        c.id,
+        c.location,
+        c.company,
+        c.role,
+        c.headline,
+        c.industry,
+        COALESCE(GROUP_CONCAT(DISTINCT t.tag), '')      AS tagsText,
+        COALESCE(GROUP_CONCAT(DISTINCT i.interest), '') AS interestsText
+      FROM contacts c
+      LEFT JOIN contact_tags t      ON t.contactId = c.id
+      LEFT JOIN contact_interests i ON i.contactId = c.id
+      WHERE ${ACTIVE_GATE_SQL}${temporalSql}
+      GROUP BY c.id
     `,
-      )
-      .all(...params) as { id: string }[];
+    )
+    .all(...temporalParams) as {
+    id: string;
+    location: string | null;
+    company: string | null;
+    role: string | null;
+    headline: string | null;
+    industry: string | null;
+    tagsText: string;
+    interestsText: string;
+  }[];
 
-    const ids = new Set(rows.map((r) => r.id));
-    const summary = summaryParts.join(", ");
-    return { contactIds: ids, summary: `${summary} (${ids.size} contacts)` };
-  } catch (err: unknown) {
-    log.warn("HybridRetrieval", `Pre-filter failed: ${getErrorMessage(err)}`);
-    return { contactIds: null, summary: "error" };
-  }
-}
-
-/**
- * Parse temporal expressions using chrono-node.
- * Handles: "haven't contacted in 3 months", "since last fall",
- *          "not talked to since Christmas", "in the past 2 weeks"
- */
-function parseTemporalFilter(
-  q: string,
-): { sql: string; params: string[]; summary: string } | null {
-  // Check if this is a "haven't contacted" / "not contacted" type query
-  const isNegativeTemporal =
-    /(?:haven'?t|not|didn'?t)\s+(?:contacted?|spoken?|talked?|reached?|met|seen)/i.test(
-      q,
-    );
-  const isTimeBound =
-    /(?:in\s+(?:the\s+)?(?:last|past)|since|for|over|ago)/i.test(q);
-
-  if (!isNegativeTemporal && !isTimeBound) return null;
-
-  // Use chrono-node to parse the temporal expression
-  const now = new Date();
-  const results = chrono.parse(q, now, { forwardDate: false });
-
-  if (results.length > 0) {
-    const parsedDate = results[0].start.date();
-    const isoDate = parsedDate.toISOString().split("T")[0];
-
-    return {
-      sql: "(lastContactedAt IS NULL OR lastContactedAt < ?)",
-      params: [isoDate],
-      summary: `lastContact before ${isoDate}`,
-    };
+  const allowed = new Set<string>();
+  for (const r of rows) {
+    if (locRe && !(r.location && locRe.test(r.location))) continue;
+    if (coRe && !(r.company && coRe.test(r.company))) continue;
+    if (roleRe) {
+      const inRole = r.role && roleRe.test(r.role);
+      const inHeadline = r.headline && roleRe.test(r.headline);
+      if (!inRole && !inHeadline) continue;
+    }
+    if (indRe) {
+      const inIndustry = r.industry && indRe.test(r.industry);
+      const inTags = r.tagsText && indRe.test(r.tagsText);
+      const inInterests = r.interestsText && indRe.test(r.interestsText);
+      if (!inIndustry && !inTags && !inInterests) continue;
+    }
+    allowed.add(r.id);
   }
 
-  // Fallback to manual regex if chrono-node didn't parse
-  const manualMatch = q.match(/(\d+)\s+(day|week|month|year)s?/i);
-  if (manualMatch) {
-    const amount = parseInt(manualMatch[1], 10);
-    const unit = manualMatch[2].toLowerCase();
-    const daysMap: Record<string, number> = {
-      day: 1,
-      week: 7,
-      month: 30,
-      year: 365,
-    };
-    const days = amount * (daysMap[unit] ?? 30);
+  const summaryParts: string[] = [];
+  if (locRe)
+    summaryParts.push(`loc(${plan.must.locationMatchers?.length ?? 0})`);
+  if (coRe) summaryParts.push(`co(${plan.must.companyMatchers?.length ?? 0})`);
+  if (roleRe) summaryParts.push(`role(${plan.must.roleMatchers?.length ?? 0})`);
+  if (indRe)
+    summaryParts.push(`ind(${plan.must.industryMatchers?.length ?? 0})`);
+  if (temporal) summaryParts.push(`temporal(${temporal.type})`);
 
-    return {
-      sql: "(lastContactedAt IS NULL OR lastContactedAt < datetime('now', ?))",
-      params: [`-${days} days`],
-      summary: `lastContact > ${days} days ago`,
-    };
-  }
-
-  return null;
+  return {
+    allowedIds: allowed,
+    summary: `${summaryParts.join("+")}=${allowed.size}`,
+  };
 }
 
 // =============================================================================
-// Channel 1: FTS5 Keyword Retrieval (Weighted BM25)
+// Phase 1a: FTS5 Keyword Retrieval (Weighted BM25)
 // =============================================================================
 
-/**
- * Search the FTS5 index with weighted BM25 scoring.
- * Column weights prioritize name > company > role > rest.
- * Pre-filtered subset is applied post-query (FTS5 can't use WHERE on external tables).
- */
 function ftsRetrieval(
   query: string,
   preFilterIds: Set<string> | null,
@@ -298,13 +283,9 @@ function ftsRetrieval(
   const tokens = sanitized.split(/\s+/).filter((t) => t.length > 0);
   if (tokens.length === 0) return [];
 
-  // Multiple FTS5 strategies, from most specific to most permissive
   const strategies = [
-    // Strategy 1: Full phrase match
     `"${sanitized}"`,
-    // Strategy 2: AND of individual token prefixes
     tokens.map((t) => `"${t}"*`).join(" "),
-    // Strategy 3: OR of individual tokens (most permissive)
     tokens.map((t) => `"${t}"*`).join(" OR "),
   ];
 
@@ -322,7 +303,6 @@ function ftsRetrieval(
         )
         .all(ftsQuery, FTS_LIMIT) as { contactId: string; score: number }[];
 
-      // Apply pre-filter
       const filtered = preFilterIds
         ? rows.filter((r) => preFilterIds.has(r.contactId))
         : rows;
@@ -343,16 +323,11 @@ function ftsRetrieval(
 }
 
 // =============================================================================
-// Channel 2: Local Vector KNN Retrieval
+// Phase 1b: Local Vector KNN Retrieval (HyDE-expanded query)
 // =============================================================================
 
-/**
- * Embed the query using the local Transformers.js model and find
- * nearest neighbors in the search_embeddings table.
- * ~3-5ms total. Zero API calls.
- */
 async function vectorRetrieval(
-  query: string,
+  embedInputText: string,
   preFilterIds: Set<string> | null,
 ): Promise<RankedItem[]> {
   if (!isLocalEmbeddingReady() || getSearchEmbeddingCount() === 0) {
@@ -360,7 +335,7 @@ async function vectorRetrieval(
   }
 
   try {
-    const queryVec = await embedText(query);
+    const queryVec = await embedText(embedInputText);
     if (!queryVec) return [];
 
     const neighbors = findSearchNeighbors(
@@ -384,18 +359,76 @@ async function vectorRetrieval(
 }
 
 // =============================================================================
-// Reciprocal Rank Fusion (RRF) — k=15 for small datasets
+// Phase 1c: Soft Boost Channels (should.traits)
+// =============================================================================
+// Traits are a SOFT signal — a contact matching multiple traits ranks
+// higher but is not gated on them. Each trait becomes its own ranked list
+// in the RRF fusion. Always intersected with the hard pre-filter set
+// (if any) so boosts can't surface excluded contacts.
+
+function buildTraitBoosts(
+  plan: QueryPlan,
+  allowedIds: Set<string> | null,
+): RankedItem[][] {
+  const traits = plan.should.traits ?? [];
+  if (traits.length === 0) return [];
+
+  const channels: RankedItem[][] = [];
+
+  for (const trait of traits) {
+    try {
+      const rows = sqlite
+        .prepare(
+          `
+          SELECT DISTINCT c.id
+          FROM contacts c
+          LEFT JOIN contact_tags t      ON t.contactId = c.id
+          LEFT JOIN contact_interests i ON i.contactId = c.id
+          WHERE c.isGhost = 0
+            AND (c.isArchived = 0 OR c.isArchived IS NULL)
+            AND c.canonicalId IS NULL
+            AND (
+              c.about LIKE ? OR c.preferences LIKE ? OR c.headline LIKE ?
+              OR c.searchExpansion LIKE ?
+              OR t.tag LIKE ? OR i.interest LIKE ?
+            )
+          LIMIT ?
+        `,
+        )
+        .all(
+          `%${trait}%`,
+          `%${trait}%`,
+          `%${trait}%`,
+          `%${trait}%`,
+          `%${trait}%`,
+          `%${trait}%`,
+          BOOST_LIMIT,
+        ) as { id: string }[];
+
+      const items: RankedItem[] = rows
+        .filter((r) => !allowedIds || allowedIds.has(r.id))
+        .map((r) => ({
+          contactId: r.id,
+          rank: 1,
+          channel: "vector" as const,
+        }));
+
+      if (items.length > 0) channels.push(items);
+    } catch (err: unknown) {
+      log.warn(
+        "HybridRetrieval",
+        `Trait boost failed for "${trait}": ${getErrorMessage(err)}`,
+      );
+    }
+  }
+
+  return channels;
+}
+
+// =============================================================================
+// Reciprocal Rank Fusion (RRF)
 // =============================================================================
 
-/**
- * Merge multiple ranked lists using Reciprocal Rank Fusion.
- *
- * RRF score: score(doc) = Σ 1/(k + rank_i)
- *
- * k=15 provides sharper discrimination than k=60 for ~960 rows.
- * A top-1 result gets score 1/16=0.0625 vs top-10 at 1/25=0.04 (~36% drop).
- * With k=60: top-1=0.0164 vs top-10=0.0143 (~13% drop — too flat).
- */
 export function reciprocalRankFusion(
   rankedLists: RankedItem[][],
   limit?: number,
@@ -411,10 +444,8 @@ export function reciprocalRankFusion(
         score: 0,
         channels: new Set<"fts" | "vector">(),
       };
-
       entry.score += 1 / (RRF_K + item.rank);
       entry.channels.add(item.channel);
-
       scoreMap.set(item.contactId, entry);
     }
   }
@@ -437,15 +468,23 @@ export function reciprocalRankFusion(
 // =============================================================================
 
 /**
- * Run the full v3 hybrid retrieval pipeline.
+ * Run the v5 hybrid retrieval pipeline.
  *
- * 1. Pre-filter extraction   (chrono-node + regex → SQL WHERE, <1ms)
- * 2. FTS5 weighted search    (on pre-filtered subset, <1ms)
- * 3. Local vector KNN        (Transformers.js, ~3-5ms)
- * 4. RRF fusion (k=15)       (<1ms)
- * 5. Confidence assessment   (is LLM reranking needed?)
+ * 1. Parallel LLM augmentation:
+ *      a. parseSearchQuery   → QueryPlan  (~150-300ms, cached 24h)
+ *      b. expandQueryForEmbedding → HyDE doc (~150-300ms, cached 24h)
+ *    Both gracefully degrade — pipeline still runs without them.
  *
- * Total: ~5-10ms. Zero API calls.
+ * 2. Hard pre-filter: QueryPlan.must.*Matchers applied JS-side via
+ *    word-boundary regex. Empty result set short-circuits the search.
+ *
+ * 3. FTS5 weighted BM25 within the filtered corpus.
+ * 4. Local vector KNN of HyDE-expanded query within the filtered corpus.
+ * 5. should.traits soft boost channels within the filtered corpus.
+ * 6. RRF fusion (k=15).
+ * 7. High-confidence detection for downstream LLM rerank decision.
+ *
+ * Total: ~300-600ms with AI (cache cold), ~10-30ms cached.
  */
 export async function hybridRetrieval(
   query: string,
@@ -453,52 +492,85 @@ export async function hybridRetrieval(
 ): Promise<RetrievalResult> {
   const t0 = Date.now();
 
-  // Phase 0: Extract pre-filters
-  const preFilter = extractPreFilters(query);
-
-  // If pre-filter returned 0 contacts, short-circuit
-  if (preFilter.contactIds && preFilter.contactIds.size === 0) {
-    log.info(
-      "HybridRetrieval",
-      `[${rid}] Pre-filter returned 0 contacts (${preFilter.summary}), skipping`,
-    );
-    return {
-      candidates: [],
-      highConfidence: false,
-      preFilterSummary: preFilter.summary,
-    };
-  }
-
-  // Phase 1: Run FTS5 + Vector KNN (FTS is sync, vector is async)
-  const [ftsResults, vectorResults] = await Promise.all([
-    Promise.resolve(ftsRetrieval(query, preFilter.contactIds)),
-    vectorRetrieval(query, preFilter.contactIds),
+  const [plan, hypoDoc] = await Promise.all([
+    parseSearchQuery(query),
+    expandQueryForEmbedding(query),
   ]);
 
-  // Phase 2: RRF fusion (no limit — return all candidates)
-  const fused = reciprocalRankFusion([ftsResults, vectorResults]);
+  // ── Phase 0: hard pre-filter ──────────────────────────────────────────
+  let allowedIds: Set<string> | null = null;
+  let hardFilterSummary = "skipped (no plan)";
+  if (plan) {
+    const hf = applyHardFilters(plan);
+    allowedIds = hf.allowedIds;
+    hardFilterSummary = hf.summary;
 
-  // Phase 3: Confidence assessment
-  // If FTS dominates the results, this is likely an exact keyword query
-  // and the LLM reranker is unnecessary overhead.
+    if (allowedIds !== null && allowedIds.size === 0) {
+      // No contact passes the hard filter — return honestly empty.
+      const elapsed = Date.now() - t0;
+      log.info(
+        "HybridRetrieval",
+        `[${rid}] "${query.slice(0, 60)}" → 0 candidates ` +
+          `(hard filter excluded all: ${hardFilterSummary}, conf=${plan.confidence}) ` +
+          `in ${elapsed}ms`,
+      );
+      return {
+        candidates: [],
+        highConfidence: false,
+        preFilterSummary: `no-match: ${hardFilterSummary}`,
+        plan,
+      };
+    }
+  }
+
+  const embedInput = hypoDoc ?? query;
+  const usingHyde = !!hypoDoc;
+
+  // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
+  const [ftsResults, vectorResults] = await Promise.all([
+    Promise.resolve(ftsRetrieval(query, allowedIds)),
+    vectorRetrieval(embedInput, allowedIds),
+  ]);
+
+  // ── Phase 1c: soft boost channels (traits) ─────────────────────────────
+  const traitBoosts = plan ? buildTraitBoosts(plan, allowedIds) : [];
+
+  // ── Phase 2: RRF fusion across FTS + vector + trait boosts ────────────
+  const fused = reciprocalRankFusion([
+    ftsResults,
+    vectorResults,
+    ...traitBoosts,
+  ]);
+
+  // ── Phase 3: confidence assessment ─────────────────────────────────────
+  // Dominant FTS = exact keyword match → LLM reranker is unnecessary.
+  // We also skip the short-circuit when hard filters are active and the
+  // result set is large enough that the rerank-as-verifier is worth doing.
   const ftsCount = fused.filter((c) => c.channels.includes("fts")).length;
   const highConfidence =
     fused.length > 0 &&
     ftsCount / fused.length >= HIGH_CONFIDENCE_FTS_RATIO &&
-    ftsResults.length >= 2;
+    ftsResults.length >= 2 &&
+    // Hard filters mean we WANT the LLM verifier to run — don't bypass.
+    allowedIds === null;
 
   const elapsed = Date.now() - t0;
   log.info(
     "HybridRetrieval",
     `[${rid}] "${query.slice(0, 60)}" → ` +
-      `FTS:${ftsResults.length} + Vec:${vectorResults.length} ` +
+      `FTS:${ftsResults.length} + Vec:${vectorResults.length}` +
+      `${usingHyde ? "(hyde)" : "(raw)"}` +
+      ` + Traits:${traitBoosts.length}ch ` +
       `→ ${fused.length} fused in ${elapsed}ms ` +
-      `(preFilter: ${preFilter.summary}, confidence: ${highConfidence ? "HIGH" : "low"})`,
+      `(plan: ${plan ? `conf=${plan.confidence}` : "none"}, ` +
+      `filter: ${hardFilterSummary}, ` +
+      `confidence: ${highConfidence ? "HIGH" : "low"})`,
   );
 
   return {
     candidates: fused,
     highConfidence,
-    preFilterSummary: preFilter.summary,
+    preFilterSummary: hardFilterSummary,
+    plan,
   };
 }

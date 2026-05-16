@@ -110,7 +110,7 @@ export interface RoutingPolicy {
    * Preview models (Gemini 3.x) are automatically allowed when a
    * preference is set, since they are the primary Gemini 3 offerings.
    *
-   * Example: `prefer: "lite"` → tries gemini-3.1-flash-lite-preview first,
+   * Example: `prefer: "lite"` → tries gemini-3.1-flash-lite first,
    * then gemini-2.5-flash-lite, then any available model.
    */
   prefer?: ModelClass;
@@ -290,4 +290,107 @@ export interface CompressedContact {
 export interface SemanticMatchResult {
   contact_id: string;
   reason: string;
+}
+
+/**
+ * Structured query plan produced by `parseSearchQuery` (Plan-Filter-Rank-Verify
+ * architecture, v5).
+ *
+ * The plan is split into TWO buckets that drive different retrieval behavior:
+ *
+ *  - `must`  — HARD constraints. Every populated `must.*Matchers` list is
+ *              converted to a JS-side word-boundary regex and applied as a
+ *              pre-filter against the relevant contact field BEFORE FTS5
+ *              and vector search run. A contact that fails any active must
+ *              dimension is never considered. This is what stops "Sydney"
+ *              from leaking into "Who lives in America?" — the location
+ *              filter is enforced, not merely boosted.
+ *
+ *  - `should` — SOFT signals. Used as additional RRF boost channels.
+ *               Contacts matching `should.traits` rank higher but are not
+ *               required to match. Used for descriptive intent the LLM
+ *               can't confidently structurize.
+ *
+ * `confidence` is the LLM's self-rated quality of the parse — low confidence
+ * skips the hard pre-filter to avoid over-zealous filtering on ambiguous
+ * queries ("show me my network", "interesting people").
+ *
+ * Matcher arrays are inclusive synonym sets — the LLM expands a single
+ * concept into all its plausible string representations. For "America" the
+ * planner emits country names ("United States", "USA"), state names
+ * ("California", "New York", ...), state abbreviations matched at word
+ * boundary ("CA", "NY", ...), and major city names. The retrieval layer
+ * then does case-insensitive word-boundary substring matching — a contact
+ * passes if its field contains ANY matcher.
+ *
+ * All fields are optional. An empty plan (must={}, should={}) is valid and
+ * means "no structured intent extracted — run pure hybrid search."
+ */
+export interface QueryPlan {
+  /**
+   * HARD filters — a contact MUST satisfy every populated *Matchers list.
+   * Each list is OR-internally (any matcher hit passes that dimension);
+   * across dimensions it is AND (all populated dimensions must pass).
+   */
+  must: {
+    /**
+     * Word-boundary substrings to match against `contact.location`.
+     * Includes synonyms, regions, states, abbreviations, and major cities.
+     * Example for "America": ["United States","USA","America","U.S.",
+     *   "California","CA","New York","NY",...,"San Francisco",...]
+     */
+    locationMatchers?: string[];
+    /** Word-boundary substrings to match against `contact.company`. */
+    companyMatchers?: string[];
+    /** Word-boundary substrings to match against `contact.role` or `contact.headline`. */
+    roleMatchers?: string[];
+    /** Word-boundary substrings to match against `contact.industry` and tags/interests. */
+    industryMatchers?: string[];
+    /** Hard temporal constraint on contact recency. */
+    temporal?: {
+      type: "lastContact" | "neverContacted";
+      daysAgo?: number;
+    };
+  };
+
+  /**
+   * SOFT signals — RRF boost channels. Contacts matching these rank higher
+   * but are not gated on them.
+   */
+  should: {
+    /**
+     * Free-form descriptors that don't fit must.* — interests, hobbies,
+     * credentials, soft traits. Matched against `about`, `preferences`,
+     * `headline`, `searchExpansion`, tags, interests.
+     */
+    traits?: string[];
+  };
+
+  /**
+   * LLM self-rated confidence in the parse.
+   * - `high`   → trust the must.* filters strictly
+   * - `medium` → trust must.* but be permissive on weak matchers
+   * - `low`    → skip must.* filtering, treat everything as soft boost
+   *              (used for vague exploratory queries like "interesting people")
+   */
+  confidence: "high" | "medium" | "low";
+
+  /** Short, human-readable description of the parse. Used in logs and debug UI. */
+  rationale: string;
+}
+
+/**
+ * @deprecated Replaced by `QueryPlan`. Kept transiently to ease migration —
+ * new code should consume `QueryPlan` directly.
+ */
+export interface ParsedSearchQuery {
+  location?: string;
+  company?: string;
+  industry?: string;
+  role?: string;
+  traits?: string[];
+  temporal?: {
+    type: "lastContact" | "neverContacted";
+    daysAgo?: number;
+  };
 }

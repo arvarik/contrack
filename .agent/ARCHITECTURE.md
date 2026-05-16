@@ -26,24 +26,51 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 - **Client to Server**: React Components → React Query (`useQuery`/`useMutation` in `src/api/`) → Express API routes (`server/routes/`) → Services (`server/services/`) → Repositories (`server/repositories/`) → Drizzle ORM → SQLite. **Never** write native `useEffect` fetch loops.
 - **Cold-Boot Prefetch**: `src/main.tsx` calls `queryClient.prefetchQuery` for `['contacts']` before the first render, ensuring Cmd+K has 0ms client-side data availability.
 
-### Search Pipeline (Ask Contrack v3 — Spotlight)
+### Search Pipeline (Ask Contrack v5 — Plan → Filter → Rank → Verify)
 
-Multi-stage hybrid retrieval with Reciprocal Rank Fusion (k=15):
+The retrieval pipeline is split into four pipeline stages, each enforcing a different
+quality guarantee:
 
-1. **Temporal Parsing**: `chrono-node` extracts date ranges from natural language queries.
-2. **Query Tokenization**: `useQueryTokenizer` hook splits queries into faceted filters and free-text components.
-3. **FTS5 Weighted BM25**: Full-text search across `contacts_fts` virtual table (name, company, role, headline, location, about, industry, extras, searchExpansion).
-4. **Local Vector KNN**: `sqlite-vec` cosine similarity search against 384-dim embeddings from `Xenova/all-MiniLM-L6-v2` generated locally via Transformers.js.
-5. **RRF Fusion**: Combines FTS5 and vector results using Reciprocal Rank Fusion (see `server/services/search/hybridRetrieval.ts`).
-6. **Optional LLM Reranker**: `rerankCandidates()` in `aiService.ts` uses the active AI provider to filter false positives from ~30 pre-screened candidates.
-7. **Two-Phase NDJSON Streaming**: Instant UI feedback from local retrieval (<15ms), followed by enriched backend resolution.
+| Stage      | Goal                                | Mechanism                                                                                              | Failure mode                                      |
+| ---------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| **Plan**   | Understand user intent              | `parseSearchQuery` → `QueryPlan { must, should, confidence }`                                          | LLM unavailable → empty plan, pipeline still runs |
+| **Filter** | Enforce hard structured intent      | JS-side word-boundary regex on `contact.location/company/role/industry` for each `must.*Matchers` list | Empty filter set → honest "no matches" response   |
+| **Rank**   | Surface relevance within candidates | FTS5 (BM25) + HyDE-vector KNN + soft trait boosts → RRF fusion (k=15)                                  | One channel down → others still produce results   |
+| **Verify** | Reject false positives              | `rerankCandidates` requires evidence per match; server-side word-boundary re-check against the plan    | LLM unavailable → keep Phase 1 results unverified |
+
+The architectural fix for "Sydney leaking into 'Who lives in America'" is the
+**Filter** stage: when the planner reports `confidence: "high"|"medium"` and emits
+`must.locationMatchers`, the JS-side word-boundary regex filter is the gate that
+FTS/vector run against — not a downstream RRF boost that can be outweighed by
+strong vector similarity on irrelevant signals.
+
+The legacy v4 description follows for historical context (now superseded):
+
+> v4 added LLM-driven query understanding on top of the v3 retrieval core: the user's
+> natural-language query is parsed and expanded by the LLM _before_ retrieval
+> runs, so the local FTS + vector channels work against a richer signal.
+
+1. **Parallel AI Query Augmentation** (lite-tier LLM, ~150-300ms each, cached 24h):
+   - `parseSearchQuery()` emits a `QueryPlan { must, should, confidence, rationale }`. The planner expands each concept into an _exhaustive synonym set_ a contact field could literally contain (for "America": ["United States","USA","America","CA","NY","TX",...,"San Francisco","Boston",...]). The split into `must` (hard) and `should` (soft) is the planner's responsibility — high-confidence structured intent ("who lives in X", "VCs at Y") goes to `must`; vague descriptive intent ("loves climbing") goes to `should.traits`.
+   - `expandQueryForEmbedding()` rewrites the query as a hypothetical contact-shaped paragraph (HyDE — Gao et al., 2022) for the vector channel.
+   - Both fail gracefully. On AI outage, the pipeline runs FTS + HyDE-or-raw vector with no hard filter — still produces results.
+2. **Hard Pre-Filter** (`applyHardFilters` in `hybridRetrieval.ts`): For each populated `must.*Matchers` list, build a case-insensitive **word-boundary** regex and pass only contacts whose corresponding field matches. Word-boundary is `(?:^|[^a-zA-Z0-9])` so 2-letter codes like `CA` match `"Los Angeles, CA"` but not `"Casablanca"`. When `confidence: "low"` the hard filter is skipped — exploratory queries shouldn't be gated. Empty result set returns early with `candidates: []` rather than falling through to broad retrieval.
+3. **FTS5 Weighted BM25**: Runs over the filtered candidate corpus (or full corpus if no plan). Column priority via BM25 weights `(name 10, company 5, role 3, headline 2, location 2, about 1, industry 1, extras 1, expansion 1)`.
+4. **Local Vector KNN (HyDE-enhanced)**: `sqlite-vec` cosine similarity over the filtered candidate corpus. Embedding model: `Xenova/all-MiniLM-L6-v2` (384-dim, runs locally via Transformers.js).
+5. **Soft Trait Boosts**: each entry in `should.traits` is a separate ranked list — a contact matching multiple traits accumulates score, but absence of a trait is not penalized. Intersected with the hard filter set.
+6. **RRF Fusion (k=15)**: Combines FTS5 + HyDE-vector + trait boost channels into a single ranked candidate list.
+7. **Verified LLM Reranker** (`rerankCandidates`): receives the `QueryPlan` alongside the top ~30 candidates. The LLM must produce per-match evidence (`{ contact_id, verified_field, verified_value, reason }`). Server then performs three independent verifications: (a) `verified_value` must be a literal substring of the named field on the actual candidate row, (b) the candidate's actual field must satisfy at least one of the active `must.*Matchers` (word-boundary), (c) the reason text must not contain negative qualifiers. Failing any check drops the match. This is the second line of defense behind the hard pre-filter.
+8. **Grounded Synthesis** (`synthesizeSearchResults`): the executive brief receives the `QueryPlan` and is instructed never to make a claim that doesn't apply to ≥80% of contacts shown. The prompt explicitly enumerates the verified filter and shows an example of a hallucinated vs grounded summary. Each contact in the prompt is rendered with its `[location:]` tag so the LLM can verify geographic claims literally.
+9. **Two-Phase NDJSON Streaming**: Phase 1 (post-filter, hydrated, pre-rerank) streams in <15ms. Phase 2 (post-rerank, verified) replaces it ~500ms later.
+
+**Caching**: `parseSearchQuery`, `expandQueryForEmbedding`, `rerankCandidates`, and `synthesizeSearchResults` all cache by content-hashed query under their respective `aiCache` tiers (24h TTL). Repeat queries pay zero AI cost.
 
 ### AI Adapter Pipeline
 
 All AI operations route through a layered architecture in `server/ai/`:
 
 - **`provider.ts`**: Abstract `AIProvider` interface — the single contract all adapters implement. Methods: `generate(options)` (required), `getQuotaSnapshot()` (optional, Gemini-only).
-- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates`, `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults`. **Never imports any SDK directly.**
+- **`aiService.ts`**: Provider-agnostic business logic facade. Exports: `parseContactRecord`, `generateCatchMeUpBriefing`, `extractMentions`, `summarizeEmlEmail`, `rerankCandidates` (now accepts `QueryPlan` and enforces per-filter evidence), `generateDailyInsight`, `bulkParseContacts`, `generateSearchExpansion`, `synthesizeSearchResults` (now accepts `QueryPlan` for grounding), `parseSearchQuery` (v5 — emits `QueryPlan { must, should, confidence, rationale }`), `expandQueryForEmbedding` (HyDE). **Never imports any SDK directly.**
 - **`singleton.ts`**: Provider factory — resolves the active `AIProvider` instance based on `AI_PROVIDER` env var. Supports `"gemini"` (default), `"openai"`, and `"anthropic"`. Ensures one shared instance across the entire application.
 - **`types.ts`**: Provider-agnostic type definitions including `AIProviderName = "gemini" | "openai" | "anthropic"`, `AIGenerateOptions`, `AIGenerateResult`, `JsonSchemaNode`, `RoutingPolicy`.
 - **Adapters** (`server/ai/adapters/`):
@@ -56,11 +83,13 @@ All AI operations route through a layered architecture in `server/ai/`:
   - `registry.ts` — Gemini model configs with per-tier rate limits. Model classes: `lite`, `flash`, `pro`.
   - `ParallelQueue.ts` — Tier-aware concurrency limiter (PAID=10, FREE=2 workers). Provider-agnostic.
 - **Model class mapping** (`routing.prefer`):
-  | `prefer` | Gemini | OpenAI | Anthropic |
-  |----------|--------|--------|-----------|
-  | `"lite"` | `gemini-2.5-flash-lite` | `gpt-4o-mini` | `claude-haiku-4.5` |
-  | `"flash"` | `gemini-2.5-flash` | `gpt-5.4-mini` | `claude-sonnet-4.6` |
-  | `"pro"` | `gemini-2.5-pro` | `gpt-5.4` | `claude-opus-4.6` |
+  | `prefer` | Gemini (PAID, AI_TIER) | Gemini (FREE) | OpenAI | Anthropic |
+  |----------|------------------------|---------------|--------|-----------|
+  | `"lite"` | `gemini-3.1-flash-lite` (GA 2026-05-07) | `gemini-2.5-flash-lite` | `gpt-5.4-nano` (2026-03-17) | `claude-haiku-4.5` |
+  | `"flash"` | `gemini-2.5-flash` | `gemini-2.5-flash` | `gpt-5.4-mini` | `claude-sonnet-4.6` |
+  | `"pro"` | `gemini-2.5-pro` | `gemini-2.5-pro` | `gpt-5.4` | `claude-opus-4.6` |
+
+  SmartRouter prefers higher-generation models within a class, so on `AI_TIER=PAID` `prefer: "lite"` picks the newer paid-only `gemini-3.1-flash-lite`; on `AI_TIER=FREE` the same call resolves to `gemini-2.5-flash-lite` because Gemini 3 has no free tier.
 
 ### AI Search Enrichment Pipeline (`server/services/aiSearch/`)
 
@@ -239,24 +268,24 @@ _Documents every LLM/ML model in use. Required by the ml-ai topology profile for
 
 #### Gemini Models (AI_PROVIDER="gemini")
 
-| Model                           | Role                                                                  | Cost (1M in / 1M out) | Context Window | Structured Output | Rate Limit (FREE)           | Rate Limit (PAID)            | Circuit Breaker Cost Cap |
-| ------------------------------- | --------------------------------------------------------------------- | --------------------- | -------------- | ----------------- | --------------------------- | ---------------------------- | ------------------------ |
-| `gemini-2.5-flash-lite`         | Lite extraction, mentions, reranking, search expansion, daily insight | $0.075 / $0.40        | 1M tokens      | Yes (JSON schema) | 10 RPM / 250K TPM / 500 RPD | 10K RPM / 10M TPM / ∞ RPD    | $0.50/day                |
-| `gemini-2.5-flash`              | Flash reasoning, EML summaries, general structured tasks              | $0.15 / $2.50         | 1M tokens      | Yes (JSON schema) | 2 RPM / 250K TPM / 20 RPD   | 2K RPM / 3M TPM / 100K RPD   | $2.00/day                |
-| `gemini-2.5-pro`                | Pro — complex reasoning, AI search grounding (Pass 1)                 | $1.25 / $10.00        | 1M tokens      | Yes (JSON schema) | 2 RPM / 4K TPM / 2 RPD      | 1K RPM / 5M TPM / 50K RPD    | $5.00/day                |
-| `gemini-3.1-flash-lite-preview` | Preview lite — overflow capacity (PAID only)                          | $0.075 / $1.50        | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 10K RPM / 10M TPM / 350K RPD | $1.50/day                |
-| `gemini-3-flash-preview`        | Preview flash — overflow capacity (PAID only)                         | $0.15 / $3.00         | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 2K RPM / 3M TPM / 100K RPD   | $3.00/day                |
-| `gemini-3.1-pro-preview`        | Preview pro — overflow capacity (PAID only)                           | $1.25 / $12.00        | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 1K RPM / 5M TPM / 50K RPD    | $6.00/day                |
+| Model                    | Role                                                                  | Cost (1M in / 1M out) | Context Window | Structured Output | Rate Limit (FREE)           | Rate Limit (PAID)            | Circuit Breaker Cost Cap |
+| ------------------------ | --------------------------------------------------------------------- | --------------------- | -------------- | ----------------- | --------------------------- | ---------------------------- | ------------------------ |
+| `gemini-2.5-flash-lite`  | Lite extraction, mentions, reranking, search expansion, daily insight | $0.075 / $0.40        | 1M tokens      | Yes (JSON schema) | 10 RPM / 250K TPM / 500 RPD | 10K RPM / 10M TPM / ∞ RPD    | $0.50/day                |
+| `gemini-2.5-flash`       | Flash reasoning, EML summaries, general structured tasks              | $0.15 / $2.50         | 1M tokens      | Yes (JSON schema) | 2 RPM / 250K TPM / 20 RPD   | 2K RPM / 3M TPM / 100K RPD   | $2.00/day                |
+| `gemini-2.5-pro`         | Pro — complex reasoning, AI search grounding (Pass 1)                 | $1.25 / $10.00        | 1M tokens      | Yes (JSON schema) | 2 RPM / 4K TPM / 2 RPD      | 1K RPM / 5M TPM / 50K RPD    | $5.00/day                |
+| `gemini-3.1-flash-lite`  | Lite (GA 2026-05-07) — default lite class on PAID tier                | $0.25 / $1.50         | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 10K RPM / 10M TPM / 350K RPD | $1.50/day                |
+| `gemini-3-flash-preview` | Preview flash — overflow capacity (PAID only)                         | $0.15 / $3.00         | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 2K RPM / 3M TPM / 100K RPD   | $3.00/day                |
+| `gemini-3.1-pro-preview` | Preview pro — overflow capacity (PAID only)                           | $1.25 / $12.00        | 1M tokens      | Yes (JSON schema) | N/A (paid only)             | 1K RPM / 5M TPM / 50K RPD    | $6.00/day                |
 
 _Grounding RPD is a shared pool: 500 RPD (FREE) / 5,000 RPD (PAID) across all Gemini models._
 
 #### OpenAI Models (AI_PROVIDER="openai")
 
-| Model          | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search          | Notes                            |
-| -------------- | ----- | --------------------- | -------------- | ------------------- | ------------------- | -------------------------------- |
-| `gpt-4o-mini`  | lite  | $0.15 / $0.60         | 128K tokens    | Yes (`json_schema`) | Yes (Responses API) | Cheapest, default for lite tasks |
-| `gpt-5.4-mini` | flash | $0.75 / $4.50         | 400K tokens    | Yes (`json_schema`) | Yes (Responses API) | Balanced price/quality           |
-| `gpt-5.4`      | pro   | $2.50 / $15.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Flagship reasoning               |
+| Model          | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search          | Notes                                            |
+| -------------- | ----- | --------------------- | -------------- | ------------------- | ------------------- | ------------------------------------------------ |
+| `gpt-5.4-nano` | lite  | $0.20 / ~$0.80        | 128K tokens    | Yes (`json_schema`) | Yes (Responses API) | Cheapest, default for lite tasks (GA 2026-03-17) |
+| `gpt-5.4-mini` | flash | $0.75 / $4.50         | 400K tokens    | Yes (`json_schema`) | Yes (Responses API) | Balanced price/quality                           |
+| `gpt-5.4`      | pro   | $2.50 / $15.00        | 1.05M tokens   | Yes (`json_schema`) | Yes (Responses API) | Flagship reasoning                               |
 
 _No free tier. Prepaid billing required (~$5 starter credits for new accounts). Rate limits are dynamic based on account spend tier._
 

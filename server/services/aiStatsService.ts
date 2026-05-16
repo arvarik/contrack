@@ -43,7 +43,9 @@ export type AIOperation =
   | "bulkParse"
   | "aiSearchGrounding"
   | "aiSearchExtraction"
-  | "aiSearchSinglePass";
+  | "aiSearchSinglePass"
+  | "queryParse"
+  | "hyde";
 
 /** Input shape for recording a single AI invocation. */
 export interface InvocationEntry {

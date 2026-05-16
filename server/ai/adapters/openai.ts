@@ -34,8 +34,12 @@ import {
 // Model Class Mapping
 // ---------------------------------------------------------------------------
 
+// OpenAI introduced a "nano" size tier below mini with GPT-5.4 nano on
+// 2026-03-17 ($0.20/1M input). That's now the closest equivalent to our
+// internal "lite" class — cheapest + fastest, intended for classification /
+// extraction / ranking style workloads. "flash" stays on 5.4-mini.
 const MODEL_MAP: Record<string, string> = {
-  lite: "gpt-4o-mini",
+  lite: "gpt-5.4-nano",
   flash: "gpt-5.4-mini",
   pro: "gpt-5.4",
 };

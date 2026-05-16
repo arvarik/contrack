@@ -21,6 +21,7 @@ interface SynthesisContact {
   name: string;
   role?: string | null;
   company?: string | null;
+  location?: string | null;
   aiReason?: string | null;
 }
 
@@ -77,6 +78,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           name: c.name,
           role: c.role || undefined,
           company: c.company || undefined,
+          location: c.location || undefined,
           aiReason: c.aiReason || undefined,
         })),
       };

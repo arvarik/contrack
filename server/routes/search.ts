@@ -3,7 +3,7 @@ import { log } from "../utils/logger.ts";
 import { searchService } from "../services/searchService.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { synthesizeSearchResults } from "../ai/index.ts";
+import { parseSearchQuery, synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
 const router = Router();
@@ -93,6 +93,7 @@ router.post(
         name: string;
         role?: string;
         company?: string;
+        location?: string;
         aiReason?: string;
       }[];
     };
@@ -125,7 +126,12 @@ router.post(
     res.write(JSON.stringify({ phase: "start" }) + "\n");
 
     try {
-      const text = await synthesizeSearchResults(query.trim(), contacts);
+      // Re-derive the QueryPlan so the synthesizer can ground itself
+      // against the same hard filters that the retrieval applied. The
+      // parser is cached (24h TTL by content-hash) so this is ~free on
+      // the typical synthesize-after-search flow.
+      const plan = await parseSearchQuery(query.trim());
+      const text = await synthesizeSearchResults(query.trim(), contacts, plan);
       res.write(JSON.stringify({ phase: "complete", text }) + "\n");
     } catch (err: unknown) {
       log.error("API", `[${rid}] Synthesis failed: ${getErrorMessage(err)}`);

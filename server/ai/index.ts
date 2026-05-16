@@ -16,6 +16,8 @@ export type {
   MentionEntity,
   CompressedContact,
   SemanticMatchResult,
+  ParsedSearchQuery,
+  QueryPlan,
   RoutingPolicy,
   DiagnosticsSnapshot,
   ModelUsageSnapshot,
@@ -86,5 +88,7 @@ export {
   generateDailyInsight,
   bulkParseContacts,
   synthesizeSearchResults,
+  parseSearchQuery,
+  expandQueryForEmbedding,
 } from "./aiService.ts";
 export type { DailyInsight } from "./aiService.ts";
