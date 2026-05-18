@@ -138,9 +138,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) =>
-      res.sendFile(path.join(distPath, "index.html")),
-    );
+    app.use((_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
   // Centralized error handler. Translates AppError / ZodError / SQLite
