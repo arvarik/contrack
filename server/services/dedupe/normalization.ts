@@ -147,6 +147,8 @@ export function generateBlockKeys(contact: NormalizedContact): string[] {
 export function contactToEmbeddingString(
   contact: NormalizedContact,
   raw: RawContactRow,
+  tags?: string[],
+  interests?: string[],
 ): string {
   const parts: string[] = [];
   if (raw.name) parts.push(`Name: ${raw.name}`);
@@ -165,16 +167,21 @@ export function contactToEmbeddingString(
 
   // Include tags and interests for rich semantic matching
   // (e.g., "who likes espresso?" should match contacts with espresso in interests)
-  const tagRows = sqlite
-    .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
-    .all(raw.id) as { tag: string }[];
-  const interestRows = sqlite
-    .prepare("SELECT interest FROM contact_interests WHERE contactId = ?")
-    .all(raw.id) as { interest: string }[];
-  const combined = [
-    ...tagRows.map((t) => t.tag),
-    ...interestRows.map((i) => i.interest),
-  ];
+  let combined: string[] = [];
+  if (tags && interests) {
+    combined = [...tags, ...interests];
+  } else {
+    const tagRows = sqlite
+      .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+      .all(raw.id) as { tag: string }[];
+    const interestRows = sqlite
+      .prepare("SELECT interest FROM contact_interests WHERE contactId = ?")
+      .all(raw.id) as { interest: string }[];
+    combined = [
+      ...tagRows.map((t) => t.tag),
+      ...interestRows.map((i) => i.interest),
+    ];
+  }
   if (combined.length > 0) parts.push(`Interests: ${combined.join(", ")}`);
 
   const content = parts.join(" | ");
@@ -198,6 +205,8 @@ export function normalizeContact(
   emails: { email: string }[],
   phones: { phone: string }[],
   sourcePlatforms: string[],
+  tags?: string[],
+  interests?: string[],
 ): NormalizedContact {
   // Name processing
   const nameTokens = tokenizeName(raw.name);
@@ -251,7 +260,12 @@ export function normalizeContact(
 
   // Derived fields (depend on the contact being fully built)
   contact.blockKeys = generateBlockKeys(contact);
-  contact.embeddingText = contactToEmbeddingString(contact, raw);
+  contact.embeddingText = contactToEmbeddingString(
+    contact,
+    raw,
+    tags,
+    interests,
+  );
 
   return contact;
 }
@@ -319,7 +333,30 @@ export function normalizeContacts(
     if (!platforms.includes(s.platform)) platforms.push(s.platform);
   }
 
-  // 5. Normalize each contact with pre-loaded child data
+  // 5. Batch-load all tags → Map<contactId, tag[]>
+  const allTags = sqlite
+    .prepare("SELECT contactId, tag FROM contact_tags")
+    .all() as { contactId: string; tag: string }[];
+
+  const tagsByContact = new Map<string, string[]>();
+  for (const t of allTags) {
+    if (!tagsByContact.has(t.contactId)) tagsByContact.set(t.contactId, []);
+    tagsByContact.get(t.contactId)!.push(t.tag);
+  }
+
+  // 6. Batch-load all interests → Map<contactId, interest[]>
+  const allInterests = sqlite
+    .prepare("SELECT contactId, interest FROM contact_interests")
+    .all() as { contactId: string; interest: string }[];
+
+  const interestsByContact = new Map<string, string[]>();
+  for (const i of allInterests) {
+    if (!interestsByContact.has(i.contactId))
+      interestsByContact.set(i.contactId, []);
+    interestsByContact.get(i.contactId)!.push(i.interest);
+  }
+
+  // 7. Normalize each contact with pre-loaded child data
   const normalized: NormalizedContact[] = [];
   for (const raw of allContacts) {
     if (!raw.name) continue; // skip nameless contacts (shouldn't happen, but safety)
@@ -330,6 +367,8 @@ export function normalizeContacts(
         emailsByContact.get(raw.id) ?? [],
         phonesByContact.get(raw.id) ?? [],
         sourcesByContact.get(raw.id) ?? [],
+        tagsByContact.get(raw.id) ?? [],
+        interestsByContact.get(raw.id) ?? [],
       ),
     );
   }
@@ -370,10 +409,20 @@ export function normalizeContactById(
     )
     .all(contactId) as { platform: string }[];
 
+  const tags = sqlite
+    .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+    .all(contactId) as { tag: string }[];
+
+  const interests = sqlite
+    .prepare("SELECT interest FROM contact_interests WHERE contactId = ?")
+    .all(contactId) as { interest: string }[];
+
   return normalizeContact(
     raw,
     emails,
     phones,
     sources.map((s) => s.platform),
+    tags.map((t) => t.tag),
+    interests.map((i) => i.interest),
   );
 }

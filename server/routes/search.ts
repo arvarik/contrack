@@ -62,7 +62,22 @@ router.post(
       res.setHeader("Cache-Control", "no-cache");
       res.flushHeaders();
 
-      await searchService.semanticSearchStream(query, rid, res);
+      // Create an AbortController bound to request closure
+      const controller = new AbortController();
+      req.on("close", () => {
+        log.info(
+          "API",
+          `[${rid}] Client disconnected mid-search stream. Aborting AI operations.`,
+        );
+        controller.abort();
+      });
+
+      await searchService.semanticSearchStream(
+        query,
+        rid,
+        res,
+        controller.signal,
+      );
     } else {
       // Single-response mode (backward compatible)
       const result = await searchService.semanticSearch(query, rid);
