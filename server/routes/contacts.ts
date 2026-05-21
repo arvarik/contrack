@@ -28,6 +28,7 @@ import {
   isEmbeddingAvailable,
 } from "../services/dedupe/embeddings.ts";
 import { dedupeService } from "../services/dedupe/index.ts";
+import { ParallelQueue } from "../ai/routing/ParallelQueue.ts";
 import {
   normalizeContactById,
   normalizeContacts,
@@ -476,20 +477,27 @@ router.post(
             `Background bulk embedding failed: ${getErrorMessage(err)}`,
           ),
         );
-        // Schedule incremental dedupe for each imported contact
-        for (const cid of createdIds) {
-          setTimeout(() => {
+        // Process incremental dedupe sequentially in the background to prevent lock saturation and CPU spikes
+        (async () => {
+          // Wait 3 seconds to let bulk inserts and embedding tasks settle
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await ParallelQueue.process(createdIds, 1, async (cid) => {
             const irid = `imp-${cid.slice(0, 8)}`;
-            dedupeService
-              .incrementalDedupeCheck(cid, irid)
-              .catch((err) =>
-                log.warn(
-                  "API",
-                  `Incremental dedupe for ${cid} failed: ${getErrorMessage(err)}`,
-                ),
+            try {
+              await dedupeService.incrementalDedupeCheck(cid, irid);
+            } catch (err) {
+              log.warn(
+                "API",
+                `Incremental dedupe for ${cid} failed: ${getErrorMessage(err)}`,
               );
-          }, 3_000);
-        }
+            }
+          });
+        })().catch((err) =>
+          log.error(
+            "API",
+            `Bulk background dedupe queue crashed: ${getErrorMessage(err)}`,
+          ),
+        );
       }
       res.status(201).json({ success: true, count });
     }

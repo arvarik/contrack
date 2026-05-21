@@ -4,7 +4,10 @@ import path from "path";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
-import { contactRepo } from "../repositories/contactRepository.ts";
+import {
+  contactRepo,
+  RELATION_REGISTRY,
+} from "../repositories/contactRepository.ts";
 import { queueGeocode } from "./geocoding/index.ts";
 import {
   processBase64Avatar,
@@ -318,25 +321,13 @@ export const contactService = {
         .where(eq(schema.contacts.id, id))
         .run();
 
-      const childMappings: [keyof typeof body, string][] = [
-        ["emails", "contact_emails"],
-        ["phones", "contact_phones"],
-        ["socialLinks", "contact_social_links"],
-        ["tags", "contact_tags"],
-        ["interests", "contact_interests"],
-        ["addresses", "contact_addresses"],
-        ["attributes", "contact_attributes"],
-        ["education", "contact_education"],
-        ["experience", "contact_experience"],
-        ["sources", "contact_sources"],
-      ];
-
-      for (const [bodyKey, tableName] of childMappings) {
-        if (body[bodyKey] !== undefined && Array.isArray(body[bodyKey])) {
+      for (const [bodyKey, config] of Object.entries(RELATION_REGISTRY)) {
+        const key = bodyKey as keyof typeof RELATION_REGISTRY;
+        if (body[key] !== undefined && Array.isArray(body[key])) {
           sqlite
-            .prepare(`DELETE FROM ${tableName} WHERE contactId = ?`)
+            .prepare(`DELETE FROM ${config.dbName} WHERE contactId = ?`)
             .run(id);
-          contactRepo.insertChildRecords(id, { [bodyKey]: body[bodyKey] });
+          contactRepo.insertChildRecords(id, { [key]: body[key] } as any);
         }
       }
     });

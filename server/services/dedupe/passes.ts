@@ -354,8 +354,14 @@ export async function runFunnelPass(
   }[] = [];
   let autoCount = 0;
   let discardCount = 0;
+  let scoredCount = 0;
 
   for (const candidate of allCandidates) {
+    if (scoredCount > 0 && scoredCount % 100 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    scoredCount++;
+
     const nA = normalizedMap.get(candidate.idA);
     const nB = normalizedMap.get(candidate.idB);
     if (!nA || !nB) continue;
