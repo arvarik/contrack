@@ -15,7 +15,6 @@ import {
   getAvailableModels,
   getGroundingRPDLimit,
   GEMINI_REGISTRY,
-  type ModelConfig,
   type TierLimits,
 } from "../../server/ai/routing/registry.ts";
 import { QuotaTracker } from "../../server/ai/routing/QuotaTracker.ts";

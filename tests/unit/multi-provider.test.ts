@@ -14,7 +14,7 @@
 // The Builder (Step 3) must make every one of these tests pass.
 // =============================================================================
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 // =============================================================================
 // 1. AIProviderName Type Contract
@@ -41,6 +41,7 @@ describe("AIProviderName Type", () => {
 // =============================================================================
 
 describe("OpenAIAdapter", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let OpenAIAdapter: any;
 
   beforeEach(async () => {
@@ -190,6 +191,7 @@ describe("OpenAIAdapter", () => {
 // =============================================================================
 
 describe("AnthropicAdapter", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let AnthropicAdapter: any;
 
   beforeEach(async () => {
@@ -484,7 +486,6 @@ describe("NPM Dependency Contracts", () => {
 
 describe("SDK Import Containment Invariant", () => {
   it("openai is only imported in the adapter file", async () => {
-    const fs = await import("fs");
     const path = await import("path");
     const { execSync } = await import("child_process");
 
@@ -508,7 +509,6 @@ describe("SDK Import Containment Invariant", () => {
   });
 
   it("@anthropic-ai/sdk is only imported in the adapter file", async () => {
-    const fs = await import("fs");
     const path = await import("path");
     const { execSync } = await import("child_process");
 

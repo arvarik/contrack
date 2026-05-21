@@ -206,7 +206,12 @@ export const searchService = {
    *
    * Uses NDJSON (newline-delimited JSON) for streaming.
    */
-  async semanticSearchStream(query: string, rid: string, res: Response) {
+  async semanticSearchStream(
+    query: string,
+    rid: string,
+    res: Response,
+    signal?: AbortSignal,
+  ) {
     const startTime = Date.now();
 
     // ── 1. Cache check ─────────────────────────────────────────────────
@@ -341,6 +346,7 @@ export const searchService = {
         query.trim(),
         compressedCandidates,
         retrieval.plan,
+        signal,
       );
 
       if (aiMatches.length > 0) {

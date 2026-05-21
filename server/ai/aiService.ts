@@ -478,6 +478,7 @@ export async function rerankCandidates(
   query: string,
   candidates: CompressedContact[],
   plan?: QueryPlan | null,
+  signal?: AbortSignal,
 ): Promise<SemanticMatchResult[]> {
   if (isMockMode()) {
     log.warn(
@@ -575,6 +576,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     prompt,
     responseFormat: "json",
     routing: { prefer: "lite" },
+    signal,
     jsonSchema: {
       type: "array",
       items: {

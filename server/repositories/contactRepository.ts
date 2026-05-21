@@ -187,16 +187,274 @@ export const contactRepo = {
 
   /**
    * Hydrate multiple contact rows in bulk.
-   * Uses the same pre-compiled prepared statements — better-sqlite3 handles
-   * the internal caching.
+   * Leverages high-performance chunked SQL batch loading to bypass N+1 queries.
    *
    * @param contacts - Array of raw contact rows
    * @returns Array of fully hydrated contacts (nulls filtered out)
    */
   hydrateMany(contacts: unknown[]): HydratedContact[] {
-    return contacts
-      .map((c) => contactRepo.hydrate(c))
-      .filter(Boolean) as HydratedContact[];
+    if (!contacts || contacts.length === 0) return [];
+
+    // Filter out invalid records
+    const validContacts = contacts.filter(
+      (c): c is RawContactRow =>
+        c !== null && typeof c === "object" && "id" in c,
+    );
+    if (validContacts.length === 0) return [];
+
+    // For very small inputs (e.g. <= 3 contacts), sequential hydration using
+    // pre-compiled statements has less overhead than bulk query preparation.
+    if (validContacts.length <= 3) {
+      return validContacts
+        .map((c) => contactRepo.hydrate(c))
+        .filter(Boolean) as HydratedContact[];
+    }
+
+    const ids = validContacts.map((c) => c.id);
+    const CHUNK_SIZE = 500;
+
+    // Helper to query in chunks of 500 to stay safely under SQLite parameter limits
+    const queryInChunks = <T>(
+      baseQuery: string,
+      idField: string,
+      orderBy: string = "",
+    ): T[] => {
+      const results: T[] = [];
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const placeholders = chunk.map(() => "?").join(",");
+        const sql = `${baseQuery} WHERE ${idField} IN (${placeholders}) ${orderBy}`;
+        results.push(...(sqlite.prepare(sql).all(chunk) as T[]));
+      }
+      return results;
+    };
+
+    // Load all relation child tables in chunked bulk queries
+    const emailRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      email: string;
+      label: string | null;
+      isPrimary: number;
+      sortOrder: number;
+      source: string;
+    }>(
+      "SELECT id, contactId, email, label, isPrimary, sortOrder, source FROM contact_emails",
+      "contactId",
+      "ORDER BY sortOrder ASC",
+    );
+
+    const phoneRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      phone: string;
+      label: string | null;
+      isPrimary: number;
+      sortOrder: number;
+      source: string;
+    }>(
+      "SELECT id, contactId, phone, label, isPrimary, sortOrder, source FROM contact_phones",
+      "contactId",
+      "ORDER BY sortOrder ASC",
+    );
+
+    const socialRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      platform: string;
+      url: string;
+      handle: string | null;
+      source: string;
+    }>(
+      "SELECT id, contactId, platform, url, handle, source FROM contact_social_links",
+      "contactId",
+    );
+
+    const eduRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      school: string;
+      degree: string | null;
+      fieldOfStudy: string | null;
+      startDate: string | null;
+      endDate: string | null;
+      description: string | null;
+    }>(
+      "SELECT id, contactId, school, degree, fieldOfStudy, startDate, endDate, description FROM contact_education",
+      "contactId",
+    );
+
+    const expRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      company: string;
+      role: string | null;
+      startDate: string | null;
+      endDate: string | null;
+      isCurrent: number;
+      description: string | null;
+      location: string | null;
+    }>(
+      "SELECT id, contactId, company, role, startDate, endDate, isCurrent, description, location FROM contact_experience",
+      "contactId",
+    );
+
+    const sourceRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      platform: string;
+      externalId: string | null;
+      connectedOn: string | null;
+      importedAt: string | null;
+    }>(
+      "SELECT id, contactId, platform, externalId, connectedOn, importedAt FROM contact_sources",
+      "contactId",
+    );
+
+    const tagRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      tag: string;
+    }>("SELECT id, contactId, tag FROM contact_tags", "contactId");
+
+    const interestRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      interest: string;
+      isAiGenerated: number;
+    }>(
+      "SELECT id, contactId, interest, isAiGenerated FROM contact_interests",
+      "contactId",
+    );
+
+    const attrRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      name: string;
+      value: string;
+    }>(
+      "SELECT id, contactId, name, value FROM contact_attributes",
+      "contactId",
+    );
+
+    const addrRows = queryInChunks<{
+      id: string;
+      contactId: string;
+      address: string;
+      label: string | null;
+      isPrimary: number;
+      sortOrder: number;
+      source: string;
+    }>(
+      "SELECT id, contactId, address, label, isPrimary, sortOrder, source FROM contact_addresses",
+      "contactId",
+      "ORDER BY sortOrder ASC",
+    );
+
+    // Specialized list memberships chunked query
+    const listRows: {
+      contactId: string;
+      id: string;
+      name: string;
+      icon: string | null;
+    }[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const placeholders = chunk.map(() => "?").join(",");
+      const sql = `
+        SELECT lm.contactId, l.id, l.name, l.icon 
+        FROM lists l
+        JOIN list_members lm ON l.id = lm.listId
+        WHERE lm.contactId IN (${placeholders})
+        ORDER BY l.sortOrder ASC
+      `;
+      listRows.push(...(sqlite.prepare(sql).all(chunk) as any[]));
+    }
+
+    // Specialized interaction count chunked query
+    const countRows: { contactId: string; cnt: number }[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const placeholders = chunk.map(() => "?").join(",");
+      const sql = `
+        SELECT contactId, COUNT(*) as cnt 
+        FROM interactions 
+        WHERE contactId IN (${placeholders}) 
+        GROUP BY contactId
+      `;
+      countRows.push(...(sqlite.prepare(sql).all(chunk) as any[]));
+    }
+
+    // Helper to group flat rows by contactId in O(N)
+    const groupByContact = <T extends { contactId: string }>(
+      rows: T[],
+    ): Map<string, T[]> => {
+      const map = new Map<string, T[]>();
+      for (const r of rows) {
+        if (!map.has(r.contactId)) map.set(r.contactId, []);
+        map.get(r.contactId)!.push(r);
+      }
+      return map;
+    };
+
+    const emailsMap = groupByContact(emailRows);
+    const phonesMap = groupByContact(phoneRows);
+    const socialMap = groupByContact(socialRows);
+    const eduMap = groupByContact(eduRows);
+    const expMap = groupByContact(expRows);
+    const sourceMap = groupByContact(sourceRows);
+    const tagsMap = groupByContact(tagRows);
+    const interestsMap = groupByContact(interestRows);
+    const attrsMap = groupByContact(attrRows);
+    const addrsMap = groupByContact(addrRows);
+    const listsMap = groupByContact(listRows);
+    const countsMap = new Map(countRows.map((r) => [r.contactId, r.cnt]));
+
+    // Reconstruct fully hydrated contact structures in JS
+    return validContacts.map(
+      (row) =>
+        ({
+          ...row,
+          emails: (emailsMap.get(row.id) ?? []).map(({ contactId, ...e }) => ({
+            ...e,
+            isPrimary: !!e.isPrimary,
+          })),
+          phones: (phonesMap.get(row.id) ?? []).map(({ contactId, ...p }) => ({
+            ...p,
+            isPrimary: !!p.isPrimary,
+          })),
+          socialLinks: (socialMap.get(row.id) ?? []).map(
+            ({ contactId, ...s }) => s,
+          ),
+          education: (eduMap.get(row.id) ?? []).map(
+            ({ contactId, ...edu }) => edu,
+          ),
+          experience: (expMap.get(row.id) ?? []).map(({ contactId, ...e }) => ({
+            ...e,
+            isCurrent: !!e.isCurrent,
+          })),
+          sources: (sourceMap.get(row.id) ?? []).map(
+            ({ contactId, ...src }) => src,
+          ),
+          tags: (tagsMap.get(row.id) ?? []).map(({ contactId, ...t }) => t),
+          interests: (interestsMap.get(row.id) ?? []).map(
+            ({ contactId, ...i }) => i,
+          ),
+          attributes: (attrsMap.get(row.id) ?? []).map(
+            ({ contactId, ...attr }) => attr,
+          ),
+          addresses: (addrsMap.get(row.id) ?? []).map(
+            ({ contactId, ...a }) => ({
+              ...a,
+              isPrimary: !!a.isPrimary,
+            }),
+          ),
+          lists: (listsMap.get(row.id) ?? []).map(
+            ({ contactId, ...list }) => list,
+          ),
+          interactionCount: countsMap.get(row.id) ?? 0,
+        }) as unknown as HydratedContact,
+    );
   },
 
   // -------------------------------------------------------------------------
