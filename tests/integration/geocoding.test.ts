@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { queueGeocode } from "../../server/services/geocoding/index.ts";
-import {
-  normalizeLocationKey,
-  getCachedGeocode,
-  cacheGeocode,
-} from "../../server/services/geocoding/cache.ts";
+import { normalizeLocationKey } from "../../server/services/geocoding/cache.ts";
 
 describe("Geocoding Integration Tests", () => {
   it("normalizes location keys accurately", () => {

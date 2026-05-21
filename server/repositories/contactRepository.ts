@@ -453,7 +453,7 @@ export const contactRepo = {
             ({ contactId, ...list }) => list,
           ),
           interactionCount: countsMap.get(row.id) ?? 0,
-        }) as HydratedContact,
+        }) as unknown as HydratedContact,
     );
   },
 
