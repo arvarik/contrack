@@ -21,6 +21,23 @@ import type { HydratedContact, ChildRecordsPayload } from "./types.ts";
 // Re-export types for consumers
 export type { HydratedContact, ChildRecordsPayload };
 
+// Central registry of contact child relations for OCP extensibility
+export const RELATION_REGISTRY = {
+  emails: { table: schema.contactEmails, dbName: "contact_emails" },
+  phones: { table: schema.contactPhones, dbName: "contact_phones" },
+  socialLinks: {
+    table: schema.contactSocialLinks,
+    dbName: "contact_social_links",
+  },
+  tags: { table: schema.contactTags, dbName: "contact_tags" },
+  interests: { table: schema.contactInterests, dbName: "contact_interests" },
+  addresses: { table: schema.contactAddresses, dbName: "contact_addresses" },
+  attributes: { table: schema.contactAttributes, dbName: "contact_attributes" },
+  education: { table: schema.contactEducation, dbName: "contact_education" },
+  experience: { table: schema.contactExperience, dbName: "contact_experience" },
+  sources: { table: schema.contactSources, dbName: "contact_sources" },
+} as const;
+
 // =============================================================================
 // URL Utilities (used by social link insertion)
 // =============================================================================
