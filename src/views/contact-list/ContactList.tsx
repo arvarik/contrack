@@ -10,14 +10,7 @@
  * The component itself handles only layout rendering and UX hooks
  * (scroll restoration, pull-to-refresh, context menus, drag-to-reorder).
  */
-import React, {
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-  useDeferredValue,
-  useEffect,
-} from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -207,24 +200,7 @@ const ContactRowWrapper = React.memo(
 // ---------------------------------------------------------------------------
 
 export const ContactList = () => {
-  const mountStart = useRef(performance.now());
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log(
-        `[Perf] ContactList mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
-      );
-    }
-  }, []);
-
   const { data: contacts = [], isLoading, refetch } = useContacts();
-
-  useEffect(() => {
-    if (!isLoading && contacts.length > 0 && import.meta.env.DEV) {
-      console.log(
-        `[Perf] ContactList data ready: items=${contacts.length}, time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`,
-      );
-    }
-  }, [isLoading, contacts.length]);
 
   const { data: lists = [] } = useLists();
   const { id } = useParams();
