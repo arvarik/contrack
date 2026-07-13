@@ -10,12 +10,7 @@
  * The component itself handles only layout rendering and UX hooks
  * (scroll restoration, pull-to-refresh, context menus, drag-to-reorder).
  */
-import React, {
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useState, useRef, useCallback, useMemo } from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
