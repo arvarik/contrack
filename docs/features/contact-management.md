@@ -180,6 +180,25 @@ Archive contacts to hide them from the Network and Map views without deleting th
 - Archive via the contact actions menu or bulk selection toolbar
 - View archived contacts in **Settings → Archived Contacts**
 - Restore individual contacts or bulk-restore selections
-- Permanently delete from the archive view
+- Delete from the archive view (moves to Trash)
 
 Archived contacts are excluded from search, dedupe, and relationship scoring.
+
+---
+
+## Trash & Undoable Deletes
+
+Deleting a contact is never instantly permanent:
+
+- **Delete** moves the contact (and its full history) to the Trash — an
+  Undo action appears in the toast
+- Review deletions in **Settings → Trash**: each entry shows when it was
+  deleted and when it will auto-purge
+- **Restore** brings a contact back fully searchable, or **Delete forever**
+  purges it immediately (with confirmation)
+- The trash empties itself after `TRASH_RETENTION_DAYS` (default 30 days)
+
+Combined with automatic database backups (`DATA_DIR/backups`, every 24h) and
+one-click full export (**`GET /api/export/json`** / **`csv`**), a stray
+delete or bulk operation is always recoverable. See
+[Configuration → Data Lifecycle](../configuration.md#data-lifecycle).

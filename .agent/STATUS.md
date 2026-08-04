@@ -14,7 +14,7 @@ _Empty — start a new feature with `/step1-spec`._
 
 **Phase:** Idle
 
-**Test Suite:** 180 tests (180 passing) — full suite, 0 regressions, <600ms run time
+**Test Suite:** 316 tests (316 passing) — unit + integration (real SQLite), 0 regressions
 
 The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
 

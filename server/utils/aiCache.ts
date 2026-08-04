@@ -2,7 +2,7 @@
  * aiCache.ts — Unified AI Response Cache with Per-Operation LRU + TTL Tiers.
  *
  * This module is the single source of truth for ALL server-side caching of AI
- * responses. It replaces the former `searchCache.ts` and the bare
+ * responses. It replaces the bare
  * `cachedInsight` variable in `dashboardService.ts`.
  *
  * WHY THIS EXISTS:
@@ -502,11 +502,10 @@ export const aiCache = {
 };
 
 // =============================================================================
-// Backward-Compat API (replaces searchCache.ts)
+// Search Result Cache API
 // =============================================================================
-// These functions mirror the former searchCache.ts public API exactly, so
-// existing consumers (searchService.ts, mergeEngine.ts) can switch imports
-// without any code changes.
+// Convenience wrappers used by searchService.ts and mergeEngine.ts to cache
+// full semantic-search result sets under a dedicated tier.
 
 export interface CachedSearchResult {
   matches: unknown[];

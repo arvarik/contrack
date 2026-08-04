@@ -467,7 +467,7 @@ return withRetry(
 5. Cache diagnostics endpoint (dev only: `/api/debug/cache-stats`)
 6. Attach Vite dev middleware (dev) or serve static `dist/` (production)
 7. Install centralized error handler
-8. Start HTTP server on `PORT` (default 3000)
+8. Start HTTP server on `PORT` (default 3210), bound to `HOST` (default 127.0.0.1)
 9. **Background tasks** (non-blocking):
    - `startRetroactiveGeocoding()` — backfill missing lat/lng (skipped when `DISABLE_BACKGROUND_JOBS=true`, used by integration tests)
    - `relationshipService.recomputeAll()` — full score recompute, then hourly via `setInterval`
@@ -477,7 +477,7 @@ return withRetry(
 ## 10. Development Lifecycle
 
 - **Install**: `npm install`
-- **Boot**: `npm run dev` (Vite middleware + Express on `:3000`)
+- **Boot**: `npm run dev` (Vite middleware + Express on `:3210`)
 - **Build**: `npm run build` (Vite production build to `dist/`)
 - **Database Seed**: `npm run seed` (resets data, recreates schemas, provides fixture data)
 - **Migrations**: `npm run db:generate` (outputs Drizzle migration)

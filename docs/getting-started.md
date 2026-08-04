@@ -66,8 +66,8 @@ NODE_ENV=production npx tsx server.ts
 | `npm run build`       | Compile production bundle via Vite                    |
 | `npm run preview`     | Preview production build locally                      |
 | `npm run seed`        | Clear DB and repopulate with demo data                |
-| `npm run lint`        | TypeScript type-check (`tsc --noEmit`)                |
-| `npm test`            | Run Vitest test suite (113 tests, <500ms)             |
+| `npm run lint`        | ESLint + TypeScript strict type-check                 |
+| `npm test`            | Run the full Vitest suite (unit + integration)        |
 | `npm run db:generate` | Generate a Drizzle Kit migration after schema changes |
 | `npm run clean`       | Purge `dist/` build cache                             |
 
@@ -81,7 +81,7 @@ NODE_ENV=production npx tsx server.ts
 | ------------------ | ----------------------------------- |
 | `Cmd+K` / `Ctrl+K` | Toggle Command Palette              |
 | `Cmd+Shift+I`      | Quick Note Modal                    |
-| `Cmd+Shift+N`      | Navigate to Network                 |
+| `Cmd+Shift+H`      | Navigate to Network                 |
 | `Cmd+Shift+P`      | Navigate to Pulse                   |
 | `Cmd+Shift+M`      | Navigate to Map                     |
 | `Cmd+Shift+S`      | Navigate to AI Search               |

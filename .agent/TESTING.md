@@ -14,7 +14,7 @@ _This file tracks test methods, scenarios, and results with concrete execution e
 1. Install dependencies: `npm install`.
 2. Generate schema migrations (if needed): `npm run db:generate`.
 3. Generate synthetic data: `npm run seed`. This clears raw SQL instances, recreates schemas via explicit Drizzle migrations, and provides controlled fixture nodes.
-4. Start the dev server: `npm run dev` (Express + Vite middleware on `:3000`).
+4. Start the dev server: `npm run dev` (Express + Vite middleware on `:3210`).
 
 ## 1. Test Architecture
 

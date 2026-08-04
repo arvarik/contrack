@@ -1,6 +1,10 @@
 # API Reference
 
-All endpoints are prefixed with `/api`. Request and response bodies are `application/json` unless noted otherwise. The server runs on `http://localhost:3000` by default.
+All endpoints are prefixed with `/api`. Request and response bodies are `application/json` unless noted otherwise. The server runs on `http://localhost:3210` by default.
+
+**Authentication:** off by default locally. When `AUTH_TOKEN` / `AUTH_REQUIRED` is configured (Docker default), every `/api` and `/uploads` request needs `Authorization: Bearer <token>` or the session cookie set by `POST /api/auth/login`. See [Configuration](configuration.md#authentication--remote-access).
+
+**Rate limits:** endpoints that trigger billable AI calls or outbound fetches are limited to 60 requests/minute per client IP (`429 RATE_LIMITED`).
 
 ---
 
@@ -19,13 +23,13 @@ Fetch all active (non-archived, non-ghost, non-merged) contacts.
 
 ```bash
 # All contacts
-curl http://localhost:3000/api/contacts
+curl http://localhost:3210/api/contacts
 
 # FTS5 search
-curl "http://localhost:3000/api/contacts?q=engineer"
+curl "http://localhost:3210/api/contacts?q=engineer"
 
 # Slim view (for caches, pickers)
-curl "http://localhost:3000/api/contacts?view=slim"
+curl "http://localhost:3210/api/contacts?view=slim"
 ```
 
 ```javascript
@@ -39,7 +43,7 @@ const contacts = await fetch("/api/contacts?view=slim").then((r) => r.json());
 Fetch a single contact with all hydrated child arrays (emails, phones, tags, lists, education, experience, etc.).
 
 ```bash
-curl http://localhost:3000/api/contacts/abc123
+curl http://localhost:3210/api/contacts/abc123
 ```
 
 **Response shape:**
@@ -90,7 +94,7 @@ Create a new contact.
 ```
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts \
+curl -X POST http://localhost:3210/api/contacts \
   -H "Content-Type: application/json" \
   -d '{"name":"Jane Smith","company":"Acme Corp","role":"VP Engineering"}'
 ```
@@ -116,7 +120,7 @@ const contact = await fetch("/api/contacts", {
 Full update with nested child arrays. Replaces child arrays entirely.
 
 ```bash
-curl -X PUT http://localhost:3000/api/contacts/abc123 \
+curl -X PUT http://localhost:3210/api/contacts/abc123 \
   -H "Content-Type: application/json" \
   -d '{"name":"Jane Smith-Johnson","emails":[{"value":"jane@newco.com","label":"work"}]}'
 ```
@@ -128,7 +132,7 @@ curl -X PUT http://localhost:3000/api/contacts/abc123 \
 Partial scalar update. Does **not** support child arrays — use `PUT` for those.
 
 ```bash
-curl -X PATCH http://localhost:3000/api/contacts/abc123 \
+curl -X PATCH http://localhost:3210/api/contacts/abc123 \
   -H "Content-Type: application/json" \
   -d '{"company":"NewCo","role":"CTO"}'
 ```
@@ -140,7 +144,7 @@ curl -X PATCH http://localhost:3000/api/contacts/abc123 \
 Cascade delete including vec0 embeddings, FTS5 entries, and interaction mentions.
 
 ```bash
-curl -X DELETE http://localhost:3000/api/contacts/abc123
+curl -X DELETE http://localhost:3210/api/contacts/abc123
 ```
 
 ---
@@ -163,7 +167,7 @@ Bulk create contacts from an import. Supports SSE streaming for multi-phase impo
 **Standard mode:**
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/bulk \
+curl -X POST http://localhost:3210/api/contacts/bulk \
   -H "Content-Type: application/json" \
   -d '{"contacts":[{"name":"Alice Johnson"},{"name":"Bob Williams"}]}'
 ```
@@ -171,7 +175,7 @@ curl -X POST http://localhost:3000/api/contacts/bulk \
 **SSE streaming mode** (for progress tracking):
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/bulk \
+curl -X POST http://localhost:3210/api/contacts/bulk \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"contacts":[...]}'
@@ -191,7 +195,7 @@ The SSE stream sends progress events through 4 phases:
 Bulk delete by ID array.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/bulk-delete \
+curl -X POST http://localhost:3210/api/contacts/bulk-delete \
   -H "Content-Type: application/json" \
   -d '{"ids":["abc123","def456"]}'
 ```
@@ -203,7 +207,7 @@ curl -X POST http://localhost:3000/api/contacts/bulk-delete \
 Bulk update shared fields across multiple contacts.
 
 ```bash
-curl -X PUT http://localhost:3000/api/contacts/bulk-update \
+curl -X PUT http://localhost:3210/api/contacts/bulk-update \
   -H "Content-Type: application/json" \
   -d '{"ids":["abc123","def456"],"data":{"company":"NewCo"}}'
 ```
@@ -215,7 +219,7 @@ curl -X PUT http://localhost:3000/api/contacts/bulk-update \
 AI-parse unstructured text into a structured contact record.
 
 ```bash
-curl -X POST http://localhost:3000/api/parse-contact \
+curl -X POST http://localhost:3210/api/parse-contact \
   -H "Content-Type: application/json" \
   -d '{"text":"Met Jane Smith at the TechCrunch event. She is VP of Engineering at Acme Corp. jane@acme.com, (415) 555-1234."}'
 ```
@@ -239,7 +243,7 @@ curl -X POST http://localhost:3000/api/parse-contact \
 Fetch all archived contacts.
 
 ```bash
-curl http://localhost:3000/api/contacts/archived
+curl http://localhost:3210/api/contacts/archived
 ```
 
 ---
@@ -249,7 +253,7 @@ curl http://localhost:3000/api/contacts/archived
 Fetch geocoded contacts for the map view (only those with lat/lng coordinates).
 
 ```bash
-curl http://localhost:3000/api/contacts/map
+curl http://localhost:3210/api/contacts/map
 ```
 
 ---
@@ -259,7 +263,7 @@ curl http://localhost:3000/api/contacts/map
 Upload an avatar image. Uses `multipart/form-data`.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/avatar \
+curl -X POST http://localhost:3210/api/contacts/abc123/avatar \
   -F "avatar=@photo.jpg"
 ```
 
@@ -270,7 +274,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/avatar \
 Single-contact enrichment via AI web grounding. Uses the provider-appropriate strategy (two-pass for Gemini, single-pass for OpenAI/Anthropic).
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/enrich
+curl -X POST http://localhost:3210/api/contacts/abc123/enrich
 ```
 
 **Response:**
@@ -296,7 +300,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/enrich
 Fetch chronological timeline with @mention links.
 
 ```bash
-curl http://localhost:3000/api/contacts/abc123/timeline
+curl http://localhost:3210/api/contacts/abc123/timeline
 ```
 
 ---
@@ -334,7 +338,7 @@ Optional `actionItem` field to create a linked follow-up:
 ```
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/interactions \
+curl -X POST http://localhost:3210/api/contacts/abc123/interactions \
   -H "Content-Type: application/json" \
   -d '{"type":"note","title":"Meeting notes","content":"Great discussion.","date":"2025-01-15T10:00:00Z"}'
 ```
@@ -346,7 +350,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/interactions \
 Edit an existing interaction.
 
 ```bash
-curl -X PATCH http://localhost:3000/api/interactions/int123 \
+curl -X PATCH http://localhost:3210/api/interactions/int123 \
   -H "Content-Type: application/json" \
   -d '{"content":"Updated meeting notes with corrections."}'
 ```
@@ -358,7 +362,7 @@ curl -X PATCH http://localhost:3000/api/interactions/int123 \
 Remove an interaction.
 
 ```bash
-curl -X DELETE http://localhost:3000/api/interactions/int123
+curl -X DELETE http://localhost:3210/api/interactions/int123
 ```
 
 ---
@@ -368,7 +372,7 @@ curl -X DELETE http://localhost:3000/api/interactions/int123
 Generate an AI "Catch-Me-Up" briefing from the contact's timeline history.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/briefing
+curl -X POST http://localhost:3210/api/contacts/abc123/briefing
 ```
 
 **Response:**
@@ -386,7 +390,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/briefing
 Promote a Ghost contact to a full contact.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/ghost123/promote
+curl -X POST http://localhost:3210/api/contacts/ghost123/promote
 ```
 
 ---
@@ -396,7 +400,7 @@ curl -X POST http://localhost:3000/api/contacts/ghost123/promote
 Upload a file attachment to a contact. Uses `multipart/form-data`.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/attachments \
+curl -X POST http://localhost:3210/api/contacts/abc123/attachments \
   -F "attachment=@document.pdf"
 ```
 
@@ -409,7 +413,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/attachments \
 FTS5 keyword search (used by the sidebar search bar).
 
 ```bash
-curl "http://localhost:3000/api/search?q=engineer+san+francisco"
+curl "http://localhost:3210/api/search?q=engineer+san+francisco"
 ```
 
 ---
@@ -429,7 +433,7 @@ Hybrid semantic search (Ask Contrack v3). Supports NDJSON streaming for progress
 **Standard JSON response:**
 
 ```bash
-curl -X POST http://localhost:3000/api/search/semantic \
+curl -X POST http://localhost:3210/api/search/semantic \
   -H "Content-Type: application/json" \
   -d '{"query":"fintech contacts in San Francisco"}'
 ```
@@ -437,7 +441,7 @@ curl -X POST http://localhost:3000/api/search/semantic \
 **NDJSON streaming** (two-phase progressive results):
 
 ```bash
-curl -X POST http://localhost:3000/api/search/semantic \
+curl -X POST http://localhost:3210/api/search/semantic \
   -H "Content-Type: application/json" \
   -H "Accept: application/x-ndjson" \
   -d '{"query":"fintech contacts"}'
@@ -453,7 +457,7 @@ Phase 2 (~500ms later): returns matches with AI-generated reasons.
 Synthesize search results into an executive brief. Streams via NDJSON.
 
 ```bash
-curl -X POST http://localhost:3000/api/search/synthesize \
+curl -X POST http://localhost:3210/api/search/synthesize \
   -H "Content-Type: application/json" \
   -H "Accept: application/x-ndjson" \
   -d '{"query":"fintech contacts","contactIds":["abc123","def456"]}'
@@ -479,7 +483,7 @@ Start a batch enrichment job for selected contacts.
 Strategy defaults to the provider-appropriate strategy if omitted.
 
 ```bash
-curl -X POST http://localhost:3000/api/ai-search \
+curl -X POST http://localhost:3210/api/ai-search \
   -H "Content-Type: application/json" \
   -d '{"contactIds":["abc123","def456"]}'
 ```
@@ -500,7 +504,7 @@ curl -X POST http://localhost:3000/api/ai-search \
 Poll the current status of a batch enrichment job.
 
 ```bash
-curl "http://localhost:3000/api/ai-search/status?batchId=batch-abc123"
+curl "http://localhost:3210/api/ai-search/status?batchId=batch-abc123"
 ```
 
 ---
@@ -510,7 +514,7 @@ curl "http://localhost:3000/api/ai-search/status?batchId=batch-abc123"
 Subscribe to real-time batch progress via Server-Sent Events (SSE).
 
 ```bash
-curl -N "http://localhost:3000/api/ai-search/stream?batchId=batch-abc123"
+curl -N "http://localhost:3210/api/ai-search/stream?batchId=batch-abc123"
 ```
 
 ```javascript
@@ -541,7 +545,7 @@ Trigger a full deduplication scan. Streams progress via SSE.
 Supported modes: `deterministic`, `ai`, `both`, `quick`, `deep`, `full`.
 
 ```bash
-curl -X POST http://localhost:3000/api/dedupe/scan \
+curl -X POST http://localhost:3210/api/dedupe/scan \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
   -d '{"mode":"full"}'
@@ -554,7 +558,7 @@ curl -X POST http://localhost:3000/api/dedupe/scan \
 Fetch pending dedupe clusters awaiting review.
 
 ```bash
-curl http://localhost:3000/api/dedupe/suggestions
+curl http://localhost:3210/api/dedupe/suggestions
 ```
 
 ---
@@ -564,7 +568,7 @@ curl http://localhost:3000/api/dedupe/suggestions
 Get the count of pending suggestions (for badges).
 
 ```bash
-curl http://localhost:3000/api/dedupe/suggestions/count
+curl http://localhost:3210/api/dedupe/suggestions/count
 ```
 
 ---
@@ -582,7 +586,7 @@ Merge a suggestion cluster.
 ```
 
 ```bash
-curl -X POST http://localhost:3000/api/dedupe/suggestions/sug123/merge \
+curl -X POST http://localhost:3210/api/dedupe/suggestions/sug123/merge \
   -H "Content-Type: application/json" \
   -d '{"primaryId":"abc123"}'
 ```
@@ -594,7 +598,7 @@ curl -X POST http://localhost:3000/api/dedupe/suggestions/sug123/merge \
 Dismiss a suggestion (adds to exclusion list — won't be suggested again).
 
 ```bash
-curl -X POST http://localhost:3000/api/dedupe/suggestions/sug123/dismiss
+curl -X POST http://localhost:3210/api/dedupe/suggestions/sug123/dismiss
 ```
 
 ---
@@ -604,7 +608,7 @@ curl -X POST http://localhost:3000/api/dedupe/suggestions/sug123/dismiss
 Manual 2-contact merge.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/merge \
+curl -X POST http://localhost:3210/api/contacts/merge \
   -H "Content-Type: application/json" \
   -d '{"primaryId":"abc123","duplicateId":"def456"}'
 ```
@@ -616,7 +620,7 @@ curl -X POST http://localhost:3000/api/contacts/merge \
 Merge an N-contact cluster.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/merge-cluster \
+curl -X POST http://localhost:3210/api/contacts/merge-cluster \
   -H "Content-Type: application/json" \
   -d '{"primaryId":"abc123","duplicateIds":["def456","ghi789"]}'
 ```
@@ -628,7 +632,7 @@ curl -X POST http://localhost:3000/api/contacts/merge-cluster \
 Fetch the audit trail of past merges.
 
 ```bash
-curl http://localhost:3000/api/dedupe/merge-log
+curl http://localhost:3210/api/dedupe/merge-log
 ```
 
 ---
@@ -638,7 +642,7 @@ curl http://localhost:3000/api/dedupe/merge-log
 Undo a previous merge.
 
 ```bash
-curl -X POST http://localhost:3000/api/dedupe/merge-log/ml123/undo
+curl -X POST http://localhost:3210/api/dedupe/merge-log/ml123/undo
 ```
 
 ---
@@ -650,7 +654,7 @@ curl -X POST http://localhost:3000/api/dedupe/merge-log/ml123/undo
 Fetch all pending (incomplete) action items.
 
 ```bash
-curl http://localhost:3000/api/action-items
+curl http://localhost:3210/api/action-items
 ```
 
 ---
@@ -660,7 +664,7 @@ curl http://localhost:3000/api/action-items
 Fetch completed action items.
 
 ```bash
-curl http://localhost:3000/api/action-items/completed
+curl http://localhost:3210/api/action-items/completed
 ```
 
 ---
@@ -670,7 +674,7 @@ curl http://localhost:3000/api/action-items/completed
 Get count of urgent (due/overdue) action items (for badges).
 
 ```bash
-curl http://localhost:3000/api/action-items/count
+curl http://localhost:3210/api/action-items/count
 ```
 
 ---
@@ -680,7 +684,7 @@ curl http://localhost:3000/api/action-items/count
 Create an action item for a contact.
 
 ```bash
-curl -X POST http://localhost:3000/api/contacts/abc123/action-items \
+curl -X POST http://localhost:3210/api/contacts/abc123/action-items \
   -H "Content-Type: application/json" \
   -d '{"title":"Send follow-up email","dueAt":"2025-02-01T00:00:00Z"}'
 ```
@@ -692,7 +696,7 @@ curl -X POST http://localhost:3000/api/contacts/abc123/action-items \
 Fetch action items for a specific contact.
 
 ```bash
-curl http://localhost:3000/api/contacts/abc123/action-items
+curl http://localhost:3210/api/contacts/abc123/action-items
 ```
 
 ---
@@ -702,7 +706,7 @@ curl http://localhost:3000/api/contacts/abc123/action-items
 Update an action item.
 
 ```bash
-curl -X PATCH http://localhost:3000/api/action-items/ai123 \
+curl -X PATCH http://localhost:3210/api/action-items/ai123 \
   -H "Content-Type: application/json" \
   -d '{"title":"Updated title","dueAt":"2025-02-15T00:00:00Z"}'
 ```
@@ -714,7 +718,7 @@ curl -X PATCH http://localhost:3000/api/action-items/ai123 \
 Mark an action item as complete.
 
 ```bash
-curl -X PATCH http://localhost:3000/api/action-items/ai123/complete
+curl -X PATCH http://localhost:3210/api/action-items/ai123/complete
 ```
 
 ---
@@ -724,7 +728,7 @@ curl -X PATCH http://localhost:3000/api/action-items/ai123/complete
 Delete an action item.
 
 ```bash
-curl -X DELETE http://localhost:3000/api/action-items/ai123
+curl -X DELETE http://localhost:3210/api/action-items/ai123
 ```
 
 ---
@@ -736,7 +740,7 @@ curl -X DELETE http://localhost:3000/api/action-items/ai123
 Fetch Relationship Pulse Dashboard metrics.
 
 ```bash
-curl http://localhost:3000/api/dashboard
+curl http://localhost:3210/api/dashboard
 ```
 
 ---
@@ -746,7 +750,7 @@ curl http://localhost:3000/api/dashboard
 Get AI-generated daily insight about your network.
 
 ```bash
-curl http://localhost:3000/api/dashboard/insight
+curl http://localhost:3210/api/dashboard/insight
 ```
 
 ---
@@ -756,7 +760,7 @@ curl http://localhost:3000/api/dashboard/insight
 CRM intelligence signals for the Command Palette zero-state (action items due, at-risk contacts, ghosts, stale data, dedupe suggestions).
 
 ```bash
-curl http://localhost:3000/api/command-palette/zero-state
+curl http://localhost:3210/api/command-palette/zero-state
 ```
 
 **Response:**
@@ -790,7 +794,7 @@ curl http://localhost:3000/api/command-palette/zero-state
 Fetch all lists with member counts.
 
 ```bash
-curl http://localhost:3000/api/lists
+curl http://localhost:3210/api/lists
 ```
 
 ---
@@ -800,7 +804,7 @@ curl http://localhost:3000/api/lists
 Create a new list.
 
 ```bash
-curl -X POST http://localhost:3000/api/lists \
+curl -X POST http://localhost:3210/api/lists \
   -H "Content-Type: application/json" \
   -d '{"name":"Board Members","icon":"👥"}'
 ```
@@ -812,7 +816,7 @@ curl -X POST http://localhost:3000/api/lists \
 Update a list (name, icon).
 
 ```bash
-curl -X PATCH http://localhost:3000/api/lists/list123 \
+curl -X PATCH http://localhost:3210/api/lists/list123 \
   -H "Content-Type: application/json" \
   -d '{"name":"Advisory Board","icon":"🎯"}'
 ```
@@ -824,7 +828,7 @@ curl -X PATCH http://localhost:3000/api/lists/list123 \
 Delete a list (members are unlinked, not deleted).
 
 ```bash
-curl -X DELETE http://localhost:3000/api/lists/list123
+curl -X DELETE http://localhost:3210/api/lists/list123
 ```
 
 ---
@@ -834,7 +838,7 @@ curl -X DELETE http://localhost:3000/api/lists/list123
 Reorder lists via an ordered ID array.
 
 ```bash
-curl -X PUT http://localhost:3000/api/lists/reorder \
+curl -X PUT http://localhost:3210/api/lists/reorder \
   -H "Content-Type: application/json" \
   -d '{"orderedIds":["list2","list1","list3"]}'
 ```
@@ -846,7 +850,7 @@ curl -X PUT http://localhost:3000/api/lists/reorder \
 Fetch contacts in a specific list.
 
 ```bash
-curl http://localhost:3000/api/lists/list123/contacts
+curl http://localhost:3210/api/lists/list123/contacts
 ```
 
 ---
@@ -856,7 +860,7 @@ curl http://localhost:3000/api/lists/list123/contacts
 Add a contact to a list.
 
 ```bash
-curl -X POST http://localhost:3000/api/lists/list123/members \
+curl -X POST http://localhost:3210/api/lists/list123/members \
   -H "Content-Type: application/json" \
   -d '{"contactId":"abc123"}'
 ```
@@ -868,7 +872,7 @@ curl -X POST http://localhost:3000/api/lists/list123/members \
 Remove a contact from a list.
 
 ```bash
-curl -X DELETE http://localhost:3000/api/lists/list123/members/abc123
+curl -X DELETE http://localhost:3210/api/lists/list123/members/abc123
 ```
 
 ---
@@ -878,7 +882,7 @@ curl -X DELETE http://localhost:3000/api/lists/list123/members/abc123
 Bulk add contacts to a list.
 
 ```bash
-curl -X POST http://localhost:3000/api/lists/list123/members/bulk \
+curl -X POST http://localhost:3210/api/lists/list123/members/bulk \
   -H "Content-Type: application/json" \
   -d '{"contactIds":["abc123","def456","ghi789"]}'
 ```
@@ -892,7 +896,7 @@ curl -X POST http://localhost:3000/api/lists/list123/members/bulk \
 Get AI model routing and quota diagnostics.
 
 ```bash
-curl http://localhost:3000/api/ai/diagnostics
+curl http://localhost:3210/api/ai/diagnostics
 ```
 
 ---
@@ -902,7 +906,7 @@ curl http://localhost:3000/api/ai/diagnostics
 Check AI Search grounding RPD quota (Gemini only).
 
 ```bash
-curl http://localhost:3000/api/ai/grounding-capacity
+curl http://localhost:3210/api/ai/grounding-capacity
 ```
 
 ---
@@ -914,7 +918,7 @@ curl http://localhost:3000/api/ai/grounding-capacity
 Get aggregated AI usage statistics (token counts, cache performance, estimated costs).
 
 ```bash
-curl http://localhost:3000/api/ai/stats/summary
+curl http://localhost:3210/api/ai/stats/summary
 ```
 
 ---
@@ -931,7 +935,7 @@ Get the AI invocation feed (paginated).
 | `offset` | Pagination offset                       |
 
 ```bash
-curl "http://localhost:3000/api/ai/stats/feed?limit=20&offset=0"
+curl "http://localhost:3210/api/ai/stats/feed?limit=20&offset=0"
 ```
 
 ---
@@ -943,7 +947,7 @@ curl "http://localhost:3000/api/ai/stats/feed?limit=20&offset=0"
 Extract OpenGraph metadata (title, image, description) from a URL using Cheerio HTML parsing. No headless browser required.
 
 ```bash
-curl "http://localhost:3000/api/link-preview/unfurl?url=https://example.com"
+curl "http://localhost:3210/api/link-preview/unfurl?url=https://example.com"
 ```
 
 ---
@@ -953,7 +957,7 @@ curl "http://localhost:3000/api/link-preview/unfurl?url=https://example.com"
 Fetch a company logo by domain. Proxies through Google S2 Favicons and caches locally for offline access.
 
 ```bash
-curl http://localhost:3000/api/logos/stripe.com
+curl http://localhost:3210/api/logos/stripe.com
 ```
 
 Returns the image binary with appropriate content-type headers.
@@ -969,7 +973,7 @@ Machine-readable query endpoints for programmatic access.
 Query contacts with filter parameters.
 
 ```bash
-curl "http://localhost:3000/api/query/contacts?q=engineer&limit=10"
+curl "http://localhost:3210/api/query/contacts?q=engineer&limit=10"
 ```
 
 ---
@@ -979,7 +983,7 @@ curl "http://localhost:3000/api/query/contacts?q=engineer&limit=10"
 Fetch action items across all contacts.
 
 ```bash
-curl http://localhost:3000/api/contacts/action-items
+curl http://localhost:3210/api/contacts/action-items
 ```
 
 ---
@@ -989,7 +993,7 @@ curl http://localhost:3000/api/contacts/action-items
 Get all unique tags.
 
 ```bash
-curl http://localhost:3000/api/tags
+curl http://localhost:3210/api/tags
 ```
 
 ---
@@ -999,7 +1003,7 @@ curl http://localhost:3000/api/tags
 Get all unique industries.
 
 ```bash
-curl http://localhost:3000/api/industries
+curl http://localhost:3210/api/industries
 ```
 
 ---
@@ -1009,7 +1013,7 @@ curl http://localhost:3000/api/industries
 Search interactions by content.
 
 ```bash
-curl "http://localhost:3000/api/interactions/search?q=proposal"
+curl "http://localhost:3210/api/interactions/search?q=proposal"
 ```
 
 ---
@@ -1019,7 +1023,88 @@ curl "http://localhost:3000/api/interactions/search?q=proposal"
 Fetch the global timeline (all interactions across all contacts).
 
 ```bash
-curl http://localhost:3000/api/timeline
+curl http://localhost:3210/api/timeline
+```
+
+---
+
+## Authentication
+
+### `GET /api/auth/status`
+
+Always reachable (even unauthenticated). Reports whether auth is enforced and whether the current request is authenticated.
+
+```bash
+curl http://localhost:3210/api/auth/status
+# → { "authRequired": true, "authenticated": false }
+```
+
+---
+
+### `POST /api/auth/login`
+
+Exchange the access token for an HttpOnly `SameSite=Strict` session cookie (used by the web app).
+
+```bash
+curl -X POST http://localhost:3210/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<your token>"}'
+```
+
+`POST /api/auth/logout` clears the cookie.
+
+---
+
+## Trash (Undoable Deletes)
+
+`DELETE /api/contacts/:id` and `POST /api/contacts/bulk-delete` are **soft deletes** — contacts move to the trash and are hard-deleted after `TRASH_RETENTION_DAYS` (default 30).
+
+### `GET /api/trash`
+
+```bash
+curl http://localhost:3210/api/trash
+# → { "items": [{ "id", "name", "company", "avatarUrl", "deletedAt" }] }
+```
+
+### `POST /api/trash/:id/restore`
+
+Restore a trashed contact to the active list (re-indexes search and embeddings). Returns the hydrated contact; `404` if the contact isn't in the trash.
+
+### `DELETE /api/trash/:id`
+
+"Delete forever" — immediately hard-deletes a trashed contact and its entire history. Refuses (`404`) for contacts that are not in the trash.
+
+---
+
+## Backups
+
+SQLite snapshots (online backup API — safe while the app runs) written to `DATA_DIR/backups/`, rotated to the `BACKUP_KEEP` most recent. A schedule runs every `BACKUP_INTERVAL_HOURS` (default 24).
+
+### `GET /api/backups`
+
+```bash
+curl http://localhost:3210/api/backups
+# → { "backups": [{ "filename", "sizeBytes", "createdAt" }] }
+```
+
+### `POST /api/backups`
+
+Take a snapshot now. Returns `201` with the new backup's metadata.
+
+---
+
+## Export
+
+### `GET /api/export/json`
+
+Downloads the entire database — contacts (hydrated), interactions, lists, action items, and the merge audit log — as a single JSON attachment.
+
+### `GET /api/export/csv`
+
+Downloads a flat, RFC-4180-escaped CSV of all non-trashed contacts.
+
+```bash
+curl -OJ http://localhost:3210/api/export/csv
 ```
 
 ---
@@ -1031,5 +1116,5 @@ curl http://localhost:3000/api/timeline
 Exposes hit/miss counters for all aiCache tiers. Only available when `NODE_ENV !== production`.
 
 ```bash
-curl http://localhost:3000/api/debug/cache-stats
+curl http://localhost:3210/api/debug/cache-stats
 ```

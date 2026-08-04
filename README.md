@@ -8,7 +8,7 @@
 [![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
 [![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-253_passing-brightgreen)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-316_passing-brightgreen)](https://vitest.dev/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 </div>
 
@@ -136,6 +136,9 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 - **Quick Note** (`Cmd+Shift+I`) — Log interactions from anywhere
 - **Link Unfurling** — Zero-Chromium OpenGraph extraction via Cheerio
 - **Logo Proxy** — Heuristic company logo discovery with local caching
+- **Trash & Undo** — Deletes are soft: restore from Settings → Trash within 30 days
+- **Automatic Backups** — Scheduled SQLite snapshots with rotation, plus one-click JSON/CSV export
+- **Single-User Auth** — Token-gated API + sign-in screen; secure-by-default in Docker
 
 ---
 
