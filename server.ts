@@ -25,6 +25,7 @@ import {
 import {
   initLocalEmbeddings,
   backfillSearchEmbeddings,
+  ensureEmbeddingStore,
 } from "./server/services/search/localEmbeddings.ts";
 
 // ── Provider-aware API key validation ────────────────────────────────────────
@@ -153,7 +154,9 @@ async function startServer() {
         "Server",
         "Local embedding model ready — starting search embedding backfill...",
       );
-      return backfillSearchEmbeddings();
+      // Reconcile the vector store with the configured embeddings capability
+      // (rebuilds + re-embeds when the model changed), then fill any gaps.
+      return ensureEmbeddingStore().then(() => backfillSearchEmbeddings());
     })
     .then((count) => {
       if (count > 0)

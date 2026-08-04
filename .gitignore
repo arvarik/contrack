@@ -15,6 +15,10 @@ coverage/
 *.db-shm
 *.db-wal
 
+# Runtime data directory (DATA_DIR): database, auth token, backups,
+# uploads, and the embedding-model cache. All machine-local secrets/state.
+data/
+
 # User-uploaded files
 uploads/
 

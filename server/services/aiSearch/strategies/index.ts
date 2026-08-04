@@ -14,10 +14,12 @@
 import type { AISearchStrategy } from "../types.ts";
 import { TwoPassStrategy } from "./twoPass.ts";
 import { SinglePassStrategy } from "./singlePass.ts";
+import { SearxngStrategy, getSearxngUrl } from "./searxng.ts";
 
 const STRATEGIES: Record<string, () => AISearchStrategy> = {
   "two-pass": () => new TwoPassStrategy(),
   "single-pass": () => new SinglePassStrategy(),
+  searxng: () => new SearxngStrategy(),
   // Future strategies:
   // 'consensus':   () => new ConsensusStrategy(),
   // 'judge':       () => new JudgeStrategy(),
@@ -42,7 +44,15 @@ export function getStrategy(name: string = "two-pass"): AISearchStrategy {
  * - Gemini uses two-pass (grounding + schema incompatible)
  * - OpenAI/Anthropic use single-pass (both supported together)
  */
-export function getDefaultStrategyForProvider(providerName: string): string {
+export function getDefaultStrategyForProvider(
+  providerName: string | null,
+): string {
+  // No grounding-capable provider serves the research capability — fall back
+  // to a self-hosted SearXNG instance when one is configured.
+  if (!providerName) {
+    if (getSearxngUrl()) return "searxng";
+    return "two-pass";
+  }
   switch (providerName.toLowerCase()) {
     case "openai":
     case "anthropic":
@@ -50,4 +60,14 @@ export function getDefaultStrategyForProvider(providerName: string): string {
     default:
       return "two-pass";
   }
+}
+
+/**
+ * True when AI Search can run at all: either a grounding provider serves the
+ * research capability, or SearXNG is configured.
+ */
+export function isResearchAvailable(
+  researchProviderId: string | null,
+): boolean {
+  return researchProviderId !== null || getSearxngUrl() !== null;
 }

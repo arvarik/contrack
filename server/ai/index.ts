@@ -34,8 +34,13 @@ export { ParallelQueue } from "./routing/ParallelQueue.ts";
 // breakers across the entire application.
 // ---------------------------------------------------------------------------
 
-import { sharedProvider, isProviderConfigured } from "./singleton.ts";
-import type { DiagnosticsSnapshot } from "./types.ts";
+import { sharedProvider } from "./singleton.ts";
+import { isAnyProviderConfigured } from "./gateway.ts";
+import type {
+  DiagnosticsSnapshot,
+  AIGenerateOptions,
+  AIGenerateResult,
+} from "./types.ts";
 
 /** Empty diagnostics snapshot for providers without quota tracking. */
 const EMPTY_SNAPSHOT: DiagnosticsSnapshot = {
@@ -46,8 +51,10 @@ const EMPTY_SNAPSHOT: DiagnosticsSnapshot = {
 };
 
 /**
- * The active provider name (lowercase), e.g. "gemini", "openai", "anthropic".
- * Routes use this to branch provider-specific logic (grounding checks, strategy selection).
+ * The default provider name (lowercase) implied by AI_PROVIDER.
+ *
+ * @deprecated Provider is now per-capability. Use `providerIdFor(capability)`
+ * from gateway.ts when you need to know what actually serves a given task.
  */
 export const activeProviderName = (
   process.env.AI_PROVIDER ?? "gemini"
@@ -60,20 +67,32 @@ export const activeProviderName = (
  * - `ai.isConfigured` — true when a valid API key is present
  * - `ai.providerName` — active provider identifier
  */
-// Capture the adapter's original method BEFORE Object.assign overwrites it.
-const _adapterSnapshot = sharedProvider.getQuotaSnapshot?.bind(sharedProvider);
-
-export const ai = Object.assign(sharedProvider, {
-  isConfigured: isProviderConfigured,
+export const ai = {
+  /** Human-readable name of the default provider. */
+  get name(): string {
+    return sharedProvider.name;
+  },
+  /** True when at least one provider has usable credentials. */
+  get isConfigured(): boolean {
+    return isAnyProviderConfigured();
+  },
+  /** @deprecated Use `providerIdFor(capability)`. */
   providerName: activeProviderName,
+
+  /** Raw generation against the default provider (legacy path). */
+  generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
+    return sharedProvider.generate(options);
+  },
+
   /**
-   * Safe quota snapshot accessor. Returns the adapter's snapshot when available
-   * (Gemini), or an empty snapshot for providers without quota tracking.
+   * Safe quota snapshot accessor. Returns the default provider's snapshot when
+   * available (Gemini), or an empty snapshot for providers without quota
+   * tracking.
    */
   getQuotaSnapshot(): DiagnosticsSnapshot {
-    return _adapterSnapshot?.() ?? EMPTY_SNAPSHOT;
+    return sharedProvider.getQuotaSnapshot?.() ?? EMPTY_SNAPSHOT;
   },
-});
+};
 
 // ---------------------------------------------------------------------------
 // Business Function Re-exports
@@ -91,3 +110,30 @@ export {
   expandQueryForEmbedding,
 } from "./aiService.ts";
 export type { DailyInsight } from "./aiService.ts";
+
+// ---------------------------------------------------------------------------
+// Capability Routing
+// ---------------------------------------------------------------------------
+
+export {
+  generateFor,
+  providerIdFor,
+  isAnyProviderConfigured,
+} from "./gateway.ts";
+export {
+  resolveCapability,
+  getCapabilityAssignment,
+  getCapabilityAssignments,
+  capabilityAvailability,
+} from "./capabilities.ts";
+export type { AICapability, CapabilityAssignment } from "./capabilities.ts";
+export {
+  getProviderConfigs,
+  getProvider,
+  isProviderAvailable,
+  invalidateProviderCache,
+} from "./providerRegistry.ts";
+export type {
+  ProviderConfig,
+  CustomEndpointConfig,
+} from "./providerRegistry.ts";

@@ -19,6 +19,14 @@ import path from "path";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import {
+  resolveEmbeddings,
+  embedWithProvider,
+  probeDimension,
+  getEmbeddingsState,
+  setEmbeddingsState,
+  BUILTIN_DIMENSION,
+} from "../../ai/embeddings.ts";
 // Type-only import — fully erased at compile time, so the runtime module
 // graph still loads @huggingface/transformers lazily via dynamic import.
 import type { FeatureExtractionPipeline } from "@huggingface/transformers";
@@ -36,7 +44,6 @@ let modelReady = false;
 let initPromise: Promise<void> | null = null;
 
 const MODEL_ID = "Xenova/all-MiniLM-L6-v2";
-const EMBED_DIMENSIONS = 384;
 const BACKFILL_BATCH_SIZE = 64;
 
 // =============================================================================
@@ -105,21 +112,43 @@ export function isLocalEmbeddingReady(): boolean {
  * Typical latency: ~3-5ms on CPU.
  */
 export async function embedText(text: string): Promise<Float32Array | null> {
-  if (!modelReady || !extractor) return null;
+  const [vector] = await embedTexts([text]);
+  return vector ?? null;
+}
 
-  const output = await extractor(text, { pooling: "mean", normalize: true });
-  const values = output.tolist()[0] as number[];
-  const vec = new Float32Array(values);
+/**
+ * Embed one or more texts using the configured embeddings capability.
+ *
+ * Routes to the pinned provider model when the embeddings capability is
+ * configured, otherwise to the bundled local model. Returns an empty array
+ * when no backend is available (search degrades to FTS-only).
+ */
+async function embedTexts(texts: string[]): Promise<Float32Array[]> {
+  if (texts.length === 0) return [];
+  const resolved = resolveEmbeddings();
 
-  // Sanity check: ensure the model produced the expected dimensionality.
-  // This guards against silent model swaps by contributors.
-  if (vec.length !== EMBED_DIMENSIONS) {
-    throw new Error(
-      `Expected ${EMBED_DIMENSIONS}-dim vector, got ${vec.length}`,
+  if (resolved.kind === "provider" && resolved.providerId && resolved.model) {
+    const vectors = await embedWithProvider(
+      resolved.providerId,
+      resolved.model,
+      texts,
     );
+    return vectors.map((v) => new Float32Array(v));
   }
 
-  return vec;
+  if (!modelReady || !extractor) return [];
+  const output = await extractor(texts, { pooling: "mean", normalize: true });
+  const rows = output.tolist() as number[][];
+  return rows.map((values) => {
+    const vec = new Float32Array(values);
+    // Guards against a silent local-model swap by a contributor.
+    if (vec.length !== BUILTIN_DIMENSION) {
+      throw new Error(
+        `Expected ${BUILTIN_DIMENSION}-dim vector from the built-in model, got ${vec.length}`,
+      );
+    }
+    return vec;
+  });
 }
 
 /**
@@ -129,11 +158,36 @@ export async function embedText(text: string): Promise<Float32Array | null> {
 export async function embedBatch(
   texts: string[],
 ): Promise<(Float32Array | null)[]> {
-  if (!modelReady || !extractor || texts.length === 0) return [];
+  return embedTexts(texts);
+}
 
-  const output = await extractor(texts, { pooling: "mean", normalize: true });
-  const allVecs = output.tolist() as number[][];
-  return allVecs.map((v) => new Float32Array(v));
+/**
+ * True when *some* embedding backend is usable: either the local model has
+ * loaded or a provider model is configured for the embeddings capability.
+ */
+export function isSearchEmbeddingReady(): boolean {
+  const resolved = resolveEmbeddings();
+  if (resolved.kind === "provider") return true;
+  return modelReady;
+}
+
+/**
+ * Recreate the search_embeddings vec0 table at a new dimension.
+ * vec0 tables have a fixed width, so changing embedding models requires a
+ * rebuild; every contact is then re-embedded by backfillSearchEmbeddings().
+ */
+export function rebuildSearchEmbeddingTable(dimension: number): void {
+  sqlite.exec(`DROP TABLE IF EXISTS search_embeddings`);
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE search_embeddings USING vec0(
+      contactId TEXT PRIMARY KEY,
+      embedding FLOAT[${dimension}]
+    );
+  `);
+  log.info(
+    "LocalEmbeddings",
+    `Rebuilt search_embeddings at ${dimension} dimensions (re-embed required)`,
+  );
 }
 
 // =============================================================================
@@ -209,6 +263,54 @@ export function getSearchEmbeddingCount(): number {
 }
 
 // =============================================================================
+// Embedding-store migration
+// =============================================================================
+
+/**
+ * Bring the vector store in line with the configured embeddings capability.
+ *
+ * Called at startup and whenever the embeddings capability changes. When the
+ * configured model differs from what the table was built with, the vec0 table
+ * is recreated at the new dimension and every contact is re-embedded.
+ *
+ * Returns the number of contacts re-embedded (0 when nothing changed).
+ */
+export async function ensureEmbeddingStore(): Promise<number> {
+  const resolved = resolveEmbeddings();
+
+  // A provider model's dimension is unknown until probed.
+  let dimension = resolved.dimension;
+  if (dimension === null && resolved.providerId && resolved.model) {
+    dimension = await probeDimension(resolved.providerId, resolved.model);
+    if (dimension === null) {
+      log.warn(
+        "LocalEmbeddings",
+        `Could not determine dimension for ${resolved.signature}; keeping the existing vector store`,
+      );
+      return 0;
+    }
+  }
+  if (dimension === null) return 0;
+
+  const state = getEmbeddingsState();
+  const changed =
+    !state ||
+    state.signature !== resolved.signature ||
+    state.dimension !== dimension;
+  if (!changed) return 0;
+
+  if (state) {
+    log.info(
+      "LocalEmbeddings",
+      `Embeddings changed (${state.signature} → ${resolved.signature}); rebuilding vector store`,
+    );
+    rebuildSearchEmbeddingTable(dimension);
+  }
+  setEmbeddingsState({ signature: resolved.signature, dimension });
+  return backfillSearchEmbeddings();
+}
+
+// =============================================================================
 // Backfill: Embed All Contacts
 // =============================================================================
 
@@ -218,8 +320,8 @@ export function getSearchEmbeddingCount(): number {
  * ~2s for 960 contacts on Apple Silicon.
  */
 export async function backfillSearchEmbeddings(): Promise<number> {
-  if (!modelReady) {
-    log.warn("LocalEmbeddings", "Cannot backfill: model not loaded");
+  if (!isSearchEmbeddingReady()) {
+    log.warn("LocalEmbeddings", "Cannot backfill: no embedding backend ready");
     return 0;
   }
 

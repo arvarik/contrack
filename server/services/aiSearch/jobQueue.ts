@@ -248,7 +248,7 @@ class AISearchJobQueue extends EventEmitter {
             const prompt = buildSearchPrompt(contact);
 
             // 4. Execute strategy (two-pass internally)
-            const result = await strategy.execute(contact, prompt, adapter);
+            const result = await strategy.execute(contact, prompt);
 
             // 5. Set status → 'merging'
             job.status = "merging";

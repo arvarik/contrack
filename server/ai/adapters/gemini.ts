@@ -12,6 +12,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AIProvider } from "../provider.ts";
+import type { ModelInfo, ModelCapability } from "../provider.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -138,6 +139,7 @@ const BASE_BACKOFF_MS = 500;
 export class GeminiAdapter implements AIProvider {
   readonly name = "Gemini";
   private client: GoogleGenAI;
+  private apiKey: string;
   private aiTier: AITier;
 
   // Routing infrastructure (shared across all generate() calls)
@@ -146,6 +148,7 @@ export class GeminiAdapter implements AIProvider {
   private circuitBreakers = new Set<string>();
 
   constructor(apiKey: string) {
+    this.apiKey = apiKey;
     this.client = new GoogleGenAI({ apiKey });
 
     // Read tier from environment once at construction time
@@ -166,6 +169,75 @@ export class GeminiAdapter implements AIProvider {
    * Returns quota snapshot, circuit breaker state, and active tier — all
    * in one call to keep the diagnostics surface minimal.
    */
+  readonly supportsSearchGrounding = true;
+
+  /**
+   * Enumerate models from the REST list endpoint.
+   *
+   * Uses fetch rather than the SDK because the REST response carries
+   * `supportedGenerationMethods`, which tells us *declaratively* whether a
+   * model does generation or embeddings — no name guessing needed.
+   */
+  async listModels(): Promise<ModelInfo[]> {
+    const models: ModelInfo[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const url = new URL(
+        "https://generativelanguage.googleapis.com/v1beta/models",
+      );
+      url.searchParams.set("key", this.apiKey);
+      url.searchParams.set("pageSize", "200");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Gemini list-models failed: ${response.status} ${response.statusText}`,
+        );
+      }
+      const body = (await response.json()) as {
+        models?: {
+          name: string;
+          displayName?: string;
+          supportedGenerationMethods?: string[];
+          inputTokenLimit?: number;
+        }[];
+        nextPageToken?: string;
+      };
+
+      for (const model of body.models ?? []) {
+        const methods = model.supportedGenerationMethods ?? [];
+        const capabilities: ModelCapability[] = [];
+        if (methods.includes("generateContent")) capabilities.push("chat");
+        if (methods.includes("embedContent")) capabilities.push("embeddings");
+        if (capabilities.length === 0) continue;
+        models.push({
+          // Strip the "models/" prefix — requests use the bare id.
+          id: model.name.replace(/^models\//, ""),
+          label: model.displayName ?? model.name,
+          capabilities,
+          capabilityConfidence: "declared",
+          contextWindow: model.inputTokenLimit,
+        });
+      }
+      pageToken = body.nextPageToken;
+    } while (pageToken);
+
+    return models;
+  }
+
+  /** Embeddings via the Gemini embedding models. */
+  async embed(texts: string[], model: string): Promise<number[][]> {
+    const response = await this.client.models.embedContent({
+      model,
+      contents: texts,
+    });
+    return (response.embeddings ?? []).map((e) => e.values as number[]);
+  }
+
   getQuotaSnapshot(): DiagnosticsSnapshot {
     return {
       ...this.tracker.getSnapshot(),

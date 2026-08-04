@@ -13,6 +13,7 @@
 // =============================================================================
 
 import type { AIProvider } from "../../../ai/provider.ts";
+import { generateFor } from "../../../ai/gateway.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";
 import {
@@ -33,18 +34,16 @@ export class SinglePassStrategy implements AISearchStrategy {
   async execute(
     _contact: HydratedContact,
     prompt: string,
-    adapter: AIProvider,
   ): Promise<AISearchResult> {
     const startMs = Date.now();
 
     // Single combined request: web search + structured JSON output
     // Prefer "pro" model class for maximum quality on research tasks.
-    const result = await adapter.generate({
+    const result = await generateFor("research", {
       prompt,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,
       enableSearchGrounding: true,
-      routing: { prefer: "pro" },
     });
 
     // Record invocation for AI Stats tracking

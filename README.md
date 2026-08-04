@@ -124,7 +124,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 ### More Capabilities
 
 - **Magic Paste** — Paste unstructured text, AI extracts a structured contact
-- **Multi-Provider AI** — Gemini (default), OpenAI, or Anthropic via provider-agnostic adapters
+- **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign models per capability from Settings
 - **Smart Router** — Automatic Gemini model selection (Lite/Flash/Pro) per use case
 - **Batch Enrichment** — AI-powered web research to hydrate contact profiles
 - **Custom Lists** — Unlimited groups with icons, drag-to-reorder, bulk membership
@@ -184,7 +184,7 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 | **Frontend** | React 19, Vite 6, React Query v5, Tailwind CSS v4, Tiptap, Motion     |
 | **Backend**  | Node.js 22, Express, TypeScript (tsx), Zod validation                 |
 | **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
-| **AI**       | Gemini / OpenAI / Anthropic (provider-agnostic adapter pattern)       |
+| **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
 | **Mapping**  | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding           |
 | **Testing**  | Vitest — 180 tests, <600ms                                            |
@@ -220,7 +220,7 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 | Variable            | Description                                                   | Default      |
 | ------------------- | ------------------------------------------------------------- | ------------ |
-| `AI_PROVIDER`       | LLM provider: `gemini`, `openai`, `anthropic`                 | `gemini`     |
+| `AI_PROVIDER`       | Preferred provider for capabilities set to Auto               | `gemini`     |
 | `GEMINI_API_KEY`    | Gemini API key                                                | —            |
 | `OPENAI_API_KEY`    | OpenAI API key                                                | —            |
 | `ANTHROPIC_API_KEY` | Anthropic API key                                             | —            |

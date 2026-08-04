@@ -16,6 +16,7 @@ import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { sqlite } from "../db.ts";
 import { ai } from "../ai/index.ts";
+import { providerIdFor } from "../ai/gateway.ts";
 import {
   getStrategy,
   getDefaultStrategyForProvider,
@@ -722,16 +723,19 @@ router.post(
 
     const startMs = Date.now();
     // F-02: Use provider-aware strategy instead of hardcoded 'two-pass'
-    const strategyName = getDefaultStrategyForProvider(ai.providerName);
+    // Strategy follows whichever provider serves the *research* capability,
+    // not the legacy default provider.
+    const researchProvider = providerIdFor("research");
+    const strategyName = getDefaultStrategyForProvider(researchProvider);
     const strategy = getStrategy(strategyName);
     const prompt = buildSearchPrompt(contact);
 
     log.info(
       "API",
-      `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${ai.providerName})`,
+      `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
     );
 
-    const result = await strategy.execute(contact, prompt, ai);
+    const result = await strategy.execute(contact, prompt);
     const fieldsUpdated = mergeSearchResult(
       id,
       contact,

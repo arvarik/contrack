@@ -12,7 +12,7 @@
 // =============================================================================
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { AIProvider } from "../provider.ts";
+import type { AIProvider, ModelInfo } from "../provider.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -72,11 +72,29 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
 
 export class AnthropicAdapter implements AIProvider {
   readonly name = "Anthropic";
+  readonly supportsSearchGrounding = true;
   readonly defaultMaxTokens = DEFAULT_MAX_TOKENS;
   private client: Anthropic;
 
   constructor(apiKey: string) {
     this.client = new Anthropic({ apiKey });
+  }
+
+  /**
+   * Enumerate models. Anthropic reports ids + display names; every listed
+   * model is a chat model (Anthropic ships no first-party embedding models).
+   */
+  async listModels(): Promise<ModelInfo[]> {
+    const models: ModelInfo[] = [];
+    for await (const model of this.client.models.list()) {
+      models.push({
+        id: model.id,
+        label: model.display_name ?? model.id,
+        capabilities: ["chat"],
+        capabilityConfidence: "declared",
+      });
+    }
+    return models;
   }
 
   resolveModel(prefer?: string, modelOverride?: string): string {

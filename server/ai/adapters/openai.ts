@@ -16,7 +16,7 @@
 // =============================================================================
 
 import OpenAI from "openai";
-import type { AIProvider } from "../provider.ts";
+import type { AIProvider, ModelInfo } from "../provider.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -82,10 +82,55 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
 
 export class OpenAIAdapter implements AIProvider {
   readonly name = "OpenAI";
+  readonly supportsSearchGrounding = true;
   private client: OpenAI;
 
   constructor(apiKey: string) {
     this.client = new OpenAI({ apiKey });
+  }
+
+  /**
+   * Enumerate models. OpenAI's list endpoint returns bare ids with no
+   * capability metadata, so capability is pattern-matched and the settings UI
+   * exposes an override.
+   */
+  async listModels(): Promise<ModelInfo[]> {
+    const models: ModelInfo[] = [];
+    for await (const model of this.client.models.list()) {
+      const id = model.id;
+      if (/^(text-)?embedding|embedding-/i.test(id)) {
+        models.push({
+          id,
+          label: id,
+          capabilities: ["embeddings"],
+          capabilityConfidence: "guessed",
+        });
+        continue;
+      }
+      // Exclude non-chat modalities (audio/image/moderation/realtime).
+      if (
+        /whisper|tts|dall-e|sora|moderation|transcribe|realtime|image/i.test(id)
+      )
+        continue;
+      if (/^(gpt|o\d|chatgpt)/i.test(id)) {
+        models.push({
+          id,
+          label: id,
+          capabilities: ["chat"],
+          capabilityConfidence: "guessed",
+        });
+      }
+    }
+    return models;
+  }
+
+  /** Embeddings via /v1/embeddings. */
+  async embed(texts: string[], model: string): Promise<number[][]> {
+    const response = await this.client.embeddings.create({
+      model,
+      input: texts,
+    });
+    return response.data.map((d) => d.embedding as number[]);
   }
 
   resolveModel(prefer?: string, modelOverride?: string): string {

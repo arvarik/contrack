@@ -26,6 +26,7 @@ import {
 import { DedupeView } from "./dedupe";
 import { ArchivedContactsView } from "./ArchivedContactsView";
 import { TrashView } from "./TrashView";
+import { AISettingsView } from "./ai-settings";
 import { ListManagerView } from "./lists";
 import { AISearchView } from "./ai-search";
 import { AIStatsView } from "./ai-stats";
@@ -65,6 +66,7 @@ export const SettingsView = () => {
   const isDedupe = location.pathname.endsWith("/dedupe");
   const isArchived = location.pathname.endsWith("/archived");
   const isTrash = location.pathname.endsWith("/trash");
+  const isAIConfig = location.pathname.endsWith("/ai-config");
   const isLists = location.pathname.endsWith("/lists");
   const isAISearch = location.pathname.includes("/ai-search");
   const isAIStats = location.pathname.includes("/ai-stats");
@@ -75,6 +77,7 @@ export const SettingsView = () => {
     if (isAIStats) return "AI Usage";
     if (isArchived) return "Archived Contacts";
     if (isTrash) return "Trash";
+    if (isAIConfig) return "AI Configuration";
     if (isLists) return "List Management";
     return "Settings";
   };
@@ -85,12 +88,19 @@ export const SettingsView = () => {
     if (isAIStats) return <Brain className="w-6 h-6 text-primary" />;
     if (isArchived) return <Archive className="w-6 h-6 text-amber-500" />;
     if (isTrash) return <Trash2 className="w-6 h-6 text-red-500" />;
+    if (isAIConfig) return <Brain className="w-6 h-6 text-primary" />;
     if (isLists) return <List className="w-6 h-6 text-primary" />;
     return <SettingsIcon className="w-6 h-6 text-primary" />;
   };
 
   const isSubpage =
-    isDedupe || isArchived || isTrash || isLists || isAISearch || isAIStats;
+    isDedupe ||
+    isArchived ||
+    isTrash ||
+    isAIConfig ||
+    isLists ||
+    isAISearch ||
+    isAIStats;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
@@ -348,6 +358,30 @@ export const SettingsView = () => {
                   </div>
                 </section>
 
+                {/* AI Configuration */}
+                <Link
+                  to="/settings/ai-config"
+                  className={cn(
+                    CARD,
+                    "block hover:bg-surface-container-high transition-colors group cursor-pointer",
+                  )}
+                >
+                  <h3
+                    className={cn(
+                      SECTION_HEADING,
+                      "mb-2 flex items-center gap-2 group-hover:text-primary transition-colors",
+                    )}
+                  >
+                    <Brain className="w-5 h-5 text-primary" />
+                    AI Configuration
+                  </h3>
+                  <p className="text-sm text-on-surface-variant">
+                    Connect providers and choose what powers each kind of AI
+                    work — fast tasks, deeper reasoning, embeddings, and online
+                    research.
+                  </p>
+                </Link>
+
                 {/* Archived Contacts */}
                 <Link
                   to="/settings/archived"
@@ -420,6 +454,15 @@ export const SettingsView = () => {
             element={
               <div className="overflow-y-auto h-full">
                 <ArchivedContactsView />
+              </div>
+            }
+          />
+
+          <Route
+            path="/ai-config"
+            element={
+              <div className="overflow-y-auto h-full">
+                <AISettingsView />
               </div>
             }
           />

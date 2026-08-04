@@ -26,6 +26,7 @@ import { aiRouter } from "./routes/ai.ts";
 import { aiStatsRouter } from "./routes/aiStats.ts";
 import { logosRouter } from "./routes/logos.ts";
 import { dataLifecycleRouter } from "./routes/dataLifecycle.ts";
+import { aiSettingsRouter } from "./routes/aiSettings.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import { authRouter, requireAuth } from "./middleware/auth.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
@@ -125,6 +126,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api", dashboardRouter);
   app.use("/api", aiSearchRouter);
   app.use("/api", dataLifecycleRouter);
+  app.use("/api/settings/ai", aiSettingsRouter);
   app.use("/api/ai/stats", aiStatsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/logos", logosRouter);

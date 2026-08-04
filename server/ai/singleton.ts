@@ -1,36 +1,36 @@
 // =============================================================================
-// AI Layer — Shared Provider Singleton
+// AI Layer — Legacy Default-Provider Accessors
 // =============================================================================
-// Single source of truth for the resolved AI provider instance.
+// Historically this module owned THE single provider instance. With
+// capability-based routing there is no longer one active provider — each
+// capability resolves independently (see capabilities.ts / gateway.ts).
 //
-// WHY THIS EXISTS:
-// Both `index.ts` (barrel) and `aiService.ts` (business functions) need
-// the same adapter instance. Without this module, each would create
-// its own — causing duplicate QuotaTrackers, independent circuit breakers,
-// and blind spots in quota tracking.
-//
-// This module breaks the circular dependency between index.ts and aiService.ts
-// by being imported by both without importing from either.
-//
-// v2.0: Multi-provider support — resolves the active AIProvider based on
-// AI_PROVIDER env var. Supports "gemini" (default), "openai", "anthropic".
+// What remains here is the legacy surface:
+//   - `createProvider()` / `getApiKeyForProvider()` — pure factories, still
+//     used by tests and by callers that want a specific adapter.
+//   - `sharedProvider` — the AI_PROVIDER-implied default, delegated to the
+//     provider registry so instance-scoped state (Gemini's SmartRouter,
+//     QuotaTracker, circuit breakers) stays singleton per provider rather
+//     than being duplicated between this module and the registry.
 // =============================================================================
 
 import type { AIProvider } from "./provider.ts";
-import type { AIProviderName } from "./types.ts";
 import { GeminiAdapter } from "./adapters/gemini.ts";
 import { OpenAIAdapter } from "./adapters/openai.ts";
 import { AnthropicAdapter } from "./adapters/anthropic.ts";
+import {
+  getProvider,
+  getProviderConfigs,
+  defaultProviderId,
+} from "./providerRegistry.ts";
 import { log } from "../utils/logger.ts";
 
 // ---------------------------------------------------------------------------
-// Provider Factory (exported for testability)
+// Factories (exported for testability)
 // ---------------------------------------------------------------------------
 
 /**
  * Create an AIProvider instance for the given provider name and API key.
- * This factory is the single decision point for adapter selection.
- *
  * Falls back to Gemini for unknown provider names with a warning.
  */
 export function createProvider(
@@ -53,9 +53,7 @@ export function createProvider(
   }
 }
 
-/**
- * Resolve the correct API key environment variable for a given provider.
- */
+/** Resolve the API key environment variable for a given provider. */
 export function getApiKeyForProvider(providerName: string): string | undefined {
   switch (providerName.toLowerCase()) {
     case "gemini":
@@ -70,61 +68,50 @@ export function getApiKeyForProvider(providerName: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Provider Resolution
+// Legacy default provider
 // ---------------------------------------------------------------------------
 
-const _providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-const _apiKey = getApiKeyForProvider(_providerName);
-
 /**
- * Determine if the active provider is properly configured with a valid API key.
+ * The provider implied by AI_PROVIDER, resolved lazily through the registry
+ * so it is the *same instance* capability routing uses. Falls back to an
+ * unconfigured Gemini adapter when nothing is configured — callers gate on
+ * mock mode before using it.
  */
-function _isConfigured(
-  providerName: string,
-  apiKey: string | undefined,
-): boolean {
-  if (!apiKey) return false;
-  // Gemini has a special "dummy_key" sentinel value
-  if (providerName === "gemini" && apiKey === "dummy_key") return false;
-  return true;
-}
-
-const _configured = _isConfigured(_providerName, _apiKey);
-
-if (!_configured) {
-  const keyVarName =
-    _providerName === "openai"
-      ? "OPENAI_API_KEY"
-      : _providerName === "anthropic"
-        ? "ANTHROPIC_API_KEY"
-        : "GEMINI_API_KEY";
-  log.warn(
-    "AIService",
-    `${keyVarName} not configured — AI functions will use mock responses`,
+export function getDefaultProvider(): AIProvider {
+  return (
+    getProvider(defaultProviderId()) ?? createProvider("gemini", "dummy_key")
   );
 }
 
-// ---------------------------------------------------------------------------
-// Shared Instance
-// ---------------------------------------------------------------------------
-
 /**
- * The single shared AIProvider instance for the entire application.
- *
- * All AI calls — whether from aiService.ts business functions, the ai barrel
- * export, dedupe, or aiSearch routes — go through this one adapter. This
- * ensures a single QuotaTracker, single SmartRouter, and single set of
- * circuit breakers for accurate quota management.
+ * @deprecated Prefer `generateFor(capability, …)` from gateway.ts.
+ * Proxied so every property access resolves through the registry at call
+ * time — credentials can change at runtime via Settings → AI.
  */
-export const sharedProvider = createProvider(
-  _providerName,
-  _apiKey || "dummy_key",
-);
+export const sharedProvider: AIProvider = new Proxy({} as AIProvider, {
+  get(_target, prop) {
+    const provider = getDefaultProvider() as unknown as Record<
+      string | symbol,
+      unknown
+    >;
+    const value = provider[prop];
+    return typeof value === "function" ? value.bind(provider) : value;
+  },
+});
 
-/** Whether the provider is properly configured with a valid API key. */
-export const isProviderConfigured = _configured;
+/** True when at least one provider has usable credentials. */
+export const isProviderConfigured = getProviderConfigs().length > 0;
 
-log.info(
-  "AIService",
-  `Initialized with provider: ${sharedProvider.name} (AI_PROVIDER=${_providerName})`,
-);
+if (!isProviderConfigured) {
+  log.warn(
+    "AIService",
+    "No AI provider configured — AI functions will use mock responses",
+  );
+} else {
+  log.info(
+    "AIService",
+    `Configured providers: ${getProviderConfigs()
+      .map((c) => c.id)
+      .join(", ")} (default: ${defaultProviderId()})`,
+  );
+}

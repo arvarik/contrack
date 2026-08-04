@@ -18,6 +18,7 @@
 // =============================================================================
 
 import type { AIProvider } from "../../../ai/provider.ts";
+import { generateFor } from "../../../ai/gateway.ts";
 import {
   wrapUntrusted,
   UNTRUSTED_DATA_RULE,
@@ -52,7 +53,6 @@ export class TwoPassStrategy implements AISearchStrategy {
   async execute(
     _contact: HydratedContact,
     prompt: string,
-    adapter: AIProvider,
   ): Promise<AISearchResult> {
     const startMs = Date.now();
     const modelsUsed: string[] = [];
@@ -77,11 +77,10 @@ export class TwoPassStrategy implements AISearchStrategy {
 
       try {
         const pass1Start = Date.now();
-        const pass1Result = await adapter.generate({
+        const pass1Result = await generateFor("research", {
           prompt,
           responseFormat: "text",
           enableSearchGrounding: true,
-          routing: { prefer: "pro" },
         });
 
         groundedText = pass1Result.text;
@@ -156,11 +155,10 @@ ${wrapUntrusted("web research text", groundedText, 32_000)}
     `.trim();
 
     const pass2Start = Date.now();
-    const pass2Result = await adapter.generate({
+    const pass2Result = await generateFor("fast", {
       prompt: extractionPrompt,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,
-      routing: { prefer: "lite" },
     });
 
     modelsUsed.push(pass2Result.model);

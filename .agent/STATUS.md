@@ -59,7 +59,7 @@ _None — next feature not started._
 
 - OpenAI (`gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4`) and Anthropic (`claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.6`) as first-class providers alongside Gemini
 - Provider-agnostic `AIProvider` interface with adapters in `server/ai/adapters/`
-- Singleton factory resolves provider from `AI_PROVIDER` env var
+- Capability router (`ai/capabilities.ts`) resolves provider + model per capability; `AI_PROVIDER` is the Auto-mode preference
 - Single-pass search strategy for OpenAI/Anthropic (web search + structured output in one call)
 - Provider-aware UI: generic "AI" labels, per-provider tier badges, cost display for all paid tiers
 - Provider-aware diagnostics, quota visualization, error messages

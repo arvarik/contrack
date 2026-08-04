@@ -80,13 +80,8 @@ export interface AISearchStrategy {
    *
    * @param contact - Fully hydrated contact with all child records
    * @param prompt - Pre-built research prompt from promptTemplate
-   * @param adapter - The AI provider adapter to use for LLM calls
    * @returns Structured result with extracted data, models used, and metrics
    * @throws Error if both passes fail (rate limit, validation, network, etc.)
    */
-  execute(
-    contact: HydratedContact,
-    prompt: string,
-    adapter: AIProvider,
-  ): Promise<AISearchResult>;
+  execute(contact: HydratedContact, prompt: string): Promise<AISearchResult>;
 }

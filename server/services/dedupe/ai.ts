@@ -1,4 +1,5 @@
 import { ai } from "../../ai/index.ts";
+import { generateFor } from "../../ai/gateway.ts";
 import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../../ai/promptSafety.ts";
 import { log } from "../../utils/logger.ts";
 import type { NormalizedContact } from "./normalization.ts";
@@ -70,7 +71,7 @@ export async function evaluateBatchWithAI(
     .join("\n\n");
 
   try {
-    const result = await ai.generate({
+    const result = await generateFor("smart", {
       systemPrompt: AI_SYSTEM_PROMPT,
       prompt: `For each pair below, determine if they represent the SAME real-world person.
 
@@ -80,7 +81,6 @@ ${wrapUntrusted("candidate pairs", pairDescriptions, 24_000)}
 
 For each pair, return your assessment.`,
       responseFormat: "json",
-      routing: { prefer: "flash" },
       jsonSchema: {
         type: "array",
         items: {

@@ -15,13 +15,19 @@ import path from "path";
 process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "contrack-int-"));
 
 // Force AI mock mode — integration tests must never hit live providers.
+//
+// These are set to "" rather than deleted on purpose: server modules call
+// `import "dotenv/config"`, and dotenv only fills variables that are *unset*.
+// Deleting them would let the developer's real .env keys leak into the test
+// run (and reach live provider APIs); an empty value is both "not configured"
+// to our credential checks and immune to dotenv repopulating it.
 process.env.AI_PROVIDER = "gemini";
-delete process.env.GEMINI_API_KEY;
-delete process.env.OPENAI_API_KEY;
-delete process.env.ANTHROPIC_API_KEY;
-delete process.env.MAPBOX_API_KEY;
-delete process.env.AUTH_TOKEN;
-delete process.env.AUTH_REQUIRED;
+process.env.GEMINI_API_KEY = "";
+process.env.OPENAI_API_KEY = "";
+process.env.ANTHROPIC_API_KEY = "";
+process.env.MAPBOX_API_KEY = "";
+process.env.AUTH_TOKEN = "";
+process.env.AUTH_REQUIRED = "";
 
 // Suppress fire-and-forget background work (geocoding fetches, debounced
 // dedupe timers) that would outlive the test file or hit the network.

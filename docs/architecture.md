@@ -126,7 +126,10 @@ server/ai/
 │   ├── openai.ts    # GPT-4o / GPT-4o-mini
 │   └── anthropic.ts # Claude Sonnet / Haiku
 ├── provider.ts      # Abstract AIProvider interface
-├── singleton.ts     # Factory — reads AI_PROVIDER, returns singleton
+├── capabilities.ts  # Capability → provider+model resolution (fast/smart/research/embeddings)
+├── gateway.ts       # generateFor(capability, opts) — the entry point for all generation
+├── providerRegistry.ts # Every configured provider (env keys, stored keys, custom endpoints)
+├── singleton.ts     # Default-provider proxy (back-compat surface)
 ├── types.ts         # Shared types (DiagnosticsSnapshot, etc.)
 └── index.ts         # Exports configured provider as `ai`
 ```

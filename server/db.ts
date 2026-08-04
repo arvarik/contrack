@@ -698,6 +698,22 @@ sqlite.exec(`
 `);
 
 // =============================================================================
+// 9g2. App settings (key/value JSON)
+// =============================================================================
+// Backs AI capability configuration: provider keys entered through the UI,
+// custom OpenAI-compatible endpoints, capability assignments, and cached
+// model lists. See server/services/settingsService.ts.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
+`);
+
+// =============================================================================
 // 9h. Hot-path indexes
 // =============================================================================
 // Every contact hydration joins ~10 child tables on contactId, and the

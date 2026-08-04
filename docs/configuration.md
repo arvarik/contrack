@@ -8,24 +8,27 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable                | Description                                                                                                                                                 | Default                 | Required                      |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ----------------------------- |
-| `AI_PROVIDER`           | LLM provider adapter: `gemini`, `openai`, or `anthropic`                                                                                                    | `gemini`                | No                            |
-| `GEMINI_API_KEY`        | Google Gemini API key                                                                                                                                       | —                       | Yes (if provider = gemini)    |
-| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                              | —                       | Yes (if provider = openai)    |
-| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                           | —                       | Yes (if provider = anthropic) |
-| `AI_TIER`               | Rate limit profile: `FREE` or `PAID`                                                                                                                        | `FREE`                  | No                            |
-| `APP_URL`               | Host URL for self-referential links                                                                                                                         | `http://localhost:3210` | No                            |
-| `PORT`                  | Express listening port                                                                                                                                      | `3210`                  | No                            |
-| `HOST`                  | Interface to bind. The server has no authentication, so it binds localhost by default; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`             | No                            |
-| `CORS_ORIGIN`           | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                  | — (disabled)            | No                            |
-| `DATA_DIR`              | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                   | project root            | No                            |
-| `MAPBOX_API_KEY`        | Mapbox geocoding API key (higher accuracy)                                                                                                                  | —                       | No                            |
-| `AUTH_TOKEN`            | Enables authentication: every `/api` and `/uploads` request must present this token (SPA sign-in, or `Authorization: Bearer`)                               | — (auth off)            | No                            |
-| `AUTH_REQUIRED`         | `true` enforces auth with an auto-generated token (persisted to `DATA_DIR/auth-token`, printed in logs on first boot). Set by the Docker image              | `false`                 | No                            |
-| `TRASH_RETENTION_DAYS`  | Days a deleted contact stays restorable before permanent purge                                                                                              | `30`                    | No                            |
-| `BACKUP_INTERVAL_HOURS` | Automatic SQLite snapshot cadence (`0` disables)                                                                                                            | `24`                    | No                            |
-| `BACKUP_KEEP`           | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                    | `7`                     | No                            |
+| Variable                | Description                                                                                                                                                 | Default                 | Required |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------- |
+| `AI_PROVIDER`           | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                     | `gemini`                | No       |
+| `GEMINI_API_KEY`        | Google Gemini API key                                                                                                                                       | —                       | No       |
+| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                              | —                       | No       |
+| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                           | —                       | No       |
+| `AI_TIER`               | Rate limit profile: `FREE` or `PAID`                                                                                                                        | `FREE`                  | No       |
+| `APP_URL`               | Host URL for self-referential links                                                                                                                         | `http://localhost:3210` | No       |
+| `PORT`                  | Express listening port                                                                                                                                      | `3210`                  | No       |
+| `HOST`                  | Interface to bind. The server has no authentication, so it binds localhost by default; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`             | No       |
+| `CORS_ORIGIN`           | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                  | — (disabled)            | No       |
+| `DATA_DIR`              | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                   | project root            | No       |
+| `MAPBOX_API_KEY`        | Mapbox geocoding API key (higher accuracy)                                                                                                                  | —                       | No       |
+| `AUTH_TOKEN`            | Enables authentication: every `/api` and `/uploads` request must present this token (SPA sign-in, or `Authorization: Bearer`)                               | — (auth off)            | No       |
+| `AUTH_REQUIRED`         | `true` enforces auth with an auto-generated token (persisted to `DATA_DIR/auth-token`, printed in logs on first boot). Set by the Docker image              | `false`                 | No       |
+| `TRASH_RETENTION_DAYS`  | Days a deleted contact stays restorable before permanent purge                                                                                              | `30`                    | No       |
+| `BACKUP_INTERVAL_HOURS` | Automatic SQLite snapshot cadence (`0` disables)                                                                                                            | `24`                    | No       |
+| `BACKUP_KEEP`           | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                    | `7`                     | No       |
+| `AI_FAST_MODEL`         | Pin the Fast capability to a model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                            | — (auto)                | No       |
+| `AI_SMART_MODEL`        | Pin the Smart capability                                                                                                                                    | — (auto)                | No       |
+| `AI_RESEARCH_MODEL`     | Pin the Online-research capability                                                                                                                          | — (auto)                | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -34,46 +37,80 @@ cp .env.example .env
 
 ---
 
-## AI Provider Setup
+## AI Configuration
 
-Contrack supports three AI providers through a provider-agnostic adapter architecture. Only one provider is active at a time.
+Contrack routes AI work by **capability**, not by "the AI provider". You connect
+whichever providers you have keys for, and each kind of task is served by a
+suitable model. Everything is configurable in the app under
+**Settings → AI Configuration**; no restart or file editing required.
 
-### Gemini (Default)
+| Capability          | Powers                                                                                        | Default          |
+| ------------------- | --------------------------------------------------------------------------------------------- | ---------------- |
+| **Fast model**      | Magic Paste parsing, @mention extraction, search understanding & verification, daily insights | Auto             |
+| **Smart model**     | Email (.eml) summaries, duplicate adjudication, research extraction                           | Auto             |
+| **Embeddings**      | Semantic search ranking, duplicate similarity                                                 | Built-in (local) |
+| **Online research** | AI Search enrichment against the live web                                                     | Auto             |
 
-1. Get an API key from [Google AI Studio](https://aistudio.google.com/apikey)
-2. Set in `.env`:
-   ```
-   AI_PROVIDER="gemini"
-   GEMINI_API_KEY="your-key-here"
-   ```
-3. The SmartRouter automatically selects the optimal Gemini model (Lite, Flash, or Pro) per use case
+**Auto** picks the first available provider, preferring `AI_PROVIDER` — so an
+existing single-key deployment behaves exactly as it did before. Set one API key
+and everything works; configure further only if you want to.
 
-**Gemini-exclusive features:**
+### Connecting providers
 
-- SmartRouter model-class routing (Lite → Flash → Pro)
-- Grounding-based web search for AI Search enrichment (two-pass strategy)
-- Quota tracking with RPD limits
-- 768-dim embedding generation for deduplication
+Add a key in the UI (stored in the app database) or via environment variable.
+Env keys always win and are shown read-only in the UI, so a Docker deployment
+can pin credentials while still exposing model choice.
 
-### OpenAI
+| Provider  | Key                                                              | Notes                                            |
+| --------- | ---------------------------------------------------------------- | ------------------------------------------------ |
+| Gemini    | [Google AI Studio](https://aistudio.google.com/apikey)           | Grounded web search; declared model capabilities |
+| OpenAI    | [OpenAI Platform](https://platform.openai.com/api-keys)          | Chat + embeddings                                |
+| Anthropic | [Anthropic Console](https://console.anthropic.com/settings/keys) | Chat only (no embeddings endpoint)               |
 
-1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-2. Set in `.env`:
-   ```
-   AI_PROVIDER="openai"
-   OPENAI_API_KEY="your-key-here"
-   ```
-3. Uses GPT models with a single-pass search strategy
+### Custom endpoints (self-hosted & other vendors)
 
-### Anthropic
+Anything that speaks the OpenAI API format can be added as a custom endpoint
+with a base URL and optional key — Ollama, vLLM, LM Studio, llama.cpp,
+OpenRouter, xAI, DeepSeek, Mistral:
 
-1. Get an API key from [Anthropic Console](https://console.anthropic.com/settings/keys)
-2. Set in `.env`:
-   ```
-   AI_PROVIDER="anthropic"
-   ANTHROPIC_API_KEY="your-key-here"
-   ```
-3. Uses Claude models with a single-pass search strategy
+```
+Label:    Homelab Ollama
+Base URL: http://alpha:11434/v1
+API key:  (blank for Ollama)
+```
+
+These can serve Fast, Smart, and Embeddings. They cannot serve Online research —
+there is no standard grounding API in the OpenAI format — so use SearXNG for
+self-hosted web research.
+
+Structured output is negotiated automatically: Contrack tries strict JSON
+schema, falls back to JSON mode, then to prompt-based JSON, and remembers what
+each model supports.
+
+### Model discovery
+
+Saving a key immediately queries the provider's list-models API. This validates
+the credential and fills the model dropdowns, so new releases appear without a
+Contrack update. Lists are cached for 24 hours and can be refreshed on demand.
+
+Gemini and Anthropic report what each model can do; OpenAI and OpenAI-compatible
+servers return bare ids, so capability is inferred from the model name and
+marked with `?` in the UI.
+
+### Self-hosted web research (SearXNG)
+
+Set a SearXNG base URL to enable online research with no cloud provider.
+Contrack queries its JSON API, fetches the top results (SSRF-guarded and
+size-capped), and runs the normal structured extraction on the Smart model.
+Combined with a local chat model and the built-in embeddings, this is a fully
+self-hosted AI stack.
+
+### Changing the embeddings model
+
+The vector index is fixed-width, so switching embedding models rebuilds it and
+re-embeds every contact in the background. Search falls back to keyword (FTS5)
+matching while that runs. The built-in local model needs no key and works
+offline.
 
 ---
 
@@ -86,7 +123,9 @@ The `AI_TIER` variable controls rate limiting and model access:
 | `FREE` | Conservative routing, limits matching free-tier quotas (~10 RPM). Avoids paid spillover. Default.           |
 | `PAID` | Aggressive routing, full paid-tier limits (10K+ RPM). Includes paid-only models (e.g., Gemini 3.x preview). |
 
-> **Note:** `AI_TIER` only affects Gemini's SmartRouter. OpenAI and Anthropic adapters use their own default rate limits.
+> **Note:** `AI_TIER` only affects Gemini's SmartRouter, which picks a concrete
+> Gemini model whenever a capability is left on Auto. Other providers use their
+> own default rate limits, and an explicitly pinned model bypasses routing.
 
 ---
 

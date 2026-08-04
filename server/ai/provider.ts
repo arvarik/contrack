@@ -12,6 +12,28 @@ import type {
   DiagnosticsSnapshot,
 } from "./types.ts";
 
+/** Which capabilities a discovered model can serve. */
+export type ModelCapability = "chat" | "embeddings";
+
+/** A model as reported by a provider's list-models API. */
+export interface ModelInfo {
+  /** Provider-native model id, passed back verbatim in requests. */
+  id: string;
+  /** Human-readable name for the settings UI. */
+  label: string;
+  /** What this model can be used for. */
+  capabilities: ModelCapability[];
+  /**
+   * How the capabilities were determined:
+   * - "declared": the provider's API states it (Gemini, Anthropic)
+   * - "guessed":  inferred from the id (OpenAI, compat servers) — the UI
+   *               lets the user override.
+   */
+  capabilityConfidence: "declared" | "guessed";
+  /** Optional context-window size, when the provider reports it. */
+  contextWindow?: number;
+}
+
 /**
  * Abstract interface for an LLM provider.
  *
@@ -45,4 +67,24 @@ export interface AIProvider {
    * safe empty snapshot as fallback.
    */
   getQuotaSnapshot?(): DiagnosticsSnapshot;
+
+  /**
+   * Optional: whether this provider can ground responses in live web search.
+   * Defaults to true for the three native adapters; the generic
+   * OpenAI-compatible adapter sets it false.
+   */
+  readonly supportsSearchGrounding?: boolean;
+
+  /**
+   * Optional: enumerate models available to these credentials.
+   * Used by the settings UI for discovery + key validation. Providers
+   * without a list API omit it.
+   */
+  listModels?(): Promise<ModelInfo[]>;
+
+  /**
+   * Optional: generate embedding vectors. Only implemented by providers whose
+   * models are selectable for the embeddings capability.
+   */
+  embed?(texts: string[], model: string): Promise<number[][]>;
 }
