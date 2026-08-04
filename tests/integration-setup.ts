@@ -20,6 +20,8 @@ delete process.env.GEMINI_API_KEY;
 delete process.env.OPENAI_API_KEY;
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.MAPBOX_API_KEY;
+delete process.env.AUTH_TOKEN;
+delete process.env.AUTH_REQUIRED;
 
 // Suppress fire-and-forget background work (geocoding fetches, debounced
 // dedupe timers) that would outlive the test file or hit the network.

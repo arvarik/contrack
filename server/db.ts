@@ -232,6 +232,18 @@ try {
   // Column already exists — expected on subsequent runs
 }
 
+// deletedAt must also exist before the FTS triggers below — they reference
+// it to keep trashed contacts out of the search index.
+try {
+  sqlite.exec(`ALTER TABLE contacts ADD COLUMN deletedAt TEXT`);
+  log.info("Database", "Added deletedAt column to contacts (trash, pre-FTS)");
+} catch {
+  // Column already exists — expected on subsequent runs
+}
+sqlite.exec(
+  `CREATE INDEX IF NOT EXISTS idx_contacts_deleted ON contacts(deletedAt)`,
+);
+
 // ── Versioned rebuild gate ──────────────────────────────────────────────
 // Dropping the FTS table forces a full reindex of every contact on boot.
 // That's only needed when the FTS schema or trigger payloads change — bump
@@ -283,15 +295,17 @@ sqlite.exec(`
   DROP TRIGGER IF EXISTS contacts_au;
   CREATE TRIGGER contacts_au AFTER UPDATE ON contacts BEGIN
     DELETE FROM contacts_fts WHERE contactId = old.id;
+    -- Trash-aware: soft-deleted contacts are removed from the index and
+    -- not reinserted until restored (deletedAt cleared).
     INSERT INTO contacts_fts(contactId, name, company, role, headline, location, about, industry, extras, searchExpansion)
-    VALUES (
+    SELECT
       new.id, new.name, new.company, new.role, new.headline, new.location, new.about, new.industry,
       COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = new.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = new.id), ''),
       COALESCE(new.searchExpansion, '')
-    );
+    WHERE new.deletedAt IS NULL;
   END;
 
   -- Child-table triggers: refresh FTS when tags, interests, emails, or phones change
@@ -305,7 +319,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = new.contactId;
+    FROM contacts c WHERE c.id = new.contactId AND c.deletedAt IS NULL;
   END;
 
   DROP TRIGGER IF EXISTS fts_tags_ad;
@@ -318,7 +332,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = old.contactId;
+    FROM contacts c WHERE c.id = old.contactId AND c.deletedAt IS NULL;
   END;
 
   DROP TRIGGER IF EXISTS fts_interests_ai;
@@ -331,7 +345,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = new.contactId;
+    FROM contacts c WHERE c.id = new.contactId AND c.deletedAt IS NULL;
   END;
 
   DROP TRIGGER IF EXISTS fts_interests_ad;
@@ -344,7 +358,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = old.contactId;
+    FROM contacts c WHERE c.id = old.contactId AND c.deletedAt IS NULL;
   END;
 
   DROP TRIGGER IF EXISTS fts_emails_ai;
@@ -357,7 +371,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = new.contactId;
+    FROM contacts c WHERE c.id = new.contactId AND c.deletedAt IS NULL;
   END;
 
   DROP TRIGGER IF EXISTS fts_emails_ad;
@@ -370,7 +384,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = old.contactId;
+    FROM contacts c WHERE c.id = old.contactId AND c.deletedAt IS NULL;
   END;
 
   -- Phone number triggers: refresh FTS when phones are added or removed
@@ -384,7 +398,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = new.contactId;
+    FROM contacts c WHERE c.id = new.contactId AND c.deletedAt IS NULL;
   END;
 
   DROP TRIGGER IF EXISTS fts_phones_ad;
@@ -397,7 +411,7 @@ sqlite.exec(`
       COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
       COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
       COALESCE(c.searchExpansion, '')
-    FROM contacts c WHERE c.id = old.contactId;
+    FROM contacts c WHERE c.id = old.contactId AND c.deletedAt IS NULL;
   END;
 
   -- Backfill FTS for any contacts not yet indexed (including phones in extras)
@@ -409,7 +423,8 @@ sqlite.exec(`
     COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
     COALESCE(c.searchExpansion, '')
   FROM contacts c
-  WHERE c.id NOT IN (SELECT contactId FROM contacts_fts);
+  WHERE c.id NOT IN (SELECT contactId FROM contacts_fts)
+    AND c.deletedAt IS NULL;
 `);
 
 if (ftsNeedsRebuild) {

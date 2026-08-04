@@ -13,4 +13,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - AI_TIER=${AI_TIER:-FREE}
       - MAPBOX_API_KEY=${MAPBOX_API_KEY}
+      # Auth is ON by default in the image (AUTH_REQUIRED=true). Set your own
+      # token here, or read the generated one: docker logs contrack | grep token
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
     restart: unless-stopped

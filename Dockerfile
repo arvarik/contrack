@@ -35,11 +35,16 @@ COPY drizzle/ ./drizzle/
 COPY server.ts drizzle.config.ts ./
 
 # Configure environment variables
+# AUTH_REQUIRED: the container binds 0.0.0.0, so auth is on by default.
+# A token is generated on first boot, persisted to /app/data/auth-token,
+# and printed in the container logs. Override with AUTH_TOKEN, or opt out
+# with AUTH_REQUIRED=false.
 ENV NODE_ENV=production \
     DATA_DIR=/app/data \
     TRANSFORMERS_CACHE=/app/data/.cache \
     PORT=3210 \
-    HOST=0.0.0.0
+    HOST=0.0.0.0 \
+    AUTH_REQUIRED=true
 
 # Create the data directory and drop root privileges
 RUN mkdir -p /app/data && chown -R node:node /app/data

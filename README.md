@@ -155,7 +155,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-Open **http://localhost:3210**. Data is automatically persisted to `./data`.
+Open **http://localhost:3210**. Data is automatically persisted to `./data`. Authentication is on by default in Docker — grab your access token with `docker logs contrack | grep "Access token"` (or set `AUTH_TOKEN`).
 
 ### Option 2: Native Installation
 
@@ -215,17 +215,19 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 ## 🔐 Environment Variables
 
-| Variable            | Description                                                                          | Default      |
-| ------------------- | ------------------------------------------------------------------------------------ | ------------ |
-| `AI_PROVIDER`       | LLM provider: `gemini`, `openai`, `anthropic`                                        | `gemini`     |
-| `GEMINI_API_KEY`    | Gemini API key                                                                       | —            |
-| `OPENAI_API_KEY`    | OpenAI API key                                                                       | —            |
-| `ANTHROPIC_API_KEY` | Anthropic API key                                                                    | —            |
-| `AI_TIER`           | `FREE` or `PAID` rate limit profile                                                  | `FREE`       |
-| `PORT`              | Express listening port                                                               | `3210`       |
-| `HOST`              | Bind interface (`0.0.0.0` to expose on LAN; no auth exists, so localhost by default) | `127.0.0.1`  |
-| `DATA_DIR`          | Root for runtime data (DB, uploads, model cache)                                     | project root |
-| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)                                         | —            |
+| Variable            | Description                                                   | Default      |
+| ------------------- | ------------------------------------------------------------- | ------------ |
+| `AI_PROVIDER`       | LLM provider: `gemini`, `openai`, `anthropic`                 | `gemini`     |
+| `GEMINI_API_KEY`    | Gemini API key                                                | —            |
+| `OPENAI_API_KEY`    | OpenAI API key                                                | —            |
+| `ANTHROPIC_API_KEY` | Anthropic API key                                             | —            |
+| `AI_TIER`           | `FREE` or `PAID` rate limit profile                           | `FREE`       |
+| `PORT`              | Express listening port                                        | `3210`       |
+| `HOST`              | Bind interface (`0.0.0.0` to expose on LAN)                   | `127.0.0.1`  |
+| `AUTH_TOKEN`        | Single-user auth token (gates `/api` + `/uploads`)            | — (off)      |
+| `AUTH_REQUIRED`     | `true` = enforce auth with a generated token (Docker default) | `false`      |
+| `DATA_DIR`          | Root for runtime data (DB, uploads, model cache)              | project root |
+| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)                  | —            |
 
 See [Configuration Guide](docs/configuration.md) for full details.
 

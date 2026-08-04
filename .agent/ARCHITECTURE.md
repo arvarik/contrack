@@ -211,6 +211,11 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/repositories/` — Data-access patterns: `contactRepository.ts`, `types.ts`
 - `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `paths.ts` (DATA_DIR-aware upload paths + traversal-safe resolution), `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts`, `unionFind.ts`
   - `server/utils/nlp/` — NLP primitives: `names.ts`, `nicknames.ts`, `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts`
+- `server/middleware/auth.ts` — Single-user bearer-token auth: `requireAuth` gates `/api` + `/uploads` when `AUTH_TOKEN` or `AUTH_REQUIRED=true` is set (auto-generated token persisted to `DATA_DIR/auth-token`); `/api/auth` router (status/login/logout, HttpOnly SameSite=Strict cookie). Timing-safe comparison; env read per request so tests can toggle.
+- `server/services/backupService.ts` — Scheduled SQLite snapshots (online backup API) into `DATA_DIR/backups` with rotation (`BACKUP_INTERVAL_HOURS`/`BACKUP_KEEP`).
+- `server/services/exportService.ts` — Full-DB JSON export + flat contacts CSV.
+- `server/routes/dataLifecycle.ts` — `/api/trash` (+restore/purge), `/api/backups`, `/api/export/{json,csv}`.
+- **Trash semantics**: `DELETE /api/contacts/:id` is a SOFT delete (`deletedAt` + `isArchived=1`; FTS row dropped by trash-aware triggers; embeddings purged). Restore clears both and re-embeds. `purgeExpiredTrash()` hard-deletes after `TRASH_RETENTION_DAYS` (default 30, daily sweep). The `deletedAt` column must exist BEFORE the FTS trigger DDL in db.ts (pre-FTS ALTER).
 - `server/app.ts` — Express app factory (`createApp`/`finalizeApp`): middleware + routers + error pipeline without listen/Vite. server.ts and the integration tests both consume it.
 - `server/ai/promptSafety.ts` — Prompt-injection defenses: `wrapUntrusted()` fencing + `UNTRUSTED_DATA_RULE` (applied at every prompt that interpolates contact/file/web text) and `sanitizeAiOutputValue()` (write-side backstop in aiSearch mergeEngine).
 - `server/db.ts` — Database initialization, FTS5 setup (full rebuild gated behind the `user_version` pragma — bump `FTS_SCHEMA_VERSION` when FTS schema/trigger payloads change), triggers, virtual tables, performance PRAGMAs, data cleanup

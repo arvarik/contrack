@@ -12,6 +12,10 @@ import path from "path";
 import { log } from "./server/utils/logger.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
+import { isAuthRequired } from "./server/middleware/auth.ts";
+import { startBackupSchedule } from "./server/services/backupService.ts";
+import { contactService } from "./server/services/contactService.ts";
+import { getErrorMessage } from "./server/utils/helpers.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
 import {
   isEmbeddingAvailable,
@@ -49,6 +53,18 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
 const HOST = process.env.HOST ?? "127.0.0.1";
 
 async function startServer() {
+  // Resolve auth config at boot so a generated token is logged immediately
+  // (Docker users read it from the container logs) rather than lazily on
+  // the first request.
+  if (isAuthRequired()) {
+    log.info("Auth", "Authentication is ENABLED for /api and /uploads");
+  } else if (HOST !== "127.0.0.1" && HOST !== "localhost") {
+    log.warn(
+      "Auth",
+      `Server binds ${HOST} with NO authentication — set AUTH_TOKEN or AUTH_REQUIRED=true`,
+    );
+  }
+
   const app = createApp({ enableRequestLogging: true });
 
   // ── Cache diagnostics (dev only) ─────────────────────────────────────────
@@ -94,6 +110,20 @@ async function startServer() {
   });
 
   startRetroactiveGeocoding();
+
+  // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────
+  startBackupSchedule();
+  if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
+    const runTrashPurge = () => {
+      try {
+        contactService.purgeExpiredTrash();
+      } catch (err) {
+        log.warn("Server", `Trash purge failed: ${getErrorMessage(err)}`);
+      }
+    };
+    runTrashPurge();
+    setInterval(runTrashPurge, 24 * 60 * 60 * 1000);
+  }
 
   // ── AI Stats: retention cleanup (30-day rolling window) ──────────────
   import("./server/services/aiStatsService.ts").then(

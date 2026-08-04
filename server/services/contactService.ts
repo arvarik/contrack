@@ -132,6 +132,40 @@ function invalidateAllCaches() {
   aiCache.invalidate("briefing");
 }
 
+/**
+ * Remove a contact's search artifacts (vec0 embeddings + dedupe metadata).
+ * FTS rows are handled by the trash-aware triggers. vec0 tables don't support
+ * FK cascading, so this must run on every soft delete and hard delete.
+ */
+function purgeContactSearchArtifacts(id: string): void {
+  try {
+    sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?").run(id);
+  } catch {
+    /* vec0 row may not exist */
+  }
+  try {
+    sqlite
+      .prepare("DELETE FROM contact_embeddings WHERE contactId = ?")
+      .run(id);
+  } catch {
+    /* vec0 row may not exist */
+  }
+  sqlite
+    .prepare("DELETE FROM dedupe_embedding_meta WHERE contactId = ?")
+    .run(id);
+}
+
+/** Permanently delete a contact row (children cascade; embeddings purged). */
+function hardDeleteContact(id: string): boolean {
+  purgeContactSearchArtifacts(id);
+  const result = db
+    .delete(schema.contacts)
+    .where(eq(schema.contacts.id, id))
+    .returning()
+    .get();
+  return !!result;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -295,36 +329,18 @@ export const contactService = {
     return { count, createdIds };
   },
 
+  /** Soft-delete a batch of contacts (same trash semantics as deleteContact). */
   bulkDeleteContacts(ids: string[]) {
     aiCache.enterBatchMode();
     try {
+      const now = new Date().toISOString();
+      const trashStmt = sqlite.prepare(
+        "UPDATE contacts SET deletedAt = ?, isArchived = 1 WHERE id = ? AND deletedAt IS NULL",
+      );
       const deleteFn = sqlite.transaction(() => {
-        const stmt = sqlite.prepare("DELETE FROM contacts WHERE id = ?");
-        // vec0 tables don't support FK cascading — clean up manually
-        const delSearch = sqlite.prepare(
-          "DELETE FROM search_embeddings WHERE contactId = ?",
-        );
-        const delDedupe = sqlite.prepare(
-          "DELETE FROM contact_embeddings WHERE contactId = ?",
-        );
-        // Regular table, but not FK-linked to contacts — clean up so
-        // findStaleEmbeddings() doesn't drift on orphaned metadata.
-        const delMeta = sqlite.prepare(
-          "DELETE FROM dedupe_embedding_meta WHERE contactId = ?",
-        );
         for (const id of ids) {
-          try {
-            delSearch.run(id);
-          } catch {
-            /* vec0 row may not exist */
-          }
-          try {
-            delDedupe.run(id);
-          } catch {
-            /* vec0 row may not exist */
-          }
-          delMeta.run(id);
-          stmt.run(id);
+          trashStmt.run(now, id);
+          purgeContactSearchArtifacts(id);
         }
       });
       deleteFn();
@@ -514,35 +530,112 @@ export const contactService = {
     return updated;
   },
 
+  /**
+   * Soft-delete: move the contact to trash. The row keeps its children and
+   * can be restored until purgeExpiredTrash() hard-deletes it. isArchived is
+   * set so every "active" surface excludes it; the trash-aware FTS triggers
+   * drop it from search; embeddings are purged (regenerated on restore).
+   */
   deleteContact(id: string) {
-    // vec0 tables don't support FK cascading — clean up manually before delete
-    try {
-      sqlite
-        .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
-        .run(id);
-    } catch {
-      /* vec0 row may not exist */
-    }
-    try {
-      sqlite
-        .prepare("DELETE FROM contact_embeddings WHERE contactId = ?")
-        .run(id);
-    } catch {
-      /* vec0 row may not exist */
-    }
-    // Keep dedupe embedding metadata in sync (not FK-linked to contacts).
-    sqlite
-      .prepare("DELETE FROM dedupe_embedding_meta WHERE contactId = ?")
-      .run(id);
+    const existing = sqlite
+      .prepare("SELECT id, deletedAt FROM contacts WHERE id = ?")
+      .get(id) as { id: string; deletedAt: string | null } | undefined;
+    if (!existing) return false;
+    if (existing.deletedAt) return true; // already in trash — idempotent
 
-    const result = db
-      .delete(schema.contacts)
+    const now = new Date().toISOString();
+    db.update(schema.contacts)
+      .set({ deletedAt: now, isArchived: 1, updatedAt: now })
       .where(eq(schema.contacts.id, id))
-      .returning()
-      .get();
-    if (!result) return false;
+      .run();
+    purgeContactSearchArtifacts(id);
     invalidateAllCaches();
     return true;
+  },
+
+  /** Restore a trashed contact to the active list. */
+  restoreContact(id: string) {
+    const existing = sqlite
+      .prepare("SELECT id, deletedAt, name FROM contacts WHERE id = ?")
+      .get(id) as
+      { id: string; deletedAt: string | null; name: string } | undefined;
+    if (!existing || !existing.deletedAt) return null;
+
+    // Clearing deletedAt makes the contacts_au trigger reinsert the FTS row.
+    db.update(schema.contacts)
+      .set({
+        deletedAt: null,
+        isArchived: 0,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(schema.contacts.id, id))
+      .run();
+
+    // Fire-and-forget: regenerate the purged embeddings.
+    embedContact(id).catch(() => {});
+    generateAndStoreEmbedding(id).catch(() => {});
+
+    invalidateAllCaches();
+    return contactRepo.hydrate(
+      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
+    );
+  },
+
+  /** List trashed contacts, newest deletions first. */
+  listTrash() {
+    return sqlite
+      .prepare(
+        `SELECT id, name, company, avatarUrl, deletedAt FROM contacts
+         WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC`,
+      )
+      .all() as {
+      id: string;
+      name: string;
+      company: string | null;
+      avatarUrl: string | null;
+      deletedAt: string;
+    }[];
+  },
+
+  /** Permanently delete one trashed contact ("delete forever"). */
+  purgeTrashedContact(id: string) {
+    const existing = sqlite
+      .prepare("SELECT id, deletedAt FROM contacts WHERE id = ?")
+      .get(id) as { id: string; deletedAt: string | null } | undefined;
+    if (!existing?.deletedAt) return false; // only trashed rows can be purged
+    const ok = hardDeleteContact(id);
+    if (ok) invalidateAllCaches();
+    return ok;
+  },
+
+  /**
+   * Hard-delete trash older than the retention window. Called on startup and
+   * daily. Returns the number of contacts purged.
+   */
+  purgeExpiredTrash(retentionDays?: number) {
+    const days =
+      retentionDays ??
+      (Number(process.env.TRASH_RETENTION_DAYS) > 0
+        ? Number(process.env.TRASH_RETENTION_DAYS)
+        : 30);
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const expired = sqlite
+      .prepare(
+        "SELECT id FROM contacts WHERE deletedAt IS NOT NULL AND deletedAt < ?",
+      )
+      .all(cutoff) as { id: string }[];
+    if (!expired.length) return 0;
+
+    const txn = sqlite.transaction(() => {
+      for (const row of expired) hardDeleteContact(row.id);
+    });
+    txn();
+    invalidateAllCaches();
+    log.info(
+      "ContactService",
+      `Purged ${expired.length} trashed contact(s) older than ${days} days`,
+    );
+    return expired.length;
   },
 
   updateAvatar(id: string, fileFilename: string, fileOriginalName: string) {
@@ -583,7 +676,7 @@ export const contactService = {
   getArchivedContacts() {
     const all = sqlite
       .prepare(
-        "SELECT * FROM contacts WHERE isArchived = 1 ORDER BY updatedAt DESC",
+        "SELECT * FROM contacts WHERE isArchived = 1 AND deletedAt IS NULL ORDER BY updatedAt DESC",
       )
       .all();
     return contactRepo.hydrateMany(all);
@@ -730,7 +823,7 @@ export const contactService = {
 
   getContactById(id: string) {
     const contact = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
+      .prepare("SELECT * FROM contacts WHERE id = ? AND deletedAt IS NULL")
       .get(id);
     if (!contact) return null;
     return contactRepo.hydrate(contact);

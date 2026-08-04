@@ -26,6 +26,7 @@ import {
   useUpdateContact,
   useAddAttachment,
   useDeleteContact,
+  useRestoreContact,
   useDeleteInteraction,
   useUpdateInteraction,
   useGenerateBriefing,
@@ -74,6 +75,7 @@ export const ContactProfile = ({
   const updateContact = useUpdateContact();
   const addAttachment = useAddAttachment();
   const deleteContact = useDeleteContact();
+  const restoreContact = useRestoreContact();
   const deleteInteraction = useDeleteInteraction();
   const updateInteraction = useUpdateInteraction();
   const generateBriefing = useGenerateBriefing();
@@ -155,7 +157,13 @@ export const ContactProfile = ({
     deleteContact.mutate(id, {
       onSuccess: () => {
         setShowDeleteConfirm(false);
-        toast.success(`Deleted ${contact.name}`);
+        toast.success(`Moved ${contact.name} to trash`, {
+          action: {
+            label: "Undo",
+            onClick: () => restoreContact.mutate(id),
+          },
+          duration: 8000,
+        });
         navigate("/");
         if (onClose) onClose();
       },

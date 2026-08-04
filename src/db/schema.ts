@@ -52,6 +52,7 @@ export const contacts = sqliteTable("contacts", {
   relationshipScore: integer("relationshipScore").default(50),
   // Dedupe infrastructure (Phase 1)
   canonicalId: text("canonicalId"), // Soft merge: points to primary contact's id. NULL = active contact.
+  deletedAt: text("deletedAt"), // Trash: soft-delete timestamp. NULL = not deleted. Purged after TRASH_RETENTION_DAYS.
   phoneticHash: text("phoneticHash"), // Double Metaphone encoding for phonetic blocking.
 });
 

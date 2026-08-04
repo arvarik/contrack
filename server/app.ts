@@ -25,7 +25,9 @@ import { aiSearchRouter } from "./routes/aiSearch.ts";
 import { aiRouter } from "./routes/ai.ts";
 import { aiStatsRouter } from "./routes/aiStats.ts";
 import { logosRouter } from "./routes/logos.ts";
+import { dataLifecycleRouter } from "./routes/dataLifecycle.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
+import { authRouter, requireAuth } from "./middleware/auth.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
 
@@ -86,6 +88,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     );
   }
 
+  // Auth endpoints must stay reachable pre-auth (login/status); everything
+  // mounted after requireAuth — uploads and all other /api routes — is gated
+  // when AUTH_TOKEN / AUTH_REQUIRED is configured.
+  app.use("/api/auth", authRouter);
+  app.use(["/api", "/uploads"], requireAuth);
+
   const uploadDir = UPLOADS_DIR;
   ensureDir(uploadDir);
   app.use(
@@ -116,6 +124,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api", actionItemsRouter);
   app.use("/api", dashboardRouter);
   app.use("/api", aiSearchRouter);
+  app.use("/api", dataLifecycleRouter);
   app.use("/api/ai/stats", aiStatsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/logos", logosRouter);

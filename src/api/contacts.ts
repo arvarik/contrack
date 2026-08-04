@@ -261,6 +261,20 @@ export const useUpdateContact = () => {
   });
 };
 
+/** Restore a trashed contact (deletes are soft — 30-day trash window). */
+export const useRestoreContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string): Promise<Contact> => {
+      const res = await apiFetch(`/trash/${id}/restore`, { method: "POST" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+  });
+};
+
 export const useDeleteContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
