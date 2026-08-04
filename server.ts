@@ -133,6 +133,20 @@ async function startServer() {
     },
   );
 
+  // ── AI model catalogs ───────────────────────────────────────────────────
+  // Populate the per-provider model lists that Settings → AI offers, so the
+  // dropdowns are filled on first open rather than after a manual refresh.
+  // Only providers whose cache is missing or older than the TTL are fetched,
+  // and every failure is swallowed — discovery is never on a critical path.
+  const refreshModelCatalogs = () =>
+    import("./server/services/aiSettingsService.ts")
+      .then(({ refreshStaleModelCaches }) => refreshStaleModelCaches())
+      .catch((err) =>
+        log.warn("Server", `AI model discovery failed: ${err.message}`),
+      );
+  refreshModelCatalogs();
+  setInterval(refreshModelCatalogs, 24 * 60 * 60 * 1000);
+
   // Relationship scoring: chunked recompute on startup, then hourly sweep.
   // recomputeAll yields to the event loop between batches so requests are
   // never starved by a long synchronous scoring pass.
