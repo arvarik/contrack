@@ -136,10 +136,10 @@ in front of the container — the app itself serves plain HTTP.
 
 ## Data Lifecycle
 
-- **Trash:** deleting a contact is a soft delete. Restore it via the undo
-  toast, `POST /api/trash/:id/restore`, or purge immediately with
-  `DELETE /api/trash/:id`. Trash is permanently purged after
-  `TRASH_RETENTION_DAYS` (default 30).
+- **Trash:** deleting a contact is a soft delete. Restore it from
+  **Settings → Trash** (or the undo toast, or `POST /api/trash/:id/restore`);
+  "Delete forever" purges immediately (`DELETE /api/trash/:id`). Trash is
+  permanently purged after `TRASH_RETENTION_DAYS` (default 30).
 - **Backups:** SQLite snapshots are written to `DATA_DIR/backups` every
   `BACKUP_INTERVAL_HOURS` (online backup API — safe while the app runs),
   keeping the `BACKUP_KEEP` most recent. Trigger one manually with

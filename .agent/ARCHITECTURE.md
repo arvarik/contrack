@@ -237,7 +237,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/dashboard/` — Pulse dashboard (metrics, action items, insights)
   - `src/views/ai-search/` — AI-powered semantic search view
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
-  - `SearchView.tsx`, `DashboardView.tsx`, `MapView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`
+  - `SearchView.tsx`, `DashboardView.tsx`, `MapView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`)
 - `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
 - `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`
 - `src/db/` — `schema.ts` (Drizzle ORM schema definitions)

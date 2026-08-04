@@ -343,6 +343,15 @@ export interface PersistedDedupeSuggestion {
   contactB?: Contact | null;
 }
 
+/** A trashed (soft-deleted) contact row from /api/trash. */
+export interface TrashedContact {
+  id: string;
+  name: string;
+  company: string | null;
+  avatarUrl: string | null;
+  deletedAt: string;
+}
+
 /** A merge audit-log row from /api/dedupe/merge-log. */
 export interface MergeLogEntry {
   id: string;

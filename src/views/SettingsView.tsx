@@ -21,9 +21,11 @@ import {
   List,
   Sparkles,
   Brain,
+  Trash2,
 } from "lucide-react";
 import { DedupeView } from "./dedupe";
 import { ArchivedContactsView } from "./ArchivedContactsView";
+import { TrashView } from "./TrashView";
 import { ListManagerView } from "./lists";
 import { AISearchView } from "./ai-search";
 import { AIStatsView } from "./ai-stats";
@@ -62,6 +64,7 @@ export const SettingsView = () => {
 
   const isDedupe = location.pathname.endsWith("/dedupe");
   const isArchived = location.pathname.endsWith("/archived");
+  const isTrash = location.pathname.endsWith("/trash");
   const isLists = location.pathname.endsWith("/lists");
   const isAISearch = location.pathname.includes("/ai-search");
   const isAIStats = location.pathname.includes("/ai-stats");
@@ -71,6 +74,7 @@ export const SettingsView = () => {
     if (isAISearch) return "AI Search";
     if (isAIStats) return "AI Usage";
     if (isArchived) return "Archived Contacts";
+    if (isTrash) return "Trash";
     if (isLists) return "List Management";
     return "Settings";
   };
@@ -80,12 +84,13 @@ export const SettingsView = () => {
     if (isAISearch) return <Sparkles className="w-6 h-6 text-primary" />;
     if (isAIStats) return <Brain className="w-6 h-6 text-primary" />;
     if (isArchived) return <Archive className="w-6 h-6 text-amber-500" />;
+    if (isTrash) return <Trash2 className="w-6 h-6 text-red-500" />;
     if (isLists) return <List className="w-6 h-6 text-primary" />;
     return <SettingsIcon className="w-6 h-6 text-primary" />;
   };
 
   const isSubpage =
-    isDedupe || isArchived || isLists || isAISearch || isAIStats;
+    isDedupe || isArchived || isTrash || isLists || isAISearch || isAIStats;
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface text-on-surface">
@@ -365,6 +370,29 @@ export const SettingsView = () => {
                     are hidden from your Network and Map.
                   </p>
                 </Link>
+
+                {/* Trash */}
+                <Link
+                  to="/settings/trash"
+                  className={cn(
+                    CARD,
+                    "block hover:bg-surface-container-high transition-colors group cursor-pointer",
+                  )}
+                >
+                  <h3
+                    className={cn(
+                      SECTION_HEADING,
+                      "mb-2 flex items-center gap-2 group-hover:text-red-500 transition-colors",
+                    )}
+                  >
+                    <Trash2 className="w-5 h-5 text-red-500" />
+                    Trash
+                  </h3>
+                  <p className="text-sm text-on-surface-variant">
+                    Recently deleted contacts. Restore them or delete them
+                    forever — the trash empties itself after 30 days.
+                  </p>
+                </Link>
               </div>
             }
           />
@@ -392,6 +420,15 @@ export const SettingsView = () => {
             element={
               <div className="overflow-y-auto h-full">
                 <ArchivedContactsView />
+              </div>
+            }
+          />
+
+          <Route
+            path="/trash"
+            element={
+              <div className="overflow-y-auto h-full">
+                <TrashView />
               </div>
             }
           />

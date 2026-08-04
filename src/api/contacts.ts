@@ -13,7 +13,12 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
-import { Contact, ContactUpdateData, ParsedContactData } from "../types";
+import {
+  Contact,
+  ContactUpdateData,
+  ParsedContactData,
+  TrashedContact,
+} from "../types";
 import { apiFetch } from "./client";
 
 /**
@@ -261,6 +266,33 @@ export const useUpdateContact = () => {
   });
 };
 
+/** Trashed (soft-deleted) contacts, newest deletions first. */
+export const useTrash = () => {
+  return useQuery({
+    queryKey: ["trash"],
+    queryFn: async (): Promise<TrashedContact[]> => {
+      const res = await apiFetch("/trash");
+      const data = await res.json();
+      return data.items as TrashedContact[];
+    },
+    staleTime: 15_000,
+  });
+};
+
+/** Permanently delete a trashed contact ("delete forever"). */
+export const usePurgeTrashedContact = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string): Promise<{ success: boolean }> => {
+      const res = await apiFetch(`/trash/${id}`, { method: "DELETE" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+    },
+  });
+};
+
 /** Restore a trashed contact (deletes are soft — 30-day trash window). */
 export const useRestoreContact = () => {
   const queryClient = useQueryClient();
@@ -271,6 +303,7 @@ export const useRestoreContact = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
 };
@@ -307,6 +340,7 @@ export const useDeleteContact = () => {
       queryClient.removeQueries({ queryKey: ["contacts", id] });
       queryClient.removeQueries({ queryKey: ["timeline", id] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
 };
