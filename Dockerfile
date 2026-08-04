@@ -12,22 +12,18 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production runtime
+# No apt packages needed: better-sqlite3 bundles its own SQLite, and Node
+# ships with a built-in CA store for outbound TLS.
 FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 
-# Ensure native bindings can run
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    sqlite3 \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install production dependencies
+# Install production dependencies + tsx to execute the TypeScript server
 COPY package.json package-lock.json ./
-RUN npm pkg delete scripts.prepare && npm ci --omit=dev --legacy-peer-deps
-
-# Install tsx globally to execute TypeScript server
-RUN npm install -g tsx
+RUN npm pkg delete scripts.prepare \
+    && npm ci --omit=dev --legacy-peer-deps \
+    && npm install -g tsx@4 \
+    && npm cache clean --force
 
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
@@ -36,20 +32,19 @@ COPY --from=builder /app/dist ./dist
 COPY server/ ./server/
 COPY src/db/ ./src/db/
 COPY drizzle/ ./drizzle/
-COPY server.ts ./
-COPY drizzle.config.ts ./
+COPY server.ts drizzle.config.ts ./
 
 # Configure environment variables
-ENV NODE_ENV=production
-ENV DATA_DIR=/app/data
-ENV TRANSFORMERS_CACHE=/app/data/.cache
-ENV PORT=3210
+ENV NODE_ENV=production \
+    DATA_DIR=/app/data \
+    TRANSFORMERS_CACHE=/app/data/.cache \
+    PORT=3210 \
+    HOST=0.0.0.0
 
-# Create the data directory
-RUN mkdir -p /app/data
+# Create the data directory and drop root privileges
+RUN mkdir -p /app/data && chown -R node:node /app/data
+USER node
 
-# Expose the default port
 EXPOSE 3210
 
-# Start the application
 CMD ["tsx", "server.ts"]

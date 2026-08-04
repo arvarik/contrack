@@ -13,6 +13,7 @@
  * @module api/suggestions
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { PersistedDedupeSuggestion, MergeLogEntry } from "../types";
 
 const API = "/api";
 
@@ -52,7 +53,7 @@ export const usePendingSuggestions = (enabled = true) =>
       const res = await fetch(`${API}/dedupe/suggestions?limit=200`);
       if (!res.ok) throw new Error("Failed to fetch suggestions");
       const data = await res.json();
-      return data.suggestions as any[];
+      return data.suggestions as PersistedDedupeSuggestion[];
     },
     enabled,
     staleTime: 15_000,
@@ -80,7 +81,7 @@ export const useMergeLog = (enabled = true) =>
       const res = await fetch(`${API}/dedupe/merge-log?limit=100`);
       if (!res.ok) throw new Error("Failed to fetch merge log");
       const data = await res.json();
-      return data.entries as any[];
+      return data.entries as MergeLogEntry[];
     },
     enabled,
     staleTime: 15_000,

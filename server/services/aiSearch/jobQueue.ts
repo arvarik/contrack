@@ -24,7 +24,7 @@ import type {
   AISearchStrategy,
 } from "./types.ts";
 import type { AIProvider } from "../../ai/provider.ts";
-import { buildSearchPrompt } from "./promptTemplate.ts";
+import { buildSearchPrompt, type AISearchOutput } from "./promptTemplate.ts";
 import { mergeSearchResult } from "./mergeEngine.ts";
 import { contactService } from "../contactService.ts";
 import { getStrategy } from "./strategies/index.ts";
@@ -36,8 +36,10 @@ import { aiCache } from "../../utils/aiCache.ts";
 // Error Classification
 // =============================================================================
 
-function classifyError(error: any): AISearchErrorType {
-  const msg = (error?.message ?? "").toLowerCase();
+function classifyError(error: unknown): AISearchErrorType {
+  const msg = (
+    (error as { message?: string } | null | undefined)?.message ?? ""
+  ).toLowerCase();
 
   if (
     msg.includes("429") ||
@@ -216,7 +218,7 @@ class AISearchJobQueue extends EventEmitter {
         }
 
         // Retry loop: retryable errors (rate_limit, network) get up to MAX_RETRIES
-        let lastError: any = null;
+        let lastError: unknown = null;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
             if (attempt > 0) {
@@ -256,7 +258,7 @@ class AISearchJobQueue extends EventEmitter {
             const fieldsUpdated = mergeSearchResult(
               job.contactId,
               contact,
-              result.data as any,
+              result.data as AISearchOutput,
               result.groundedText,
             );
 

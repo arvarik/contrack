@@ -12,7 +12,7 @@ interface State {
 
 export class ErrorBoundary extends Component<Props, State> {
   declare props: Readonly<Props>;
-  public state: State = {
+  public override state: State = {
     hasError: false,
   };
 
@@ -20,11 +20,11 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  public render() {
+  public override render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-surface flex items-center justify-center p-6 text-on-surface">

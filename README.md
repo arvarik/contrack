@@ -1,15 +1,15 @@
 <div align="center">
   <h1>🤝 Contrack</h1>
   <p><b>People Relationship Manager for Proactive Networking</b></p>
-  
-  [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-  [![Node.js Version](https://img.shields.io/badge/Node.js-22+-success)](https://nodejs.org/)
-  [![SQLite WAL](https://img.shields.io/badge/Database-SQLite3_WAL-003B57?logo=sqlite)](https://sqlite.org/)
-  [![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
-  [![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
-  [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-  [![Tests](https://img.shields.io/badge/Tests-180_passing-brightgreen)](https://vitest.dev/)
-  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Node.js Version](https://img.shields.io/badge/Node.js-22+-success)](https://nodejs.org/)
+[![SQLite WAL](https://img.shields.io/badge/Database-SQLite3_WAL-003B57?logo=sqlite)](https://sqlite.org/)
+[![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
+[![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/Tests-253_passing-brightgreen)](https://vitest.dev/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 </div>
 
 <br/>
@@ -215,15 +215,17 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 ## 🔐 Environment Variables
 
-| Variable            | Description                                   | Default  |
-| ------------------- | --------------------------------------------- | -------- |
-| `AI_PROVIDER`       | LLM provider: `gemini`, `openai`, `anthropic` | `gemini` |
-| `GEMINI_API_KEY`    | Gemini API key                                | —        |
-| `OPENAI_API_KEY`    | OpenAI API key                                | —        |
-| `ANTHROPIC_API_KEY` | Anthropic API key                             | —        |
-| `AI_TIER`           | `FREE` or `PAID` rate limit profile           | `FREE`   |
-| `PORT`              | Express listening port                        | `3210`   |
-| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)  | —        |
+| Variable            | Description                                                                          | Default      |
+| ------------------- | ------------------------------------------------------------------------------------ | ------------ |
+| `AI_PROVIDER`       | LLM provider: `gemini`, `openai`, `anthropic`                                        | `gemini`     |
+| `GEMINI_API_KEY`    | Gemini API key                                                                       | —            |
+| `OPENAI_API_KEY`    | OpenAI API key                                                                       | —            |
+| `ANTHROPIC_API_KEY` | Anthropic API key                                                                    | —            |
+| `AI_TIER`           | `FREE` or `PAID` rate limit profile                                                  | `FREE`       |
+| `PORT`              | Express listening port                                                               | `3210`       |
+| `HOST`              | Bind interface (`0.0.0.0` to expose on LAN; no auth exists, so localhost by default) | `127.0.0.1`  |
+| `DATA_DIR`          | Root for runtime data (DB, uploads, model cache)                                     | project root |
+| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)                                         | —            |
 
 See [Configuration Guide](docs/configuration.md) for full details.
 

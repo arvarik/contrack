@@ -83,11 +83,12 @@ All AI operations route through a layered architecture in `server/ai/`:
   - `registry.ts` — Gemini model configs with per-tier rate limits. Model classes: `lite`, `flash`, `pro`.
   - `ParallelQueue.ts` — Tier-aware concurrency limiter (PAID=10, FREE=2 workers). Provider-agnostic.
 - **Model class mapping** (`routing.prefer`):
-  | `prefer` | Gemini (PAID, AI_TIER) | Gemini (FREE) | OpenAI | Anthropic |
-  |----------|------------------------|---------------|--------|-----------|
-  | `"lite"` | `gemini-3.1-flash-lite` (GA 2026-05-07) | `gemini-2.5-flash-lite` | `gpt-5.4-nano` (2026-03-17) | `claude-haiku-4.5` |
-  | `"flash"` | `gemini-2.5-flash` | `gemini-2.5-flash` | `gpt-5.4-mini` | `claude-sonnet-4.6` |
-  | `"pro"` | `gemini-2.5-pro` | `gemini-2.5-pro` | `gpt-5.4` | `claude-opus-4.6` |
+
+  | `prefer`  | Gemini (PAID, AI_TIER)                  | Gemini (FREE)           | OpenAI                      | Anthropic           |
+  | --------- | --------------------------------------- | ----------------------- | --------------------------- | ------------------- |
+  | `"lite"`  | `gemini-3.1-flash-lite` (GA 2026-05-07) | `gemini-2.5-flash-lite` | `gpt-5.4-nano` (2026-03-17) | `claude-haiku-4-5`  |
+  | `"flash"` | `gemini-2.5-flash`                      | `gemini-2.5-flash`      | `gpt-5.4-mini`              | `claude-sonnet-4-6` |
+  | `"pro"`   | `gemini-2.5-pro`                        | `gemini-2.5-pro`        | `gpt-5.4`                   | `claude-opus-4-6`   |
 
   SmartRouter prefers higher-generation models within a class, so on `AI_TIER=PAID` `prefer: "lite"` picks the newer paid-only `gemini-3.1-flash-lite`; on `AI_TIER=FREE` the same call resolves to `gemini-2.5-flash-lite` because Gemini 3 has no free tier.
 
@@ -114,7 +115,7 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 
 ### Concurrency / Threading Model
 
-- **Server**: Single Node.js process, async I/O. Background sweeps run on startup: relationship score recomputation (then hourly via `setInterval`), retroactive geocoding, local embedding backfill, dedupe embedding backfill.
+- **Server**: Single Node.js process, async I/O. Background sweeps run on startup: relationship score recomputation in yielding batches of 200 (then hourly via `setInterval`), retroactive geocoding, local embedding backfill, dedupe embedding backfill.
 - **AI Queue**: Concurrency managed by `ParallelQueue` — max 10 concurrent workers (PAID) or 2 (FREE), respecting per-model RPM/TPM/RPD limits dynamically.
 
 ## 3. Data Models & Database Schema
@@ -208,14 +209,16 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
   - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
 - `server/repositories/` — Data-access patterns: `contactRepository.ts`, `types.ts`
-- `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `searchCache.ts`, `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts`, `unionFind.ts`
+- `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `paths.ts` (DATA_DIR-aware upload paths + traversal-safe resolution), `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts`, `unionFind.ts`
   - `server/utils/nlp/` — NLP primitives: `names.ts`, `nicknames.ts`, `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts`
-- `server/db.ts` — Database initialization, FTS5 setup, triggers, virtual tables, performance PRAGMAs, data cleanup
+- `server/app.ts` — Express app factory (`createApp`/`finalizeApp`): middleware + routers + error pipeline without listen/Vite. server.ts and the integration tests both consume it.
+- `server/ai/promptSafety.ts` — Prompt-injection defenses: `wrapUntrusted()` fencing + `UNTRUSTED_DATA_RULE` (applied at every prompt that interpolates contact/file/web text) and `sanitizeAiOutputValue()` (write-side backstop in aiSearch mergeEngine).
+- `server/db.ts` — Database initialization, FTS5 setup (full rebuild gated behind the `user_version` pragma — bump `FTS_SCHEMA_VERSION` when FTS schema/trigger payloads change), triggers, virtual tables, performance PRAGMAs, data cleanup
 
 ### Frontend (`src/`)
 
 - `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `index.ts`
-- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`, `useUndoableAction.ts`
+- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`
 - `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
 - `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`
@@ -250,7 +253,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - **LLM Providers** (selected via `AI_PROVIDER` env var):
   - **Gemini** (default): 6 registered models via `@google/genai`. Full SmartRouter + QuotaTracker + circuit breakers. Includes Google Search grounding and embedding models.
   - **OpenAI**: `gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4` via `openai` npm package. Web search via Responses API. Structured output via `response_format: json_schema`.
-  - **Anthropic**: `claude-haiku-4.5`, `claude-sonnet-4.6`, `claude-opus-4.6` via `@anthropic-ai/sdk`. Web search via native `web_search` tool. Structured output via `output_config.format: json_schema`.
+  - **Anthropic**: `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` via `@anthropic-ai/sdk`. Web search via native `web_search` tool. Structured output via `output_config.format: json_schema`.
 - **Dedupe Embeddings**: `gemini-embedding-2-preview` via `@google/genai` (Gemini-only, uses `GEMINI_API_KEY` regardless of active `AI_PROVIDER`). Degrades to deterministic-only matching when unavailable.
 - **Local Search Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search. Provider-agnostic (runs locally).
 - **Geocoding**: Mapbox (Primary, requires `MAPBOX_API_KEY`) / Nominatim (Fallback, no key needed).
@@ -293,9 +296,9 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 
 | Model               | Class | Cost (1M in / 1M out) | Context Window | Structured Output   | Web Search        | Notes                            |
 | ------------------- | ----- | --------------------- | -------------- | ------------------- | ----------------- | -------------------------------- |
-| `claude-haiku-4.5`  | lite  | $1.00 / $5.00         | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Cheapest, default for lite tasks |
-| `claude-sonnet-4.6` | flash | $3.00 / $15.00        | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Balanced coding/agents           |
-| `claude-opus-4.6`   | pro   | $5.00 / $25.00        | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Flagship reasoning               |
+| `claude-haiku-4-5`  | lite  | $1.00 / $5.00         | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Cheapest, default for lite tasks |
+| `claude-sonnet-4-6` | flash | $3.00 / $15.00        | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Balanced coding/agents           |
+| `claude-opus-4-6`   | pro   | $5.00 / $25.00        | 200K tokens    | Yes (`json_schema`) | Yes (native tool) | Flagship reasoning               |
 
 _No free tier. Prepaid billing required (~$5 starter credits for new accounts). Rate limits based on 4-tier spend system. No first-party embedding models._
 
@@ -307,24 +310,28 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 
 ## 6. Environment Variables
 
-| Variable            | Required                     | Default  | Purpose                                                                                                                                              |
-| ------------------- | ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AI_PROVIDER`       | No                           | `gemini` | LLM provider adapter selection. Supported: `"gemini"`, `"openai"`, `"anthropic"`.                                                                    |
-| `GEMINI_API_KEY`    | When `AI_PROVIDER=gemini`    | —        | Google Gemini API key. Also used for dedupe embeddings regardless of active provider.                                                                |
-| `OPENAI_API_KEY`    | When `AI_PROVIDER=openai`    | —        | OpenAI API key. Prepaid billing required.                                                                                                            |
-| `ANTHROPIC_API_KEY` | When `AI_PROVIDER=anthropic` | —        | Anthropic Claude API key. Prepaid billing required.                                                                                                  |
-| `AI_TIER`           | No                           | `FREE`   | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
-| `MAPBOX_API_KEY`    | No                           | —        | Enables Mapbox as primary geocoder (falls back to Nominatim if missing).                                                                             |
-| `PORT`              | No                           | `3000`   | Server port.                                                                                                                                         |
-| `APP_URL`           | No                           | —        | Self-referential URL for OAuth/links (injected by AI Studio).                                                                                        |
-| `NODE_ENV`          | No                           | —        | When `production`, serves static `dist/` and uses `morgan` short format.                                                                             |
-| `DISABLE_HMR`       | No                           | —        | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                                                                         |
+| Variable            | Required                     | Default      | Purpose                                                                                                                                              |
+| ------------------- | ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`       | No                           | `gemini`     | LLM provider adapter selection. Supported: `"gemini"`, `"openai"`, `"anthropic"`.                                                                    |
+| `GEMINI_API_KEY`    | When `AI_PROVIDER=gemini`    | —            | Google Gemini API key. Also used for dedupe embeddings regardless of active provider.                                                                |
+| `OPENAI_API_KEY`    | When `AI_PROVIDER=openai`    | —            | OpenAI API key. Prepaid billing required.                                                                                                            |
+| `ANTHROPIC_API_KEY` | When `AI_PROVIDER=anthropic` | —            | Anthropic Claude API key. Prepaid billing required.                                                                                                  |
+| `AI_TIER`           | No                           | `FREE`       | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
+| `MAPBOX_API_KEY`    | No                           | —            | Enables Mapbox as primary geocoder (falls back to Nominatim if missing).                                                                             |
+| `PORT`              | No                           | `3210`       | Server port.                                                                                                                                         |
+| `HOST`              | No                           | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                                                                      |
+| `CORS_ORIGIN`       | No                           | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                                                               |
+| `DATA_DIR`          | No                           | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker.                                                 |
+| `APP_URL`           | No                           | —            | Self-referential URL for OAuth/links (injected by AI Studio).                                                                                        |
+| `NODE_ENV`          | No                           | —            | When `production`, serves static `dist/` and uses `morgan` short format.                                                                             |
+| `DISABLE_HMR`       | No                           | —            | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                                                                         |
 
 ## 7. Invariants & Safety Rules
 
 - **NEVER** write native `useEffect` fetch loops for data operations. Rely solely on `@tanstack/react-query`.
 - **NEVER** silently swallow errors (`.catch(() => {})`).
-- **MUST** manually purge `search_embeddings` and `contact_embeddings` on contact deletion/merge.
+- **MUST** manually purge `search_embeddings`, `contact_embeddings`, and `dedupe_embedding_meta` on contact deletion/merge.
+- **MUST** resolve stored `/uploads/...` URLs through `resolveUploadPath()` (`server/utils/paths.ts`) before any filesystem read/unlink — these columns are user-writable and the helper enforces containment inside the uploads root.
 - **MUST** route all AI calls through the `ai` singleton exported from `server/ai/index.ts`. Never import `@google/genai`, `openai`, or `@anthropic-ai/sdk` directly outside the adapter layer.
 - **Exception**: `server/services/dedupe/embeddings.ts` imports `@google/genai` directly for embedding generation — this is Gemini-only and does not go through the provider adapter.
 - **Local-First Mandate**: External relational database usage is forbidden. All data lives in `curator.db`.
@@ -450,14 +457,14 @@ return withRetry(
 
 1. Load environment variables (`dotenv/config`)
 2. Validate active provider's API key based on `AI_PROVIDER` (warn if missing)
-3. Initialize Express with CORS, JSON parsing (50MB limit), request ID middleware, Morgan logging
+3. Initialize Express with optional CORS (only when `CORS_ORIGIN` is set), JSON parsing (50MB limit), per-IP rate limiting on AI-cost endpoints (60 req/min via `server/middleware/rateLimit.ts`), request ID middleware, Morgan logging
 4. Mount all API routers
 5. Cache diagnostics endpoint (dev only: `/api/debug/cache-stats`)
 6. Attach Vite dev middleware (dev) or serve static `dist/` (production)
 7. Install centralized error handler
 8. Start HTTP server on `PORT` (default 3000)
 9. **Background tasks** (non-blocking):
-   - `startRetroactiveGeocoding()` — backfill missing lat/lng
+   - `startRetroactiveGeocoding()` — backfill missing lat/lng (skipped when `DISABLE_BACKGROUND_JOBS=true`, used by integration tests)
    - `relationshipService.recomputeAll()` — full score recompute, then hourly via `setInterval`
    - `initLocalEmbeddings()` → `backfillSearchEmbeddings()` — load Transformers.js model, backfill 384-dim vectors
    - `backfillEmbeddings()` — backfill 768-dim Gemini dedupe embeddings (only if count === 0)

@@ -21,6 +21,7 @@ import { useCreateContact, useParseContactText } from "../../api";
 import type {
   ContactUpdateData,
   ContactList as ContactListType,
+  ParsedContactData,
 } from "../../types";
 import { Modal } from "../../components/ui/Modal";
 import { ImportModal } from "../../components/ImportModal";
@@ -103,9 +104,7 @@ export const ContactListModals = ({
 }: ContactListModalsProps) => {
   // ── Smart paste + create contact state ────────────────────────────────
   const [smartPasteText, setSmartPasteText] = useState("");
-  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(
-    null,
-  );
+  const [parsedData, setParsedData] = useState<ParsedContactData | null>(null);
   const [isSmartPasteModalOpen, setIsSmartPasteModalOpen] = useState(false);
 
   const createContact = useCreateContact();
@@ -122,7 +121,7 @@ export const ContactListModals = ({
     const emailValue = data.email as string;
     const phoneValue = data.phone as string;
     try {
-      const pd = parsedData as Record<string, any> | null;
+      const pd = parsedData;
       const newContact = await createContact.mutateAsync({
         name: data.name as string,
         role: data.role as string,
@@ -152,7 +151,7 @@ export const ContactListModals = ({
   };
 
   // Derived: use parsedData for default values in the form
-  const pd = parsedData as Record<string, any> | null;
+  const pd = parsedData;
 
   return (
     <>
@@ -392,7 +391,7 @@ export const ContactListModals = ({
                 try {
                   const res =
                     await parseContactText.mutateAsync(smartPasteText);
-                  setParsedData(res as Record<string, unknown>);
+                  setParsedData(res);
                   onCloseSmartPaste();
                   // NOTE: The parent must detect parsedData change and open the new contact modal.
                   // We signal via onContactCreated pattern — but for smart paste, we re-open modal

@@ -23,7 +23,7 @@ import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { rerankCandidates, type CompressedContact } from "../ai/aiService.ts";
-import { getCachedSearch, setCachedSearch } from "../utils/searchCache.ts";
+import { getCachedSearch, setCachedSearch } from "../utils/aiCache.ts";
 import {
   hybridRetrieval,
   type RetrievalResult,
@@ -80,17 +80,22 @@ function hydrateCandidates(
 ): Map<string, HydratedMatch> {
   const hydratedMap = new Map<string, HydratedMatch>();
   const topIds = candidateIds.slice(0, limit);
+  if (!topIds.length) return hydratedMap;
 
+  // Single IN(...) query + bulk hydration — this is the search hot path, and
+  // per-id hydrate() here previously cost ~13 queries per candidate.
+  const placeholders = topIds.map(() => "?").join(",");
+  const rows = sqlite
+    .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
+    .all(topIds);
+  const hydratedRows = contactRepo.hydrateMany(rows);
+  const byId = new Map(hydratedRows.map((r) => [r.id, r]));
+
+  // Preserve the ranked candidate order.
   for (const id of topIds) {
-    const fullRow = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
-      .get(id);
-    if (!fullRow) continue;
-    hydratedMap.set(id, {
-      ...(contactRepo.hydrate(fullRow) as any),
-      id,
-      aiReason: null,
-    });
+    const hydrated = byId.get(id);
+    if (!hydrated) continue;
+    hydratedMap.set(id, { ...hydrated, id, aiReason: null });
   }
 
   return hydratedMap;
@@ -118,7 +123,18 @@ function buildCompressedCandidates(
       .prepare(
         "SELECT id, name, role, company, location, about, industry, preferences FROM contacts WHERE id = ?",
       )
-      .get(id) as any;
+      .get(id) as
+      | {
+          id: string;
+          name: string;
+          role: string | null;
+          company: string | null;
+          location: string | null;
+          about: string | null;
+          industry: string | null;
+          preferences: string | null;
+        }
+      | undefined;
     if (!row) continue;
 
     const tags = (tagsStmt.all(id) as { tag: string }[]).map((t) => t.tag);

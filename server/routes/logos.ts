@@ -2,14 +2,11 @@ import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import { log } from "../utils/logger.ts";
+import { LOGOS_DIR, ensureDir } from "../utils/paths.ts";
 
 const router = Router();
-const logosDir = path.join(process.cwd(), "uploads", "logos");
-
-// Ensure the directory exists
-if (!fs.existsSync(logosDir)) {
-  fs.mkdirSync(logosDir, { recursive: true });
-}
+const logosDir = LOGOS_DIR;
+ensureDir(logosDir);
 
 // In-memory cache of known failed domains to avoid repeating 404 requests to Clearbit
 const knownFailedDomains = new Set<string>();
@@ -66,9 +63,10 @@ router.get("/:domain", async (req: Request, res: Response) => {
     // 4. Serve the fetched image
     res.setHeader("Content-Type", contentType);
     res.send(buffer);
-  } catch (err: any) {
+  } catch (err) {
     log.error("Logo", `Error fetching logo for ${sanitizedDomain}: ${err}`);
-    res.status(500).send(`Internal server error: ${err.message || err}`);
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).send(`Internal server error: ${message}`);
   }
 });
 

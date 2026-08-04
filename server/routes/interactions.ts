@@ -1,27 +1,57 @@
 import { Router } from "express";
-import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { log } from "../utils/logger.ts";
 import { interactionService } from "../services/interactionService.ts";
-import { validateBody, interactionCreateSchema } from "../utils/validators.ts";
+import {
+  validateBody,
+  interactionCreateSchema,
+  interactionUpdateSchema,
+} from "../utils/validators.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { UPLOADS_DIR, ensureDir } from "../utils/paths.ts";
 
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const uploadDir = UPLOADS_DIR;
+ensureDir(uploadDir);
+
+// Attachment extensions we accept. Script-capable types (.html, .svg, .xhtml,
+// .js, …) are excluded — uploads are served from the app origin, so a stored
+// HTML file would execute as same-origin script.
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
+  ".eml",
+  ".txt",
+  ".md",
+  ".csv",
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+]);
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, file.fieldname + "-" + uniqueSuffix + ext);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_ATTACHMENT_EXTENSIONS.has(ext)) return cb(null, true);
     cb(
-      null,
-      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname),
+      new AppError(`File type "${ext || "unknown"}" is not allowed`, 400, {
+        code: "UNSUPPORTED_FILE_TYPE",
+      }),
     );
   },
 });
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -37,7 +67,7 @@ router.post(
   "/contacts/:id/interactions",
   validateBody(interactionCreateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const result = interactionService.createInteraction(
       String(req.params.id),
       req.body,
@@ -53,7 +83,7 @@ router.post(
 router.post(
   "/contacts/:id/briefing",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const points = await interactionService.generateBriefing(
       String(req.params.id),
     );
@@ -70,7 +100,7 @@ router.post(
 router.post(
   "/contacts/:id/promote",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const updated = interactionService.promoteGhost(String(req.params.id));
     if (!updated) throw new AppError("Contact not found", 404);
 
@@ -83,7 +113,7 @@ router.post(
   "/contacts/:id/attachments",
   upload.single("attachment"),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     if (!req.file) throw new AppError("No file", 400);
 
     const result = await interactionService.handleAttachment(
@@ -97,12 +127,9 @@ router.post(
 
 router.patch(
   "/interactions/:id",
+  validateBody(interactionUpdateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
-
-    if (Object.keys(req.body).length === 0) {
-      throw new AppError("No valid fields to update", 400);
-    }
+    const rid = req.requestId;
 
     const result = interactionService.updateInteraction(
       String(req.params.id),
@@ -118,7 +145,7 @@ router.patch(
 router.delete(
   "/interactions/:id",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const success = interactionService.deleteInteraction(String(req.params.id));
     if (!success) throw new AppError("Not found", 404);
 
@@ -130,7 +157,7 @@ router.delete(
 router.get(
   "/contacts/:id/relationships",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const limit = parseInt(req.query.limit as string) || 50;
 
     const rows = interactionService.getRelationships(

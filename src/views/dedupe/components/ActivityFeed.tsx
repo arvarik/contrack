@@ -11,19 +11,22 @@ import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useMergeLog, useUndoMerge } from "../../../api";
 import { cn } from "../../../lib/utils";
+import type { MergeLogEntry } from "../../../types";
 
 // =============================================================================
 // ActivityFeed — Merge audit log with undo capability
 // =============================================================================
 
 /** Group entries by relative date. */
-function groupByDate(entries: any[]): { label: string; items: any[] }[] {
+function groupByDate(
+  entries: MergeLogEntry[],
+): { label: string; items: MergeLogEntry[] }[] {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 86400000);
   const thisWeek = new Date(today.getTime() - 7 * 86400000);
 
-  const groups: Map<string, any[]> = new Map();
+  const groups: Map<string, MergeLogEntry[]> = new Map();
 
   for (const entry of entries) {
     const date = new Date(entry.mergedAt);
@@ -51,7 +54,7 @@ export const ActivityFeed = () => {
 
   const groups = useMemo(() => groupByDate(entries), [entries]);
 
-  const handleUndo = async (id: string, name: string) => {
+  const handleUndo = async (id: string, name: string | undefined) => {
     try {
       await undoMerge.mutateAsync(id);
       toast.success(`Restored "${name}"`);

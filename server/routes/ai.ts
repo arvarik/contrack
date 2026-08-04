@@ -34,7 +34,7 @@ const router = Router();
 router.get(
   "/diagnostics",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
 
     const snapshot = ai.getQuotaSnapshot();
 

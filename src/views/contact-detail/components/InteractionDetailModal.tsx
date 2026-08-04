@@ -17,6 +17,7 @@ import type { LucideIcon } from "lucide-react";
 import { format } from "date-fns";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 
 interface InteractionDetailModalProps {
   isOpen: boolean;
@@ -54,6 +55,15 @@ export const InteractionDetailModal = ({
       setIsEditing(false);
     }
   }, [isOpen, interaction]);
+
+  // Sanitize once per content change instead of on every render.
+  const sanitizedContent = React.useMemo(
+    () =>
+      interaction?.content
+        ? DOMPurify.sanitize(interaction.content, TIPTAP_SANITIZE_CONFIG)
+        : "",
+    [interaction?.content],
+  );
 
   if (!interaction) return null;
 
@@ -156,7 +166,7 @@ export const InteractionDetailModal = ({
                     <div
                       className="prose prose-sm max-w-none text-on-surface prose-p:my-2 prose-headings:my-3 break-words prose-a:text-primary"
                       dangerouslySetInnerHTML={{
-                        __html: DOMPurify.sanitize(interaction.content || ""),
+                        __html: sanitizedContent,
                       }}
                     />
                   ) : (

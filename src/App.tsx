@@ -25,12 +25,32 @@ import { ContactDetail } from "./views/contact-detail";
 import { CommandPalette } from "./components/command-palette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { QuickInteractionModal } from "./components/QuickInteractionModal";
-import { MapView } from "./views/MapView";
-import { SettingsView } from "./views/SettingsView";
-import { SearchView } from "./views/SearchView";
-import { DashboardView } from "./views/DashboardView";
 import { navLink, SECTION_BG } from "./lib/styles";
 import { cn } from "./lib/utils";
+
+// Route-level code splitting: secondary views load on demand so the initial
+// bundle only carries the ContactList/ContactDetail critical path.
+const MapView = React.lazy(() =>
+  import("./views/MapView").then((m) => ({ default: m.MapView })),
+);
+const SettingsView = React.lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.SettingsView })),
+);
+const SearchView = React.lazy(() =>
+  import("./views/SearchView").then((m) => ({ default: m.SearchView })),
+);
+const DashboardView = React.lazy(() =>
+  import("./views/DashboardView").then((m) => ({ default: m.DashboardView })),
+);
+
+/** Minimal centered fallback shown while a lazy route chunk loads. */
+const RouteFallback = () => (
+  <div className="w-full h-full flex items-center justify-center">
+    <span className="text-on-surface-variant font-bold animate-pulse">
+      Loading...
+    </span>
+  </div>
+);
 
 import { Sidebar } from "./components/layout/Sidebar";
 import { EmptyState } from "./components/layout/EmptyState";
@@ -140,7 +160,9 @@ const ResponsiveLayout = () => {
                 path="/settings/*"
                 element={
                   <RouteErrorBoundary viewName="Settings">
-                    <SettingsView />
+                    <Suspense fallback={<RouteFallback />}>
+                      <SettingsView />
+                    </Suspense>
                   </RouteErrorBoundary>
                 }
               />
@@ -148,7 +170,9 @@ const ResponsiveLayout = () => {
                 path="/search"
                 element={
                   <RouteErrorBoundary viewName="Search">
-                    <SearchView />
+                    <Suspense fallback={<RouteFallback />}>
+                      <SearchView />
+                    </Suspense>
                   </RouteErrorBoundary>
                 }
               />
@@ -156,7 +180,9 @@ const ResponsiveLayout = () => {
                 path="/pulse"
                 element={
                   <RouteErrorBoundary viewName="Dashboard">
-                    <DashboardView />
+                    <Suspense fallback={<RouteFallback />}>
+                      <DashboardView />
+                    </Suspense>
                   </RouteErrorBoundary>
                 }
               />
@@ -205,7 +231,9 @@ const ResponsiveLayout = () => {
             path="/map"
             element={
               <RouteErrorBoundary viewName="Map">
-                <MapView />
+                <Suspense fallback={<RouteFallback />}>
+                  <MapView />
+                </Suspense>
               </RouteErrorBoundary>
             }
           />
@@ -213,7 +241,9 @@ const ResponsiveLayout = () => {
             path="/map/contact/:id"
             element={
               <RouteErrorBoundary viewName="Map">
-                <MapView />
+                <Suspense fallback={<RouteFallback />}>
+                  <MapView />
+                </Suspense>
               </RouteErrorBoundary>
             }
           />

@@ -9,11 +9,12 @@ const router = Router();
 router.get(
   "/query/contacts",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
 
     const options = {
-      limit: parseInt(req.query.limit as string) || 50,
-      offset: parseInt(req.query.offset as string) || 0,
+      // Cap limit/offset — unbounded values previously reached SQL directly.
+      limit: Math.min(parseInt(req.query.limit as string) || 50, 200),
+      offset: Math.max(parseInt(req.query.offset as string) || 0, 0),
       fields: req.query.fields as string,
       role: req.query.role as string,
       company: req.query.company as string,
@@ -33,7 +34,7 @@ router.get(
 router.get(
   "/contacts/action-items",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const rows = mcpService.getActionItems();
 
     log.debug(
@@ -63,7 +64,7 @@ router.get(
 router.get(
   "/interactions/search",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const q = req.query.q as string;
     if (!q) throw new AppError("q parameter is required", 400);
 
@@ -81,8 +82,8 @@ router.get(
 router.get(
   "/timeline",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const rid = req.requestId;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const since = req.query.since as string;
     const type = req.query.type as string;
 

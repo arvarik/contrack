@@ -84,7 +84,6 @@ export {
   generateCatchMeUpBriefing,
   extractMentions,
   summarizeEmlEmail,
-  semanticContactSearch,
   generateDailyInsight,
   bulkParseContacts,
   synthesizeSearchResults,

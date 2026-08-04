@@ -15,6 +15,7 @@
 // =============================================================================
 
 import { GoogleGenAI } from "@google/genai";
+import type { EmbedContentResponse } from "@google/genai";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { normalizeContacts, normalizeContactById } from "./normalization.ts";
@@ -59,8 +60,10 @@ export function isEmbeddingAvailable(): boolean {
 // Error Classification
 // =============================================================================
 
-function isRetryableError(error: any): boolean {
-  const msg = (error?.message ?? "").toLowerCase();
+function isRetryableError(error: unknown): boolean {
+  const msg = (
+    (error as { message?: string } | null | undefined)?.message ?? ""
+  ).toLowerCase();
   return (
     msg.includes("429") ||
     msg.includes("rate limit") ||
@@ -121,7 +124,7 @@ export async function generateBatchEmbeddings(
     const batch = items.slice(i, i + EMBED_BATCH_SIZE);
     const texts = batch.map((b) => b.text);
 
-    let response: any = null;
+    let response: EmbedContentResponse | null = null;
     let lastError: Error | null = null;
 
     // Retry loop with exponential backoff
@@ -280,7 +283,7 @@ export function clearEmbeddingMeta(): void {
 
 /** Get the total number of stored embeddings. */
 export function getEmbeddingCount(): number {
-  return (_stmts.count.get() as any).cnt;
+  return (_stmts.count.get() as { cnt: number }).cnt;
 }
 
 /** Check if a contact has an embedding. */

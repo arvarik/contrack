@@ -16,6 +16,16 @@
       "@/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "noEmit": true,
+
+    /* Strictness — keep these on. `strict` enables noImplicitAny,
+       strictNullChecks, strictFunctionTypes, useUnknownInCatchVariables, etc.
+       NOTE: `any` bypasses these checks entirely — that's why the
+       no-explicit-any lint rule is an error, not a warning. */
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true
+  },
+  "include": ["src", "server", "tests", "scripts", "*.ts"],
+  "exclude": ["node_modules", "dist", "data", "uploads"]
 }

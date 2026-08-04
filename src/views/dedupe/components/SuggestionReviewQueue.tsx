@@ -33,6 +33,7 @@ import { ContactCard } from "./shared/ContactCard";
 import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import type { Contact, PersistedDedupeSuggestion } from "../../../types";
 
 // =============================================================================
 // Lightweight Union-Find for frontend cluster grouping
@@ -90,8 +91,8 @@ class SimpleUnionFind {
 
 interface SuggestionCluster {
   id: string;
-  contacts: any[];
-  suggestions: any[];
+  contacts: Contact[];
+  suggestions: PersistedDedupeSuggestion[];
   bestPrimaryId: string;
   maxConfidence: number;
   hasWeakLink: boolean;
@@ -101,7 +102,7 @@ interface SuggestionCluster {
 // Utility: pick best primary from a list of contacts
 // =============================================================================
 
-function pickBestPrimary(contacts: any[]): any {
+function pickBestPrimary(contacts: Contact[]): Contact {
   let best = contacts[0];
   let bestScore = scorePrimary(best);
   for (let i = 1; i < contacts.length; i++) {
@@ -114,7 +115,7 @@ function pickBestPrimary(contacts: any[]): any {
   return best;
 }
 
-function scorePrimary(c: any): number {
+function scorePrimary(c: Contact): number {
   let score = 0;
   if (c.avatarUrl?.startsWith("/uploads/avatars/")) score += 100;
   else if (c.avatarUrl) score += 5;
@@ -133,11 +134,13 @@ function scorePrimary(c: any): number {
 // Group pairwise suggestions into clusters
 // =============================================================================
 
-function buildSuggestionClusters(suggestions: any[]): SuggestionCluster[] {
+function buildSuggestionClusters(
+  suggestions: PersistedDedupeSuggestion[],
+): SuggestionCluster[] {
   if (suggestions.length === 0) return [];
 
   const uf = new SimpleUnionFind();
-  const contactMap = new Map<string, any>();
+  const contactMap = new Map<string, Contact>();
 
   for (const s of suggestions) {
     if (!s.contactA || !s.contactB) continue;
@@ -147,7 +150,7 @@ function buildSuggestionClusters(suggestions: any[]): SuggestionCluster[] {
   }
 
   const clusterGroups = uf.getClusters();
-  const clusterSuggestionMap = new Map<string, any[]>();
+  const clusterSuggestionMap = new Map<string, PersistedDedupeSuggestion[]>();
 
   for (const s of suggestions) {
     if (!s.contactA || !s.contactB) continue;
@@ -160,7 +163,9 @@ function buildSuggestionClusters(suggestions: any[]): SuggestionCluster[] {
   const result: SuggestionCluster[] = [];
 
   for (const [root, memberIds] of clusterGroups) {
-    const contacts = memberIds.map((id) => contactMap.get(id)).filter(Boolean);
+    const contacts = memberIds
+      .map((id) => contactMap.get(id))
+      .filter((c): c is Contact => c !== undefined);
 
     if (contacts.length < 2) continue;
 

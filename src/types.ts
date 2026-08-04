@@ -207,7 +207,39 @@ export type ContactUpdateData = Partial<
   interests?: { id?: string; interest: string; isAiGenerated?: boolean }[];
   attributes?: { id?: string; name: string; value: string }[];
   tags?: Partial<ContactTag>[];
+  education?: Partial<ContactEducation>[];
+  experience?: Partial<ContactExperience>[];
 };
+
+/**
+ * AI-parsed contact fields returned by POST /api/parse-contact (Magic Paste).
+ * Child entries are partial — the parser omits ids and unknown fields.
+ */
+export interface ParsedContactData extends Partial<
+  Omit<
+    Contact,
+    | "emails"
+    | "phones"
+    | "addresses"
+    | "socialLinks"
+    | "interests"
+    | "attributes"
+    | "education"
+    | "experience"
+    | "sources"
+    | "tags"
+    | "lists"
+  >
+> {
+  /** Flat convenience fields present in some parser responses. */
+  email?: string;
+  phone?: string;
+  emails?: Partial<ContactEmail>[];
+  phones?: Partial<ContactPhone>[];
+  socialLinks?: Partial<ContactSocialLink>[];
+  education?: Partial<ContactEducation>[];
+  experience?: Partial<ContactExperience>[];
+}
 
 /**
  * A single entry on a contact's interaction timeline.
@@ -291,6 +323,42 @@ export interface DedupeSuggestion {
   matchedField?: string;
 }
 
+/**
+ * A persisted dedupe suggestion row from /api/dedupe/suggestions.
+ * Mirrors the server's DedupeSuggestion (server/services/dedupe/suggestions.ts).
+ */
+export interface PersistedDedupeSuggestion {
+  id: string;
+  contactIdA: string;
+  contactIdB: string;
+  matchType: string;
+  confidence: number;
+  reasoning: string;
+  matchedField: string | null;
+  status: "pending" | "auto_merged" | "merged" | "dismissed";
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  contactA?: Contact | null;
+  contactB?: Contact | null;
+}
+
+/** A merge audit-log row from /api/dedupe/merge-log. */
+export interface MergeLogEntry {
+  id: string;
+  primaryId: string;
+  duplicateId: string;
+  mergedBy: string;
+  mergeType: string;
+  confidence: number;
+  reasoning: string;
+  mergedAt: string;
+  undoneAt: string | null;
+  duplicateSnapshot: string | null;
+  primaryName?: string;
+  duplicateName?: string;
+}
+
 /** A single piece of evidence connecting two contacts within a cluster. */
 export interface ClusterPair {
   contactIdA: string;
@@ -325,12 +393,7 @@ export interface DedupeCluster {
 }
 
 export type DedupeScanMode =
-  | "deterministic"
-  | "ai"
-  | "both"
-  | "quick"
-  | "deep"
-  | "full";
+  "deterministic" | "ai" | "both" | "quick" | "deep" | "full";
 export type DedupeScanPhase =
   | "starting"
   | "normalizing"
@@ -398,20 +461,11 @@ export interface SemanticSearchResult {
 
 /** Status lifecycle: queued → searching → merging → success | error */
 export type AISearchJobStatus =
-  | "queued"
-  | "searching"
-  | "merging"
-  | "success"
-  | "error";
+  "queued" | "searching" | "merging" | "success" | "error";
 
 /** Error classification for contextual UI messages. */
 export type AISearchErrorType =
-  | "rate_limit"
-  | "validation"
-  | "network"
-  | "auth"
-  | "ambiguous"
-  | "unknown";
+  "rate_limit" | "validation" | "network" | "auth" | "ambiguous" | "unknown";
 
 export interface AISearchJob {
   id: string;

@@ -5,7 +5,7 @@
  * Called once in App.tsx inside the Router context.
  *
  * Shortcut map:
- *   Cmd+Shift+N → Network (/)
+ *   Cmd+Shift+H → Network (/)
  *   Cmd+Shift+P → Pulse (/pulse)
  *   Cmd+Shift+M → Map (/map)
  *   Cmd+Shift+S → AI Search (/search)

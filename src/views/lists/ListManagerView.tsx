@@ -194,8 +194,8 @@ export const ListManagerView = () => {
                   </p>
                   <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
                     <Users className="w-3 h-3" />
-                    {(list as any).memberCount ?? 0}{" "}
-                    {(list as any).memberCount === 1 ? "contact" : "contacts"}
+                    {list.memberCount ?? 0}{" "}
+                    {list.memberCount === 1 ? "contact" : "contacts"}
                   </p>
                 </div>
 

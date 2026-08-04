@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -8,13 +9,17 @@ import {
   contactRepo,
   RELATION_REGISTRY,
 } from "../repositories/contactRepository.ts";
+import type {
+  ContactPayload,
+  NewContactPayload,
+  ContactRow,
+  ChildRecordsPayload,
+} from "../repositories/types.ts";
 import { queueGeocode } from "./geocoding/index.ts";
 import {
   processBase64Avatar,
   isBase64DataUri,
 } from "../utils/avatarProcessor.ts";
-import { invalidateSearchCache } from "../utils/searchCache.ts";
-import { invalidateDailyInsight } from "./dashboardService.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
@@ -26,7 +31,7 @@ import { embedContact } from "./search/localEmbeddings.ts";
 import { generateSearchExpansion } from "../ai/aiService.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
-import { dedupeService, dedupeQueue } from "./dedupe/index.ts";
+import { dedupeService } from "./dedupe/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +64,8 @@ const SEARCH_TRIGGER_FIELDS = [
  * If called multiple times for the same contact within 5s, only the last fires.
  */
 function scheduleIncrementalDedupe(contactId: string) {
+  // Integration tests set this to avoid 5s debounce timers outliving a file.
+  if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
   // Clear any pending timer
   const existing = _dedupeTimers.get(contactId);
   if (existing) clearTimeout(existing);
@@ -88,7 +95,7 @@ function scheduleIncrementalDedupe(contactId: string) {
  * Centralised here so createContact + bulkCreateContacts stay DRY.
  * Any field not listed here will never reach the database.
  */
-function buildInsertValues(body: any, id: string) {
+function buildInsertValues(body: NewContactPayload, id: string) {
   return {
     id,
     name: body.name,
@@ -110,20 +117,55 @@ function buildInsertValues(body: any, id: string) {
   };
 }
 
-/** Invalidate all caches that depend on contact data. */
+/**
+ * Invalidate the caches that depend on contact data.
+ *
+ * Deliberately NOT invalidateAll(): the content-addressed tiers (queryParse,
+ * hyde, mentions) hash their own input text and are unaffected by contact
+ * mutations — flushing them on every edit made repeat searches pay full AI
+ * cost for nothing.
+ */
 function invalidateAllCaches() {
-  // aiCache.invalidateAll() flushes all tiers (rerank, synthesis, dailyInsight,
-  // briefing). This is a single call that replaces the former two-call pattern
-  // (invalidateSearchCache + invalidateDailyInsight).
-  aiCache.invalidateAll();
+  aiCache.invalidate("rerank");
+  aiCache.invalidate("synthesis");
+  aiCache.invalidate("dailyInsight");
+  aiCache.invalidate("briefing");
 }
 
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
+/** Columns selected by the getSlimContacts Pass-1 query, typed off the schema. */
+type SlimContactRow = Pick<
+  ContactRow,
+  | "id"
+  | "name"
+  | "firstName"
+  | "lastName"
+  | "company"
+  | "avatarUrl"
+  | "themeColor"
+  | "isGhost"
+  | "isArchived"
+  | "addedAt"
+  | "updatedAt"
+  | "role"
+  | "headline"
+  | "location"
+  | "industry"
+  | "pronouns"
+  | "cadenceDays"
+  | "lastContactedAt"
+  | "nextFollowUpAt"
+  | "lat"
+  | "lng"
+  | "relationshipScore"
+  | "aiHydratedAt"
+>;
+
 export const contactService = {
-  createContact(body: any, source: string = "manual") {
+  createContact(body: NewContactPayload, source: string = "manual") {
     const id = crypto.randomUUID();
     const values = buildInsertValues(body, id);
 
@@ -142,7 +184,9 @@ export const contactService = {
       queueGeocode(id, body.location);
     } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
       const primaryAddress =
-        body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
+        body.addresses.find(
+          (a) => typeof a === "object" && a !== null && a.isPrimary,
+        ) || body.addresses[0];
       const addressString =
         typeof primaryAddress === "string"
           ? primaryAddress
@@ -169,8 +213,10 @@ export const contactService = {
       industry: body.industry,
       about: body.about,
       preferences: body.preferences,
-      tags: body.tags,
-      interests: body.interests,
+      tags: body.tags?.map((t) => (typeof t === "string" ? t : t.tag)),
+      interests: body.interests?.map((i) =>
+        typeof i === "string" ? i : i.interest,
+      ),
     })
       .then((expansion) => {
         if (expansion) {
@@ -198,7 +244,7 @@ export const contactService = {
   },
 
   async bulkCreateContacts(
-    validContacts: any[],
+    validContacts: NewContactPayload[],
     onProgress?: (processed: number, total: number, phase: string) => void,
   ): Promise<{ count: number; createdIds: string[] }> {
     const total = validContacts.length;
@@ -261,6 +307,11 @@ export const contactService = {
         const delDedupe = sqlite.prepare(
           "DELETE FROM contact_embeddings WHERE contactId = ?",
         );
+        // Regular table, but not FK-linked to contacts — clean up so
+        // findStaleEmbeddings() doesn't drift on orphaned metadata.
+        const delMeta = sqlite.prepare(
+          "DELETE FROM dedupe_embedding_meta WHERE contactId = ?",
+        );
         for (const id of ids) {
           try {
             delSearch.run(id);
@@ -272,6 +323,7 @@ export const contactService = {
           } catch {
             /* vec0 row may not exist */
           }
+          delMeta.run(id);
           stmt.run(id);
         }
       });
@@ -283,7 +335,7 @@ export const contactService = {
     return ids.length;
   },
 
-  bulkUpdateContacts(ids: string[], data: any) {
+  bulkUpdateContacts(ids: string[], data: Record<string, unknown>) {
     aiCache.enterBatchMode();
     try {
       const update = buildContactUpdate(data);
@@ -308,11 +360,11 @@ export const contactService = {
     return ids.length;
   },
 
-  updateContact(id: string, body: any) {
+  updateContact(id: string, body: ContactPayload) {
     // Recompute phoneticHash if name changed
     const updateData = buildContactUpdate(body);
     if (body.name) {
-      (updateData as any).phoneticHash = doubleMetaphone(body.name).primary;
+      updateData.phoneticHash = doubleMetaphone(body.name).primary;
     }
 
     const txn = sqlite.transaction(() => {
@@ -327,7 +379,9 @@ export const contactService = {
           sqlite
             .prepare(`DELETE FROM ${config.dbName} WHERE contactId = ?`)
             .run(id);
-          contactRepo.insertChildRecords(id, { [key]: body[key] } as any);
+          contactRepo.insertChildRecords(id, {
+            [key]: body[key],
+          } as ChildRecordsPayload);
         }
       }
     });
@@ -342,7 +396,9 @@ export const contactService = {
       queueGeocode(id, body.location);
     } else if (Array.isArray(body.addresses) && body.addresses.length > 0) {
       const primaryAddress =
-        body.addresses.find((a: any) => a?.isPrimary) || body.addresses[0];
+        body.addresses.find(
+          (a) => typeof a === "object" && a !== null && a.isPrimary,
+        ) || body.addresses[0];
       const addressString =
         typeof primaryAddress === "string"
           ? primaryAddress
@@ -375,7 +431,12 @@ export const contactService = {
         .prepare(
           "SELECT name, role, company, industry, about, preferences FROM contacts WHERE id = ?",
         )
-        .get(id) as any;
+        .get(id) as
+        | Pick<
+            ContactRow,
+            "name" | "role" | "company" | "industry" | "about" | "preferences"
+          >
+        | undefined;
       if (row) {
         const tags = (
           sqlite
@@ -426,14 +487,14 @@ export const contactService = {
     return updated;
   },
 
-  patchContact(id: string, body: any) {
+  patchContact(id: string, body: Record<string, unknown>) {
     const update = buildContactUpdate(body);
     db.update(schema.contacts)
       .set(update)
       .where(eq(schema.contacts.id, id))
       .run();
 
-    if (body.location) {
+    if (typeof body.location === "string" && body.location) {
       queueGeocode(id, body.location);
     }
 
@@ -469,6 +530,10 @@ export const contactService = {
     } catch {
       /* vec0 row may not exist */
     }
+    // Keep dedupe embedding metadata in sync (not FK-linked to contacts).
+    sqlite
+      .prepare("DELETE FROM dedupe_embedding_meta WHERE contactId = ?")
+      .run(id);
 
     const result = db
       .delete(schema.contacts)
@@ -485,10 +550,12 @@ export const contactService = {
 
     const existing = sqlite
       .prepare("SELECT avatarUrl FROM contacts WHERE id = ?")
-      .get(id) as any;
+      .get(id) as { avatarUrl: string | null } | undefined;
     if (existing?.avatarUrl?.startsWith("/uploads/avatars/")) {
-      const oldPath = path.join(process.cwd(), existing.avatarUrl);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      // avatarUrl is user-writable via the update endpoints — resolve it
+      // through the containment check so `..` segments can't escape uploads/.
+      const oldPath = resolveUploadPath(existing.avatarUrl);
+      if (oldPath && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
     db.update(schema.contacts)
@@ -535,11 +602,11 @@ export const contactService = {
              cadenceDays, lastContactedAt, nextFollowUpAt,
              lat, lng, relationshipScore, aiHydratedAt
       FROM contacts
-      WHERE (isArchived = 0 OR isArchived IS NULL)
+      WHERE (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
       ORDER BY addedAt DESC
     `,
       )
-      .all() as any[];
+      .all() as SlimContactRow[];
     const pass1Ms = Date.now() - startMs;
 
     // Pass 2: Batch fetch all relations (Separate queries are faster than GROUP_CONCAT/LEFT JOIN for large sets)
@@ -554,33 +621,42 @@ export const contactService = {
       ORDER BY l.sortOrder ASC
     `,
       )
-      .all() as any[];
+      .all() as {
+      contactId: string;
+      id: string;
+      name: string;
+      icon: string | null;
+      sortOrder: number;
+    }[];
 
     const unarchivedQuery = `WHERE contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)`;
     const tagRows = sqlite
       .prepare(`SELECT contactId, tag FROM contact_tags ${unarchivedQuery}`)
-      .all() as any[];
+      .all() as { contactId: string; tag: string }[];
     const emailRows = sqlite
       .prepare(`SELECT contactId, email FROM contact_emails ${unarchivedQuery}`)
-      .all() as any[];
+      .all() as { contactId: string; email: string }[];
     const phoneRows = sqlite
       .prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`)
-      .all() as any[];
+      .all() as { contactId: string; phone: string }[];
     const interactionCounts = sqlite
       .prepare(
         `SELECT contactId, COUNT(*) as cnt FROM interactions ${unarchivedQuery} GROUP BY contactId`,
       )
-      .all() as any[];
+      .all() as { contactId: string; cnt: number }[];
     const socialLinkCounts = sqlite
       .prepare(
         `SELECT contactId, COUNT(*) as cnt FROM contact_social_links ${unarchivedQuery} GROUP BY contactId`,
       )
-      .all() as any[];
+      .all() as { contactId: string; cnt: number }[];
     const pass2Ms = Date.now() - listStartMs;
 
     // Pass 3: Join in JS (Near-zero cost O(N))
     const joinStartMs = Date.now();
-    const listsByContact = new Map<string, any[]>();
+    const listsByContact = new Map<
+      string,
+      { id: string; name: string; icon: string | null; sortOrder: number }[]
+    >();
     for (const r of listRows) {
       if (!listsByContact.has(r.contactId)) listsByContact.set(r.contactId, []);
       listsByContact
@@ -588,20 +664,20 @@ export const contactService = {
         .push({ id: r.id, name: r.name, icon: r.icon, sortOrder: r.sortOrder });
     }
 
-    const tagsByContact = new Map<string, any[]>();
+    const tagsByContact = new Map<string, { id: string; tag: string }[]>();
     for (const r of tagRows) {
       if (!tagsByContact.has(r.contactId)) tagsByContact.set(r.contactId, []);
       tagsByContact.get(r.contactId)!.push({ id: r.tag, tag: r.tag });
     }
 
-    const emailsByContact = new Map<string, any[]>();
+    const emailsByContact = new Map<string, { email: string }[]>();
     for (const r of emailRows) {
       if (!emailsByContact.has(r.contactId))
         emailsByContact.set(r.contactId, []);
       emailsByContact.get(r.contactId)!.push({ email: r.email });
     }
 
-    const phonesByContact = new Map<string, any[]>();
+    const phonesByContact = new Map<string, { phone: string }[]>();
     for (const r of phoneRows) {
       if (!phonesByContact.has(r.contactId))
         phonesByContact.set(r.contactId, []);
@@ -646,7 +722,7 @@ export const contactService = {
   getAllContacts() {
     const all = sqlite
       .prepare(
-        "SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) ORDER BY addedAt DESC",
+        "SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL ORDER BY addedAt DESC",
       )
       .all();
     return contactRepo.hydrateMany(all);

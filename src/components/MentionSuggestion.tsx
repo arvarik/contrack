@@ -1,4 +1,9 @@
 import { ReactRenderer } from "@tiptap/react";
+import type {
+  SuggestionProps,
+  SuggestionKeyDownProps,
+} from "@tiptap/suggestion";
+import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import tippy, { Instance as TippyInstance } from "tippy.js";
 import React, {
   forwardRef,
@@ -91,7 +96,7 @@ export const getMentionSuggestion = (contacts: ContactSlim[]) => ({
     let popup: TippyInstance[];
 
     return {
-      onStart: (props: any) => {
+      onStart: (props: SuggestionProps<ContactSlim, MentionNodeAttrs>) => {
         component = new ReactRenderer(MentionList, {
           props,
           editor: props.editor,
@@ -100,7 +105,7 @@ export const getMentionSuggestion = (contacts: ContactSlim[]) => ({
         if (!props.clientRect) return;
 
         popup = tippy("body", {
-          getReferenceClientRect: props.clientRect,
+          getReferenceClientRect: props.clientRect as () => DOMRect,
           appendTo: () => document.body,
           content: component.element,
           showOnCreate: true,
@@ -110,23 +115,31 @@ export const getMentionSuggestion = (contacts: ContactSlim[]) => ({
         });
       },
 
-      onUpdate(props: any) {
+      onUpdate(props: SuggestionProps<ContactSlim, MentionNodeAttrs>) {
         component.updateProps(props);
 
         if (!props.clientRect) return;
 
         popup[0].setProps({
-          getReferenceClientRect: props.clientRect,
+          getReferenceClientRect: props.clientRect as () => DOMRect,
         });
       },
 
-      onKeyDown(props: any) {
+      onKeyDown(props: SuggestionKeyDownProps) {
         if (props.event.key === "Escape") {
           popup[0].hide();
           return true;
         }
 
-        return (component.ref as any)?.onKeyDown(props);
+        // `?? false` matches the old behavior: an undefined return (null ref)
+        // was already treated as falsy by TipTap.
+        return (
+          (
+            component.ref as {
+              onKeyDown: (args: { event: KeyboardEvent }) => boolean;
+            } | null
+          )?.onKeyDown(props) ?? false
+        );
       },
 
       onExit() {

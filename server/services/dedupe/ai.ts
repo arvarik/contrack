@@ -1,11 +1,14 @@
 import { ai } from "../../ai/index.ts";
+import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../../ai/promptSafety.ts";
 import { log } from "../../utils/logger.ts";
 import type { NormalizedContact } from "./normalization.ts";
-import type { MatchSignals } from "./types.ts";
+import type { ContactRow, MatchSignals } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 /** Enhanced system prompt for timeline-aware duplicate detection. */
-const AI_SYSTEM_PROMPT = `You are a contact de-duplication expert for a personal CRM.
+const AI_SYSTEM_PROMPT = `${UNTRUSTED_DATA_RULE}
+
+You are a contact de-duplication expert for a personal CRM.
 You determine if two contact records represent the same real-world person.
 You are conservative — only flag as duplicate when genuinely confident.
 
@@ -25,8 +28,8 @@ IMPORTANT REASONING GUIDELINES:
 export async function evaluateBatchWithAI(
   candidates: {
     idx: number;
-    a: any;
-    b: any;
+    a: ContactRow;
+    b: ContactRow;
     nA: NormalizedContact;
     nB: NormalizedContact;
     signals: MatchSignals;
@@ -64,7 +67,7 @@ export async function evaluateBatchWithAI(
   Contact B: "${c.b.name}" | Company: ${c.b.company || "(none)"} | Role: ${c.b.role || "(none)"} | Location: ${c.b.location || "(none)"} | Emails: ${emailsB} | Phones: ${phonesB} | Source: ${srcB}
   Signals: ${signals}`;
     })
-    .join("\\n\\n");
+    .join("\n\n");
 
   try {
     const result = await ai.generate({
@@ -73,7 +76,7 @@ export async function evaluateBatchWithAI(
 
 Consider: common nickname variants (Bob/Robert, Bill/William, Mike/Michael), abbreviations, typos, professional context (same company, role, location), and career progression. Be CONSERVATIVE — only flag duplicates when genuinely confident.
 
-${pairDescriptions}
+${wrapUntrusted("candidate pairs", pairDescriptions, 24_000)}
 
 For each pair, return your assessment.`,
       responseFormat: "json",

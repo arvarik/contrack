@@ -126,8 +126,10 @@ if (contactCount.count === 0) {
     console.log(
       "✅ Seed complete: Inserted default seed contact (Julian Thorne)",
     );
-  } catch (e: any) {
-    console.warn("⚠️ Seed insertion skipped", { reason: e.message });
+  } catch (e) {
+    console.warn("⚠️ Seed insertion skipped", {
+      reason: e instanceof Error ? e.message : String(e),
+    });
   }
 } else {
   console.log(

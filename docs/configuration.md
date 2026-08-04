@@ -8,16 +8,24 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable            | Description                                              | Default                 | Required                      |
-| ------------------- | -------------------------------------------------------- | ----------------------- | ----------------------------- |
-| `AI_PROVIDER`       | LLM provider adapter: `gemini`, `openai`, or `anthropic` | `gemini`                | No                            |
-| `GEMINI_API_KEY`    | Google Gemini API key                                    | —                       | Yes (if provider = gemini)    |
-| `OPENAI_API_KEY`    | OpenAI API key                                           | —                       | Yes (if provider = openai)    |
-| `ANTHROPIC_API_KEY` | Anthropic API key                                        | —                       | Yes (if provider = anthropic) |
-| `AI_TIER`           | Rate limit profile: `FREE` or `PAID`                     | `FREE`                  | No                            |
-| `APP_URL`           | Host URL for self-referential links                      | `http://localhost:3000` | No                            |
-| `PORT`              | Express listening port                                   | `3000`                  | No                            |
-| `MAPBOX_API_KEY`    | Mapbox geocoding API key (higher accuracy)               | —                       | No                            |
+| Variable            | Description                                                                                                                                                 | Default                 | Required                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ----------------------------- |
+| `AI_PROVIDER`       | LLM provider adapter: `gemini`, `openai`, or `anthropic`                                                                                                    | `gemini`                | No                            |
+| `GEMINI_API_KEY`    | Google Gemini API key                                                                                                                                       | —                       | Yes (if provider = gemini)    |
+| `OPENAI_API_KEY`    | OpenAI API key                                                                                                                                              | —                       | Yes (if provider = openai)    |
+| `ANTHROPIC_API_KEY` | Anthropic API key                                                                                                                                           | —                       | Yes (if provider = anthropic) |
+| `AI_TIER`           | Rate limit profile: `FREE` or `PAID`                                                                                                                        | `FREE`                  | No                            |
+| `APP_URL`           | Host URL for self-referential links                                                                                                                         | `http://localhost:3000` | No                            |
+| `PORT`              | Express listening port                                                                                                                                      | `3210`                  | No                            |
+| `HOST`              | Interface to bind. The server has no authentication, so it binds localhost by default; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`             | No                            |
+| `CORS_ORIGIN`       | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                  | — (disabled)            | No                            |
+| `DATA_DIR`          | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                   | project root            | No                            |
+| `MAPBOX_API_KEY`    | Mapbox geocoding API key (higher accuracy)                                                                                                                  | —                       | No                            |
+
+> **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
+> (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
+> link unfurling, embedding backfill) are limited to 60 requests/minute per
+> client IP. Exceeding the window returns `429 RATE_LIMITED`.
 
 ---
 

@@ -157,9 +157,14 @@ export const relationshipService = {
   /**
    * Batch recompute all non-archived, non-ghost contact scores.
    * Called on server startup and every 60 minutes via setInterval.
-   * Uses a single transaction for efficiency — measured at ~2ms per 100 contacts.
+   *
+   * Runs in batches of 200 with an event-loop yield between batches:
+   * better-sqlite3 is synchronous, so a single monolithic transaction over
+   * thousands of contacts would starve every pending HTTP request for the
+   * full duration. Each batch commits its own transaction (~2ms per 100
+   * contacts), so requests interleave between batches.
    */
-  recomputeAll(): void {
+  async recomputeAll(): Promise<void> {
     const startMs = Date.now();
 
     const contacts = sqlite
@@ -175,22 +180,31 @@ export const relationshipService = {
       "UPDATE contacts SET relationshipScore = ? WHERE id = ?",
     );
 
+    const BATCH_SIZE = 200;
     let skipped = 0;
-    const txn = sqlite.transaction(() => {
-      for (const c of contacts) {
-        try {
-          const score = computeScoreForContact(c);
-          updateStmt.run(score, c.id);
-        } catch (err: unknown) {
-          skipped++;
-          log.warn(
-            "RelationshipScore",
-            `Skipped ${c.id}: ${getErrorMessage(err)}`,
-          );
+    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
+      const batch = contacts.slice(i, i + BATCH_SIZE);
+      const txn = sqlite.transaction(() => {
+        for (const c of batch) {
+          try {
+            const score = computeScoreForContact(c);
+            updateStmt.run(score, c.id);
+          } catch (err: unknown) {
+            skipped++;
+            log.warn(
+              "RelationshipScore",
+              `Skipped ${c.id}: ${getErrorMessage(err)}`,
+            );
+          }
         }
+      });
+      txn();
+
+      // Yield so pending HTTP requests are served between batches.
+      if (i + BATCH_SIZE < contacts.length) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
-    });
-    txn();
+    }
 
     const elapsed = Date.now() - startMs;
     log.info(

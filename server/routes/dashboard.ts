@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   "/dashboard",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
 
     const payload = dashboardService.getDashboardPayload();
     log.debug("API", `[${rid}] GET /api/dashboard`);
@@ -21,7 +21,7 @@ router.get(
 router.get(
   "/dashboard/insight",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
 
     const insight = await dashboardService.getInsight();
     log.debug("API", `[${rid}] GET /api/dashboard/insight`);
@@ -39,7 +39,7 @@ router.get(
 router.get(
   "/command-palette/zero-state",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
 
     const payload = zeroStateService.getPayload();
     log.debug(

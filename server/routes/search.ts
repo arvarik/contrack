@@ -11,7 +11,7 @@ const router = Router();
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const q = req.query.q as string;
 
     if (!q) return res.json([]);
@@ -40,7 +40,7 @@ router.get(
 router.post(
   "/semantic",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const { query } = req.body as { query?: string };
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
@@ -101,7 +101,7 @@ router.post(
 router.post(
   "/synthesize",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const { query, contacts } = req.body as {
       query?: string;
       contacts?: {

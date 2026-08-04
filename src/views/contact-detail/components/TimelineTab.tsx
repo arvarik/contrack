@@ -5,7 +5,7 @@
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Mail,
@@ -27,11 +27,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 
 import type { Interaction } from "../../../types";
-import { cn } from "../../../lib/utils";
+import { cn, safeHref } from "../../../lib/utils";
+import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { EMPTY_STATE } from "../../../lib/styles";
 import { RichInteractionComposer } from "../../../components/RichInteractionComposer";
 import { InteractionDetailModal } from "./InteractionDetailModal";
 import { useCompleteActionItem } from "../../../api";
+import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -42,8 +44,8 @@ export interface TimelineTabProps {
   timeline: Interaction[];
   timelineLoading: boolean;
   isDragActive: boolean;
-  getRootProps: () => any;
-  getInputProps: () => any;
+  getRootProps: () => DropzoneRootProps;
+  getInputProps: () => DropzoneInputProps;
 
   // Mutations passed from parent
   deleteInteraction: {
@@ -53,7 +55,11 @@ export interface TimelineTabProps {
     ) => void;
   };
   updateInteraction: {
-    mutate: (args: { id: string; contactId: string; data: any }) => void;
+    mutate: (args: {
+      id: string;
+      contactId: string;
+      data: { title?: string; content?: string | null };
+    }) => void;
   };
   promoteGhost: {
     mutate: (id: string, opts?: { onSuccess?: () => void }) => void;
@@ -131,6 +137,27 @@ function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
     return null;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// InteractionContent — memoized, sanitized rich-text preview for one entry
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Memoized so DOMPurify.sanitize doesn't re-run for every timeline entry on
+ * each parent render — it only runs when the entry's HTML actually changes.
+ */
+const InteractionContent = React.memo(({ html }: { html: string }) => {
+  const sanitized = useMemo(
+    () => DOMPurify.sanitize(html, TIPTAP_SANITIZE_CONFIG),
+    [html],
+  );
+  return (
+    <div
+      className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"
+      dangerouslySetInnerHTML={{ __html: sanitized }}
+    />
+  );
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
@@ -267,12 +294,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                 )}
 
                 {item.content ? (
-                  <div
-                    className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"
-                    dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(item.content),
-                    }}
-                  />
+                  <InteractionContent html={item.content} />
                 ) : null}
 
                 {/* Ghost Mentions */}
@@ -349,7 +371,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                       />
                     ) : (
                       <a
-                        href={item.fileUrl}
+                        href={safeHref(item.fileUrl)}
                         download
                         onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden"

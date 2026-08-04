@@ -11,6 +11,18 @@ import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 
+/**
+ * Narrow action_items row shape — only the columns the mutation guards
+ * below actually read (rows come from `SELECT *` but are treated narrowly).
+ */
+interface ActionItemRow {
+  id: string;
+  contactId: string;
+  title: string;
+  dueAt: string;
+  completedAt: string | null;
+}
+
 export const actionItemService = {
   /**
    * Get all pending action items across all non-archived contacts,
@@ -117,11 +129,11 @@ export const actionItemService = {
   update(id: string, updates: { dueAt?: string; title?: string }) {
     const existing = sqlite
       .prepare("SELECT * FROM action_items WHERE id = ?")
-      .get(id) as any;
+      .get(id) as ActionItemRow | undefined;
     if (!existing) return null;
 
     const setClauses: string[] = [];
-    const values: any[] = [];
+    const values: string[] = [];
 
     if (updates.dueAt !== undefined) {
       setClauses.push("dueAt = ?");
@@ -155,7 +167,7 @@ export const actionItemService = {
   complete(id: string) {
     const existing = sqlite
       .prepare("SELECT * FROM action_items WHERE id = ?")
-      .get(id) as any;
+      .get(id) as ActionItemRow | undefined;
     if (!existing) return null;
     if (existing.completedAt) return existing; // Already completed — idempotent
 
@@ -178,7 +190,7 @@ export const actionItemService = {
   delete(id: string): boolean {
     const existing = sqlite
       .prepare("SELECT * FROM action_items WHERE id = ?")
-      .get(id) as any;
+      .get(id) as ActionItemRow | undefined;
     if (!existing) return false;
 
     sqlite.prepare("DELETE FROM action_items WHERE id = ?").run(id);

@@ -9,7 +9,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const { primaryId, duplicateId } = req.body;
 
       if (!primaryId || !duplicateId) {
@@ -31,7 +31,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge-batch",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const { merges } = req.body;
 
       if (!Array.isArray(merges) || merges.length === 0) {
@@ -87,7 +87,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge-cluster",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const { primaryId, duplicateIds } = req.body;
 
       if (
@@ -106,7 +106,8 @@ export function registerMergeRoutes(router: Router) {
 
       let merged = 0;
       let failed = 0;
-      let lastResult: any = null;
+      let lastResult: ReturnType<typeof dedupeService.mergeContacts> | null =
+        null;
 
       for (const dupId of duplicateIds) {
         try {
@@ -132,7 +133,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge-clusters",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const { clusters } = req.body;
 
       if (!Array.isArray(clusters) || clusters.length === 0) {
@@ -143,7 +144,8 @@ export function registerMergeRoutes(router: Router) {
       }
 
       const totalOps = clusters.reduce(
-        (sum: number, c: any) => sum + (c.duplicateIds?.length ?? 0),
+        (sum: number, c: { duplicateIds?: unknown[] }) =>
+          sum + (c.duplicateIds?.length ?? 0),
         0,
       );
       if (totalOps > 250) {

@@ -30,7 +30,7 @@ const router = Router();
 router.get(
   "/action-items",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const items = actionItemService.getAllPending();
     log.debug("API", `[${rid}] GET /api/action-items → ${items.length}`);
     res.json(items);
@@ -40,7 +40,7 @@ router.get(
 router.get(
   "/action-items/completed",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const items = actionItemService.getRecentlyCompleted();
     log.debug(
       "API",
@@ -53,7 +53,7 @@ router.get(
 router.get(
   "/action-items/count",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const count = actionItemService.getUrgentCount();
     log.debug("API", `[${rid}] GET /api/action-items/count → ${count}`);
     res.json({ count });
@@ -66,7 +66,7 @@ router.patch(
   "/action-items/:id",
   validateBody(actionItemUpdateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const updated = actionItemService.update(String(req.params.id), req.body);
     if (!updated) throw new AppError("Action item not found", 404);
     log.info(
@@ -80,7 +80,7 @@ router.patch(
 router.patch(
   "/action-items/:id/complete",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const completed = actionItemService.complete(String(req.params.id));
     if (!completed) throw new AppError("Action item not found", 404);
     log.info(
@@ -94,7 +94,7 @@ router.patch(
 router.delete(
   "/action-items/:id",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const success = actionItemService.delete(String(req.params.id));
     if (!success) throw new AppError("Action item not found", 404);
     log.info(
@@ -110,7 +110,7 @@ router.delete(
 router.get(
   "/contacts/:id/action-items",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const items = actionItemService.getByContactId(String(req.params.id));
     log.debug(
       "API",
@@ -124,7 +124,7 @@ router.post(
   "/contacts/:id/action-items",
   validateBody(actionItemCreateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const { title, dueAt } = req.body;
     const item = actionItemService.create(String(req.params.id), title, dueAt);
     log.info(

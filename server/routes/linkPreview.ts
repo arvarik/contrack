@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   "/unfurl",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const targetUrl = req.query.url as string;
 
     if (!targetUrl) throw new AppError("url query parameter is required", 400);

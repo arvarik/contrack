@@ -23,7 +23,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 
 import type { Contact, ContactUpdateData } from "../../../types";
-import { cn } from "../../../lib/utils";
+import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
 import {
   LABEL,
   CARD_TINTED,
@@ -107,7 +107,7 @@ const SocialLinkPill: React.FC<{
   return (
     <div className="relative group/pill flex" ref={menuRef}>
       <a
-        href={sl.url}
+        href={safeHref(sl.url)}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high pl-3 pr-1.5 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
@@ -173,42 +173,6 @@ const SocialLinkPill: React.FC<{
     </div>
   );
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// LinkedIn slug cleanup — strips auto-generated numeric suffixes for display
-//
-// LinkedIn auto-generates slugs like "alex-sadler-07993773" when a user
-// hasn't set a custom vanity URL. The suffix is alphanumeric (hex/numeric)
-// and typically 5-10 characters. We strip it for cleaner display while
-// keeping the actual URL unchanged.
-//
-// Heuristic:
-//   1. The slug must contain at least one hyphen (multi-part = name segments)
-//   2. The last segment must be ≥5 chars (avoids stripping real name initials like "-c")
-//   3. The last segment must contain at least one digit (names rarely do)
-//
-// Examples:
-//   "alex-sadler-07993773"      → "alex-sadler"
-//   "alexander-glavin-17b821a8" → "alexander-glavin"
-//   "yuxuan-jonathan-c-027b18156" → "yuxuan-jonathan-c"
-//   "young-lee-78ab07111"       → "young-lee"
-//   "aayush1196"                → "aayush1196"    (no hyphens → no change)
-//   "wangxi05104"               → "wangxi05104"   (no hyphens → no change)
-// ═══════════════════════════════════════════════════════════════════════════
-
-function cleanLinkedInSlug(slug: string): string {
-  const lastDash = slug.lastIndexOf("-");
-  if (lastDash === -1) return slug; // no hyphens → custom username, leave untouched
-
-  const suffix = slug.slice(lastDash + 1);
-
-  // Only strip if the suffix is ≥5 chars and contains at least one digit
-  if (suffix.length >= 5 && /\d/.test(suffix) && /^[a-z0-9]+$/i.test(suffix)) {
-    return slug.slice(0, lastDash);
-  }
-
-  return slug;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
@@ -558,7 +522,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     (sl) => sl.url === contact.website,
                   ) && (
                     <a
-                      href={contact.website}
+                      href={safeHref(contact.website)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"

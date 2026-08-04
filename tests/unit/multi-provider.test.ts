@@ -211,31 +211,32 @@ describe("AnthropicAdapter", () => {
   });
 
   // ── Model Class Mapping ──────────────────────────────────────────────
-  // Contract: lite → claude-haiku-4.5, flash → claude-sonnet-4.6, pro → claude-opus-4.6
+  // Contract: lite → claude-haiku-4-5, flash → claude-sonnet-4-6, pro → claude-opus-4-6
+  // (API model IDs use dashes, not dots — dotted IDs 404 on the live API.)
 
   describe("model class mapping", () => {
-    it("maps 'lite' to claude-haiku-4.5", () => {
+    it("maps 'lite' to claude-haiku-4-5", () => {
       const adapter = new AnthropicAdapter("test-key");
       const model = adapter.resolveModel("lite");
-      expect(model).toBe("claude-haiku-4.5");
+      expect(model).toBe("claude-haiku-4-5");
     });
 
-    it("maps 'flash' to claude-sonnet-4.6", () => {
+    it("maps 'flash' to claude-sonnet-4-6", () => {
       const adapter = new AnthropicAdapter("test-key");
       const model = adapter.resolveModel("flash");
-      expect(model).toBe("claude-sonnet-4.6");
+      expect(model).toBe("claude-sonnet-4-6");
     });
 
-    it("maps 'pro' to claude-opus-4.6", () => {
+    it("maps 'pro' to claude-opus-4-6", () => {
       const adapter = new AnthropicAdapter("test-key");
       const model = adapter.resolveModel("pro");
-      expect(model).toBe("claude-opus-4.6");
+      expect(model).toBe("claude-opus-4-6");
     });
 
     it("defaults to lite when no preference specified", () => {
       const adapter = new AnthropicAdapter("test-key");
       const model = adapter.resolveModel(undefined);
-      expect(model).toBe("claude-haiku-4.5");
+      expect(model).toBe("claude-haiku-4-5");
     });
   });
 
@@ -271,6 +272,7 @@ describe("AnthropicAdapter", () => {
             properties: {
               name: { type: "string" },
             },
+            additionalProperties: false,
             required: ["name"],
           },
         },
@@ -287,9 +289,10 @@ describe("AnthropicAdapter", () => {
       };
 
       const translated = adapter.translateSchema(schema);
-      // Anthropic supports nullable in JSON schema
+      // Nullability is expressed as a JSON Schema type union, not OpenAPI's
+      // `nullable` keyword (which the Anthropic API does not accept).
       const companyProp = translated.json_schema.schema.properties.company;
-      expect(companyProp.nullable).toBe(true);
+      expect(companyProp.type).toEqual(["string", "null"]);
     });
   });
 });

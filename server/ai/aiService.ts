@@ -12,7 +12,6 @@
 //   - generateCatchMeUpBriefing(contact, interactions)
 //   - extractMentions(text)
 //   - summarizeEmlEmail(rawEml)
-//   - semanticContactSearch(query, contacts)
 //   - generateDailyInsight(stats)
 //   - bulkParseContacts(texts, concurrency?)
 // =============================================================================
@@ -33,6 +32,7 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { recordInvocation } from "../services/aiStatsService.ts";
 import { aiCache, contentHash } from "../utils/aiCache.ts";
+import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "./promptSafety.ts";
 
 // Re-export domain types for consumers
 export type {
@@ -91,7 +91,9 @@ export async function parseContactRecord(text: string): Promise<ParsedContact> {
 
   const systemPrompt = `You are an expert contact data extraction system.
     Your only job is to read unstructured text and extract contact fields with high precision.
-    You NEVER invent or infer data not explicitly stated in the text.`;
+    You NEVER invent or infer data not explicitly stated in the text.
+
+${UNTRUSTED_DATA_RULE}`;
 
   const prompt = `
     Extract contact information from the following unstructured text. 
@@ -102,8 +104,7 @@ export async function parseContactRecord(text: string): Promise<ParsedContact> {
     For experience entries, try to determine if a role is current (isCurrent).
     For education entries, try to extract the field of study separately from degree.
 
-    Text Payload:
-    "${text}"
+    ${wrapUntrusted("contact text payload", text)}
   `;
 
   const result = await provider.generate({
@@ -235,7 +236,9 @@ export async function generateCatchMeUpBriefing(
     ];
   }
 
-  const systemPrompt = `You are an elite executive assistant preparing a meeting brief.
+  const systemPrompt = `${UNTRUSTED_DATA_RULE}
+
+You are an elite executive assistant preparing a meeting brief.
     You synthesize contact profiles and interaction history into tightly-framed, highly actionable bullet points.
     Every point must be grounded in specific data — never pad with generalities.`;
 
@@ -251,11 +254,9 @@ export async function generateCatchMeUpBriefing(
     If there isn't enough interaction history to derive meaningful points, gracefully mention that 
     this is a relatively new or sparse contact, but always return exactly 3 robust string bullet points.
 
-    Contact Profile:
-    ${JSON.stringify(contact, null, 2)}
+    ${wrapUntrusted("contact profile JSON", JSON.stringify(contact, null, 2))}
 
-    Recent Timeline (Past 15):
-    ${JSON.stringify(interactions, null, 2)}
+    ${wrapUntrusted("recent timeline JSON", JSON.stringify(interactions, null, 2), 16_000)}
   `;
 
   const result = await provider.generate({
@@ -287,7 +288,7 @@ export async function generateCatchMeUpBriefing(
     tokenCount: result.tokenCount,
     latencyMs: result.latencyMs,
     cached: false,
-    description: `Catch-Me-Up for ${(contact as any).name || "contact"}`,
+    description: `Catch-Me-Up for ${typeof contact.name === "string" && contact.name ? contact.name : "contact"}`,
   });
   return parsed;
 }
@@ -324,7 +325,9 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
     return cached;
   }
 
-  const systemPrompt = `You are a named-entity recognition system specializing in identifying people mentioned in CRM notes.
+  const systemPrompt = `${UNTRUSTED_DATA_RULE}
+
+You are a named-entity recognition system specializing in identifying people mentioned in CRM notes.
     Extract only distinct human beings — never the note author themselves.`;
 
   const prompt = `
@@ -339,8 +342,7 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
     Schema: [{ "name": "string", "company": "string | null", "context": "string" }]
     If nobody new is mentioned, return an empty array [].
     
-    Timeline Note:
-    "${text}"
+    ${wrapUntrusted("timeline note", text)}
   `;
 
   try {
@@ -411,7 +413,9 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
     return "<p><strong>Re: Q3 Roadmap Planning</strong></p><p>Thread summary:</p><ul><li>Julian proposed pushing the V2 alpha back by two weeks.</li><li>Sarah agreed to coordinate with marketing.</li><li>John provided the final wireframe mocks for the reporting suite.</li></ul>";
   }
 
-  const systemPrompt = `You are an expert executive assistant processing raw email exports.
+  const systemPrompt = `${UNTRUSTED_DATA_RULE}
+
+You are an expert executive assistant processing raw email exports.
     You distill email threads into clean, highly legible HTML summaries.
     You strip all MIME headers, legal footers, and security scanner additions.`;
 
@@ -423,8 +427,7 @@ export async function summarizeEmlEmail(rawEml: string): Promise<string> {
     3. Provide a highly legible, synthesized summary of the ACTUAL conversation thread. Do not just blindly copy the text. Distill it.
     4. Provide the final output as a clean HTML string. Use <ul>, <li>, <p>, and <strong> tags to make it ultra-readable inside a custom UI component pane. Do NOT wrap it in "html", "head", or "body" tags. Only return the inner content elements.
     
-    Raw .EML text:
-    "${rawEml}"
+    ${wrapUntrusted("raw .eml file", rawEml, 24_000)}
   `;
 
   try {
@@ -526,7 +529,9 @@ export async function rerankCandidates(
   }
   const hasHardConstraints = planDirectives.length > 0;
 
-  const systemPrompt = `You are a precise CRM data analyst. You verify whether each candidate contact DEFINITIVELY matches a user query, and you cite the specific field value that proves it.
+  const systemPrompt = `${UNTRUSTED_DATA_RULE}
+
+You are a precise CRM data analyst. You verify whether each candidate contact DEFINITIVELY matches a user query, and you cite the specific field value that proves it.
 
 These contacts have already been pre-filtered by a retrieval system — your job is the LAST line of defense against false positives. Be ruthlessly precise.
 
@@ -567,7 +572,7 @@ A contact that fails any hard constraint MUST be excluded, regardless of how wel
 ${plan?.rationale ? `\nPLANNER RATIONALE: ${plan.rationale}` : ""}
 
 CANDIDATES (${candidates.length}):
-${JSON.stringify(candidates)}
+${wrapUntrusted("candidate contacts JSON", JSON.stringify(candidates), 24_000)}
 
 Return a JSON array of VERIFIED matches with field-level evidence. If no candidate can be grounded, return [].`;
 
@@ -614,7 +619,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
 
   const wordBoundaryMatch = (haystack: string, needle: string): boolean => {
     if (!haystack || !needle) return false;
-    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$1");
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(
       `(?:^|[^a-zA-Z0-9])${escaped}(?=[^a-zA-Z0-9]|$)`,
       "i",
@@ -723,17 +728,6 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
   });
 
   return filtered;
-}
-
-/**
- * @deprecated Use `rerankCandidates()` instead. This is a backward-compat shim
- * that delegates to the new reranker. Kept for any call sites not yet migrated.
- */
-export async function semanticContactSearch(
-  query: string,
-  contacts: CompressedContact[],
-): Promise<SemanticMatchResult[]> {
-  return rerankCandidates(query, contacts);
 }
 
 // =============================================================================
@@ -955,8 +949,10 @@ export async function generateSearchExpansion(contact: {
 
   try {
     const result = await provider.generate({
-      systemPrompt: `You generate search expansion keywords. Given a contact profile, output a comma-separated list of 10 search terms that someone might use to find this person. Include: synonyms for their role, industry keywords, related fields, skill inferences, and location-based terms. Output ONLY the comma-separated list, nothing else.`,
-      prompt: parts.join(" | "),
+      systemPrompt: `${UNTRUSTED_DATA_RULE}
+
+You generate search expansion keywords. Given a contact profile, output a comma-separated list of 10 search terms that someone might use to find this person. Include: synonyms for their role, industry keywords, related fields, skill inferences, and location-based terms. Output ONLY the comma-separated list, nothing else.`,
+      prompt: wrapUntrusted("contact profile", parts.join(" | ")),
       responseFormat: "text",
       routing: { prefer: "lite" },
     });
@@ -1084,7 +1080,9 @@ export async function synthesizeSearchResults(
     );
   }
 
-  const systemPrompt = `You are a CRM intelligence analyst. You produce a 2-3 sentence grounded executive brief about a set of contacts that match a query.
+  const systemPrompt = `${UNTRUSTED_DATA_RULE}
+
+You are a CRM intelligence analyst. You produce a 2-3 sentence grounded executive brief about a set of contacts that match a query.
 
 CRITICAL GROUNDING RULES:
 1. NEVER make a claim that does not apply to AT LEAST 80% of the contacts shown. If you say "based in America", check every contact's [location:] tag.
@@ -1104,7 +1102,7 @@ GOOD example (grounded):
 ${grounding.length ? `\nVERIFIED FILTER:\n${grounding.join("\n")}` : ""}
 
 MATCHING CONTACTS (${contacts.length} total):
-${contactSummaries}
+${wrapUntrusted("contact summaries", contactSummaries, 24_000)}
 
 Write a 2-3 sentence executive brief. Every claim must be true for the contacts shown.`;
 

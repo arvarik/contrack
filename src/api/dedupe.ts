@@ -14,7 +14,7 @@
  */
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { DedupeScanMode, DedupeScanProgress } from "../types";
+import type { Contact, DedupeScanMode, DedupeScanProgress } from "../types";
 
 const API_BASE = "/api";
 
@@ -228,7 +228,7 @@ export const useMergeCluster = () => {
         success: boolean;
         merged: number;
         failed: number;
-        contact: any;
+        contact: Contact;
       }>;
     },
     onSuccess: () => {

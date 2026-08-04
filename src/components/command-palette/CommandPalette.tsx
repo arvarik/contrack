@@ -237,10 +237,7 @@ export const CommandPalette = () => {
     if (!match) return null;
     const [_, type, nameStr, content] = match;
     const typeLower = type.toLowerCase() as
-      | "note"
-      | "call"
-      | "meeting"
-      | "email";
+      "note" | "call" | "meeting" | "email";
     const targetContact = allContacts.find((c) =>
       c.name?.toLowerCase().includes(nameStr.toLowerCase().trim()),
     );

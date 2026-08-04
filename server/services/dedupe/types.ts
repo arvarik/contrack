@@ -3,7 +3,8 @@
 // =============================================================================
 
 import type { NormalizedContact } from "./normalization.ts";
-export type { NormalizedContact };
+import type { ContactRow, HydratedContact } from "../../repositories/types.ts";
+export type { NormalizedContact, ContactRow, HydratedContact };
 
 export type MatchType =
   | "email"
@@ -25,8 +26,8 @@ export interface RawPair {
 }
 
 export interface PassContext {
-  allContacts: any[];
-  contactMap: Map<string, any>;
+  allContacts: ContactRow[];
+  contactMap: Map<string, ContactRow>;
   normalized: NormalizedContact[];
   normalizedMap: Map<string, NormalizedContact>;
   seenPairs: Set<string>;
@@ -56,12 +57,7 @@ export interface MatchSignals {
 }
 
 export type DedupeScanMode =
-  | "deterministic"
-  | "ai"
-  | "both"
-  | "quick"
-  | "deep"
-  | "full";
+  "deterministic" | "ai" | "both" | "quick" | "deep" | "full";
 export type DedupeScanPhase =
   | "starting"
   | "normalizing"
@@ -109,7 +105,7 @@ export interface ClusterPair {
 
 export interface DedupeCluster {
   id: string;
-  contacts: any[];
+  contacts: HydratedContact[];
   suggestedPrimaryId: string;
   pairs: ClusterPair[];
   aggregateConfidence: number;

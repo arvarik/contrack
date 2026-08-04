@@ -12,8 +12,9 @@ import path from "path";
 import sharp from "sharp";
 import { log } from "./logger.ts";
 import { getErrorMessage } from "./helpers.ts";
+import { AVATARS_DIR } from "./paths.ts";
 
-const AVATAR_DIR = path.join(process.cwd(), "uploads", "avatars");
+const AVATAR_DIR = AVATARS_DIR;
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
 
@@ -74,6 +75,6 @@ export async function processBase64Avatar(
 /**
  * Check if a string is a base64 data URI (not an HTTP URL or dicebear SVG).
  */
-export function isBase64DataUri(url: string | null | undefined): boolean {
+export function isBase64DataUri(url: string | null | undefined): url is string {
   return !!url && url.startsWith("data:image/");
 }

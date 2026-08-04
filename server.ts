@@ -1,35 +1,17 @@
 /**
  * server.ts — Express application entry point.
  *
- * Boots the HTTP server with all API routers, Vite dev middleware (or static
- * serving in production), request ID tracing, Morgan logging, centralized
- * error handling via AppError, and background geocoding on startup.
+ * Boots the HTTP server: builds the API app via createApp() (see
+ * server/app.ts), attaches Vite dev middleware (or static serving in
+ * production), starts listening, and kicks off background tasks.
  */
 import "dotenv/config";
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
-import cors from "cors";
-import crypto from "crypto";
-import morgan from "morgan";
-import fs from "fs";
 
 import { log } from "./server/utils/logger.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
-
-import { linkPreviewRouter } from "./server/routes/linkPreview.ts";
-import { searchRouter } from "./server/routes/search.ts";
-import { listsRouter } from "./server/routes/lists.ts";
-import { contactsRouter } from "./server/routes/contacts.ts";
-import { interactionsRouter } from "./server/routes/interactions.ts";
-import { dedupeRouter } from "./server/routes/dedupe/index.ts";
-import { mcpRouter } from "./server/routes/mcp.ts";
-import { actionItemsRouter } from "./server/routes/actionItems.ts";
-import { dashboardRouter } from "./server/routes/dashboard.ts";
-import { aiSearchRouter } from "./server/routes/aiSearch.ts";
-import { aiRouter } from "./server/routes/ai.ts";
-import { aiStatsRouter } from "./server/routes/aiStats.ts";
-import { logosRouter } from "./server/routes/logos.ts";
+import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
 import {
   isEmbeddingAvailable,
@@ -40,11 +22,6 @@ import {
   initLocalEmbeddings,
   backfillSearchEmbeddings,
 } from "./server/services/search/localEmbeddings.ts";
-
-import {
-  errorHandler,
-  notFoundHandler,
-} from "./server/middleware/errorHandler.ts";
 
 // ── Provider-aware API key validation ────────────────────────────────────────
 const AI_PROVIDER = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
@@ -57,66 +34,26 @@ const KEY_VAR = API_KEY_MAP[AI_PROVIDER] ?? "GEMINI_API_KEY";
 const KEY_VALUE = process.env[KEY_VAR];
 
 if (!KEY_VALUE || (AI_PROVIDER === "gemini" && KEY_VALUE === "dummy_key")) {
-  console.warn(
-    `\n\x1b[33m⚠️  [WARNING] ${KEY_VAR} is not configured inside .env!\x1b[0m`,
-  );
-  console.warn(
-    `\x1b[33m   AI provider "${AI_PROVIDER}" will not be available. AI features will fail gracefully.\x1b[0m\n`,
+  log.warn("Server", `${KEY_VAR} is not configured inside .env!`);
+  log.warn(
+    "Server",
+    `AI provider "${AI_PROVIDER}" will not be available. AI features will fail gracefully.`,
   );
 } else {
-  console.log(
-    `\x1b[36mℹ️  AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)\x1b[0m`,
-  );
+  log.info("Server", `AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)`);
 }
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
-const uploadDir = process.env.DATA_DIR
-  ? path.join(process.env.DATA_DIR, "uploads")
-  : path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// Bind localhost by default — this app has no authentication, so exposing it
+// on all interfaces should be an explicit choice (HOST=0.0.0.0, set in Docker).
+const HOST = process.env.HOST ?? "127.0.0.1";
 
 async function startServer() {
-  const app = express();
-  app.disable("x-powered-by");
-
-  app.use(cors());
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-
-  app.use((req, res, next) => {
-    (req as any).requestId = crypto.randomUUID().split("-")[0];
-    next();
-  });
-
-  const morganFormat = process.env.NODE_ENV === "production" ? "short" : "dev";
-  app.use(
-    morgan(morganFormat, {
-      skip: (req) =>
-        req.url.includes("node_modules") ||
-        req.url.includes("@vite") ||
-        req.url.includes("src/"),
-    }),
-  );
-
-  app.use("/uploads", express.static(uploadDir));
-
-  app.use("/api/link-preview", linkPreviewRouter); // Using renamed router
-  app.use("/api/search", searchRouter);
-  app.use("/api/lists", listsRouter);
-  app.use("/api", contactsRouter);
-  app.use("/api", interactionsRouter);
-  app.use("/api", mcpRouter);
-  app.use("/api", dedupeRouter);
-  app.use("/api", actionItemsRouter);
-  app.use("/api", dashboardRouter);
-  app.use("/api", aiSearchRouter);
-  app.use("/api/ai/stats", aiStatsRouter);
-  app.use("/api/ai", aiRouter);
-  app.use("/api/logos", logosRouter);
+  const app = createApp({ enableRequestLogging: true });
 
   // ── Cache diagnostics (dev only) ─────────────────────────────────────────
   // Exposes hit/miss counters and entry counts for all aiCache tiers.
-  // Useful for debugging: curl http://localhost:3000/api/debug/cache-stats
+  // Useful for debugging: curl http://localhost:3210/api/debug/cache-stats
   if (process.env.NODE_ENV !== "production") {
     const { aiCache } = await import("./server/utils/aiCache.ts");
     app.get("/api/debug/cache-stats", (_req, res) => {
@@ -130,6 +67,9 @@ async function startServer() {
   app.use(notFoundHandler);
 
   if (process.env.NODE_ENV !== "production") {
+    // Lazy import: vite is a devDependency and must never enter the
+    // production module graph (the Docker image installs --omit=dev).
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -144,12 +84,12 @@ async function startServer() {
   // Centralized error handler. Translates AppError / ZodError / SQLite
   // codes into a canonical JSON envelope and strips internal details
   // (stack, cause) before responding in production.
-  app.use(errorHandler);
+  finalizeApp(app);
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, HOST, () => {
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     log.info("Server", `Contrack CRM running on http://localhost:${PORT}`);
-    log.info("Server", `Database: curator.db | Uploads: ${uploadDir}`);
+    log.info("Server", `Bound to ${HOST}`);
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   });
 
@@ -162,9 +102,17 @@ async function startServer() {
     },
   );
 
-  // Relationship scoring: full recompute on startup, then hourly sweep
-  relationshipService.recomputeAll();
-  setInterval(() => relationshipService.recomputeAll(), 60 * 60 * 1000);
+  // Relationship scoring: chunked recompute on startup, then hourly sweep.
+  // recomputeAll yields to the event loop between batches so requests are
+  // never starved by a long synchronous scoring pass.
+  const runScoreSweep = () =>
+    relationshipService
+      .recomputeAll()
+      .catch((err) =>
+        log.warn("Server", `Relationship score sweep failed: ${err.message}`),
+      );
+  runScoreSweep();
+  setInterval(runScoreSweep, 60 * 60 * 1000);
 
   // ── Local embedding model for Ask Contrack v3 ───────────────────────────
   // Load the Transformers.js model, then backfill search embeddings.

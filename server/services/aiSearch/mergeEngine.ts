@@ -18,6 +18,7 @@
 // =============================================================================
 
 import { sqlite } from "../../db.ts";
+import { sanitizeAiOutputValue } from "../../ai/promptSafety.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { invalidateSearchCache } from "../../utils/aiCache.ts";
 import type {
@@ -78,7 +79,14 @@ export function mergeSearchResult(
     const newVal = searchResult[field];
     const existingVal = existing[field as keyof HydratedContact];
     if (newVal && !existingVal) {
-      scalarUpdate[field] = newVal;
+      // Write-side injection backstop: cap length, strip control chars, and
+      // discard values that echo instruction-injection phrases from the web.
+      const safeVal = sanitizeAiOutputValue(
+        String(newVal),
+        field === "about" ? 4_000 : 500,
+      );
+      if (safeVal === null) continue;
+      scalarUpdate[field] = safeVal;
       fieldsUpdated++;
     }
   }
@@ -87,8 +95,11 @@ export function mergeSearchResult(
   if (!existing.aiBackground) {
     const dossier = synthesizeDossier(existing, searchResult);
     if (dossier) {
-      scalarUpdate["aiBackground"] = dossier;
-      fieldsUpdated++;
+      const safeDossier = sanitizeAiOutputValue(dossier, 12_000);
+      if (safeDossier !== null) {
+        scalarUpdate["aiBackground"] = safeDossier;
+        fieldsUpdated++;
+      }
     }
   }
 
@@ -313,8 +324,8 @@ function synthesizeDossier(
   const sections: string[] = [];
 
   // ── Professional Summary ───────────────────────────────────────────
-  const about = searchResult.about || (existing as any).about;
-  const headline = searchResult.headline || (existing as any).headline;
+  const about = searchResult.about || existing.about;
+  const headline = searchResult.headline || existing.headline;
   if (about) {
     sections.push(about);
   } else if (headline) {
@@ -322,8 +333,8 @@ function synthesizeDossier(
   }
 
   // ── Industry & Location ────────────────────────────────────────────
-  const industry = searchResult.industry || (existing as any).industry;
-  const location = searchResult.location || (existing as any).location;
+  const industry = searchResult.industry || existing.industry;
+  const location = searchResult.location || existing.location;
   if (industry || location) {
     const parts: string[] = [];
     if (industry) parts.push(`**Industry:** ${industry}`);
@@ -336,7 +347,7 @@ function synthesizeDossier(
     ? searchResult.experience
     : existing.experience;
   if (experience && experience.length > 0) {
-    const lines = experience.map((exp: any) => {
+    const lines = experience.map((exp) => {
       const current = exp.isCurrent ? " *(Current)*" : "";
       const dates = formatDateRange(exp.startDate, exp.endDate, exp.isCurrent);
       const loc = exp.location ? ` · ${exp.location}` : "";
@@ -353,7 +364,7 @@ function synthesizeDossier(
     ? searchResult.education
     : existing.education;
   if (education && education.length > 0) {
-    const lines = education.map((edu: any) => {
+    const lines = education.map((edu) => {
       const field = edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : "";
       const dates = formatDateRange(edu.startDate, edu.endDate);
       let line = `- **${edu.degree || "Degree"}**${field} — ${edu.school}`;
@@ -366,15 +377,15 @@ function synthesizeDossier(
   // ── Notable Details (attributes) ──────────────────────────────────
   if (searchResult.attributes && searchResult.attributes.length > 0) {
     const lines = searchResult.attributes.map(
-      (a: any) => `- **${a.name}:** ${a.value}`,
+      (a) => `- **${a.name}:** ${a.value}`,
     );
     sections.push(`### Notable\n${lines.join("\n")}`);
   }
 
   // ── Interests ──────────────────────────────────────────────────────
   const interests = searchResult.interests?.length
-    ? searchResult.interests.map((i: any) => i.interest || i)
-    : existing.interests?.map((i: any) => i.interest);
+    ? searchResult.interests.map((i) => i.interest || i)
+    : existing.interests?.map((i) => i.interest);
   if (interests && interests.length > 0) {
     sections.push(`### Interests\n${interests.join(" · ")}`);
   }

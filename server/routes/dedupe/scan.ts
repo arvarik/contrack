@@ -13,7 +13,7 @@ export function registerScanRoutes(router: Router) {
   router.post(
     "/dedupe/scan",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const { mode = "deep", autoMergeThreshold } = req.body;
 
       const validModes = [
@@ -139,7 +139,7 @@ export function registerScanRoutes(router: Router) {
     router.post(
       "/dev/seed-duplicates",
       asyncHandler(async (req, res) => {
-        const rid = (req as any).requestId;
+        const rid = req.requestId;
         dedupeService.seedDuplicates();
         log.info(
           "API",

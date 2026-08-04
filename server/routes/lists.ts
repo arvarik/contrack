@@ -15,7 +15,7 @@ const router = Router();
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const lists = listService.getAllLists();
     log.debug("API", `[${rid}] GET /api/lists → ${lists.length}`);
     res.json(lists);
@@ -26,14 +26,11 @@ router.post(
   "/",
   validateBody(listCreateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const { name, icon } = req.body;
 
     const list = listService.createList(name, icon);
-    log.info(
-      "API",
-      `[${rid}] POST /api/lists → "${name.trim()}" (${(list as any).id})`,
-    );
+    log.info("API", `[${rid}] POST /api/lists → "${name.trim()}" (${list.id})`);
     res.status(201).json(list);
   }),
 );
@@ -42,7 +39,7 @@ router.put(
   "/reorder",
   validateBody(z.object({ orderedIds: z.array(z.string()) })),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const count = listService.reorderLists(req.body.orderedIds);
     log.info(
       "API",
@@ -56,7 +53,7 @@ router.patch(
   "/:id",
   validateBody(listUpdateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const updated = listService.updateList(String(req.params.id), req.body);
     if (!updated) throw new AppError("List not found", 404);
     log.info("API", `[${rid}] PATCH /api/lists/${String(req.params.id)}`);
@@ -67,7 +64,7 @@ router.patch(
 router.get(
   "/:id/contacts",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const contacts = listService.getListContacts(String(req.params.id));
     log.debug(
       "API",
@@ -80,7 +77,7 @@ router.get(
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const deleted = listService.deleteList(String(req.params.id));
 
     if (!deleted) {
@@ -106,7 +103,7 @@ router.post(
   "/:id/members",
   validateBody(z.object({ contactId: z.string() })),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     listService.addMember(String(req.params.id), req.body.contactId);
     log.info(
       "API",
@@ -119,7 +116,7 @@ router.post(
 router.delete(
   "/:id/members/:contactId",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     listService.removeMember(
       String(req.params.id),
       String(req.params.contactId),
@@ -136,7 +133,7 @@ router.post(
   "/:id/members/bulk",
   validateBody(z.object({ contactIds: z.array(z.string()).min(1) })),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const count = listService.bulkAddMembers(
       String(req.params.id),
       req.body.contactIds,

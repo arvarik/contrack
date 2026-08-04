@@ -41,7 +41,7 @@ import {
   useBulkUpdateContacts,
 } from "../../api";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { ContactUpdateData } from "../../types";
+import type { Contact, ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -108,7 +108,7 @@ const FilterButton = ({
 // ---------------------------------------------------------------------------
 
 interface ContactRowWrapperProps {
-  contact: any;
+  contact: Contact;
   active: boolean;
   isFlashing: boolean;
   isSelectMode: boolean;
@@ -116,7 +116,7 @@ interface ContactRowWrapperProps {
   onToggleSelect: (id: string) => void;
   handleContextMenu: ReturnType<typeof useContextMenu>["handleContextMenu"];
   recordVisit: (id: string) => void;
-  archiveContact: () => Promise<void>;
+  archiveContact: (contact: { id: string; name: string }) => Promise<void>;
   navigate: (path: string) => void;
 }
 
@@ -156,7 +156,7 @@ const ContactRowWrapper = React.memo(
           id: "archive",
           label: "Archive",
           icon: <Archive className="w-3.5 h-3.5" />,
-          onClick: archiveContact,
+          onClick: () => archiveContact({ id: contact.id, name: contact.name }),
         },
       ],
       [contact.id, contact.name, contact.emails, navigate, archiveContact],
@@ -231,6 +231,17 @@ export const ContactList = () => {
   const archiveContact = useArchiveContact();
   const { recentIds, recordVisit } = useRecentContacts();
   const { limit: recentLimit } = useRecentContactsLimit();
+
+  // Stable archive handler — an inline closure here would defeat
+  // ContactRowWrapper's React.memo (new function identity every render).
+  const archiveContactMutateAsync = archiveContact.mutateAsync;
+  const handleArchiveContact = useCallback(
+    async (contact: { id: string; name: string }) => {
+      await archiveContactMutateAsync(contact.id);
+      toast.success(`Archived "${contact.name}"`);
+    },
+    [archiveContactMutateAsync],
+  );
 
   // ── Visual flash: highlight newly created contact for 2s ────────────
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -319,9 +330,25 @@ export const ContactList = () => {
     toggleSelect,
     enterSelectMode,
     exitSelectMode,
+    clearSelection,
     selectAll,
     isPending,
   } = multiSelect;
+
+  // ── Derived data (hoisted out of JSX to avoid recomputing per render) ──
+  const activeContactCount = useMemo(
+    () => contacts.filter((c) => !c.isArchived).length,
+    [contacts],
+  );
+
+  const recentContacts = useMemo(
+    () =>
+      recentIds
+        .map((rid) => contacts.find((c) => c.id === rid && !c.isArchived))
+        .filter(Boolean)
+        .slice(0, recentLimit) as typeof contacts,
+    [recentIds, contacts, recentLimit],
+  );
 
   // ── Virtualization ──────────────────────────────────────────────────
   const rowVirtualizer = useVirtualizer({
@@ -427,7 +454,7 @@ export const ContactList = () => {
               <button
                 onClick={
                   selectedCount === filteredContacts.length
-                    ? () => multiSelect.selectAll()
+                    ? clearSelection
                     : selectAll
                 }
                 className="text-xs font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
@@ -506,7 +533,7 @@ export const ContactList = () => {
               <FilterButton
                 label="All"
                 icon={<Users className="w-3.5 h-3.5" />}
-                count={contacts.filter((c) => !c.isArchived).length}
+                count={activeContactCount}
                 active={filterMode === "all"}
                 onClick={() => setFilterMode("all")}
               />
@@ -574,7 +601,7 @@ export const ContactList = () => {
         )}
 
         {/* Empty state: 0 contacts total (onboarding) */}
-        {!isLoading && contacts.filter((c) => !c.isArchived).length === 0 && (
+        {!isLoading && activeContactCount === 0 && (
           <div className="flex flex-col items-center justify-center h-64 text-center gap-4 p-6">
             <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
               <Users className="w-8 h-8 text-primary/60" />
@@ -612,7 +639,7 @@ export const ContactList = () => {
 
         {/* Empty state: search/filter has no results */}
         {!isLoading &&
-          contacts.filter((c) => !c.isArchived).length > 0 &&
+          activeContactCount > 0 &&
           filteredContacts.length === 0 && (
             <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
               <Search className="w-8 h-8 text-on-surface-variant/30" />
@@ -646,37 +673,29 @@ export const ContactList = () => {
         {!isLoading &&
           !searchQuery &&
           filterMode === "all" &&
-          recentIds.length > 0 &&
-          (() => {
-            const recentContacts = recentIds
-              .map((rid) => contacts.find((c) => c.id === rid && !c.isArchived))
-              .filter(Boolean)
-              .slice(0, recentLimit) as typeof contacts;
-            if (recentContacts.length === 0) return null;
-            return (
-              <div className="mb-3">
-                <div className="flex items-center gap-1.5 px-1 mb-1.5">
-                  <Clock className="w-3 h-3 text-on-surface-variant/50" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
-                    Recent
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {recentContacts.map((contact) => (
-                    <ContactListItem
-                      key={`recent-${contact.id}`}
-                      contact={contact}
-                      active={id === contact.id}
-                      isSelectMode={isSelectMode}
-                      isSelected={selectedIds.has(contact.id)}
-                      onToggleSelect={toggleSelect}
-                    />
-                  ))}
-                </div>
-                <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
+          recentContacts.length > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                <Clock className="w-3 h-3 text-on-surface-variant/50" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
+                  Recent
+                </span>
               </div>
-            );
-          })()}
+              <div className="space-y-1">
+                {recentContacts.map((contact) => (
+                  <ContactListItem
+                    key={`recent-${contact.id}`}
+                    contact={contact}
+                    active={id === contact.id}
+                    isSelectMode={isSelectMode}
+                    isSelected={selectedIds.has(contact.id)}
+                    onToggleSelect={toggleSelect}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
+            </div>
+          )}
 
         <div
           style={{
@@ -710,10 +729,7 @@ export const ContactList = () => {
                   onToggleSelect={toggleSelect}
                   handleContextMenu={handleContextMenu}
                   recordVisit={recordVisit}
-                  archiveContact={async () => {
-                    await archiveContact.mutateAsync(contact.id);
-                    toast.success(`Archived "${contact.name}"`);
-                  }}
+                  archiveContact={handleArchiveContact}
                   navigate={navigate}
                 />
               </div>
@@ -747,7 +763,7 @@ export const ContactList = () => {
           multiSelect.handleBulkDelete();
           setIsBulkDeleteConfirm(false);
         }}
-        isBulkDeletePending={false}
+        isBulkDeletePending={multiSelect.isBulkDeletePending}
         isAddToListOpen={isAddToListOpen}
         onCloseAddToList={() => setIsAddToListOpen(false)}
         lists={lists}
@@ -755,7 +771,7 @@ export const ContactList = () => {
           multiSelect.handleBulkAddToList(listId);
           setIsAddToListOpen(false);
         }}
-        isBulkAddToListPending={false}
+        isBulkAddToListPending={multiSelect.isBulkAddToListPending}
         isBulkEditOpen={isBulkEditOpen}
         onCloseBulkEdit={() => setIsBulkEditOpen(false)}
         onBulkEditApply={(field, value) => {

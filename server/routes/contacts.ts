@@ -1,7 +1,6 @@
 import { Router } from "express";
-import path from "path";
-import fs from "fs";
 import multer from "multer";
+import { AVATARS_DIR, ensureDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
@@ -21,7 +20,10 @@ import {
   getStrategy,
   getDefaultStrategyForProvider,
 } from "../services/aiSearch/strategies/index.ts";
-import { buildSearchPrompt } from "../services/aiSearch/promptTemplate.ts";
+import {
+  buildSearchPrompt,
+  type AISearchOutput,
+} from "../services/aiSearch/promptTemplate.ts";
 import { mergeSearchResult } from "../services/aiSearch/mergeEngine.ts";
 import {
   generateAndStoreBulkEmbeddings,
@@ -42,13 +44,24 @@ import { storeSuggestion } from "../services/dedupe/suggestions.ts";
 import { computePrimaryScore } from "../services/dedupe/clustering.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 
-const avatarDir = path.join(process.cwd(), "uploads", "avatars");
-if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
+const avatarDir = AVATARS_DIR;
+ensureDir(avatarDir);
+
+// Raster image types only. SVG is deliberately excluded — it can carry
+// scripts and is served from the app origin. The extension is derived from
+// the MIME type, never from the client-supplied filename.
+const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/avif": ".avif",
+};
 
 const avatarStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, avatarDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const ext = AVATAR_MIME_EXTENSIONS[file.mimetype] ?? ".jpg";
     cb(null, `avatar-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
   },
 });
@@ -56,8 +69,8 @@ const uploadAvatar = multer({
   storage: avatarStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for avatars
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) return cb(null, true);
-    cb(new Error("Only image files are allowed"));
+    if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
+    cb(new Error("Only JPEG, PNG, GIF, WebP, or AVIF images are allowed"));
   },
 });
 
@@ -66,7 +79,7 @@ const router = Router();
 router.get(
   "/contacts/map",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const results = contactService.getMapContacts();
     log.debug("API", `[${rid}] GET /api/contacts/map → ${results.length}`);
     res.json(results);
@@ -76,7 +89,7 @@ router.get(
 router.get(
   "/contacts/archived",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const results = contactService.getArchivedContacts();
     log.debug("API", `[${rid}] GET /api/contacts/archived → ${results.length}`);
     res.json(results);
@@ -86,7 +99,7 @@ router.get(
 router.get(
   "/contacts",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const view = req.query.view as string;
 
     if (view === "slim") {
@@ -107,7 +120,7 @@ router.get(
 router.get(
   "/contacts/:id",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const contact = contactService.getContactById(String(req.params.id));
     if (!contact) {
       log.warn("API", `[${rid}] 404 ${String(req.params.id)}`);
@@ -121,7 +134,7 @@ router.post(
   "/contacts",
   validateBody(contactCreateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     if (!req.body.name) throw new AppError("Name is required", 400);
 
     const contact = contactService.createContact(req.body);
@@ -137,7 +150,7 @@ router.post(
   "/contacts/bulk",
   validateBody(contactBulkCreateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const wantsStream = req.headers.accept?.includes("text/event-stream");
 
     if (wantsStream) {
@@ -154,7 +167,7 @@ router.post(
         Connection: "keep-alive",
       });
 
-      const send = (data: Record<string, any>) => {
+      const send = (data: Record<string, unknown>) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
@@ -205,6 +218,12 @@ router.post(
 
           // For each imported contact, check for duplicates against ALL contacts
           for (let i = 0; i < createdIds.length; i++) {
+            // Yield between contacts: the per-contact scan is O(all contacts)
+            // of synchronous work, so a large import would otherwise starve
+            // every concurrent request (and the SSE flush) for the whole scan.
+            if (i > 0) {
+              await new Promise<void>((resolve) => setImmediate(resolve));
+            }
             const contactId = createdIds[i];
             const target = normalizeContactById(contactId);
             if (!target) continue;
@@ -228,7 +247,7 @@ router.post(
                   const pair = {
                     idA: contactId,
                     idB: other.id,
-                    matchType: "name" as any,
+                    matchType: "name",
                     confidence: 0.95,
                     reasoning: "Exact name match (import-time detection)",
                   };
@@ -261,6 +280,10 @@ router.post(
                     storeSuggestion(pair, "auto_merged");
                     autoMerged++;
                   } catch (err: unknown) {
+                    log.warn(
+                      "API",
+                      `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
+                    );
                     storeSuggestion(pair, "pending");
                     needsReview++;
                   }
@@ -282,7 +305,7 @@ router.post(
                     const pair = {
                       idA: contactId,
                       idB: other.id,
-                      matchType: "nickname" as any,
+                      matchType: "nickname",
                       confidence: 0.88,
                       reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
                     };
@@ -321,7 +344,7 @@ router.post(
                 const pair = {
                   idA: contactId,
                   idB: match.contactId,
-                  matchType: "email" as any,
+                  matchType: "email",
                   confidence: 0.99,
                   reasoning: "Shared email address",
                 };
@@ -353,7 +376,11 @@ router.post(
                   );
                   storeSuggestion(pair, "auto_merged");
                   autoMerged++;
-                } catch {
+                } catch (err: unknown) {
+                  log.warn(
+                    "API",
+                    `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
+                  );
                   storeSuggestion(pair, "pending");
                   needsReview++;
                 }
@@ -385,7 +412,7 @@ router.post(
                   const pair = {
                     idA: contactId,
                     idB: row.contactId,
-                    matchType: "phone" as any,
+                    matchType: "phone",
                     confidence: 0.95,
                     reasoning: "Shared phone number",
                   };
@@ -417,7 +444,11 @@ router.post(
                     );
                     storeSuggestion(pair, "auto_merged");
                     autoMerged++;
-                  } catch {
+                  } catch (err: unknown) {
+                    log.warn(
+                      "API",
+                      `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
+                    );
                     storeSuggestion(pair, "pending");
                     needsReview++;
                   }
@@ -508,7 +539,7 @@ router.post(
   "/parse-contact",
   validateBody(z.object({ text: z.string().min(1, "text is required") })),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const { text } = req.body;
     const parsed = await parseContactRecord(text);
     log.info(
@@ -523,7 +554,7 @@ router.post(
   "/contacts/bulk-delete",
   validateBody(z.object({ ids: z.array(z.string().min(1)).min(1) })),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const count = contactService.bulkDeleteContacts(req.body.ids);
     log.info(
       "API",
@@ -542,7 +573,7 @@ router.put(
     }),
   ),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const count = contactService.bulkUpdateContacts(
       req.body.ids,
       req.body.data,
@@ -559,7 +590,7 @@ router.put(
   "/contacts/:id",
   validateBody(contactUpdateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const updated = contactService.updateContact(
       String(req.params.id),
       req.body,
@@ -575,8 +606,9 @@ router.put(
 
 router.patch(
   "/contacts/:id",
+  validateBody(contactUpdateSchema),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const childKeys = [
       "emails",
       "phones",
@@ -613,7 +645,7 @@ router.patch(
 router.delete(
   "/contacts/:id",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const success = contactService.deleteContact(String(req.params.id));
     if (!success) throw new AppError("Not found", 404);
     log.info("API", `[${rid}] DELETE /api/contacts/${String(req.params.id)}`);
@@ -625,7 +657,7 @@ router.post(
   "/contacts/:id/avatar",
   uploadAvatar.single("avatar"),
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     if (!req.file) throw new AppError("No image file provided", 400);
 
     const updated = contactService.updateAvatar(
@@ -655,7 +687,7 @@ router.post(
 router.post(
   "/contacts/:id/enrich",
   asyncHandler(async (req, res) => {
-    const rid = (req as any).requestId;
+    const rid = req.requestId;
     const id = String(req.params.id);
 
     // Check AI provider is configured (F-03: provider-aware error message)
@@ -700,7 +732,11 @@ router.post(
     );
 
     const result = await strategy.execute(contact, prompt, ai);
-    const fieldsUpdated = mergeSearchResult(id, contact, result.data as any);
+    const fieldsUpdated = mergeSearchResult(
+      id,
+      contact,
+      result.data as AISearchOutput,
+    );
     const latencyMs = Date.now() - startMs;
 
     log.info(

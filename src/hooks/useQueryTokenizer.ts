@@ -10,18 +10,12 @@
  *
  * @module hooks/useQueryTokenizer
  */
-import { useMemo, useCallback, useRef } from "react";
+import { useMemo, useCallback, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type FacetField =
-  | "role"
-  | "company"
-  | "location"
-  | "industry"
-  | "tag"
-  | "score"
-  | "updated";
+  "role" | "company" | "location" | "industry" | "tag" | "score" | "updated";
 
 export interface FacetFilter {
   field: FacetField;
@@ -82,10 +76,10 @@ export function useQueryTokenizer(
   setRawInput: (value: string) => void,
 ) {
   /** Manually locked filters (from pills the user hasn't removed) */
-  const lockedFiltersRef = useRef<FacetFilter[]>([]);
+  const [lockedFilters, setLockedFilters] = useState<FacetFilter[]>([]);
 
   const parsed = useMemo((): ParsedQuery => {
-    const filters: FacetFilter[] = [...lockedFiltersRef.current];
+    const filters: FacetFilter[] = [...lockedFilters];
     let remaining = rawInput;
 
     // Extract completed facet tokens (must have trailing space)
@@ -102,7 +96,7 @@ export function useQueryTokenizer(
       });
     }
 
-    // Move completed tokens to locked filters
+    // Merge completed tokens into the filter set (locked filters first)
     for (const cm of completedMatches) {
       if (!FACET_FIELDS.has(cm.field)) continue;
 
@@ -115,7 +109,6 @@ export function useQueryTokenizer(
           )
         ) {
           filters.push(filter);
-          lockedFiltersRef.current = [...lockedFiltersRef.current, filter];
         }
       }
 
@@ -140,50 +133,91 @@ export function useQueryTokenizer(
       freeText: remaining.trim(),
       activePrefix,
     };
-  }, [rawInput]);
+  }, [rawInput, lockedFilters]);
+
+  // Promote newly completed tokens into locked state. This is a render-phase
+  // state adjustment (the React-sanctioned "derive state during render"
+  // pattern): parsed.filters is always lockedFilters plus any new tokens, so
+  // a length difference means new tokens were typed. The setState triggers an
+  // immediate re-render where the lengths match, terminating the loop.
+  if (parsed.filters.length !== lockedFilters.length) {
+    setLockedFilters(parsed.filters);
+  }
+
+  /**
+   * Remove any completed token text from the input that parses to the given
+   * filter, so re-parsing doesn't immediately re-lock a removed pill.
+   */
+  const stripFilterToken = useCallback(
+    (input: string, filter: FacetFilter): string => {
+      const regex = new RegExp(COMPLETED_FACET_REGEX.source, "gi");
+      return input.replace(regex, (full, field: string, value: string) => {
+        const candidate = parseFilterValue(
+          field.toLowerCase() as FacetField,
+          value,
+        );
+        if (
+          candidate &&
+          candidate.field === filter.field &&
+          candidate.value === filter.value
+        ) {
+          return "";
+        }
+        return full;
+      });
+    },
+    [],
+  );
 
   /** Add a filter manually (from autocomplete selection) */
   const addFilter = useCallback(
     (filter: FacetFilter) => {
       // Don't add duplicates
       if (
-        lockedFiltersRef.current.some(
+        lockedFilters.some(
           (f) => f.field === filter.field && f.value === filter.value,
         )
       ) {
         return;
       }
-      lockedFiltersRef.current = [...lockedFiltersRef.current, filter];
+      setLockedFilters((prev) =>
+        prev.some((f) => f.field === filter.field && f.value === filter.value)
+          ? prev
+          : [...prev, filter],
+      );
 
       // Remove the active prefix from the raw input
       setRawInput(rawInput.replace(ACTIVE_PREFIX_REGEX, "").trim());
     },
-    [rawInput, setRawInput],
+    [lockedFilters, rawInput, setRawInput],
   );
 
   /** Remove a locked filter (pill dismiss) */
   const removeFilter = useCallback(
     (index: number) => {
-      lockedFiltersRef.current = lockedFiltersRef.current.filter(
-        (_, i) => i !== index,
-      );
-      // Force re-parse by setting input to itself
-      setRawInput(rawInput);
+      const removed = lockedFilters[index];
+      setLockedFilters((prev) => prev.filter((_, i) => i !== index));
+      if (removed) {
+        const stripped = stripFilterToken(rawInput, removed);
+        if (stripped !== rawInput) setRawInput(stripped);
+      }
     },
-    [rawInput, setRawInput],
+    [lockedFilters, rawInput, setRawInput, stripFilterToken],
   );
 
   /** Remove the last locked filter (Backspace on empty input) */
   const removeLastFilter = useCallback(() => {
-    if (lockedFiltersRef.current.length === 0) return false;
-    lockedFiltersRef.current = lockedFiltersRef.current.slice(0, -1);
-    setRawInput(rawInput);
+    if (lockedFilters.length === 0) return false;
+    const removed = lockedFilters[lockedFilters.length - 1];
+    setLockedFilters((prev) => prev.slice(0, -1));
+    const stripped = stripFilterToken(rawInput, removed);
+    if (stripped !== rawInput) setRawInput(stripped);
     return true;
-  }, [rawInput, setRawInput]);
+  }, [lockedFilters, rawInput, setRawInput, stripFilterToken]);
 
   /** Reset all locked filters */
   const clearFilters = useCallback(() => {
-    lockedFiltersRef.current = [];
+    setLockedFilters([]);
   }, []);
 
   return {
@@ -192,7 +226,7 @@ export function useQueryTokenizer(
     removeFilter,
     removeLastFilter,
     clearFilters,
-    hasFilters: lockedFiltersRef.current.length > 0,
+    hasFilters: parsed.filters.length > 0,
   };
 }
 

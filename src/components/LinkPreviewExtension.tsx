@@ -1,10 +1,15 @@
 import { Node, mergeAttributes } from "@tiptap/core";
-import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
+import {
+  ReactNodeViewRenderer,
+  NodeViewWrapper,
+  type NodeViewProps,
+} from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import React, { useEffect, useState } from "react";
 import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
+import { safeHref } from "../lib/utils";
 
-const LinkPreviewComponent = ({ node, updateAttributes }: any) => {
+const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
   const { url, title, description, image, loading, error } = node.attrs;
 
   useEffect(() => {
@@ -35,7 +40,7 @@ const LinkPreviewComponent = ({ node, updateAttributes }: any) => {
       contentEditable={false}
     >
       <a
-        href={url}
+        href={safeHref(url)}
         target="_blank"
         rel="noopener noreferrer"
         className="block rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col sm:flex-row group"

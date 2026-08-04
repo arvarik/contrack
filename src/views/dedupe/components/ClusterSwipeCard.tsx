@@ -72,7 +72,7 @@ export const ClusterSwipeCard = ({
   const duplicateIds = useMemo(() => duplicates.map((c) => c.id), [duplicates]);
 
   const handleDragEnd = useCallback(
-    (_: any, info: { offset: { x: number }; velocity: { x: number } }) => {
+    (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
       const threshold = 100;
       const velocityThreshold = 500;
 

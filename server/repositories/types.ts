@@ -138,12 +138,47 @@ export interface HydratedContact extends ContactRow {
  * Each array accepts either a plain string (shorthand) or a structured object.
  * The repository normalizes these unions internally.
  */
+/**
+ * Scalar contact fields accepted from create/update payloads (post-Zod).
+ * Everything is optional — Zod has validated shapes, this types the allow-list.
+ */
+export interface ContactScalarPayload {
+  name?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  headline?: string | null;
+  role?: string | null;
+  company?: string | null;
+  location?: string | null;
+  birthday?: string | null;
+  preferences?: string | null;
+  avatarUrl?: string | null;
+  cadenceDays?: number | null;
+  about?: string | null;
+  pronouns?: string | null;
+  industry?: string | null;
+  website?: string | null;
+}
+
+/**
+ * Full inbound contact payload: scalars + child arrays. The Record part
+ * keeps passthrough keys readable as `unknown` (the Zod schemas allow
+ * extra keys; buildContactUpdate re-filters through its allow-list).
+ */
+export type ContactPayload = ContactScalarPayload &
+  ChildRecordsPayload & {
+    /** Stamped by the bulk-import flow to record provenance. */
+    _sourcePlatform?: string;
+  } & Record<string, unknown>;
+
+/** A create payload — identical to ContactPayload but `name` is required. */
+export type NewContactPayload = ContactPayload & { name: string };
+
 export interface ChildRecordsPayload {
   emails?: (string | { email: string; label?: string; isPrimary?: boolean })[];
   phones?: (string | { phone: string; label?: string; isPrimary?: boolean })[];
   socialLinks?: (
-    | string
-    | { url: string; platform?: string; handle?: string }
+    string | { url: string; platform?: string; handle?: string }
   )[];
   education?: {
     school: string;
@@ -175,7 +210,6 @@ export interface ChildRecordsPayload {
   interests?: (string | { interest: string; isAiGenerated?: boolean })[];
   attributes?: { name: string; value: string }[];
   addresses?: (
-    | string
-    | { address: string; label?: string; isPrimary?: boolean }
+    string | { address: string; label?: string; isPrimary?: boolean }
   )[];
 }

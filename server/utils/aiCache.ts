@@ -462,14 +462,24 @@ export const aiCache = {
   // Diagnostics
   // ===========================================================================
 
-  /** Get hit/miss/entry statistics for all tiers. */
+  /**
+   * Get hit/miss/entry statistics for all tiers.
+   *
+   * The returned record maps tier names to their stats, plus one special
+   * "batchMode" key with batch-mode metadata — consumers iterate entries and
+   * skip "batchMode" (see aiStatsService). The union return type reflects
+   * that runtime shape honestly; the old intersection type was
+   * unconstructable and needed an `as any`.
+   */
   getStats(): Record<
     string,
-    TierStats & { ttlMs: number; maxEntries: number }
-  > & {
-    batchMode: { active: boolean; depth: number; pendingInvalidations: number };
-  } {
-    const result: Record<string, any> = {};
+    | (TierStats & { ttlMs: number; maxEntries: number })
+    | { active: boolean; depth: number; pendingInvalidations: number }
+  > {
+    const result: Record<
+      string,
+      TierStats & { ttlMs: number; maxEntries: number }
+    > = {};
     for (const [op, tierStats] of stats) {
       // Clean expired before reporting
       removeExpired(op, stores.get(op)!);
@@ -480,12 +490,14 @@ export const aiCache = {
         maxEntries: TIER_CONFIGS[op]?.maxEntries,
       };
     }
-    result.batchMode = {
-      active: batchRefCount > 0,
-      depth: batchRefCount,
-      pendingInvalidations: pendingInvalidations.size,
+    return {
+      ...result,
+      batchMode: {
+        active: batchRefCount > 0,
+        depth: batchRefCount,
+        pendingInvalidations: pendingInvalidations.size,
+      },
     };
-    return result as any;
   },
 };
 
@@ -497,7 +509,7 @@ export const aiCache = {
 // without any code changes.
 
 export interface CachedSearchResult {
-  matches: any[];
+  matches: unknown[];
   fallback: boolean;
 }
 

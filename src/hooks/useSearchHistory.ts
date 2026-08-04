@@ -49,9 +49,9 @@ const readHistory = (): SearchHistoryEntry[] => {
       (e: unknown): e is SearchHistoryEntry =>
         typeof e === "object" &&
         e !== null &&
-        typeof (e as any).query === "string" &&
-        typeof (e as any).mode === "string" &&
-        typeof (e as any).timestamp === "number",
+        typeof (e as Record<string, unknown>).query === "string" &&
+        typeof (e as Record<string, unknown>).mode === "string" &&
+        typeof (e as Record<string, unknown>).timestamp === "number",
     );
   } catch {
     return [];

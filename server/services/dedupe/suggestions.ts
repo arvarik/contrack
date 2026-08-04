@@ -22,6 +22,7 @@ import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { AppError } from "../../utils/AppError.ts";
+import type { HydratedContact } from "./types.ts";
 
 // =============================================================================
 // Types
@@ -40,8 +41,8 @@ export interface DedupeSuggestion {
   reviewedAt: string | null;
   reviewedBy: string | null;
   // Hydrated contact data (populated by getPendingSuggestions)
-  contactA?: any;
-  contactB?: any;
+  contactA?: HydratedContact | null;
+  contactB?: HydratedContact | null;
 }
 
 export interface MergeLogEntry {
@@ -216,21 +217,26 @@ export function storeSuggestions(
  */
 export function getPendingSuggestions(limit: number = 100): DedupeSuggestion[] {
   const rows = _stmts.getPending.all(limit) as DedupeSuggestion[];
+  if (!rows.length) return rows;
 
-  // Hydrate contacts for display
-  for (const row of rows) {
-    try {
-      const rawA = sqlite
-        .prepare("SELECT * FROM contacts WHERE id = ?")
-        .get(row.contactIdA);
-      const rawB = sqlite
-        .prepare("SELECT * FROM contacts WHERE id = ?")
-        .get(row.contactIdB);
-      if (rawA) row.contactA = contactRepo.hydrate(rawA);
-      if (rawB) row.contactB = contactRepo.hydrate(rawB);
-    } catch {
-      // Contact may have been deleted — leave hydrated fields as undefined
+  // Bulk-hydrate every referenced contact in one IN(...) query — per-row
+  // hydrate() here previously cost ~26 queries per suggestion.
+  try {
+    const ids = [...new Set(rows.flatMap((r) => [r.contactIdA, r.contactIdB]))];
+    const placeholders = ids.map(() => "?").join(",");
+    const rawRows = sqlite
+      .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
+      .all(ids);
+    const hydrated = new Map(
+      contactRepo.hydrateMany(rawRows).map((c) => [c.id, c]),
+    );
+    for (const row of rows) {
+      row.contactA = hydrated.get(row.contactIdA) ?? row.contactA;
+      row.contactB = hydrated.get(row.contactIdB) ?? row.contactB;
     }
+  } catch (err) {
+    // Contact may have been deleted mid-read — leave fields undefined
+    log.warn("Dedupe", `Suggestion hydration failed: ${String(err)}`);
   }
 
   return rows;
@@ -238,7 +244,7 @@ export function getPendingSuggestions(limit: number = 100): DedupeSuggestion[] {
 
 /** Get the count of pending suggestions (for sidebar badge). */
 export function getPendingCount(): number {
-  return (_stmts.getPendingCount.get() as any).cnt;
+  return (_stmts.getPendingCount.get() as { cnt: number }).cnt;
 }
 
 /** Get a suggestion by ID. */
@@ -271,8 +277,7 @@ export function getSuggestionForContact(
   contactId: string,
 ): DedupeSuggestion | null {
   const row = _stmts.getForContact.get(contactId, contactId) as
-    | DedupeSuggestion
-    | undefined;
+    DedupeSuggestion | undefined;
   if (!row) return null;
 
   try {
@@ -440,10 +445,10 @@ export function getMergeLog(limit: number = 50): MergeLogEntry[] {
       // Primary may still exist; duplicate may be soft-merged (canonicalId set) or hard-deleted
       const primary = sqlite
         .prepare("SELECT name FROM contacts WHERE id = ?")
-        .get(row.primaryId) as any;
+        .get(row.primaryId) as { name: string } | undefined;
       const duplicate = sqlite
         .prepare("SELECT name FROM contacts WHERE id = ?")
-        .get(row.duplicateId) as any;
+        .get(row.duplicateId) as { name: string } | undefined;
       row.primaryName = primary?.name ?? "(deleted)";
       row.duplicateName = duplicate?.name ?? "(deleted)";
     } catch {
@@ -471,8 +476,7 @@ export function getMergeLog(limit: number = 50): MergeLogEntry[] {
  */
 export function undoSoftMerge(mergeLogId: string, rid: string): void {
   const entry = _stmts.getMergeLogById.get(mergeLogId) as
-    | MergeLogEntry
-    | undefined;
+    MergeLogEntry | undefined;
 
   if (!entry) {
     throw new AppError(`Merge log entry ${mergeLogId} not found`, 404, {
@@ -503,7 +507,8 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
   // Verify the duplicate contact still exists (it should — soft merge doesn't delete)
   const duplicate = sqlite
     .prepare("SELECT id, canonicalId FROM contacts WHERE id = ?")
-    .get(entry.duplicateId) as any;
+    .get(entry.duplicateId) as
+    { id: string; canonicalId: string | null } | undefined;
 
   if (!duplicate) {
     throw new AppError(

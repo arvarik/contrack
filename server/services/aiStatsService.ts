@@ -30,22 +30,25 @@ import crypto from "crypto";
 // Types
 // =============================================================================
 
-/** Valid operation values for the ai_invocations table. */
-export type AIOperation =
-  | "briefing"
-  | "rerank"
-  | "mentions"
-  | "synthesis"
-  | "parse"
-  | "searchExpansion"
-  | "dailyInsight"
-  | "emlSummary"
-  | "bulkParse"
-  | "aiSearchGrounding"
-  | "aiSearchExtraction"
-  | "aiSearchSinglePass"
-  | "queryParse"
-  | "hyde";
+/** Valid operation values for the ai_invocations table (single source of truth). */
+export const AI_OPERATIONS = [
+  "briefing",
+  "rerank",
+  "mentions",
+  "synthesis",
+  "parse",
+  "searchExpansion",
+  "dailyInsight",
+  "emlSummary",
+  "bulkParse",
+  "aiSearchGrounding",
+  "aiSearchExtraction",
+  "aiSearchSinglePass",
+  "queryParse",
+  "hyde",
+] as const;
+
+export type AIOperation = (typeof AI_OPERATIONS)[number];
 
 /** Input shape for recording a single AI invocation. */
 export interface InvocationEntry {

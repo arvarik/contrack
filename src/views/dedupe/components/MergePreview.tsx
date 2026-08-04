@@ -13,7 +13,11 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { motion } from "motion/react";
-import type { Contact } from "../../../types";
+import type { Contact, ContactEmail, ContactPhone } from "../../../types";
+
+/** Child records annotated with which duplicate contributed them. */
+type AnnotatedEmail = ContactEmail & { _from?: string };
+type AnnotatedPhone = ContactPhone & { _from?: string };
 import { cn } from "../../../lib/utils";
 import { CARD, TAG_PILL } from "../../../lib/styles";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
@@ -50,7 +54,8 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
       "website",
     ] as const;
 
-    const merged: Record<string, any> = { ...primary };
+    // Contact plus an open index so union-keyed scalar writes type-check.
+    const merged = { ...primary } as Contact & Record<string, unknown>;
     for (const dup of duplicates) {
       for (const field of scalarFields) {
         if (!merged[field] && dup[field]) {
@@ -63,13 +68,13 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
     const seenEmails = new Set(
       primary.emails?.map((e) => e.email.toLowerCase().trim()) ?? [],
     );
-    const allEmails = [...(primary.emails ?? [])];
+    const allEmails: AnnotatedEmail[] = [...(primary.emails ?? [])];
     for (const dup of duplicates) {
       for (const e of dup.emails ?? []) {
         const norm = e.email.toLowerCase().trim();
         if (!seenEmails.has(norm)) {
           seenEmails.add(norm);
-          allEmails.push({ ...e, _from: dup.name } as any);
+          allEmails.push({ ...e, _from: dup.name });
         }
       }
     }
@@ -77,13 +82,13 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
     const seenPhones = new Set(
       primary.phones?.map((p) => p.phone.replace(/\D/g, "").slice(-10)) ?? [],
     );
-    const allPhones = [...(primary.phones ?? [])];
+    const allPhones: AnnotatedPhone[] = [...(primary.phones ?? [])];
     for (const dup of duplicates) {
       for (const p of dup.phones ?? []) {
         const norm = p.phone.replace(/\D/g, "").slice(-10);
         if (!seenPhones.has(norm)) {
           seenPhones.add(norm);
-          allPhones.push({ ...p, _from: dup.name } as any);
+          allPhones.push({ ...p, _from: dup.name });
         }
       }
     }
@@ -113,7 +118,11 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
       phones: allPhones,
       tags: allTags,
       interactionCount: totalInteractions,
-    } as Contact & { interactionCount: number };
+    } as Omit<Contact, "emails" | "phones"> & {
+      interactionCount: number;
+      emails: AnnotatedEmail[];
+      phones: AnnotatedPhone[];
+    };
   }, [primary, duplicates]);
 
   return (
@@ -216,7 +225,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
               Emails ({preview.emails.length})
             </div>
             <div className="space-y-1">
-              {preview.emails.map((e: any, i: number) => (
+              {preview.emails.map((e, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <span className="font-mono text-xs text-on-surface">
                     {e.email}
@@ -240,7 +249,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
               Phones ({preview.phones.length})
             </div>
             <div className="space-y-1">
-              {preview.phones.map((p: any, i: number) => (
+              {preview.phones.map((p, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <span className="font-mono text-xs text-on-surface">
                     {p.phone}

@@ -1,0 +1,41 @@
+# Dependencies — reinstalled inside the image for the correct platform
+node_modules
+
+# VCS / editor
+.git
+.github
+.vscode
+.idea
+.cursorrules
+.agent
+.husky
+
+# Secrets — must never enter image layers
+.env
+.env.*
+!.env.example
+
+# Local data — databases, uploads, model caches
+*.db
+*.db-shm
+*.db-wal
+uploads
+data
+
+# Build output — rebuilt inside the image
+dist
+coverage
+
+# Docs, tests, and tooling not needed at build/runtime
+docs
+tests
+scripts
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md
+CONTRIBUTING.md
+LICENSE
+
+# OS noise
+.DS_Store

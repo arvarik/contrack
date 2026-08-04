@@ -84,7 +84,7 @@ export const ContactCard = ({
           )}
           {contact.sources?.length > 0 && (
             <span className={SOURCE_BADGE}>
-              via {contact.sources.map((s: any) => s.platform).join(", ")}
+              via {contact.sources.map((s) => s.platform).join(", ")}
             </span>
           )}
         </div>

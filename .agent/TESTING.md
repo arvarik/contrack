@@ -23,8 +23,28 @@ _This file tracks test methods, scenarios, and results with concrete execution e
 - **Runner**: Vitest 4.x (imported from `vitest/config`)
 - **Environment**: Node (not jsdom — backend-focused tests)
 - **Globals**: `true` (describe/it/expect available without imports)
-- **Setup File**: `tests/setup.ts` — mocks `server/db.ts` to prevent disk writes during tests
 - **Coverage**: V8 provider with `text`, `json`, `html` reporters (see `vitest.config.ts`)
+
+### Two vitest projects (vitest.config.ts)
+
+| Project       | Include                | Database                                                                                  | Setup file                   |
+| ------------- | ---------------------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
+| `unit`        | `tests/unit/**`        | **Mocked** — `tests/setup.ts` stubs `server/db.ts`                                        | `tests/setup.ts`             |
+| `integration` | `tests/integration/**` | **Real SQLite** in a per-file temp `DATA_DIR` (migrations, FTS triggers, indexes all run) | `tests/integration-setup.ts` |
+
+Integration tests mount the production request pipeline via `createApp()`
+(`server/app.ts`) with supertest — no port, no Vite. `tests/integration-setup.ts`
+sets `DATA_DIR` to a fresh temp dir BEFORE any server module is imported,
+clears all AI keys (mock mode), and sets `DISABLE_BACKGROUND_JOBS=true`
+(suppresses geocode fetches and debounced dedupe timers; the same env var is
+honored in production code). Run one project with
+`npx vitest run --project integration`.
+
+Integration suites cover: contact CRUD + validation envelopes, FTS
+create/rename/child-table triggers, bulk create/delete, interactions +
+@mention linking (`interaction_mentions`), action items + the
+`nextFollowUpAt` triggers, lists + membership, hard-merge (409 undo
+contract) and soft-merge → audit log → undo, dashboard/zero-state/MCP.
 
 ### Test Setup Mock Pattern (`tests/setup.ts`)
 

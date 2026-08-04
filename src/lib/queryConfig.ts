@@ -94,12 +94,7 @@ export const STALE_TIMES = {
 // =============================================================================
 
 type CacheEventType =
-  | "hit"
-  | "miss"
-  | "stale"
-  | "invalidate"
-  | "prefetch"
-  | "placeholder";
+  "hit" | "miss" | "stale" | "invalidate" | "prefetch" | "placeholder";
 
 interface CacheEvent {
   type: CacheEventType;

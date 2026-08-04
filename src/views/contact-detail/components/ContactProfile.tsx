@@ -134,7 +134,7 @@ export const ContactProfile = ({
       "application/pdf": [".pdf"],
       "text/*": [".txt", ".csv", ".md"],
     },
-  } as any);
+  });
 
   // ── Event handlers ────────────────────────────────────────────────────
   const handleUpdate = (field: string, val: string) => {

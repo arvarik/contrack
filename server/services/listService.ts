@@ -2,6 +2,14 @@ import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 
+interface ListRow {
+  id: string;
+  name: string;
+  icon: string | null;
+  sortOrder: number;
+  memberCount: number;
+}
+
 export const listService = {
   getAllLists() {
     return sqlite
@@ -32,7 +40,7 @@ export const listService = {
 
     return sqlite
       .prepare("SELECT *, 0 as memberCount FROM lists WHERE id = ?")
-      .get(id);
+      .get(id) as ListRow;
   },
 
   updateList(id: string, data: { name?: string; icon?: string }) {
@@ -42,7 +50,7 @@ export const listService = {
     if (!existing) return null;
 
     const setClauses: string[] = [];
-    const values: any[] = [];
+    const values: (string | number)[] = [];
     if (data.name !== undefined) {
       setClauses.push("name = ?");
       values.push(data.name.trim());
@@ -94,7 +102,7 @@ export const listService = {
       ORDER BY c.addedAt DESC
     `,
       )
-      .all(id) as any[];
+      .all(id) as unknown[];
     return contactRepo.hydrateMany(rows);
   },
 

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { resolveUploadPath } from "../utils/paths.ts";
 // @ts-expect-error no types available
 import emlFormat from "eml-format";
 import { db, sqlite } from "../db.ts";
@@ -160,7 +161,10 @@ export const interactionService = {
         .get();
 
       if (content) {
-        const mentionRegex = /data-type="mention"\\s+data-id="([^"]+)"/g;
+        // Tolerate any attributes between data-type and data-id — TipTap does
+        // not guarantee adjacency. (A previous version used `\\s`, which in a
+        // regex literal matches a literal backslash + "s" and never matched.)
+        const mentionRegex = /data-type="mention"[^>]*?data-id="([^"]+)"/g;
         const explicitMentionIds = [...content.matchAll(mentionRegex)].map(
           (m) => m[1],
         );
@@ -308,7 +312,9 @@ export const interactionService = {
     const now = new Date().toISOString();
 
     if (file.originalname.toLowerCase().endsWith(".eml")) {
-      const rawEml = fs.readFileSync(file.path, "utf8");
+      // Async read — attachments can be up to 50 MB and a sync read would
+      // block the event loop for every other request.
+      const rawEml = await fs.promises.readFile(file.path, "utf8");
 
       const emlData = await new Promise<Record<string, unknown>>(
         (resolve, reject) => {
@@ -399,7 +405,11 @@ export const interactionService = {
     if (!existing) return null;
 
     const { title, content } = body;
-    const updates: Record<string, any> = {};
+    const updates: {
+      title?: string;
+      content?: string | null;
+      updatedAt?: string;
+    } = {};
     if (title !== undefined) updates.title = title;
     if (content !== undefined) updates.content = content;
 
@@ -427,8 +437,9 @@ export const interactionService = {
     if (!existing) return false;
 
     if (existing.fileUrl?.startsWith("/uploads/")) {
-      const filePath = path.join(process.cwd(), existing.fileUrl);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      // Containment-checked resolution — never unlink outside uploads/.
+      const filePath = resolveUploadPath(existing.fileUrl);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
 
     db.delete(schema.interactions).where(eq(schema.interactions.id, id)).run();

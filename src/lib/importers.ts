@@ -12,7 +12,58 @@
  * @module lib/importers
  */
 import Papa from "papaparse";
-import { Contact } from "../types";
+
+// ===========================================================================
+// Parser output types — the wire shape POSTed to /api/contacts/bulk
+// ===========================================================================
+
+export interface ImportedEmail {
+  email: string;
+  label?: string;
+  isPrimary?: boolean;
+}
+export interface ImportedPhone {
+  phone: string;
+  label?: string;
+  isPrimary?: boolean;
+}
+export interface ImportedAddress {
+  address: string;
+  label?: string;
+  isPrimary?: boolean;
+}
+export interface ImportedSocialLink {
+  platform: string;
+  url: string;
+  handle?: string | null;
+}
+export interface ImportedSource {
+  platform: string;
+  externalId?: string | null;
+  connectedOn?: string | null;
+  rawData?: string;
+}
+
+/** Draft contact produced by the import parsers. */
+export interface ImportedContact {
+  name: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  company?: string | null;
+  role?: string | null;
+  location?: string | null;
+  birthday?: string | null;
+  about?: string | null;
+  website?: string | null;
+  avatarUrl?: string | null;
+  emails?: ImportedEmail[];
+  phones?: ImportedPhone[];
+  addresses?: ImportedAddress[];
+  socialLinks?: ImportedSocialLink[];
+  sources?: ImportedSource[];
+  /** Provenance stamp consumed by the bulk-import endpoint. */
+  _sourcePlatform?: string;
+}
 
 // ===========================================================================
 // Social Profile Helpers
@@ -89,8 +140,8 @@ function resolveSocialProfile(
 export const parseVCard = (
   vcardData: string,
   sourcePlatform: string,
-): Partial<Contact>[] => {
-  const contacts: Partial<Contact>[] = [];
+): ImportedContact[] => {
+  const contacts: ImportedContact[] = [];
   const cards = vcardData.split(/BEGIN:VCARD/i);
 
   for (const card of cards) {
@@ -108,7 +159,7 @@ export const parseVCard = (
     //   EMAIL;type=INTERNET;type=HOME:email@example.com
     //   item1.EMAIL;type=INTERNET:email@example.com
     const emailRegex = /^(?:item\d+\.)?EMAIL(?:[;][^:]*)*:(.+)$/gim;
-    const emails: any[] = [];
+    const emails: ImportedEmail[] = [];
     let emailMatch;
     while ((emailMatch = emailRegex.exec(card)) !== null) {
       const fullLine = emailMatch[0];
@@ -143,7 +194,7 @@ export const parseVCard = (
     // Extract ALL phone numbers — handles Apple format:
     //   TEL;type=IPHONE;type=CELL;type=VOICE;type=pref:(732) 423-3295
     const phoneRegex = /^(?:item\d+\.)?TEL(?:[;][^:]*)*:(.+)$/gim;
-    const phones: any[] = [];
+    const phones: ImportedPhone[] = [];
     let phoneMatch;
     while ((phoneMatch = phoneRegex.exec(card)) !== null) {
       const fullLine = phoneMatch[0];
@@ -174,7 +225,7 @@ export const parseVCard = (
     //   item3.ADR;type=pref:;;15 Kinglet Dr S;Cranbury;NJ;08512;United States
     //   item4.ADR;type=HOME:;;1 Brady St\nApt A-625;San Francisco;CA;94103;United States
     const adrRegex = /^(?:item\d+\.)?ADR(?:[;][^:]*)*:(.+)$/gim;
-    const addresses: any[] = [];
+    const addresses: ImportedAddress[] = [];
     let adrMatch;
     while ((adrMatch = adrRegex.exec(card)) !== null) {
       const fullLine = adrMatch[0];
@@ -236,7 +287,7 @@ export const parseVCard = (
     //   X-SOCIALPROFILE;type=linkedin:http://www.linkedin.com/in/arvarik
     //   X-SOCIALPROFILE;type=GitHub:x-apple:arvarik
     const socialRegex = /^X-SOCIALPROFILE(?:;[^:]*)*:(.+)$/gim;
-    const socialLinks: any[] = [];
+    const socialLinks: ImportedSocialLink[] = [];
     let socialMatch;
     while ((socialMatch = socialRegex.exec(card)) !== null) {
       const fullLine = socialMatch[0];
@@ -317,7 +368,7 @@ export const parseVCard = (
     // Build location from the primary address
     let location: string | null = null;
     if (addresses.length > 0) {
-      const primary = addresses.find((a: any) => a.isPrimary) || addresses[0];
+      const primary = addresses.find((a) => a.isPrimary) || addresses[0];
       location = primary.address;
     }
 
@@ -344,7 +395,7 @@ export const parseVCard = (
       socialLinks,
       sources: [{ platform: sourcePlatform }],
       _sourcePlatform: sourcePlatform,
-    } as any);
+    });
   }
   return contacts;
 };
@@ -355,7 +406,7 @@ export const parseVCard = (
 // ===========================================================================
 export const parseLinkedInCSV = (
   csvData: string,
-): Promise<Partial<Contact>[]> => {
+): Promise<ImportedContact[]> => {
   return new Promise((resolve, reject) => {
     // LinkedIn CSVs may have introductory lines before the real header
     // Strip any lines before the actual header row
@@ -366,13 +417,13 @@ export const parseLinkedInCSV = (
     if (headerIndex === -1) headerIndex = 0;
     const cleanedCSV = lines.slice(headerIndex).join("\n");
 
-    Papa.parse(cleanedCSV, {
+    Papa.parse<Record<string, string | undefined>>(cleanedCSV, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         try {
           const parsed = results.data
-            .map((row: any) => {
+            .map((row) => {
               const firstName = (row["First Name"] || "").trim();
               const lastName = (row["Last Name"] || "").trim();
               const fullName = `${firstName} ${lastName}`.trim();
@@ -384,10 +435,10 @@ export const parseLinkedInCSV = (
               const profileUrl = (row["URL"] || "").trim();
               const connectedOn = (row["Connected On"] || "").trim();
 
-              const emails: any[] = email
+              const emails: ImportedEmail[] = email
                 ? [{ email, label: "work", isPrimary: true }]
                 : [];
-              const socialLinks: any[] = profileUrl
+              const socialLinks: ImportedSocialLink[] = profileUrl
                 ? [{ platform: "linkedin", url: profileUrl }]
                 : [];
 
@@ -408,9 +459,9 @@ export const parseLinkedInCSV = (
                   },
                 ],
                 _sourcePlatform: "linkedin",
-              } as any;
+              } satisfies ImportedContact;
             })
-            .filter(Boolean);
+            .filter((c): c is NonNullable<typeof c> => c !== null);
 
           resolve(parsed);
         } catch (e) {
@@ -426,14 +477,19 @@ export const parseLinkedInCSV = (
 // Facebook JSON Parser
 // Input: friends_v2 JSON array with [{ name, timestamp }] structure
 // ===========================================================================
-export const parseFacebookJSON = (jsonData: string): Partial<Contact>[] => {
+interface FacebookFriend {
+  name?: string;
+  timestamp?: number;
+}
+
+export const parseFacebookJSON = (jsonData: string): ImportedContact[] => {
   try {
     const data = JSON.parse(jsonData);
 
     // Facebook exports come in various structures
     // Common: { friends_v2: [{ name, timestamp }] }
     // Or: [{ name, timestamp }]
-    let friends: any[] = [];
+    let friends: FacebookFriend[] = [];
 
     if (data.friends_v2) {
       friends = data.friends_v2;
@@ -462,8 +518,8 @@ export const parseFacebookJSON = (jsonData: string): Partial<Contact>[] => {
     }
 
     return friends
-      .filter((f: any) => f.name)
-      .map((f: any) => {
+      .filter((f): f is FacebookFriend & { name: string } => Boolean(f.name))
+      .map((f) => {
         // Facebook uses UTF-8 escaped encoding for names
         let name = f.name;
         try {
@@ -486,7 +542,7 @@ export const parseFacebookJSON = (jsonData: string): Partial<Contact>[] => {
             },
           ],
           _sourcePlatform: "facebook",
-        } as any;
+        } satisfies ImportedContact;
       });
   } catch (e: unknown) {
     if ((e instanceof Error ? e.message : String(e)).includes("Could not find"))
@@ -502,17 +558,15 @@ export const parseFacebookJSON = (jsonData: string): Partial<Contact>[] => {
 // Columns: Given Name, Family Name, E-mail 1 - Value, Phone 1 - Value,
 //          Organization 1 - Name, Organization 1 - Title, etc.
 // ===========================================================================
-export const parseGoogleCSV = (
-  csvData: string,
-): Promise<Partial<Contact>[]> => {
+export const parseGoogleCSV = (csvData: string): Promise<ImportedContact[]> => {
   return new Promise((resolve, reject) => {
-    Papa.parse(csvData, {
+    Papa.parse<Record<string, string | undefined>>(csvData, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         try {
           const parsed = results.data
-            .map((row: any) => {
+            .map((row) => {
               const firstName = (row["Given Name"] || "").trim();
               const lastName = (row["Family Name"] || "").trim();
               const fullName = (
@@ -521,7 +575,7 @@ export const parseGoogleCSV = (
               if (!fullName) return null;
 
               // Collect all emails (Google supports E-mail 1, E-mail 2, etc.)
-              const emails: any[] = [];
+              const emails: ImportedEmail[] = [];
               for (let i = 1; i <= 5; i++) {
                 const email = (row[`E-mail ${i} - Value`] || "").trim();
                 const type = (
@@ -537,7 +591,7 @@ export const parseGoogleCSV = (
               }
 
               // Collect all phones
-              const phones: any[] = [];
+              const phones: ImportedPhone[] = [];
               for (let i = 1; i <= 5; i++) {
                 const phone = (row[`Phone ${i} - Value`] || "").trim();
                 const type = (
@@ -573,9 +627,9 @@ export const parseGoogleCSV = (
                 phones,
                 sources: [{ platform: "google" }],
                 _sourcePlatform: "google",
-              } as any;
+              } satisfies ImportedContact;
             })
-            .filter(Boolean);
+            .filter((c): c is NonNullable<typeof c> => c !== null);
 
           resolve(parsed);
         } catch (e) {
@@ -593,15 +647,15 @@ export const parseGoogleCSV = (
 export const parseGenericCSV = (
   csvData: string,
   sourceName: string,
-): Promise<Partial<Contact>[]> => {
+): Promise<ImportedContact[]> => {
   return new Promise((resolve, reject) => {
-    Papa.parse(csvData, {
+    Papa.parse<Record<string, string | undefined>>(csvData, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         try {
           const parsed = results.data
-            .map((row: any) => {
+            .map((row) => {
               const name = row["Name"] || row["name"] || row["Full Name"];
               if (!name || name === "Unknown") return null;
 
@@ -622,9 +676,9 @@ export const parseGenericCSV = (
                   : [],
                 sources: [{ platform: sourceName }],
                 _sourcePlatform: sourceName,
-              } as any;
+              } satisfies ImportedContact;
             })
-            .filter(Boolean);
+            .filter((c): c is NonNullable<typeof c> => c !== null);
 
           resolve(parsed);
         } catch (e) {

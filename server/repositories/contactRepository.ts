@@ -385,7 +385,7 @@ export const contactRepo = {
         WHERE lm.contactId IN (${placeholders})
         ORDER BY l.sortOrder ASC
       `;
-      listRows.push(...(sqlite.prepare(sql).all(chunk) as any[]));
+      listRows.push(...(sqlite.prepare(sql).all(chunk) as typeof listRows));
     }
 
     // Specialized interaction count chunked query
@@ -399,7 +399,7 @@ export const contactRepo = {
         WHERE contactId IN (${placeholders}) 
         GROUP BY contactId
       `;
-      countRows.push(...(sqlite.prepare(sql).all(chunk) as any[]));
+      countRows.push(...(sqlite.prepare(sql).all(chunk) as typeof countRows));
     }
 
     // Helper to group flat rows by contactId in O(N)

@@ -61,6 +61,12 @@ sqlite.pragma("synchronous = NORMAL");
 // any query that uses ORDER BY on non-indexed columns (which creates temp B-trees).
 sqlite.pragma("temp_store = MEMORY");
 
+// busy_timeout: With WAL mode + several background writers (geocode queue,
+// embedding backfills, incremental dedupe, hourly score recompute), a
+// concurrent write would otherwise surface immediately as SQLITE_BUSY (503).
+// Wait up to 5s for the lock instead.
+sqlite.pragma("busy_timeout = 5000");
+
 // ── Diagnostic: Log all applied PRAGMA values for observability ──────────
 import fs from "fs";
 
@@ -201,8 +207,11 @@ try {
       `Scrubbed ${totalDateFixes} 'null' string date value(s) from experience/education`,
     );
   }
-} catch (err: any) {
-  log.warn("Database", `Data cleanup skipped: ${err.message}`);
+} catch (err) {
+  log.warn(
+    "Database",
+    `Data cleanup skipped: ${err instanceof Error ? err.message : String(err)}`,
+  );
 }
 
 // =============================================================================
@@ -223,10 +232,29 @@ try {
   // Column already exists — expected on subsequent runs
 }
 
-try {
-  sqlite.exec(`DROP TABLE IF EXISTS contacts_fts`);
-} catch {
-  /* may not exist */
+// ── Versioned rebuild gate ──────────────────────────────────────────────
+// Dropping the FTS table forces a full reindex of every contact on boot.
+// That's only needed when the FTS schema or trigger payloads change — bump
+// FTS_SCHEMA_VERSION when they do. Otherwise the triggers below keep the
+// index in sync and the incremental backfill catches any missed rows.
+const FTS_SCHEMA_VERSION = 1;
+const storedFtsVersion = sqlite.pragma("user_version", {
+  simple: true,
+}) as number;
+const ftsTableExists = !!sqlite
+  .prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'contacts_fts'",
+  )
+  .get();
+const ftsNeedsRebuild =
+  !ftsTableExists || storedFtsVersion !== FTS_SCHEMA_VERSION;
+
+if (ftsNeedsRebuild) {
+  try {
+    sqlite.exec(`DROP TABLE IF EXISTS contacts_fts`);
+  } catch {
+    /* may not exist */
+  }
 }
 
 sqlite.exec(`
@@ -384,7 +412,15 @@ sqlite.exec(`
   WHERE c.id NOT IN (SELECT contactId FROM contacts_fts);
 `);
 
-log.info("Database", "FTS5 search index ready");
+if (ftsNeedsRebuild) {
+  sqlite.pragma(`user_version = ${FTS_SCHEMA_VERSION}`);
+  log.info(
+    "Database",
+    `FTS5 search index rebuilt (schema v${FTS_SCHEMA_VERSION})`,
+  );
+} else {
+  log.info("Database", "FTS5 search index up-to-date (full rebuild skipped)");
+}
 
 // =============================================================================
 // 4. Auto-stamp updatedAt on every contacts mutation
@@ -645,6 +681,36 @@ sqlite.exec(`
     embeddedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
   );
 `);
+
+// =============================================================================
+// 9h. Hot-path indexes
+// =============================================================================
+// Every contact hydration joins ~10 child tables on contactId, and the
+// dashboard/zero-state/dedupe queries filter contacts on status columns.
+// Without these, each lookup is a full table scan (only PK autoindexes and a
+// few composite uniques existed). All idempotent via IF NOT EXISTS.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE INDEX IF NOT EXISTS idx_contact_emails_contact ON contact_emails(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contact_phones_contact ON contact_phones(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contact_social_links_contact ON contact_social_links(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contact_education_contact ON contact_education(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contact_experience_contact ON contact_experience(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contact_sources_contact ON contact_sources(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contact_tags_contact ON contact_tags(contactId);
+  CREATE INDEX IF NOT EXISTS idx_interactions_contact ON interactions(contactId);
+  CREATE INDEX IF NOT EXISTS idx_interaction_mentions_contact ON interaction_mentions(contactId);
+  CREATE INDEX IF NOT EXISTS idx_list_members_contact ON list_members(contactId);
+  CREATE INDEX IF NOT EXISTS idx_contacts_canonical ON contacts(canonicalId);
+  CREATE INDEX IF NOT EXISTS idx_contacts_status ON contacts(isGhost, isArchived, canonicalId);
+  CREATE INDEX IF NOT EXISTS idx_contacts_last_contacted ON contacts(lastContactedAt);
+  CREATE INDEX IF NOT EXISTS idx_contacts_added ON contacts(addedAt);
+  CREATE INDEX IF NOT EXISTS idx_contacts_score ON contacts(relationshipScore);
+`);
+
+// Give the query planner statistics for the new indexes.
+sqlite.pragma("optimize");
 
 // =============================================================================
 // 10. Phonetic Hash Backfill

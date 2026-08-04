@@ -50,7 +50,6 @@ const ContactListItemInner = ({
   const primaryEmail = contact.emails?.[0]?.email || null;
   const logoInfo = useCompanyLogo(primaryEmail, contact.company);
   const logoUrl = logoInfo?.url;
-  const logoDomain = logoInfo?.domain;
   const [imgError, setImgError] = useState(false);
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -102,14 +101,6 @@ const ContactListItemInner = ({
 
   const handleLogoError = () => {
     setImgError(true);
-    if (logoDomain) {
-      try {
-        const cacheRaw = localStorage.getItem("contrack_failed_logos") || "{}";
-        const cache = JSON.parse(cacheRaw);
-        cache[logoDomain] = true;
-        localStorage.setItem("contrack_failed_logos", JSON.stringify(cache));
-      } catch (e) {}
-    }
   };
 
   return (
@@ -216,6 +207,8 @@ const areEqual = (
     prev.contact.nextFollowUpAt === next.contact.nextFollowUpAt &&
     prev.contact.relationshipScore === next.contact.relationshipScore &&
     prev.contact.themeColor === next.contact.themeColor &&
+    prev.contact.role === next.contact.role &&
+    prev.contact.isGhost === next.contact.isGhost &&
     prev.active === next.active &&
     prev.isSelectMode === next.isSelectMode &&
     prev.isSelected === next.isSelected

@@ -14,11 +14,7 @@ import type { AIProvider } from "../../ai/provider.ts";
 
 /** Status lifecycle: queued → searching → merging → success | error */
 export type AISearchJobStatus =
-  | "queued"
-  | "searching"
-  | "merging"
-  | "success"
-  | "error";
+  "queued" | "searching" | "merging" | "success" | "error";
 
 /** Error classification for contextual UI messages and future retry logic. */
 export type AISearchErrorType =

@@ -40,6 +40,7 @@ import type {
   RawPair,
   MatchType,
   NormalizedContact,
+  ContactRow,
 } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
@@ -464,10 +465,10 @@ export const dedupeService = {
                 seenPairs.add(pk);
                 const rawA = sqlite
                   .prepare("SELECT * FROM contacts WHERE id = ?")
-                  .get(contactId) as any;
+                  .get(contactId) as ContactRow | undefined;
                 const rawB = sqlite
                   .prepare("SELECT * FROM contacts WHERE id = ?")
-                  .get(neighbor.contactId) as any;
+                  .get(neighbor.contactId) as ContactRow | undefined;
                 pairs.push({
                   idA: contactId,
                   idB: neighbor.contactId,

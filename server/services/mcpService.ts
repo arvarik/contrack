@@ -11,7 +11,7 @@ export const mcpService = {
     industry?: string;
   }) {
     let q = "SELECT * FROM contacts WHERE 1=1";
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (options.role) {
       q += " AND role LIKE ?";
@@ -29,12 +29,14 @@ export const mcpService = {
     q += " ORDER BY addedAt DESC LIMIT ? OFFSET ?";
     params.push(options.limit, options.offset);
 
-    let rows = sqlite.prepare(q).all(...params) as any[];
+    // Dynamic field projection below requires string-keyed access — rows are
+    // treated as generic records rather than a fixed contact shape.
+    let rows = sqlite.prepare(q).all(...params) as Record<string, unknown>[];
 
     if (options.fields) {
       const allowed = options.fields.split(",").map((f) => f.trim());
       rows = rows.map((r) => {
-        const projected: any = {};
+        const projected: Record<string, unknown> = {};
         for (const k of allowed) if (k in r) projected[k] = r[k];
         return projected;
       });
@@ -58,7 +60,7 @@ export const mcpService = {
       ORDER BY lastContactedAt ASC
     `,
       )
-      .all(now, now) as any[];
+      .all(now, now);
 
     return contactRepo.hydrateMany(rows);
   },
@@ -85,7 +87,7 @@ export const mcpService = {
       JOIN contacts c ON i.contactId = c.id
       WHERE (i.title LIKE ? OR i.content LIKE ?)
     `;
-    const params: any[] = [safeQ, safeQ];
+    const params: string[] = [safeQ, safeQ];
 
     if (type) {
       sqlQuery += " AND i.type = ?";
@@ -103,7 +105,7 @@ export const mcpService = {
       JOIN contacts c ON i.contactId = c.id
       WHERE 1=1
     `;
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (since) {
       sqlQuery += " AND i.date >= ?";

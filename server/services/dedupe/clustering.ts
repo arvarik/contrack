@@ -3,13 +3,24 @@ import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { UnionFind } from "../../utils/unionFind.ts";
-import type { RawPair, DedupeCluster, ClusterPair } from "./types.ts";
+import type {
+  RawPair,
+  DedupeCluster,
+  ClusterPair,
+  ContactRow,
+  HydratedContact,
+} from "./types.ts";
 
 /**
  * Compute a fitness score for a contact as a primary/keeper candidate.
  * Higher score = richer record = better primary.
+ *
+ * Accepts `HydratedContact | null` because callers pass `contactRepo.hydrate()`
+ * results directly; hydrate() only returns null for malformed input rows, which
+ * callers never provide (this was an implicit assumption under `any`).
  */
-export function computePrimaryScore(contact: any): number {
+export function computePrimaryScore(candidate: HydratedContact | null): number {
+  const contact = candidate!;
   let score = 0;
 
   // Custom imported avatar = massive priority boost (user invested effort)
@@ -33,7 +44,7 @@ export function computePrimaryScore(contact: any): number {
 
   const row = sqlite
     .prepare("SELECT COUNT(*) as c FROM interactions WHERE contactId = ?")
-    .get(contact.id) as any;
+    .get(contact.id) as { c: number } | undefined;
   score += (row?.c ?? 0) * 5;
 
   if (contact.updatedAt) {
@@ -47,7 +58,9 @@ export function computePrimaryScore(contact: any): number {
 }
 
 /** Select the contact with the highest primary score from a list. */
-export function selectBestPrimary(contacts: any[]): any {
+export function selectBestPrimary(
+  contacts: HydratedContact[],
+): HydratedContact {
   let best = contacts[0];
   let bestScore = computePrimaryScore(best);
   for (let i = 1; i < contacts.length; i++) {
@@ -64,7 +77,7 @@ export function selectBestPrimary(contacts: any[]): any {
  * Generate a human-readable summary describing why the cluster was grouped.
  */
 export function generateClusterSummary(
-  contacts: any[],
+  contacts: HydratedContact[],
   pairs: ClusterPair[],
 ): string {
   const parts: string[] = [];
@@ -135,7 +148,7 @@ const LARGE_CLUSTER_THRESHOLD = 10;
  */
 export function buildClusters(
   pairs: RawPair[],
-  contactMap: Map<string, any>,
+  contactMap: Map<string, ContactRow>,
   rid: string,
 ): DedupeCluster[] {
   if (pairs.length === 0) return [];
@@ -152,7 +165,9 @@ export function buildClusters(
     const contacts = memberIds
       .map((id) => contactMap.get(id))
       .filter(Boolean)
-      .map((raw) => contactRepo.hydrate(raw));
+      // Non-null assertion: hydrate() only returns null for malformed rows,
+      // and every input here is a live row from contactMap.
+      .map((raw) => contactRepo.hydrate(raw)!);
 
     if (contacts.length < 2) continue;
 

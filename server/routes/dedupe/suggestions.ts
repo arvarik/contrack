@@ -44,7 +44,7 @@ export function registerSuggestionRoutes(router: Router) {
   router.post(
     "/dedupe/suggestions/:id/dismiss",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const id = String(req.params.id);
 
       dismissSuggestion(id, rid);
@@ -56,7 +56,7 @@ export function registerSuggestionRoutes(router: Router) {
   router.post(
     "/dedupe/suggestions/:id/merge",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const id = String(req.params.id);
       const { primaryId } = req.body;
 
@@ -104,7 +104,7 @@ export function registerSuggestionRoutes(router: Router) {
   router.post(
     "/dedupe/merge-log/:id/undo",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
       const id = String(req.params.id);
 
       undoSoftMerge(id, rid);

@@ -21,6 +21,8 @@ const geocodeQueue: GeoTask[] = [];
 let isGeocoding = false;
 
 export function queueGeocode(contactId: string, location: string): void {
+  // Integration tests set this to keep background fetches off the network.
+  if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
   if (!location?.trim()) return;
 
   const key = normalizeLocationKey(location);

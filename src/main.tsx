@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";
 import { logCacheEvent } from "./lib/queryConfig";
+import { fetchContactsSlim } from "./api/contacts";
 import App from "./App.tsx";
 import "./index.css";
 
@@ -51,9 +52,7 @@ const queryClient = new QueryClient({
 queryClient.prefetchQuery({
   queryKey: ["contacts"],
   queryFn: async () => {
-    const res = await fetch("/api/contacts?view=slim");
-    if (!res.ok) throw new Error("Prefetch failed");
-    const data = await res.json();
+    const data = await fetchContactsSlim();
     logCacheEvent({
       type: "prefetch",
       queryKey: "['contacts']",

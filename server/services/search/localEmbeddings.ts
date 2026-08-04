@@ -15,18 +15,23 @@
 // using Gemini's 768-dim embeddings for higher-accuracy similarity.
 // =============================================================================
 
+import path from "path";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+// Type-only import — fully erased at compile time, so the runtime module
+// graph still loads @huggingface/transformers lazily via dynamic import.
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 
 // =============================================================================
 // Types & State
 // =============================================================================
 
 /** The HuggingFace pipeline factory function (lazy-loaded via dynamic import). */
-let pipelineFactory: any = null;
+let pipelineFactory:
+  typeof import("@huggingface/transformers").pipeline | null = null;
 /** The initialized feature-extraction pipeline instance. */
-let extractor: any = null;
+let extractor: FeatureExtractionPipeline | null = null;
 let modelReady = false;
 let initPromise: Promise<void> | null = null;
 
@@ -50,9 +55,19 @@ export async function initLocalEmbeddings(): Promise<void> {
   initPromise = (async () => {
     try {
       const t0 = Date.now();
-      const { pipeline: createPipeline } =
+      const { pipeline: createPipeline, env: hfEnv } =
         await import("@huggingface/transformers");
       pipelineFactory = createPipeline;
+
+      // Transformers.js ignores the Python-style TRANSFORMERS_CACHE env var;
+      // it only reads env.cacheDir (default: inside node_modules, which is
+      // ephemeral in Docker). Persist the model in DATA_DIR when configured.
+      const cacheDir =
+        process.env.TRANSFORMERS_CACHE ??
+        (process.env.DATA_DIR
+          ? path.join(process.env.DATA_DIR, ".cache")
+          : undefined);
+      if (cacheDir) hfEnv.cacheDir = cacheDir;
 
       extractor = await pipelineFactory("feature-extraction", MODEL_ID, {
         dtype: "q8", // quantized for speed + lower memory
@@ -222,7 +237,7 @@ export async function backfillSearchEmbeddings(): Promise<number> {
       AND c.id NOT IN (SELECT contactId FROM search_embeddings)
   `,
     )
-    .all() as any[];
+    .all() as SearchTextRow[];
 
   if (missing.length === 0) {
     log.debug("LocalEmbeddings", "All contacts already have search embeddings");
@@ -295,7 +310,7 @@ export async function embedContact(contactId: string): Promise<void> {
     FROM contacts WHERE id = ?
   `,
     )
-    .get(contactId) as any;
+    .get(contactId) as SearchTextRow | undefined;
 
   if (!row) return;
 
@@ -321,12 +336,26 @@ export async function embedContact(contactId: string): Promise<void> {
 // Text Representation
 // =============================================================================
 
+/** Narrow row of contact columns selected for building search-embedding text. */
+interface SearchTextRow {
+  id: string;
+  name: string;
+  company: string | null;
+  role: string | null;
+  location: string | null;
+  industry: string | null;
+  headline: string | null;
+  about: string | null;
+  preferences: string | null;
+  searchExpansion: string | null;
+}
+
 /**
  * Convert a contact row into a text string optimized for search embedding.
  * Includes all searchable fields plus Doc2Query expansion terms.
  */
 function contactToSearchText(
-  row: any,
+  row: SearchTextRow,
   tags: string[],
   interests: string[],
 ): string {

@@ -142,7 +142,7 @@ export const useUpdateInteraction = () => {
     }: {
       id: string;
       contactId: string;
-      data: { title?: string; content?: string };
+      data: { title?: string; content?: string | null };
     }): Promise<Interaction> => {
       const res = await fetch(`${API_BASE}/interactions/${id}`, {
         method: "PATCH",

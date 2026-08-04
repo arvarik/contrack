@@ -31,9 +31,9 @@ import {
 // ---------------------------------------------------------------------------
 
 const MODEL_MAP: Record<string, string> = {
-  lite: "claude-haiku-4.5",
-  flash: "claude-sonnet-4.6",
-  pro: "claude-opus-4.6",
+  lite: "claude-haiku-4-5",
+  flash: "claude-sonnet-4-6",
+  pro: "claude-opus-4-6",
 };
 
 const DEFAULT_MODEL_CLASS = "lite";
@@ -46,8 +46,10 @@ const SEARCH_MAX_TOKENS = 8192;
 // ---------------------------------------------------------------------------
 
 function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
-  const result: Record<string, unknown> = { type: node.type };
-  if (node.nullable) result.nullable = true;
+  // JSON Schema expresses nullability as a type union, not OpenAPI's `nullable`.
+  const result: Record<string, unknown> = {
+    type: node.nullable ? [node.type, "null"] : node.type,
+  };
   if (node.enum) result.enum = node.enum;
   if (node.description) result.description = node.description;
 
@@ -58,6 +60,7 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
         translateSchemaNode(value);
     }
   }
+  if (node.type === "object") result.additionalProperties = false;
   if (node.items) result.items = translateSchemaNode(node.items);
   if (node.required) result.required = node.required;
   return result;
@@ -152,8 +155,14 @@ export class AnthropicAdapter implements AIProvider {
       max_tokens: maxTokens,
     };
     if (options.systemPrompt) requestParams.system = options.systemPrompt;
-    if (options.enableSearchGrounding)
-      requestParams.tools = [{ type: "web_search" }];
+    if (options.enableSearchGrounding) {
+      // Sonnet/Opus 4.6+ support the dynamic-filtering variant; Haiku 4.5
+      // only supports the basic one.
+      const webSearchType = model.includes("haiku")
+        ? "web_search_20250305"
+        : "web_search_20260209";
+      requestParams.tools = [{ type: webSearchType, name: "web_search" }];
+    }
     if (options.responseFormat === "json" && options.jsonSchema) {
       requestParams.output_config = {
         format: this.translateSchema(options.jsonSchema),

@@ -83,7 +83,11 @@ function translate(err: unknown): {
       statusCode: 400,
       code: "DB_CONSTRAINT",
       message: "Database constraint violation",
-      details: { sqliteMessage: e.message },
+      // Raw SQLite text leaks table/column names — dev only.
+      details:
+        process.env.NODE_ENV !== "production"
+          ? { sqliteMessage: e.message }
+          : undefined,
       isOperational: true,
     };
   }

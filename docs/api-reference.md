@@ -11,9 +11,10 @@ All endpoints are prefixed with `/api`. Request and response bodies are `applica
 Fetch all active (non-archived, non-ghost, non-merged) contacts.
 
 **Query Parameters:**
-| Param | Description |
-|-------|-------------|
-| `q` | FTS5 full-text search query |
+
+| Param  | Description                                                                       |
+| ------ | --------------------------------------------------------------------------------- |
+| `q`    | FTS5 full-text search query                                                       |
 | `view` | Set to `slim` for lightweight response (id, name, company, avatarUrl, themeColor) |
 
 ```bash
@@ -923,10 +924,11 @@ curl http://localhost:3000/api/ai/stats/summary
 Get the AI invocation feed (paginated).
 
 **Query Parameters:**
-| Param | Description |
-|-------|-------------|
-| `limit` | Number of items to return (default: 50) |
-| `offset` | Pagination offset |
+
+| Param    | Description                             |
+| -------- | --------------------------------------- |
+| `limit`  | Number of items to return (default: 50) |
+| `offset` | Pagination offset                       |
 
 ```bash
 curl "http://localhost:3000/api/ai/stats/feed?limit=20&offset=0"

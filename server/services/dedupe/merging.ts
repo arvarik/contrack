@@ -6,6 +6,13 @@ import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
+import type { ContactRow } from "./types.ts";
+import type {
+  ContactPhoneRow,
+  ContactEducationRow,
+  ContactExperienceRow,
+  ContactSourceRow,
+} from "../../repositories/types.ts";
 
 export function mergeContacts(
   primaryId: string,
@@ -17,10 +24,10 @@ export function mergeContacts(
   // itself re-reads both rows before mutating (see comment inside the txn).
   const primary = sqlite
     .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(primaryId) as any;
+    .get(primaryId) as ContactRow | undefined;
   const duplicate = sqlite
     .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(duplicateId) as any;
+    .get(duplicateId) as ContactRow | undefined;
 
   if (!primary) {
     throw new NotFoundError("Primary contact", primaryId);
@@ -87,13 +94,13 @@ export function mergeContacts(
 
     const primaryPhones = sqlite
       .prepare("SELECT phone FROM contact_phones WHERE contactId = ?")
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactPhoneRow, "phone">[];
     const primaryPhoneNorms = new Set(
-      primaryPhones.map((p: any) => normalizePhone(p.phone)),
+      primaryPhones.map((p) => normalizePhone(p.phone)),
     );
     const dupePhones = sqlite
       .prepare("SELECT id, phone FROM contact_phones WHERE contactId = ?")
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<ContactPhoneRow, "id" | "phone">[];
     for (const dp of dupePhones) {
       if (!primaryPhoneNorms.has(normalizePhone(dp.phone))) {
         sqlite
@@ -117,10 +124,10 @@ export function mergeContacts(
       .prepare(
         "SELECT school, degree FROM contact_education WHERE contactId = ?",
       )
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactEducationRow, "school" | "degree">[];
     const primaryEduKeys = new Set(
       primaryEdu.map(
-        (e: any) =>
+        (e) =>
           `${(e.school || "").toLowerCase().trim()}::${(e.degree || "").toLowerCase().trim()}`,
       ),
     );
@@ -128,7 +135,10 @@ export function mergeContacts(
       .prepare(
         "SELECT id, school, degree FROM contact_education WHERE contactId = ?",
       )
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<
+      ContactEducationRow,
+      "id" | "school" | "degree"
+    >[];
     for (const edu of dupeEdu) {
       const key = `${(edu.school || "").toLowerCase().trim()}::${(edu.degree || "").toLowerCase().trim()}`;
       if (!primaryEduKeys.has(key)) {
@@ -142,10 +152,10 @@ export function mergeContacts(
       .prepare(
         "SELECT company, role FROM contact_experience WHERE contactId = ?",
       )
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactExperienceRow, "company" | "role">[];
     const primaryExpKeys = new Set(
       primaryExp.map(
-        (e: any) =>
+        (e) =>
           `${(e.company || "").toLowerCase().trim()}::${(e.role || "").toLowerCase().trim()}`,
       ),
     );
@@ -153,7 +163,10 @@ export function mergeContacts(
       .prepare(
         "SELECT id, company, role FROM contact_experience WHERE contactId = ?",
       )
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<
+      ContactExperienceRow,
+      "id" | "company" | "role"
+    >[];
     for (const exp of dupeExp) {
       const key = `${(exp.company || "").toLowerCase().trim()}::${(exp.role || "").toLowerCase().trim()}`;
       if (!primaryExpKeys.has(key)) {
@@ -167,10 +180,10 @@ export function mergeContacts(
       .prepare(
         "SELECT platform, externalId FROM contact_sources WHERE contactId = ?",
       )
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactSourceRow, "platform" | "externalId">[];
     const primarySrcKeys = new Set(
       primarySrc.map(
-        (s: any) =>
+        (s) =>
           `${(s.platform || "").toLowerCase().trim()}::${(s.externalId || "").toLowerCase().trim()}`,
       ),
     );
@@ -178,7 +191,10 @@ export function mergeContacts(
       .prepare(
         "SELECT id, platform, externalId FROM contact_sources WHERE contactId = ?",
       )
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<
+      ContactSourceRow,
+      "id" | "platform" | "externalId"
+    >[];
     for (const src of dupeSrc) {
       const key = `${(src.platform || "").toLowerCase().trim()}::${(src.externalId || "").toLowerCase().trim()}`;
       if (!primarySrcKeys.has(key)) {
@@ -253,8 +269,16 @@ export function mergeContacts(
       "aiBackground",
       "aiSummary",
       "aiBriefingAt",
-    ];
-    const updates: Record<string, any> = {
+    ] as const;
+    // Uniform value union (all scalar columns are TEXT or REAL) so the
+    // union-keyed writes below type-check; narrowed back to per-column
+    // types at the `.set()` call site.
+    const updates: Partial<
+      Record<
+        (typeof scalarFields)[number] | "updatedAt" | "addedAt",
+        string | number | null
+      >
+    > = {
       updatedAt: new Date().toISOString(),
     };
     for (const field of scalarFields) {
@@ -281,7 +305,7 @@ export function mergeContacts(
     }
 
     db.update(schema.contacts)
-      .set(updates)
+      .set(updates as Partial<ContactRow>)
       .where(eq(schema.contacts.id, primaryId))
       .run();
 
@@ -300,6 +324,10 @@ export function mergeContacts(
     } catch {
       /* vec0 row may not exist */
     }
+    // Keep dedupe embedding metadata in sync (not FK-linked to contacts).
+    sqlite
+      .prepare("DELETE FROM dedupe_embedding_meta WHERE contactId = ?")
+      .run(duplicateId);
 
     sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(duplicateId);
 
@@ -333,10 +361,10 @@ export function softMergeContacts(
 ) {
   const primary = sqlite
     .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(primaryId) as any;
+    .get(primaryId) as ContactRow | undefined;
   const duplicate = sqlite
     .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(duplicateId) as any;
+    .get(duplicateId) as ContactRow | undefined;
 
   if (!primary) {
     throw new NotFoundError("Primary contact", primaryId);
@@ -362,8 +390,7 @@ export function softMergeContacts(
     const dupInTx = sqlite
       .prepare("SELECT id, canonicalId FROM contacts WHERE id = ?")
       .get(duplicateId) as
-      | { id: string; canonicalId: string | null }
-      | undefined;
+      { id: string; canonicalId: string | null } | undefined;
     if (!dupInTx) {
       log.warn(
         "DedupeService",
@@ -411,13 +438,13 @@ export function softMergeContacts(
 
     const primaryPhones = sqlite
       .prepare("SELECT phone FROM contact_phones WHERE contactId = ?")
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactPhoneRow, "phone">[];
     const primaryPhoneNorms = new Set(
-      primaryPhones.map((p: any) => normalizePhone(p.phone)),
+      primaryPhones.map((p) => normalizePhone(p.phone)),
     );
     const dupePhones = sqlite
       .prepare("SELECT id, phone FROM contact_phones WHERE contactId = ?")
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<ContactPhoneRow, "id" | "phone">[];
     for (const dp of dupePhones) {
       if (!primaryPhoneNorms.has(normalizePhone(dp.phone))) {
         sqlite
@@ -441,10 +468,10 @@ export function softMergeContacts(
       .prepare(
         "SELECT school, degree FROM contact_education WHERE contactId = ?",
       )
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactEducationRow, "school" | "degree">[];
     const primaryEduKeys = new Set(
       primaryEdu.map(
-        (e: any) =>
+        (e) =>
           `${(e.school || "").toLowerCase().trim()}::${(e.degree || "").toLowerCase().trim()}`,
       ),
     );
@@ -452,7 +479,10 @@ export function softMergeContacts(
       .prepare(
         "SELECT id, school, degree FROM contact_education WHERE contactId = ?",
       )
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<
+      ContactEducationRow,
+      "id" | "school" | "degree"
+    >[];
     for (const edu of dupeEdu) {
       const key = `${(edu.school || "").toLowerCase().trim()}::${(edu.degree || "").toLowerCase().trim()}`;
       if (!primaryEduKeys.has(key)) {
@@ -466,10 +496,10 @@ export function softMergeContacts(
       .prepare(
         "SELECT company, role FROM contact_experience WHERE contactId = ?",
       )
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactExperienceRow, "company" | "role">[];
     const primaryExpKeys = new Set(
       primaryExp.map(
-        (e: any) =>
+        (e) =>
           `${(e.company || "").toLowerCase().trim()}::${(e.role || "").toLowerCase().trim()}`,
       ),
     );
@@ -477,7 +507,10 @@ export function softMergeContacts(
       .prepare(
         "SELECT id, company, role FROM contact_experience WHERE contactId = ?",
       )
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<
+      ContactExperienceRow,
+      "id" | "company" | "role"
+    >[];
     for (const exp of dupeExp) {
       const key = `${(exp.company || "").toLowerCase().trim()}::${(exp.role || "").toLowerCase().trim()}`;
       if (!primaryExpKeys.has(key)) {
@@ -491,10 +524,10 @@ export function softMergeContacts(
       .prepare(
         "SELECT platform, externalId FROM contact_sources WHERE contactId = ?",
       )
-      .all(primaryId) as any[];
+      .all(primaryId) as Pick<ContactSourceRow, "platform" | "externalId">[];
     const primarySrcKeys = new Set(
       primarySrc.map(
-        (s: any) =>
+        (s) =>
           `${(s.platform || "").toLowerCase().trim()}::${(s.externalId || "").toLowerCase().trim()}`,
       ),
     );
@@ -502,7 +535,10 @@ export function softMergeContacts(
       .prepare(
         "SELECT id, platform, externalId FROM contact_sources WHERE contactId = ?",
       )
-      .all(duplicateId) as any[];
+      .all(duplicateId) as Pick<
+      ContactSourceRow,
+      "id" | "platform" | "externalId"
+    >[];
     for (const src of dupeSrc) {
       const key = `${(src.platform || "").toLowerCase().trim()}::${(src.externalId || "").toLowerCase().trim()}`;
       if (!primarySrcKeys.has(key)) {
@@ -577,8 +613,16 @@ export function softMergeContacts(
       "aiBackground",
       "aiSummary",
       "aiBriefingAt",
-    ];
-    const updates: Record<string, any> = {
+    ] as const;
+    // Uniform value union (all scalar columns are TEXT or REAL) so the
+    // union-keyed writes below type-check; narrowed back to per-column
+    // types at the `.set()` call site.
+    const updates: Partial<
+      Record<
+        (typeof scalarFields)[number] | "updatedAt" | "addedAt",
+        string | number | null
+      >
+    > = {
       updatedAt: new Date().toISOString(),
     };
     for (const field of scalarFields) {
@@ -605,7 +649,7 @@ export function softMergeContacts(
     }
 
     db.update(schema.contacts)
-      .set(updates)
+      .set(updates as Partial<ContactRow>)
       .where(eq(schema.contacts.id, primaryId))
       .run();
 

@@ -249,7 +249,7 @@ function generateContacts(count: number) {
               isPrimary: 0,
             }
           : null,
-      ].filter(Boolean),
+      ].filter((x) => x !== null),
       phones: [{ phone: faker.phone.number(), label: "mobile", isPrimary: 1 }],
       addresses: [{ address: city.location, label: "work", isPrimary: 1 }],
       socialLinks: [
@@ -265,7 +265,7 @@ function generateContacts(count: number) {
               handle: `@${firstName}_${lastName}`,
             }
           : null,
-      ].filter(Boolean),
+      ].filter((x) => x !== null),
       experience: [
         {
           company: faker.helpers.arrayElement(COMPANIES),
@@ -409,7 +409,7 @@ try {
         })
         .run();
 
-      for (const e of c.emails as any[]) {
+      for (const e of c.emails) {
         db.insert(schema.contactEmails)
           .values({
             id: crypto.randomUUID(),
@@ -421,7 +421,7 @@ try {
           })
           .run();
       }
-      for (const p of c.phones as any[]) {
+      for (const p of c.phones) {
         db.insert(schema.contactPhones)
           .values({
             id: crypto.randomUUID(),
@@ -433,7 +433,7 @@ try {
           })
           .run();
       }
-      for (const a of c.addresses as any[]) {
+      for (const a of c.addresses) {
         db.insert(schema.contactAddresses)
           .values({
             id: crypto.randomUUID(),
@@ -445,7 +445,7 @@ try {
           })
           .run();
       }
-      for (const sl of c.socialLinks as any[]) {
+      for (const sl of c.socialLinks) {
         db.insert(schema.contactSocialLinks)
           .values({
             id: crypto.randomUUID(),
@@ -457,7 +457,7 @@ try {
           })
           .run();
       }
-      for (const exp of c.experience as any[]) {
+      for (const exp of c.experience) {
         db.insert(schema.contactExperience)
           .values({
             id: crypto.randomUUID(),
@@ -471,7 +471,7 @@ try {
           })
           .run();
       }
-      for (const edu of c.education as any[]) {
+      for (const edu of c.education) {
         db.insert(schema.contactEducation)
           .values({
             id: crypto.randomUUID(),
@@ -483,12 +483,12 @@ try {
           })
           .run();
       }
-      for (const t of c.tags as any[]) {
+      for (const t of c.tags) {
         db.insert(schema.contactTags)
           .values({ id: crypto.randomUUID(), contactId: id, tag: t })
           .run();
       }
-      for (const i of c.interests as any[]) {
+      for (const i of c.interests) {
         db.insert(schema.contactInterests)
           .values({
             id: crypto.randomUUID(),
@@ -498,12 +498,12 @@ try {
           })
           .run();
       }
-      for (const int of c.interactions as any[]) {
+      for (const int of c.interactions) {
         db.insert(schema.interactions)
           .values({
             id: crypto.randomUUID(),
             contactId: id,
-            type: int.type as any,
+            type: int.type,
             title: int.title,
             content: int.content,
             date: int.date,
@@ -515,6 +515,9 @@ try {
   console.log(
     "✅ Successfully injected 30 rich mock contacts into the database.",
   );
-} catch (e: any) {
-  console.error("⚠️ Failed to inject mocks:", e.message);
+} catch (e) {
+  console.error(
+    "⚠️ Failed to inject mocks:",
+    e instanceof Error ? e.message : String(e),
+  );
 }

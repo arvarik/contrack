@@ -11,28 +11,20 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { getSummary, getFeed } from "../services/aiStatsService.ts";
+import {
+  getSummary,
+  getFeed,
+  AI_OPERATIONS,
+} from "../services/aiStatsService.ts";
 import type { AIOperation } from "../services/aiStatsService.ts";
 
 const router = Router();
 
 // =============================================================================
-// Valid operation vocabulary (must match AIOperation type)
+// Valid operation vocabulary — derived from the canonical AI_OPERATIONS list
 // =============================================================================
 
-const VALID_OPERATIONS = new Set<string>([
-  "briefing",
-  "rerank",
-  "mentions",
-  "synthesis",
-  "parse",
-  "searchExpansion",
-  "dailyInsight",
-  "emlSummary",
-  "bulkParse",
-  "aiSearchGrounding",
-  "aiSearchExtraction",
-]);
+const VALID_OPERATIONS = new Set<string>(AI_OPERATIONS);
 
 // =============================================================================
 // GET /summary

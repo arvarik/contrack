@@ -22,7 +22,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Navigate to **http://localhost:3000**. You're ready.
+Navigate to **http://localhost:3210**. You're ready.
 
 ## What Happens on First Boot
 

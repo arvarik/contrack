@@ -19,9 +19,9 @@ import {
   parseGoogleCSV,
   parseFacebookJSON,
   parseGenericCSV,
+  type ImportedContact,
 } from "../lib/importers";
 import { useQueryClient } from "@tanstack/react-query";
-import { Contact } from "../types";
 import { TAB_CONTAINER, tabItem, SECTION_BG } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -55,59 +55,52 @@ interface StreamProgress {
 
 /**
  * Bulk-create contacts via SSE for progress tracking.
- * Returns the full import summary including deduplication results.
- * Falls back to standard JSON POST for small batches (< 20 contacts).
+ * Always streams — the multi-phase pipeline (import → embedding → scan)
+ * needs SSE. Returns the full import summary including deduplication results.
  */
 async function bulkImportWithProgress(
-  contacts: Partial<Contact>[],
+  contacts: ImportedContact[],
   onProgress: (p: StreamProgress) => void,
 ): Promise<{ count: number; summary?: ImportSummary }> {
-  // Always stream — the multi-phase pipeline (import → embedding → scan) needs SSE
-  const useStream = true;
-
   const res = await fetch("/api/contacts/bulk", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(useStream ? { Accept: "text/event-stream" } : {}),
+      Accept: "text/event-stream",
     },
     body: JSON.stringify(contacts),
   });
 
   if (!res.ok) throw new Error("Failed to import contacts");
+  if (!res.body) throw new Error("Import stream unavailable.");
 
-  if (useStream && res.body) {
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let result: { count: number; summary?: ImportSummary } = { count: 0 };
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: { count: number; summary?: ImportSummary } = { count: 0 };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.done) {
-              result = { count: data.count, summary: data.summary };
-            } else {
-              onProgress(data);
-            }
-          } catch {}
-        }
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          if (data.done) {
+            result = { count: data.count, summary: data.summary };
+          } else {
+            onProgress(data);
+          }
+        } catch {}
       }
     }
-    return result;
-  } else {
-    const data = await res.json();
-    return { count: data.count };
   }
+  return result;
 }
 
 export const ImportModal = ({
@@ -150,7 +143,7 @@ export const ImportModal = ({
 
     try {
       const text = await file.text();
-      let newContacts: Partial<Contact>[] = [];
+      let newContacts: ImportedContact[] = [];
 
       if (file.name.endsWith(".vcf")) {
         newContacts = parseVCard(text, "apple");

@@ -27,13 +27,13 @@ interface State {
 export class RouteErrorBoundary extends Component<Props, State> {
   declare props: Readonly<Props>;
   declare setState: Component<Props, State>["setState"];
-  public state: State = { hasError: false };
+  public override state: State = { hasError: false };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, info: ErrorInfo) {
+  public override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(
       `[RouteErrorBoundary${this.props.viewName ? `: ${this.props.viewName}` : ""}]`,
       error,
@@ -45,7 +45,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: undefined });
   };
 
-  public render() {
+  public override render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center h-full p-8 text-on-surface">

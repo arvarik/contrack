@@ -13,26 +13,32 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
-import { Contact, ContactUpdateData } from "../types";
+import { Contact, ContactUpdateData, ParsedContactData } from "../types";
+import { apiFetch } from "./client";
 
-const API_BASE = "/api";
+/**
+ * Canonical fetcher for the `['contacts']` query — the single source of truth
+ * shared by `useContacts`, `useContactNames`, `useSlimContactsForSearch`, and
+ * the cold-boot prefetch in main.tsx. All consumers share one cache slot and
+ * project their own shape via `select`.
+ */
+export const fetchContactsSlim = async (): Promise<Contact[]> => {
+  const start = performance.now();
+  const res = await apiFetch("/contacts?view=slim");
+  const data: Contact[] = await res.json();
+  const duration = performance.now() - start;
+  if (import.meta.env.DEV) {
+    console.log(
+      `[Perf] fetchContactsSlim: fetch took ${duration.toFixed(2)}ms, items=${data.length}`,
+    );
+  }
+  return data;
+};
 
 export const useContacts = () => {
   return useQuery({
     queryKey: ["contacts"],
-    queryFn: async (): Promise<Contact[]> => {
-      const start = performance.now();
-      const res = await fetch(`${API_BASE}/contacts?view=slim`);
-      if (!res.ok) throw new Error("Failed to fetch contacts");
-      const data = await res.json();
-      const duration = performance.now() - start;
-      if (import.meta.env.DEV) {
-        console.log(
-          `[Perf] useContacts: fetch took ${duration.toFixed(2)}ms, items=${data.length}`,
-        );
-      }
-      return data;
-    },
+    queryFn: fetchContactsSlim,
     staleTime: 600_000, // 10 minutes — navigating back to Network is now instant
   });
 };
@@ -56,11 +62,7 @@ export interface ContactSlim {
 export const useContactNames = () => {
   return useQuery({
     queryKey: ["contacts"],
-    queryFn: async (): Promise<Contact[]> => {
-      const res = await fetch(`${API_BASE}/contacts?view=slim`);
-      if (!res.ok) throw new Error("Failed to fetch contacts");
-      return res.json();
-    },
+    queryFn: fetchContactsSlim,
     staleTime: 600_000,
     select: (contacts): ContactSlim[] =>
       contacts.map((c) => ({
@@ -99,11 +101,7 @@ export interface SlimSearchContact {
 export const useSlimContactsForSearch = () => {
   return useQuery({
     queryKey: ["contacts"],
-    queryFn: async (): Promise<Contact[]> => {
-      const res = await fetch(`${API_BASE}/contacts?view=slim`);
-      if (!res.ok) throw new Error("Failed to fetch contacts");
-      return res.json();
-    },
+    queryFn: fetchContactsSlim,
     staleTime: 600_000,
     select: (contacts): SlimSearchContact[] =>
       contacts
@@ -128,8 +126,7 @@ export const useContact = (id: string | undefined) => {
   return useQuery({
     queryKey: ["contacts", id],
     queryFn: async (): Promise<Contact> => {
-      const res = await fetch(`${API_BASE}/contacts/${id}`);
-      if (!res.ok) throw new Error("Failed to fetch contact");
+      const res = await apiFetch(`/contacts/${id}`);
       return res.json();
     },
     enabled: !!id,
@@ -146,8 +143,7 @@ export const useMapContacts = () => {
     queryFn: async (): Promise<
       (Partial<Contact> & { lat: number; lng: number })[]
     > => {
-      const res = await fetch(`${API_BASE}/contacts/map`);
-      if (!res.ok) throw new Error("Failed to fetch map data");
+      const res = await apiFetch("/contacts/map");
       return res.json();
     },
     staleTime: STALE_TIMES.mapData,
@@ -158,8 +154,7 @@ export const useArchivedContacts = () => {
   return useQuery({
     queryKey: ["contacts", "archived"],
     queryFn: async (): Promise<Contact[]> => {
-      const res = await fetch(`${API_BASE}/contacts/archived`);
-      if (!res.ok) throw new Error("Failed to fetch archived contacts");
+      const res = await apiFetch("/contacts/archived");
       return res.json();
     },
     staleTime: STALE_TIMES.archived,
@@ -170,12 +165,11 @@ export const useCreateContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: ContactUpdateData): Promise<Contact> => {
-      const res = await fetch(`${API_BASE}/contacts`, {
+      const res = await apiFetch("/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create contact");
       return res.json();
     },
     onSuccess: () => {
@@ -190,12 +184,11 @@ export const useBulkCreateContacts = () => {
     mutationFn: async (
       contacts: Partial<Contact>[],
     ): Promise<{ success: boolean; count: number }> => {
-      const res = await fetch(`${API_BASE}/contacts/bulk`, {
+      const res = await apiFetch("/contacts/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(contacts),
       });
-      if (!res.ok) throw new Error("Failed to bulk create contacts");
       return res.json();
     },
     onSuccess: () => {
@@ -206,13 +199,12 @@ export const useBulkCreateContacts = () => {
 
 export const useParseContactText = () => {
   return useMutation({
-    mutationFn: async (text: string): Promise<Partial<Contact>> => {
-      const res = await fetch(`${API_BASE}/parse-contact`, {
+    mutationFn: async (text: string): Promise<ParsedContactData> => {
+      const res = await apiFetch("/parse-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) throw new Error("Failed to parse text");
       return res.json();
     },
   });
@@ -228,12 +220,11 @@ export const useUpdateContact = () => {
       id: string;
       data: ContactUpdateData;
     }): Promise<Contact> => {
-      const res = await fetch(`${API_BASE}/contacts/${id}`, {
+      const res = await apiFetch(`/contacts/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update contact");
       return res.json();
     },
     onMutate: async ({ id, data }) => {
@@ -276,10 +267,9 @@ export const useDeleteContact = () => {
     mutationFn: async (
       id: string,
     ): Promise<{ success: boolean; message: string }> => {
-      const res = await fetch(`${API_BASE}/contacts/${id}`, {
+      const res = await apiFetch(`/contacts/${id}`, {
         method: "DELETE",
       });
-      if (!res.ok) throw new Error("Failed to delete contact");
       return res.json();
     },
     onMutate: async (id) => {
@@ -311,12 +301,11 @@ export const useArchiveContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API_BASE}/contacts/${id}`, {
+      const res = await apiFetch(`/contacts/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isArchived: true }),
       });
-      if (!res.ok) throw new Error("Failed to archive contact");
       return res.json();
     },
     onMutate: async (id) => {
@@ -362,12 +351,11 @@ export const useUnarchiveContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${API_BASE}/contacts/${id}`, {
+      const res = await apiFetch(`/contacts/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isArchived: false }),
       });
-      if (!res.ok) throw new Error("Failed to unarchive contact");
       return res.json();
     },
     onMutate: async (id) => {
@@ -415,12 +403,11 @@ export const useBulkDeleteContacts = () => {
     mutationFn: async (
       ids: string[],
     ): Promise<{ success: boolean; count: number }> => {
-      const res = await fetch(`${API_BASE}/contacts/bulk-delete`, {
+      const res = await apiFetch("/contacts/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
       });
-      if (!res.ok) throw new Error("Failed to bulk delete contacts");
       return res.json();
     },
     onMutate: async (ids) => {
@@ -456,12 +443,11 @@ export const useBulkUpdateContacts = () => {
       ids: string[];
       data: ContactUpdateData;
     }): Promise<{ success: boolean; count: number }> => {
-      const res = await fetch(`${API_BASE}/contacts/bulk-update`, {
+      const res = await apiFetch("/contacts/bulk-update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids, data }),
       });
-      if (!res.ok) throw new Error("Failed to bulk update contacts");
       return res.json();
     },
     onMutate: async ({ ids, data }) => {
@@ -501,11 +487,10 @@ export const useUploadAvatar = () => {
     }): Promise<Contact> => {
       const formData = new FormData();
       formData.append("avatar", file);
-      const res = await fetch(`${API_BASE}/contacts/${contactId}/avatar`, {
+      const res = await apiFetch(`/contacts/${contactId}/avatar`, {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error("Failed to upload avatar");
       return res.json();
     },
     onSuccess: (_data, { contactId }) => {
@@ -526,12 +511,11 @@ export const useSetDicebearAvatar = () => {
       contactId: string;
       avatarUrl: string;
     }): Promise<Contact> => {
-      const res = await fetch(`${API_BASE}/contacts/${contactId}`, {
+      const res = await apiFetch(`/contacts/${contactId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ avatarUrl }),
       });
-      if (!res.ok) throw new Error("Failed to set avatar");
       return res.json();
     },
     onSuccess: (_data, { contactId }) => {

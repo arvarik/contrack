@@ -21,7 +21,13 @@ import {
   classifyPair,
 } from "./scoring.ts";
 import { evaluateBatchWithAI } from "./ai.ts";
-import type { RawPair, PassContext, MatchSignals } from "./types.ts";
+import type {
+  RawPair,
+  PassContext,
+  MatchSignals,
+  ContactRow,
+  NormalizedContact,
+} from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 const MEGA_BLOCK_THRESHOLD = 100;
@@ -50,8 +56,8 @@ async function withTimeout<T>(
 export function buildScoringReasoning(
   signals: MatchSignals,
   score: number,
-  rawA: any,
-  rawB: any,
+  rawA: ContactRow | undefined,
+  rawB: ContactRow | undefined,
 ): string {
   const parts: string[] = [];
 
@@ -100,7 +106,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     GROUP BY e1.contactId, e2.contactId
   `,
     )
-    .all() as any[];
+    .all() as { id1: string; id2: string; matchedField: string }[];
 
   for (const m of emailDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
@@ -120,7 +126,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   // D2: Exact phone
   const allPhones = sqlite
     .prepare("SELECT contactId, phone FROM contact_phones")
-    .all() as any[];
+    .all() as { contactId: string; phone: string }[];
   const phoneMap = new Map<string, string[]>();
   for (const p of allPhones) {
     if (!contactMap.has(p.contactId)) continue;
@@ -170,7 +176,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
       AND c1.canonicalId IS NULL AND c2.canonicalId IS NULL
   `,
     )
-    .all() as any[];
+    .all() as { id1: string; id2: string; name1: string; name2: string }[];
 
   const allSources = sqlite
     .prepare("SELECT contactId, platform FROM contact_sources")
@@ -235,7 +241,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   }
 
   // D5: Nickname-equivalent name
-  const lastNameGroups = new Map<string, any[]>();
+  const lastNameGroups = new Map<string, NormalizedContact[]>();
   for (const n of ctx.normalized) {
     if (n.lastNameNorm.length < 2) continue;
     if (!lastNameGroups.has(n.lastNameNorm))
@@ -423,8 +429,10 @@ export async function runFunnelPass(
 
     const aiCandidates = aiQueue.map((item, idx) => ({
       idx,
-      a: ctx.contactMap.get(item.pair.idA),
-      b: ctx.contactMap.get(item.pair.idB),
+      // Non-null assertions: every queued candidate id originates from
+      // normalized contacts that are present in contactMap.
+      a: ctx.contactMap.get(item.pair.idA)!,
+      b: ctx.contactMap.get(item.pair.idB)!,
       nA: normalizedMap.get(item.pair.idA)!,
       nB: normalizedMap.get(item.pair.idB)!,
       signals: item.signals,

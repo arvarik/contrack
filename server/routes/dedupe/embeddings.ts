@@ -14,7 +14,7 @@ export function registerEmbeddingRoutes(router: Router) {
   router.post(
     "/dedupe/backfill-embeddings",
     asyncHandler(async (req, res) => {
-      const rid = (req as any).requestId;
+      const rid = req.requestId;
 
       if (!isEmbeddingAvailable()) {
         throw new AppError(
@@ -53,7 +53,7 @@ export function registerEmbeddingRoutes(router: Router) {
           .prepare(
             "SELECT COUNT(*) AS cnt FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL",
           )
-          .get() as any
+          .get() as { cnt: number }
       ).cnt;
 
       res.json({

@@ -4,7 +4,7 @@
  * Renders geocoded contacts on a world map with clustered avatar markers.
  * Clicking a marker navigates to the contact detail overlay within the map context.
  */
-import React from "react";
+import React, { useMemo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -19,6 +19,7 @@ import { useMapContacts } from "../api";
 import L from "leaflet";
 import { useNavigate, useLocation } from "react-router-dom";
 import { fallbackAvatarUrl } from "../lib/avatar";
+import { escapeHtml } from "../lib/utils";
 
 const MapClickHandler = () => {
   const navigate = useNavigate();
@@ -41,15 +42,35 @@ const PRIMARY_COLOR = "var(--color-primary)";
 const SURFACE_BG = "var(--color-surface-container-lowest)";
 
 /**
+ * Only allow http(s) URLs or same-origin relative paths as avatar sources.
+ * Anything else (javascript:, data:, etc.) falls back to a generated avatar.
+ */
+const isSafeAvatarUrl = (url: string): boolean => {
+  if (url.startsWith("/")) return true;
+  try {
+    const protocol = new URL(url).protocol.toLowerCase();
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Creates a Leaflet DivIcon with the contact's avatar photo.
  * Uses the app's primary colour for the border ring for visual consistency.
+ *
+ * Security: the avatar URL is scheme-validated and HTML-escaped before being
+ * interpolated into the divIcon markup (L.divIcon renders via innerHTML).
  */
-const createCustomIcon = (avatarUrl: string) => {
+const createCustomIcon = (avatarUrl: string, contactName: string) => {
+  const validatedUrl = isSafeAvatarUrl(avatarUrl)
+    ? avatarUrl
+    : fallbackAvatarUrl(contactName);
   return L.divIcon({
     className: "custom-avatar-icon bg-transparent border-none outline-none",
     html: `
       <div style="width: 48px; height: 48px; border-radius: 50%; border: 3px solid ${PRIMARY_COLOR}; overflow: hidden; background: ${SURFACE_BG}; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translate(-50%, -50%); transition: transform 0.2s;" onMouseOver="this.style.transform='translate(-50%, -60%)'" onMouseOut="this.style.transform='translate(-50%, -50%)'">
-        <img src="${avatarUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+        <img src="${escapeHtml(validatedUrl)}" style="width: 100%; height: 100%; object-fit: cover;" />
       </div>
     `,
     iconSize: [0, 0], // Offset handled by transform in the inner div
@@ -60,7 +81,10 @@ const createCustomIcon = (avatarUrl: string) => {
  * Creates a cluster icon showing the count of grouped contacts.
  * Uses the app's primary colour for the badge.
  */
-const createClusterCustomIcon = function (cluster: any) {
+// Minimal structural type — react-leaflet-cluster's own typings use `any`.
+const createClusterCustomIcon = function (cluster: {
+  getChildCount(): number;
+}) {
   return L.divIcon({
     html: `
       <div style="width: 48px; height: 48px; border-radius: 50%; border: 3px solid ${PRIMARY_COLOR}; background: ${SURFACE_BG}; display: flex; align-items: center; justify-content: center; font-weight: 800; color: ${PRIMARY_COLOR}; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 1.2rem;">
@@ -79,6 +103,19 @@ const createClusterCustomIcon = function (cluster: any) {
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
   const navigate = useNavigate();
+
+  // Memoize marker icons per avatar URL so a fresh L.divIcon isn't minted
+  // for every contact on every render.
+  const markerIcons = useMemo(() => {
+    const cache = new Map<string, L.DivIcon>();
+    for (const contact of contacts) {
+      const url = contact.avatarUrl || fallbackAvatarUrl(contact.name || "");
+      if (!cache.has(url)) {
+        cache.set(url, createCustomIcon(url, contact.name || ""));
+      }
+    }
+    return cache;
+  }, [contacts]);
 
   return (
     <div className="w-full h-full relative bg-surface-container-lowest z-0">
@@ -118,7 +155,7 @@ export const MapView = () => {
             <Marker
               key={contact.id}
               position={[contact.lat, contact.lng]}
-              icon={createCustomIcon(
+              icon={markerIcons.get(
                 contact.avatarUrl || fallbackAvatarUrl(contact.name || ""),
               )}
               eventHandlers={{

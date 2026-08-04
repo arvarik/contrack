@@ -141,6 +141,8 @@ export const contactCreateSchema = z
     preferences: z.string().nullable().optional(),
     birthday: z.string().nullable().optional(),
     pronouns: z.string().nullable().optional(),
+    website: z.string().nullable().optional(),
+    cadenceDays: z.number().int().positive().nullable().optional(),
     isGhost: stringToBool,
     isArchived: stringToBool,
     nextFollowUpAt: z.string().nullable().optional(),
@@ -149,7 +151,9 @@ export const contactCreateSchema = z
 
 export const contactUpdateSchema = contactCreateSchema.partial();
 
-export const contactBulkCreateSchema = z.array(contactCreateSchema);
+// Cap bulk imports — combined with the 50 MB JSON body limit, an unbounded
+// array lets one request allocate arbitrary memory.
+export const contactBulkCreateSchema = z.array(contactCreateSchema).max(5000);
 
 /** Payload for POST /interactions. Type is open string. */
 export const interactionCreateSchema = z
@@ -169,6 +173,16 @@ export const interactionCreateSchema = z
       .optional(),
   })
   .passthrough();
+
+/** Payload for PATCH /interactions/:id — only title and content are mutable. */
+export const interactionUpdateSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    content: z.string().nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "No valid fields to update",
+  });
 
 export const actionItemCreateSchema = z.object({
   title: z.string().min(1, "Title is required"),

@@ -44,6 +44,11 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     });
   }, []);
 
+  /** Deselect everything while staying in select mode. */
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   const selectAll = useCallback(() => {
     setSelectedIds(new Set(filteredContacts.map((c) => c.id)));
   }, [filteredContacts]);
@@ -186,9 +191,12 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     selectedIds,
     selectedCount,
     isPending,
+    isBulkDeletePending: bulkDelete.isPending,
+    isBulkAddToListPending: bulkAddToList.isPending,
     enterSelectMode,
     exitSelectMode,
     toggleSelect,
+    clearSelection,
     selectAll,
     handleBulkDelete,
     handleBulkArchive,

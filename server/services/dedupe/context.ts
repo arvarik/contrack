@@ -3,7 +3,7 @@ import { log } from "../../utils/logger.ts";
 import { normalizeContacts } from "./normalization.ts";
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
 import { distanceToSimilarity } from "./scoring.ts";
-import type { NormalizedContact, PassContext } from "./types.ts";
+import type { ContactRow, NormalizedContact, PassContext } from "./types.ts";
 
 /**
  * Build the shared context used by all detection passes.
@@ -17,9 +17,9 @@ export function buildPassContext(rid: string): PassContext {
     .prepare(
       "SELECT * FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL",
     )
-    .all() as any[];
+    .all() as ContactRow[];
 
-  const contactMap = new Map<string, any>();
+  const contactMap = new Map<string, ContactRow>();
   for (const c of allContacts) contactMap.set(c.id, c);
 
   // 2. Normalize all contacts (batch)

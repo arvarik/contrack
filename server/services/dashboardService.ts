@@ -6,6 +6,28 @@ import { aiCache } from "../utils/aiCache.ts";
 import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
 import type { ActionItem } from "../../src/types.ts";
 
+// =============================================================================
+// Local row shapes for the raw SQL queries below (narrow — only the columns
+// each SELECT actually returns).
+// =============================================================================
+
+/** Slim contact card columns shared by several dashboard queries. */
+interface ContactCardRow {
+  id: string;
+  name: string;
+  company: string | null;
+  avatarUrl: string | null;
+  themeColor: string | null;
+}
+
+interface DashboardMetricsRow {
+  totalActive: number;
+  avgDaysSinceInteraction: number | null;
+  atRiskCount: number;
+  totalInteractions30d: number;
+  newContacts30d: number;
+}
+
 /**
  * Discard the cached Daily Insight. Call this any time contact data is mutated
  * so the next dashboard/insight request regenerates with fresh CRM data.
@@ -53,7 +75,7 @@ export const dashboardService = {
       LIMIT 5
     `,
       )
-      .all() as any[];
+      .all() as (ContactCardRow & { mentionCount: number })[];
 
     // 3. Metrics
     const metrics = sqlite
@@ -67,7 +89,7 @@ export const dashboardService = {
         (SELECT COUNT(*) FROM contacts WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
     `,
       )
-      .get() as any;
+      .get() as DashboardMetricsRow;
 
     if (metrics.avgDaysSinceInteraction === null) {
       metrics.avgDaysSinceInteraction = 0;
@@ -89,7 +111,11 @@ export const dashboardService = {
       LIMIT 10
     `,
       )
-      .all() as any[];
+      .all() as (ContactCardRow & {
+      relationshipScore: number;
+      daysSinceContact: number;
+      lastInteractionTitle: string | null;
+    })[];
 
     // 5. Recently Added
     const recentlyAdded = sqlite
@@ -102,7 +128,7 @@ export const dashboardService = {
       LIMIT 5
     `,
       )
-      .all() as any[];
+      .all() as (ContactCardRow & { addedAt: string | null })[];
 
     // 6. Industry Composition
     const industryComposition = sqlite
@@ -170,7 +196,7 @@ export const dashboardService = {
       LIMIT 20
     `,
       )
-      .all() as any[];
+      .all() as (ContactCardRow & { addedAt: string | null })[];
 
     const elapsed = Date.now() - startMs;
     log.info("Dashboard", `Assembled dashboard payload in ${elapsed}ms`);
@@ -216,7 +242,7 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
         )
-        .get() as any
+        .get() as { count: number }
     ).count;
 
     const industryRows = sqlite
@@ -251,7 +277,7 @@ export const dashboardService = {
       WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
     `,
         )
-        .get() as any
+        .get() as { count: number }
     ).count;
 
     const topRel = sqlite
