@@ -105,8 +105,8 @@ export function deleteCustomEndpoint(id: string): void {
 // ---------------------------------------------------------------------------
 
 const VALID_CAPABILITIES: AICapability[] = [
-  "fast",
-  "smart",
+  "quick",
+  "deep",
   "research",
   "embeddings",
 ];
@@ -118,7 +118,7 @@ export function setCapabilityAssignment(
   if (!VALID_CAPABILITIES.includes(capability)) {
     throw new ValidationError(`Unknown capability "${capability}"`);
   }
-  if (!["auto", "pinned", "builtin", "disabled"].includes(assignment.mode)) {
+  if (!["auto", "pinned", "disabled"].includes(assignment.mode)) {
     throw new ValidationError(`Unknown mode "${assignment.mode}"`);
   }
   if (assignment.mode === "pinned" && !assignment.providerId) {
@@ -289,8 +289,7 @@ export function getSettingsView(): AISettingsView {
   const capabilities: AISettingsView["capabilities"] = {};
   for (const capability of VALID_CAPABILITIES) {
     const assignment = assignments[capability] ?? {
-      mode:
-        capability === "embeddings" ? ("builtin" as const) : ("auto" as const),
+      mode: "auto" as const,
     };
     let resolved: { providerId: string; model?: string } | null = null;
     if (capability !== "embeddings") {

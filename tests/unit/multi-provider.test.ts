@@ -441,15 +441,50 @@ describe("Environment Variable Contracts", () => {
     expect(envExample).toContain("ANTHROPIC_API_KEY");
   });
 
-  it(".env.example documents all three AI_PROVIDER options", async () => {
+  it(".env.example documents a key for every built-in provider", async () => {
     const fs = await import("fs");
     const envExample = fs.readFileSync(
       new URL("../../.env.example", import.meta.url),
       "utf-8",
     );
-    expect(envExample).toContain('"openai"');
-    expect(envExample).toContain('"anthropic"');
-    expect(envExample).toContain('"gemini"');
+    // Providers are chosen by which keys are present, not by naming one in
+    // AI_PROVIDER, so the keys are what the file has to document.
+    expect(envExample).toContain("GEMINI_API_KEY");
+    expect(envExample).toContain("OPENAI_API_KEY");
+    expect(envExample).toContain("ANTHROPIC_API_KEY");
+  });
+
+  it(".env.example documents the per-task model overrides", async () => {
+    const fs = await import("fs");
+    const envExample = fs.readFileSync(
+      new URL("../../.env.example", import.meta.url),
+      "utf-8",
+    );
+    for (const v of [
+      "AI_QUICK_MODEL",
+      "AI_DEEP_MODEL",
+      "AI_RESEARCH_MODEL",
+      "AI_EMBEDDINGS_MODEL",
+    ]) {
+      expect(envExample).toContain(v);
+    }
+  });
+
+  it(".env.example keeps the advanced overrides commented out", async () => {
+    const fs = await import("fs");
+    const envExample = fs.readFileSync(
+      new URL("../../.env.example", import.meta.url),
+      "utf-8",
+    );
+    // One key must be enough to run; an uncommented model pin would break
+    // that promise for anyone who copies the file verbatim.
+    for (const v of [
+      "AI_QUICK_MODEL",
+      "AI_DEEP_MODEL",
+      "AI_EMBEDDINGS_MODEL",
+    ]) {
+      expect(envExample).toMatch(new RegExp(`^# ${v}=`, "m"));
+    }
   });
 });
 

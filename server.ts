@@ -18,9 +18,8 @@ import { contactService } from "./server/services/contactService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
 import {
-  isEmbeddingAvailable,
   backfillEmbeddings,
-  getEmbeddingCount,
+  ensureDedupeEmbeddingStore,
 } from "./server/services/dedupe/embeddings.ts";
 import {
   initLocalEmbeddings,
@@ -178,38 +177,22 @@ async function startServer() {
           "Server",
           `Search embedding backfill complete: ${count} contacts embedded locally`,
         );
+      // Dedupe shares the embeddings capability, so it can only run once a
+      // backend is ready. Reconcile it (rebuilding if the model changed) and
+      // fill any gaps — previously this only ran when the store was entirely
+      // empty, so a partial index could never repair itself.
+      return ensureDedupeEmbeddingStore().then(() => backfillEmbeddings());
+    })
+    .then((count) => {
+      if (count > 0)
+        log.info(
+          "Server",
+          `Dedupe embedding backfill complete: ${count} contacts embedded`,
+        );
     })
     .catch((err) => {
-      log.warn(
-        "Server",
-        `Local embedding init/backfill failed: ${err.message}`,
-      );
+      log.warn("Server", `Embedding init/backfill failed: ${err.message}`);
     });
-
-  // ── Dedupe embedding backfill (Gemini, for dedupe engine) ───────────────
-  if (isEmbeddingAvailable()) {
-    const existingCount = getEmbeddingCount();
-    if (existingCount === 0) {
-      log.info(
-        "Server",
-        "Starting background embedding backfill for dedupe...",
-      );
-      backfillEmbeddings()
-        .then((count) => {
-          if (count > 0)
-            log.info(
-              "Server",
-              `Dedupe embedding backfill complete: ${count} contacts embedded`,
-            );
-        })
-        .catch((err) => {
-          log.warn(
-            "Server",
-            `Dedupe embedding backfill failed: ${err.message}`,
-          );
-        });
-    }
-  }
 }
 
 startServer();

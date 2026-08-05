@@ -131,7 +131,7 @@ router.delete(
 // ─── Capability assignments ──────────────────────────────────────────────────
 
 const assignmentSchema = z.object({
-  mode: z.enum(["auto", "pinned", "builtin", "disabled"]),
+  mode: z.enum(["auto", "pinned", "disabled"]),
   providerId: z.string().optional(),
   model: z.string().optional(),
 });

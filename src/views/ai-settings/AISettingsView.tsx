@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Info,
   Server,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -45,21 +46,21 @@ interface CapabilityMeta {
   /** What app features this capability powers. */
   tooltip: string;
   /** Extra option beyond auto/pinned. */
-  specialMode?: { mode: "builtin" | "disabled"; label: string };
+  specialMode?: { mode: "auto" | "disabled"; label: string };
   warning?: string;
 }
 
 const CAPABILITIES: CapabilityMeta[] = [
   {
-    key: "fast",
-    label: "Fast model",
+    key: "quick",
+    label: "Quick tasks",
     icon: <Zap className="w-4 h-4 text-amber-500" />,
     tooltip:
       "Magic Paste contact parsing, @mention extraction, search understanding and result verification, daily insights, and search expansion. High volume, low complexity — favors cheap, quick models.",
   },
   {
-    key: "smart",
-    label: "Smart model",
+    key: "deep",
+    label: "Deep tasks",
     icon: <Brain className="w-4 h-4 text-primary" />,
     tooltip:
       "Email (.eml) summarization, duplicate adjudication, and structured extraction from research. Lower volume, higher reasoning — favors stronger models.",
@@ -70,13 +71,13 @@ const CAPABILITIES: CapabilityMeta[] = [
     icon: <Dna className="w-4 h-4 text-emerald-500" />,
     tooltip:
       "Semantic search ranking and duplicate similarity detection. The built-in model runs locally with no API cost and works offline.",
-    specialMode: { mode: "builtin", label: "Built-in (local, recommended)" },
+    specialMode: { mode: "auto", label: "Built-in (local, recommended)" },
     warning:
       "Changing the embedding model rebuilds the vector index and re-embeds every contact in the background.",
   },
   {
     key: "research",
-    label: "Online research",
+    label: "Web research",
     icon: <Globe className="w-4 h-4 text-sky-500" />,
     tooltip:
       "AI Search enrichment — researching contacts across the live web. Requires a provider with search grounding, or a self-hosted SearXNG instance.",
@@ -108,6 +109,10 @@ export const AISettingsView = () => {
     apiKey: "",
   });
   const [searxngInput, setSearxngInput] = useState<string | null>(null);
+  // Someone with one API key has nothing to decide here, so the per-task rows
+  // stay folded away until they're wanted — or until something is already
+  // pinned, in which case hiding it would misrepresent the configuration.
+  const [showPerTask, setShowPerTask] = useState(false);
 
   if (isLoading || !settings) {
     return (
@@ -155,6 +160,14 @@ export const AISettingsView = () => {
   };
 
   const hasAnyProvider = settings.providers.length > 0;
+  const customized = Object.values(settings.capabilities).some(
+    (c) => c.assignment.mode !== "auto",
+  );
+  const perTaskOpen = showPerTask || customized;
+  // What Auto actually landed on, for the collapsed summary.
+  const autoTarget = settings.capabilities.quick?.resolved?.providerId;
+  const autoLabel =
+    settings.providers.find((p) => p.id === autoTarget)?.label ?? null;
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">
@@ -329,16 +342,47 @@ export const AISettingsView = () => {
           </div>
         )}
 
-        <div className="space-y-4">
-          {CAPABILITIES.map((meta) => (
-            <CapabilityRow
-              key={meta.key}
-              meta={meta}
-              assignment={settings.capabilities[meta.key]?.assignment}
-              resolved={settings.capabilities[meta.key]?.resolved}
-            />
-          ))}
-        </div>
+        {!perTaskOpen && hasAnyProvider && (
+          <div className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-container-low">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div className="flex-1 min-w-0 text-sm">
+              <span className="font-bold">All tasks</span>
+              <span className="text-on-surface-variant">
+                {" "}
+                → {autoLabel ?? "your connected providers"}, chosen
+                automatically
+              </span>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowPerTask((v) => !v)}
+          aria-expanded={perTaskOpen}
+          className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors"
+        >
+          <ChevronDown
+            className={cn(
+              "w-3.5 h-3.5 transition-transform",
+              perTaskOpen && "rotate-180",
+            )}
+          />
+          {perTaskOpen ? "Hide per-task settings" : "Customize per task"}
+        </button>
+
+        {perTaskOpen && (
+          <div className="space-y-4">
+            {CAPABILITIES.map((meta) => (
+              <CapabilityRow
+                key={meta.key}
+                meta={meta}
+                assignment={settings.capabilities[meta.key]?.assignment}
+                resolved={settings.capabilities[meta.key]?.resolved}
+              />
+            ))}
+          </div>
+        )}
 
         {/* SearXNG — self-hosted research */}
         <div className="pt-2 border-t border-on-surface-variant/10 space-y-2">
@@ -508,7 +552,7 @@ const CapabilityRow = ({
   const setCapability = useSetCapability();
 
   const current = assignment ?? {
-    mode: meta.key === "embeddings" ? "builtin" : "auto",
+    mode: "auto",
   };
   const value =
     current.mode === "pinned" && current.providerId && current.model
@@ -585,7 +629,7 @@ const CapabilityRow = ({
           )}
         </div>
       )}
-      {meta.warning && current.mode !== "builtin" && (
+      {meta.warning && current.mode !== "auto" && (
         <div className="text-xs text-amber-600 pl-1 flex items-start gap-1.5">
           <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
           {meta.warning}

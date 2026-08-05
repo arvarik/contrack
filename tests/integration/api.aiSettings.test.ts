@@ -34,24 +34,26 @@ describe("GET /api/settings/ai", () => {
     ).toEqual(expect.arrayContaining(["gemini", "openai", "anthropic"]));
   });
 
-  it("defaults every capability to auto (embeddings to built-in)", async () => {
+  it("defaults every capability to auto", async () => {
     const res = await request(app).get("/api/settings/ai");
-    expect(res.body.capabilities.fast.assignment.mode).toBe("auto");
-    expect(res.body.capabilities.smart.assignment.mode).toBe("auto");
+    expect(res.body.capabilities.quick.assignment.mode).toBe("auto");
+    expect(res.body.capabilities.deep.assignment.mode).toBe("auto");
     expect(res.body.capabilities.research.assignment.mode).toBe("auto");
-    expect(res.body.capabilities.embeddings.assignment.mode).toBe("builtin");
+    // Embeddings uses the same vocabulary as the rest; auto means the
+    // built-in local model.
+    expect(res.body.capabilities.embeddings.assignment.mode).toBe("auto");
   });
 
   it("resolves nothing while no provider is connected", async () => {
     const res = await request(app).get("/api/settings/ai");
-    expect(res.body.capabilities.fast.resolved).toBeNull();
+    expect(res.body.capabilities.quick.resolved).toBeNull();
   });
 });
 
 describe("capability assignment", () => {
   it("persists a pinned assignment and echoes the updated view", async () => {
     const res = await request(app)
-      .put("/api/settings/ai/capabilities/smart")
+      .put("/api/settings/ai/capabilities/deep")
       .send({
         mode: "pinned",
         providerId: "anthropic",
@@ -59,16 +61,14 @@ describe("capability assignment", () => {
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.view.capabilities.smart.assignment).toEqual({
+    expect(res.body.view.capabilities.deep.assignment).toEqual({
       mode: "pinned",
       providerId: "anthropic",
       model: "claude-opus-5",
     });
 
     const after = await request(app).get("/api/settings/ai");
-    expect(after.body.capabilities.smart.assignment.model).toBe(
-      "claude-opus-5",
-    );
+    expect(after.body.capabilities.deep.assignment.model).toBe("claude-opus-5");
   });
 
   it("supports disabling online research", async () => {
@@ -83,7 +83,7 @@ describe("capability assignment", () => {
 
   it("rejects an unknown mode", async () => {
     const res = await request(app)
-      .put("/api/settings/ai/capabilities/fast")
+      .put("/api/settings/ai/capabilities/quick")
       .send({ mode: "telepathy" });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
@@ -91,7 +91,7 @@ describe("capability assignment", () => {
 
   it("rejects a pinned assignment with no provider", async () => {
     const res = await request(app)
-      .put("/api/settings/ai/capabilities/fast")
+      .put("/api/settings/ai/capabilities/quick")
       .send({ mode: "pinned", model: "some-model" });
     expect(res.status).toBe(400);
   });
@@ -230,7 +230,7 @@ describe("custom OpenAI-compatible endpoints", () => {
 
 describe("model catalog", () => {
   it("returns empty groups before any discovery has run", async () => {
-    const res = await request(app).get("/api/settings/ai/models/smart");
+    const res = await request(app).get("/api/settings/ai/models/deep");
     expect(res.status).toBe(200);
     expect(res.body.groups).toEqual([]);
   });

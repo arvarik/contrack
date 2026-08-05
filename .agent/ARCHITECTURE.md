@@ -217,7 +217,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/routes/dataLifecycle.ts` — `/api/trash` (+restore/purge), `/api/backups`, `/api/export/{json,csv}`.
 - **Trash semantics**: `DELETE /api/contacts/:id` is a SOFT delete (`deletedAt` + `isArchived=1`; FTS row dropped by trash-aware triggers; embeddings purged). Restore clears both and re-embeds. `purgeExpiredTrash()` hard-deletes after `TRASH_RETENTION_DAYS` (default 30, daily sweep). The `deletedAt` column must exist BEFORE the FTS trigger DDL in db.ts (pre-FTS ALTER).
 - `server/app.ts` — Express app factory (`createApp`/`finalizeApp`): middleware + routers + error pipeline without listen/Vite. server.ts and the integration tests both consume it.
-- `server/ai/capabilities.ts` — Capability routing (`fast` / `smart` / `research` / `embeddings`): resolves each capability to a provider + model from settings pins → env overrides (`AI_FAST_MODEL` etc.) → Auto (legacy `AI_PROVIDER` first, then a preference order). Internal classes preserved: fast→lite, smart→flash, research→pro.
+- `server/ai/capabilities.ts` — Capability routing (`quick` / `deep` / `research` / `embeddings`): resolves each capability to a provider + model from settings pins → env overrides (`AI_QUICK_MODEL` etc.) → Auto (legacy `AI_PROVIDER` first, then a preference order). Internal classes preserved: quick→lite, deep→flash, research→pro.
 - `server/ai/gateway.ts` — `generateFor(capability, options)`: the single entry point business logic uses for generation. Replaces calling one shared provider with `routing.prefer`.
 - `server/ai/providerRegistry.ts` — All _configured_ providers (env keys, UI-stored keys, custom OpenAI-compatible endpoints), instance-cached per id so Gemini's SmartRouter/QuotaTracker stay singleton.
 - `server/ai/adapters/openaiCompatible.ts` — One adapter for every OpenAI-format backend (Ollama, vLLM, LM Studio, xAI, DeepSeek, Mistral). Adaptive structured output: json_schema → json_object → prompt, remembered per model.
@@ -264,7 +264,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - **Gemini** (default): 6 registered models via `@google/genai`. Full SmartRouter + QuotaTracker + circuit breakers. Includes Google Search grounding and embedding models.
   - **OpenAI**: `gpt-4o-mini`, `gpt-5.4-mini`, `gpt-5.4` via `openai` npm package. Web search via Responses API. Structured output via `response_format: json_schema`.
   - **Anthropic**: `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` via `@anthropic-ai/sdk`. Web search via native `web_search` tool. Structured output via `output_config.format: json_schema`.
-- **Dedupe Embeddings**: `gemini-embedding-2-preview` via `@google/genai` (Gemini-only, uses `GEMINI_API_KEY` regardless of active `AI_PROVIDER`). Degrades to deterministic-only matching when unavailable.
+- **Dedupe Embeddings**: resolved from the embeddings capability — the same model that backs semantic search. Defaults to the built-in local model. Degrades to deterministic-only matching when unavailable.
 - **Local Search Embeddings**: `Xenova/all-MiniLM-L6-v2` via `@huggingface/transformers` — 384-dim vectors for search. Provider-agnostic (runs locally).
 - **Geocoding**: Mapbox (Primary, requires `MAPBOX_API_KEY`) / Nominatim (Fallback, no key needed).
 - **Avatar Processing**: `sharp` for image resizing/optimization.
@@ -320,24 +320,25 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 
 ## 6. Environment Variables
 
-| Variable            | Required                | Default      | Purpose                                                                                                                                              |
-| ------------------- | ----------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AI_PROVIDER`       | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.                                                   |
-| `AI_FAST_MODEL`     | No                      | —            | Pin the Fast capability: `model` or `provider:model`. Overridden by a Settings pin.                                                                  |
-| `AI_SMART_MODEL`    | No                      | —            | Pin the Smart capability.                                                                                                                            |
-| `AI_RESEARCH_MODEL` | No                      | —            | Pin the Online-research capability.                                                                                                                  |
-| `GEMINI_API_KEY`    | No (any provider works) | —            | Google Gemini API key. Also used for dedupe embeddings regardless of active provider.                                                                |
-| `OPENAI_API_KEY`    | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                                                                            |
-| `ANTHROPIC_API_KEY` | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                                                                  |
-| `AI_TIER`           | No                      | `FREE`       | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
-| `MAPBOX_API_KEY`    | No                      | —            | Enables Mapbox as primary geocoder (falls back to Nominatim if missing).                                                                             |
-| `PORT`              | No                      | `3210`       | Server port.                                                                                                                                         |
-| `HOST`              | No                      | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                                                                      |
-| `CORS_ORIGIN`       | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                                                               |
-| `DATA_DIR`          | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker.                                                 |
-| `APP_URL`           | No                      | —            | Self-referential URL for OAuth/links (injected by AI Studio).                                                                                        |
-| `NODE_ENV`          | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                                                                             |
-| `DISABLE_HMR`       | No                      | —            | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                                                                         |
+| Variable              | Required                | Default      | Purpose                                                                                                                                              |
+| --------------------- | ----------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`         | No                      | `gemini`     | Preferred provider when a capability is on Auto. Supported: `"gemini"`, `"openai"`, `"anthropic"`.                                                   |
+| `AI_QUICK_MODEL`      | No                      | —            | Pin the Quick-tasks model: `model` or `provider:model`. Overridden by a Settings pin.                                                                |
+| `AI_DEEP_MODEL`       | No                      | —            | Pin the Deep-tasks model.                                                                                                                            |
+| `AI_RESEARCH_MODEL`   | No                      | —            | Pin the Online-research capability.                                                                                                                  |
+| `AI_EMBEDDINGS_MODEL` | No                      | —            | Pin the Embeddings model (governs both search and dedupe vectors).                                                                                   |
+| `GEMINI_API_KEY`      | No (any provider works) | —            | Google Gemini API key. Also used for dedupe embeddings regardless of active provider.                                                                |
+| `OPENAI_API_KEY`      | No (any provider works) | —            | OpenAI API key. Prepaid billing required.                                                                                                            |
+| `ANTHROPIC_API_KEY`   | No (any provider works) | —            | Anthropic Claude API key. Prepaid billing required.                                                                                                  |
+| `AI_TIER`             | No                      | `FREE`       | **Gemini only.** Controls SmartRouter rate limit profiles: `FREE` (~10 RPM) or `PAID` (10K+ RPM, preview models). Has no effect on OpenAI/Anthropic. |
+| `MAPBOX_API_KEY`      | No                      | —            | Enables Mapbox as primary geocoder (falls back to Nominatim if missing).                                                                             |
+| `PORT`                | No                      | `3210`       | Server port.                                                                                                                                         |
+| `HOST`                | No                      | `127.0.0.1`  | Bind interface. No auth exists, so localhost by default; Docker sets `0.0.0.0`.                                                                      |
+| `CORS_ORIGIN`         | No                      | — (off)      | Enables CORS for one origin. Disabled by default (SPA is same-origin).                                                                               |
+| `DATA_DIR`            | No                      | project root | Root for runtime data: `curator.db`, `uploads/`, Transformers.js model cache. `/app/data` in Docker.                                                 |
+| `APP_URL`             | No                      | —            | Self-referential URL for OAuth/links (injected by AI Studio).                                                                                        |
+| `NODE_ENV`            | No                      | —            | When `production`, serves static `dist/` and uses `morgan` short format.                                                                             |
+| `DISABLE_HMR`         | No                      | —            | Set to `true` to disable Vite HMR (used in AI Studio to prevent flickering).                                                                         |
 
 ## 7. Invariants & Safety Rules
 

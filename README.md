@@ -124,7 +124,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 ### More Capabilities
 
 - **Magic Paste** — Paste unstructured text, AI extracts a structured contact
-- **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign models per capability from Settings
+- **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign a model per task from Settings, or just set one key and let it choose
 - **Smart Router** — Automatic Gemini model selection (Lite/Flash/Pro) per use case
 - **Batch Enrichment** — AI-powered web research to hydrate contact profiles
 - **Custom Lists** — Unlimited groups with icons, drag-to-reorder, bulk membership

@@ -35,8 +35,8 @@ const ENV_KEYS = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   "AI_PROVIDER",
-  "AI_FAST_MODEL",
-  "AI_SMART_MODEL",
+  "AI_QUICK_MODEL",
+  "AI_DEEP_MODEL",
   "AI_RESEARCH_MODEL",
 ];
 const savedEnv: Record<string, string | undefined> = {};
@@ -112,14 +112,14 @@ describe("provider registry", () => {
 describe("capability resolution — backward compatibility", () => {
   it("maps capabilities to the historical model classes", () => {
     process.env.GEMINI_API_KEY = "g-key";
-    expect(resolveCapability("fast")?.modelClass).toBe("lite");
-    expect(resolveCapability("smart")?.modelClass).toBe("flash");
+    expect(resolveCapability("quick")?.modelClass).toBe("lite");
+    expect(resolveCapability("deep")?.modelClass).toBe("flash");
     expect(resolveCapability("research")?.modelClass).toBe("pro");
   });
 
   it("routes everything to the single configured provider", () => {
     process.env.GEMINI_API_KEY = "g-key";
-    for (const cap of ["fast", "smart", "research"] as const) {
+    for (const cap of ["quick", "deep", "research"] as const) {
       expect(resolveCapability(cap)?.providerId).toBe("gemini");
       // No pinned model → the adapter's own router picks, as before.
       expect(resolveCapability(cap)?.model).toBeUndefined();
@@ -130,15 +130,15 @@ describe("capability resolution — backward compatibility", () => {
     process.env.GEMINI_API_KEY = "g-key";
     process.env.ANTHROPIC_API_KEY = "a-key";
     process.env.AI_PROVIDER = "anthropic";
-    expect(resolveCapability("fast")?.providerId).toBe("anthropic");
-    expect(resolveCapability("smart")?.providerId).toBe("anthropic");
+    expect(resolveCapability("quick")?.providerId).toBe("anthropic");
+    expect(resolveCapability("deep")?.providerId).toBe("anthropic");
   });
 
   it("returns null for every capability when nothing is configured", () => {
-    expect(resolveCapability("fast")).toBeNull();
+    expect(resolveCapability("quick")).toBeNull();
     expect(capabilityAvailability()).toEqual({
-      fast: false,
-      smart: false,
+      quick: false,
+      deep: false,
       research: false,
     });
   });
@@ -149,13 +149,13 @@ describe("capability resolution — explicit configuration", () => {
     process.env.GEMINI_API_KEY = "g-key";
     process.env.ANTHROPIC_API_KEY = "a-key";
     settingsStore.set("ai.capabilities", {
-      smart: {
+      deep: {
         mode: "pinned",
         providerId: "anthropic",
         model: "claude-sonnet-5",
       },
     });
-    const resolved = resolveCapability("smart");
+    const resolved = resolveCapability("deep");
     expect(resolved?.providerId).toBe("anthropic");
     expect(resolved?.model).toBe("claude-sonnet-5");
   });
@@ -163,22 +163,22 @@ describe("capability resolution — explicit configuration", () => {
   it("falls back to auto when a pinned provider loses its credentials", () => {
     process.env.GEMINI_API_KEY = "g-key";
     settingsStore.set("ai.capabilities", {
-      fast: { mode: "pinned", providerId: "openai", model: "gpt-5.6-luna" },
+      quick: { mode: "pinned", providerId: "openai", model: "gpt-5.6-luna" },
     });
-    expect(resolveCapability("fast")?.providerId).toBe("gemini");
+    expect(resolveCapability("quick")?.providerId).toBe("gemini");
   });
 
   it("treats a disabled capability as unavailable", () => {
     process.env.GEMINI_API_KEY = "g-key";
     settingsStore.set("ai.capabilities", { research: { mode: "disabled" } });
     expect(resolveCapability("research")).toBeNull();
-    expect(resolveCapability("fast")).not.toBeNull();
+    expect(resolveCapability("quick")).not.toBeNull();
   });
 
   it("applies env model overrides (bare model uses the default provider)", () => {
     process.env.GEMINI_API_KEY = "g-key";
-    process.env.AI_FAST_MODEL = "gemini-3.5-flash-lite";
-    const resolved = resolveCapability("fast");
+    process.env.AI_QUICK_MODEL = "gemini-3.5-flash-lite";
+    const resolved = resolveCapability("quick");
     expect(resolved?.providerId).toBe("gemini");
     expect(resolved?.model).toBe("gemini-3.5-flash-lite");
   });
@@ -186,19 +186,23 @@ describe("capability resolution — explicit configuration", () => {
   it("applies env overrides in provider:model form", () => {
     process.env.GEMINI_API_KEY = "g-key";
     process.env.ANTHROPIC_API_KEY = "a-key";
-    process.env.AI_SMART_MODEL = "anthropic:claude-opus-5";
-    const resolved = resolveCapability("smart");
+    process.env.AI_DEEP_MODEL = "anthropic:claude-opus-5";
+    const resolved = resolveCapability("deep");
     expect(resolved?.providerId).toBe("anthropic");
     expect(resolved?.model).toBe("claude-opus-5");
   });
 
   it("settings pins beat env overrides", () => {
     process.env.GEMINI_API_KEY = "g-key";
-    process.env.AI_FAST_MODEL = "gemini-2.5-flash-lite";
+    process.env.AI_QUICK_MODEL = "gemini-2.5-flash-lite";
     settingsStore.set("ai.capabilities", {
-      fast: { mode: "pinned", providerId: "gemini", model: "gemini-3.6-flash" },
+      quick: {
+        mode: "pinned",
+        providerId: "gemini",
+        model: "gemini-3.6-flash",
+      },
     });
-    expect(resolveCapability("fast")?.model).toBe("gemini-3.6-flash");
+    expect(resolveCapability("quick")?.model).toBe("gemini-3.6-flash");
   });
 });
 
@@ -208,7 +212,7 @@ describe("capability resolution — research grounding constraint", () => {
       { id: "homelab", label: "Ollama", baseUrl: "http://alpha:11434/v1" },
     ]);
     // The compat endpoint can serve chat…
-    expect(resolveCapability("fast")?.providerId).toBe("custom:homelab");
+    expect(resolveCapability("quick")?.providerId).toBe("custom:homelab");
     // …but cannot ground research.
     expect(resolveCapability("research")).toBeNull();
   });
@@ -219,5 +223,41 @@ describe("capability resolution — research grounding constraint", () => {
       { id: "homelab", label: "Ollama", baseUrl: "http://alpha:11434/v1" },
     ]);
     expect(resolveCapability("research")?.providerId).toBe("anthropic");
+  });
+});
+
+describe("embeddings capability", () => {
+  it("defaults to the built-in local model with no configuration", async () => {
+    const { resolveEmbeddings } = await import("../../server/ai/embeddings.ts");
+    const resolved = resolveEmbeddings();
+    expect(resolved.kind).toBe("builtin");
+    // The built-in model is the whole point of local-first: no key, offline.
+    expect(resolved.dimension).toBe(384);
+  });
+
+  it("honors AI_EMBEDDINGS_MODEL, matching the other capabilities", async () => {
+    process.env.GEMINI_API_KEY = "g-key";
+    process.env.AI_EMBEDDINGS_MODEL = "gemini:gemini-embedding-2";
+    const { resolveEmbeddings } = await import("../../server/ai/embeddings.ts");
+    const resolved = resolveEmbeddings();
+    expect(resolved.kind).toBe("provider");
+    expect(resolved.providerId).toBe("gemini");
+    expect(resolved.model).toBe("gemini-embedding-2");
+    delete process.env.AI_EMBEDDINGS_MODEL;
+  });
+
+  it("lets a Settings pin beat the env override", async () => {
+    process.env.GEMINI_API_KEY = "g-key";
+    process.env.AI_EMBEDDINGS_MODEL = "gemini:gemini-embedding-001";
+    settingsStore.set("ai.capabilities", {
+      embeddings: {
+        mode: "pinned",
+        providerId: "gemini",
+        model: "gemini-embedding-2",
+      },
+    });
+    const { resolveEmbeddings } = await import("../../server/ai/embeddings.ts");
+    expect(resolveEmbeddings().model).toBe("gemini-embedding-2");
+    delete process.env.AI_EMBEDDINGS_MODEL;
   });
 });

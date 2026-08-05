@@ -26,9 +26,10 @@ cp .env.example .env
 | `TRASH_RETENTION_DAYS`  | Days a deleted contact stays restorable before permanent purge                                                                                              | `30`                    | No       |
 | `BACKUP_INTERVAL_HOURS` | Automatic SQLite snapshot cadence (`0` disables)                                                                                                            | `24`                    | No       |
 | `BACKUP_KEEP`           | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                    | `7`                     | No       |
-| `AI_FAST_MODEL`         | Pin the Fast capability to a model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                            | — (auto)                | No       |
-| `AI_SMART_MODEL`        | Pin the Smart capability                                                                                                                                    | — (auto)                | No       |
-| `AI_RESEARCH_MODEL`     | Pin the Online-research capability                                                                                                                          | — (auto)                | No       |
+| `AI_QUICK_MODEL`        | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                     | — (auto)                | No       |
+| `AI_DEEP_MODEL`         | Pin the Deep-tasks model                                                                                                                                    | — (auto)                | No       |
+| `AI_RESEARCH_MODEL`     | Pin the Web-research model                                                                                                                                  | — (auto)                | No       |
+| `AI_EMBEDDINGS_MODEL`   | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                      | — (built-in)            | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -44,12 +45,12 @@ whichever providers you have keys for, and each kind of task is served by a
 suitable model. Everything is configurable in the app under
 **Settings → AI Configuration**; no restart or file editing required.
 
-| Capability          | Powers                                                                                        | Default          |
-| ------------------- | --------------------------------------------------------------------------------------------- | ---------------- |
-| **Fast model**      | Magic Paste parsing, @mention extraction, search understanding & verification, daily insights | Auto             |
-| **Smart model**     | Email (.eml) summaries, duplicate adjudication, research extraction                           | Auto             |
-| **Embeddings**      | Semantic search ranking, duplicate similarity                                                 | Built-in (local) |
-| **Online research** | AI Search enrichment against the live web                                                     | Auto             |
+| Capability       | Powers                                                                                        | Default          |
+| ---------------- | --------------------------------------------------------------------------------------------- | ---------------- |
+| **Quick tasks**  | Magic Paste parsing, @mention extraction, search understanding & verification, daily insights | Auto             |
+| **Deep tasks**   | Email (.eml) summaries, duplicate adjudication, research extraction                           | Auto             |
+| **Embeddings**   | Semantic search ranking, duplicate similarity                                                 | Built-in (local) |
+| **Web research** | AI Search enrichment against the live web                                                     | Auto             |
 
 **Auto** picks the first available provider, preferring `AI_PROVIDER` — so an
 existing single-key deployment behaves exactly as it did before. Set one API key
@@ -79,7 +80,7 @@ Base URL: http://alpha:11434/v1
 API key:  (blank for Ollama)
 ```
 
-These can serve Fast, Smart, and Embeddings. They cannot serve Online research —
+These can serve Quick, Deep, and Embeddings. They cannot serve Online research —
 there is no standard grounding API in the OpenAI format — so use SearXNG for
 self-hosted web research.
 
@@ -101,16 +102,18 @@ marked with `?` in the UI.
 
 Set a SearXNG base URL to enable online research with no cloud provider.
 Contrack queries its JSON API, fetches the top results (SSRF-guarded and
-size-capped), and runs the normal structured extraction on the Smart model.
+size-capped), and runs the normal structured extraction on the Deep-tasks model.
 Combined with a local chat model and the built-in embeddings, this is a fully
 self-hosted AI stack.
 
 ### Changing the embeddings model
 
-The vector index is fixed-width, so switching embedding models rebuilds it and
-re-embeds every contact in the background. Search falls back to keyword (FTS5)
-matching while that runs. The built-in local model needs no key and works
-offline.
+One setting governs both vector indexes — semantic search and duplicate
+detection — so "built-in (local)" genuinely means nothing leaves the machine.
+
+The indexes are fixed-width, so switching models rebuilds them and re-embeds
+every contact in the background. Search falls back to keyword (FTS5) matching
+while that runs. The built-in local model needs no key and works offline.
 
 ---
 

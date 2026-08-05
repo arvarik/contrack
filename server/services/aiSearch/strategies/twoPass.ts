@@ -155,7 +155,7 @@ ${wrapUntrusted("web research text", groundedText, 32_000)}
     `.trim();
 
     const pass2Start = Date.now();
-    const pass2Result = await generateFor("fast", {
+    const pass2Result = await generateFor("quick", {
       prompt: extractionPrompt,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,

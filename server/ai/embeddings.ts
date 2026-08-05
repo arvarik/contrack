@@ -19,7 +19,7 @@
 // =============================================================================
 
 import { getProvider } from "./providerRegistry.ts";
-import { getCapabilityAssignment } from "./capabilities.ts";
+import { getCapabilityAssignment, parseEnvOverride } from "./capabilities.ts";
 import {
   getSetting,
   setSetting,
@@ -62,26 +62,45 @@ function readDimensionCache(): DimensionCache {
 export function resolveEmbeddings(): ResolvedEmbeddings {
   const assignment = getCapabilityAssignment("embeddings");
 
+  // 1. Explicit pin from Settings.
   if (
     assignment.mode === "pinned" &&
     assignment.providerId &&
     assignment.model
   ) {
-    const signature = `${assignment.providerId}/${assignment.model}`;
-    return {
-      kind: "provider",
-      providerId: assignment.providerId,
-      model: assignment.model,
-      dimension: readDimensionCache()[signature] ?? null,
-      signature,
-    };
+    return providerEmbeddings(assignment.providerId, assignment.model);
   }
 
+  // 2. Env override — parity with the generation capabilities, for deployments
+  //    that configure declaratively and never open Settings. A Settings pin
+  //    wins, matching the precedence used everywhere else.
+  const envValue = process.env.AI_EMBEDDINGS_MODEL;
+  if (assignment.mode !== "pinned" && envValue) {
+    const parsed = parseEnvOverride(envValue);
+    if (parsed) return providerEmbeddings(parsed.providerId, parsed.model);
+  }
+
+  // 3. Auto — the built-in local model. No key, no network, no cost.
   return {
     kind: "builtin",
     model: BUILTIN_MODEL_ID,
     dimension: BUILTIN_DIMENSION,
     signature: `builtin/${BUILTIN_MODEL_ID}`,
+  };
+}
+
+/** Shape a provider-backed embeddings resolution, with its cached dimension. */
+function providerEmbeddings(
+  providerId: string,
+  model: string,
+): ResolvedEmbeddings {
+  const signature = `${providerId}/${model}`;
+  return {
+    kind: "provider",
+    providerId,
+    model,
+    dimension: readDimensionCache()[signature] ?? null,
+    signature,
   };
 }
 
@@ -156,12 +175,30 @@ export async function probeDimension(
 // ---------------------------------------------------------------------------
 
 /** What the search_embeddings table was last built with. */
-export function getEmbeddingsState(): EmbeddingsState | null {
-  return getSetting<EmbeddingsState>(SETTING_KEYS.embeddingsState);
+/**
+ * Which vector store a build record belongs to. Search and dedupe share a
+ * model but are rebuilt independently, so each records its own state — a
+ * single record would make one store's rebuild look like the other's.
+ */
+export type EmbeddingStore = "search" | "dedupe";
+
+function stateKey(store: EmbeddingStore): string {
+  return store === "search"
+    ? SETTING_KEYS.embeddingsState
+    : `${SETTING_KEYS.embeddingsState}.dedupe`;
 }
 
-export function setEmbeddingsState(state: EmbeddingsState): void {
-  setSetting(SETTING_KEYS.embeddingsState, state);
+export function getEmbeddingsState(
+  store: EmbeddingStore = "search",
+): EmbeddingsState | null {
+  return getSetting<EmbeddingsState>(stateKey(store));
+}
+
+export function setEmbeddingsState(
+  state: EmbeddingsState,
+  store: EmbeddingStore = "search",
+): void {
+  setSetting(stateKey(store), state);
 }
 
 /**

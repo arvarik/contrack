@@ -6,7 +6,7 @@
 // at call time, using (in priority order):
 //
 //   1. An explicit pin from the settings store (Settings → AI).
-//   2. An env override (AI_FAST_MODEL / AI_SMART_MODEL / AI_RESEARCH_PROVIDER).
+//   2. An env override (AI_QUICK_MODEL / AI_DEEP_MODEL / AI_RESEARCH_PROVIDER).
 //   3. Auto: the legacy AI_PROVIDER first (so existing deployments behave
 //      identically), then a documented preference order over whatever
 //      providers have credentials.
@@ -31,17 +31,16 @@ import { getSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { log } from "../utils/logger.ts";
 
 /** User-facing AI capabilities. */
-export type AICapability = "fast" | "smart" | "research" | "embeddings";
+export type AICapability = "quick" | "deep" | "research" | "embeddings";
 
 /** How a capability is configured. */
 export interface CapabilityAssignment {
   /**
    * - "auto":     resolve from available providers (default)
    * - "pinned":   use `providerId` + `model` exactly
-   * - "builtin":  embeddings only — the local Transformers.js model
    * - "disabled": capability turned off (research only)
    */
-  mode: "auto" | "pinned" | "builtin" | "disabled";
+  mode: "auto" | "pinned" | "disabled";
   providerId?: string;
   model?: string;
 }
@@ -61,8 +60,8 @@ const CAPABILITY_CLASS: Record<
   Exclude<AICapability, "embeddings">,
   ModelClass
 > = {
-  fast: "lite",
-  smart: "flash",
+  quick: "lite",
+  deep: "flash",
   research: "pro",
 };
 
@@ -72,15 +71,15 @@ const CAPABILITY_CLASS: Record<
  * data, not logic — see docs/recommendations for the rationale.
  */
 const AUTO_ORDER: Record<Exclude<AICapability, "embeddings">, string[]> = {
-  fast: ["gemini", "openai", "anthropic"],
-  smart: ["gemini", "anthropic", "openai"],
+  quick: ["gemini", "openai", "anthropic"],
+  deep: ["gemini", "anthropic", "openai"],
   research: ["gemini", "anthropic", "openai"],
 };
 
 /** Env overrides, checked before auto-resolution. */
 const ENV_OVERRIDE: Record<Exclude<AICapability, "embeddings">, string> = {
-  fast: "AI_FAST_MODEL",
-  smart: "AI_SMART_MODEL",
+  quick: "AI_QUICK_MODEL",
+  deep: "AI_DEEP_MODEL",
   research: "AI_RESEARCH_MODEL",
 };
 
@@ -102,7 +101,7 @@ export function getCapabilityAssignment(
   const assignments = getCapabilityAssignments();
   return (
     assignments[capability] ?? {
-      mode: capability === "embeddings" ? "builtin" : "auto",
+      mode: "auto",
     }
   );
 }
@@ -111,7 +110,7 @@ export function getCapabilityAssignment(
  * Parse an env override of the form "provider:model" or bare "model"
  * (bare uses the default provider).
  */
-function parseEnvOverride(
+export function parseEnvOverride(
   value: string,
 ): { providerId: string; model: string } | null {
   const trimmed = value.trim();
@@ -223,8 +222,8 @@ export function capabilityAvailability(): Record<
   boolean
 > {
   return {
-    fast: resolveCapability("fast") !== null,
-    smart: resolveCapability("smart") !== null,
+    quick: resolveCapability("quick") !== null,
+    deep: resolveCapability("deep") !== null,
     research: resolveCapability("research") !== null,
   };
 }

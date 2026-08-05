@@ -8,7 +8,7 @@
 // Pass 1 — Retrieval: query SearXNG's JSON API, then fetch the top result
 //          pages and reduce them to text. No LLM involved.
 // Pass 2 — Extraction: the existing structured-extraction call, running on
-//          whichever provider serves the "smart" capability.
+//          whichever provider serves the "deep" capability.
 //
 // Web pages are hostile input by construction: every fetch goes through the
 // shared SSRF guards, responses are size-capped, and the text is fenced with
@@ -178,7 +178,7 @@ export class SearxngStrategy implements AISearchStrategy {
       `Retrieved ${documents.length} page(s) for "${contact.name}" in ${Date.now() - startMs}ms`,
     );
 
-    // ── Pass 2: structured extraction on the "smart" capability ─────────
+    // ── Pass 2: structured extraction on the "deep" capability ─────────
     const extractionPrompt = `${prompt}
 
 ${UNTRUSTED_DATA_RULE}
@@ -190,7 +190,7 @@ include facts you can support from this text.
 
 ${wrapUntrusted("web research text", researchText, 32_000)}`;
 
-    const extraction = await generateFor("smart", {
+    const extraction = await generateFor("deep", {
       prompt: extractionPrompt,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,

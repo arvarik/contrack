@@ -2,7 +2,7 @@
 // AI Layer — Capability Gateway
 // =============================================================================
 // The single entry point business logic uses to run a generation. Callers say
-// *what kind of work* it is ("fast", "smart", "research") and the gateway
+// *what kind of work* it is ("quick", "deep", "research") and the gateway
 // resolves the provider and model from the user's capability configuration.
 //
 // This replaces the old pattern of calling a single shared provider with a

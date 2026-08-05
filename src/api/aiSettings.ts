@@ -9,10 +9,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 
-export type AICapability = "fast" | "smart" | "research" | "embeddings";
+export type AICapability = "quick" | "deep" | "research" | "embeddings";
 
 export interface CapabilityAssignment {
-  mode: "auto" | "pinned" | "builtin" | "disabled";
+  mode: "auto" | "pinned" | "disabled";
   providerId?: string;
   model?: string;
 }

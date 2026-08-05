@@ -1,59 +1,107 @@
 // =============================================================================
-// Dedupe Embedding Service — Semantic Contact Embeddings via Gemini
+// Dedupe Embedding Service — Semantic Contact Embeddings
 // =============================================================================
-// Generates, stores, and queries 768-dimensional contact embeddings using
-// Google's gemini-embedding-2-preview model and sqlite-vec for native
-// vector similarity search within SQLite.
+// Generates, stores, and queries contact embeddings for duplicate detection,
+// using sqlite-vec for native vector similarity search within SQLite.
+//
+// The model comes from the *embeddings capability* — the same setting that
+// powers semantic search — so "Embeddings: built-in (local)" genuinely means
+// nothing leaves the machine. This file previously called Gemini directly
+// regardless of that setting, which both ignored the user's choice and sent
+// every contact to Google from an app that advertises local-first operation.
 //
 // Design principles:
-// - Uses @google/genai SDK directly (not the AI adapter — no fallback chain needed)
-// - Manual L2 normalization for sub-3072 MRL dimensions
+// - Model/provider resolved from the embeddings capability, never hardcoded
+// - Manual L2 normalization (provider vectors are not always unit length)
 // - Float32Array buffer format for sqlite-vec compatibility
-// - Exponential backoff on rate limit errors
 // - Concurrency guard: only one backfill at a time
-// - Graceful degradation: if API fails, log warning and continue
+// - Graceful degradation: if embedding fails, log a warning and continue
 // =============================================================================
 
-import { GoogleGenAI } from "@google/genai";
-import type { EmbedContentResponse } from "@google/genai";
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { normalizeContacts, normalizeContactById } from "./normalization.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import {
+  embedBatch,
+  isSearchEmbeddingReady,
+} from "../search/localEmbeddings.ts";
+import {
+  resolveEmbeddings,
+  probeDimension,
+  getEmbeddingsState,
+  setEmbeddingsState,
+} from "../../ai/embeddings.ts";
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const EMBED_MODEL = "gemini-embedding-2-preview";
-const EMBED_DIMENSIONS = 768; // MRL truncation: 3072 → 768 (~2% quality loss, 4× storage savings)
-const EMBED_BATCH_SIZE = 100; // Gemini limit per request
-const MAX_RETRIES = 4; // Exponential backoff: 1s → 2s → 4s → 8s
-const BASE_RETRY_MS = 1000;
+const EMBED_BATCH_SIZE = 64;
 
-// =============================================================================
-// Gemini Client (lazy initialization)
-// =============================================================================
-
-let _client: GoogleGenAI | null = null;
-
-function getClient(): GoogleGenAI {
-  if (!_client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === "dummy_key") {
-      throw new Error(
-        "GEMINI_API_KEY not configured — cannot generate embeddings",
-      );
-    }
-    _client = new GoogleGenAI({ apiKey });
-  }
-  return _client;
+/** True when some embedding backend (local model or provider) is usable. */
+export function isEmbeddingAvailable(): boolean {
+  return isSearchEmbeddingReady();
 }
 
-/** Returns true if the Gemini API key is configured and non-dummy. */
-export function isEmbeddingAvailable(): boolean {
-  const key = process.env.GEMINI_API_KEY;
-  return !!(key && key !== "dummy_key");
+/** Signature of the model currently backing the dedupe vector store. */
+export function currentEmbeddingSignature(): string {
+  return resolveEmbeddings().signature;
+}
+
+/** Recreate contact_embeddings at a new width. vec0 columns are fixed-size. */
+function rebuildDedupeEmbeddingTable(dimension: number): void {
+  sqlite.exec(`DROP TABLE IF EXISTS contact_embeddings`);
+  sqlite.exec(`
+    CREATE VIRTUAL TABLE contact_embeddings USING vec0(
+      contactId TEXT PRIMARY KEY,
+      embedding FLOAT[${dimension}]
+    );
+  `);
+  log.info(
+    "DedupeEmbeddings",
+    `Rebuilt contact_embeddings at ${dimension} dimensions (re-embed required)`,
+  );
+}
+
+/**
+ * Bring the dedupe vector store in line with the embeddings capability,
+ * mirroring what ensureEmbeddingStore() does for search. Returns the number
+ * of contacts re-embedded (0 when nothing changed).
+ */
+export async function ensureDedupeEmbeddingStore(): Promise<number> {
+  const resolved = resolveEmbeddings();
+
+  let dimension = resolved.dimension;
+  if (dimension === null && resolved.providerId && resolved.model) {
+    dimension = await probeDimension(resolved.providerId, resolved.model);
+  }
+  if (dimension === null) {
+    log.warn(
+      "DedupeEmbeddings",
+      `Could not determine dimension for ${resolved.signature}; keeping the existing vector store`,
+    );
+    return 0;
+  }
+
+  const state = getEmbeddingsState("dedupe");
+  const changed =
+    !state ||
+    state.signature !== resolved.signature ||
+    state.dimension !== dimension;
+  if (!changed) return 0;
+
+  if (state) {
+    log.info(
+      "DedupeEmbeddings",
+      `Embeddings changed (${state.signature} → ${resolved.signature}); rebuilding dedupe vector store`,
+    );
+  }
+  // Also covers first boot after upgrade: db.ts creates the table at the
+  // legacy 768 width, which won't match a 384-dim local model.
+  rebuildDedupeEmbeddingTable(dimension);
+  setEmbeddingsState({ signature: resolved.signature, dimension }, "dedupe");
+  return backfillEmbeddings();
 }
 
 // =============================================================================
@@ -106,68 +154,37 @@ function l2Normalize(values: number[]): Float32Array {
 // =============================================================================
 
 /**
- * Generate embeddings for a batch of text strings via Gemini API.
- * Handles batching (max 100 per request), rate limiting, and normalization.
+ * Generate embeddings for a batch of text strings.
  *
- * @param items   - Array of { id, text } to embed
+ * Routed through the shared embedding path, so it honors the embeddings
+ * capability and inherits its count guard: a backend that returns fewer
+ * vectors than inputs is an error, not a silently short batch.
+ *
+ * @param items      - Array of { id, text } to embed
  * @param onProgress - Optional callback for progress reporting
- * @returns Map of id → normalized Float32Array (768-dim)
+ * @returns Map of id → normalized Float32Array
  */
 export async function generateBatchEmbeddings(
   items: { id: string; text: string }[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<Map<string, Float32Array>> {
-  const client = getClient();
   const results = new Map<string, Float32Array>();
 
   for (let i = 0; i < items.length; i += EMBED_BATCH_SIZE) {
     const batch = items.slice(i, i + EMBED_BATCH_SIZE);
-    const texts = batch.map((b) => b.text);
-
-    let response: EmbedContentResponse | null = null;
-    let lastError: Error | null = null;
-
-    // Retry loop with exponential backoff
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        response = await client.models.embedContent({
-          model: EMBED_MODEL,
-          contents: texts,
-          config: { outputDimensionality: EMBED_DIMENSIONS },
-        });
-        break; // success
-      } catch (err: unknown) {
-        lastError =
-          err instanceof Error ? err : new Error(getErrorMessage(err));
-        if (isRetryableError(err) && attempt < MAX_RETRIES) {
-          const delayMs = BASE_RETRY_MS * Math.pow(2, attempt);
-          log.warn(
-            "DedupeEmbeddings",
-            `Rate limited on batch ${Math.floor(i / EMBED_BATCH_SIZE) + 1}, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
-          );
-          await new Promise((r) => setTimeout(r, delayMs));
-        } else {
-          throw err;
-        }
+    try {
+      const vectors = await embedBatch(batch.map((b) => b.text));
+      for (let j = 0; j < batch.length; j++) {
+        const vec = vectors[j];
+        if (vec) results.set(batch[j].id, l2Normalize(Array.from(vec)));
       }
-    }
-
-    if (!response?.embeddings) {
+    } catch (err) {
+      // One bad batch shouldn't abandon the rest of the backfill.
       log.error(
         "DedupeEmbeddings",
-        `Failed to embed batch starting at index ${i}: ${lastError?.message}`,
+        `Failed to embed batch starting at index ${i}: ${getErrorMessage(err)}`,
       );
-      continue; // skip this batch, process rest
     }
-
-    // Extract and normalize each embedding
-    for (let j = 0; j < batch.length; j++) {
-      const embedding = response.embeddings[j];
-      if (embedding?.values) {
-        results.set(batch[j].id, l2Normalize(embedding.values));
-      }
-    }
-
     onProgress?.(Math.min(i + batch.length, items.length), items.length);
   }
 
@@ -181,19 +198,9 @@ export async function generateBatchEmbeddings(
 export async function generateSingleEmbedding(
   text: string,
 ): Promise<Float32Array> {
-  const client = getClient();
-
-  const response = await client.models.embedContent({
-    model: EMBED_MODEL,
-    contents: text,
-    config: { outputDimensionality: EMBED_DIMENSIONS },
-  });
-
-  if (!response.embeddings?.[0]?.values) {
-    throw new Error("No embedding returned from Gemini API");
-  }
-
-  return l2Normalize(response.embeddings[0].values);
+  const [vector] = await embedBatch([text]);
+  if (!vector) throw new Error("No embedding returned for contact text");
+  return l2Normalize(Array.from(vector));
 }
 
 /**

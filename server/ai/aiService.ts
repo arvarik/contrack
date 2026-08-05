@@ -205,7 +205,7 @@ ${UNTRUSTED_DATA_RULE}`;
     ${wrapUntrusted("contact text payload", text)}
   `;
 
-  const result = await generateFor("fast", {
+  const result = await generateFor("quick", {
     systemPrompt,
     prompt,
     responseFormat: "json",
@@ -358,7 +358,7 @@ You are an elite executive assistant preparing a meeting brief.
     ${wrapUntrusted("recent timeline JSON", JSON.stringify(interactions, null, 2), 16_000)}
   `;
 
-  const result = await generateFor("fast", {
+  const result = await generateFor("quick", {
     systemPrompt,
     prompt,
     responseFormat: "json",
@@ -444,7 +444,7 @@ You are a named-entity recognition system specializing in identifying people men
   `;
 
   try {
-    const result = await generateFor("fast", {
+    const result = await generateFor("quick", {
       systemPrompt,
       prompt,
       responseFormat: "json",
@@ -528,7 +528,7 @@ You are an expert executive assistant processing raw email exports.
   `;
 
   try {
-    const result = await generateFor("smart", {
+    const result = await generateFor("deep", {
       systemPrompt,
       prompt,
       responseFormat: "text",
@@ -672,7 +672,7 @@ ${wrapUntrusted("candidate contacts JSON", JSON.stringify(candidates), 24_000)}
 
 Return a JSON array of VERIFIED matches with field-level evidence. If no candidate can be grounded, return [].`;
 
-  const result = await generateFor("fast", {
+  const result = await generateFor("quick", {
     systemPrompt,
     prompt,
     responseFormat: "json",
@@ -873,7 +873,7 @@ export async function generateDailyInsight(stats: {
   `;
 
   try {
-    const result = await generateFor("fast", {
+    const result = await generateFor("quick", {
       systemPrompt,
       prompt,
       responseFormat: "json",
@@ -1042,7 +1042,7 @@ export async function generateSearchExpansion(contact: {
   if (parts.length <= 1) return null; // Name-only contacts aren't worth expanding
 
   try {
-    const result = await generateFor("fast", {
+    const result = await generateFor("quick", {
       systemPrompt: `${UNTRUSTED_DATA_RULE}
 
 You generate search expansion keywords. Given a contact profile, output a comma-separated list of 10 search terms that someone might use to find this person. Include: synonyms for their role, industry keywords, related fields, skill inferences, and location-based terms. Output ONLY the comma-separated list, nothing else.`,
@@ -1200,7 +1200,7 @@ ${wrapUntrusted("contact summaries", contactSummaries, 24_000)}
 Write a 2-3 sentence executive brief. Every claim must be true for the contacts shown.`;
 
   try {
-    const result = await generateFor("fast", {
+    const result = await generateFor("quick", {
       systemPrompt,
       prompt,
       responseFormat: "text",
@@ -1336,7 +1336,7 @@ CRITICAL
 Return the structured QueryPlan JSON.`;
 
   try {
-    const result = await generateFor("fast", {
+    const result = await generateFor("quick", {
       systemPrompt,
       prompt,
       responseFormat: "json",
@@ -1513,7 +1513,7 @@ Output ONLY the profile text. No preamble, no quotes, no "Here is..." prefix.`;
 Hypothetical matching profile:`;
 
   try {
-    const result = await generateFor("fast", {
+    const result = await generateFor("quick", {
       systemPrompt,
       prompt,
       responseFormat: "text",
