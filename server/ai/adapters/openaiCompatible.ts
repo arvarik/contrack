@@ -25,6 +25,7 @@ import type {
   JsonSchemaNode,
 } from "../types.ts";
 import { log } from "../../utils/logger.ts";
+import { AppError } from "../../utils/AppError.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   withTimeout,
@@ -41,6 +42,24 @@ export interface OpenAICompatibleOptions {
 
 /** How structured output is expressed for a given model. */
 type JsonMode = "json_schema" | "json_object" | "prompt";
+
+/** A backend that can't honor the requested response_format says so in a 400. */
+function isFormatRejection(message: string): boolean {
+  return /response_format|json_schema|not supported|unsupported|invalid.*format/i.test(
+    message,
+  );
+}
+
+/** Would the caller be able to parse this body? Fences are tolerated. */
+function isParseableJson(text: string): boolean {
+  if (!text?.trim()) return false;
+  try {
+    parseAIJson(text, "openaiCompatible.probe");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -163,35 +182,56 @@ export class OpenAICompatibleAdapter implements AIProvider {
     signal: AbortSignal,
     startMs: number,
   ): Promise<AIGenerateResult> {
-    const mode: JsonMode =
-      options.responseFormat === "json"
-        ? (this.jsonModes.get(model) ?? "json_schema")
-        : "prompt";
+    const wantsJson = options.responseFormat === "json";
+    let mode: JsonMode = wantsJson
+      ? (this.jsonModes.get(model) ?? "json_schema")
+      : "prompt";
 
-    try {
-      return await this.attempt(options, model, mode, signal, startMs);
-    } catch (err) {
-      // A backend that rejects the richer structured-output forms answers with
-      // a 400 naming response_format. Downgrade once and remember it.
-      const message = getErrorMessage(err);
-      const isFormatRejection =
-        /response_format|json_schema|not supported|unsupported|invalid.*format/i.test(
-          message,
-        );
-      if (options.responseFormat === "json" && isFormatRejection) {
-        const next: JsonMode =
-          mode === "json_schema" ? "json_object" : "prompt";
-        if (mode !== "prompt") {
-          this.jsonModes.set(model, next);
+    // Walk down the ladder until one mode yields parseable JSON. A backend can
+    // fail loudly (a 400 naming response_format) or quietly (a 200 whose body
+    // is not JSON at all), so both a rejection and an unparseable body trigger
+    // the downgrade.
+    for (;;) {
+      let result: AIGenerateResult;
+      try {
+        result = await this.attempt(options, model, mode, signal, startMs);
+      } catch (err) {
+        const next = this.nextMode(mode);
+        if (wantsJson && next && isFormatRejection(getErrorMessage(err))) {
           log.warn(
             "OpenAICompatible",
             `${model} rejected ${mode}; downgrading structured output to ${next}`,
           );
-          return this.attempt(options, model, next, signal, startMs);
+          this.jsonModes.set(model, next);
+          mode = next;
+          continue;
         }
+        throw err;
       }
-      throw err;
+
+      if (!wantsJson) return result;
+      if (isParseableJson(result.text)) {
+        // Remember what worked so later calls skip the failed rungs.
+        this.jsonModes.set(model, mode);
+        return result;
+      }
+
+      const next = this.nextMode(mode);
+      if (!next) return result; // Let the caller's parse surface the error.
+      log.warn(
+        "OpenAICompatible",
+        `${model} returned unparseable JSON under ${mode}; downgrading to ${next}`,
+      );
+      this.jsonModes.set(model, next);
+      mode = next;
     }
+  }
+
+  /** Next rung down the structured-output ladder, or null at the bottom. */
+  private nextMode(mode: JsonMode): JsonMode | null {
+    if (mode === "json_schema") return "json_object";
+    if (mode === "json_object") return "prompt";
+    return null;
   }
 
   private async attempt(
@@ -235,7 +275,14 @@ export class OpenAICompatibleAdapter implements AIProvider {
     }
 
     interface ChatCompletionResponse {
-      choices?: Array<{ message?: { content?: string | null } }>;
+      choices?: Array<{
+        finish_reason?: string;
+        message?: {
+          content?: string | null;
+          /** Reasoning models (gemma-4, qwq, deepseek-r1…) split their output. */
+          reasoning_content?: string | null;
+        };
+      }>;
       usage?: { total_tokens?: number };
     }
     const response = (await this.client.chat.completions.create(
@@ -245,7 +292,24 @@ export class OpenAICompatibleAdapter implements AIProvider {
       { signal },
     )) as unknown as ChatCompletionResponse;
 
-    const text = response.choices?.[0]?.message?.content ?? "";
+    const choice = response.choices?.[0];
+    const text = choice?.message?.content ?? "";
+    // A reasoning model that hits the token ceiling mid-thought returns an
+    // empty `content` with the budget spent in `reasoning_content`. Silently
+    // returning "" would surface downstream as "malformed JSON", which sends
+    // the user looking in the wrong place.
+    if (!text.trim() && choice?.message?.reasoning_content?.trim()) {
+      // 422, not 502: retrying replays the same prompt into the same ceiling,
+      // which on a local model costs seconds per attempt for a certain failure.
+      throw new AppError(
+        `${this.name}: ${model} spent its entire token budget on reasoning and produced no answer` +
+          (choice.finish_reason === "length"
+            ? " (finish_reason=length — raise the server's token limit for this model)"
+            : ""),
+        422,
+        { code: "AI_NO_ANSWER" },
+      );
+    }
     const tokenCount = response.usage?.total_tokens;
     const latencyMs = Date.now() - startMs;
 

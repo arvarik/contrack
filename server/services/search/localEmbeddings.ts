@@ -378,6 +378,12 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     const vectors = await embedBatch(texts);
 
     // Store in transaction for speed
+    if (vectors.length !== batch.length) {
+      throw new Error(
+        `Embedding backend returned ${vectors.length} vectors for ${batch.length} contacts — refusing to write a partial index`,
+      );
+    }
+
     const txn = sqlite.transaction(() => {
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];

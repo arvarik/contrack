@@ -107,7 +107,18 @@ export async function embedWithProvider(
       { code: "EMBEDDINGS_UNSUPPORTED" },
     );
   }
-  return provider.embed(texts, model);
+  const vectors = await provider.embed(texts, model);
+  // A provider that returns fewer vectors than inputs would otherwise be
+  // absorbed by callers as "some contacts just didn't embed", leaving the
+  // index quietly incomplete. Make it a hard error.
+  if (vectors.length !== texts.length) {
+    throw new AppError(
+      `Provider "${providerId}" returned ${vectors.length} embeddings for ${texts.length} inputs`,
+      502,
+      { code: "EMBEDDINGS_INCOMPLETE" },
+    );
+  }
+  return vectors;
 }
 
 /**

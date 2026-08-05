@@ -233,7 +233,10 @@ export class GeminiAdapter implements AIProvider {
   async embed(texts: string[], model: string): Promise<number[][]> {
     const response = await this.client.models.embedContent({
       model,
-      contents: texts,
+      // Each text must be its own Content. Passing `contents: texts` reads as
+      // ONE content with many parts and yields a single merged vector — which
+      // silently under-fills the batch instead of erroring.
+      contents: texts.map((text) => ({ parts: [{ text }] })),
     });
     return (response.embeddings ?? []).map((e) => e.values as number[]);
   }
