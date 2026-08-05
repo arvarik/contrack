@@ -252,7 +252,11 @@ describe("AnthropicAdapter", () => {
   });
 
   describe("schema translation", () => {
-    it("translates a JsonSchemaNode to Anthropic json_schema format", () => {
+    // The Anthropic API takes the schema DIRECTLY under `format`. This test
+    // previously asserted OpenAI's nested `json_schema: { name, schema }`
+    // wrapper, which the API rejects with a 400 — the assertion encoded the
+    // bug, so every JSON call to Anthropic failed while this stayed green.
+    it("translates a JsonSchemaNode to Anthropic's output_config format", () => {
       const adapter = new AnthropicAdapter("test-key");
       const schema = {
         type: "object" as const,
@@ -265,16 +269,13 @@ describe("AnthropicAdapter", () => {
       const translated = adapter.translateSchema(schema);
       expect(translated).toEqual({
         type: "json_schema",
-        json_schema: {
-          name: "response",
-          schema: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-            },
-            additionalProperties: false,
-            required: ["name"],
+        schema: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
           },
+          additionalProperties: false,
+          required: ["name"],
         },
       });
     });
@@ -291,7 +292,7 @@ describe("AnthropicAdapter", () => {
       const translated = adapter.translateSchema(schema);
       // Nullability is expressed as a JSON Schema type union, not OpenAPI's
       // `nullable` keyword (which the Anthropic API does not accept).
-      const companyProp = translated.json_schema.schema.properties.company;
+      const companyProp = translated.schema.properties.company;
       expect(companyProp.type).toEqual(["string", "null"]);
     });
   });

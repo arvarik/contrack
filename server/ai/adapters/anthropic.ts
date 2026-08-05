@@ -19,6 +19,7 @@ import type {
   JsonSchemaNode,
 } from "../types.ts";
 import { log } from "../../utils/logger.ts";
+import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   withTimeout,
   withRetry,
@@ -66,6 +67,20 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
   return result;
 }
 
+/**
+ * True when Claude refused the schema itself rather than the request. These
+ * are deterministic — retrying the same schema always fails — so the caller
+ * must change approach instead of backing off.
+ */
+function isSchemaComplexityError(error: unknown): boolean {
+  const msg = getErrorMessage(error).toLowerCase();
+  return (
+    msg.includes("too many optional parameters") ||
+    msg.includes("grammar compilation") ||
+    (msg.includes("output_config.format") && msg.includes("schema"))
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Anthropic Adapter
 // ---------------------------------------------------------------------------
@@ -75,6 +90,11 @@ export class AnthropicAdapter implements AIProvider {
   readonly supportsSearchGrounding = true;
   readonly defaultMaxTokens = DEFAULT_MAX_TOKENS;
   private client: Anthropic;
+  /**
+   * Prompts whose schema Claude declined to compile (it caps optional
+   * parameters at 24). Remembered so the retry is paid once, not per call.
+   */
+  private schemaTooComplex = new Set<string>();
 
   constructor(apiKey: string) {
     this.client = new Anthropic({ apiKey });
@@ -104,13 +124,19 @@ export class AnthropicAdapter implements AIProvider {
     );
   }
 
+  /**
+   * Anthropic's `output_config.format` takes the schema directly:
+   *   { type: "json_schema", schema: {...} }
+   * NOT OpenAI's nested `json_schema: { name, schema }` wrapper, which the
+   * API rejects with a 400.
+   */
   translateSchema(schema: JsonSchemaNode): {
     type: "json_schema";
-    json_schema: { name: string; schema: Record<string, unknown> };
+    schema: Record<string, unknown>;
   } {
     return {
       type: "json_schema",
-      json_schema: { name: "response", schema: translateSchemaNode(schema) },
+      schema: translateSchemaNode(schema),
     };
   }
 
@@ -124,12 +150,48 @@ export class AnthropicAdapter implements AIProvider {
     return withRetry(
       async (attempt) => {
         const startMs = Date.now();
-        const result = await withTimeout(
-          (signal) =>
-            this.runMessages(options, model, maxTokens, signal, startMs),
-          timeoutMs,
-          options.signal,
-        );
+        const schemaKey = `${model}:${options.systemPrompt?.slice(0, 60) ?? ""}`;
+        let useSchema = !this.schemaTooComplex.has(schemaKey);
+        let result: AIGenerateResult;
+        try {
+          result = await withTimeout(
+            (signal) =>
+              this.runMessages(
+                options,
+                model,
+                maxTokens,
+                signal,
+                startMs,
+                useSchema,
+              ),
+            timeoutMs,
+            options.signal,
+          );
+        } catch (err) {
+          // Claude caps a schema at 24 optional parameters. Contrack's research
+          // schema is legitimately wider than that, so drop to prompt-guided
+          // JSON rather than failing the whole enrichment.
+          if (!useSchema || !isSchemaComplexityError(err)) throw err;
+          log.warn(
+            "AnthropicAdapter",
+            `${model} declined the response schema (${getErrorMessage(err).slice(0, 120)}); retrying with prompt-guided JSON`,
+          );
+          this.schemaTooComplex.add(schemaKey);
+          useSchema = false;
+          result = await withTimeout(
+            (signal) =>
+              this.runMessages(
+                options,
+                model,
+                maxTokens,
+                signal,
+                startMs,
+                false,
+              ),
+            timeoutMs,
+            options.signal,
+          );
+        }
 
         if (options.responseFormat === "json") {
           parseAIJson(result.text, `AnthropicAdapter.generate(${model})`);
@@ -162,6 +224,7 @@ export class AnthropicAdapter implements AIProvider {
     maxTokens: number,
     signal: AbortSignal,
     startMs: number,
+    useSchema = true,
   ): Promise<AIGenerateResult> {
     const messages: Array<{ role: "user"; content: string }> = [
       { role: "user", content: options.prompt },
@@ -172,7 +235,17 @@ export class AnthropicAdapter implements AIProvider {
       messages,
       max_tokens: maxTokens,
     };
-    if (options.systemPrompt) requestParams.system = options.systemPrompt;
+    let systemPrompt = options.systemPrompt ?? "";
+    // Without a schema to constrain it, the model needs the shape in words.
+    if (options.responseFormat === "json" && !useSchema) {
+      systemPrompt += `\n\nRespond with valid JSON only — no markdown fences, no prose.`;
+      if (options.jsonSchema) {
+        systemPrompt += `\n\nMatch this schema:\n${JSON.stringify(
+          translateSchemaNode(options.jsonSchema),
+        )}`;
+      }
+    }
+    if (systemPrompt.trim()) requestParams.system = systemPrompt.trim();
     if (options.enableSearchGrounding) {
       // Sonnet/Opus 4.6+ support the dynamic-filtering variant; Haiku 4.5
       // only supports the basic one.
@@ -181,7 +254,7 @@ export class AnthropicAdapter implements AIProvider {
         : "web_search_20260209";
       requestParams.tools = [{ type: webSearchType, name: "web_search" }];
     }
-    if (options.responseFormat === "json" && options.jsonSchema) {
+    if (options.responseFormat === "json" && options.jsonSchema && useSchema) {
       requestParams.output_config = {
         format: this.translateSchema(options.jsonSchema),
       };
