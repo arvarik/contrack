@@ -84,10 +84,44 @@ contrack/
 Run the full test suite:
 
 ```bash
-npm test              # Watch mode
-npx vitest run        # Single run (180 tests, <600ms)
-npm run lint          # TypeScript type check
+npm test              # Unit + integration (390 tests, no API keys needed)
+npm run test:coverage # ...with a coverage report
+npm run lint          # ESLint + tsc --noEmit (strict)
 ```
+
+**You never need an API key to develop Contrack.** `npm test` mocks every AI
+call, and the integration suite blanks provider keys so a stray request can't
+escape to a real API.
+
+#### Contract tests (optional)
+
+`npm run test:contract` calls **real** provider APIs. It exists because mocked
+adapter tests cannot catch a wire-format mismatch — a mock encodes our
+assumption about a provider, so if the assumption is wrong the test passes
+forever while the feature is broken. That is not hypothetical: Anthropic's
+structured output shipped broken for exactly that reason, with a green unit
+test asserting the wrong shape.
+
+Every provider block **skips itself when its credential is absent**, so this is
+useful with one key or none:
+
+```bash
+npm run test:contract            # no keys -> everything skips, exit 0
+GEMINI_API_KEY=... npm run test:contract   # runs only the Gemini block
+```
+
+To exercise a self-hosted OpenAI-compatible server:
+
+```bash
+CONTRACT_COMPAT_URL=http://localhost:11434/v1 \
+CONTRACT_COMPAT_MODEL=llama3.1 \
+  npm run test:contract
+```
+
+Models can be pinned per provider with `CONTRACT_<PROVIDER>_MODEL` and
+`CONTRACT_<PROVIDER>_EMBED_MODEL` if the defaults are unavailable on your
+account. These tests are not part of CI — they are run before a release and
+whenever an adapter changes.
 
 ### Commit Messages
 
@@ -104,7 +138,8 @@ docs: update API reference in README
 ## Pull Request Process
 
 1. Ensure your branch is up to date with `main`
-2. Run `npm run lint` and `npx vitest run` — both must pass
+2. Run `npm run lint` and `npm test` — both must pass. If you changed an
+   AI adapter, run `npm run test:contract` with whatever key you have.
 3. Describe **what** changed and **why** in the PR description
 4. If your change modifies the API surface, update [`docs/api-reference.md`](docs/api-reference.md)
 5. If your change modifies the database schema, include the migration file

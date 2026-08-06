@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Provider contract tests** (`npm run test:contract`) — a suite that calls
+  real provider APIs to verify the things a mocked test cannot: that
+  `listModels` speaks the shape we parse, that structured output returns
+  parseable JSON, and that `embed` returns one vector per input. Both provider
+  bugs found in 1.4.0 were wire-format mismatches invisible to mocked tests, and
+  one of them had a green unit test asserting the wrong shape.
+
+  Not part of CI and not required for development. Each provider block skips
+  itself when its credential is absent, so `npm test` remains key-free and
+  contributors with a single key exercise only that provider.
+
+### Fixed
+
+- The integration suite no longer makes outbound network calls. Two tests
+  stored a key for a built-in provider, which reached the real vendor to
+  validate it — the only flaky tests in the suite. They now use a custom
+  endpoint pointed at a closed port, which fails immediately and
+  deterministically; real provider behaviour is covered by the contract suite.
+
 ## [1.4.0] — 2026-08-05
 
 Contrack no longer asks you to pick "an AI provider". You connect whichever

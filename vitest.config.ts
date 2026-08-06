@@ -19,6 +19,22 @@ export default defineConfig({
         },
       },
       {
+        // Contract tests call REAL provider APIs and are deliberately NOT in
+        // the default run: cloning the repo and running `npm test` must work
+        // with no credentials at all. Each provider block skips itself when its
+        // key is absent, so one key exercises one provider.
+        //   npm run test:contract
+        test: {
+          name: "contract",
+          environment: "node",
+          globals: true,
+          include: ["tests/contract/**/*.contract.test.ts"],
+          testTimeout: 90_000,
+          // Third-party rate limits punish parallelism.
+          fileParallelism: false,
+        },
+      },
+      {
         // Integration tests run the real request pipeline (supertest against
         // createApp()) on a real SQLite database in a per-file temp DATA_DIR.
         // No db mock — migrations, FTS triggers, and cascades all execute.

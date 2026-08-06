@@ -105,36 +105,49 @@ describe("capability assignment", () => {
 });
 
 describe("provider credentials", () => {
-  // NOTE: the two tests below make a real outbound call — storing a key
-  // triggers discovery against the provider. They assert only that the key is
-  // stored/redacted and that *any* failure maps to DISCOVERY_FAILED, so they
-  // pass whether the provider rejects the key or the network is unavailable.
-  // The generous timeout absorbs the adapter's retry backoff.
+  // Credential handling is exercised through a custom endpoint pointed at a
+  // closed port: connection-refused is immediate and deterministic. Storing a
+  // key for a *built-in* provider would reach out to the real vendor, which
+  // made these the only network-dependent — and only flaky — tests in the
+  // suite. Real provider behavior is covered by `npm run test:contract`.
+  const UNREACHABLE = "http://127.0.0.1:59999/v1";
+
   it("never returns a raw API key — only a redacted preview", async () => {
-    // Discovery fails (fake key) but the key is still stored.
-    await request(app)
-      .put("/api/settings/ai/providers/gemini/key")
-      .send({ apiKey: "AIzaSyFAKEKEYFORTESTS1234" });
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "secretive",
+      label: "Secretive",
+      baseUrl: UNREACHABLE,
+      apiKey: "sk-SUPERSECRETVALUE1234",
+    });
 
     const res = await request(app).get("/api/settings/ai");
-    const body = JSON.stringify(res.body);
-    expect(body).not.toContain("AIzaSyFAKEKEYFORTESTS1234");
+    expect(JSON.stringify(res.body)).not.toContain("sk-SUPERSECRETVALUE1234");
 
-    const gemini = res.body.providers.find(
-      (p: { id: string }) => p.id === "gemini",
+    const endpoint = res.body.customEndpoints.find(
+      (e: { id: string }) => e.id === "secretive",
     );
-    expect(gemini).toBeTruthy();
-    expect(gemini.keyPreview).toBe("••••1234");
-    expect(gemini.source).toBe("settings");
-  }, 30_000);
+    expect(endpoint).toBeTruthy();
+    expect(endpoint.keyPreview).toBe("••••1234");
+    expect(endpoint.apiKey).toBeUndefined();
+  });
 
-  it("surfaces a discovery failure for an invalid key", async () => {
-    const res = await request(app)
-      .put("/api/settings/ai/providers/gemini/key")
-      .send({ apiKey: "definitely-not-a-valid-key" });
+  it("surfaces a discovery failure without discarding the credential", async () => {
+    const res = await request(app).put("/api/settings/ai/endpoints").send({
+      id: "unreachable",
+      label: "Unreachable",
+      baseUrl: UNREACHABLE,
+      apiKey: "sk-still-stored-9999",
+    });
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe("DISCOVERY_FAILED");
-  }, 30_000);
+
+    // A typo'd URL must not cost the user the key they just typed.
+    const view = await request(app).get("/api/settings/ai");
+    const endpoint = view.body.customEndpoints.find(
+      (e: { id: string }) => e.id === "unreachable",
+    );
+    expect(endpoint.keyPreview).toBe("••••9999");
+  });
 
   it("rejects an unknown provider id", async () => {
     const res = await request(app)
@@ -152,19 +165,22 @@ describe("provider credentials", () => {
   });
 
   it("removes a stored key", async () => {
-    await request(app)
-      .put("/api/settings/ai/providers/openai/key")
-      .send({ apiKey: "sk-fake-key-for-tests" });
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "temp-key",
+      label: "Temp",
+      baseUrl: UNREACHABLE,
+      apiKey: "sk-remove-me",
+    });
     const removed = await request(app).delete(
-      "/api/settings/ai/providers/openai/key",
+      "/api/settings/ai/endpoints/temp-key",
     );
     expect(removed.status).toBe(200);
 
     const res = await request(app).get("/api/settings/ai");
     expect(
-      res.body.providers.find((p: { id: string }) => p.id === "openai"),
+      res.body.customEndpoints.find((e: { id: string }) => e.id === "temp-key"),
     ).toBeUndefined();
-  }, 30_000);
+  });
 
   it("404s model refresh for an unconfigured provider", async () => {
     const res = await request(app).post(

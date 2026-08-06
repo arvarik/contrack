@@ -40,10 +40,11 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seedMock.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "prepare": "husky"
+    "test": "vitest run --project unit --project integration",
+    "test:watch": "vitest --project unit --project integration",
+    "test:coverage": "vitest run --project unit --project integration --coverage",
+    "prepare": "husky",
+    "test:contract": "vitest run --project contract"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
