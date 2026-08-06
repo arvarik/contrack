@@ -107,12 +107,16 @@ describe("OpenAIAdapter", () => {
         required: ["name"],
       };
 
+      // `strict: true` must NOT be sent. Strict mode requires `required` to
+      // list every key in `properties`, and this schema — like every real one
+      // in Contrack — has optional fields. Asserting strict here is what let
+      // the 400 ship: the unit test was green while every OpenAI JSON call
+      // failed against the real API.
       const translated = adapter.translateSchema(schema);
       expect(translated).toEqual({
         type: "json_schema",
         json_schema: {
           name: "response",
-          strict: true,
           schema: {
             type: "object",
             properties: {
@@ -124,6 +128,7 @@ describe("OpenAIAdapter", () => {
           },
         },
       });
+      expect("strict" in translated.json_schema).toBe(false);
     });
 
     it("handles nullable fields via anyOf pattern", () => {

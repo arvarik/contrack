@@ -22,6 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OpenAI structured output was rejected outright.** The adapter sent
+  `strict: true`, which requires `required` to list every key in `properties` —
+  but Contrack's schemas have genuinely optional fields (a contact has a name;
+  it may not have a company). Every schema-constrained OpenAI call failed with
+  `400 Invalid schema for response_format`. As with the Anthropic bug, a unit
+  test asserted the broken shape and stayed green. Found by the contract suite
+  on its first run against a working key.
+- **Changing the embeddings model left the dedupe index at the old width.** The
+  settings route rebuilt only the search store, so `contact_embeddings` stayed
+  at 384 while new vectors were 1536 and every insert failed with
+  `Expected 384 dimensions but received 1536` until the process restarted. Both
+  stores now rebuild together, with an integration test asserting they stay the
+  same width.
 - The integration suite no longer makes outbound network calls. Two tests
   stored a key for a built-in provider, which reached the real vendor to
   validate it — the only flaky tests in the suite. They now use a custom

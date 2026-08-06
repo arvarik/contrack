@@ -24,6 +24,7 @@ import {
 import { setSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { invalidateProviderCache } from "../ai/providerRegistry.ts";
 import { ensureEmbeddingStore } from "../services/search/localEmbeddings.ts";
+import { ensureDedupeEmbeddingStore } from "../services/dedupe/embeddings.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import type { AICapability } from "../ai/capabilities.ts";
 
@@ -144,13 +145,19 @@ router.put(
     const capability = String(req.params.capability) as AICapability;
     setCapabilityAssignment(capability, req.body);
 
-    // Switching embedding models changes the vector width — rebuild and
-    // re-embed in the background so the request returns immediately.
+    // Switching embedding models changes the vector width, so BOTH stores
+    // have to be rebuilt — search and dedupe share one model. Reconciling only
+    // search leaves contact_embeddings at the old width, and every subsequent
+    // insert fails with "Expected 384 dimensions but received 1536" until the
+    // process restarts. Runs in the background so the request returns at once.
     if (capability === "embeddings") {
-      ensureEmbeddingStore()
-        .then((count) => {
-          if (count > 0)
-            log.info("AISettings", `Re-embedded ${count} contacts`);
+      Promise.all([ensureEmbeddingStore(), ensureDedupeEmbeddingStore()])
+        .then(([searchCount, dedupeCount]) => {
+          if (searchCount > 0 || dedupeCount > 0)
+            log.info(
+              "AISettings",
+              `Re-embedded ${searchCount} contacts for search, ${dedupeCount} for dedupe`,
+            );
         })
         .catch((err) =>
           log.error("AISettings", `Re-index failed: ${getErrorMessage(err)}`),

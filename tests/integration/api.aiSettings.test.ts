@@ -96,6 +96,28 @@ describe("capability assignment", () => {
     expect(res.status).toBe(400);
   });
 
+  it("keeps both vector stores at the same width", async () => {
+    // Search and dedupe share one embeddings model, so a change must rebuild
+    // both. Reconciling only search stranded contact_embeddings at the old
+    // width and every later insert failed with "Expected 384 dimensions but
+    // received 1536" until the process restarted.
+    const widthOf = (table: string) => {
+      const row = sqlite
+        .prepare("SELECT sql FROM sqlite_master WHERE name = ?")
+        .get(table) as { sql?: string } | undefined;
+      return row?.sql?.match(/FLOAT\[(\d+)\]/)?.[1];
+    };
+
+    const res = await request(app)
+      .put("/api/settings/ai/capabilities/embeddings")
+      .send({ mode: "auto" });
+    expect(res.status).toBe(200);
+
+    // Let the background reconciliation settle.
+    await new Promise((r) => setTimeout(r, 500));
+    expect(widthOf("search_embeddings")).toBe(widthOf("contact_embeddings"));
+  });
+
   it("rejects an unknown capability", async () => {
     const res = await request(app)
       .put("/api/settings/ai/capabilities/telepathy")

@@ -140,11 +140,25 @@ export class OpenAIAdapter implements AIProvider {
     );
   }
 
+  /**
+   * OpenAI wraps the schema in `json_schema: { name, schema }` — note this is
+   * NOT the shape Anthropic uses, which takes the schema directly.
+   *
+   * `strict: true` is deliberately omitted. Strict mode requires `required` to
+   * list every key in `properties`, and Contrack's schemas have genuinely
+   * optional fields (a contact has a name; it may not have a company). Sending
+   * strict with those schemas is rejected outright:
+   *
+   *   400 Invalid schema for response_format 'response': 'required' is required
+   *   to be supplied and to be an array including every key in properties.
+   *
+   * Non-strict json_schema still constrains generation and accepts optional
+   * fields, which is what we need.
+   */
   translateSchema(schema: JsonSchemaNode): {
     type: "json_schema";
     json_schema: {
       name: string;
-      strict: true;
       schema: Record<string, unknown>;
     };
   } {
@@ -152,7 +166,6 @@ export class OpenAIAdapter implements AIProvider {
       type: "json_schema",
       json_schema: {
         name: "response",
-        strict: true,
         schema: translateSchemaNode(schema),
       },
     };
