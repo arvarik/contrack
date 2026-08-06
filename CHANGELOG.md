@@ -90,6 +90,9 @@ indexes below repair themselves automatically on first start.
   surfacing as "malformed JSON".
 - `data/` is excluded from version control — it holds the auth token,
   uploads, and backups.
+- **Container images are now published for `linux/arm64` as well as
+  `linux/amd64`.** Previous releases were amd64-only, so Apple Silicon and ARM
+  homelab hosts could not pull them at all.
 
 ## [1.3.0] — 2026-08-04
 
