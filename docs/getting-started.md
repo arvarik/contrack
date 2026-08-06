@@ -6,10 +6,14 @@ This guide walks you through installing Contrack, running it locally, and unders
 
 - **Node.js 22+** — [Download](https://nodejs.org/)
 - **Git** — [Download](https://git-scm.com/)
-- **An AI API key** (at least one):
-  - [Gemini](https://aistudio.google.com/apikey) (default provider)
+- **An AI API key** — any one is enough; Contrack picks a suitable model for
+  each kind of work. Add more later to mix providers across tasks.
+  - [Gemini](https://aistudio.google.com/apikey)
   - [OpenAI](https://platform.openai.com/api-keys)
   - [Anthropic](https://console.anthropic.com/settings/keys)
+
+  You can also point Contrack at a self-hosted OpenAI-compatible server
+  (Ollama, vLLM, LM Studio) from Settings → AI instead of using a key.
 
 ## Quick Start
 
@@ -18,7 +22,7 @@ git clone https://github.com/arvarik/contrack.git
 cd contrack
 npm install
 cp .env.example .env
-# Edit .env — add your API key for your chosen provider
+# Edit .env — add one API key. Everything else is optional.
 npm run dev
 ```
 
@@ -31,7 +35,7 @@ When the server starts for the first time, several background processes kick off
 1. **Database initialization** — SQLite tables, FTS5 indexes, and `vec0` virtual tables are created
 2. **Local embedding model** — Transformers.js downloads and caches `all-MiniLM-L6-v2` (384-dim) for Ask Contrack search
 3. **Search embedding backfill** — Existing contacts get local vector embeddings for semantic search
-4. **Dedupe embedding backfill** — If Gemini is configured, 768-dim embeddings are generated for deduplication
+4. **Dedupe embedding backfill** — Contacts get vector embeddings for duplicate detection, using the same model as search (the local one by default, so no API key is needed)
 5. **Relationship scoring** — Full recompute of all relationship scores (runs hourly after boot)
 6. **Retroactive geocoding** — Contacts with addresses but no coordinates get geocoded in the background
 

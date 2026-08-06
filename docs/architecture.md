@@ -121,12 +121,14 @@ All errors flow through a centralized Express error handler using the `AppError`
 
 ```
 server/ai/
-├── adapters/        # Concrete implementations
-│   ├── gemini.ts    # Gemini 2.5 Flash / 3.1 Pro with SmartRouter
-│   ├── openai.ts    # GPT-4o / GPT-4o-mini
-│   └── anthropic.ts # Claude Sonnet / Haiku
+├── adapters/                # Concrete implementations
+│   ├── gemini.ts            # Gemini via @google/genai, with SmartRouter + quota tracking
+│   ├── openai.ts            # OpenAI
+│   ├── anthropic.ts         # Anthropic
+│   └── openaiCompatible.ts  # Any OpenAI-format server (Ollama, vLLM, LM Studio…)
 ├── provider.ts      # Abstract AIProvider interface
-├── capabilities.ts  # Capability → provider+model resolution (fast/smart/research/embeddings)
+├── capabilities.ts  # Capability → provider+model resolution (quick/deep/research/embeddings)
+├── embeddings.ts    # Embeddings capability + vector dimension lifecycle
 ├── gateway.ts       # generateFor(capability, opts) — the entry point for all generation
 ├── providerRegistry.ts # Every configured provider (env keys, stored keys, custom endpoints)
 ├── singleton.ts     # Default-provider proxy (back-compat surface)

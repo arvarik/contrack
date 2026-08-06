@@ -107,7 +107,7 @@ _Track mock/stub status across the frontend. Populated during Build phase, clear
 | `server/ai/aiService.ts:715` — `synthesizeSearchResults()`   | isMockMode mock data | `POST /api/search/synthesize`         | Production — returns templated string            |
 | `src/views/ai-stats/components/SummaryBar.tsx:20`            | Tier badge label     | N/A (UI label)                        | Production — displays "Mock Mode" tier badge     |
 
-_All stubs are production-grade graceful degradation paths (triggered when the active provider's API key is absent). No MSW mocking or dev-only fake data detected._
+_All stubs are production-grade graceful degradation paths (triggered when no AI provider is configured). No MSW mocking or dev-only fake data detected._
 
 ---
 

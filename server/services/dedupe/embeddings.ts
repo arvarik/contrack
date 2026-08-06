@@ -44,11 +44,6 @@ export function isEmbeddingAvailable(): boolean {
   return isSearchEmbeddingReady();
 }
 
-/** Signature of the model currently backing the dedupe vector store. */
-export function currentEmbeddingSignature(): string {
-  return resolveEmbeddings().signature;
-}
-
 /** Recreate contact_embeddings at a new width. vec0 columns are fixed-size. */
 function rebuildDedupeEmbeddingTable(dimension: number): void {
   sqlite.exec(`DROP TABLE IF EXISTS contact_embeddings`);

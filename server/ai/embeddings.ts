@@ -200,16 +200,3 @@ export function setEmbeddingsState(
 ): void {
   setSetting(stateKey(store), state);
 }
-
-/**
- * Does the vector store need rebuilding for the current configuration?
- * True when the configured model differs from what the table holds.
- */
-export function needsReindex(resolved: ResolvedEmbeddings): boolean {
-  const state = getEmbeddingsState();
-  if (!state) return false; // first boot — db.ts creates at the default dimension
-  if (state.signature !== resolved.signature) return true;
-  if (resolved.dimension !== null && state.dimension !== resolved.dimension)
-    return true;
-  return false;
-}

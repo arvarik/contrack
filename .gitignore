@@ -19,6 +19,11 @@ coverage/
 # uploads, and the embedding-model cache. All machine-local secrets/state.
 data/
 
+# Database snapshots. These are full copies of the contact database. Today
+# they are all *.db and would be caught above, but that is incidental — a
+# compressed or manifest file would not be, so ignore the directory itself.
+backups/
+
 # User-uploaded files
 uploads/
 

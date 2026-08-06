@@ -889,6 +889,174 @@ curl -X POST http://localhost:3210/api/lists/list123/members/bulk \
 
 ---
 
+## AI Configuration
+
+Backs **Settings → AI**. Capabilities are `quick`, `deep`, `embeddings`, and
+`research`. See [Configuration](configuration.md#ai-configuration) for what each
+one powers.
+
+### `GET /api/settings/ai`
+
+The full configuration view: connected providers (with redacted key previews),
+built-in providers not yet configured, custom endpoints, every capability's
+assignment plus what it currently resolves to, and the SearXNG URL.
+
+```bash
+curl http://localhost:3210/api/settings/ai
+```
+
+```json
+{
+  "providers": [
+    {
+      "id": "gemini",
+      "label": "Google Gemini",
+      "kind": "gemini",
+      "source": "env",
+      "keyPreview": "••••YJWY",
+      "modelCount": 45,
+      "supportsDiscovery": true,
+      "supportsGrounding": true
+    }
+  ],
+  "availableProviders": [{ "id": "openai", "label": "OpenAI" }],
+  "customEndpoints": [],
+  "capabilities": {
+    "quick": {
+      "assignment": { "mode": "auto" },
+      "resolved": { "providerId": "gemini" }
+    },
+    "embeddings": { "assignment": { "mode": "auto" }, "resolved": null }
+  },
+  "searxngUrl": null
+}
+```
+
+A raw API key is never returned — only `keyPreview`.
+
+---
+
+### `GET /api/settings/ai/models/:capability`
+
+Models eligible for a capability, grouped by provider. Chat models for
+`quick`/`deep`/`research`, embedding models for `embeddings`.
+
+```bash
+curl http://localhost:3210/api/settings/ai/models/deep
+```
+
+```json
+{
+  "groups": [
+    {
+      "providerId": "gemini",
+      "providerLabel": "Google Gemini",
+      "models": [
+        {
+          "id": "gemini-3.6-flash",
+          "label": "Gemini 3.6 Flash",
+          "capabilities": ["chat"],
+          "capabilityConfidence": "declared"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`capabilityConfidence` is `declared` when the provider reports what a model can
+do (Gemini, Anthropic) and `guessed` when it was inferred from the model name
+(OpenAI and OpenAI-compatible servers return bare ids).
+
+---
+
+### `PUT /api/settings/ai/providers/:id/key`
+
+Store an API key for a built-in provider (`gemini`, `openai`, `anthropic`) and
+immediately validate it by discovering models. Returns `502 DISCOVERY_FAILED` if
+the provider rejects the key — the key is still stored so it can be corrected.
+
+```bash
+curl -X PUT http://localhost:3210/api/settings/ai/providers/anthropic/key \
+  -H "Content-Type: application/json" \
+  -d '{"apiKey":"sk-ant-..."}'
+```
+
+```json
+{ "success": true, "modelCount": 11 }
+```
+
+Keys set via environment variable take precedence and cannot be overwritten here.
+
+---
+
+### `DELETE /api/settings/ai/providers/:id/key`
+
+Remove a stored key. Environment-provided keys are unaffected.
+
+---
+
+### `POST /api/settings/ai/providers/:id/refresh-models`
+
+Re-query a provider's model list, bypassing the 24-hour cache.
+
+```json
+{ "modelCount": 45, "fetchedAt": "2026-08-05T00:00:00.000Z" }
+```
+
+---
+
+### `PUT /api/settings/ai/capabilities/:capability`
+
+Assign a capability. `mode` is `auto`, `pinned`, or `disabled`; `pinned`
+requires `providerId`. Assigning `embeddings` triggers a background vector-store
+rebuild if the model's dimension differs.
+
+```bash
+curl -X PUT http://localhost:3210/api/settings/ai/capabilities/deep \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"pinned","providerId":"anthropic","model":"claude-sonnet-5"}'
+```
+
+```json
+{ "success": true, "view": { "...": "the full settings view" } }
+```
+
+---
+
+### `PUT /api/settings/ai/endpoints`
+
+Add or update a custom OpenAI-compatible endpoint (Ollama, vLLM, LM Studio,
+llama.cpp, OpenRouter…). Validates connectivity by listing models; the endpoint
+is stored even when that fails, so an offline server can be configured ahead of
+time.
+
+```bash
+curl -X PUT http://localhost:3210/api/settings/ai/endpoints \
+  -H "Content-Type: application/json" \
+  -d '{"id":"homelab","label":"Homelab Ollama","baseUrl":"http://alpha:11434/v1"}'
+```
+
+---
+
+### `DELETE /api/settings/ai/endpoints/:id`
+
+Remove a custom endpoint.
+
+---
+
+### `PUT /api/settings/ai/searxng`
+
+Set the SearXNG base URL for self-hosted web research. An empty string clears it.
+
+```bash
+curl -X PUT http://localhost:3210/api/settings/ai/searxng \
+  -H "Content-Type: application/json" \
+  -d '{"url":"http://searxng.local:8080"}'
+```
+
+---
+
 ## AI Diagnostics
 
 ### `GET /api/ai/diagnostics`
