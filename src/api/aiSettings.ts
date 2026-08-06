@@ -45,7 +45,14 @@ export interface AISettings {
     string,
     {
       assignment: CapabilityAssignment;
-      resolved: { providerId: string; model?: string } | null;
+      resolved: {
+        providerId: string;
+        model?: string;
+        /** Set when the target has no provider entry (the built-in model). */
+        label?: string;
+      } | null;
+      /** Why `resolved` is null, phrased for the user. */
+      unavailableReason?: string;
     }
   >;
   searxngUrl?: string;

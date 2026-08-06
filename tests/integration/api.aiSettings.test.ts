@@ -48,6 +48,63 @@ describe("GET /api/settings/ai", () => {
     const res = await request(app).get("/api/settings/ai");
     expect(res.body.capabilities.quick.resolved).toBeNull();
   });
+
+  it("reports embeddings as the built-in model, not as unavailable", async () => {
+    // Embeddings resolves through resolveEmbeddings(), not resolveCapability(),
+    // and its Auto target is the local model — which needs no provider and
+    // works offline. Reporting null made the UI show an amber "nothing
+    // available" warning on a capability that was working fine.
+    const res = await request(app).get("/api/settings/ai");
+    const embeddings = res.body.capabilities.embeddings;
+
+    expect(embeddings.resolved).not.toBeNull();
+    expect(embeddings.resolved.providerId).toBe("builtin");
+    expect(embeddings.resolved.label).toMatch(/built-in/i);
+    expect(embeddings.resolved.label).toContain("384");
+    expect(embeddings.unavailableReason).toBeUndefined();
+  });
+
+  it("explains why a capability is unavailable", async () => {
+    const res = await request(app).get("/api/settings/ai");
+    // With nothing connected, every generation capability should say so in
+    // terms of the next action rather than just reporting emptiness.
+    expect(res.body.capabilities.quick.unavailableReason).toMatch(
+      /no providers connected/i,
+    );
+    expect(res.body.capabilities.research.unavailableReason).toMatch(
+      /no providers connected/i,
+    );
+  });
+
+  it("tells the user research falls to SearXNG once one is configured", async () => {
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "local",
+      label: "Local",
+      baseUrl: "http://127.0.0.1:59999/v1",
+    });
+    await request(app)
+      .put("/api/settings/ai/searxng")
+      .send({ url: "http://searxng.local:8080" });
+
+    const res = await request(app).get("/api/settings/ai");
+    // A compat endpoint cannot ground, so research resolves to no provider —
+    // but the feature still works through SearXNG, and saying "unavailable"
+    // would be wrong.
+    expect(res.body.capabilities.research.resolved).toBeNull();
+    // Match text unique to the configured case — both messages mention
+    // SearXNG, so /searxng/i alone would pass either way.
+    expect(res.body.capabilities.research.unavailableReason).toMatch(
+      /runs through your SearXNG/i,
+    );
+  });
+
+  it("omits a reason for a deliberately disabled capability", async () => {
+    await request(app)
+      .put("/api/settings/ai/capabilities/research")
+      .send({ mode: "disabled" });
+    const res = await request(app).get("/api/settings/ai");
+    expect(res.body.capabilities.research.unavailableReason).toBeUndefined();
+  });
 });
 
 describe("capability assignment", () => {
@@ -117,6 +174,33 @@ describe("capability assignment", () => {
     await new Promise((r) => setTimeout(r, 500));
     expect(widthOf("search_embeddings")).toBe(widthOf("contact_embeddings"));
   });
+
+  it("refuses an embeddings pin the provider cannot actually serve", async () => {
+    // Compat servers return bare model ids, so "embeddings" capability is a
+    // guess from the name. A server that does not implement /v1/embeddings
+    // must fail loudly here rather than leaving a pin that silently keeps the
+    // vector store on the previous model.
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "noembed",
+      label: "No Embeddings",
+      baseUrl: "http://127.0.0.1:59999/v1",
+    });
+
+    const res = await request(app)
+      .put("/api/settings/ai/capabilities/embeddings")
+      .send({
+        mode: "pinned",
+        providerId: "custom:noembed",
+        model: "some-embed-model",
+      });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.code).toBe("EMBEDDINGS_PROBE_FAILED");
+
+    // The rejected pin must not have been stored.
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.capabilities.embeddings.assignment.mode).toBe("auto");
+  }, 30_000);
 
   it("rejects an unknown capability", async () => {
     const res = await request(app)

@@ -20,8 +20,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   itself when its credential is absent, so `npm test` remains key-free and
   contributors with a single key exercise only that provider.
 
+### Changed
+
+- Settings → AI now says _why_ a capability is unavailable and what to do about
+  it, instead of "nothing available". A self-hosted setup is told that research
+  runs through SearXNG — which is accurate, since enrichment works through
+  SearXNG even though no provider resolves for the capability.
+- Pinning an embeddings model now probes it first and refuses the assignment if
+  the provider cannot actually produce a vector. Compat servers advertise bare
+  model ids, so embedding capability is guessed from the name; a model that
+  looks right on a server without `/v1/embeddings` previously saved a pin that
+  silently left the vector store on the old model.
+
 ### Fixed
 
+- **Settings → AI reported embeddings as unavailable when it was working.** The
+  view resolved every capability except embeddings, so the Auto row rendered an
+  amber "nothing available" against a capability served correctly by the
+  built-in local model. It now reads "Built-in local model · 384-dim".
 - **OpenAI structured output was rejected outright.** The adapter sent
   `strict: true`, which requires `required` to list every key in `properties` —
   but Contrack's schemas have genuinely optional fields (a contact has a name;

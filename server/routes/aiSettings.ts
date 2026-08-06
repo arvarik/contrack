@@ -25,6 +25,8 @@ import { setSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { invalidateProviderCache } from "../ai/providerRegistry.ts";
 import { ensureEmbeddingStore } from "../services/search/localEmbeddings.ts";
 import { ensureDedupeEmbeddingStore } from "../services/dedupe/embeddings.ts";
+import { probeDimension } from "../ai/embeddings.ts";
+import { AppError } from "../utils/AppError.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import type { AICapability } from "../ai/capabilities.ts";
 
@@ -143,6 +145,27 @@ router.put(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const capability = String(req.params.capability) as AICapability;
+    // An embeddings model is only usable if the endpoint really implements
+    // /v1/embeddings. Compat servers advertise bare model ids, so capability is
+    // guessed from the name — a model called "…-embed" on a server started
+    // without embeddings support looks fine until it is probed. Probe first and
+    // refuse the assignment, rather than saving a pin that quietly leaves the
+    // vector store on the previous model.
+    if (capability === "embeddings" && req.body.mode === "pinned") {
+      const dimension = await probeDimension(
+        String(req.body.providerId),
+        String(req.body.model),
+      );
+      if (dimension === null) {
+        throw new AppError(
+          `${req.body.providerId} could not produce an embedding with "${req.body.model}". ` +
+            `Check the model supports embeddings and the endpoint exposes /v1/embeddings.`,
+          502,
+          { code: "EMBEDDINGS_PROBE_FAILED" },
+        );
+      }
+    }
+
     setCapabilityAssignment(capability, req.body);
 
     // Switching embedding models changes the vector width, so BOTH stores

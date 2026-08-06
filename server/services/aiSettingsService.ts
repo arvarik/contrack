@@ -14,7 +14,9 @@ import {
   getProviderConfigs,
   invalidateProviderCache,
   type CustomEndpointConfig,
+  type ProviderConfig,
 } from "../ai/providerRegistry.ts";
+import { resolveEmbeddings } from "../ai/embeddings.ts";
 import {
   getCapabilityAssignments,
   type AICapability,
@@ -246,8 +248,18 @@ export interface AISettingsView {
     string,
     {
       assignment: CapabilityAssignment;
-      /** What Auto currently resolves to (null when unavailable). */
-      resolved: { providerId: string; model?: string } | null;
+      /** What this capability currently resolves to (null when unavailable). */
+      resolved: {
+        providerId: string;
+        model?: string;
+        /** Human-readable target — the built-in model has no provider entry. */
+        label?: string;
+      } | null;
+      /**
+       * Why `resolved` is null, phrased for the user. Absent when the
+       * capability is working, or when it was deliberately disabled.
+       */
+      unavailableReason?: string;
     }
   >;
   searxngUrl?: string;
@@ -258,6 +270,75 @@ const BUILT_IN_LABELS: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
 };
+
+/**
+ * Resolve one capability into what the settings UI should display.
+ *
+ * Embeddings needs its own path: it resolves through resolveEmbeddings()
+ * rather than resolveCapability(), and its Auto target is the built-in local
+ * model — which has no provider entry, so it needs an explicit label. Leaving
+ * it out made the UI report "nothing available" for a capability that was
+ * working perfectly offline.
+ */
+function resolveForView(
+  capability: AICapability,
+  assignment: CapabilityAssignment,
+  configs: ProviderConfig[],
+): AISettingsView["capabilities"][string] {
+  if (assignment.mode === "disabled") {
+    // Deliberate, so not a problem to explain away.
+    return { assignment, resolved: null };
+  }
+
+  if (capability === "embeddings") {
+    const e = resolveEmbeddings();
+    return {
+      assignment,
+      resolved:
+        e.kind === "builtin"
+          ? {
+              providerId: "builtin",
+              model: e.model,
+              label: `Built-in local model · ${e.dimension}-dim`,
+            }
+          : { providerId: e.providerId!, model: e.model },
+    };
+  }
+
+  const r = resolveCapability(capability);
+  if (r) {
+    return {
+      assignment,
+      resolved: { providerId: r.providerId, model: r.model },
+    };
+  }
+
+  return {
+    assignment,
+    resolved: null,
+    unavailableReason: reasonFor(capability, configs),
+  };
+}
+
+/** Explain an unavailable capability in terms of what the user can do next. */
+function reasonFor(
+  capability: AICapability,
+  configs: ProviderConfig[],
+): string {
+  if (configs.length === 0) {
+    return "No providers connected. Add an API key above, or a custom endpoint.";
+  }
+  if (capability === "research") {
+    // Research is the one capability a self-hosted stack cannot serve through
+    // a model alone — but SearXNG covers it, and when configured the feature
+    // genuinely works despite resolving to no provider.
+    if (getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url) {
+      return "No connected provider offers web search, so research runs through your SearXNG instance.";
+    }
+    return "No connected provider offers web search. Connect Gemini, OpenAI, or Anthropic, or set a SearXNG URL below.";
+  }
+  return "No connected provider can serve this capability.";
+}
 
 export function getSettingsView(): AISettingsView {
   const configs = getProviderConfigs();
@@ -291,12 +372,7 @@ export function getSettingsView(): AISettingsView {
     const assignment = assignments[capability] ?? {
       mode: "auto" as const,
     };
-    let resolved: { providerId: string; model?: string } | null = null;
-    if (capability !== "embeddings") {
-      const r = resolveCapability(capability);
-      resolved = r ? { providerId: r.providerId, model: r.model } : null;
-    }
-    capabilities[capability] = { assignment, resolved };
+    capabilities[capability] = resolveForView(capability, assignment, configs);
   }
 
   return {

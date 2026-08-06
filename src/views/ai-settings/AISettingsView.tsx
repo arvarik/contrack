@@ -379,6 +379,9 @@ export const AISettingsView = () => {
                 meta={meta}
                 assignment={settings.capabilities[meta.key]?.assignment}
                 resolved={settings.capabilities[meta.key]?.resolved}
+                unavailableReason={
+                  settings.capabilities[meta.key]?.unavailableReason
+                }
               />
             ))}
           </div>
@@ -543,10 +546,16 @@ const CapabilityRow = ({
   meta,
   assignment,
   resolved,
+  unavailableReason,
 }: {
   meta: CapabilityMeta;
   assignment?: CapabilityAssignment;
-  resolved?: { providerId: string; model?: string } | null;
+  resolved?: {
+    providerId: string;
+    model?: string;
+    label?: string;
+  } | null;
+  unavailableReason?: string;
 }) => {
   const { data: groups = [] } = useCapabilityModels(meta.key);
   const setCapability = useSetCapability();
@@ -619,12 +628,15 @@ const CapabilityRow = ({
         <div className="text-xs text-on-surface-variant pl-1">
           {resolved ? (
             <>
-              → resolves to <strong>{resolved.providerId}</strong>
-              {resolved.model ? ` · ${resolved.model}` : ""}
+              → resolves to{" "}
+              <strong>{resolved.label ?? resolved.providerId}</strong>
+              {!resolved.label && resolved.model ? ` · ${resolved.model}` : ""}
             </>
           ) : (
+            // Say what is wrong and what to do about it, not just that
+            // something is missing.
             <span className="text-amber-600">
-              → nothing available for this capability
+              → {unavailableReason ?? "nothing available for this capability"}
             </span>
           )}
         </div>
