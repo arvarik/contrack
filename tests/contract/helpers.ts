@@ -73,3 +73,49 @@ export const EXTRACTION_PROMPT =
 export function announce(provider: string, reason: string): void {
   console.info(`[contract] skipping ${provider}: ${reason}`);
 }
+
+/** Does this message mean "your credential is no good" rather than "our code is"? */
+function isCredentialProblem(message: string): boolean {
+  return /401|403|invalid[_ ]?api[_ ]?key|incorrect api key|deactivated|unauthorized|permission|invalid x-api-key|api key not valid|expired/i.test(
+    message,
+  );
+}
+
+export interface CredentialStatus {
+  usable: boolean;
+  reason?: string;
+}
+
+/**
+ * Decide whether a provider's credential is worth testing against.
+ *
+ * These tests exist to verify *our* adapters, not the reader's API keys — and
+ * `OPENAI_API_KEY` in particular is commonly exported globally for unrelated
+ * tools, so a stale one must not turn this suite red for someone who never
+ * intended to test that provider. A credential rejected by the provider skips
+ * with an explanation; anything else fails, because that is our bug.
+ */
+export async function probeCredential(
+  provider: string,
+  key: string | null,
+  probe: () => Promise<unknown>,
+): Promise<CredentialStatus> {
+  if (!key) {
+    const reason = `${provider.toUpperCase()}_API_KEY not set`;
+    announce(provider, reason);
+    return { usable: false, reason };
+  }
+  try {
+    await probe();
+    return { usable: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (isCredentialProblem(message)) {
+      const reason = `credential rejected by the provider — ${message.slice(0, 120)}`;
+      announce(provider, reason);
+      return { usable: false, reason };
+    }
+    // Not an auth problem: let the suite run so the real failure surfaces.
+    return { usable: true };
+  }
+}

@@ -25,11 +25,31 @@ import {
   modelFor,
   embedModelFor,
   announce,
+  probeCredential,
   CONTRACT_TIMEOUT_MS,
   CONTACT_SCHEMA,
   EXTRACTION_PROMPT,
 } from "./helpers.ts";
 import { parseAIJson } from "../../server/ai/resilience.ts";
+
+// Probed once at load: a credential the provider rejects skips its block with
+// an explanation, so a stale key in someone's shell cannot turn this red.
+const { GeminiAdapter } = await import("../../server/ai/adapters/gemini.ts");
+const { OpenAIAdapter } = await import("../../server/ai/adapters/openai.ts");
+const { AnthropicAdapter } =
+  await import("../../server/ai/adapters/anthropic.ts");
+const { OpenAICompatibleAdapter } =
+  await import("../../server/ai/adapters/openaiCompatible.ts");
+
+const gemini = await probeCredential("gemini", geminiKey(), () =>
+  new GeminiAdapter(geminiKey()!).listModels(),
+);
+const openai = await probeCredential("openai", openaiKey(), () =>
+  new OpenAIAdapter(openaiKey()!).listModels(),
+);
+const anthropic = await probeCredential("anthropic", anthropicKey(), () =>
+  new AnthropicAdapter(anthropicKey()!).listModels(),
+);
 
 /** Assert a generate() result is JSON we can actually use. */
 function expectUsableExtraction(text: string) {
@@ -42,14 +62,10 @@ function expectUsableExtraction(text: string) {
 
 // ─── Gemini ──────────────────────────────────────────────────────────────────
 
-describe.skipIf(!geminiKey())("Gemini", () => {
-  if (!geminiKey()) announce("Gemini", "GEMINI_API_KEY not set");
-
+describe.skipIf(!gemini.usable)("Gemini", () => {
   it(
     "lists models with declared capabilities",
     async () => {
-      const { GeminiAdapter } =
-        await import("../../server/ai/adapters/gemini.ts");
       const models = await new GeminiAdapter(geminiKey()!).listModels();
 
       expect(models.length).toBeGreaterThan(0);
@@ -69,8 +85,6 @@ describe.skipIf(!geminiKey())("Gemini", () => {
   it(
     "returns schema-conformant JSON",
     async () => {
-      const { GeminiAdapter } =
-        await import("../../server/ai/adapters/gemini.ts");
       const result = await new GeminiAdapter(geminiKey()!).generate({
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
@@ -88,8 +102,6 @@ describe.skipIf(!geminiKey())("Gemini", () => {
       // The v1.4.0 bug: `contents: string[]` reads as ONE Content with many
       // parts, so a batch collapsed to a single vector and the rest were
       // dropped. A batch of 3 is enough to catch a regression.
-      const { GeminiAdapter } =
-        await import("../../server/ai/adapters/gemini.ts");
       const vectors = await new GeminiAdapter(geminiKey()!).embed(
         ["alpha one", "beta two", "gamma three"],
         embedModelFor("gemini", "gemini-embedding-2"),
@@ -106,14 +118,10 @@ describe.skipIf(!geminiKey())("Gemini", () => {
 
 // ─── OpenAI ──────────────────────────────────────────────────────────────────
 
-describe.skipIf(!openaiKey())("OpenAI", () => {
-  if (!openaiKey()) announce("OpenAI", "OPENAI_API_KEY not set");
-
+describe.skipIf(!openai.usable)("OpenAI", () => {
   it(
     "lists models, inferring capability from the id",
     async () => {
-      const { OpenAIAdapter } =
-        await import("../../server/ai/adapters/openai.ts");
       const models = await new OpenAIAdapter(openaiKey()!).listModels();
 
       expect(models.length).toBeGreaterThan(0);
@@ -134,8 +142,6 @@ describe.skipIf(!openaiKey())("OpenAI", () => {
     async () => {
       // The Anthropic-class bug: the response_format wrapper differs per
       // vendor, and getting it wrong fails only against the real API.
-      const { OpenAIAdapter } =
-        await import("../../server/ai/adapters/openai.ts");
       const result = await new OpenAIAdapter(openaiKey()!).generate({
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
@@ -150,8 +156,6 @@ describe.skipIf(!openaiKey())("OpenAI", () => {
   it(
     "embeds one vector per input",
     async () => {
-      const { OpenAIAdapter } =
-        await import("../../server/ai/adapters/openai.ts");
       const vectors = await new OpenAIAdapter(openaiKey()!).embed(
         ["alpha one", "beta two", "gamma three"],
         embedModelFor("openai", "text-embedding-3-small"),
@@ -167,14 +171,10 @@ describe.skipIf(!openaiKey())("OpenAI", () => {
 
 // ─── Anthropic ───────────────────────────────────────────────────────────────
 
-describe.skipIf(!anthropicKey())("Anthropic", () => {
-  if (!anthropicKey()) announce("Anthropic", "ANTHROPIC_API_KEY not set");
-
+describe.skipIf(!anthropic.usable)("Anthropic", () => {
   it(
     "lists models with declared capabilities",
     async () => {
-      const { AnthropicAdapter } =
-        await import("../../server/ai/adapters/anthropic.ts");
       const models = await new AnthropicAdapter(anthropicKey()!).listModels();
 
       expect(models.length).toBeGreaterThan(0);
@@ -194,8 +194,6 @@ describe.skipIf(!anthropicKey())("Anthropic", () => {
       // Regression guard for the v1.4.0 bug: Contrack sent OpenAI's nested
       // `json_schema: { name, schema }` wrapper, which Anthropic rejects with a
       // 400. Every JSON operation failed while the mocked test stayed green.
-      const { AnthropicAdapter } =
-        await import("../../server/ai/adapters/anthropic.ts");
       const result = await new AnthropicAdapter(anthropicKey()!).generate({
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
@@ -223,8 +221,6 @@ describe.skipIf(!anthropicKey())("Anthropic", () => {
         ),
         required: ["field0"],
       };
-      const { AnthropicAdapter } =
-        await import("../../server/ai/adapters/anthropic.ts");
       const result = await new AnthropicAdapter(anthropicKey()!).generate({
         prompt: "Return JSON with field0 set to the string 'ok'.",
         responseFormat: "json",
@@ -247,8 +243,6 @@ describe.skipIf(!compatUrl())("OpenAI-compatible endpoint", () => {
   it(
     "lists models",
     async () => {
-      const { OpenAICompatibleAdapter } =
-        await import("../../server/ai/adapters/openaiCompatible.ts");
       const models = await new OpenAICompatibleAdapter({
         baseUrl: compatUrl()!,
       }).listModels();
@@ -271,8 +265,6 @@ describe.skipIf(!compatUrl())("OpenAI-compatible endpoint", () => {
         announce("OpenAI-compatible", "CONTRACT_COMPAT_MODEL not set");
         return;
       }
-      const { OpenAICompatibleAdapter } =
-        await import("../../server/ai/adapters/openaiCompatible.ts");
       const result = await new OpenAICompatibleAdapter({
         baseUrl: compatUrl()!,
       }).generate({
@@ -290,8 +282,6 @@ describe.skipIf(!compatUrl())("OpenAI-compatible endpoint", () => {
   it(
     "never claims search grounding",
     async () => {
-      const { OpenAICompatibleAdapter } =
-        await import("../../server/ai/adapters/openaiCompatible.ts");
       // No standard grounding API exists in the compat surface, so research
       // must never resolve to one of these.
       expect(

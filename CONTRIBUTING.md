@@ -102,8 +102,10 @@ forever while the feature is broken. That is not hypothetical: Anthropic's
 structured output shipped broken for exactly that reason, with a green unit
 test asserting the wrong shape.
 
-Every provider block **skips itself when its credential is absent**, so this is
-useful with one key or none:
+Every provider block **skips itself when its credential is absent — or when the
+provider rejects it**. A stale `OPENAI_API_KEY` exported in your shell for some
+unrelated tool will not turn this suite red; it skips with the reason. Only a
+genuine adapter fault fails. So this is useful with one key or none:
 
 ```bash
 npm run test:contract            # no keys -> everything skips, exit 0

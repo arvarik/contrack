@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Expected 384 dimensions but received 1536` until the process restarted. Both
   stores now rebuild together, with an integration test asserting they stay the
   same width.
+- Contract tests no longer fail on a credential the provider rejects. A stale
+  `OPENAI_API_KEY` exported globally for an unrelated tool — common on a
+  developer machine — turned the suite red for someone who never meant to test
+  that provider. Credentials are probed once up front: rejected ones skip with
+  the reason, and only a real adapter fault fails.
 - The integration suite no longer makes outbound network calls. Two tests
   stored a key for a built-in provider, which reached the real vendor to
   validate it — the only flaky tests in the suite. They now use a custom
