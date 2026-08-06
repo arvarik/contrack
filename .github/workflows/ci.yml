@@ -6,10 +6,30 @@ on:
     tags: ["v*"]
   pull_request:
     branches: ["main"]
+  # Manual re-run, and an escape hatch when GitHub's hosted pool is congested
+  # or degraded — pick the hppc self-hosted runner instead of waiting in queue.
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Where to run tests"
+        type: choice
+        default: "ubuntu-latest"
+        options:
+          - "ubuntu-latest"
+          - "hppc"
+
+concurrency:
+  # A newer push supersedes an in-flight run for the same ref. Tags and main
+  # are never cancelled — those produce published artifacts.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # Fork pull requests carry untrusted code, so they are pinned to
+    # GitHub-hosted runners and can never reach the self-hosted machine.
+    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","linux","x64","hppc"]') || 'ubuntu-latest' }}
+    timeout-minutes: 20
 
     strategy:
       matrix:
@@ -40,13 +60,31 @@ jobs:
       - name: Production Build
         run: npm run build
 
-  publish-docker:
+  # ── Container image ────────────────────────────────────────────────────────
+  # Each architecture builds on a runner of that architecture. Emulating arm64
+  # through QEMU works but compiles this project's native modules
+  # (better-sqlite3, onnxruntime) under emulation, which is dramatically
+  # slower. Public repos get free arm64 runners, so neither arch is emulated.
+  #
+  # Each job pushes an untagged manifest by digest; `merge` then assembles the
+  # digests into one multi-arch tag. This is the pattern docker/build-push-action
+  # documents for splitting a build across runners.
+  build-image:
     needs: build-and-test
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -61,7 +99,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+          # Cache is scoped per platform so the two jobs don't evict each other.
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          retention-days: 1
+          if-no-files-found: error
+
+  merge-image:
+    needs: build-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -72,30 +160,35 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      # QEMU is needed to build the arm64 image on an amd64 runner.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Create multi-arch manifest
+        working-directory: /tmp/digests
+        run: |
+          # Word splitting is intentional: each substitution expands to a list
+          # of separate arguments (-t tag -t tag, then one ref per digest).
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          # Apple Silicon and ARM homelab hosts are a primary target for a
-          # self-hosted app; an amd64-only image leaves them unable to pull.
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Verify both architectures are present
+        run: |
+          TAG=$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          echo "Inspecting $TAG"
+          docker buildx imagetools inspect "$TAG"
+          for arch in amd64 arm64; do
+            docker buildx imagetools inspect "$TAG" --raw \
+              | grep -q "\"architecture\":\"$arch\"" \
+              || { echo "::error::$TAG is missing linux/$arch"; exit 1; }
+          done
 
-  # Version tags (vX.Y.Z) get a GitHub Release. The release is created as a
-  # draft only if one doesn't already exist for the tag — pushing a tag after
-  # `gh release create` (the usual flow) is a no-op here.
+  # Version tags (vX.Y.Z) get a GitHub Release. Created only if one doesn't
+  # already exist for the tag — publishing via `gh release create` first (to
+  # attach hand-written notes) makes this a no-op rather than a conflict.
   release:
     needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

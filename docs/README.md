@@ -4,12 +4,13 @@ Welcome to the Contrack documentation. These guides cover everything from gettin
 
 ## Quick Links
 
-| Guide                                 | Description                                             |
-| ------------------------------------- | ------------------------------------------------------- |
-| [Getting Started](getting-started.md) | Installation, first run, scripts, keyboard shortcuts    |
-| [Configuration](configuration.md)     | Environment variables, AI provider setup, tier tuning   |
-| [Architecture](architecture.md)       | System overview, data flow, AI routing, database schema |
-| [API Reference](api-reference.md)     | Complete REST API with curl and JavaScript examples     |
+| Guide                                 | Description                                                 |
+| ------------------------------------- | ----------------------------------------------------------- |
+| [Getting Started](getting-started.md) | Installation, first run, scripts, keyboard shortcuts        |
+| [Configuration](configuration.md)     | Environment variables, AI provider setup, tier tuning       |
+| [Architecture](architecture.md)       | System overview, data flow, AI routing, database schema     |
+| [API Reference](api-reference.md)     | Complete REST API with curl and JavaScript examples         |
+| [CI & Release](ci-and-release.md)     | Pipeline, multi-arch images, publishing, self-hosted runner |
 
 ## Feature Guides
 
