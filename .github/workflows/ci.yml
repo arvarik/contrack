@@ -28,7 +28,7 @@ jobs:
   build-and-test:
     # Fork pull requests carry untrusted code, so they are pinned to
     # GitHub-hosted runners and can never reach the self-hosted machine.
-    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","linux","x64","hppc"]') || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
 
     strategy:

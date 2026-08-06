@@ -58,7 +58,7 @@ tag, so publishing your own notes first is the intended flow.
 ## Self-hosted runner (hppc)
 
 `hppc` is registered as a self-hosted runner with the labels
-`self-hosted, linux, x64, hppc, contrack`. It exists as an escape hatch: when
+`self-hosted, hppc, contrack` (plus the automatic `Linux`/`X64`). It exists as an escape hatch: when
 GitHub's hosted pool is congested or degraded, re-run the workflow through
 **Actions → CI → Run workflow** and choose `hppc` for the runner input.
 
