@@ -28,7 +28,7 @@ export const SuccessStage = ({
         transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.1 }}
         className="p-6 bg-emerald-500/10 rounded-3xl mb-6"
       >
-        <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+        <CheckCircle2 className="w-16 h-16 text-success" />
       </motion.div>
       <h2 className="text-xl font-headline font-bold mb-2">Merge Complete!</h2>
       <p className="text-on-surface-variant text-sm mb-6">

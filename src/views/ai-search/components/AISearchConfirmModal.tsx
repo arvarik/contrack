@@ -72,7 +72,7 @@ export function AISearchConfirmModal({
           <button
             onClick={onClose}
             disabled={isStarting}
-            className="flex-1 py-2.5 rounded-xl bg-surface-container font-bold text-sm text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-xl bg-surface-container font-bold text-sm text-on-surface hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
           >
             Cancel
           </button>
@@ -89,7 +89,7 @@ export function AISearchConfirmModal({
         </div>
 
         {/* Safety note */}
-        <p className="text-[10px] text-on-surface-variant/60 text-center leading-relaxed">
+        <p className="text-[10px] text-on-surface-variant text-center leading-relaxed">
           New data fills empty fields. Your existing data is never overwritten.
         </p>
       </div>

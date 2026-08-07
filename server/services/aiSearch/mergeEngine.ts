@@ -57,7 +57,6 @@ export function mergeSearchResult(
   contactId: string,
   existing: HydratedContact,
   searchResult: AISearchOutput,
-  groundedText?: string,
 ): number {
   let fieldsUpdated = 0;
   const scalarUpdate: Record<string, unknown> = {};

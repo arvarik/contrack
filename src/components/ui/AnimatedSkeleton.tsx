@@ -44,13 +44,6 @@ export const AnimatedSkeleton = ({
   );
 };
 
-export const SkeletonBlock = ({
-  className,
-  ...props
-}: AnimatedSkeletonProps) => (
-  <AnimatedSkeleton className={cn("rounded-2xl h-24", className)} {...props} />
-);
-
 export const SkeletonText = ({
   className,
   lines = 1,
@@ -70,17 +63,4 @@ export const SkeletonText = ({
       />
     ))}
   </div>
-);
-
-export const SkeletonAvatar = ({
-  className,
-  ...props
-}: AnimatedSkeletonProps) => (
-  <AnimatedSkeleton
-    className={cn(
-      "rounded-[2rem] h-24 w-24 md:w-32 md:h-32 shrink-0",
-      className,
-    )}
-    {...props}
-  />
 );

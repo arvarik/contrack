@@ -14,6 +14,7 @@ import { Sparkles, CheckCheck, AlertCircle } from "lucide-react";
 import { HealthRingAvatar } from "../../../components/HealthRingAvatar";
 import { cn } from "../../../lib/utils";
 import type { Contact } from "../../../types";
+import { activateOnKey } from "../../../lib/a11y";
 
 // ---------------------------------------------------------------------------
 // Contact Row
@@ -35,6 +36,9 @@ export function ContactRow({
 }: ContactRowProps) {
   return (
     <div
+      onKeyDown={activateOnKey(onToggle)}
+      tabIndex={0}
+      role="button"
       onClick={onToggle}
       className={cn(
         "flex items-center gap-4 px-6 py-3.5 cursor-pointer transition-colors group",
@@ -89,7 +93,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   if (hasError) {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
+      <span className="flex items-center gap-1 text-[10px] font-bold text-error bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
         <AlertCircle className="w-3 h-3" />
         Error
       </span>

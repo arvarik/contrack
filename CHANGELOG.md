@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Accounts replace the access token.** A gated instance now shows a one-time
+  setup screen that creates your account (email + username + password), then a
+  real sign-in screen. Sessions are server-side rows lasting 30 days, so
+  signing out actually ends the session and "sign out other devices" works.
+  Settings → Account holds your profile, password, and the list of devices
+  you're signed in on; the sidebar gets a sign-out button.
+
+  Passwords use scrypt (N=2^16, r=8, p=1) from `node:crypto` — no new native
+  dependency. Cost parameters are stored inside each hash, so raising them
+  later upgrades passwords silently on next sign-in. The session cookie holds a
+  random secret and the database stores only its SHA-256, so neither the
+  database nor one of the rotating backups yields a live session.
+
+  Existing data is not disturbed: everything already in the database is
+  assigned to the account you create. There is no reset email — this is
+  self-hosted with no mail server — so
+  [Configuration](docs/configuration.md#authentication--remote-access)
+  documents the recovery procedure.
+
+- **`ownerId` on `contacts`, `lists`, `ai_invocations` and `dedupe_merge_log`**
+  — every table not reachable from `contacts` through a foreign key. Nothing
+  filters on it yet; it exists so that adding multi-tenancy later is "scope the
+  queries" rather than "scope the queries AND migrate live data". `NULL` means
+  "belongs to whoever owns this instance", which is every row until an account
+  exists. `ON DELETE RESTRICT`, so a stray `DELETE FROM users` fails loudly
+  instead of taking the contacts with it.
+
 - **Provider contract tests** (`npm run test:contract`) — a suite that calls
   real provider APIs to verify the things a mocked test cannot: that
   `listModels` speaks the shape we parse, that structured output returns
@@ -21,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contributors with a single key exercise only that provider.
 
 ### Changed
+
+- **`AUTH_TOKEN` is now `API_TOKEN`**, and means something narrower: the
+  credential for scripts, cron jobs and MCP clients, sent as
+  `Authorization: Bearer`. People sign in with an account instead. The old name
+  still works with a deprecation warning at startup. `AUTH_REQUIRED` keeps its
+  name and its `false` default, in Docker as well as locally — the server warns
+  at startup when it binds a non-loopback address with auth off.
 
 - Settings → AI now says _why_ a capability is unavailable and what to do about
   it, instead of "nothing available". A self-hosted setup is told that research

@@ -652,7 +652,7 @@ export const CommandPalette = () => {
                     exit={{ scale: 0.5, opacity: 0 }}
                     transition={{ duration: 0.15 }}
                   >
-                    <Zap className="w-5 h-5 text-emerald-500 animate-pulse" />
+                    <Zap className="w-5 h-5 text-success animate-pulse" />
                   </motion.div>
                 ) : (
                   <motion.div
@@ -671,6 +671,8 @@ export const CommandPalette = () => {
                 value={search}
                 onValueChange={handleSearchChange}
                 onKeyDown={handleSearchInputKeyDown}
+                // The palette exists to be typed into the instant it opens.
+                // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
                 placeholder={
                   hasFilters
@@ -687,19 +689,19 @@ export const CommandPalette = () => {
             {/* ── Mode indicator ribbon ── */}
             <div className="flex items-center gap-3 px-4 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container">
               <span
-                className={`flex items-center gap-1 ${mode === "normal" ? "text-on-surface font-bold" : "text-on-surface-variant/50"}`}
+                className={`flex items-center gap-1 ${mode === "normal" ? "text-on-surface font-bold" : "text-on-surface-variant"}`}
               >
                 <Search className="w-3 h-3" /> Search
               </span>
               <span className="text-on-surface-variant/20">•</span>
               <span
-                className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant/50"}`}
+                className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant"}`}
               >
                 <Sparkles className="w-3 h-3" /> ? AI Query
               </span>
               <span className="text-on-surface-variant/20">•</span>
               <span
-                className={`flex items-center gap-1 ${mode === "action" ? "text-emerald-500 font-bold" : "text-on-surface-variant/50"}`}
+                className={`flex items-center gap-1 ${mode === "action" ? "text-success font-bold" : "text-on-surface-variant"}`}
               >
                 <Zap className="w-3 h-3" /> &gt; Actions
               </span>
@@ -771,7 +773,7 @@ export const CommandPalette = () => {
                   {/* Empty / typing prompt */}
                   {aiQuery.length === 0 && (
                     <Command.Empty className="py-8 text-center text-sm text-on-surface-variant">
-                      <Sparkles className="w-8 h-8 text-primary/30 mx-auto mb-3" />
+                      <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
                       <p className="font-bold text-on-surface mb-1">
                         AI Query Mode
                       </p>
@@ -786,7 +788,7 @@ export const CommandPalette = () => {
                               e.preventDefault();
                               setSearch(`? ${q}`);
                             }}
-                            className="w-full text-left text-xs px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
+                            className="w-full text-left text-xs px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary transition-colors"
                           >
                             ? {q}
                           </button>
@@ -798,7 +800,7 @@ export const CommandPalette = () => {
                   {/* Short query — waiting for more input */}
                   {aiQuery.length > 0 && aiQuery.length < 3 && (
                     <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                      <Sparkles className="w-6 h-6 text-primary/30 mx-auto mb-2" />
+                      <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
                       <p className="text-xs">Keep typing to search…</p>
                     </Command.Empty>
                   )}
@@ -806,7 +808,7 @@ export const CommandPalette = () => {
                   {/* Loading shimmer */}
                   {aiQuery.length >= 3 && isAiLoading && (
                     <div className="px-1 py-2 space-y-1">
-                      <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary/60 flex items-center gap-1.5">
+                      <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
                         <Sparkles className="w-3 h-3 animate-pulse" /> Asking
                         AI…
                       </div>
@@ -829,7 +831,7 @@ export const CommandPalette = () => {
                         className={GROUP_HEADING_PRIMARY}
                       >
                         {aiFallback && (
-                          <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-amber-600">
+                          <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-warning">
                             <AlertTriangle className="w-3 h-3" />
                             <span>
                               AI unavailable — showing keyword matches
@@ -882,7 +884,7 @@ export const CommandPalette = () => {
                             );
                             handleClose();
                           }}
-                          className="text-xs text-primary/60 hover:text-primary flex items-center gap-1 transition-colors group"
+                          className="text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
                         >
                           Open in full-page search
                           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -944,13 +946,13 @@ export const CommandPalette = () => {
                     onSelect={handleActionExecute}
                     className="flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-emerald-500/10 aria-selected:bg-emerald-500/15 transition-colors text-on-surface"
                   >
-                    <div className="w-10 h-10 flex items-center justify-center bg-emerald-500/20 text-emerald-500 rounded-full shrink-0 shadow-lg shadow-emerald-500/10">
+                    <div className="w-10 h-10 flex items-center justify-center bg-emerald-500/20 text-success rounded-full shrink-0 shadow-lg shadow-emerald-500/10">
                       {getLogIcon(actionMatch.type)}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col">
                       <span className="font-bold text-sm block truncate">
                         Log {actionMatch.type} for{" "}
-                        <span className="text-emerald-400">
+                        <span className="text-success">
                           {actionMatch.contact.name}
                         </span>
                       </span>
@@ -981,12 +983,12 @@ export const CommandPalette = () => {
                         <span className="flex items-center gap-1.5">
                           Contacts
                           {instantSearch.isInstant && (
-                            <span className="text-amber-500 text-[9px] font-bold uppercase tracking-widest animate-pulse">
+                            <span className="text-warning text-[9px] font-bold uppercase tracking-widest animate-pulse">
                               ⚡ instant
                             </span>
                           )}
                           {hasFilters && (
-                            <span className="text-primary/50 text-[9px] font-bold uppercase tracking-widest">
+                            <span className="text-primary text-[9px] font-bold uppercase tracking-widest">
                               filtered
                             </span>
                           )}
@@ -1108,19 +1110,19 @@ export const CommandPalette = () => {
                 Use <kbd className={KBD_SM}>↑</kbd>{" "}
                 <kbd className={KBD_SM}>↓</kbd> to navigate
                 {isEmptyInput && searchHistory.entries.length > 0 && (
-                  <span className="text-on-surface-variant/40 ml-1">
+                  <span className="text-on-surface-variant ml-1">
                     • ↑ for history
                   </span>
                 )}
               </span>
               <span className="flex items-center gap-1">
                 {!isEmptyInput && !subMenuContactId && (
-                  <span className="text-on-surface-variant/40 mr-2">
+                  <span className="text-on-surface-variant mr-2">
                     <kbd className={KBD_SM}>→</kbd> actions
                   </span>
                 )}
                 {!isEmptyInput && peekContact && !subMenuContactId && (
-                  <span className="text-on-surface-variant/40 mr-2">
+                  <span className="text-on-surface-variant mr-2">
                     Hold <kbd className={KBD_SM}>Shift</kbd> to peek
                   </span>
                 )}

@@ -402,10 +402,9 @@ try {
           pronouns: c.pronouns,
           industry: c.industry,
           themeColor: c.themeColor,
-          avatarUrl:
-            "https://api.dicebear.com/7.x/avataaars/svg?seed=" +
-            encodeURIComponent(c.name) +
-            "&mouth=default,smile,serious",
+          // Local generation — see server/services/avatarService. Seeding must
+          // not bake third-party URLs into a fresh database.
+          avatarUrl: "/api/avatar/avataaars?seed=" + encodeURIComponent(c.name),
         })
         .run();
 

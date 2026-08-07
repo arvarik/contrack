@@ -94,7 +94,6 @@ export const useDeleteInteraction = () => {
   return useMutation({
     mutationFn: async ({
       id,
-      contactId,
     }: {
       id: string;
       contactId: string;
@@ -137,7 +136,6 @@ export const useUpdateInteraction = () => {
   return useMutation({
     mutationFn: async ({
       id,
-      contactId,
       data,
     }: {
       id: string;

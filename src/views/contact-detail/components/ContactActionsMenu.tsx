@@ -9,6 +9,7 @@ import type {
   ContactPhone,
   ContactAddress,
 } from "../../../types";
+import { activateOnKey } from "../../../lib/a11y";
 
 export const ContactActionsMenu = ({
   contact,
@@ -85,25 +86,43 @@ export const ContactActionsMenu = ({
         <MoreVertical className="w-5 h-5" />
       </button>
       {isOpen && (
-        <ul className={cn(DROPDOWN_MENU, "right-0 w-56 mt-2 z-50")}>
-          <li className={DROPDOWN_ITEM} onClick={copyBasic}>
+        <ul role="menu" className={cn(DROPDOWN_MENU, "right-0 w-56 mt-2 z-50")}>
+          <li
+            role="menuitem"
+            tabIndex={0}
+            className={DROPDOWN_ITEM}
+            onClick={copyBasic}
+            onKeyDown={activateOnKey(copyBasic)}
+          >
             <Copy className="w-4 h-4 mr-2 opacity-50" />
             Copy Basic Details
           </li>
-          <li className={DROPDOWN_ITEM} onClick={copyAdvanced}>
+          <li
+            role="menuitem"
+            tabIndex={0}
+            className={DROPDOWN_ITEM}
+            onClick={copyAdvanced}
+            onKeyDown={activateOnKey(copyAdvanced)}
+          >
             <Copy className="w-4 h-4 mr-2 opacity-50" />
             Copy Full Details
           </li>
           <div className="h-px bg-white/10 my-1 mx-2" />
           <li
+            tabIndex={0}
+            role="menuitem"
             className={cn(
               DROPDOWN_ITEM,
-              "text-red-400 hover:text-red-300 hover:bg-red-500/10",
+              "text-error hover:text-error hover:bg-red-500/10",
             )}
             onClick={() => {
               setIsOpen(false);
               onDelete();
             }}
+            onKeyDown={activateOnKey(() => {
+              setIsOpen(false);
+              onDelete();
+            })}
           >
             <Trash2 className="w-4 h-4 mr-2 opacity-50" />
             Delete Contact

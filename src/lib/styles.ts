@@ -96,7 +96,7 @@ export const TEXT_LINK = "text-primary hover:underline font-bold";
 
 /** Danger text button — destructive inline action */
 export const DANGER_BTN =
-  "w-full text-xs text-red-500/60 hover:text-red-500 hover:bg-red-500/5 rounded-xl py-3 transition-colors font-bold uppercase tracking-widest flex items-center justify-center gap-2";
+  "w-full text-xs text-error hover:text-error hover:bg-red-500/5 rounded-xl py-3 transition-colors font-bold uppercase tracking-widest flex items-center justify-center gap-2";
 
 // ─── Badges & Pills ─────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ export const MICRO_BADGE =
 
 /** Status badge — success variant (e.g. "Current" on experience) */
 export const STATUS_BADGE_SUCCESS =
-  "text-[9px] uppercase tracking-widest bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded font-bold";
+  "text-[9px] uppercase tracking-widest bg-emerald-500/10 text-success px-1.5 py-0.5 rounded font-bold";
 
 /** Source badge */
 export const SOURCE_BADGE =
@@ -179,14 +179,6 @@ export const listRow = (active: boolean) =>
 export const TIMELINE_CARD =
   "p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card";
 
-/** Timeline icon marker */
-export const timelineMarker = (bgClass: string, textClass: string) =>
-  cn(
-    "flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 shadow-sm z-10",
-    bgClass,
-    textClass,
-  );
-
 // ─── Composer ────────────────────────────────────────────────────────────────
 
 /** Rich text composer container */
@@ -230,5 +222,5 @@ export const FORM_INPUT =
 /** AI pre-fill glow — returns additional classes when a field was auto-populated */
 export const formInputHighlight = (hasValue: boolean) =>
   hasValue
-    ? "bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,158,219,0.3)] animate-pulse"
+    ? "bg-primary/10 ring-2 ring-primary/50 shadow-[0_0_15px_rgba(0,113,156,0.3)] animate-pulse"
     : "";

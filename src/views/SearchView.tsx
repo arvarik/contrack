@@ -1,12 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
-import { Sparkles, Search, Tag, X, Loader2, AlertTriangle } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { Sparkles, Search, X, Loader2, AlertTriangle } from "lucide-react";
 import { useSemanticSearch } from "../api";
-import type { SemanticMatch } from "../types";
 import { PAGE_TITLE, SECTION_BG } from "../lib/styles";
 import { cn } from "../lib/utils";
+import { tileDelay } from "../lib/motion";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -38,7 +37,6 @@ export const SearchView = () => {
     }
   }, []);
 
-  const navigate = useNavigate();
   const {
     lastAISearchQuery,
     setLastAISearchQuery,
@@ -155,28 +153,24 @@ export const SearchView = () => {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface">
       {/* Header */}
-      <header className={cn(SECTION_BG, "p-6 shrink-0")}>
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
-              <div className="p-2 bg-primary/10 rounded-xl">
-                <Sparkles className="w-6 h-6 text-primary" />
-              </div>
-              Ask Contrack
-            </h1>
-            <p className="text-sm text-on-surface-variant mt-0.5">
-              Semantic AI search across your network
-            </p>
+      <header className={cn(SECTION_BG, "px-4 sm:px-6 py-5 sm:py-6 shrink-0")}>
+        <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
+          <div className="p-2 bg-primary/10 rounded-xl shrink-0">
+            <Sparkles className="w-6 h-6 text-primary" />
           </div>
-        </div>
+          Ask Contrack
+        </h1>
+        <p className="text-sm text-on-surface-variant mt-0.5">
+          Semantic AI search across your network
+        </p>
       </header>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-          {/* Search Input */}
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8 pb-28 md:pb-8">
+          {/* Search Input — the button drops below the field on phones */}
           <div className="relative">
-            <div className="flex items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-5 py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-all">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-3.5 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
               {isLoading ? (
                 <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
               ) : (
@@ -187,33 +181,39 @@ export const SearchView = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask anything about your network..."
-                className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant/50 text-lg"
+                // Short enough to survive a 390px viewport without the
+                // placeholder being clipped mid-word.
+                placeholder="Ask about your network…"
+                aria-label="Ask anything about your network"
+                className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
               />
-              <AnimatePresence>
-                {query.length > 0 && (
-                  <motion.button
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={() => {
-                      setQuery("");
-                      setLastAISearchQuery("");
-                      semanticSearch.reset();
-                      inputRef.current?.focus();
-                    }}
-                    className="p-1.5 rounded-full text-on-surface-variant/50 hover:bg-surface-container-high hover:text-on-surface transition-colors shrink-0"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-5 h-5" />
-                  </motion.button>
+              {/*
+                Reserved slot, not an AnimatePresence exit. Mounting and
+                unmounting the clear button changed the row's width mid-typing
+                and nudged the caret; now the space is always there and only
+                the button's opacity changes.
+              */}
+              <button
+                onClick={() => {
+                  setQuery("");
+                  setLastAISearchQuery("");
+                  semanticSearch.reset();
+                  inputRef.current?.focus();
+                }}
+                tabIndex={query.length > 0 ? 0 : -1}
+                aria-hidden={query.length === 0}
+                className={cn(
+                  "p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
+                  query.length === 0 && "opacity-0 pointer-events-none",
                 )}
-              </AnimatePresence>
+                aria-label="Clear search"
+              >
+                <X className="w-5 h-5" />
+              </button>
               <button
                 onClick={() => handleSearch()}
                 disabled={query.trim().length < 3 || isLoading}
-                className="px-4 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5"
+                className="w-full sm:w-auto px-4 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-shadow shrink-0 flex items-center justify-center gap-1.5 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
               >
                 <Search className="w-4 h-4" />
                 Search
@@ -223,130 +223,104 @@ export const SearchView = () => {
 
           {/* Example queries — only shown before first search */}
           {!hasSearched && !isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="space-y-4"
-            >
+            <div className="space-y-4">
               <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                 Try asking...
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {EXAMPLE_QUERIES.map((q, i) => (
-                  <motion.button
+                  <button
                     key={q}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 + i * 0.04 }}
+                    style={{ animationDelay: tileDelay(i) }}
                     onClick={() => handleExampleClick(q)}
-                    className="text-left px-4 py-3 rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md hover:bg-primary/5 text-sm text-on-surface-variant hover:text-primary transition-all group"
+                    className="tile-enter text-left px-4 py-3 rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md hover:bg-primary/5 text-sm text-on-surface-variant hover:text-primary transition-[background-color,box-shadow,color] duration-200 group"
                   >
-                    <span className="text-primary/50 group-hover:text-primary mr-1.5 font-bold">
+                    <span className="text-primary group-hover:text-primary mr-1.5 font-bold">
                       ?
                     </span>
                     {q}
-                  </motion.button>
+                  </button>
                 ))}
               </div>
-            </motion.div>
+            </div>
           )}
 
           {/*
-            Single AnimatePresence with mode="popLayout" switches between shimmer and results.
+            Shimmer and results share one keyed slot and crossfade with CSS.
 
-            mode="popLayout": when shimmer exits, Framer immediately removes it from
-            document flow (position: absolute) so the incoming results section takes its
-            natural height from frame 1 — no double-stacking, no layout jump.
-
-            All three states (loading, results, empty/error) share the same keyed slot.
+            This used to be `<AnimatePresence mode="popLayout">`, which yanks the
+            exiting shimmer into `position: absolute` for the length of its exit
+            — and for those frames the shimmer sits on top of the incoming cards
+            at a stale width. A keyed `.fade-enter` swaps in one commit: the
+            outgoing tree is gone before the new one paints, so there is nothing
+            to overlap.
           */}
-          <AnimatePresence mode="popLayout">
-            {isLoading ? (
-              <motion.div
-                key="shimmer"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-3"
-              >
-                <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-widest mb-4">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Searching...
+          {isLoading ? (
+            <div key="shimmer" className="fade-enter space-y-3">
+              <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-widest mb-4">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Searching...
+              </div>
+              <ShimmerCard delay={0} />
+              <ShimmerCard delay={0.08} />
+              <ShimmerCard delay={0.16} />
+            </div>
+          ) : results.length > 0 ? (
+            <div key="results" className="fade-enter space-y-3">
+              {/* Results header — wraps rather than crushes on narrow screens */}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-primary">
+                    {isFallback ? "Keyword Results" : "AI Results"}
+                  </span>
+                  <span className="text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
+                    {results.length} match{results.length !== 1 ? "es" : ""}
+                  </span>
                 </div>
-                <ShimmerCard delay={0} />
-                <ShimmerCard delay={0.08} />
-                <ShimmerCard delay={0.16} />
-              </motion.div>
-            ) : results.length > 0 ? (
-              <motion.div
-                key="results"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.22 }}
-                className="space-y-3"
-              >
-                {/* Results header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                      {isFallback ? "Keyword Results" : "AI Results"}
-                    </span>
-                    <span className="text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
-                      {results.length} match{results.length !== 1 ? "es" : ""}
-                    </span>
+                {isEnriching && (
+                  <div className="flex items-center gap-1.5 text-xs text-primary">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Enriching with AI…</span>
                   </div>
-                  {isEnriching && (
-                    <div className="flex items-center gap-1.5 text-xs text-primary/70">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>Enriching with AI…</span>
-                    </div>
-                  )}
-                  {isFallback && (
-                    <div className="flex items-center gap-1.5 text-xs text-amber-600">
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>AI unavailable — showing keyword matches</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Synthesis executive brief (Feature 6) */}
-                {!isFallback && (
-                  <SynthesisBar
-                    query={query}
-                    contacts={results}
-                    resultCount={results.length}
-                  />
                 )}
+                {isFallback && (
+                  <div className="flex items-center gap-1.5 text-xs text-warning">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>AI unavailable — showing keyword matches</span>
+                  </div>
+                )}
+              </div>
 
-                {/* Cards — CSS stagger, no per-card Framer Motion */}
-                <div className="space-y-2">
-                  {results.map((match, i) => (
-                    <ResultCard
-                      key={match.id}
-                      match={match}
-                      index={i}
-                      isFallback={isFallback}
-                      onClick={() => setFloatingContactId(match.id)}
-                    />
-                  ))}
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+              {/* Synthesis executive brief (Feature 6) */}
+              {!isFallback && (
+                <SynthesisBar
+                  query={query}
+                  contacts={results}
+                  resultCount={results.length}
+                />
+              )}
+
+              {/* Cards — CSS stagger, no per-card Framer Motion */}
+              <div className="space-y-2">
+                {results.map((match, i) => (
+                  <ResultCard
+                    key={match.id}
+                    match={match}
+                    index={i}
+                    isFallback={isFallback}
+                    onClick={() => setFloatingContactId(match.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* No results */}
           {!isLoading &&
             hasSearched &&
             results.length === 0 &&
             !semanticSearch.isError && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center py-16 text-center"
-              >
+              <div className="tile-enter flex flex-col items-center justify-center py-16 text-center">
                 <div className="p-4 bg-surface-container-low rounded-2xl mb-4">
                   <Search className="w-10 h-10 text-on-surface-variant/30" />
                 </div>
@@ -357,25 +331,21 @@ export const SearchView = () => {
                   Try rephrasing your query, or check if your contacts have
                   relevant details filled in.
                 </p>
-              </motion.div>
+              </div>
             )}
 
           {/* Error state */}
           {semanticSearch.isError && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-16 text-center"
-            >
+            <div className="tile-enter flex flex-col items-center justify-center py-16 text-center">
               <div className="p-4 bg-rose-500/10 rounded-2xl mb-4">
-                <AlertTriangle className="w-10 h-10 text-rose-500" />
+                <AlertTriangle className="w-10 h-10 text-error" />
               </div>
               <p className="font-bold text-on-surface mb-1">Search failed</p>
               <p className="text-sm text-on-surface-variant">
                 {(semanticSearch.error as Error)?.message ||
                   "An unexpected error occurred."}
               </p>
-            </motion.div>
+            </div>
           )}
         </div>
       </div>

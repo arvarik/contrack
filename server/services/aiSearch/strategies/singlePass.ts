@@ -12,7 +12,6 @@
 // Used automatically when AI_PROVIDER is "openai" or "anthropic".
 // =============================================================================
 
-import type { AIProvider } from "../../../ai/provider.ts";
 import { generateFor } from "../../../ai/gateway.ts";
 import type { HydratedContact } from "../../../repositories/types.ts";
 import type { AISearchStrategy, AISearchResult } from "../types.ts";

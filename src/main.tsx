@@ -5,7 +5,7 @@
  * StrictMode, an ErrorBoundary, and the TanStack React Query provider.
  */
 import { StrictMode } from "react";
-import { AuthGate } from "./components/AuthGate";
+import { AuthGate } from "./components/auth/AuthGate";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";

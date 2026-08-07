@@ -5,12 +5,12 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import { safeHref } from "../lib/utils";
 
 const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
-  const { url, title, description, image, loading, error } = node.attrs;
+  const { url, title, description, image, loading } = node.attrs;
 
   useEffect(() => {
     if (loading && url) {
@@ -135,7 +135,7 @@ export const LinkPreviewExtension = Node.create({
                 "span",
                 {
                   class:
-                    "text-[10px] uppercase font-bold text-on-surface-variant/50",
+                    "text-[10px] uppercase font-bold text-on-surface-variant",
                 },
                 "LINK",
               ],

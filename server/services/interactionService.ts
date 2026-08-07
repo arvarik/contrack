@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import fs from "fs";
-import path from "path";
 import { resolveUploadPath } from "../utils/paths.ts";
 // @ts-expect-error no types available
 import emlFormat from "eml-format";

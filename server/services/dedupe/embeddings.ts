@@ -100,26 +100,6 @@ export async function ensureDedupeEmbeddingStore(): Promise<number> {
 }
 
 // =============================================================================
-// Error Classification
-// =============================================================================
-
-function isRetryableError(error: unknown): boolean {
-  const msg = (
-    (error as { message?: string } | null | undefined)?.message ?? ""
-  ).toLowerCase();
-  return (
-    msg.includes("429") ||
-    msg.includes("rate limit") ||
-    msg.includes("quota") ||
-    msg.includes("resource exhausted") ||
-    msg.includes("503") ||
-    msg.includes("unavailable") ||
-    msg.includes("deadline") ||
-    msg.includes("timeout")
-  );
-}
-
-// =============================================================================
 // L2 Normalization
 // =============================================================================
 
@@ -198,23 +178,6 @@ export async function generateSingleEmbedding(
   return l2Normalize(Array.from(vector));
 }
 
-/**
- * Generate an embedding for a search query.
- *
- * Uses `task: retrieval` prefix instead of `task: clustering` used for
- * contact embeddings. Gemini's embedding model is prompt-aware:
- * - `clustering` optimizes for document↔document similarity (good for dedupe)
- * - `retrieval`  optimizes for query↔document matching (good for search)
- *
- * Using the correct task prefix significantly improves recall in search.
- */
-export async function generateQueryEmbedding(
-  queryText: string,
-): Promise<Float32Array> {
-  const text = `task: retrieval | query: ${queryText}`;
-  return generateSingleEmbedding(text);
-}
-
 // =============================================================================
 // Storage: sqlite-vec Operations
 // =============================================================================
@@ -272,12 +235,6 @@ export function storeEmbeddings(
   txn();
 }
 
-/** Delete an embedding (e.g., when a contact is deleted). */
-export function deleteEmbedding(contactId: string): void {
-  _stmts.delete.run(contactId);
-  _stmts.deleteMeta.run(contactId);
-}
-
 /** Clear all embedding metadata (used on full scan reset). */
 export function clearEmbeddingMeta(): void {
   _stmts.clearMeta.run();
@@ -286,11 +243,6 @@ export function clearEmbeddingMeta(): void {
 /** Get the total number of stored embeddings. */
 export function getEmbeddingCount(): number {
   return (_stmts.count.get() as { cnt: number }).cnt;
-}
-
-/** Check if a contact has an embedding. */
-export function hasEmbedding(contactId: string): boolean {
-  return !!_stmts.exists.get(contactId);
 }
 
 /**

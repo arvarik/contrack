@@ -148,6 +148,123 @@ migrate(db, { migrationsFolder: "./drizzle" });
 log.info("Database", "Drizzle migrations applied successfully");
 
 // =============================================================================
+// 2z. Identity — users, sessions, and data ownership
+// =============================================================================
+// Declared here rather than as a Drizzle migration for the same reason
+// `app_settings` is (§9g2): this file is the one place guaranteed to run
+// before any query, and the DDL is trivially idempotent. The tables are still
+// mirrored in src/db/schema.ts so the rest of the app gets Drizzle types.
+//
+// See the OWNERSHIP note in src/db/schema.ts for what `ownerId` means and why
+// only four tables carry it.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL UNIQUE,
+    displayName TEXT,
+    passwordHash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member',
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    lastLoginAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    expiresAt TEXT NOT NULL,
+    lastSeenAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    userAgent TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId);
+  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expiresAt);
+`);
+
+// The ownership columns themselves are added in §9i, once every table that
+// carries one has been created.
+
+// Expired sessions are rejected on use, but sweeping them on boot keeps the
+// table from accumulating rows nobody will ever look at again.
+const sweptSessions = sqlite
+  .prepare(`DELETE FROM sessions WHERE expiresAt <= datetime('now')`)
+  .run();
+if (sweptSessions.changes > 0) {
+  log.info("Database", `Swept ${sweptSessions.changes} expired session(s)`);
+}
+
+// =============================================================================
+// 2a. Data Migration — Retire stored api.dicebear.com avatar URLs
+// =============================================================================
+// Contacts created before avatars were generated locally carry an absolute
+// `https://api.dicebear.com/9.x/<style>/svg?seed=...` URL in `avatarUrl`, so
+// every render of those rows sent the contact's name to a third party. Rewrite
+// them to the app's own route.
+//
+// Only the style and seed carry over. The old URLs also encoded expression and
+// clothing parameters, but those are now applied server-side at render time —
+// which is deliberate, because the old parameters constrained only the mouth
+// and left `eyebrows` free, so some contacts scowled. Faces whose brows were
+// angry will change; that is the point.
+//
+// Idempotent: the LIKE only matches URLs that have not been migrated, and an
+// unknown style falls back to avataaars rather than producing a dead route.
+// =============================================================================
+
+try {
+  const legacy = sqlite
+    .prepare(
+      "SELECT id, avatarUrl FROM contacts WHERE avatarUrl LIKE 'https://api.dicebear.com/%'",
+    )
+    .all() as { id: string; avatarUrl: string }[];
+
+  if (legacy.length > 0) {
+    const KNOWN_STYLES = new Set([
+      "avataaars",
+      "lorelei",
+      "bottts",
+      "initials",
+    ]);
+    const update = sqlite.prepare(
+      "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
+    );
+    const migrateAll = sqlite.transaction(
+      (rows: { id: string; avatarUrl: string }[]) => {
+        for (const row of rows) {
+          let style = "avataaars";
+          let seed = "";
+          try {
+            const url = new URL(row.avatarUrl);
+            // Path shape: /9.x/<style>/svg
+            const fromPath = url.pathname.split("/").filter(Boolean)[1];
+            if (fromPath && KNOWN_STYLES.has(fromPath)) style = fromPath;
+            seed = url.searchParams.get("seed") ?? "";
+          } catch {
+            // Unparseable URL — fall through to the name-seeded default below.
+          }
+          const params = new URLSearchParams({ seed });
+          update.run(`/api/avatar/${style}?${params.toString()}`, row.id);
+        }
+      },
+    );
+    migrateAll(legacy.filter((row) => row.avatarUrl));
+    log.info(
+      "Database",
+      `Migrated ${legacy.length} avatar URL(s) off api.dicebear.com to local generation`,
+    );
+  }
+} catch (err) {
+  log.warn(
+    "Database",
+    `Avatar URL migration skipped: ${err instanceof Error ? err.message : String(err)}`,
+  );
+}
+
+// =============================================================================
 // 2a. Data Cleanup — Sanitize legacy AI Search artifacts
 // =============================================================================
 // These idempotent queries fix two issues in previously-hydrated contacts:
@@ -712,6 +829,57 @@ sqlite.exec(`
     updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
   );
 `);
+
+// =============================================================================
+// 9i. Data ownership columns
+// =============================================================================
+// Runs here, near the end, because it has to come after every table it
+// touches has been created — `dedupe_merge_log` is built in §9e above, well
+// after the Drizzle migrations. The `users` table it references is created in
+// §2z.
+//
+// See the OWNERSHIP note in src/db/schema.ts for what NULL means and why only
+// these four tables carry the column.
+// =============================================================================
+
+/** Tables that carry `ownerId` — every table not reachable from `contacts`. */
+export const OWNED_TABLES = [
+  "contacts",
+  "lists",
+  "ai_invocations",
+  "dedupe_merge_log",
+] as const;
+
+for (const table of OWNED_TABLES) {
+  // Tested with table_info rather than a try/catch around ALTER, so a real
+  // failure (missing table, locked database) still surfaces instead of being
+  // swallowed as "column already exists".
+  const columns = sqlite.pragma(`table_info(${table})`) as { name: string }[];
+  if (columns.length === 0) {
+    throw new Error(
+      `Cannot add ownerId: table "${table}" does not exist. §9i must run after every owned table is created.`,
+    );
+  }
+  if (!columns.some((c) => c.name === "ownerId")) {
+    // SQLite permits ADD COLUMN with a REFERENCES clause only when the default
+    // is NULL — which is the semantics we want anyway: existing rows are
+    // unowned until an account claims them.
+    //
+    // RESTRICT rather than CASCADE on purpose — see the OWNERSHIP note in
+    // src/db/schema.ts. Deleting an account that still owns contacts should
+    // fail loudly, not delete the contacts.
+    sqlite.exec(
+      `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
+    );
+    log.info("Database", `Added ownerId column to ${table}`);
+  }
+  // Indexed now rather than when multi-tenancy lands: every owner-scoped query
+  // that project adds will filter on this, and an index nobody reads costs one
+  // page on a column that currently holds a single distinct value.
+  sqlite.exec(
+    `CREATE INDEX IF NOT EXISTS idx_${table}_owner ON ${table}(ownerId)`,
+  );
+}
 
 // =============================================================================
 // 9h. Hot-path indexes

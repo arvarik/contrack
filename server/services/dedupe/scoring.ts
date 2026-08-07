@@ -14,11 +14,7 @@
 // (Section 2.7) and tuned for a personal CRM with ~1,000 contacts.
 // =============================================================================
 
-import {
-  jaroWinkler,
-  isNicknameMatch,
-  normalizeCompany,
-} from "../../utils/nlp/index.ts";
+import { jaroWinkler, isNicknameMatch } from "../../utils/nlp/index.ts";
 import type {
   NormalizedContact,
   MatchSignals,

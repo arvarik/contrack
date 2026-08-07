@@ -464,7 +464,7 @@ export const parseLinkedInCSV = (
             .filter((c): c is NonNullable<typeof c> => c !== null);
 
           resolve(parsed);
-        } catch (e) {
+        } catch {
           reject(new Error("Failed to parse LinkedIn CSV structure."));
         }
       },
@@ -544,7 +544,7 @@ export const parseFacebookJSON = (jsonData: string): ImportedContact[] => {
           _sourcePlatform: "facebook",
         } satisfies ImportedContact;
       });
-  } catch (e: unknown) {
+  } catch (e) {
     if ((e instanceof Error ? e.message : String(e)).includes("Could not find"))
       throw e;
     throw new Error(
@@ -632,7 +632,7 @@ export const parseGoogleCSV = (csvData: string): Promise<ImportedContact[]> => {
             .filter((c): c is NonNullable<typeof c> => c !== null);
 
           resolve(parsed);
-        } catch (e) {
+        } catch {
           reject(new Error("Failed to parse Google Contacts CSV structure."));
         }
       },
@@ -681,7 +681,7 @@ export const parseGenericCSV = (
             .filter((c): c is NonNullable<typeof c> => c !== null);
 
           resolve(parsed);
-        } catch (e) {
+        } catch {
           reject(new Error("Failed to parse CSV structure."));
         }
       },

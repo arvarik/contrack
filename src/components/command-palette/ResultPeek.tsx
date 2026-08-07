@@ -137,7 +137,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
             {/* Tags */}
             {contact.tags && contact.tags.length > 0 && (
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase tracking-wider text-on-surface-variant/60 font-bold flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold flex items-center gap-1">
                   <Tag className="w-2.5 h-2.5" />
                   Tags
                 </span>
@@ -151,7 +151,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
                     </span>
                   ))}
                   {contact.tags.length > 5 && (
-                    <span className="text-[10px] text-on-surface-variant/50">
+                    <span className="text-[10px] text-on-surface-variant">
                       +{contact.tags.length - 5}
                     </span>
                   )}
@@ -160,7 +160,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
             )}
 
             {/* Hint */}
-            <div className="text-[9px] text-on-surface-variant/40 text-center mt-1">
+            <div className="text-[9px] text-on-surface-variant text-center mt-1">
               Release Space to dismiss
             </div>
           </div>

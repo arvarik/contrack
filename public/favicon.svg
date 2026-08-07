@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Contrack">
+  <title>Contrack</title>
+  <!--
+    The Contrack mark: the signature gradient tile from index.css with a
+    single-stroke "C" cut out of it.
+
+    Drawn as one arc rather than typeset text so it renders identically
+    everywhere (a favicon cannot depend on a webfont), and kept to one heavy
+    stroke with round caps so it still reads as a C at 16×16 in a tab strip.
+    The gradient is the same primary-dim → primary-container ramp the sidebar
+    wordmark uses, so the tab icon and the app agree.
+
+    Arc geometry: radius 15.5 about (32,32), open from -52° to +52°. The
+    endpoints below are that circle evaluated at those angles — if you change
+    the radius, recompute them or the arc silently stops being centred.
+  -->
+  <defs>
+    <linearGradient id="contrack-mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00628a" />
+      <stop offset="1" stop-color="#47befd" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#contrack-mark)" />
+  <path
+    d="M41.5 19.8A15.5 15.5 0 1 0 41.5 44.2"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="9"
+    stroke-linecap="round"
+  />
+</svg>

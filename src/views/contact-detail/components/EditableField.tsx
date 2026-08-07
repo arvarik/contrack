@@ -9,6 +9,7 @@ import React, { useState, useEffect } from "react";
 import { Check } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";
+import { activateOnKey } from "../../../lib/a11y";
 
 export const EditableField = ({
   value,
@@ -54,6 +55,9 @@ export const EditableField = ({
   if (isEditing) {
     return (
       <input
+        aria-label={placeholder}
+        // Inline editor, opened by clicking the value it replaces.
+        // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         value={currentVal}
         onChange={(e) => setCurrentVal(e.target.value)}
@@ -67,10 +71,13 @@ export const EditableField = ({
 
   return (
     <span
+      onKeyDown={activateOnKey(() => setIsEditing(true))}
+      tabIndex={0}
+      role="button"
       onClick={() => setIsEditing(true)}
       className={cn(
         "relative cursor-text group inline-flex items-center gap-1.5",
-        !value && "text-on-surface-variant opacity-50 italic",
+        !value && "text-on-surface-variant italic",
         className,
       )}
     >
@@ -82,7 +89,7 @@ export const EditableField = ({
       {/* Save confirmation ✓ — fades in/out */}
       {showSaved && (
         <span
-          className="inline-flex items-center shrink-0 text-emerald-500 animate-fade-in pointer-events-none"
+          className="inline-flex items-center shrink-0 text-success animate-fade-in pointer-events-none"
           aria-label="Saved"
         >
           <Check className="w-3.5 h-3.5" strokeWidth={3} />

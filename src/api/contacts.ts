@@ -183,25 +183,6 @@ export const useCreateContact = () => {
   });
 };
 
-export const useBulkCreateContacts = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (
-      contacts: Partial<Contact>[],
-    ): Promise<{ success: boolean; count: number }> => {
-      const res = await apiFetch("/contacts/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(contacts),
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
-  });
-};
-
 export const useParseContactText = () => {
   return useMutation({
     mutationFn: async (text: string): Promise<ParsedContactData> => {
@@ -299,6 +280,25 @@ export const useRestoreContact = () => {
   return useMutation({
     mutationFn: async (id: string): Promise<Contact> => {
       const res = await apiFetch(`/trash/${id}/restore`, { method: "POST" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+    },
+  });
+};
+
+/** Restore many trashed contacts at once — the undo path for a bulk delete. */
+export const useBulkRestoreContacts = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]): Promise<{ count: number }> => {
+      const res = await apiFetch("/trash/bulk-restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
       return res.json();
     },
     onSuccess: () => {

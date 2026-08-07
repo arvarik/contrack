@@ -24,7 +24,10 @@ import { SmartRouter } from "../routing/SmartRouter.ts";
 import {
   getAITier,
   getGroundingRPDLimit,
+  getModelConfig,
+  previewModelForClass,
   type AITier,
+  type ModelClass,
 } from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -132,6 +135,33 @@ const MAX_RETRIES = 3;
 /** Base delay for exponential backoff: 500ms, 1000ms, 2000ms */
 const BASE_BACKOFF_MS = 500;
 
+/**
+ * Whether a discovered Gemini model can use the `googleSearch` tool.
+ *
+ * The list-models API says nothing about tool support, so this is derived:
+ * the registry is authoritative for models we route to, and everything else
+ * falls back to a family rule — the general-purpose `gemini-*` text models
+ * take the `googleSearch` tool, and the specialist families do not.
+ *
+ * Excluded, and why: the open-weight Gemma and Lyria families and the
+ * `deep-research-*` / `antigravity-*` agents are not `gemini-*` at all; and
+ * within `gemini-*`, the embedding, image, video, speech, live-session,
+ * retrieval (AQA), robotics, and computer-use variants are built for a
+ * different job and reject or ignore a search tool.
+ *
+ * Getting this wrong in the permissive direction is what put non-grounding
+ * models in the web-research dropdown, where picking one produced a setting
+ * that saved cleanly and then failed on the first research call.
+ */
+function supportsGrounding(modelId: string): boolean {
+  const known = getModelConfig(modelId);
+  if (known) return known.supportsGrounding;
+  if (!/^gemini-/i.test(modelId)) return false;
+  return !/embedding|image|veo|tts|audio|live|aqa|robotics|computer-use/i.test(
+    modelId,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Gemini Adapter (Smart Mesh v1.2)
 // ---------------------------------------------------------------------------
@@ -172,6 +202,21 @@ export class GeminiAdapter implements AIProvider {
   readonly supportsSearchGrounding = true;
 
   /**
+   * The model the SmartRouter settles on for a class when nothing is rate
+   * limited. Under load the router may fall back to another model in the
+   * same class — this is the steady-state answer the settings UI shows.
+   */
+  defaultModelFor(modelClass: ModelClass): string | undefined {
+    return previewModelForClass(
+      modelClass,
+      this.aiTier,
+      // The "pro" class is what research runs on, and research always needs
+      // the googleSearch tool.
+      modelClass === "pro",
+    );
+  }
+
+  /**
    * Enumerate models from the REST list endpoint.
    *
    * Uses fetch rather than the SDK because the REST response carries
@@ -210,13 +255,17 @@ export class GeminiAdapter implements AIProvider {
 
       for (const model of body.models ?? []) {
         const methods = model.supportedGenerationMethods ?? [];
+        const id = model.name.replace(/^models\//, "");
         const capabilities: ModelCapability[] = [];
         if (methods.includes("generateContent")) capabilities.push("chat");
         if (methods.includes("embedContent")) capabilities.push("embeddings");
         if (capabilities.length === 0) continue;
+        if (capabilities.includes("chat") && supportsGrounding(id)) {
+          capabilities.push("grounding");
+        }
         models.push({
           // Strip the "models/" prefix — requests use the bare id.
-          id: model.name.replace(/^models\//, ""),
+          id,
           label: model.displayName ?? model.name,
           capabilities,
           capabilityConfidence: "declared",

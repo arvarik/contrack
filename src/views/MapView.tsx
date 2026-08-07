@@ -20,6 +20,8 @@ import L from "leaflet";
 import { useNavigate, useLocation } from "react-router-dom";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import { escapeHtml } from "../lib/utils";
+import { usePageTitle } from "../hooks/usePageTitle";
+import { buttonLike } from "../lib/a11y";
 
 const MapClickHandler = () => {
   const navigate = useNavigate();
@@ -104,6 +106,8 @@ export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
   const navigate = useNavigate();
 
+  usePageTitle("Map");
+
   // Memoize marker icons per avatar URL so a fresh L.divIcon isn't minted
   // for every contact on every render.
   const markerIcons = useMemo(() => {
@@ -168,12 +172,12 @@ export const MapView = () => {
                   multiple addresses — hover the pin to see before navigating */}
               <Popup closeButton={false} offset={[0, -24]}>
                 <div
+                  {...buttonLike(() => navigate(`/map/contact/${contact.id}`))}
                   style={{
                     fontFamily: "var(--font-body)",
                     padding: "4px 8px",
                     cursor: "pointer",
                   }}
-                  onClick={() => navigate(`/map/contact/${contact.id}`)}
                 >
                   <p
                     style={{

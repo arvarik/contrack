@@ -22,7 +22,7 @@
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import type { NormalizedContact } from "./types.ts";
-import { findNearestNeighbors, getEmbeddingCount } from "./embeddings.ts";
+import { getEmbeddingCount } from "./embeddings.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 // =============================================================================

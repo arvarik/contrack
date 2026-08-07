@@ -5,27 +5,39 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
 import { LinkPreviewExtension } from "./LinkPreviewExtension";
-import { useAddInteraction, useUpdateContact, useContactNames } from "../api";
+import { useAddInteraction, useContactNames } from "../api";
 import type { Interaction } from "../types";
 import { getMentionSuggestion } from "./MentionSuggestion";
 import { FileText, Phone, Handshake, Mail, CalendarClock } from "lucide-react";
 import * as chrono from "chrono-node";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { COMPOSER, NLP_INPUT_ROW, TAG_PILL, iconToggle } from "../lib/styles";
+import { COMPOSER, TAG_PILL, iconToggle } from "../lib/styles";
 import { cn } from "../lib/utils";
+
+/** Placeholder copy per interaction type — see the Placeholder config below. */
+const PLACEHOLDERS = {
+  note: "Write a quick note...",
+  call: "Summarize the call...",
+  meeting: "Capture meeting highlights...",
+  email: "Log an email interaction...",
+} as const;
+
+type InteractionKind = keyof typeof PLACEHOLDERS;
 
 export const RichInteractionComposer = ({
   contactId,
 }: {
   contactId: string;
 }) => {
-  const [type, setType] = useState<"note" | "call" | "meeting" | "email">(
-    "note",
-  );
+  const [type, setType] = useState<InteractionKind>("note");
+  /**
+   * Mirrors `type` for the Placeholder callback, which is invoked by
+   * ProseMirror outside React's render cycle and so cannot close over state.
+   */
+  const typeRef = React.useRef<InteractionKind>("note");
   const { data: allContacts = [] } = useContactNames();
   const addInteraction = useAddInteraction();
-  const updateContact = useUpdateContact();
   const [followUpText, setFollowUpText] = useState("");
   const [hasContent, setHasContent] = useState(false);
   const parsedDate = chrono.parseDate(followUpText);
@@ -88,7 +100,7 @@ export const RichInteractionComposer = ({
       }
 
       setFollowUpText("");
-    } catch (err: unknown) {
+    } catch {
       toast.error("Failed to log interaction");
     }
   };
@@ -110,7 +122,10 @@ export const RichInteractionComposer = ({
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: "Write a quick note...",
+        // A function, not a string: it is re-evaluated whenever the
+        // placeholder decoration is recomputed, so switching interaction type
+        // needs no reach into the editor's internals.
+        placeholder: () => PLACEHOLDERS[typeRef.current],
         showOnlyWhenEditable: false,
       }),
       SubmitExtension,
@@ -135,18 +150,22 @@ export const RichInteractionComposer = ({
     },
   });
 
-  // Reconfigure placeholder when type shifts
+  /*
+   * Refresh the placeholder when the interaction type changes.
+   *
+   * This used to reach into `editor.extensionManager.extensions`, find the
+   * placeholder extension by name with a non-null assertion, and mutate its
+   * options in place. That crashed the whole contact detail view the moment
+   * the composer was code-split — `extensionManager` is null until the editor
+   * finishes initialising, and the `if (editor)` guard did not catch it
+   * because the editor object itself exists by then.
+   *
+   * The placeholder is now a function (see Placeholder.configure above), so
+   * all this has to do is ask ProseMirror to recompute decorations.
+   */
   React.useEffect(() => {
-    if (editor) {
-      const ph = {
-        note: "Write a quick note...",
-        call: "Summarize the call...",
-        meeting: "Capture meeting highlights...",
-        email: "Log an email interaction...",
-      }[type];
-      editor.extensionManager.extensions.find(
-        (e) => e.name === "placeholder",
-      )!.options.placeholder = ph;
+    typeRef.current = type;
+    if (editor && !editor.isDestroyed && editor.view) {
       editor.view.dispatch(editor.state.tr);
     }
   }, [type, editor]);
@@ -163,12 +182,13 @@ export const RichInteractionComposer = ({
         <div className="mt-4 group flex items-center relative">
           <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-surface-container to-transparent -top-3 opacity-50" />
           <div className="flex flex-1 items-center px-3 py-2.5 bg-surface-container-lowest rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-            <CalendarClock className="w-4 h-4 text-primary/80 mr-2.5 shrink-0" />
+            <CalendarClock className="w-4 h-4 text-primary mr-2.5 shrink-0" />
             <input
+              aria-label="Next action"
               value={followUpText}
               onChange={(e) => setFollowUpText(e.target.value)}
               placeholder="Next Action (e.g. Follow up next Tuesday at 2pm)..."
-              className="flex-1 bg-transparent border-none text-xs font-semibold text-on-surface focus:ring-0 p-0 focus:outline-none placeholder:text-on-surface-variant/40"
+              className="flex-1 bg-transparent border-none text-xs font-semibold text-on-surface focus:ring-0 p-0 focus:outline-none placeholder:text-on-surface-variant"
             />
             {parsedDate && (
               <span className={cn(TAG_PILL, "ml-2 shrink-0 shadow-sm")}>
@@ -223,7 +243,7 @@ export const RichInteractionComposer = ({
           disabled={
             (!hasContent && !followUpText.trim()) || addInteraction.isPending
           }
-          className="bg-primary text-on-primary hover:bg-primary/90 font-bold rounded-full px-7 py-2.5 shadow-sm text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-primary text-on-primary hover:bg-primary/90 font-bold rounded-full px-7 py-2.5 shadow-sm text-sm transition-all active:scale-95 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
         >
           Save
         </button>

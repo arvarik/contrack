@@ -493,7 +493,7 @@ export const searchService = {
         setCachedSearch(query, result);
         return { ...result, cached: false };
       }
-    } catch (err: unknown) {
+    } catch {
       log.warn(
         "SemanticSearch",
         `[${rid}] LLM reranker failed, returning Stage 1 results`,

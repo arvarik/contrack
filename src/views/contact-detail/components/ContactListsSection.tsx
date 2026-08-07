@@ -110,7 +110,7 @@ export const ContactListsSection = ({
             onClick={() =>
               removeFromList.mutate({ listId: list.id, contactId })
             }
-            className="w-0 overflow-hidden opacity-0 group-hover/listpill:w-3 group-hover/listpill:ml-0.5 group-hover/listpill:opacity-100 hover:text-red-500 transition-all duration-300 flex items-center"
+            className="w-0 overflow-hidden opacity-0 group-hover/listpill:w-3 group-hover/listpill:ml-0.5 group-hover/listpill:opacity-100 hover:text-error transition-all duration-300 flex items-center"
             title="Remove from list"
           >
             <X className="w-3 h-3 shrink-0" />

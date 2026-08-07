@@ -13,11 +13,12 @@ import {
   useUnarchiveContact,
   useBulkUpdateContacts,
   useBulkDeleteContacts,
+  useBulkRestoreContacts,
 } from "../api";
 import { HealthRingAvatar } from "../components/HealthRingAvatar";
-import { Modal } from "../components/ui/Modal";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
+import { toastUndoableDelete } from "../lib/undoToast";
 import { CARD, SECTION_HEADING, EMPTY_STATE, ICON_BTN } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
@@ -31,11 +32,11 @@ export const ArchivedContactsView = () => {
   const unarchive = useUnarchiveContact();
   const bulkUpdate = useBulkUpdateContacts();
   const bulkDelete = useBulkDeleteContacts();
+  const bulkRestore = useBulkRestoreContacts();
 
   // ── Multi-select state ────────────────────────────────────────────────
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isBulkDeleteConfirm, setIsBulkDeleteConfirm] = useState(false);
   const [floatingContactId, setFloatingContactId] = useState<string | null>(
     null,
   );
@@ -92,15 +93,26 @@ export const ArchivedContactsView = () => {
   };
 
   // ── Bulk delete ───────────────────────────────────────────────────────
+  /**
+   * Deleting an archived contact is the same soft delete as anywhere else —
+   * it moves to Trash for 30 days. This used to report "Permanently deleted",
+   * which was simply untrue.
+   */
   const handleBulkDelete = () => {
     const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
       onSuccess: ({ count }) => {
-        toast.success(
-          `Permanently deleted ${count} contact${count !== 1 ? "s" : ""}`,
-        );
+        toastUndoableDelete({
+          count,
+          onUndo: () =>
+            bulkRestore.mutate(ids, {
+              onError: (err) =>
+                toast.error(
+                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+            }),
+        });
         exitSelectMode();
-        setIsBulkDeleteConfirm(false);
       },
       onError: (err) =>
         toast.error(
@@ -111,20 +123,16 @@ export const ArchivedContactsView = () => {
 
   return (
     <div className="p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 bg-amber-500/10 rounded-xl">
-          <Archive className="w-6 h-6 text-amber-500" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-2xl font-headline font-bold text-on-surface">
-            Archived Contacts
-          </h2>
-          <p className="text-sm text-on-surface-variant mt-0.5">
-            Archived contacts are hidden from your Network and Map, but remain
-            accessible here and via Ask Contrack.
-          </p>
-        </div>
+      {/*
+        Description and actions only — the Settings shell above already
+        renders the archive icon and the "Archived Contacts" heading, and
+        printing them again here stacked two headers with the same words.
+      */}
+      <div className="flex items-start gap-3 mb-2">
+        <p className="flex-1 min-w-0 text-sm text-on-surface-variant">
+          Archived contacts are hidden from your Network and Map, but remain
+          accessible here and via Ask Contrack.
+        </p>
 
         {/* Multi-select toggle */}
         {contacts.length > 0 && (
@@ -152,7 +160,7 @@ export const ArchivedContactsView = () => {
                 ? () => setSelectedIds(new Set())
                 : selectAll
             }
-            className="text-xs font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
+            className="text-xs font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
           >
             {selectedCount === contacts.length ? "Deselect All" : "Select All"}
           </button>
@@ -169,7 +177,7 @@ export const ArchivedContactsView = () => {
         <div className={cn(EMPTY_STATE, "flex flex-col items-center py-16")}>
           <Archive className="w-10 h-10 text-on-surface-variant/30 mb-4" />
           <p className="font-semibold text-sm">No archived contacts</p>
-          <p className="text-xs mt-1 opacity-70">
+          <p className="text-xs mt-1 text-on-surface-variant">
             Archive contacts from their detail page to hide them from your
             Network.
           </p>
@@ -276,7 +284,7 @@ export const ArchivedContactsView = () => {
                       }}
                       disabled={unarchive.isPending}
                       title="Restore to Network"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 transition-colors opacity-0 group-hover:opacity-100 shrink-0 disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-warning bg-amber-500/10 hover:bg-amber-500/20 transition-colors opacity-0 group-hover:opacity-100 shrink-0 disabled:opacity-50"
                     >
                       <ArchiveRestore className="w-3.5 h-3.5" />
                       Restore
@@ -311,7 +319,7 @@ export const ArchivedContactsView = () => {
               <button
                 onClick={handleBulkRestore}
                 disabled={bulkUpdate.isPending}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-amber-500 hover:bg-amber-500/10 transition-colors disabled:opacity-40 shrink-0"
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-warning hover:bg-amber-500/10 transition-colors disabled:opacity-40 shrink-0"
               >
                 <ArchiveRestore className="w-4 h-4" />
                 <span className="text-[9px] font-bold uppercase tracking-widest opacity-80">
@@ -323,9 +331,9 @@ export const ArchivedContactsView = () => {
 
               {/* Delete Permanently */}
               <button
-                onClick={() => setIsBulkDeleteConfirm(true)}
+                onClick={() => handleBulkDelete()}
                 disabled={bulkDelete.isPending}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-rose-500 hover:bg-rose-500/10 transition-colors disabled:opacity-40 shrink-0"
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-error hover:bg-rose-500/10 transition-colors disabled:opacity-40 shrink-0"
               >
                 <Trash2 className="w-4 h-4" />
                 <span className="text-[9px] font-bold uppercase tracking-widest opacity-80">
@@ -336,41 +344,6 @@ export const ArchivedContactsView = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* ── Bulk Delete Confirm Modal ─────────────────────────────────────── */}
-      <Modal
-        isOpen={isBulkDeleteConfirm}
-        onClose={() => setIsBulkDeleteConfirm(false)}
-        title="Permanently Delete"
-      >
-        <div className="space-y-4 pt-2">
-          <p className="text-sm text-on-surface-variant leading-relaxed">
-            Permanently delete{" "}
-            <span className="font-bold text-on-surface">{selectedCount}</span>{" "}
-            archived contact{selectedCount !== 1 ? "s" : ""}? All their
-            interactions and data will be lost.{" "}
-            <span className="text-rose-500 font-bold">
-              This cannot be undone.
-            </span>
-          </p>
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => setIsBulkDeleteConfirm(false)}
-              className="flex-1 py-2.5 rounded-xl bg-surface-container font-bold text-sm text-on-surface hover:bg-surface-container-high transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              disabled={bulkDelete.isPending}
-              className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              {bulkDelete.isPending ? "Deleting…" : `Delete ${selectedCount}`}
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Floating Contact Card overlay */}
       <FloatingContactCard

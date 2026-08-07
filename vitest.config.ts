@@ -45,6 +45,20 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts"],
           setupFiles: ["./tests/integration-setup.ts"],
           testTimeout: 20_000,
+          // One PROCESS per file, not one worker thread.
+          //
+          // These tests configure the server through `process.env` — the auth
+          // middleware reads it per request precisely so a test can toggle
+          // enforcement. Worker threads share one process, so `AUTH_REQUIRED`
+          // set by the auth file lands on every file running beside it, and
+          // their requests start failing on a credential they never asked for.
+          //
+          // That was a real flake, not a theory: roughly one integration run in
+          // five failed somewhere unrelated to auth, and it reproduced on
+          // demand by running the auth file alongside any other. Per-file
+          // processes give each file its own environment — which is what the
+          // per-file temp DATA_DIR in integration-setup.ts already assumes.
+          pool: "forks",
         },
       },
     ],

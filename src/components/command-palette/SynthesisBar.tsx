@@ -13,7 +13,6 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Sparkles, X, Loader2, AlertTriangle } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,51 +148,45 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   const px = compact ? "px-3 py-2" : "px-4 py-3";
   const textSize = compact ? "text-xs" : "text-sm";
 
+  /*
+   * One slot, one keyed crossfade — deliberately NOT `<AnimatePresence
+   * mode="wait">` with height 0 ↔ auto. That combination collapsed the bar to
+   * zero on every phase change before re-expanding, so each transition shoved
+   * the entire result list up and back down. Phases still change height (a
+   * button is shorter than a paragraph), but now it happens once, in one
+   * direction, instead of twice.
+   */
   return (
-    <AnimatePresence mode="wait">
+    <div key={phase} className="fade-enter">
       {/* ── Idle: Show synthesize button ── */}
       {phase === "idle" && (
-        <motion.div
-          key="idle"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2 }}
-          className={compact ? "px-1" : ""}
-        >
+        <div className={compact ? "px-1" : ""}>
           <button
             onClick={handleSynthesize}
             className={`
               w-full ${px} rounded-xl flex items-center gap-2
               bg-primary/5 hover:bg-primary/10 transition-colors group
-              ${textSize} text-primary/70 hover:text-primary cursor-pointer
+              ${textSize} text-primary hover:text-primary cursor-pointer
             `}
           >
             <Sparkles
               className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} group-hover:scale-110 transition-transform`}
             />
             <span className="font-semibold">Synthesize these results</span>
-            <span className="text-on-surface-variant/50 ml-auto">
+            <span className="text-on-surface-variant ml-auto">
               {resultCount} contacts
             </span>
           </button>
-        </motion.div>
+        </div>
       )}
 
       {/* ── Loading: Shimmer skeleton ── */}
       {phase === "loading" && (
-        <motion.div
-          key="loading"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+        <div
           className={`${compact ? "mx-1" : ""} rounded-xl bg-primary/5 ${px} space-y-2`}
           style={{ minHeight: compact ? "60px" : "80px" }}
         >
-          <div
-            className={`flex items-center gap-2 ${textSize} text-primary/60`}
-          >
+          <div className={`flex items-center gap-2 ${textSize} text-primary`}>
             <Loader2
               className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} animate-spin`}
             />
@@ -203,17 +196,12 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
             <div className="h-3 bg-primary/10 rounded-full animate-pulse w-4/5" />
             <div className="h-3 bg-primary/10 rounded-full animate-pulse w-3/5" />
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* ── Complete: Show synthesis text ── */}
       {phase === "complete" && synthesisText && (
-        <motion.div
-          key="complete"
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
+        <div
           className={`
             ${compact ? "mx-1" : ""} rounded-xl bg-primary/5
             ${px} relative group
@@ -234,22 +222,17 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           >
             <X className="w-3 h-3" />
           </button>
-        </motion.div>
+        </div>
       )}
 
       {/* ── Error state ── */}
       {phase === "error" && (
-        <motion.div
-          key="error"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+        <div
           className={`${compact ? "mx-1" : ""} rounded-xl bg-rose-500/5 ${px}`}
         >
           <div className={`flex items-center gap-2 ${textSize}`}>
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-            <span className="text-rose-600">
+            <AlertTriangle className="w-3.5 h-3.5 text-error shrink-0" />
+            <span className="text-error">
               Synthesis failed{errorMessage ? `: ${errorMessage}` : ""}
             </span>
             <button
@@ -266,8 +249,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
               <X className="w-3 h-3" />
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </div>
   );
 };

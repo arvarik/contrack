@@ -41,6 +41,10 @@ Thumbs.db
 # Test / scratch artifacts
 test.eml
 
+# Working reviews — running scratchpads of proposals, not shipped docs
+docs/ui-ux-review.md
+docs/backend-surface-gaps.md
+
 # Gemstack-managed internal design docs — not shipped
 docs/archive/
 docs/designs/

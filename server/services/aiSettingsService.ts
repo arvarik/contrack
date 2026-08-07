@@ -145,11 +145,6 @@ function writeModelCache(cache: Record<string, CachedModelList>): void {
   setSetting(SETTING_KEYS.aiModelCache, cache);
 }
 
-/** Cached models for a provider (may be stale; never triggers a fetch). */
-export function getCachedModels(providerId: string): CachedModelList | null {
-  return readModelCache()[providerId] ?? null;
-}
-
 /**
  * Fetch and cache a provider's model list. Throws when discovery fails so the
  * caller (key validation) can surface an actionable error; the previous list
@@ -251,6 +246,14 @@ export interface AISettingsView {
       /** What this capability currently resolves to (null when unavailable). */
       resolved: {
         providerId: string;
+        /** Display name of the provider that will serve this capability. */
+        providerLabel: string;
+        /**
+         * The concrete model that will run. Populated even in Auto mode —
+         * "chosen automatically" told the user nothing about what would
+         * execute or what it would cost. Undefined only when the provider
+         * genuinely cannot say in advance (a custom endpoint).
+         */
         model?: string;
         /** Human-readable target — the built-in model has no provider entry. */
         label?: string;
@@ -298,10 +301,15 @@ function resolveForView(
         e.kind === "builtin"
           ? {
               providerId: "builtin",
+              providerLabel: "Built-in",
               model: e.model,
               label: `Built-in local model · ${e.dimension}-dim`,
             }
-          : { providerId: e.providerId!, model: e.model },
+          : {
+              providerId: e.providerId!,
+              providerLabel: labelFor(e.providerId!, configs),
+              model: e.model,
+            },
     };
   }
 
@@ -309,7 +317,15 @@ function resolveForView(
   if (r) {
     return {
       assignment,
-      resolved: { providerId: r.providerId, model: r.model },
+      resolved: {
+        providerId: r.providerId,
+        providerLabel: labelFor(r.providerId, configs),
+        // In Auto mode `resolveCapability` leaves the model to the adapter's
+        // own router, so ask the adapter what it would pick. Adapters that
+        // cannot answer (custom endpoints) leave this undefined and the UI
+        // falls back to naming the provider alone.
+        model: r.model ?? r.provider.defaultModelFor?.(r.modelClass),
+      },
     };
   }
 
@@ -318,6 +334,15 @@ function resolveForView(
     resolved: null,
     unavailableReason: reasonFor(capability, configs),
   };
+}
+
+/** Display name for a provider id, falling back to the id itself. */
+function labelFor(providerId: string, configs: ProviderConfig[]): string {
+  return (
+    configs.find((c) => c.id === providerId)?.label ??
+    BUILT_IN_LABELS[providerId] ??
+    providerId
+  );
 }
 
 /** Explain an unavailable capability in terms of what the user can do next. */
@@ -388,13 +413,32 @@ export function getSettingsView(): AISettingsView {
   };
 }
 
-/** Models eligible for a capability, grouped for the UI dropdowns. */
+/**
+ * Models eligible for a capability, grouped for the UI dropdowns.
+ *
+ * Research is filtered on "grounding", not "chat". Every chat model used to
+ * be offered here, so the web-research picker listed dozens of models that
+ * cannot search the web at all — and picking one saved without complaint,
+ * then failed on the first enrichment run. Adapters now mark which of their
+ * models actually support search grounding (see ModelCapability), and
+ * providers that cannot ground at all — every custom OpenAI-compatible
+ * endpoint — contribute nothing to this list.
+ */
 export function getModelsForCapability(
   capability: AICapability,
 ): { providerId: string; providerLabel: string; models: ModelInfo[] }[] {
-  const wanted = capability === "embeddings" ? "embeddings" : "chat";
+  const wanted =
+    capability === "embeddings"
+      ? "embeddings"
+      : capability === "research"
+        ? "grounding"
+        : "chat";
   const cache = readModelCache();
   return getProviderConfigs()
+    .filter((config) => {
+      if (capability !== "research") return true;
+      return getProvider(config.id)?.supportsSearchGrounding !== false;
+    })
     .map((config) => ({
       providerId: config.id,
       providerLabel: config.label,

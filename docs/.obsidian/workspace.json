@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "recommendations/2026-08-04-capability-based-ai-configuration.md",
+                "file": "backend-surface-gaps.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "2026-08-04-capability-based-ai-configuration"
+              "title": "backend-surface-gaps"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "recommendations/2026-08-04-capability-based-ai-configuration.md",
+                "file": "backend-surface-gaps.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for 2026-08-04-capability-based-ai-configuration"
+              "title": "Backlinks for backend-surface-gaps"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "recommendations/2026-08-04-capability-based-ai-configuration.md",
+                "file": "backend-surface-gaps.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from 2026-08-04-capability-based-ai-configuration"
+              "title": "Outgoing links from backend-surface-gaps"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "recommendations/2026-08-04-capability-based-ai-configuration.md",
+                "file": "backend-surface-gaps.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 2026-08-04-capability-based-ai-configuration"
+              "title": "Outline of backend-surface-gaps"
             }
           }
         ]
@@ -183,11 +183,13 @@
       "bases:Create new base": false
     }
   },
-  "active": "d22535e712890204",
+  "active": "2fbcf173ada20be7",
   "lastOpenFiles": [
     "ci-and-release.md",
+    "backend-surface-gaps.md",
     "recommendations/2026-08-04-unsurfaced-capabilities-and-model-landscape.md",
     "recommendations/2026-08-04-capability-based-ai-configuration.md",
+    "ui-ux-review.md",
     "recommendations/2026-08-03-improvement-recommendations.md"
   ]
 }

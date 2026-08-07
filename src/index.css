@@ -1,4 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap");
+/* Self-hosted; see fonts.css for why this is not a Google Fonts import. */
+@import "./fonts.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
@@ -10,16 +11,41 @@
   /* ===================================================================
    * THE CONTRACK DESIGN SYSTEM
    * ===================================================================
-   * Primary Blue: #009EDB — high‑energy, vibrant anchor.
+   * Primary Blue: #006A91 — the interactive anchor.
    * Surface Hierarchy: physical stack of fine paper.
    * No‑Line Rule: boundaries through bg‑color shifts, never 1px borders.
    * Glass & Gradient Rule: glassmorphism for floating UI, signature
    *   gradient reserved only for branding (e.g. sidebar logo text).
+   *
+   * ── Contrast contract ──────────────────────────────────────────────
+   * Every colour below that is ever used as TEXT or as an ICON clears
+   * WCAG AA (4.5:1) against every surface it actually lands on in this
+   * app — measured, not assumed. The binding cases are not white cards;
+   * they are the pale tints (`bg-primary/15`, `bg-emerald-500/10`, …)
+   * that badges and pills are built from, where a colour sits on a wash
+   * of itself.
+   *
+   * The previous primary, #009EDB, measured 2.39:1 at its worst and
+   * 3.04:1 on a white card — so 254 `text-primary` call sites, every
+   * filled CTA's white label, and every status pill failed. The palette
+   * is the right place to fix that: one token change repairs every call
+   * site at once and cannot regress the way per-component patches do.
+   *
+   * Verify with scripts/contrast-audit (see docs/ui-ux-review.md) after
+   * touching anything here.
    * =================================================================== */
 
   /* ── Primary Palette ────────────────────────────────────────────── */
-  --color-primary: #009edb;
+  /* 6.05:1 on white · 5.60:1 on surface · 4.68:1 on surface-container-high,
+     and 4.89:1 on the worst real case — an active filter pill, where primary
+     text sits on a primary/15 wash over a sectional background. Chosen to
+     clear 4.5:1 on EVERY surface in the stack rather than only the ones in
+     use today, so a new `text-primary` call site cannot silently fail.
+     Also the fill behind white button labels: contrast is symmetric, so one
+     value satisfies both directions. */
+  --color-primary: #006a91;
   --color-primary-dim: #00628a;
+  /* Light end of the branding gradient and pale fills only — never text. */
   --color-primary-container: #47befd;
   --color-on-primary: #ffffff;
   --color-on-primary-container: #001e2f;
@@ -29,8 +55,23 @@
   --color-secondary-container: #cfe6f2;
   --color-on-secondary-container: #40555f;
 
+  /* ── Status ─────────────────────────────────────────────────────────
+   * Text and icons only. The pale `bg-*-500/10` washes these sit on stay
+   * on Tailwind's raw palette — a background carries no contrast duty,
+   * and the light tint is what makes the chip read as its colour.
+   *
+   * Each value is the lightest one in its hue that still clears 4.5:1 on
+   * all ten surfaces measured in the app. Amber is unavoidably brown at
+   * that threshold; that is what an accessible amber looks like on white.
+   * ------------------------------------------------------------------ */
+  --color-success: #046b4e; /* worst measured 5.13:1 */
+  --color-warning: #9a4c08; /* worst measured 4.84:1 */
+  --color-info: #036796; /* worst measured 4.88:1 */
+
   /* ── Error / Destructive ────────────────────────────────────────── */
-  --color-error: #ef4444;
+  /* Was #ef4444 — 2.96:1 at worst, and only 3.76:1 under the white label
+     on a filled `bg-error` badge. */
+  --color-error: #bf1b1b; /* worst measured 4.87:1 */
   --color-on-error: #ffffff;
 
   /* ── Surface Hierarchy (paper-stack) ────────────────────────────── */
@@ -69,11 +110,46 @@
     @apply font-headline tracking-tight;
   }
 
-  /* Kill default border on focusable elements — we use ring instead  */
-  input,
-  textarea,
-  select,
-  button {
+  /* ── Keyboard focus ───────────────────────────────────────────────────
+   * This used to be a blanket `outline: none` on every input, textarea,
+   * select and button, justified by "we use ring instead". In practice the
+   * app has ~253 buttons and ~52 focus rings: the shared classes in
+   * lib/styles.ts (ICON_BTN, navLink, tabItem, filterPill, listRow) all
+   * define hover and active states but no focus state. So most controls had
+   * no visible focus indicator at all — a WCAG 2.4.7 failure, and an odd one
+   * in an app whose pitch is "keyboard-first".
+   *
+   * `:focus-visible` means pointer users never see this; it appears only for
+   * keyboard (and other non-pointer) interaction, so it costs the mouse
+   * experience nothing.
+   *
+   * `:where()` holds specificity at zero, so any component that already
+   * defines its own ring still wins without needing !important.
+   *
+   * `outline-offset` draws the ring OUTSIDE the control, which is what keeps
+   * it visible on a filled `bg-primary` button — an inset primary ring on a
+   * primary fill would be invisible.
+   * ------------------------------------------------------------------- */
+  :where(
+    button,
+    [role="button"],
+    a,
+    input,
+    select,
+    textarea,
+    summary,
+    [tabindex]
+  ):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    /* Nothing should clip the ring away at the edge of a scroll container. */
+    border-radius: inherit;
+  }
+
+  /* Pointer interaction keeps the old behaviour: no outline. */
+  :where(button, [role="button"], a, input, select, textarea):focus:not(
+      :focus-visible
+    ) {
     outline: none;
   }
 }
@@ -127,14 +203,17 @@
     cursor: pointer;
   }
   .btn-primary:hover {
-    box-shadow: 0 10px 15px -3px rgba(0, 158, 219, 0.2);
+    box-shadow: 0 10px 15px -3px rgba(0, 113, 156, 0.25);
     transform: scale(1.02);
   }
   .btn-primary:active {
     transform: scale(0.98);
   }
   .btn-primary:disabled {
-    opacity: 0.5;
+    /* Not opacity: fading a filled button fades its label into its own fill.
+       Dim the chrome and keep the text readable. */
+    background-color: var(--color-surface-container-high);
+    color: var(--color-on-surface-variant);
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -155,7 +234,10 @@
     background-color: var(--color-surface-container-high);
   }
   .btn-secondary:disabled {
-    opacity: 0.5;
+    /* Ghost button: the label only fades against a constant page background,
+       so it stays legible — but not at 50%. */
+    color: var(--color-on-surface-variant);
+    opacity: 0.75;
     cursor: not-allowed;
   }
 
@@ -264,6 +346,60 @@
   }
   .timeline-entry {
     animation: timelineEntryIn 0.35s ease-out both;
+  }
+
+  /**
+   * tile-enter — the ONE entrance animation for dashboard/settings tiles.
+   *
+   * Why CSS and not motion.div: a motion component holds the element at
+   * `initial` (opacity 0) until its effect starts the animation, so any
+   * re-mount — a tab switch, a query resolving, a parent branch swap —
+   * replays the whole thing and the tile visibly blinks. A CSS animation
+   * runs exactly once, when the node is inserted, and is driven entirely
+   * off the compositor.
+   *
+   * Stagger via `style={{ animationDelay: tileDelay(i) }}` — see
+   * lib/motion.ts, which caps the ramp so the last tile is never more than
+   * ~200ms behind the first. Long stagger chains are what read as "flicker":
+   * the page looks broken while it waits its turn.
+   */
+  @keyframes tileIn {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  .tile-enter {
+    animation: tileIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /** Opacity-only crossfade for content that swaps inside a fixed slot. */
+  .fade-enter {
+    animation: resultCardIn 0.2s ease-out both;
+  }
+}
+
+/* =====================================================================
+ * REDUCED MOTION
+ * =====================================================================
+ * A global opt-out, not a per-component one. Anything that animates —
+ * CSS keyframes, transitions, smooth scrolling — collapses to an instant
+ * state change. Motion One reads the same media query internally, so
+ * `motion.*` components are covered by their own reduced-motion handling.
+ * ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

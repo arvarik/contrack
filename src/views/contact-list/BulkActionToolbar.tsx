@@ -41,7 +41,6 @@ const BulkActionBtn = ({
 );
 
 interface BulkActionToolbarProps {
-  selectedCount: number;
   isPending: boolean;
   onArchive: () => void;
   onAddToList: () => void;
@@ -52,7 +51,6 @@ interface BulkActionToolbarProps {
 }
 
 export const BulkActionToolbar = ({
-  selectedCount,
   isPending,
   onArchive,
   onAddToList,
@@ -93,7 +91,7 @@ export const BulkActionToolbar = ({
           label="Archive"
           onClick={onArchive}
           disabled={isPending}
-          className="text-amber-500 hover:bg-amber-500/10"
+          className="text-warning hover:bg-amber-500/10"
         />
         <BulkActionBtn
           icon={<AddToListIcon className="w-4 h-4" />}
@@ -138,6 +136,7 @@ export const BulkActionToolbar = ({
               >
                 {VIBE_COLORS.map((vibe) => (
                   <button
+                    aria-label={`Set colour to ${vibe.id}`}
                     key={vibe.id}
                     onClick={() => {
                       onColorChange(vibe.id);
@@ -170,7 +169,7 @@ export const BulkActionToolbar = ({
           label="Delete"
           onClick={onDelete}
           disabled={isPending}
-          className="text-rose-500 hover:bg-rose-500/10"
+          className="text-error hover:bg-rose-500/10"
         />
       </div>
     </motion.div>

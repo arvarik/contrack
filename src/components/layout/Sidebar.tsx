@@ -4,6 +4,11 @@
  * Each nav item wraps with a custom Tooltip that appears to the right
  * of the icon after a 250ms hover delay — replacing the ugly native
  * browser `title` tooltip with a polished in-app version.
+ *
+ * That tooltip is a hover-rendered <div>, so it is worth nothing to a screen
+ * reader or to a keyboard user tabbing through: every link here is an icon
+ * with no text. Each one therefore carries its own `aria-label`, duplicating
+ * the tooltip's label. Keep the two in sync when adding a destination.
  */
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -12,6 +17,8 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   Activity,
+  Keyboard,
+  LogOut,
 } from "lucide-react";
 import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -19,6 +26,8 @@ import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
+import { openKeyboardShortcuts } from "../../lib/appEvents";
+import { useAuth } from "../auth/AuthGate";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -66,7 +75,7 @@ const SidebarTooltip = ({
             <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
               {label}
               {shortcut && (
-                <span className="block text-[9px] font-mono font-normal text-on-surface-variant/60 mt-0.5">
+                <span className="block text-[9px] font-mono font-normal text-on-surface-variant mt-0.5">
                   {shortcut}
                 </span>
               )}
@@ -92,6 +101,7 @@ export const Sidebar = () => {
   const { lastContactId } = useRecent();
   const isMap = location.pathname.startsWith("/map");
   const isCleanup = location.pathname.startsWith("/settings");
+  const { user, authRequired, signOut } = useAuth();
   const isSearch = location.pathname.startsWith("/search");
   const isPulse = location.pathname.startsWith("/pulse");
   const isHome =
@@ -111,7 +121,7 @@ export const Sidebar = () => {
     <aside
       className={cn(
         SECTION_BG,
-        "w-16 h-screen hidden md:flex flex-col items-center py-6 gap-6 shrink-0 relative z-20",
+        "w-16 h-screen hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
       {/* Contrack wordmark — rotated vertical */}
@@ -132,13 +142,18 @@ export const Sidebar = () => {
         <Link
           to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"}
           className={navLink(isHome)}
+          aria-label="Network"
         >
           <LayoutDashboard className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
 
       <SidebarTooltip label="Relationship Pulse" shortcut="⌘⇧P">
-        <Link to="/pulse" className={navLink(isPulse, "relative")}>
+        <Link
+          to="/pulse"
+          className={navLink(isPulse, "relative")}
+          aria-label="Relationship Pulse"
+        >
           <Activity className="w-6 h-6" />
           {/* Urgent action items — red dot (top-right) */}
           {urgentCount > 0 && (
@@ -162,25 +177,78 @@ export const Sidebar = () => {
       </SidebarTooltip>
 
       <SidebarTooltip label="Map" shortcut="⌘⇧M">
-        <Link to="/map" className={navLink(isMap)}>
+        <Link to="/map" className={navLink(isMap)} aria-label="Map">
           <Map className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
 
       <SidebarTooltip label="AI Search" shortcut="⌘⇧S">
-        <Link to="/search" className={navLink(isSearch)}>
+        <Link to="/search" className={navLink(isSearch)} aria-label="AI Search">
           <Sparkles className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
 
-      {/* spacer to push following items down */}
+      {/* spacer to push the utility group to the bottom */}
       <div className="flex-1" />
 
-      <SidebarTooltip label="Settings" shortcut="⌘⇧,">
-        <Link to="/settings" className={navLink(isCleanup)}>
-          <SettingsIcon className="w-6 h-6" />
-        </Link>
-      </SidebarTooltip>
+      {/*
+        Utility group. The bottom corner used to hold a lone gear with nothing
+        marking it as a different kind of thing from the four destinations
+        above it. It is now a labelled group, separated by a background shift
+        rather than a rule (the design system's no-line rule), holding the two
+        actions that are *about* the app rather than about your contacts.
+
+        Keyboard shortcuts previously had no visible entry point at all — the
+        overlay existed but you had to already know to press `?`. Discoverable
+        shortcuts are the difference between a keyboard-first app and an app
+        with keyboard shortcuts.
+      */}
+      <div className="flex flex-col items-center gap-2 w-full pt-3 pb-1 bg-surface-container/40 rounded-t-2xl">
+        <SidebarTooltip label="Keyboard shortcuts" shortcut="?">
+          <button
+            type="button"
+            onClick={openKeyboardShortcuts}
+            className={navLink(false)}
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard className="w-6 h-6" />
+          </button>
+        </SidebarTooltip>
+
+        <SidebarTooltip label="Settings" shortcut="⌘⇧,">
+          <Link
+            to="/settings"
+            className={navLink(isCleanup)}
+            aria-label="Settings"
+          >
+            <SettingsIcon className="w-6 h-6" />
+          </Link>
+        </SidebarTooltip>
+
+        {/*
+          Sign-out sits in the utility group rather than buried three levels
+          into Settings, because "get me out of here" is not something anyone
+          should have to navigate for — and it only appears when there is
+          actually a session to end.
+
+          The tooltip names the account: on a shared machine the useful
+          question before signing out is "signed in as whom".
+        */}
+        {authRequired && user && (
+          <SidebarTooltip
+            label={`Sign out — ${user.displayName || user.username}`}
+          >
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className={navLink(false)}
+              aria-label={`Sign out of ${user.displayName || user.username}'s account`}
+            >
+              <LogOut className="w-6 h-6" />
+            </button>
+          </SidebarTooltip>
+        )}
+      </div>
     </aside>
   );
 };

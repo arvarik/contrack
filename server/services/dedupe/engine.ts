@@ -4,7 +4,7 @@ import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
 import { dedupeQueue } from "./jobQueue.ts";
-import { buildPassContext, getEmbeddingSimilarity } from "./context.ts";
+import { buildPassContext } from "./context.ts";
 import {
   backfillEmbeddings,
   isEmbeddingAvailable,
@@ -114,7 +114,7 @@ export const dedupeService = {
               );
             }
 
-            const embedded = await backfillEmbeddings((done, total, phase) => {
+            const embedded = await backfillEmbeddings((done, total) => {
               dedupeQueue.update(scanId, {
                 phaseName: `Embedding contacts (${done}/${total})…`,
               });

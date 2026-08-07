@@ -1,6 +1,5 @@
 import React from "react";
 import { cn } from "../../lib/utils";
-import { CARD_COMPACT } from "../../lib/styles";
 
 const SkeletonBox = ({
   className,

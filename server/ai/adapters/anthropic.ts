@@ -12,7 +12,8 @@
 // =============================================================================
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { AIProvider, ModelInfo } from "../provider.ts";
+import type { AIProvider, ModelInfo, ModelCapability } from "../provider.ts";
+import type { ModelClass } from "../routing/registry.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -41,6 +42,22 @@ const DEFAULT_MODEL_CLASS = "lite";
 
 const DEFAULT_MAX_TOKENS = 4096;
 const SEARCH_MAX_TOKENS = 8192;
+
+/**
+ * Whether a Claude model supports the server-side `web_search` tool.
+ *
+ * Anthropic's list-models endpoint does not report tool support, so this is
+ * a family rule: web search shipped with Claude 3.5 and is available on every
+ * family since. The pre-3.5 models (`claude-2*`, `claude-instant*`, and the
+ * original `claude-3-{opus,sonnet,haiku}`) predate it. Claude 3.5 and 3.7 are
+ * spelled `claude-3-5-*` / `claude-3-7-*`, so the exclusion below matches only
+ * a bare major-3 family segment.
+ */
+function supportsWebSearch(modelId: string): boolean {
+  if (/^claude-(2|instant)/i.test(modelId)) return false;
+  if (/^claude-3-(opus|sonnet|haiku)/i.test(modelId)) return false;
+  return /^claude-/i.test(modelId);
+}
 
 // ---------------------------------------------------------------------------
 // Schema Translation — Anthropic supports nullable natively
@@ -103,18 +120,29 @@ export class AnthropicAdapter implements AIProvider {
   /**
    * Enumerate models. Anthropic reports ids + display names; every listed
    * model is a chat model (Anthropic ships no first-party embedding models).
+   *
+   * The server-side `web_search` tool this adapter uses for research is a
+   * Claude 3.5-and-later feature, so the legacy families are excluded from
+   * the grounding capability rather than offered and left to fail.
    */
   async listModels(): Promise<ModelInfo[]> {
     const models: ModelInfo[] = [];
     for await (const model of this.client.models.list()) {
+      const capabilities: ModelCapability[] = ["chat"];
+      if (supportsWebSearch(model.id)) capabilities.push("grounding");
       models.push({
         id: model.id,
         label: model.display_name ?? model.id,
-        capabilities: ["chat"],
+        capabilities,
         capabilityConfidence: "declared",
       });
     }
     return models;
+  }
+
+  /** Claude has fixed per-class models; no dynamic routing to preview. */
+  defaultModelFor(modelClass: ModelClass): string | undefined {
+    return MODEL_MAP[modelClass] ?? MODEL_MAP[DEFAULT_MODEL_CLASS];
   }
 
   resolveModel(prefer?: string, modelOverride?: string): string {

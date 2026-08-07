@@ -86,7 +86,7 @@ export const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
 
   return (
     <span
-      className={`text-[11px] flex items-center gap-1 ${isStale ? "text-rose-500/70" : "text-on-surface-variant/50"}`}
+      className={`text-[11px] flex items-center gap-1 ${isStale ? "text-error" : "text-on-surface-variant"}`}
     >
       <Clock className="w-2.5 h-2.5 shrink-0" />
       {text}
@@ -148,7 +148,7 @@ export const StaleChip = ({
   };
 
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-amber-600/80 bg-amber-500/10 px-1.5 py-0.5 rounded-md font-medium">
+    <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-amber-500/10 px-1.5 py-0.5 rounded-md font-medium">
       {ageLabel}
       <button
         type="button"
@@ -158,7 +158,7 @@ export const StaleChip = ({
         className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded transition-colors ${
           disabled
             ? "text-on-surface-variant/30 cursor-not-allowed"
-            : "text-amber-600 hover:text-amber-700 hover:bg-amber-500/20 cursor-pointer"
+            : "text-warning hover:text-warning hover:bg-amber-500/20 cursor-pointer"
         } ${isThisEnriching ? "animate-spin" : ""}`}
       >
         <RefreshCw className="w-2.5 h-2.5" />

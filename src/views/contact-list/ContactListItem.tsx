@@ -23,8 +23,35 @@ import { useCompanyLogo } from "../../hooks/useCompanyLogo";
 import { listRow } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { Contact } from "../../types";
+import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
+import { MapPin } from "lucide-react";
 
-import { isPast, isToday } from "date-fns";
+import { isPast, isToday, formatDistanceToNowStrict } from "date-fns";
+
+/**
+ * "3mo" / "5d" / "—" — a recency stamp short enough to sit in a list row.
+ *
+ * `formatDistanceToNowStrict` gives "3 months"; the list has room for a
+ * column, not a sentence.
+ */
+function shortRecency(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  const words = formatDistanceToNowStrict(parsed).split(" ");
+  const value = words[0];
+  const unit = (words[1] ?? "").replace(/s$/, "");
+  const abbrev: Record<string, string> = {
+    second: "s",
+    minute: "m",
+    hour: "h",
+    day: "d",
+    week: "w",
+    month: "mo",
+    year: "y",
+  };
+  return `${value}${abbrev[unit] ?? ""}`;
+}
 
 const API_BASE = "/api";
 
@@ -34,6 +61,8 @@ const API_BASE = "/api";
 
 interface ContactListItemProps {
   contact: Contact;
+  /** Comfortable keeps the roomy default; compact roughly doubles rows/screen. */
+  density: ListDensity;
   active: boolean;
   isSelectMode: boolean;
   isSelected: boolean;
@@ -42,6 +71,7 @@ interface ContactListItemProps {
 
 const ContactListItemInner = ({
   contact,
+  density,
   active,
   isSelectMode,
   isSelected,
@@ -103,6 +133,9 @@ const ContactListItemInner = ({
     setImgError(true);
   };
 
+  const compact = density === "compact";
+  const metrics = DENSITY_METRICS[density];
+
   return (
     <Link
       id={`contact-row-${contact.id}`}
@@ -112,6 +145,9 @@ const ContactListItemInner = ({
       onPointerLeave={handlePointerLeave}
       className={cn(
         listRow(active && !isSelectMode),
+        // Compact trims the padding, not the information: the same name and
+        // company are shown, just in less vertical space.
+        compact && "gap-2.5 p-2",
         isSelectMode && "cursor-pointer select-none",
         isSelectMode &&
           isSelected &&
@@ -141,7 +177,7 @@ const ContactListItemInner = ({
         )}
       </AnimatePresence>
 
-      <HealthRingAvatar contact={contact} size={48} />
+      <HealthRingAvatar contact={contact} size={metrics.avatarSize} />
 
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
@@ -165,7 +201,12 @@ const ContactListItemInner = ({
         </div>
 
         {contact.company ? (
-          <p className="text-xs text-on-surface-variant truncate font-medium flex items-center gap-1.5 mt-0.5">
+          <p
+            className={cn(
+              "text-xs text-on-surface-variant truncate font-medium flex items-center gap-1.5",
+              compact ? "mt-0" : "mt-0.5",
+            )}
+          >
             {logoUrl && !imgError ? (
               <img
                 src={logoUrl}
@@ -179,11 +220,48 @@ const ContactListItemInner = ({
             {contact.company}
           </p>
         ) : contact.role ? (
-          <p className="text-xs text-on-surface-variant truncate flex items-center gap-1.5 mt-0.5">
+          <p
+            className={cn(
+              "text-xs text-on-surface-variant truncate flex items-center gap-1.5",
+              compact ? "mt-0" : "mt-0.5",
+            )}
+          >
             <Briefcase className="w-3.5 h-3.5 opacity-60" />
             {contact.role}
           </p>
         ) : null}
+      </div>
+
+      {/*
+        Tablet-only metadata column.
+
+        Between 768 and 1023 px the list is the whole content area — roughly a
+        700 px row carrying a name and a company, with most of it empty. Above
+        1023 px the list collapses to a 350 px column beside the detail pane
+        and there is no room for this; below 768 px there is no room either.
+        So it appears exactly in the band that has spare width, which is what
+        `md:flex lg:hidden` says.
+
+        Recency is the signal a relationship CRM is actually for, so it gets
+        the column rather than, say, the role.
+      */}
+      <div className="hidden md:flex lg:hidden items-center gap-5 shrink-0 pl-4 text-xs text-on-surface-variant">
+        {contact.location && (
+          <span className="flex items-center gap-1.5 max-w-[14rem] truncate">
+            <MapPin className="w-3.5 h-3.5 shrink-0 opacity-60" />
+            <span className="truncate">{contact.location}</span>
+          </span>
+        )}
+        <span
+          className="w-14 text-right tabular-nums"
+          title={
+            contact.lastContactedAt
+              ? `Last contacted ${new Date(contact.lastContactedAt).toLocaleDateString()}`
+              : "No logged interactions yet"
+          }
+        >
+          {shortRecency(contact.lastContactedAt)}
+        </span>
       </div>
     </Link>
   );
@@ -206,9 +284,13 @@ const areEqual = (
     prev.contact.avatarUrl === next.contact.avatarUrl &&
     prev.contact.nextFollowUpAt === next.contact.nextFollowUpAt &&
     prev.contact.relationshipScore === next.contact.relationshipScore &&
+    // Rendered by the tablet-band metadata column.
+    prev.contact.location === next.contact.location &&
+    prev.contact.lastContactedAt === next.contact.lastContactedAt &&
     prev.contact.themeColor === next.contact.themeColor &&
     prev.contact.role === next.contact.role &&
     prev.contact.isGhost === next.contact.isGhost &&
+    prev.density === next.density &&
     prev.active === next.active &&
     prev.isSelectMode === next.isSelectMode &&
     prev.isSelected === next.isSelected

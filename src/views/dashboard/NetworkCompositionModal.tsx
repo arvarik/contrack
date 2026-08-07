@@ -3,7 +3,7 @@ import { X, PieChart, MapPin, Briefcase } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { DashboardPayload } from "../../api";
-import { cn } from "../../lib/utils";
+
 import { SECTION_HEADING } from "../../lib/styles";
 import { Modal } from "../../components/ui/Modal";
 

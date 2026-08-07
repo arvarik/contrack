@@ -188,7 +188,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
       )}
 
       {/* Footer hint */}
-      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[10px] text-on-surface-variant/40">
+      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[10px] text-on-surface-variant">
         <kbd className={KBD_SM}>↵</kbd> toggle
         <span>·</span>
         <kbd className={KBD_SM}>ESC</kbd> back

@@ -8,7 +8,7 @@
 [![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
 [![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-316_passing-brightgreen)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-474_passing-brightgreen)](https://vitest.dev/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 </div>
 
@@ -138,7 +138,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 - **Logo Proxy** — Heuristic company logo discovery with local caching
 - **Trash & Undo** — Deletes are soft: restore from Settings → Trash within 30 days
 - **Automatic Backups** — Scheduled SQLite snapshots with rotation, plus one-click JSON/CSV export
-- **Single-User Auth** — Token-gated API + sign-in screen; secure-by-default in Docker
+- **Accounts** — Optional sign-in with username/password, server-side sessions you can revoke per device, plus a bearer token for scripts and MCP
 
 ---
 
@@ -158,7 +158,7 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-Open **http://localhost:3210**. Data is automatically persisted to `./data`. Authentication is on by default in Docker — grab your access token with `docker logs contrack | grep "Access token"` (or set `AUTH_TOKEN`).
+Open **http://localhost:3210**. Data is automatically persisted to `./data`. Authentication is off by default, on the assumption that the container is reached from this machine only — set `AUTH_REQUIRED=true` if the port is reachable by anything else, and the first visit will walk you through creating an account.
 
 ### Option 2: Native Installation
 
@@ -218,19 +218,19 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 ## 🔐 Environment Variables
 
-| Variable            | Description                                                   | Default      |
-| ------------------- | ------------------------------------------------------------- | ------------ |
-| `AI_PROVIDER`       | Preferred provider for capabilities set to Auto               | `gemini`     |
-| `GEMINI_API_KEY`    | Gemini API key                                                | —            |
-| `OPENAI_API_KEY`    | OpenAI API key                                                | —            |
-| `ANTHROPIC_API_KEY` | Anthropic API key                                             | —            |
-| `AI_TIER`           | `FREE` or `PAID` rate limit profile                           | `FREE`       |
-| `PORT`              | Express listening port                                        | `3210`       |
-| `HOST`              | Bind interface (`0.0.0.0` to expose on LAN)                   | `127.0.0.1`  |
-| `AUTH_TOKEN`        | Single-user auth token (gates `/api` + `/uploads`)            | — (off)      |
-| `AUTH_REQUIRED`     | `true` = enforce auth with a generated token (Docker default) | `false`      |
-| `DATA_DIR`          | Root for runtime data (DB, uploads, model cache)              | project root |
-| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)                  | —            |
+| Variable            | Description                                               | Default      |
+| ------------------- | --------------------------------------------------------- | ------------ |
+| `AI_PROVIDER`       | Preferred provider for capabilities set to Auto           | `gemini`     |
+| `GEMINI_API_KEY`    | Gemini API key                                            | —            |
+| `OPENAI_API_KEY`    | OpenAI API key                                            | —            |
+| `ANTHROPIC_API_KEY` | Anthropic API key                                         | —            |
+| `AI_TIER`           | `FREE` or `PAID` rate limit profile                       | `FREE`       |
+| `PORT`              | Express listening port                                    | `3210`       |
+| `HOST`              | Bind interface (`0.0.0.0` to expose on LAN)               | `127.0.0.1`  |
+| `AUTH_REQUIRED`     | `true` = require sign-in with an account                  | `false`      |
+| `API_TOKEN`         | Machine credential for scripts/MCP (`Bearer`); also gates | — (off)      |
+| `DATA_DIR`          | Root for runtime data (DB, uploads, model cache)          | project root |
+| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)              | —            |
 
 See [Configuration Guide](docs/configuration.md) for full details.
 

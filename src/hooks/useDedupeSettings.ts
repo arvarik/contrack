@@ -23,9 +23,6 @@ export const PRESET_THRESHOLDS: Record<MergePreset, number> = {
   conservative: 0.97,
 };
 
-/** Fallback threshold exported for consumers that need the raw number */
-export const DEFAULT_AUTO_MERGE_THRESHOLD = PRESET_THRESHOLDS.default;
-
 interface DedupeSettings {
   preset: MergePreset;
 }

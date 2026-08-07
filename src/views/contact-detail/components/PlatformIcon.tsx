@@ -11,7 +11,6 @@ import {
   Instagram,
   Globe,
   Youtube,
-  ExternalLink,
 } from "lucide-react";
 
 // Known platform → icon mapping

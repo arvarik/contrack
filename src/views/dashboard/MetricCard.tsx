@@ -2,14 +2,14 @@ import React from "react";
 import { cn } from "../../lib/utils";
 import { CARD_COMPACT, LABEL_PRIMARY } from "../../lib/styles";
 import { LucideIcon } from "lucide-react";
-import { motion } from "motion/react";
 
 interface MetricCardProps {
   label: string;
   value: string | number;
   subValue?: string;
   icon: LucideIcon;
-  delay?: number;
+  /** CSS entrance delay from `tileDelay(index)`. */
+  delay?: string;
   highlight?: boolean;
   onClick?: () => void;
 }
@@ -19,27 +19,34 @@ export const MetricCard = ({
   value,
   subValue,
   icon: Icon,
-  delay = 0,
+  delay,
   highlight = false,
   onClick,
 }: MetricCardProps) => {
-  const Component = onClick ? motion.button : motion.div;
+  const Component = onClick ? "button" : "div";
 
   return (
     <Component
       onClick={onClick}
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay, ease: "easeOut" }}
+      style={{ animationDelay: delay }}
       className={cn(
         CARD_COMPACT,
-        "flex flex-col relative text-left overflow-hidden group transition-all duration-200",
+        "tile-enter flex flex-col relative text-left overflow-hidden group",
+        // Only the interactive affordances transition — a blanket
+        // `transition-all` also animates the entrance's final frame, which
+        // double-renders the tile settling into place.
+        "transition-[transform,box-shadow] duration-200",
+        // Reserve the tile's height up front so the row does not resize when
+        // the numbers land. Matches the skeleton's 8rem on desktop; tighter on
+        // phones, where the three tiles stack and the extra air just costs
+        // scrolling.
+        "min-h-[6rem] sm:min-h-[8rem]",
         highlight && "ring-1 ring-primary/20 bg-primary/[0.02]",
         onClick &&
           "cursor-pointer hover:-translate-y-1 hover:shadow-md hover:ring-2 hover:ring-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
       )}
     >
-      <div className="flex items-start justify-between mb-2">
+      <div className="flex items-start justify-between mb-2 gap-2">
         <span
           className={cn(
             LABEL_PRIMARY,
@@ -50,7 +57,7 @@ export const MetricCard = ({
         </span>
         <div
           className={cn(
-            "p-1.5 rounded-lg transition-colors duration-300",
+            "p-1.5 rounded-lg transition-colors duration-300 shrink-0",
             highlight
               ? "bg-primary/10 text-primary"
               : "bg-surface-container text-on-surface-variant group-hover:bg-surface-container-high",
@@ -59,17 +66,17 @@ export const MetricCard = ({
           <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div className="mt-auto flex items-baseline gap-2">
+      <div className="mt-auto flex flex-wrap items-baseline gap-x-2">
         <span
           className={cn(
-            "text-3xl font-headline font-bold",
+            "text-3xl font-headline font-bold tabular-nums",
             highlight ? "text-primary" : "text-on-surface",
           )}
         >
           {value}
         </span>
         {subValue && (
-          <span className="text-xs font-bold text-on-surface-variant/60">
+          <span className="text-xs font-bold text-on-surface-variant">
             {subValue}
           </span>
         )}

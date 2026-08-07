@@ -18,7 +18,6 @@ import {
   EMPTY_STATE,
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import type { Contact } from "../../types";
 
 type DataFilter = "all" | "has_links" | "has_email" | "no_data";
 
@@ -107,20 +106,17 @@ export function AISearchView() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
-      {/* Header — compact */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-xl">
-          <Sparkles className="w-5 h-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-headline font-bold text-on-surface">
-            AI Search
-          </h2>
-          <p className="text-xs text-on-surface-variant mt-0.5">
-            Enrich contacts with AI-powered web research
-          </p>
-        </div>
-      </div>
+      {/*
+        No title block here. This view is only ever mounted inside the
+        Settings shell, which already renders the icon and "Contact
+        Enrichment" heading — repeating it stacked two near-identical headers
+        on top of each other and pushed the actual content off a phone screen.
+        Only the description that the shell does not carry survives.
+      */}
+      <p className="text-sm text-on-surface-variant">
+        Research contacts on the live web and fill in the gaps in their
+        profiles.
+      </p>
 
       {/* Loading */}
       {isLoading && (
@@ -137,7 +133,7 @@ export function AISearchView() {
           <div className={cn(EMPTY_STATE, "flex flex-col items-center py-12")}>
             <Sparkles className="w-10 h-10 text-on-surface-variant/30 mb-4" />
             <p className="font-semibold text-sm">No contacts available</p>
-            <p className="text-xs mt-1 opacity-70">
+            <p className="text-xs mt-1 text-on-surface-variant">
               Add contacts to your network to start using AI Search.
             </p>
           </div>
@@ -155,6 +151,7 @@ export function AISearchView() {
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
                   <input
+                    aria-label="Filter contacts"
                     type="text"
                     placeholder="Filter contacts…"
                     value={searchQuery}
@@ -197,7 +194,7 @@ export function AISearchView() {
                 </span>
                 <button
                   onClick={toggleSelectAll}
-                  className="text-xs font-bold text-primary px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
+                  className="text-xs font-bold text-primary px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
                 >
                   {selectedIds.size === filteredContacts.length &&
                   filteredContacts.length > 0
@@ -234,7 +231,7 @@ export function AISearchView() {
                 "w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all",
                 selectedIds.size > 0
                   ? "btn-primary shadow-lg hover:shadow-xl"
-                  : "bg-surface-container-high text-on-surface-variant cursor-not-allowed opacity-50",
+                  : "bg-surface-container-high text-on-surface-variant cursor-not-allowed",
               )}
             >
               <Sparkles className="w-4 h-4" />

@@ -142,7 +142,7 @@ const stores = new Map<string, Map<string, CacheEntry>>();
 const stats = new Map<string, TierStats>();
 
 /** Initialize all tiers on module load. */
-for (const [op, config] of Object.entries(TIER_CONFIGS)) {
+for (const op of Object.keys(TIER_CONFIGS)) {
   stores.set(op, new Map());
   stats.set(op, { entries: 0, hits: 0, misses: 0, evictions: 0 });
 }
@@ -538,14 +538,6 @@ export function setCachedSearch(
  */
 export function invalidateSearchCache(): void {
   aiCache.invalidate("rerank");
-}
-
-/** Diagnostic: number of live (non-expired) search cache entries. */
-export function searchCacheSize(): number {
-  const store = stores.get("rerank");
-  if (!store) return 0;
-  removeExpired("rerank", store);
-  return store.size;
 }
 
 // =============================================================================

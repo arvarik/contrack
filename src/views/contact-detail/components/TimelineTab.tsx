@@ -5,7 +5,7 @@
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Mail,
@@ -30,10 +30,27 @@ import type { Interaction } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
 import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { EMPTY_STATE } from "../../../lib/styles";
-import { RichInteractionComposer } from "../../../components/RichInteractionComposer";
+import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
+
+/**
+ * The composer carries TipTap + ProseMirror, which together are the bulk of
+ * the contact detail bundle — and the user cannot type into it during the
+ * first paint anyway. Splitting it here means the profile and the timeline
+ * render from a much smaller chunk while the editor streams in beside them.
+ *
+ * The import fires on mount rather than on first click: it is a parallel
+ * fetch, not a blocking one, so by the time anyone reaches for the keyboard
+ * it has almost always landed — without making the first keystroke wait.
+ */
+const RichInteractionComposer = React.lazy(() =>
+  import("../../../components/RichInteractionComposer").then((m) => ({
+    default: m.RichInteractionComposer,
+  })),
+);
 import { InteractionDetailModal } from "./InteractionDetailModal";
 import { useCompleteActionItem } from "../../../api";
 import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
+import { activateOnKey } from "../../../lib/a11y";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -79,17 +96,17 @@ function getInteractionStyle(type: string) {
   if (type === "call") {
     Icon = Phone;
     bgClass = "bg-blue-500/10";
-    textClass = "text-blue-500";
+    textClass = "text-info";
   }
   if (type === "meeting") {
     Icon = Handshake;
     bgClass = "bg-emerald-500/10";
-    textClass = "text-emerald-600";
+    textClass = "text-success";
   }
   if (type === "email") {
     Icon = Mail;
     bgClass = "bg-green-500/10";
-    textClass = "text-green-500";
+    textClass = "text-success";
   }
   if (type === "note") {
     bgClass = "bg-primary/10";
@@ -98,22 +115,22 @@ function getInteractionStyle(type: string) {
   if (type === "message" || type === "sms") {
     Icon = MessageSquare;
     bgClass = "bg-teal-500/10";
-    textClass = "text-teal-500";
+    textClass = "text-success";
   }
   if (type === "linkedin") {
     Icon = Linkedin;
     bgClass = "bg-blue-600/10";
-    textClass = "text-blue-600";
+    textClass = "text-info";
   }
   if (type === "facebook") {
     Icon = Facebook;
     bgClass = "bg-blue-500/10";
-    textClass = "text-blue-500";
+    textClass = "text-info";
   }
   if (type === "import") {
     Icon = ExternalLink;
     bgClass = "bg-amber-500/10";
-    textClass = "text-amber-500";
+    textClass = "text-warning";
   }
 
   return { Icon, bgClass, textClass };
@@ -218,7 +235,9 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         )}
       </AnimatePresence>
 
-      <RichInteractionComposer contactId={contactId} />
+      <Suspense fallback={<ComposerPlaceholder />}>
+        <RichInteractionComposer contactId={contactId} />
+      </Suspense>
 
       {/* Empty State */}
       {!timelineLoading && timeline.length === 0 && (
@@ -253,6 +272,9 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
 
               {/* Content Box */}
               <div
+                onKeyDown={activateOnKey(() => setSelectedInteraction(item))}
+                tabIndex={0}
+                role="button"
                 className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer"
                 onClick={() => setSelectedInteraction(item)}
               >
@@ -269,7 +291,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                         e.stopPropagation();
                         handleDeleteInteraction(item.id);
                       }}
-                      className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-red-500 p-1 rounded transition-opacity"
+                      className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-error p-1 rounded transition-opacity"
                       title="Delete interaction"
                       aria-label="Delete interaction"
                     >
@@ -281,11 +303,16 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                 {/* Via mention badge */}
                 {item.isViaName && (
                   <div
+                    tabIndex={0}
+                    role="button"
                     className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/contact/${item.isViaId}`);
                     }}
+                    onKeyDown={activateOnKey(() =>
+                      navigate(`/contact/${item.isViaId}`),
+                    )}
                     title="Navigate to Original Interaction"
                   >
                     <ExternalLink className="w-3 h-3 text-primary" /> via{" "}

@@ -10,6 +10,80 @@ import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 
 // =============================================================================
+// Identity
+// =============================================================================
+// Contrack is single-account today: one `users` row, created through the
+// first-run setup screen. The tables are shaped for more than that on purpose,
+// because the thing that makes multi-tenancy expensive is not the login — it
+// is retrofitting ownership onto data that was written without it. Carrying
+// `ownerId` from the start means that project becomes "scope the queries"
+// rather than "scope the queries AND migrate live data".
+//
+// What is deliberately NOT here: any endpoint that creates a second user.
+// Two users today would share every contact, because no query filters by
+// owner yet — an actively misleading feature. `role` exists so the column is
+// already populated when admin/member starts to mean something.
+// =============================================================================
+
+/**
+ * users — Account records. Exactly one row in the current single-user model.
+ *
+ * `email` and `username` are both stored lowercased and are independently
+ * unique; sign-in accepts either. `passwordHash` is a self-describing scrypt
+ * string (see server/services/passwords.ts) so the cost parameters can be
+ * raised later without invalidating existing passwords.
+ */
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  /** Lowercased. Unique. Accepted as a sign-in identifier. */
+  email: text("email").notNull().unique(),
+  /** Lowercased. Unique. Accepted as a sign-in identifier. */
+  username: text("username").notNull().unique(),
+  /** Free-form name for display; falls back to username when empty. */
+  displayName: text("displayName"),
+  /** `scrypt$N$r$p$salt$hash` — parameters travel with the hash. */
+  passwordHash: text("passwordHash").notNull(),
+  /** 'admin' | 'member'. The first account created is always 'admin'. */
+  role: text("role").notNull().default("member"),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  updatedAt: text("updatedAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  lastLoginAt: text("lastLoginAt"),
+});
+
+/**
+ * sessions — Server-side browser sessions.
+ *
+ * `id` is the SHA-256 of the secret held in the client's cookie, never the
+ * secret itself: a leaked database (or a stray backup, of which this app keeps
+ * seven) does not hand over live sessions. Lookup is still a primary-key hit.
+ *
+ * Server-side rather than a stateless JWT because revocation is the feature
+ * that matters here — "sign out everywhere" has to actually end the session,
+ * and a self-hosted app cannot lean on short expiries to paper over that.
+ */
+export const sessions = sqliteTable("sessions", {
+  /** SHA-256 hex of the cookie secret. */
+  id: text("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  /** ISO timestamp; expired rows are rejected on use and swept on boot. */
+  expiresAt: text("expiresAt").notNull(),
+  lastSeenAt: text("lastSeenAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  /** Truncated User-Agent, so the sessions list can say which device. */
+  userAgent: text("userAgent"),
+});
+
+// =============================================================================
 // Core Tables
 // =============================================================================
 
@@ -54,7 +128,50 @@ export const contacts = sqliteTable("contacts", {
   canonicalId: text("canonicalId"), // Soft merge: points to primary contact's id. NULL = active contact.
   deletedAt: text("deletedAt"), // Trash: soft-delete timestamp. NULL = not deleted. Purged after TRASH_RETENTION_DAYS.
   phoneticHash: text("phoneticHash"), // Double Metaphone encoding for phonetic blocking.
+  /**
+   * Owning account. See the OWNERSHIP note below — NULL means "belongs to
+   * whoever owns this instance", which is every row until an account exists.
+   */
+  ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
+
+// =============================================================================
+// OWNERSHIP
+// =============================================================================
+// `ownerId` appears on exactly four tables: contacts, lists, ai_invocations,
+// and dedupe_merge_log. That is not an oversight — it is every table that is
+// NOT reachable from `contacts` through a foreign key. Interactions, action
+// items, list members, the eleven contact_* child tables and the dedupe
+// suggestion/exclusion tables all carry a `contactId` (or `listId`) with ON
+// DELETE CASCADE, so their owner is derivable by a join and duplicating it
+// would only create a column that can drift out of sync.
+//
+// dedupe_merge_log is the interesting exception: it deliberately has no
+// foreign key, because it stores snapshots of contacts that were hard-deleted
+// and must outlive them. Nothing to join through, so it owns its own column.
+//
+// THE INVARIANT: `ownerId IS NULL` means "unowned — belongs to whoever owns
+// this instance". Every row starts that way, and stays that way for as long
+// as the instance has no accounts. Creating the first account claims all of
+// them (see server/services/authService.ts → claimUnownedData), and a boot
+// reconcile re-claims anything written while signed out. So NULL is a valid,
+// meaningful state rather than a bug to be defended against.
+//
+// Nothing filters on this column yet. Doing so is the multi-tenancy project,
+// and it needs a repository layer that takes the owner as a required argument
+// — the failure mode of a forgotten `WHERE ownerId = ?` is a silent data leak
+// with no error and no failing test, which is not something to defend with
+// discipline across a hundred call sites.
+//
+// ON DELETE RESTRICT, not CASCADE. Cascade is what a mature multi-tenant app
+// wants — remove an account, remove its data — but it is the wrong default to
+// inherit *before* account deletion has been designed, because it turns
+// `DELETE FROM users` into "silently destroy every contact". Restrict makes
+// that fail loudly instead, which forces whoever builds account deletion to
+// decide what should happen to the data rather than discovering the answer
+// afterwards. `sessions` still cascades: a session without its account is
+// meaningless, and nobody mourns it.
+// =============================================================================
 
 // =============================================================================
 // Normalized Child Tables
@@ -353,6 +470,11 @@ export const dedupeMergeLog = sqliteTable("dedupe_merge_log", {
   mergedAt: text("mergedAt").default(sql`(CURRENT_TIMESTAMP)`),
   undoneAt: text("undoneAt"),
   duplicateSnapshot: text("duplicateSnapshot"), // JSON blob for hard deletes
+  /**
+   * Owning account. This table carries its own because it has no foreign key
+   * to join through — the snapshots outlive the contacts they describe.
+   */
+  ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
 // =============================================================================
@@ -393,6 +515,8 @@ export const lists = sqliteTable("lists", {
   icon: text("icon").notNull().default("star"),
   sortOrder: integer("sortOrder").notNull().default(0),
   createdAt: text("createdAt").default(sql`(CURRENT_TIMESTAMP)`),
+  /** Owning account — see the OWNERSHIP note above. */
+  ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
 /**
@@ -446,13 +570,32 @@ export const aiInvocations = sqliteTable("ai_invocations", {
   createdAt: text("createdAt")
     .notNull()
     .default(sql`(datetime('now'))`),
+  /** Owning account — see the OWNERSHIP note above. Standalone table, no FK. */
+  ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
 // =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================
 
+export const usersRelations = relations(users, ({ many }) => ({
+  sessions: many(sessions),
+  contacts: many(contacts),
+  lists: many(lists),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
 export const contactsRelations = relations(contacts, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [contacts.ownerId],
+    references: [users.id],
+  }),
   emails: many(contactEmails),
   phones: many(contactPhones),
   addresses: many(contactAddresses),

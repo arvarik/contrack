@@ -25,28 +25,14 @@ import type * as schema from "../../src/db/schema.ts";
 
 /** Raw `contacts` row — all columns, before child hydration. */
 export type ContactRow = typeof schema.contacts.$inferSelect;
-/** Raw `contact_emails` row — one per email-per-contact. */
-export type ContactEmailRow = typeof schema.contactEmails.$inferSelect;
 /** Raw `contact_phones` row — one per phone-per-contact. */
 export type ContactPhoneRow = typeof schema.contactPhones.$inferSelect;
-/** Raw `contact_social_links` row — one per social URL. */
-export type ContactSocialLinkRow =
-  typeof schema.contactSocialLinks.$inferSelect;
 /** Raw `contact_education` row — one per school+degree pair. */
 export type ContactEducationRow = typeof schema.contactEducation.$inferSelect;
 /** Raw `contact_experience` row — one per job/role. */
 export type ContactExperienceRow = typeof schema.contactExperience.$inferSelect;
 /** Raw `contact_sources` row — one per import provenance. */
 export type ContactSourceRow = typeof schema.contactSources.$inferSelect;
-/** Raw `contact_tags` row — one per (contactId, tag). */
-export type ContactTagRow = typeof schema.contactTags.$inferSelect;
-/** Raw `contact_interests` row — one per (contactId, interest). */
-export type ContactInterestRow = typeof schema.contactInterests.$inferSelect;
-/** Raw `contact_attributes` row — flexible LLM-extracted key/value pairs. */
-export type ContactAttributeRow = typeof schema.contactAttributes.$inferSelect;
-/** Raw `contact_addresses` row — one per postal address. */
-export type ContactAddressRow = typeof schema.contactAddresses.$inferSelect;
-
 // =============================================================================
 // HydratedContact — the fully-joined API response shape
 // =============================================================================

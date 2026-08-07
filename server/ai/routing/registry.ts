@@ -220,11 +220,6 @@ export function getModelConfig(modelId: string): ModelConfig | undefined {
   return GEMINI_REGISTRY.find((m) => m.id === modelId);
 }
 
-/** Get only stable models (default for production routing). */
-export function getStableModels(): ModelConfig[] {
-  return GEMINI_REGISTRY.filter((m) => m.stability === "stable");
-}
-
 /**
  * Get models available for routing on a given tier.
  * - FREE: only models with hasFreeTier === true
@@ -233,4 +228,40 @@ export function getStableModels(): ModelConfig[] {
 export function getAvailableModels(tier: AITier): ModelConfig[] {
   if (tier === "PAID") return GEMINI_REGISTRY;
   return GEMINI_REGISTRY.filter((m) => m.hasFreeTier);
+}
+
+/**
+ * Which model the SmartRouter would pick for a class if nothing were rate
+ * limited or circuit-broken — the answer to "what does Auto actually run?".
+ *
+ * This mirrors SmartRouter's Pass-1 filters and candidate sort deliberately:
+ * the router's real choice additionally depends on live quota state, which no
+ * settings screen can meaningfully predict, so this reports the steady-state
+ * pick and the router remains free to fall back under load. Keep the sort here
+ * in step with `SmartRouter.getNextAvailableRoute`.
+ *
+ * @returns the model id, or undefined if nothing in the registry qualifies
+ */
+export function previewModelForClass(
+  prefer: ModelClass,
+  tier: AITier,
+  requiresGrounding = false,
+): string | undefined {
+  // Preview models are opt-in in the router only when a class preference is
+  // set — which is exactly the case here, so they are in scope.
+  const candidates = GEMINI_REGISTRY.filter((m) => {
+    if (tier === "FREE" && !m.hasFreeTier) return false;
+    if (requiresGrounding && !m.supportsGrounding) return false;
+    return true;
+  });
+
+  candidates.sort((a, b) => {
+    const aPref = a.modelClass === prefer ? 0 : 1;
+    const bPref = b.modelClass === prefer ? 0 : 1;
+    if (aPref !== bPref) return aPref - bPref;
+    if (a.generation !== b.generation) return b.generation - a.generation;
+    return a.costPerM - b.costPerM;
+  });
+
+  return candidates[0]?.id;
 }

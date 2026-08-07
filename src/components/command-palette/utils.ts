@@ -19,7 +19,7 @@ export const GROUP_HEADING =
 /** Group heading color variants */
 export const GROUP_HEADING_DEFAULT = `${GROUP_HEADING} [&_[cmdk-group-heading]]:text-on-surface-variant`;
 export const GROUP_HEADING_PRIMARY = `${GROUP_HEADING} [&_[cmdk-group-heading]]:text-primary`;
-export const GROUP_HEADING_EMERALD = `${GROUP_HEADING} [&_[cmdk-group-heading]]:text-emerald-500`;
+export const GROUP_HEADING_EMERALD = `${GROUP_HEADING} [&_[cmdk-group-heading]]:text-success`;
 
 /** Strip the mode prefix from a search query for display purposes */
 export function stripModePrefix(query: string): string {

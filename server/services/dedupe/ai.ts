@@ -1,4 +1,3 @@
-import { ai } from "../../ai/index.ts";
 import { generateFor } from "../../ai/gateway.ts";
 import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../../ai/promptSafety.ts";
 import { log } from "../../utils/logger.ts";

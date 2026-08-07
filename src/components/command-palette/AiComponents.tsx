@@ -73,7 +73,7 @@ export const AIResultCard = ({
           <span className="font-bold text-sm truncate">{match.name}</span>
           <ScoreDot score={match.relationshipScore ?? null} />
           {isFallback && (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
               Fallback
             </span>
           )}
@@ -116,9 +116,9 @@ export const AIResultCard = ({
             initial={{ opacity: 0, y: 2 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.06 + 0.1 }}
-            className="text-xs text-primary/70 italic flex items-center gap-1 mt-0.5"
+            className="text-xs text-primary italic flex items-center gap-1 mt-0.5"
           >
-            <Sparkles className="w-3 h-3 text-primary/50 shrink-0" />
+            <Sparkles className="w-3 h-3 text-primary shrink-0" />
             {match.aiReason}
           </motion.span>
         )}

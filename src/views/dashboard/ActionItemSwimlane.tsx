@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { cn } from "../../lib/utils";
-import { CARD_COMPACT, SECTION_HEADING, TAG_PILL } from "../../lib/styles";
+import { SECTION_HEADING } from "../../lib/styles";
 import { ActionItem } from "../../types";
 import {
   Check,
@@ -11,14 +11,15 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCompleteActionItem, useUpdateActionItem } from "../../api";
-import { format, isPast, isToday, addDays } from "date-fns";
+import { format, addDays } from "date-fns";
 import { createPortal } from "react-dom";
 
 interface SwimlaneProps {
   title: string;
   items: ActionItem[];
   theme: "urgent" | "today" | "upcoming";
-  delay?: number;
+  /** CSS entrance delay from `tileDelay(index)`. */
+  delay?: string;
   firstActionItemId?: string;
 }
 
@@ -44,14 +45,20 @@ const SnoozeDropdown = ({
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* Click-outside catcher. Presentational — Escape is the keyboard path
+          (see the effect above), so this needs no tab stop. */}
+      <div
+        role="presentation"
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+      />
       <div
         className={cn(
           "absolute z-50 mt-1 w-36 overflow-hidden rounded-xl glass-panel py-1 shadow-xl outline-none",
         )}
         style={{ top, left: Math.max(10, left) }}
       >
-        <div className="px-3 py-1.5 bg-surface-container-high text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">
+        <div className="px-3 py-1.5 bg-surface-container-high text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">
           Snooze
         </div>
         <button
@@ -159,7 +166,7 @@ const ActionCard = ({
           {item.title}
         </span>
         <div className="flex flex-wrap items-center gap-2 mt-1">
-          <span className="text-xs font-semibold text-on-surface-variant/80 truncate max-w-[150px]">
+          <span className="text-xs font-semibold text-on-surface-variant truncate max-w-[150px]">
             {item.contactName || "Unknown"}
           </span>
           <span className="w-1 h-1 rounded-full bg-surface-container-high" />
@@ -202,7 +209,7 @@ export const ActionItemSwimlane = ({
   title,
   items,
   theme,
-  delay = 0,
+  delay,
   firstActionItemId,
 }: SwimlaneProps) => {
   if (items.length === 0) return null;
@@ -210,11 +217,9 @@ export const ActionItemSwimlane = ({
   const hasActiveItem = items.some((item) => item.id === firstActionItemId);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay, ease: "easeOut" }}
-      className="flex flex-col gap-3"
+    <div
+      style={{ animationDelay: delay }}
+      className="tile-enter flex flex-col gap-3"
     >
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
@@ -245,16 +250,23 @@ export const ActionItemSwimlane = ({
         )}
       </div>
 
+      {/*
+        Exit-only animation. The rows used to carry `layout` plus a
+        height 0 ↔ auto enter animation, which made Motion re-measure every
+        row on every render of this list — including the ones triggered by an
+        unrelated background refetch — and the whole lane twitched. Collapsing
+        the height on exit alone still reads as "the item was checked off",
+        and costs nothing on the far more common re-render path.
+      */}
       <div className="flex flex-col gap-2">
         <AnimatePresence initial={false}>
           {items.map((item) => (
             <motion.div
               key={item.id}
-              layout
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, scale: 0.95, height: 0 }}
-              transition={{ duration: 0.2 }}
+              initial={false}
+              exit={{ opacity: 0, height: 0, marginTop: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-hidden"
             >
               <ActionCard
                 item={item}
@@ -265,6 +277,6 @@ export const ActionItemSwimlane = ({
           ))}
         </AnimatePresence>
       </div>
-    </motion.div>
+    </div>
   );
 };

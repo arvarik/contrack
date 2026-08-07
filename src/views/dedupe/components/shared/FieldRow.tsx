@@ -20,7 +20,7 @@ export const FieldRow = ({
   <div
     className={`flex items-center gap-2.5 ${highlighted ? "bg-amber-500/8 rounded-lg px-2.5 py-1.5 -mx-1" : ""}`}
   >
-    <span className="text-on-surface-variant/60 shrink-0">{icon}</span>
+    <span className="text-on-surface-variant shrink-0">{icon}</span>
     <span className="text-on-surface-variant text-xs font-bold uppercase tracking-wider w-16 shrink-0">
       {label}
     </span>

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { formatDistanceToNow } from "date-fns";
 import { parseBriefingPoints } from "../../../lib/safeParse";
 import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
-import { cn } from "../../../lib/utils";
+
 import { Contact } from "../../../types";
 
 interface CatchMeUpFabProps {
@@ -105,7 +105,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
                     )}
                   </ul>
                   <div className="flex items-center justify-between mt-8 pt-4 bg-surface-container-low -mx-6 md:-mx-8 px-6 md:px-8 -mb-6 md:-mb-8 pb-6 md:pb-8 rounded-b-[2rem]">
-                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/50 font-bold">
+                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
                       {contact.aiBriefingAt &&
                         `Generated ${formatDistanceToNow(new Date(contact.aiBriefingAt), { addSuffix: true })}`}
                     </p>

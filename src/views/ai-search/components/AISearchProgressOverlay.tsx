@@ -26,11 +26,11 @@ interface Props {
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
-  queued: <Circle className="w-3.5 h-3.5 text-on-surface-variant/40" />,
+  queued: <Circle className="w-3.5 h-3.5 text-on-surface-variant" />,
   searching: <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />,
-  merging: <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin" />,
-  success: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />,
-  error: <XCircle className="w-3.5 h-3.5 text-rose-500" />,
+  merging: <Loader2 className="w-3.5 h-3.5 text-warning animate-spin" />,
+  success: <CheckCircle2 className="w-3.5 h-3.5 text-success" />,
+  error: <XCircle className="w-3.5 h-3.5 text-error" />,
 };
 
 export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
@@ -81,12 +81,10 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-on-surface">
             {succeeded > 0 && (
-              <span className="text-emerald-500">{succeeded} updated</span>
+              <span className="text-success">{succeeded} updated</span>
             )}
             {succeeded > 0 && failed > 0 && ", "}
-            {failed > 0 && (
-              <span className="text-rose-500">{failed} failed</span>
-            )}
+            {failed > 0 && <span className="text-error">{failed} failed</span>}
           </span>
         </button>
       </motion.div>
@@ -123,7 +121,7 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
           </button>
           <button
             onClick={onDismiss}
-            className="p-1 rounded-lg text-on-surface-variant hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+            className="p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -152,9 +150,7 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
             <span className="flex-1">
               {totalFields > 0 ? (
                 <span>
-                  <span className="font-bold text-emerald-500">
-                    {totalFields}
-                  </span>{" "}
+                  <span className="font-bold text-success">{totalFields}</span>{" "}
                   field{totalFields !== 1 ? "s" : ""} enriched
                   {batch.totalTokens > 0 && (
                     <span className="ml-1 opacity-60">
@@ -191,8 +187,8 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
         className={cn(
           "flex-1 truncate",
           job.status === "success" ? "text-on-surface" : "",
-          job.status === "error" ? "text-rose-500" : "",
-          job.status === "queued" ? "text-on-surface-variant/60" : "",
+          job.status === "error" ? "text-error" : "",
+          job.status === "queued" ? "text-on-surface-variant" : "",
           job.status === "searching" || job.status === "merging"
             ? "text-on-surface font-medium"
             : "",
@@ -203,7 +199,7 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
       {/* Right side: latency or status text */}
       <span className="text-[10px] text-on-surface-variant shrink-0 tabular-nums">
         {job.status === "success" && job.latencyMs != null && (
-          <span className="text-emerald-500">
+          <span className="text-success">
             {(job.latencyMs / 1000).toFixed(1)}s
           </span>
         )}
@@ -214,7 +210,7 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
           <span className="ml-1 opacity-40">✓ Up to date</span>
         )}
         {job.status === "error" && (
-          <span className="text-rose-500 font-bold" title={job.error}>
+          <span className="text-error font-bold" title={job.error}>
             Error
           </span>
         )}
@@ -222,7 +218,7 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
           <span className="text-primary opacity-60">Searching…</span>
         )}
         {job.status === "merging" && (
-          <span className="text-amber-500 opacity-60">Merging…</span>
+          <span className="text-warning opacity-60">Merging…</span>
         )}
       </span>
     </div>

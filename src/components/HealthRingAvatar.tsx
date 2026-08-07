@@ -4,7 +4,7 @@
  * The ring color is driven by the contact's `themeColor` preference.
  */
 import React from "react";
-import { cn } from "../lib/utils";
+
 import { fallbackAvatarUrl } from "../lib/avatar";
 
 interface HealthRingAvatarProps {

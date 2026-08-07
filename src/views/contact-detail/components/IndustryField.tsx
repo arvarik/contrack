@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { cn } from "../../../lib/utils";
 import { Combobox } from "../../../components/ui/Combobox";
+import { activateOnKey } from "../../../lib/a11y";
 
 const COMMON_INDUSTRIES = [
   "Finance",
@@ -46,6 +47,8 @@ export const IndustryField = ({
   if (isEditing) {
     return (
       <Combobox
+        // Inline editor, opened by clicking the value it replaces.
+        // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         value={tempVal}
         onChange={setTempVal}
@@ -57,10 +60,16 @@ export const IndustryField = ({
   }
   return (
     <span
+      tabIndex={0}
+      role="button"
       onClick={() => {
         setIsEditing(true);
         setTempVal(value || "");
       }}
+      onKeyDown={activateOnKey(() => {
+        setIsEditing(true);
+        setTempVal(value || "");
+      })}
       className={cn(
         "cursor-pointer hover:bg-surface-container-high px-1 -mx-1 rounded transition-colors whitespace-pre-wrap max-w-full break-words outline-none text-sm font-medium",
         !value && "opacity-50 italic",

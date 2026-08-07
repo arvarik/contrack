@@ -174,7 +174,7 @@ export const ClusterSwipeCard = ({
           style={{ opacity: approveOpacity }}
         >
           <div className="p-4 bg-emerald-500/20 rounded-full">
-            <Check className="w-12 h-12 text-emerald-500" strokeWidth={3} />
+            <Check className="w-12 h-12 text-success" strokeWidth={3} />
           </div>
         </motion.div>
         <motion.div
@@ -182,7 +182,7 @@ export const ClusterSwipeCard = ({
           style={{ opacity: rejectOpacity }}
         >
           <div className="p-4 bg-rose-500/20 rounded-full">
-            <X className="w-12 h-12 text-rose-500" strokeWidth={3} />
+            <X className="w-12 h-12 text-error" strokeWidth={3} />
           </div>
         </motion.div>
 
@@ -201,7 +201,7 @@ export const ClusterSwipeCard = ({
                 {cluster.size} contacts
               </span>
               {cluster.hasWeakLink && (
-                <span className="text-xs font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-full">
                   Weak link
                 </span>
               )}
@@ -214,8 +214,8 @@ export const ClusterSwipeCard = ({
               className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3"
               role="alert"
             >
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+              <p className="text-xs text-warning leading-relaxed">
                 <span className="font-bold">
                   Large cluster ({cluster.size} contacts).
                 </span>{" "}
@@ -282,7 +282,7 @@ export const ClusterSwipeCard = ({
                       )}
                     </div>
                     {isSelectedPrimary && (
-                      <Crown className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <Crown className="w-4 h-4 text-success shrink-0" />
                     )}
                   </button>
                 );
@@ -295,7 +295,7 @@ export const ClusterSwipeCard = ({
             <ContactCard
               contact={primary}
               label="Primary (Keeper)"
-              labelColor="text-emerald-600 bg-emerald-500/10"
+              labelColor="text-success bg-emerald-500/10"
               isPrimary
             />
             <div className="space-y-3">
@@ -304,7 +304,7 @@ export const ClusterSwipeCard = ({
                   key={dup.id}
                   contact={dup}
                   label="Merges In"
-                  labelColor="text-amber-600 bg-amber-500/10"
+                  labelColor="text-warning bg-amber-500/10"
                   other={primary}
                   onSetPrimary={() => setSelectedPrimaryId(dup.id)}
                 />
@@ -347,7 +347,7 @@ export const ClusterSwipeCard = ({
             <button
               onClick={handleButtonDismiss}
               aria-label="Keep contacts separate"
-              className="group flex items-center gap-3 px-6 py-3 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-rose-600 w-full sm:w-auto justify-center"
+              className="group flex items-center gap-3 px-6 py-3 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-error w-full sm:w-auto justify-center"
             >
               <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <div className="text-left">
@@ -362,9 +362,9 @@ export const ClusterSwipeCard = ({
             {cluster.requiresConfirmation && (
               <div className="w-full">
                 <div className="flex items-start gap-3 p-3 bg-amber-500/10 rounded-xl mb-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-amber-600">
+                    <p className="text-sm font-bold text-warning">
                       Large cluster warning
                     </p>
                     <p className="text-xs text-on-surface-variant mt-0.5">
@@ -376,6 +376,7 @@ export const ClusterSwipeCard = ({
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
+                    aria-label="Confirm merging this large cluster"
                     type="checkbox"
                     checked={largeClusterConfirmed}
                     onChange={(e) => setLargeClusterConfirmed(e.target.checked)}
@@ -395,7 +396,7 @@ export const ClusterSwipeCard = ({
                 (cluster.requiresConfirmation && !largeClusterConfirmed)
               }
               aria-label={`Merge ${cluster.size} contacts into one`}
-              className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 w-full sm:w-auto justify-center"
+              className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all w-full sm:w-auto justify-center disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
             >
               <div className="text-right">
                 <div className="text-sm font-bold">

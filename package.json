@@ -1,6 +1,6 @@
 {
   "name": "contrack",
-  "version": "1.4.0",
+  "version": "1.5.2",
   "description": "A local-first, AI-powered personal CRM for high-leverage individuals. Built with React 19, Express, SQLite, and Gemini.",
   "private": true,
   "type": "module",
@@ -44,10 +44,16 @@
     "test:watch": "vitest --project unit --project integration",
     "test:coverage": "vitest run --project unit --project integration --coverage",
     "prepare": "husky",
-    "test:contract": "vitest run --project contract"
+    "test:contract": "vitest run --project contract",
+    "audit:contrast": "node scripts/contrast-audit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
+    "@dicebear/avataaars": "^9.4.2",
+    "@dicebear/bottts": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
+    "@dicebear/initials": "^9.4.2",
+    "@dicebear/lorelei": "^9.4.2",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

@@ -16,6 +16,7 @@
  *   const recentContacts = contacts.filter(c => recentIds.includes(c.id));
  */
 import { useState, useCallback, useEffect } from "react";
+import { SETTINGS_CHANGED_EVENT, emitSettingsChanged } from "../lib/appEvents";
 
 const STORAGE_KEY = "contrack_recent_contacts";
 const LIMIT_KEY = "contrack_recent_limit";
@@ -85,7 +86,7 @@ export const useRecentContactsLimit = () => {
     try {
       localStorage.setItem(LIMIT_KEY, String(clamped));
       // Notify other components (ContactList) that the preference changed
-      window.dispatchEvent(new Event("contrack_settings_changed"));
+      emitSettingsChanged();
     } catch {
       // Ignore quota errors
     }
@@ -95,9 +96,8 @@ export const useRecentContactsLimit = () => {
   // Stay in sync if another tab or component changes the preference
   useEffect(() => {
     const handler = () => setLimitState(readLimit());
-    window.addEventListener("contrack_settings_changed", handler);
-    return () =>
-      window.removeEventListener("contrack_settings_changed", handler);
+    window.addEventListener(SETTINGS_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, handler);
   }, []);
 
   return { limit, setLimit };

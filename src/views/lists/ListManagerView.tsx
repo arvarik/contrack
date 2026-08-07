@@ -7,22 +7,16 @@
  */
 import React, { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  GripVertical,
-  Plus,
-  List,
-  Users,
-  ChevronLeft,
-  ArrowLeft,
-} from "lucide-react";
+import { GripVertical, Plus, List, Users, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLists, useReorderLists, useCreateList } from "../../api";
-import { ContactList as ContactListType } from "../../types";
+
 import { ListIcon, CreateListModal } from "../contact-list/CreateListModal";
 import { ListDetailPanel } from "./ListDetailPanel";
 import { cn } from "../../lib/utils";
 import { SECTION_HEADING } from "../../lib/styles";
 import { toast } from "sonner";
+import { activateOnKey } from "../../lib/a11y";
 
 export const ListManagerView = () => {
   const { data: lists = [], isLoading } = useLists();
@@ -101,7 +95,7 @@ export const ListManagerView = () => {
         </div>
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 text-primary rounded-xl text-xs font-bold hover:bg-primary/20 transition-colors shrink-0"
+          className="flex items-center gap-1.5 px-3 py-2 bg-surface-container text-primary rounded-xl text-xs font-bold hover:bg-surface-container-high transition-colors shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New List</span>
@@ -127,7 +121,7 @@ export const ListManagerView = () => {
             </div>
             <div>
               <p className="font-bold text-sm">No lists yet</p>
-              <p className="text-xs mt-1 opacity-60">
+              <p className="text-xs mt-1 text-on-surface-variant">
                 Create a list to group your contacts
               </p>
             </div>
@@ -146,6 +140,8 @@ export const ListManagerView = () => {
 
             return (
               <div
+                tabIndex={0}
+                role="button"
                 key={list.id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, idx)}
@@ -161,10 +157,14 @@ export const ListManagerView = () => {
                     : "bg-surface-container-lowest hover:bg-surface-container-low shadow-sm",
                 )}
                 onClick={() => setSelectedListId(isSelected ? null : list.id)}
+                onKeyDown={activateOnKey(() =>
+                  setSelectedListId(isSelected ? null : list.id),
+                )}
               >
                 {/* Grip handle — visible on hover on desktop, always subtle on mobile */}
                 <div
-                  className="text-on-surface-variant/25 group-hover:text-on-surface-variant/60 transition-colors cursor-grab active:cursor-grabbing shrink-0 touch-none"
+                  role="presentation"
+                  className="text-on-surface-variant/25 group-hover:text-on-surface-variant transition-colors cursor-grab active:cursor-grabbing shrink-0 touch-none"
                   onMouseDown={(e) => e.stopPropagation()}
                 >
                   <GripVertical className="w-4 h-4" />
@@ -175,7 +175,7 @@ export const ListManagerView = () => {
                   className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
                     isSelected
-                      ? "bg-primary/20 text-primary"
+                      ? "bg-primary/15 text-primary"
                       : "bg-surface-container-low text-on-surface-variant",
                   )}
                 >
@@ -205,7 +205,7 @@ export const ListManagerView = () => {
                     "transition-all shrink-0",
                     isSelected
                       ? "text-primary"
-                      : "text-on-surface-variant/30 group-hover:text-on-surface-variant/60",
+                      : "text-on-surface-variant/30 group-hover:text-on-surface-variant",
                   )}
                 >
                   <svg

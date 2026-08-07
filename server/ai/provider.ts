@@ -11,9 +11,19 @@ import type {
   AIGenerateResult,
   DiagnosticsSnapshot,
 } from "./types.ts";
+import type { ModelClass } from "./routing/registry.ts";
 
-/** Which capabilities a discovered model can serve. */
-export type ModelCapability = "chat" | "embeddings";
+/**
+ * Which capabilities a discovered model can serve.
+ *
+ * "grounding" is deliberately separate from "chat": every provider that can
+ * ground answers in live web search only supports it on a *subset* of its
+ * chat models, and offering the rest as web-research options produces a
+ * setting that saves fine and then fails at call time. No provider reports
+ * this in its list-models response, so each adapter derives it from the
+ * documented model families — see `listModels` in each adapter.
+ */
+export type ModelCapability = "chat" | "embeddings" | "grounding";
 
 /** A model as reported by a provider's list-models API. */
 export interface ModelInfo {
@@ -24,10 +34,13 @@ export interface ModelInfo {
   /** What this model can be used for. */
   capabilities: ModelCapability[];
   /**
-   * How the capabilities were determined:
+   * How chat/embeddings capability was determined:
    * - "declared": the provider's API states it (Gemini, Anthropic)
    * - "guessed":  inferred from the id (OpenAI, compat servers) — the UI
    *               lets the user override.
+   *
+   * Note this does NOT describe "grounding", which is always inferred from
+   * the model family regardless of provider.
    */
   capabilityConfidence: "declared" | "guessed";
   /** Optional context-window size, when the provider reports it. */
@@ -81,6 +94,21 @@ export interface AIProvider {
    * without a list API omit it.
    */
   listModels?(): Promise<ModelInfo[]>;
+
+  /**
+   * Optional: the model id this provider would actually use for a routing
+   * class, with no pin in effect.
+   *
+   * Settings previously described unpinned capabilities as "chosen
+   * automatically", which is true and useless — it tells the user nothing
+   * about what will run or what it costs. Adapters that can name their pick
+   * ahead of the call implement this so the UI can show the model instead of
+   * the word "automatically".
+   *
+   * Returns undefined when the choice genuinely cannot be known in advance
+   * (a compat endpoint whose model set is arbitrary).
+   */
+  defaultModelFor?(modelClass: ModelClass): string | undefined;
 
   /**
    * Optional: generate embedding vectors. Only implemented by providers whose

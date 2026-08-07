@@ -62,7 +62,7 @@ export function useCompanyLogo(
             domain = d;
           }
         }
-      } catch (e) {}
+      } catch {}
     }
 
     // Strategy 2: Clever heuristic to guess domain from company name

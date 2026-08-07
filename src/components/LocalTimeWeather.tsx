@@ -14,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { SETTINGS_CHANGED_EVENT } from "../lib/appEvents";
 
 interface LocalTimeWeatherProps {
   lat: number | null;
@@ -25,30 +26,30 @@ interface LocalTimeWeatherProps {
 const getWeatherIcon = (code: number, isDay: boolean) => {
   if (code === 0)
     return isDay ? (
-      <Sun className="w-4 h-4 text-amber-500" />
+      <Sun className="w-4 h-4 text-warning" />
     ) : (
-      <Moon className="w-4 h-4 text-indigo-300" />
+      <Moon className="w-4 h-4 text-info" />
     );
   if (code === 1 || code === 2 || code === 3)
     return isDay ? (
-      <CloudSun className="w-4 h-4 text-amber-500" />
+      <CloudSun className="w-4 h-4 text-warning" />
     ) : (
-      <Cloud className="w-4 h-4 text-indigo-300" />
+      <Cloud className="w-4 h-4 text-info" />
     );
   if (code === 45 || code === 48)
     return <CloudFog className="w-4 h-4 text-slate-400" />;
   if ((code >= 51 && code <= 55) || (code >= 56 && code <= 57))
-    return <CloudDrizzle className="w-4 h-4 text-sky-400" />;
+    return <CloudDrizzle className="w-4 h-4 text-info" />;
   if (
     (code >= 61 && code <= 65) ||
     (code >= 66 && code <= 67) ||
     (code >= 80 && code <= 82)
   )
-    return <CloudRain className="w-4 h-4 text-blue-500" />;
+    return <CloudRain className="w-4 h-4 text-info" />;
   if ((code >= 71 && code <= 77) || code === 85 || code === 86)
-    return <CloudSnow className="w-4 h-4 text-sky-200" />;
+    return <CloudSnow className="w-4 h-4 text-info" />;
   if (code >= 95 && code <= 99)
-    return <CloudLightning className="w-4 h-4 text-yellow-500" />;
+    return <CloudLightning className="w-4 h-4 text-warning" />;
   return <Cloud className="w-4 h-4 text-slate-400" />;
 };
 
@@ -106,7 +107,7 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
     if (lat === null || lng === null) return null;
     try {
       return tzlookup(lat, lng);
-    } catch (e) {
+    } catch {
       return null;
     }
   }, [lat, lng]);
@@ -122,12 +123,9 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
         setTempUnit(updated);
       }
     };
-    window.addEventListener("contrack_settings_changed", handleSettingsChange);
+    window.addEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChange);
     return () =>
-      window.removeEventListener(
-        "contrack_settings_changed",
-        handleSettingsChange,
-      );
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChange);
   }, []);
 
   useEffect(() => {
@@ -170,9 +168,9 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
       {/* Timezone Context Pill */}
       <div className="flex items-center gap-1.5 text-sm font-bold text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-xl shadow-sm">
         {timeData.isDay ? (
-          <Sun className="w-4 h-4 text-amber-500" />
+          <Sun className="w-4 h-4 text-warning" />
         ) : (
-          <Moon className="w-4 h-4 text-indigo-400" />
+          <Moon className="w-4 h-4 text-info" />
         )}
         <span>
           {timeData.timeString} {timeData.timeZoneName}

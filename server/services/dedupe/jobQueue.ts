@@ -15,10 +15,8 @@ import crypto from "crypto";
 import { log } from "../../utils/logger.ts";
 import type {
   DedupeScanMode,
-  DedupeScanPhase,
   DedupeScanProgress,
   DedupeCluster,
-  ClusterPair,
 } from "./types.ts";
 
 // =============================================================================

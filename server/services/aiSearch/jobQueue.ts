@@ -21,7 +21,6 @@ import type {
   AISearchBatch,
   AISearchJobStatus,
   AISearchErrorType,
-  AISearchStrategy,
 } from "./types.ts";
 import type { AIProvider } from "../../ai/provider.ts";
 import { buildSearchPrompt, type AISearchOutput } from "./promptTemplate.ts";
@@ -182,7 +181,7 @@ class AISearchJobQueue extends EventEmitter {
    * Process all jobs in a batch sequentially.
    * One contact at a time. Individual failures never block the batch.
    */
-  async processBatch(batchId: string, adapter: AIProvider): Promise<void> {
+  async processBatch(batchId: string, _adapter: AIProvider): Promise<void> {
     if (this.processing) {
       throw new Error("An AI Search batch is already in progress");
     }
@@ -218,7 +217,6 @@ class AISearchJobQueue extends EventEmitter {
         }
 
         // Retry loop: retryable errors (rate_limit, network) get up to MAX_RETRIES
-        let lastError: unknown = null;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
             if (attempt > 0) {
@@ -254,12 +252,11 @@ class AISearchJobQueue extends EventEmitter {
             job.status = "merging";
             this.emit(batchId, batch);
 
-            // 6. Run merge engine (pass grounded text for dossier population)
+            // 6. Run merge engine
             const fieldsUpdated = mergeSearchResult(
               job.contactId,
               contact,
               result.data as AISearchOutput,
-              result.groundedText,
             );
 
             // 7. Set status → 'success'
@@ -276,10 +273,8 @@ class AISearchJobQueue extends EventEmitter {
               `Job ${job.id} (${job.contactName}): success — ${fieldsUpdated} field(s) merged in ${job.latencyMs}ms`,
             );
             this.emit(batchId, batch);
-            lastError = null;
             break; // Success — exit retry loop
           } catch (err: unknown) {
-            lastError = err;
             const errorType = classifyError(err);
             const isRetryable =
               errorType === "rate_limit" ||

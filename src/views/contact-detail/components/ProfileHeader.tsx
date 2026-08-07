@@ -18,22 +18,18 @@ import {
   Copy,
   Trash2,
 } from "lucide-react";
-import { formatDistanceToNow, isPast, isToday } from "date-fns";
-import { motion, AnimatePresence } from "motion/react";
+import { isPast, isToday } from "date-fns";
+import { motion } from "motion/react";
 import { toast } from "sonner";
 
 import type { Contact, ContactUpdateData } from "../../../types";
 import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
-import {
-  LABEL,
-  CARD_TINTED,
-  SECTION_HEADING_SPACED,
-} from "../../../lib/styles";
+
 import { LocalTimeWeather } from "../../../components/LocalTimeWeather";
 
 import { EditableField } from "./EditableField";
 import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
-import { VibePickerPopover, VIBE_COLORS } from "./VibePickerPopover";
+import { VibePickerPopover } from "./VibePickerPopover";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactListsSection } from "./ContactListsSection";
 import { CatchMeUpFab } from "./CatchMeUpFab";
@@ -134,7 +130,7 @@ const SocialLinkPill: React.FC<{
         }}
         className={cn(
           "absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-lg transition-all duration-200",
-          "text-on-surface-variant/50 hover:text-on-surface hover:bg-surface-container-highest",
+          "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest",
           menuOpen ? "opacity-100" : "opacity-0 group-hover/pill:opacity-100",
         )}
         aria-label="Link actions"
@@ -163,7 +159,7 @@ const SocialLinkPill: React.FC<{
               onDelete();
               setMenuOpen(false);
             }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-rose-500 hover:bg-rose-500/8 transition-colors text-left"
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-rose-500/8 transition-colors text-left"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete link
@@ -241,6 +237,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               />
             </div>
             <button
+              aria-label="Change avatar"
               onClick={onOpenAvatarPicker}
               title="Edit Avatar"
               className="absolute inset-0 rounded-3xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer z-10"
@@ -289,7 +286,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   placeholder="Contact Name"
                 />
                 {contact.pronouns && (
-                  <span className="opacity-40 text-2xl font-medium tracking-normal inline-block align-middle pb-1">
+                  <span className="text-on-surface-variant text-2xl font-medium tracking-normal inline-block align-middle pb-1">
                     ({contact.pronouns})
                   </span>
                 )}
@@ -355,8 +352,8 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 className={cn(
                   "p-2 rounded-xl transition-all flex items-center justify-center",
                   contact.isArchived
-                    ? "text-amber-500 bg-amber-500/15 hover:bg-amber-500/25"
-                    : "text-on-surface-variant hover:bg-surface-container hover:text-amber-500",
+                    ? "text-warning bg-amber-500/15 hover:bg-amber-500/25"
+                    : "text-on-surface-variant hover:bg-surface-container hover:text-warning",
                 )}
               >
                 <Archive className="w-5 h-5" />
@@ -385,7 +382,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     headlineNorm === normalize(contact.company));
                 if (isDuplicate) return null;
                 return (
-                  <div className="text-base text-on-surface-variant font-medium mb-1 italic opacity-70">
+                  <div className="text-base text-on-surface-variant font-medium mb-1 italic">
                     <EditableField
                       value={contact.headline}
                       onSave={(val) => onUpdate("headline", val)}
@@ -411,7 +408,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 onSave={(val) => onUpdate("role", val)}
                 placeholder="Role / Title"
               />
-              <span className="opacity-50">at</span>
+              <span className="text-on-surface-variant">at</span>
               <EditableField
                 value={contact.company}
                 onSave={(val) => onUpdate("company", val)}
@@ -585,7 +582,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                           },
                         });
                       }}
-                      className="w-4 h-4 rounded-full text-primary/40 hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 -mr-1"
+                      className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-primary hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                       aria-label={`Remove tag ${t.tag}`}
                     >
                       <X className="w-2.5 h-2.5" />

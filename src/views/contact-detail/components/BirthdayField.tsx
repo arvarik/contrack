@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { activateOnKey } from "../../../lib/a11y";
 
 export const BirthdayField = ({
   value,
@@ -66,7 +67,10 @@ export const BirthdayField = ({
   if (isEditing) {
     return (
       <input
+        aria-label="Birthday"
         type="date"
+        // Inline editor, opened by clicking the value it replaces.
+        // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         defaultValue={toInputValue(value)}
         onChange={handleChange}
@@ -80,6 +84,9 @@ export const BirthdayField = ({
 
   return (
     <div
+      onKeyDown={activateOnKey(() => setIsEditing(true))}
+      tabIndex={0}
+      role="button"
       onClick={() => setIsEditing(true)}
       className="flex items-center gap-2 cursor-text group/bday"
     >
@@ -93,7 +100,7 @@ export const BirthdayField = ({
         {display || "Add Birthday..."}
       </span>
       {upcomingDays !== null && (
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 shrink-0">
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-warning shrink-0">
           {upcomingDays === 0 ? "🎂 Today!" : `🎂 in ${upcomingDays}d`}
         </span>
       )}

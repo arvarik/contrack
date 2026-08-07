@@ -16,7 +16,6 @@ import {
   getFeed,
   AI_OPERATIONS,
 } from "../services/aiStatsService.ts";
-import type { AIOperation } from "../services/aiStatsService.ts";
 
 const router = Router();
 

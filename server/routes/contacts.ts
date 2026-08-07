@@ -664,7 +664,6 @@ router.post(
     const updated = contactService.updateAvatar(
       String(req.params.id),
       req.file.filename,
-      req.file.originalname,
     );
     if (!updated) throw new AppError("Contact not found", 404);
 

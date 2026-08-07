@@ -5,9 +5,11 @@
 // =============================================================================
 
 import { Router } from "express";
+import { z } from "zod";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { validateBody } from "../utils/validators.ts";
 import { contactService } from "../services/contactService.ts";
 import { listBackups, runBackup } from "../services/backupService.ts";
 import {
@@ -38,6 +40,32 @@ router.post(
     }
     log.info("API", `[${rid}] POST /api/trash/${req.params.id}/restore`);
     res.json(restored);
+  }),
+);
+
+/**
+ * Restore many at once — the undo path for a bulk delete.
+ *
+ * Without this, undoing a 200-contact delete meant 200 round trips, which is
+ * slow enough that the user watches their contacts trickle back one by one
+ * and cannot tell whether it worked.
+ */
+router.post(
+  "/trash/bulk-restore",
+  validateBody(z.object({ ids: z.array(z.string().min(1)).min(1) })),
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+    let count = 0;
+    for (const id of req.body.ids as string[]) {
+      // Skip anything already restored or purged rather than failing the whole
+      // batch: undo has to be forgiving, or it is not undo.
+      if (contactService.restoreContact(id)) count += 1;
+    }
+    log.info(
+      "API",
+      `[${rid}] POST /api/trash/bulk-restore → ${count} restored`,
+    );
+    res.json({ success: true, count });
   }),
 );
 

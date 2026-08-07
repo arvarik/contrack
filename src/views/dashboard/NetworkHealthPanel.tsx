@@ -4,24 +4,22 @@ import { CARD_COMPACT, SECTION_HEADING, TAG_PILL } from "../../lib/styles";
 import { DashboardPayload } from "../../api";
 import { Link } from "react-router-dom";
 import { Ghost, HeartPulse, Sparkles, Clock } from "lucide-react";
-import { motion } from "motion/react";
 import { FloatingContactCard } from "../../components/FloatingContactCard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 
 interface NetworkHealthProps {
   payload: DashboardPayload;
-  delay?: number;
+  /** CSS entrance delay from `tileDelay(index)`. */
+  delay?: string;
 }
 
 const Avatar = ({
   url,
   name,
-  color,
   size = "w-10 h-10",
 }: {
   url?: string | null;
   name: string;
-  color: string;
   size?: string;
 }) => {
   const src = url || fallbackAvatarUrl(name);
@@ -29,6 +27,10 @@ const Avatar = ({
     <img
       src={src}
       alt={name}
+      // Avatars are decorative-adjacent and always off-screen-cheap; decoding
+      // async keeps a slow one from blocking the row it sits in.
+      loading="lazy"
+      decoding="async"
       className={cn(
         "rounded-full object-cover shadow-sm bg-surface-container-highest",
         size,
@@ -37,20 +39,15 @@ const Avatar = ({
   );
 };
 
-export const NetworkHealthPanel = ({
-  payload,
-  delay = 0,
-}: NetworkHealthProps) => {
+export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
   const [floatingContactId, setFloatingContactId] = useState<string | null>(
     null,
   );
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay, ease: "easeOut" }}
-      className="flex flex-col gap-6"
+    <div
+      style={{ animationDelay: delay }}
+      className="tile-enter flex flex-col gap-6"
     >
       {/* GHOSTS */}
       {payload.ghosts.length > 0 && (
@@ -82,7 +79,6 @@ export const NetworkHealthPanel = ({
                 <Avatar
                   url={g.avatarUrl}
                   name={g.name}
-                  color={g.themeColor}
                   size="w-6 h-6 text-[10px]"
                 />
                 <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
@@ -114,12 +110,7 @@ export const NetworkHealthPanel = ({
                 className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container-low transition-colors group"
               >
                 <div className="relative">
-                  <Avatar
-                    url={c.avatarUrl}
-                    name={c.name}
-                    color={c.themeColor}
-                    size="w-9 h-9"
-                  />
+                  <Avatar url={c.avatarUrl} name={c.name} size="w-9 h-9" />
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-error rounded-full border-2 border-surface flex items-center justify-center">
                     <span className="text-[7px] font-bold text-white leading-none">
                       {Math.round(c.relationshipScore)}
@@ -151,15 +142,19 @@ export const NetworkHealthPanel = ({
             <span className={SECTION_HEADING}>Recently Added</span>
           </div>
           <div className="flex -space-x-3 overflow-hidden ml-1 py-1">
-            {payload.recentlyAdded.map((c, i) => (
+            {payload.recentlyAdded.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setFloatingContactId(c.id)}
-                className="relative z-10 hover:z-20 transform hover:scale-110 transition-transform focus:outline-none"
+                title={c.name}
+                aria-label={c.name}
+                className="relative z-10 hover:z-20 transform hover:scale-110 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full"
               >
                 <img
                   src={c.avatarUrl || fallbackAvatarUrl(c.name)}
                   alt={c.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-10 h-10 rounded-full border-2 border-surface-container-lowest object-cover shadow-sm bg-surface-container-highest"
                 />
               </button>
@@ -174,6 +169,6 @@ export const NetworkHealthPanel = ({
         onClose={() => setFloatingContactId(null)}
         showNetworkButton
       />
-    </motion.div>
+    </div>
   );
 };

@@ -47,6 +47,13 @@ export interface AISettings {
       assignment: CapabilityAssignment;
       resolved: {
         providerId: string;
+        /** Display name of the provider serving this capability. */
+        providerLabel: string;
+        /**
+         * The concrete model that will run — populated in Auto mode too, so
+         * the UI can name it instead of saying "chosen automatically".
+         * Undefined only when the provider cannot say in advance.
+         */
         model?: string;
         /** Set when the target has no provider entry (the built-in model). */
         label?: string;
@@ -61,6 +68,7 @@ export interface AISettings {
 export interface ModelOption {
   id: string;
   label: string;
+  /** "chat" | "embeddings" | "grounding" — see server/ai/provider.ts */
   capabilities: string[];
   capabilityConfidence: "declared" | "guessed";
   contextWindow?: number;

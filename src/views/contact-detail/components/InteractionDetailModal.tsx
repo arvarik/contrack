@@ -36,6 +36,7 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
 };
 
 import { Edit2, Save } from "lucide-react";
+import { activateOnKey } from "../../../lib/a11y";
 
 export const InteractionDetailModal = ({
   isOpen,
@@ -97,6 +98,7 @@ export const InteractionDetailModal = ({
                   <div className="flex-1 ml-3 min-w-0 mr-4">
                     {isEditing ? (
                       <input
+                        aria-label="Interaction title"
                         value={editingTitle}
                         onChange={(e) => setEditingTitle(e.target.value)}
                         className="text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded outline-none focus:ring-2 focus:ring-primary/20"
@@ -156,6 +158,7 @@ export const InteractionDetailModal = ({
                   </span>
                   {isEditing ? (
                     <textarea
+                      aria-label="Interaction content"
                       value={editingContent}
                       onChange={(e) => setEditingContent(e.target.value)}
                       className="w-full min-h-[200px] p-3 text-sm rounded-xl bg-surface-container-low border border-primary/50 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 resize-y"
@@ -186,13 +189,25 @@ export const InteractionDetailModal = ({
                       <div className="flex flex-col gap-2">
                         {interaction.actionItems.map((action) => (
                           <div
+                            tabIndex={0}
+                            role="button"
                             key={action.id}
+                            aria-label={
+                              action.completedAt
+                                ? `${action.title} (completed)`
+                                : `Complete follow-up: ${action.title}`
+                            }
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!action.completedAt) {
                                 onCompleteActionItem(action.id);
                               }
                             }}
+                            onKeyDown={activateOnKey(() => {
+                              if (!action.completedAt) {
+                                onCompleteActionItem(action.id);
+                              }
+                            })}
                             className={cn(
                               "flex flex-col gap-1.5 p-3 rounded-xl border bg-surface-container transition-all",
                               action.completedAt
@@ -229,7 +244,7 @@ export const InteractionDetailModal = ({
                                     className={cn(
                                       "text-[10px] uppercase font-bold tracking-wider",
                                       action.completedAt
-                                        ? "text-on-surface-variant/60"
+                                        ? "text-on-surface-variant"
                                         : "text-error opacity-80",
                                     )}
                                   >

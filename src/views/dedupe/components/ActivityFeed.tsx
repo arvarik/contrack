@@ -80,7 +80,7 @@ export const ActivityFeed = () => {
         <p className="text-sm text-on-surface-variant">
           No merge activity yet.
         </p>
-        <p className="text-xs text-on-surface-variant/60 mt-1">
+        <p className="text-xs text-on-surface-variant mt-1">
           Merged contacts will appear here.
         </p>
       </div>
@@ -129,7 +129,7 @@ export const ActivityFeed = () => {
                     ) : isAuto ? (
                       <Sparkles className="w-3.5 h-3.5 text-primary" />
                     ) : (
-                      <User className="w-3.5 h-3.5 text-emerald-600" />
+                      <User className="w-3.5 h-3.5 text-success" />
                     )}
                   </div>
 
@@ -147,7 +147,7 @@ export const ActivityFeed = () => {
                               Auto-merged{" "}
                             </span>
                           ) : (
-                            <span className="text-emerald-600 font-bold">
+                            <span className="text-success font-bold">
                               Merged{" "}
                             </span>
                           )}
@@ -176,7 +176,7 @@ export const ActivityFeed = () => {
                     <button
                       onClick={() => handleUndo(entry.id, entry.duplicateName)}
                       disabled={undoMerge.isPending}
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:opacity-50"
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <Undo2 className="w-3 h-3" />
                       Undo
@@ -184,7 +184,7 @@ export const ActivityFeed = () => {
                   )}
 
                   {isUndone && (
-                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-on-surface-variant/50">
+                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-on-surface-variant">
                       <CheckCircle2 className="w-3 h-3" />
                       Restored
                     </span>

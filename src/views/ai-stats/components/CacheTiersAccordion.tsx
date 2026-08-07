@@ -30,9 +30,9 @@ function formatTTL(ms: number): string {
 }
 
 function hitRateColor(rate: number): string {
-  if (rate >= 0.75) return "text-emerald-400";
+  if (rate >= 0.75) return "text-success";
   if (rate >= 0.5) return "text-on-surface-variant";
-  return "text-amber-400";
+  return "text-warning";
 }
 
 export const CacheTiersAccordion = ({
@@ -51,7 +51,7 @@ export const CacheTiersAccordion = ({
       >
         <DatabaseZap className="w-4 h-4 text-primary" />
         <span className={cn(SECTION_HEADING, "mb-0")}>Cache Tiers</span>
-        <span className="text-[10px] font-bold text-on-surface-variant/50 bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
+        <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
           {totalEntries}
         </span>
         <motion.div
@@ -59,7 +59,7 @@ export const CacheTiersAccordion = ({
           transition={{ duration: 0.2 }}
           className="ml-auto"
         >
-          <ChevronDown className="w-4 h-4 text-on-surface-variant/50 group-hover:text-on-surface-variant transition-colors" />
+          <ChevronDown className="w-4 h-4 text-on-surface-variant group-hover:text-on-surface-variant transition-colors" />
         </motion.div>
       </button>
 
@@ -75,7 +75,7 @@ export const CacheTiersAccordion = ({
           >
             <div className="mt-4 space-y-0">
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_50px_50px_50px_50px_50px_50px] gap-2 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/40">
+              <div className="grid grid-cols-[1fr_50px_50px_50px_50px_50px_50px] gap-2 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                 <span>Tier</span>
                 <span className="text-right">Entries</span>
                 <span className="text-right">Hits</span>
@@ -116,7 +116,7 @@ export const CacheTiersAccordion = ({
                   >
                     {(tier.hitRate * 100).toFixed(0)}%
                   </span>
-                  <span className="text-right text-on-surface-variant/60">
+                  <span className="text-right text-on-surface-variant">
                     {formatTTL(tier.ttlMs)}
                   </span>
                 </div>

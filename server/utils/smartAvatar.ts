@@ -1,46 +1,21 @@
 /**
- * Smart Avatar — Gender-aware DiceBear URL builder.
+ * Smart Avatar — name → gender classification for avatar styling.
  *
- * Uses a local name-gender lookup table (~40K entries) to classify
- * first names as masculine/feminine/unknown, then tunes DiceBear
- * avataaars parameters accordingly.
+ * Uses a local name-gender lookup table (~40K entries) to classify first names
+ * as masculine/feminine/unknown, so avatar generation can pick from a matching
+ * pool of hair and clothing assets. Zero API calls, ~0.01ms per name,
+ * deterministic, and unclassifiable names simply get the unconstrained pool.
  *
- * - Zero API calls — runs entirely in-process (~0.01ms per name).
- * - Deterministic — same name always produces the same avatar.
- * - Graceful fallback — unknown names use default PRNG seeding.
- *
- * Call `buildSmartAvatarUrl(name)` anywhere an avatar URL is needed.
+ * The asset pools themselves live in services/avatarService, because they are
+ * now applied when the SVG is rendered rather than encoded into a URL. This
+ * module used to build `api.dicebear.com` URLs; that put every contact's name
+ * in an outbound request, and is gone.
  */
 
 import { getGender } from "gender-detection-from-name";
 
-// =============================================================================
-// DiceBear preset configurations per gender classification
-// =============================================================================
-// Each preset constrains the PRNG to gender-appropriate asset pools.
-// The `seed` parameter still drives the specific selection within each pool,
-// so two people with different names but the same gender get different avatars.
-
-const PRESETS = {
-  male: {
-    top: "shortFlat,shortRound,shortWaved,shortCurly,theCaesar,theCaesarAndSidePart,sides,shavedSides,dreads01,frizzle",
-    facialHairProbability: "33",
-    clothing:
-      "blazerAndShirt,blazerAndSweater,collarAndSweater,hoodie,shirtCrewNeck,shirtVNeck",
-  },
-  female: {
-    top: "longButNotTooLong,straight01,straight02,straightAndStrand,bob,bun,curly,curvy,bigHair,miaWallace",
-    facialHairProbability: "0",
-    clothing:
-      "blazerAndShirt,blazerAndSweater,collarAndSweater,shirtScoopNeck,shirtCrewNeck,shirtVNeck",
-  },
-  unknown: {
-    // No top/clothing constraints — full PRNG diversity
-    facialHairProbability: "10",
-  },
-} as const;
-
-type GenderPreset = keyof typeof PRESETS;
+/** The three asset pools avatarService keys off. */
+export type GenderPreset = "male" | "female" | "unknown";
 
 // =============================================================================
 // Public API
@@ -81,32 +56,4 @@ export function classifyName(fullName: string): GenderPreset {
   if (result === "male") return "male";
   if (result === "female") return "female";
   return "unknown";
-}
-
-/**
- * Build a DiceBear avataaars URL with gender-appropriate styling.
- *
- * @param name  - The contact's full name (used as seed + for gender classification)
- * @returns     - A deterministic DiceBear SVG URL
- */
-export function buildSmartAvatarUrl(name: string): string {
-  const gender = classifyName(name);
-  const preset = PRESETS[gender];
-
-  // Build query params from the preset
-  // Note: URLSearchParams handles encoding automatically — do not pre-encode.
-  const params = new URLSearchParams();
-  params.set("seed", name);
-  params.set("mouth", "default,smile,serious");
-  params.set("skinColor", "f8d25c"); // Emoji yellow — neutral default
-
-  if ("top" in preset) {
-    params.set("top", preset.top);
-  }
-  params.set("facialHairProbability", preset.facialHairProbability);
-  if ("clothing" in preset) {
-    params.set("clothing", preset.clothing);
-  }
-
-  return `https://api.dicebear.com/9.x/avataaars/svg?${params.toString()}`;
 }

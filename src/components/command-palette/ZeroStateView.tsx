@@ -57,7 +57,7 @@ const modeIcon = (mode: string) => {
     case "ai":
       return <Sparkles className="w-3 h-3 text-primary" />;
     case "action":
-      return <Zap className="w-3 h-3 text-emerald-500" />;
+      return <Zap className="w-3 h-3 text-success" />;
     default:
       return <Search className="w-3 h-3 text-on-surface-variant" />;
   }
@@ -66,15 +66,15 @@ const modeIcon = (mode: string) => {
 const insightIcon = (type: string) => {
   switch (type) {
     case "action_items":
-      return <ClipboardList className="w-3.5 h-3.5 text-amber-500" />;
+      return <ClipboardList className="w-3.5 h-3.5 text-warning" />;
     case "at_risk":
-      return <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />;
+      return <AlertTriangle className="w-3.5 h-3.5 text-error" />;
     case "ghost":
-      return <Ghost className="w-3.5 h-3.5 text-purple-500" />;
+      return <Ghost className="w-3.5 h-3.5 text-info" />;
     case "stale_data":
-      return <Satellite className="w-3.5 h-3.5 text-sky-500" />;
+      return <Satellite className="w-3.5 h-3.5 text-info" />;
     case "dedupe":
-      return <RefreshCw className="w-3.5 h-3.5 text-teal-500" />;
+      return <RefreshCw className="w-3.5 h-3.5 text-success" />;
     default:
       return <Activity className="w-3.5 h-3.5 text-on-surface-variant" />;
   }
@@ -194,7 +194,7 @@ export const ZeroStateView = ({
               <span className="text-sm truncate flex-1">
                 {stripModePrefix(entry.query)}
               </span>
-              <Clock className="w-3 h-3 text-on-surface-variant/40 shrink-0" />
+              <Clock className="w-3 h-3 text-on-surface-variant shrink-0" />
             </Command.Item>
           ))}
         </Command.Group>
@@ -233,7 +233,7 @@ export const ZeroStateView = ({
             <span className="text-sm flex-1">{item.label}</span>
             {item.shortcut && (
               <kbd
-                className={`${KBD_SM} text-on-surface-variant/40 hidden sm:inline-flex`}
+                className={`${KBD_SM} text-on-surface-variant hidden sm:inline-flex`}
               >
                 {item.shortcut}
               </kbd>

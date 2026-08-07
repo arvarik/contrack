@@ -174,7 +174,7 @@ export const ListDetailPanel = ({
           </div>
           <button
             onClick={onViewInNetwork}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 rounded-xl hover:bg-primary/20 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
             title="View filtered in Network page"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -197,7 +197,7 @@ export const ListDetailPanel = ({
           </div>
           <button
             onClick={onViewInNetwork}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 rounded-xl hover:bg-primary/20 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Network
@@ -238,6 +238,7 @@ export const ListDetailPanel = ({
 
           <div className="flex gap-2">
             <input
+              aria-label="List name"
               ref={nameInputRef}
               type="text"
               value={editName}
@@ -256,7 +257,7 @@ export const ListDetailPanel = ({
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={handleSave}
                   disabled={!editName.trim() || updateList.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-on-primary text-xs font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
+                  className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-on-primary text-xs font-bold rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
                 >
                   <Check className="w-3.5 h-3.5" />
                   Save
@@ -328,7 +329,7 @@ export const ListDetailPanel = ({
                   <button
                     onClick={() => handleRemoveMember(contact.id)}
                     disabled={removingId === contact.id}
-                    className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-rose-500 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                    className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
                     title="Remove from list"
                   >
                     {removingId === contact.id ? (
@@ -346,7 +347,7 @@ export const ListDetailPanel = ({
         {/* ── Delete List ──────────────────────────────────────────────────── */}
         <section className="px-5 pb-8">
           <div className="bg-rose-500/6 rounded-xl px-4 py-2.5 flex items-center gap-3 min-h-[44px]">
-            <Trash2 className="w-3.5 h-3.5 text-rose-400/70 shrink-0" />
+            <Trash2 className="w-3.5 h-3.5 text-error shrink-0" />
             <AnimatePresence mode="wait" initial={false}>
               {!showDeleteConfirm ? (
                 <motion.div
@@ -356,12 +357,12 @@ export const ListDetailPanel = ({
                   exit={{ opacity: 0 }}
                   className="flex items-center justify-between flex-1 gap-3"
                 >
-                  <span className="text-xs text-rose-400/80 font-medium">
+                  <span className="text-xs text-error font-medium">
                     Delete this list
                   </span>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 transition-colors shrink-0"
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-error bg-rose-500/10 hover:bg-rose-500/20 transition-colors shrink-0"
                   >
                     Delete
                   </button>

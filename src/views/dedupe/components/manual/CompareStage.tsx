@@ -59,8 +59,8 @@ export const CompareStage = ({
             }
             labelColor={
               contact.id === primaryId
-                ? "text-emerald-600 bg-emerald-500/10"
-                : "text-amber-600 bg-amber-500/10"
+                ? "text-success bg-emerald-500/10"
+                : "text-warning bg-amber-500/10"
             }
             other={selected.find((c) => c.id !== contact.id)}
             isPrimary={contact.id === primaryId}
@@ -72,9 +72,9 @@ export const CompareStage = ({
       {/* Warning for 3-way merge */}
       {selected.length === 3 && (
         <div className="flex items-start gap-3 p-4 bg-amber-500/8 rounded-xl mb-6">
-          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
           <div>
-            <div className="text-sm font-bold text-amber-600 mb-1">
+            <div className="text-sm font-bold text-warning mb-1">
               3-Way Merge
             </div>
             <p className="text-xs text-on-surface-variant">

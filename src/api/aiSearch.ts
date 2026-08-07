@@ -6,7 +6,7 @@
  * Mutation: useStartAISearch (kicks off a batch)
  */
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AISearchBatch } from "../types";
 

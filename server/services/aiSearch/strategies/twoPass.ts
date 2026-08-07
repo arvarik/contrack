@@ -17,7 +17,6 @@
 // model routing (pro doesn't support grounding — use flash).
 // =============================================================================
 
-import type { AIProvider } from "../../../ai/provider.ts";
 import { generateFor } from "../../../ai/gateway.ts";
 import {
   wrapUntrusted,

@@ -111,10 +111,6 @@ const cleanupStmt = sqlite.prepare(`
   DELETE FROM ai_invocations WHERE createdAt < datetime('now', '-30 days')
 `);
 
-const countStmt = sqlite.prepare(`
-  SELECT COUNT(*) AS cnt FROM ai_invocations
-`);
-
 // =============================================================================
 // Cost Lookup — Build a model→costPerM map from all provider registries
 // =============================================================================

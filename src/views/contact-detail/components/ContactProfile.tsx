@@ -10,15 +10,14 @@
  * - {@link DossierTab}    — AI dossier, experience, education
  * - {@link TimelineTab}   — Interaction composer, timeline entries
  */
-import React, { useState, useCallback } from "react";
-import { Modal } from "../../../components/ui/Modal";
+import React, { Suspense, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
+import { toastUndoableDelete } from "../../../lib/undoToast";
 import { cn } from "../../../lib/utils";
-import { CARD } from "../../../lib/styles";
+
 import { usePageTitle } from "../../../hooks/usePageTitle";
-import { Loader2 } from "lucide-react";
 
 import {
   useContact,
@@ -38,7 +37,29 @@ import {
 import { AvatarPickerModal } from "../../../components/AvatarPickerModal";
 import { ProfileHeader } from "./ProfileHeader";
 import { DetailsCard } from "./DetailsCard";
-import { DossierTab } from "./DossierTab";
+/**
+ * Behind a tab the user has to click, so it has no business in the chunk that
+ * blocks the first render of a contact.
+ */
+/** Card-shaped stand-in so switching tabs does not flash an empty pane. */
+const DossierFallback = () => (
+  <div className="space-y-6" aria-busy="true">
+    {[0, 1].map((i) => (
+      <div
+        key={i}
+        className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm space-y-3"
+      >
+        <div className="h-3 w-28 bg-surface-container-high/60 rounded-full animate-pulse" />
+        <div className="h-4 w-3/4 bg-surface-container/50 rounded-full animate-pulse" />
+        <div className="h-4 w-1/2 bg-surface-container/50 rounded-full animate-pulse" />
+      </div>
+    ))}
+  </div>
+);
+
+const DossierTab = React.lazy(() =>
+  import("./DossierTab").then((m) => ({ default: m.DossierTab })),
+);
 import { TimelineTab } from "./TimelineTab";
 import { VIBE_COLORS } from "./VibePickerPopover";
 import { DupeBanner } from "./DupeBanner";
@@ -145,24 +166,31 @@ export const ContactProfile = ({
   };
 
   // Delete confirmation — uses <Modal> instead of native confirm()
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  /**
+   * Delete and leave, offering undo — the modal that used to sit in front of
+   * this said "Permanently delete… This action cannot be undone", which was
+   * false: the mutation is a soft delete into a 30-day Trash, and this handler
+   * already offered an Undo toast underneath the dialog that denied one
+   * existed. Same trade as the bulk path; see lib/undoToast.
+   */
   const handleDeleteContact = () => {
     if (!id || !contact) return;
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = () => {
-    if (!id || !contact) return;
+    const name = contact.name;
     deleteContact.mutate(id, {
       onSuccess: () => {
-        setShowDeleteConfirm(false);
-        toast.success(`Moved ${contact.name} to trash`, {
-          action: {
-            label: "Undo",
-            onClick: () => restoreContact.mutate(id),
+        toastUndoableDelete({
+          count: 1,
+          name,
+          onUndo: () => {
+            restoreContact.mutate(id, {
+              onSuccess: () => navigate(`/contact/${id}`),
+              onError: (err) =>
+                toast.error(
+                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+            });
           },
-          duration: 8000,
         });
         navigate("/");
         if (onClose) onClose();
@@ -220,7 +248,7 @@ export const ContactProfile = ({
           />
 
           {/* ── Dupe Suggestion Banner ──────────────────────────────────── */}
-          <DupeBanner contactId={id} contactName={contact.name} />
+          <DupeBanner contactId={id} />
 
           {/* ── Two-Column Layout ───────────────────────────────────────── */}
           <div className="max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10">
@@ -263,7 +291,11 @@ export const ContactProfile = ({
                   </button>
                 </div>
 
-                {activeTab === "dossier" && <DossierTab contact={contact} />}
+                {activeTab === "dossier" && (
+                  <Suspense fallback={<DossierFallback />}>
+                    <DossierTab contact={contact} />
+                  </Suspense>
+                )}
 
                 {activeTab === "timeline" && (
                   <TimelineTab
@@ -290,42 +322,7 @@ export const ContactProfile = ({
           isOpen={isAvatarPickerOpen}
           onClose={() => setIsAvatarPickerOpen(false)}
           contactId={id}
-          contactName={contact.name}
-          currentAvatarUrl={contact.avatarUrl || undefined}
         />
-      )}
-
-      {/* ── Delete Confirmation Modal ─────────────────────────────────────── */}
-      {contact && (
-        <Modal
-          isOpen={showDeleteConfirm}
-          onClose={() => setShowDeleteConfirm(false)}
-          title="Delete Contact"
-        >
-          <div className="space-y-6">
-            <p className="text-on-surface-variant text-sm leading-relaxed">
-              Permanently delete{" "}
-              <span className="font-bold text-on-surface">{contact.name}</span>?
-              This action cannot be undone — all interactions, notes, and
-              attachments will be lost.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={deleteContact.isPending}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-error text-on-error hover:bg-error/90 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
-              >
-                {deleteContact.isPending ? "Deleting…" : "Delete Forever"}
-              </button>
-            </div>
-          </div>
-        </Modal>
       )}
     </>
   );

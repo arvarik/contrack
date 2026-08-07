@@ -16,7 +16,8 @@
 // =============================================================================
 
 import OpenAI from "openai";
-import type { AIProvider, ModelInfo } from "../provider.ts";
+import type { AIProvider, ModelInfo, ModelCapability } from "../provider.ts";
+import type { ModelClass } from "../routing/registry.ts";
 import type {
   AIGenerateOptions,
   AIGenerateResult,
@@ -45,6 +46,20 @@ const MODEL_MAP: Record<string, string> = {
 };
 
 const DEFAULT_MODEL_CLASS = "lite";
+
+/**
+ * Whether a model can use the Responses API `web_search` tool, which is how
+ * this adapter grounds research.
+ *
+ * OpenAI's list endpoint returns bare ids with no capability metadata at all,
+ * so like the chat/embeddings split above this is a name rule — and like that
+ * split it is reported with "guessed" confidence. Web search is available on
+ * the GPT-4o and later flagship families and the o-series reasoning models;
+ * the legacy 3.5 and instruct families cannot use tools this way.
+ */
+function supportsWebSearch(modelId: string): boolean {
+  return /^(gpt-4o|gpt-4\.1|gpt-[5-9]|o[3-9])/i.test(modelId);
+}
 
 // ---------------------------------------------------------------------------
 // Schema Translation (unchanged — OpenAI still needs nullable→anyOf)
@@ -113,15 +128,22 @@ export class OpenAIAdapter implements AIProvider {
       )
         continue;
       if (/^(gpt|o\d|chatgpt)/i.test(id)) {
+        const capabilities: ModelCapability[] = ["chat"];
+        if (supportsWebSearch(id)) capabilities.push("grounding");
         models.push({
           id,
           label: id,
-          capabilities: ["chat"],
+          capabilities,
           capabilityConfidence: "guessed",
         });
       }
     }
     return models;
+  }
+
+  /** OpenAI has fixed per-class models; no dynamic routing to preview. */
+  defaultModelFor(modelClass: ModelClass): string | undefined {
+    return MODEL_MAP[modelClass] ?? MODEL_MAP[DEFAULT_MODEL_CLASS];
   }
 
   /** Embeddings via /v1/embeddings. */

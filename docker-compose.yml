@@ -13,7 +13,12 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - AI_TIER=${AI_TIER:-FREE}
       - MAPBOX_API_KEY=${MAPBOX_API_KEY}
-      # Auth is ON by default in the image (AUTH_REQUIRED=true). Set your own
-      # token here, or read the generated one: docker logs contrack | grep token
-      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      # Auth is OFF by default. The published port is reachable by anything
+      # that can route to this host, so if that is more than the host itself,
+      # set AUTH_REQUIRED=true — the first visit walks you through creating an
+      # account, and everything already in the database is assigned to it.
+      - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
+      # Machine credential for scripts and MCP clients. Setting it also gates
+      # the instance. Generate one with: openssl rand -hex 32
+      - API_TOKEN=${API_TOKEN:-}
     restart: unless-stopped

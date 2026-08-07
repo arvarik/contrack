@@ -28,14 +28,6 @@ interface DashboardMetricsRow {
   newContacts30d: number;
 }
 
-/**
- * Discard the cached Daily Insight. Call this any time contact data is mutated
- * so the next dashboard/insight request regenerates with fresh CRM data.
- */
-export function invalidateDailyInsight(): void {
-  aiCache.invalidate("dailyInsight");
-}
-
 export const dashboardService = {
   getDashboardPayload() {
     const startMs = Date.now();

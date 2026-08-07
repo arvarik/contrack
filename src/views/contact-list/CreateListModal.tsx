@@ -91,10 +91,17 @@ export const CreateListModal = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Create List">
       <form onSubmit={handleSubmit} className="space-y-6 pt-2">
         <div>
-          <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-3">
+          <span
+            id="new-list-icon-label"
+            className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-3"
+          >
             Choose an Icon
-          </label>
-          <div className="grid grid-cols-7 gap-2">
+          </span>
+          <div
+            role="group"
+            aria-labelledby="new-list-icon-label"
+            className="grid grid-cols-7 gap-2"
+          >
             {ICON_OPTIONS.map((key) => {
               const active = icon === key;
               return (
@@ -117,10 +124,16 @@ export const CreateListModal = ({
           </div>
         </div>
         <div>
-          <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">
+          <label
+            htmlFor="new-list-name"
+            className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5"
+          >
             List Name
           </label>
           <input
+            id="new-list-name"
+            // Dialog the user opened to name a new list.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
             type="text"
             value={name}
@@ -143,7 +156,7 @@ export const CreateListModal = ({
           <button
             type="submit"
             disabled={!name.trim() || isPending}
-            className="ml-auto bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm"
+            className="ml-auto bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity text-sm disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
           >
             {isPending ? "Creating..." : "Create List"}
           </button>

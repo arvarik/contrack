@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { cn } from "../../lib/utils";
 import { DROPDOWN_MENU, DROPDOWN_ITEM } from "../../lib/styles";
 import { ChevronDown } from "lucide-react";
+import { activateOnKey } from "../../lib/a11y";
 
 export const CustomSelect = ({
   value,
@@ -44,11 +45,19 @@ export const CustomSelect = ({
 
       {isOpen && (
         <ul
+          role="listbox"
           className={cn(DROPDOWN_MENU, "min-w-[100px]")}
           onMouseDown={(e) => e.preventDefault()}
         >
           {options.map((opt) => (
             <li
+              aria-selected={opt === value}
+              onKeyDown={activateOnKey(() => {
+                onChange(opt);
+                setIsOpen(false);
+              })}
+              tabIndex={0}
+              role="option"
               key={opt}
               className={DROPDOWN_ITEM}
               onClick={() => {

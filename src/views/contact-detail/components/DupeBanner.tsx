@@ -28,14 +28,13 @@ import { ContactCard } from "../../dedupe/components/shared/ContactCard";
 
 interface DupeBannerProps {
   contactId: string;
-  contactName: string;
 }
 
 // =============================================================================
 // Component
 // =============================================================================
 
-export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
+export const DupeBanner = ({ contactId }: DupeBannerProps) => {
   const { data: suggestion, isLoading } = useSuggestionForContact(contactId);
   const dismiss = useDismissSuggestion();
   const merge = useMergeSuggestion();
@@ -106,7 +105,7 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
         <button
           onClick={handleDismiss}
           disabled={dismiss.isPending}
-          className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:opacity-50"
+          className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
         >
           Not the same
         </button>
@@ -139,7 +138,7 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
                   <ContactCard
                     contact={primary}
                     label="Primary (Keeper)"
-                    labelColor="text-emerald-600 bg-emerald-500/10"
+                    labelColor="text-success bg-emerald-500/10"
                     other={duplicate}
                     isPrimary
                   />
@@ -155,7 +154,7 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
                   <ContactCard
                     contact={duplicate}
                     label="Duplicate (Merges In)"
-                    labelColor="text-amber-600 bg-amber-500/10"
+                    labelColor="text-warning bg-amber-500/10"
                     other={primary}
                     onSetPrimary={() => setSwapped((s) => !s)}
                   />
@@ -176,7 +175,7 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
                 <button
                   onClick={handleDismiss}
                   disabled={dismiss.isPending}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-surface-container-low hover:bg-rose-500/8 rounded-xl text-sm font-bold text-on-surface-variant hover:text-rose-600 transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-surface-container-low hover:bg-rose-500/8 rounded-xl text-sm font-bold text-on-surface-variant hover:text-error transition-all disabled:text-on-surface-variant disabled:cursor-not-allowed"
                 >
                   <X className="w-4 h-4" />
                   Keep Separate
@@ -184,7 +183,7 @@ export const DupeBanner = ({ contactId, contactName }: DupeBannerProps) => {
                 <button
                   onClick={handleMerge}
                   disabled={merge.isPending}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
                 >
                   {merge.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

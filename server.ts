@@ -13,6 +13,7 @@ import { log } from "./server/utils/logger.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import { isAuthRequired } from "./server/middleware/auth.ts";
+import { countUsers } from "./server/services/authService.ts";
 import { startBackupSchedule } from "./server/services/backupService.ts";
 import { contactService } from "./server/services/contactService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
@@ -53,15 +54,21 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
 const HOST = process.env.HOST ?? "127.0.0.1";
 
 async function startServer() {
-  // Resolve auth config at boot so a generated token is logged immediately
-  // (Docker users read it from the container logs) rather than lazily on
-  // the first request.
+  // Report the auth posture at boot rather than leaving it to be discovered on
+  // the first request — "why is it asking me to sign in" and "why is it NOT"
+  // are both questions best answered by the startup log.
   if (isAuthRequired()) {
     log.info("Auth", "Authentication is ENABLED for /api and /uploads");
+    if (countUsers() === 0) {
+      log.info(
+        "Auth",
+        "No account exists yet — open the app to create one. Until then every request is refused.",
+      );
+    }
   } else if (HOST !== "127.0.0.1" && HOST !== "localhost") {
     log.warn(
       "Auth",
-      `Server binds ${HOST} with NO authentication — set AUTH_TOKEN or AUTH_REQUIRED=true`,
+      `Server binds ${HOST} with NO authentication — set AUTH_REQUIRED=true to require sign-in, or API_TOKEN for script access`,
     );
   }
 

@@ -101,13 +101,13 @@ const SortableRow = ({
           />
           {/* Primary indicator for first address */}
           {isAddress && idx === 0 && (
-            <span className="flex items-center gap-0.5 text-[9px] uppercase tracking-widest text-primary font-bold opacity-70">
+            <span className="flex items-center gap-0.5 text-[9px] uppercase tracking-widest text-primary font-bold">
               <MapPinIcon className="w-2.5 h-2.5" /> map pin
             </span>
           )}
           <button
             onClick={() => onRemove(idx)}
-            className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-rose-500 p-0.5 rounded transition-opacity shrink-0"
+            className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-error p-0.5 rounded transition-opacity shrink-0"
             title="Remove"
           >
             <X className="w-3 h-3" />
@@ -167,7 +167,7 @@ const AddressDisplay = ({ value }: { value: string }) => {
         <React.Fragment key={i}>
           <span className="inline whitespace-nowrap">{part}</span>
           {i < parts.length - 1 && (
-            <span className="text-on-surface-variant/50">, </span>
+            <span className="text-on-surface-variant">, </span>
           )}
         </React.Fragment>
       ))}
@@ -309,6 +309,9 @@ export const MultiValueField = ({
             className="text-[10px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none shrink-0 w-fit cursor-pointer flex items-center gap-1 relative z-10"
           />
           <input
+            aria-label={inputPlaceholder}
+            // Appears only after the user chooses to add a value.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
@@ -330,7 +333,7 @@ export const MultiValueField = ({
       ) : (
         <button
           onClick={() => setIsAdding(true)}
-          className="flex items-center gap-1 text-sm text-on-surface-variant opacity-50 italic text-left hover:opacity-80 transition-opacity py-0.5 group/add"
+          className="flex items-center gap-1 text-sm text-on-surface-variant italic text-left hover:text-primary transition-colors py-0.5 group/add"
         >
           {items.length === 0 ? (
             <span>{emptyPlaceholder}</span>

@@ -62,7 +62,7 @@ export const ResultCard = ({
             {match.name}
           </span>
           {isFallback && (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
               Keyword
             </span>
           )}
@@ -99,8 +99,8 @@ export const ResultCard = ({
         {/* AI Reason — plain render, no nested motion element */}
         {match.aiReason && (
           <div className="flex items-start gap-1.5 mt-1">
-            <Sparkles className="w-3.5 h-3.5 text-primary/60 shrink-0 mt-0.5" />
-            <span className="text-sm text-primary/80 italic leading-snug">
+            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+            <span className="text-sm text-primary italic leading-snug">
               {match.aiReason}
             </span>
           </div>

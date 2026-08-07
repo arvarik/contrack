@@ -17,23 +17,23 @@ interface SummaryBarProps {
 const TIER_LABELS: Record<string, { label: string; color: string }> = {
   FREE: {
     label: "Free Tier",
-    color: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
+    color: "bg-emerald-500/10 text-success ring-emerald-500/20",
   },
   PAID: {
     label: "Paid Tier",
-    color: "bg-blue-500/10 text-blue-400 ring-blue-500/20",
+    color: "bg-blue-500/10 text-info ring-blue-500/20",
   },
   MOCK: {
     label: "Mock Mode",
-    color: "bg-amber-500/10 text-amber-400 ring-amber-500/20",
+    color: "bg-amber-500/10 text-warning ring-amber-500/20",
   },
   OPENAI: {
     label: "OpenAI",
-    color: "bg-teal-500/10 text-teal-400 ring-teal-500/20",
+    color: "bg-teal-500/10 text-success ring-teal-500/20",
   },
   ANTHROPIC: {
     label: "Anthropic",
-    color: "bg-orange-500/10 text-orange-400 ring-orange-500/20",
+    color: "bg-orange-500/10 text-warning ring-orange-500/20",
   },
 };
 
@@ -125,10 +125,7 @@ export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
             </p>
           </motion.div>
         ) : (
-          <motion.div
-            key="empty"
-            className="text-on-surface-variant/70 text-sm"
-          >
+          <motion.div key="empty" className="text-on-surface-variant text-sm">
             Unable to load AI usage data.
           </motion.div>
         )}

@@ -16,12 +16,12 @@ export const MatchBadge = ({ type, confidence }: MatchBadgeProps) => {
     email: {
       icon: <Mail className="w-3.5 h-3.5" />,
       label: "Email Match",
-      color: "text-emerald-600 bg-emerald-500/10",
+      color: "text-success bg-emerald-500/10",
     },
     phone: {
       icon: <Phone className="w-3.5 h-3.5" />,
       label: "Phone Match",
-      color: "text-blue-600 bg-blue-500/10",
+      color: "text-info bg-blue-500/10",
     },
     ai: {
       icon: <Sparkles className="w-3.5 h-3.5" />,

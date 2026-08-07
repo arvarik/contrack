@@ -16,10 +16,9 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
-import { FileText, Sparkles, Trash2 } from "lucide-react";
+import { FileText, Sparkles } from "lucide-react";
 import { useCreateContact, useParseContactText } from "../../api";
 import type {
-  ContactUpdateData,
   ContactList as ContactListType,
   ParsedContactData,
 } from "../../types";
@@ -38,12 +37,8 @@ import { fallbackAvatarUrl } from "../../lib/avatar";
 
 interface ContactListModalsProps {
   // Bulk delete
-  isBulkDeleteConfirm: boolean;
-  onCloseBulkDelete: () => void;
-  selectedCount: number;
-  onBulkDelete: () => void;
-  isBulkDeletePending: boolean;
   // Add to list
+  selectedCount: number;
   isAddToListOpen: boolean;
   onCloseAddToList: () => void;
   lists: ContactListType[];
@@ -76,11 +71,7 @@ interface ContactListModalsProps {
 // =============================================================================
 
 export const ContactListModals = ({
-  isBulkDeleteConfirm,
-  onCloseBulkDelete,
   selectedCount,
-  onBulkDelete,
-  isBulkDeletePending,
   isAddToListOpen,
   onCloseAddToList,
   lists,
@@ -105,7 +96,6 @@ export const ContactListModals = ({
   // ── Smart paste + create contact state ────────────────────────────────
   const [smartPasteText, setSmartPasteText] = useState("");
   const [parsedData, setParsedData] = useState<ParsedContactData | null>(null);
-  const [isSmartPasteModalOpen, setIsSmartPasteModalOpen] = useState(false);
 
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
@@ -155,40 +145,12 @@ export const ContactListModals = ({
 
   return (
     <>
-      {/* ── Bulk Delete Confirm Modal ────────────────────────────────────── */}
-      <Modal
-        isOpen={isBulkDeleteConfirm}
-        onClose={onCloseBulkDelete}
-        title="Delete Contacts"
-      >
-        <div className="space-y-4 pt-2">
-          <p className="text-sm text-on-surface-variant leading-relaxed">
-            Permanently delete{" "}
-            <span className="font-bold text-on-surface">{selectedCount}</span>{" "}
-            contact{selectedCount !== 1 ? "s" : ""}? This will remove all their
-            interactions and data.{" "}
-            <span className="text-rose-500 font-bold">
-              This cannot be undone.
-            </span>
-          </p>
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onCloseBulkDelete}
-              className="flex-1 py-2.5 rounded-xl bg-surface-container font-bold text-sm text-on-surface hover:bg-surface-container-high transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onBulkDelete}
-              disabled={isBulkDeletePending}
-              className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              {isBulkDeletePending ? "Deleting..." : `Delete ${selectedCount}`}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/*
+        The bulk-delete confirmation modal used to live here. It has been
+        removed rather than reworded: delete is a soft delete into a 30-day
+        Trash, and the flow now deletes immediately and offers Undo in the
+        toast. See lib/undoToast for why that is the better trade.
+      */}
 
       {/* ── Add to List Modal ──────────────────────────────────────────── */}
       <Modal
@@ -211,7 +173,7 @@ export const ContactListModals = ({
               key={list.id}
               onClick={() => onBulkAddToList(list.id)}
               disabled={isBulkAddToListPending}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors text-left disabled:opacity-50"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors text-left disabled:text-on-surface-variant disabled:cursor-not-allowed"
             >
               <span className="text-primary">
                 <ListIcon icon={list.icon} className="w-4 h-4" />
@@ -247,8 +209,11 @@ export const ContactListModals = ({
       >
         <form onSubmit={handleCreateContact} className="space-y-4 pt-2">
           <div>
-            <label className={FORM_LABEL}>Full Name *</label>
+            <label htmlFor="new-contact-name" className={FORM_LABEL}>
+              Full Name *
+            </label>
             <input
+              id="new-contact-name"
               required
               name="name"
               type="text"
@@ -259,8 +224,11 @@ export const ContactListModals = ({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={FORM_LABEL}>Role</label>
+              <label htmlFor="new-contact-role" className={FORM_LABEL}>
+                Role
+              </label>
               <input
+                id="new-contact-role"
                 name="role"
                 type="text"
                 defaultValue={(pd?.role as string) || ""}
@@ -269,8 +237,11 @@ export const ContactListModals = ({
               />
             </div>
             <div>
-              <label className={FORM_LABEL}>Company</label>
+              <label htmlFor="new-contact-company" className={FORM_LABEL}>
+                Company
+              </label>
               <input
+                id="new-contact-company"
                 name="company"
                 type="text"
                 defaultValue={(pd?.company as string) || ""}
@@ -281,8 +252,11 @@ export const ContactListModals = ({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={FORM_LABEL}>Email</label>
+              <label htmlFor="new-contact-email" className={FORM_LABEL}>
+                Email
+              </label>
               <input
+                id="new-contact-email"
                 name="email"
                 type="email"
                 defaultValue={
@@ -298,8 +272,11 @@ export const ContactListModals = ({
               />
             </div>
             <div>
-              <label className={FORM_LABEL}>Phone</label>
+              <label htmlFor="new-contact-phone" className={FORM_LABEL}>
+                Phone
+              </label>
               <input
+                id="new-contact-phone"
                 name="phone"
                 type="tel"
                 defaultValue={
@@ -316,8 +293,11 @@ export const ContactListModals = ({
             </div>
           </div>
           <div>
-            <label className={FORM_LABEL}>Location</label>
+            <label htmlFor="new-contact-location" className={FORM_LABEL}>
+              Location
+            </label>
             <input
+              id="new-contact-location"
               name="location"
               type="text"
               defaultValue={(pd?.location as string) || ""}
@@ -329,7 +309,7 @@ export const ContactListModals = ({
             <button
               type="submit"
               disabled={createContact.isPending}
-              className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm shadow-sm"
+              className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
             >
               {createContact.isPending ? "Saving..." : "Save Contact"}
             </button>
@@ -376,6 +356,9 @@ export const ContactListModals = ({
                 details for you.
               </p>
               <textarea
+                aria-label="Paste contact details"
+                // Dialog whose whole purpose is the pasted text.
+                // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
                 value={smartPasteText}
                 onChange={(e) => setSmartPasteText(e.target.value)}
@@ -403,7 +386,7 @@ export const ContactListModals = ({
                 }
               }}
               disabled={!smartPasteText.trim() || parseContactText.isPending}
-              className="bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm flex items-center gap-2"
+              className="bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity text-sm flex items-center gap-2 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
             >
               <FileText className="w-4 h-4" />
               {parseContactText.isPending ? "Extracting…" : "Extract Contact"}

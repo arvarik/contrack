@@ -225,9 +225,9 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
       <div className="px-5 py-4 space-y-4">
         {/* Contact Picker */}
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block">
             Who?
-          </label>
+          </span>
 
           {selectedContact ? (
             <div className="flex items-center gap-2 bg-surface-container-low rounded-xl px-3 py-2.5">
@@ -254,8 +254,9 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
           ) : (
             <div className="relative">
               <div className="flex items-center gap-2 bg-surface-container-low rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-primary/30 transition-all">
-                <Search className="w-4 h-4 text-on-surface-variant/50 shrink-0" />
+                <Search className="w-4 h-4 text-on-surface-variant shrink-0" />
                 <input
+                  aria-label="Search for a contact"
                   ref={contactInputRef}
                   value={contactQuery}
                   onChange={(e) => setContactQuery(e.target.value)}
@@ -263,7 +264,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                   placeholder="Search for a contact…"
                   // text-base on mobile prevents iOS Safari's auto-zoom on focus
                   // (which would otherwise rescale the whole bottom sheet).
-                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant/40"
+                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant"
                   autoComplete="off"
                   inputMode="search"
                 />
@@ -311,10 +312,17 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
 
         {/* Type Selector — pill chips, each ≥ 44px tall on touch */}
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block">
+          <span
+            id="quick-note-type-label"
+            className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block"
+          >
             Type
-          </label>
-          <div className="flex flex-wrap gap-2">
+          </span>
+          <div
+            role="group"
+            aria-labelledby="quick-note-type-label"
+            className="flex flex-wrap gap-2"
+          >
             {INTERACTION_TYPES.map(({ type, label, icon }) => (
               <button
                 key={type}
@@ -335,16 +343,20 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
 
         {/* Content Area */}
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block">
+          <label
+            htmlFor="quick-note-content"
+            className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block"
+          >
             What happened?
           </label>
           <textarea
+            id="quick-note-content"
             ref={contentRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Discussed Q3 targets and Series B timeline…"
             // text-base on mobile prevents iOS auto-zoom on focus.
-            className="w-full bg-surface-container-low rounded-xl px-3 py-3 text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant/40 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none resize-none transition-all"
+            className="w-full bg-surface-container-low rounded-xl px-3 py-3 text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant border-none focus:ring-2 focus:ring-primary/30 focus:outline-none resize-none transition-all"
             style={{
               fieldSizing: "content" as unknown as "fixed",
               minHeight: "88px",
@@ -356,7 +368,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
 
       {/* Footer */}
       <div className="px-5 py-3.5 bg-surface-container-low flex items-center justify-between sticky bottom-0 sm:static">
-        <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-on-surface-variant/50">
+        <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-on-surface-variant">
           <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-surface-container-high text-[10px] font-bold">
             ⌘
           </kbd>
@@ -370,7 +382,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
           onClick={handleSubmit}
           disabled={!canSubmit}
           // min-h-[44px] keeps the primary CTA touch-safe.
-          className="ml-auto min-h-[44px] flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary font-bold text-sm rounded-xl hover:bg-primary/90 active:bg-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="ml-auto min-h-[44px] flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary font-bold text-sm rounded-xl hover:bg-primary/90 active:bg-primary transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
         >
           {addInteraction.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />

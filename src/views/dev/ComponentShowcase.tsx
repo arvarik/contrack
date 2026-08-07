@@ -52,13 +52,11 @@ import {
   Settings,
   Plus,
   Trash2,
-  Edit2,
   Mail,
   Phone,
   MapPin,
   Sparkles,
   Users,
-  ArrowRight,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -80,7 +78,7 @@ const ColorSwatch = ({
     <span className="text-[10px] font-bold text-on-surface-variant text-center leading-tight">
       {name}
     </span>
-    <span className="text-[9px] font-mono text-on-surface-variant/50">
+    <span className="text-[9px] font-mono text-on-surface-variant">
       {variable}
     </span>
   </div>
@@ -133,19 +131,19 @@ export const ComponentShowcase = () => {
           <div className="space-y-4">
             <div>
               <span className={LABEL}>LABEL token</span>
-              <span className="ml-4 text-[10px] font-mono text-on-surface-variant/50">
+              <span className="ml-4 text-[10px] font-mono text-on-surface-variant">
                 LABEL
               </span>
             </div>
             <div>
               <span className={LABEL_PRIMARY}>LABEL_PRIMARY token</span>
-              <span className="ml-4 text-[10px] font-mono text-on-surface-variant/50">
+              <span className="ml-4 text-[10px] font-mono text-on-surface-variant">
                 LABEL_PRIMARY
               </span>
             </div>
             <div>
               <span className={SECTION_HEADING}>SECTION_HEADING token</span>
-              <span className="ml-4 text-[10px] font-mono text-on-surface-variant/50">
+              <span className="ml-4 text-[10px] font-mono text-on-surface-variant">
                 SECTION_HEADING
               </span>
             </div>
@@ -153,13 +151,13 @@ export const ComponentShowcase = () => {
               <h3 className={SECTION_HEADING_SPACED}>
                 <Sparkles className="w-4 h-4" /> Section Heading Spaced
               </h3>
-              <span className="text-[10px] font-mono text-on-surface-variant/50">
+              <span className="text-[10px] font-mono text-on-surface-variant">
                 SECTION_HEADING_SPACED
               </span>
             </div>
             <div>
               <h1 className={PAGE_TITLE}>Page Title</h1>
-              <span className="text-[10px] font-mono text-on-surface-variant/50">
+              <span className="text-[10px] font-mono text-on-surface-variant">
                 PAGE_TITLE (font-headline = Manrope)
               </span>
             </div>
@@ -311,13 +309,13 @@ export const ComponentShowcase = () => {
           <div>
             <h4 className={cn(LABEL, "mb-3")}>SPECIAL BUTTONS</h4>
             <div className="space-y-2">
-              <a
+              <button
+                type="button"
                 className={TEXT_LINK}
-                href="#"
                 onClick={(e) => e.preventDefault()}
               >
                 Text Link Style
-              </a>
+              </button>
               <div>
                 <button className={DANGER_BTN}>
                   <Trash2 className="w-3.5 h-3.5" /> Delete Permanently
@@ -376,31 +374,55 @@ export const ComponentShowcase = () => {
         <Section title="Form Inputs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className={FORM_LABEL}>Standard Form Input</label>
-              <input className={FORM_INPUT} placeholder="Type something..." />
+              <label htmlFor="demo-standard-input" className={FORM_LABEL}>
+                Standard Form Input
+              </label>
+              <input
+                id="demo-standard-input"
+                className={FORM_INPUT}
+                placeholder="Type something..."
+              />
             </div>
             <div>
-              <label className={FORM_LABEL}>AI Highlighted Input</label>
+              <label htmlFor="demo-ai-input" className={FORM_LABEL}>
+                AI Highlighted Input
+              </label>
               <input
+                id="demo-ai-input"
                 className={cn(FORM_INPUT, formInputHighlight(true))}
                 defaultValue="AI pre-filled"
               />
             </div>
             <div>
-              <label className={FORM_LABEL}>Search Input</label>
+              <label htmlFor="demo-search" className={FORM_LABEL}>
+                Search Input
+              </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-                <input className={SEARCH_INPUT} placeholder="Search... (/)" />
+                <input
+                  id="demo-search"
+                  className={SEARCH_INPUT}
+                  placeholder="Search... (/)"
+                />
               </div>
             </div>
             <div>
-              <label className={FORM_LABEL}>Editable Field</label>
-              <input className={EDITABLE_INPUT} defaultValue="Click to edit" />
+              <label htmlFor="demo-editable" className={FORM_LABEL}>
+                Editable Field
+              </label>
+              <input
+                id="demo-editable"
+                className={EDITABLE_INPUT}
+                defaultValue="Click to edit"
+              />
             </div>
           </div>
           <div>
-            <label className={FORM_LABEL}>CSS .input class</label>
+            <label htmlFor="demo-css-input" className={FORM_LABEL}>
+              CSS .input class
+            </label>
             <input
+              id="demo-css-input"
               className="input"
               placeholder="Global .input from index.css"
             />
@@ -471,8 +493,11 @@ export const ComponentShowcase = () => {
               Focus is trapped — Tab cycles within the dialog.
             </p>
             <div>
-              <label className={FORM_LABEL}>Example Input</label>
+              <label htmlFor="demo-focus" className={FORM_LABEL}>
+                Example Input
+              </label>
               <input
+                id="demo-focus"
                 className={FORM_INPUT}
                 placeholder="Focus should stay inside..."
               />

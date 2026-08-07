@@ -61,13 +61,3 @@ export function getDefaultStrategyForProvider(
       return "two-pass";
   }
 }
-
-/**
- * True when AI Search can run at all: either a grounding provider serves the
- * research capability, or SearXNG is configured.
- */
-export function isResearchAvailable(
-  researchProviderId: string | null,
-): boolean {
-  return researchProviderId !== null || getSearxngUrl() !== null;
-}

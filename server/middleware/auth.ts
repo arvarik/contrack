@@ -1,92 +1,119 @@
 // =============================================================================
-// Authentication — single-user bearer token
+// Authentication — accounts for people, tokens for machines
 // =============================================================================
-// The server has one owner. Auth is a single secret token, enforced when:
-//   - AUTH_TOKEN is set (the token), or
-//   - AUTH_REQUIRED=true (a token is generated once and persisted to
-//     DATA_DIR/auth-token — the Docker image sets this so containers are
-//     secure by default; the token is printed to the logs on first boot).
+// Two credential kinds, because they are used by different things and want
+// different properties:
 //
-// Clients authenticate with either:
-//   - Authorization: Bearer <token>   (scripts, MCP clients)
-//   - contrack_token cookie           (the SPA, set via POST /api/auth/login)
+//   • A SESSION belongs to a person. Username/email + password at a sign-in
+//     screen, exchanged for an HttpOnly cookie backed by a server-side row so
+//     it can actually be revoked.
 //
-// The cookie is HttpOnly + SameSite=Strict, which also serves as CSRF
-// protection for the cookie path. Comparison is timing-safe.
+//   • An API TOKEN belongs to a script. High-entropy, sent as
+//     `Authorization: Bearer <token>`, never expires, no login round-trip.
+//     MCP clients and cron jobs want this; making them drive a password form
+//     would be strictly worse.
+//
+// Enforcement is controlled by AUTH_REQUIRED (default false — see the note on
+// binding below). API_TOKEN also implies enforcement, because a token is only
+// meaningful on an instance that is gated.
+//
+// Every request carries a Principal describing who is asking. Today nothing
+// downstream filters by it beyond "are you allowed in at all", but it is the
+// seam multi-tenancy needs, and stamping ownership on new rows already uses it.
+//
+// Note on defaults: auth is off out of the box, including in Docker, because
+// the common case is a container reached only from its host. The server logs a
+// warning at startup when it binds a non-loopback address with auth off, which
+// is the case where that default is wrong.
 // =============================================================================
 
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import {
-  Router,
-  type Request,
-  type Response,
-  type NextFunction,
-} from "express";
-import { DATA_DIR } from "../utils/paths.ts";
+import type { Request, Response, NextFunction } from "express";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
-import { asyncHandler } from "../utils/asyncHandler.ts";
+import { resolveSession, type User } from "../services/authService.ts";
 
-const COOKIE_NAME = "contrack_token";
-const COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
-const TOKEN_FILE = path.join(DATA_DIR, "auth-token");
+export const COOKIE_NAME = "contrack_session";
 
-/** Cached auto-generated token (only used in AUTH_REQUIRED mode). */
-let generatedToken: string | null = null;
+/** The legacy cookie, cleared on sight so old browsers don't hold a dead one. */
+const LEGACY_COOKIE_NAME = "contrack_token";
+
+// =============================================================================
+// Principal
+// =============================================================================
+
+/** Who is making this request. */
+export type Principal =
+  /** Auth is disabled — everyone is let through, nobody is identified. */
+  | { kind: "anonymous" }
+  /** A signed-in person. */
+  | { kind: "user"; user: User; sessionId: string }
+  /** A script or MCP client presenting API_TOKEN. */
+  | { kind: "service" };
+
+// `Request.principal` is declared in server/types/express.d.ts, alongside the
+// other Request augmentations, rather than here.
+
+/** The signed-in user, or null for anonymous/service requests. */
+export function currentUser(req: Request): User | null {
+  return req.principal?.kind === "user" ? req.principal.user : null;
+}
+
+/** The session id backing this request, or null. */
+export function currentSessionId(req: Request): string | null {
+  return req.principal?.kind === "user" ? req.principal.sessionId : null;
+}
+
+// =============================================================================
+// Configuration
+// =============================================================================
 
 /**
- * Resolve the active auth token, or null when auth is disabled.
- * Reads env per call so tests can toggle enforcement; the generated-token
- * file is read/created once and cached.
+ * The machine token, or null when none is configured.
+ *
+ * Read per call rather than cached at import so tests can toggle enforcement
+ * by setting the environment variable.
  */
-export function resolveAuthToken(): string | null {
-  const envToken = process.env.AUTH_TOKEN?.trim();
-  if (envToken) return envToken;
+export function resolveApiToken(): string | null {
+  const token = process.env.API_TOKEN?.trim();
+  if (token) return token;
 
-  if (process.env.AUTH_REQUIRED === "true") {
-    if (generatedToken) return generatedToken;
-    try {
-      if (fs.existsSync(TOKEN_FILE)) {
-        generatedToken = fs.readFileSync(TOKEN_FILE, "utf8").trim();
-      } else {
-        generatedToken = crypto.randomBytes(32).toString("hex");
-        fs.writeFileSync(TOKEN_FILE, generatedToken + "\n", { mode: 0o600 });
-        log.info("Auth", "Generated new auth token (persisted to auth-token)");
-      }
-      // Printed on purpose: this is how a Docker user retrieves their token.
-      log.info(
-        "Auth",
-        `Access token: ${generatedToken} — sign in with it, or send it as a Bearer token.`,
-      );
-      return generatedToken;
-    } catch (err) {
-      log.error(
-        "Auth",
-        `AUTH_REQUIRED=true but the token file could not be read/created: ${String(err)}`,
-      );
-      // Fail closed: no request can authenticate, better than silently open.
-      return crypto.randomBytes(32).toString("hex");
-    }
+  // AUTH_TOKEN was this variable's name before accounts existed, when it was
+  // the only credential. Still honoured so an existing deployment does not
+  // break on upgrade; warned about once so it eventually goes away.
+  const legacy = process.env.AUTH_TOKEN?.trim();
+  if (legacy) {
+    warnLegacyTokenOnce();
+    return legacy;
   }
-
   return null;
 }
 
-/** True when auth is currently enforced. */
+let legacyWarned = false;
+function warnLegacyTokenOnce(): void {
+  if (legacyWarned) return;
+  legacyWarned = true;
+  log.warn(
+    "Auth",
+    "AUTH_TOKEN is deprecated — rename it to API_TOKEN. It now identifies machine clients (scripts, MCP); people sign in with an account.",
+  );
+}
+
+/** True when the instance requires a credential. */
 export function isAuthRequired(): boolean {
-  return resolveAuthToken() !== null;
+  return process.env.AUTH_REQUIRED === "true" || resolveApiToken() !== null;
 }
 
-function timingSafeEqualStrings(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
+/** Reset memoized warnings. Test seam. */
+export function __resetAuthWarnings(): void {
+  legacyWarned = false;
 }
 
-/** Minimal cookie parser (avoids a dependency for one cookie). */
+// =============================================================================
+// Cookie handling
+// =============================================================================
+
+/** Minimal cookie parser (avoids a dependency for two cookies). */
 function readCookie(req: Request, name: string): string | null {
   const header = req.headers.cookie;
   if (!header) return null;
@@ -100,24 +127,138 @@ function readCookie(req: Request, name: string): string | null {
   return null;
 }
 
-/** Extract the presented credential from header or cookie. */
-function presentedToken(req: Request): string | null {
-  const header = req.headers.authorization;
-  if (header?.startsWith("Bearer ")) return header.slice(7).trim();
+/**
+ * Cookie attributes.
+ *
+ * `SameSite=Strict` is the CSRF defence for the cookie path — a cross-site
+ * request simply does not carry the cookie, so no state-changing endpoint can
+ * be triggered from another origin.
+ *
+ * `Secure` is set only when the request arrived over HTTPS. Hard-coding it
+ * would break plain-HTTP local use (`http://localhost:3210`), which is the
+ * default way this app is run; omitting it entirely would drop the flag on
+ * the reverse-proxy deployments where it matters most.
+ */
+function cookieAttributes(req: Request, maxAgeSeconds: number): string {
+  const secure = isHttps(req) ? "; Secure" : "";
+  return `HttpOnly; SameSite=Strict; Path=/${secure}; Max-Age=${maxAgeSeconds}`;
+}
+
+function isHttps(req: Request): boolean {
+  if (req.secure) return true;
+  // Behind a reverse proxy Express only sees plain HTTP; the proxy reports the
+  // original scheme in this header. Trusted for the sole purpose of deciding
+  // whether to add `Secure`, where a wrong answer costs nothing an attacker
+  // could not already do on a plain-HTTP connection.
+  const forwarded = req.headers["x-forwarded-proto"];
+  const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return typeof value === "string" && value.split(",")[0].trim() === "https";
+}
+
+/** Set the session cookie on a response. */
+export function setSessionCookie(
+  req: Request,
+  res: Response,
+  secret: string,
+  expiresAt: string,
+): void {
+  const maxAge = Math.max(
+    0,
+    Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
+  );
+  res.append(
+    "Set-Cookie",
+    `${COOKIE_NAME}=${encodeURIComponent(secret)}; ${cookieAttributes(req, maxAge)}`,
+  );
+}
+
+/** Clear the session cookie, and the pre-accounts one alongside it. */
+export function clearSessionCookie(req: Request, res: Response): void {
+  res.append("Set-Cookie", `${COOKIE_NAME}=; ${cookieAttributes(req, 0)}`);
+  res.append(
+    "Set-Cookie",
+    `${LEGACY_COOKIE_NAME}=; ${cookieAttributes(req, 0)}`,
+  );
+}
+
+/** Read the session secret this request presented, if any. */
+export function presentedSessionSecret(req: Request): string | null {
   return readCookie(req, COOKIE_NAME);
 }
 
-export function isAuthenticated(req: Request): boolean {
-  const required = resolveAuthToken();
-  if (required === null) return true;
-  const presented = presentedToken(req);
-  return presented !== null && timingSafeEqualStrings(presented, required);
+// =============================================================================
+// Middleware
+// =============================================================================
+
+function timingSafeEqualStrings(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 /**
- * Gate middleware for /api/* and /uploads/*. No-op when auth is disabled.
- * The /api/auth/* endpoints are mounted BEFORE this middleware in app.ts,
- * so login/status stay reachable.
+ * Resolve the caller and hang it on the request. Runs for every request,
+ * including the pre-auth ones, so `/api/auth/status` can report who you are.
+ *
+ * Never rejects — deciding what to do about an unidentified caller is
+ * `requireAuth`'s job, and the auth routes need to run without one.
+ */
+export function attachPrincipal(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  // Bearer token → service client.
+  const header = req.headers.authorization;
+  const apiToken = resolveApiToken();
+  if (header?.startsWith("Bearer ") && apiToken) {
+    const presented = header.slice(7).trim();
+    if (timingSafeEqualStrings(presented, apiToken)) {
+      req.principal = { kind: "service" };
+      return next();
+    }
+  }
+
+  // Session cookie → person. Resolved even when auth is off, so that someone
+  // who signed in before enforcement was disabled is still *identified* —
+  // which is what stamps ownership on the rows they create and what makes
+  // /api/auth/me answer. Costs one indexed lookup, and only when a cookie is
+  // actually present.
+  const secret = presentedSessionSecret(req);
+  if (secret) {
+    const resolved = resolveSession(secret);
+    if (resolved) {
+      req.principal = {
+        kind: "user",
+        user: resolved.user,
+        sessionId: resolved.sessionId,
+      };
+      return next();
+    }
+  }
+
+  if (!isAuthRequired()) {
+    req.principal = { kind: "anonymous" };
+    return next();
+  }
+
+  // Identified as nobody on a gated instance. Left unset rather than marked
+  // anonymous, because "auth is off" and "you failed to authenticate" must not
+  // look alike to anything downstream.
+  next();
+}
+
+/** True when this request may proceed. */
+export function isAuthenticated(req: Request): boolean {
+  return req.principal !== undefined;
+}
+
+/**
+ * Gate for /api/* and /uploads/*. No-op when auth is disabled.
+ *
+ * The /api/auth/* endpoints are mounted BEFORE this in app.ts so sign-in and
+ * status stay reachable.
  */
 export function requireAuth(
   req: Request,
@@ -125,53 +266,29 @@ export function requireAuth(
   next: NextFunction,
 ): void {
   if (isAuthenticated(req)) return next();
-  next(
-    new AppError("Authentication required", 401, {
-      code: "UNAUTHORIZED",
-    }),
-  );
+  next(new AppError("Authentication required", 401, { code: "UNAUTHORIZED" }));
 }
 
-// =============================================================================
-// /api/auth router — status, login (sets cookie), logout
-// =============================================================================
-
-const router = Router();
-
-router.get("/status", (req, res) => {
-  res.json({
-    authRequired: isAuthRequired(),
-    authenticated: isAuthenticated(req),
-  });
-});
-
-router.post(
-  "/login",
-  asyncHandler(async (req, res) => {
-    const required = resolveAuthToken();
-    if (required === null) {
-      // Auth disabled — treat login as a no-op success.
-      return res.json({ success: true });
-    }
-    const supplied =
-      typeof req.body?.token === "string" ? req.body.token.trim() : "";
-    if (!supplied || !timingSafeEqualStrings(supplied, required)) {
-      throw new AppError("Invalid token", 401, { code: "UNAUTHORIZED" });
-    }
-    res.setHeader(
-      "Set-Cookie",
-      `${COOKIE_NAME}=${encodeURIComponent(supplied)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
+/**
+ * Gate for endpoints that need a person rather than any valid credential —
+ * profile edits, password changes, session management. A service token is a
+ * shared secret with no account behind it, so there is no "your password" for
+ * it to change.
+ */
+export function requireUser(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  if (req.principal?.kind === "user") return next();
+  if (req.principal?.kind === "service") {
+    return next(
+      new AppError(
+        "This endpoint needs a signed-in account, not an API token.",
+        403,
+        { code: "USER_REQUIRED" },
+      ),
     );
-    res.json({ success: true });
-  }),
-);
-
-router.post("/logout", (_req, res) => {
-  res.setHeader(
-    "Set-Cookie",
-    `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,
-  );
-  res.json({ success: true });
-});
-
-export const authRouter = router;
+  }
+  next(new AppError("Authentication required", 401, { code: "UNAUTHORIZED" }));
+}

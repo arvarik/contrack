@@ -14,13 +14,13 @@ import type { FacetFilter } from "../../hooks/useQueryTokenizer";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FIELD_COLORS: Record<string, string> = {
-  role: "bg-blue-500/15 text-blue-600 ring-blue-500/20",
-  company: "bg-violet-500/15 text-violet-600 ring-violet-500/20",
-  location: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/20",
-  industry: "bg-amber-500/15 text-amber-600 ring-amber-500/20",
+  role: "bg-blue-500/15 text-info ring-blue-500/20",
+  company: "bg-violet-500/15 text-info ring-violet-500/20",
+  location: "bg-emerald-500/15 text-success ring-emerald-500/20",
+  industry: "bg-amber-500/15 text-warning ring-amber-500/20",
   tag: "bg-pink-500/15 text-pink-600 ring-pink-500/20",
-  score: "bg-orange-500/15 text-orange-600 ring-orange-500/20",
-  updated: "bg-teal-500/15 text-teal-600 ring-teal-500/20",
+  score: "bg-orange-500/15 text-warning ring-orange-500/20",
+  updated: "bg-teal-500/15 text-success ring-teal-500/20",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

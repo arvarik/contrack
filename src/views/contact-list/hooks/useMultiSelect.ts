@@ -10,18 +10,21 @@
  */
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { toastUndoableDelete } from "../../../lib/undoToast";
 import {
   useBulkDeleteContacts,
+  useBulkRestoreContacts,
   useBulkUpdateContacts,
   useBulkAddToList,
 } from "../../../api";
-import type { Contact, ContactUpdateData } from "../../../types";
+import type { Contact } from "../../../types";
 
 export function useMultiSelect(filteredContacts: Contact[]) {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const bulkDelete = useBulkDeleteContacts();
+  const bulkRestore = useBulkRestoreContacts();
   const bulkUpdate = useBulkUpdateContacts();
   const bulkAddToList = useBulkAddToList();
 
@@ -55,11 +58,27 @@ export function useMultiSelect(filteredContacts: Contact[]) {
 
   // ── Bulk Actions ──────────────────────────────────────────────────────
 
+  /**
+   * Delete now, offer undo — no confirmation dialog.
+   *
+   * This is a soft delete into a 30-day Trash, so a modal asking "are you
+   * sure?" charges every correct deletion for a mistake that is already
+   * recoverable. See lib/undoToast.
+   */
   const handleBulkDelete = useCallback(() => {
     const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
       onSuccess: ({ count }) => {
-        toast.success(`Deleted ${count} contact${count !== 1 ? "s" : ""}`);
+        toastUndoableDelete({
+          count,
+          onUndo: () =>
+            bulkRestore.mutate(ids, {
+              onError: (err) =>
+                toast.error(
+                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+            }),
+        });
         exitSelectMode();
       },
       onError: (err) =>
@@ -67,7 +86,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
           `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
         ),
     });
-  }, [selectedIds, bulkDelete, exitSelectMode]);
+  }, [selectedIds, bulkDelete, bulkRestore, exitSelectMode]);
 
   const handleBulkArchive = useCallback(() => {
     const ids = Array.from(selectedIds) as string[];

@@ -115,13 +115,16 @@ export const BulkEditFieldModal = ({
 
         {/* Field selector */}
         <div>
-          <label className={cn(LABEL, "block mb-2")}>Field to Edit</label>
+          <span id="bulk-edit-field-label" className={cn(LABEL, "block mb-2")}>
+            Field to Edit
+          </span>
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setFieldDropdownOpen((v) => !v)}
               aria-haspopup="listbox"
               aria-expanded={fieldDropdownOpen}
+              aria-labelledby="bulk-edit-field-label"
               // min-h-[44px] keeps this control touch-safe.
               className="w-full min-h-[44px] flex items-center justify-between px-4 py-2.5 rounded-xl bg-surface-container-low text-sm font-semibold text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest transition-colors"
             >
@@ -175,9 +178,14 @@ export const BulkEditFieldModal = ({
 
         {/* Value input */}
         <div>
-          <label className={cn(LABEL, "block mb-2")}>New Value</label>
+          <label htmlFor="bulk-edit-value" className={cn(LABEL, "block mb-2")}>
+            New Value
+          </label>
           <input
+            id="bulk-edit-value"
             key={selectedField.key}
+            // Dialog the user opened to type a value.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
             type={selectedField.type}
             inputMode={selectedField.type === "number" ? "numeric" : "text"}
@@ -221,7 +229,7 @@ export const BulkEditFieldModal = ({
           <button
             onClick={handleApply}
             disabled={!value.trim() || isPending}
-            className="flex-1 min-h-[44px] py-3 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 active:opacity-100 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2"
+            className="flex-1 min-h-[44px] py-3 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 active:opacity-100 transition-opacity flex items-center justify-center gap-2 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
           >
             <Pencil className="w-4 h-4" />
             {isPending ? "Applying…" : "Apply to All"}

@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import fs from "fs";
-import path from "path";
 import { resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
@@ -22,11 +21,8 @@ import {
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
-import { buildSmartAvatarUrl } from "../utils/smartAvatar.ts";
-import {
-  generateAndStoreEmbedding,
-  generateAndStoreBulkEmbeddings,
-} from "./dedupe/embeddings.ts";
+import { buildAvatarUrl } from "./avatarService.ts";
+import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
 import { embedContact } from "./search/localEmbeddings.ts";
 import { generateSearchExpansion } from "../ai/aiService.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
@@ -205,7 +201,7 @@ export const contactService = {
 
     // Smart avatar: if no avatar was provided, generate a gender-aware one
     if (!values.avatarUrl && body.name) {
-      values.avatarUrl = buildSmartAvatarUrl(body.name);
+      values.avatarUrl = buildAvatarUrl(body.name);
     }
 
     const txn = sqlite.transaction(() => {
@@ -309,7 +305,7 @@ export const contactService = {
 
           // Smart avatar: gender-aware DiceBear URL if no avatar was provided
           if (!values.avatarUrl && c.name) {
-            values.avatarUrl = buildSmartAvatarUrl(c.name);
+            values.avatarUrl = buildAvatarUrl(c.name);
           }
 
           db.insert(schema.contacts).values(values).run();
@@ -638,7 +634,7 @@ export const contactService = {
     return expired.length;
   },
 
-  updateAvatar(id: string, fileFilename: string, fileOriginalName: string) {
+  updateAvatar(id: string, fileFilename: string) {
     const avatarUrl = `/uploads/avatars/${fileFilename}`;
 
     const existing = sqlite

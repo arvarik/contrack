@@ -12,7 +12,6 @@ import {
   UserPlus,
   ArrowRight,
 } from "lucide-react";
-import Papa from "papaparse";
 import {
   parseVCard,
   parseLinkedInCSV,
@@ -22,7 +21,7 @@ import {
   type ImportedContact,
 } from "../lib/importers";
 import { useQueryClient } from "@tanstack/react-query";
-import { TAB_CONTAINER, tabItem, SECTION_BG } from "../lib/styles";
+import { TAB_CONTAINER, tabItem } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -109,7 +108,6 @@ export const ImportModal = ({
   onSuccess,
 }: ImportModalProps) => {
   const [activeTab, setActiveTab] = useState<ImportTab>("apple");
-  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<ImportPhase>("idle");
   const [progress, setProgress] = useState<StreamProgress | null>(null);
@@ -123,14 +121,12 @@ export const ImportModal = ({
     setProgress(null);
     setSummary(null);
     setError(null);
-    setIsUploading(false);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
     setError(null);
     setSummary(null);
     setPhase("importing");
@@ -213,7 +209,6 @@ export const ImportModal = ({
       setPhase("idle");
       setProgress(null);
     } finally {
-      setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -350,7 +345,7 @@ export const ImportModal = ({
                 Download the archive, extract it, and upload the{" "}
                 <strong>Connections.csv</strong> file below.
               </li>
-              <li className="text-xs text-on-surface-variant/70 mt-1">
+              <li className="text-xs text-on-surface-variant mt-1">
                 Fields imported: Name, Company, Position, Email, Profile URL,
                 Connection Date
               </li>
@@ -371,7 +366,7 @@ export const ImportModal = ({
               <li>
                 Upload the downloaded <strong>.csv</strong> file below.
               </li>
-              <li className="text-xs text-on-surface-variant/70 mt-1">
+              <li className="text-xs text-on-surface-variant mt-1">
                 Fields imported: Name, multiple Emails & Phones, Company, Role,
                 Address, Birthday, Notes, Website
               </li>
@@ -398,7 +393,7 @@ export const ImportModal = ({
                 Download, extract, and upload the <strong>friends.json</strong>{" "}
                 file below.
               </li>
-              <li className="text-xs text-on-surface-variant/70 mt-1">
+              <li className="text-xs text-on-surface-variant mt-1">
                 Note: Facebook only exports friend names and connection dates —
                 no emails or phone numbers.
               </li>
@@ -422,7 +417,7 @@ export const ImportModal = ({
             {/* Success header */}
             <div className="flex flex-col items-center text-center">
               <div className="bg-emerald-500/10 p-3 rounded-full mb-3">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
               <h3 className="font-headline font-bold text-lg text-on-surface">
                 Import Complete
@@ -437,7 +432,7 @@ export const ImportModal = ({
               {summary.autoMerged > 0 && (
                 <div className="flex items-center gap-3 px-5 py-3.5">
                   <div className="bg-emerald-500/10 p-2 rounded-lg">
-                    <GitMerge className="w-4 h-4 text-emerald-500" />
+                    <GitMerge className="w-4 h-4 text-success" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
@@ -453,7 +448,7 @@ export const ImportModal = ({
               {summary.needsReview > 0 && (
                 <div className="flex items-center gap-3 px-5 py-3.5">
                   <div className="bg-amber-500/10 p-2 rounded-lg">
-                    <Search className="w-4 h-4 text-amber-500" />
+                    <Search className="w-4 h-4 text-warning" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
@@ -572,13 +567,13 @@ export const ImportModal = ({
             ) : phase === "scanning" && progress?.autoMerged !== undefined ? (
               <p className="text-xs text-on-surface-variant mt-2">
                 {progress.autoMerged > 0 && (
-                  <span className="text-emerald-500 font-bold">
+                  <span className="text-success font-bold">
                     {progress.autoMerged} merged
                   </span>
                 )}
                 {progress.autoMerged > 0 && progress.needsReview! > 0 && " · "}
                 {progress.needsReview! > 0 && (
-                  <span className="text-amber-500 font-bold">
+                  <span className="text-warning font-bold">
                     {progress.needsReview} to review
                   </span>
                 )}
@@ -603,6 +598,7 @@ export const ImportModal = ({
             onClick={() => fileInputRef.current?.click()}
           >
             <input
+              aria-label="Choose a file to import"
               type="file"
               ref={fileInputRef}
               className="hidden"
@@ -623,7 +619,7 @@ export const ImportModal = ({
       </AnimatePresence>
 
       {error && (
-        <div className="mt-4 p-4 bg-red-500/10 text-red-500 rounded-xl flex items-center gap-3 text-sm font-medium">
+        <div className="mt-4 p-4 bg-red-500/10 text-error rounded-xl flex items-center gap-3 text-sm font-medium">
           <AlertCircle className="w-5 h-5 shrink-0" />
           {error}
         </div>

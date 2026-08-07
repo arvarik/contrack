@@ -41,6 +41,12 @@ import {
   useBulkUpdateContacts,
 } from "../../api";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  DENSITY_METRICS,
+  useListDensity,
+  type ListDensity,
+} from "../../hooks/useListDensity";
+import { AlphabetJumpButtons, AlphabetRail, bucketFor } from "./AlphabetRail";
 import type { Contact, ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
@@ -96,7 +102,7 @@ const FilterButton = ({
     {icon}
     {label}
     <span
-      className={`ml-0.5 text-[10px] ${active ? "text-primary/70" : "opacity-50"}`}
+      className={`ml-0.5 text-[10px] ${active ? "text-primary" : "opacity-50"}`}
     >
       {count}
     </span>
@@ -109,6 +115,7 @@ const FilterButton = ({
 
 interface ContactRowWrapperProps {
   contact: Contact;
+  density: ListDensity;
   active: boolean;
   isFlashing: boolean;
   isSelectMode: boolean;
@@ -123,6 +130,7 @@ interface ContactRowWrapperProps {
 const ContactRowWrapper = React.memo(
   ({
     contact,
+    density,
     active,
     isFlashing,
     isSelectMode,
@@ -173,18 +181,29 @@ const ContactRowWrapper = React.memo(
 
     return (
       <div
+        // Presentational: the interactive element is the <Link> inside
+        // ContactListItem. Enter on that link fires a click that bubbles to
+        // this handler, so keyboard users record a visit without this wrapper
+        // needing to be focusable itself.
+        role="presentation"
         onContextMenu={(e) => handleContextMenu(e, contextItems)}
         onClick={() => recordVisit(contact.id)}
         {...longPress}
         className={cn(
           "rounded-xl transition-all duration-300",
           isFlashing &&
-            "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,158,219,0.2)]",
+            "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,113,156,0.2)]",
         )}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "1px 72px" }}
+        style={{
+          contentVisibility: "auto",
+          // Must track the real row height, or `content-visibility` reserves
+          // the wrong space for off-screen rows and the scrollbar lurches.
+          containIntrinsicSize: `1px ${DENSITY_METRICS[density].rowHeight}px`,
+        }}
       >
         <ContactListItem
           contact={contact}
+          density={density}
           active={active}
           isSelectMode={isSelectMode}
           isSelected={isSelected}
@@ -200,7 +219,7 @@ const ContactRowWrapper = React.memo(
 // ---------------------------------------------------------------------------
 
 export const ContactList = () => {
-  const { data: contacts = [], isLoading, refetch } = useContacts();
+  const { data: contacts = [], isLoading, isError, refetch } = useContacts();
 
   const { data: lists = [] } = useLists();
   const { id } = useParams();
@@ -263,7 +282,6 @@ export const ContactList = () => {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [isAddToListOpen, setIsAddToListOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
-  const [isBulkDeleteConfirm, setIsBulkDeleteConfirm] = useState(false);
 
   const createList = useCreateList();
   const reorderLists = useReorderLists();
@@ -350,13 +368,92 @@ export const ContactList = () => {
     [recentIds, contacts, recentLimit],
   );
 
+  // ── Density ─────────────────────────────────────────────────────────
+  const { density, metrics } = useListDensity();
+
   // ── Virtualization ──────────────────────────────────────────────────
+  /**
+   * How far the virtual list starts below the top of the scroll container.
+   *
+   * The "Recent" block and the pull-to-refresh indicator live inside the same
+   * scroller, above the virtual list. Without telling the virtualizer about
+   * that gap, its offsets are correct *relative to its own container* — so
+   * rows render in the right place — but `scrollToIndex` computes a scrollTop
+   * as if the list began at the top of the scroller, and every jump lands
+   * short by exactly the height of whatever is above it. That is invisible
+   * until something actually jumps, which is why the alphabet rail is what
+   * surfaced it.
+   */
+  const virtualListRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
   const rowVirtualizer = useVirtualizer({
     count: filteredContacts.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 72, // Estimated height of a row + gap (64px + 8px)
+    scrollMargin,
+    // Only an estimate — rows are measured for real by `measureElement`
+    // below — but it must track density or the scrollbar jumps as the user
+    // scrolls into rows that have not been measured yet.
+    estimateSize: () => metrics.rowHeight,
     overscan: 5, // Render 5 items outside viewport for smooth scrolling
   });
+
+  React.useLayoutEffect(() => {
+    const list = virtualListRef.current;
+    const scroller = scrollRef.current;
+    if (!list || !scroller) return;
+    const offset =
+      list.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+    setScrollMargin((previous) =>
+      Math.abs(previous - offset) > 1 ? offset : previous,
+    );
+    // Recomputed whenever the block above the list can change height: the
+    // Recent row count, its preference, the density of those rows, and
+    // whether a search collapses the section entirely.
+  }, [recentContacts.length, recentLimit, density, searchQuery, scrollRef]);
+
+  // ── Alphabet rail ───────────────────────────────────────────────────
+  // Only meaningful when the list is actually alphabetical, and only worth
+  // the screen width once scrolling is a chore.
+  const showAlphabetRail =
+    sortBy === "name" && !searchQuery && filteredContacts.length >= 15;
+
+  /** Bucket → index of its first contact. Rebuilt only when the list changes. */
+  const bucketIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!showAlphabetRail) return map;
+    filteredContacts.forEach((contact, i) => {
+      const bucket = bucketFor(contact.name);
+      if (!map.has(bucket)) map.set(bucket, i);
+    });
+    return map;
+  }, [filteredContacts, showAlphabetRail]);
+
+  /**
+   * Which letter is at the top of the viewport, for the rail's highlight.
+   *
+   * Derived from the virtualizer's own first visible item rather than from a
+   * scroll listener, so it cannot drift out of step with what is rendered.
+   */
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const activeBucket = showAlphabetRail
+    ? (() => {
+        const first = virtualItems[0];
+        const contact = first ? filteredContacts[first.index] : undefined;
+        return contact ? bucketFor(contact.name) : null;
+      })()
+    : null;
+
+  const jumpToIndex = useCallback(
+    (index: number) => {
+      // By index, never by offset: offsets for unmeasured rows are estimates,
+      // and jumping to one lands in the wrong place.
+      rowVirtualizer.scrollToIndex(index, { align: "start" });
+    },
+    [rowVirtualizer],
+  );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -471,6 +568,7 @@ export const ContactList = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
             <input
+              aria-label="Search contacts"
               id="search-input"
               type="text"
               placeholder={
@@ -569,201 +667,227 @@ export const ContactList = () => {
           </div>
         )}
       </div>
-      {/* Contact list */}
-      <div
-        ref={listScrollRef}
-        className="flex-1 overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 scrollbar-hide"
-      >
-        {/* Pull-to-refresh indicator — mobile only */}
-        <PullIndicator
-          isPulling={isPulling}
-          isRefreshing={isRefreshing}
-          progress={pullProgress}
-          pullDistance={pullDistance}
-        />
+      {/*
+        Contact list.
 
-        {isLoading && (
-          <div className="px-2 py-3 space-y-1">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
-                style={{ animationDelay: `${i * 60}ms` }}
-              >
-                <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
-                  <div className="h-3 bg-surface-container rounded-full w-2/5" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        The wrapper exists so the alphabet rail can be positioned against the
+        *visible* list area. Rendered inside the scroller, an absolutely
+        positioned rail resolves its `top-0 bottom-0` against the full scroll
+        height and then scrolls away with the content — so it both disappears
+        and maps pointer positions against a box thousands of pixels tall.
+      */}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={listScrollRef}
+          className="h-full overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 scrollbar-hide"
+        >
+          {/* Pull-to-refresh indicator — mobile only */}
+          <PullIndicator
+            isPulling={isPulling}
+            isRefreshing={isRefreshing}
+            progress={pullProgress}
+            pullDistance={pullDistance}
+          />
 
-        {/* Empty state: 0 contacts total (onboarding) */}
-        {!isLoading && activeContactCount === 0 && (
-          <div className="flex flex-col items-center justify-center h-64 text-center gap-4 p-6">
-            <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
-              <Users className="w-8 h-8 text-primary/60" />
-            </div>
-            <div>
-              <p className="font-bold text-base">Your network is empty</p>
-              <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-[200px] mx-auto">
-                Add your first contact to get started
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 w-full max-w-[200px]">
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
-              >
-                <UserPlus className="w-4 h-4" />
-                Add Contact{" "}
-                <kbd className="hidden sm:inline text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">
-                  N
-                </kbd>
-              </button>
-              <button
-                onClick={() => setIsSmartPasteOpen(true)}
-                className="btn-secondary flex items-center justify-center gap-2 text-sm py-2.5"
-              >
-                <Sparkles className="w-4 h-4" />
-                Smart Paste{" "}
-                <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">
-                  V
-                </kbd>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Empty state: search/filter has no results */}
-        {!isLoading &&
-          activeContactCount > 0 &&
-          filteredContacts.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
-              <Search className="w-8 h-8 text-on-surface-variant/30" />
-              <div>
-                <p className="font-bold text-sm">
-                  {searchQuery
-                    ? `No results for "${searchQuery}"`
-                    : "No contacts in this list"}
-                </p>
-                {searchQuery && (
-                  <p className="text-xs text-on-surface-variant mt-1">
-                    Try the AI search for deeper results
-                  </p>
-                )}
-              </div>
-              {searchQuery && (
-                <button
-                  onClick={() =>
-                    navigate(`/search?q=${encodeURIComponent(searchQuery)}`)
-                  }
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+          {isLoading && (
+            <div className="px-2 py-3 space-y-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
+                  style={{ animationDelay: `${i * 60}ms` }}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Search with AI
-                </button>
-              )}
+                  <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
+                    <div className="h-3 bg-surface-container rounded-full w-2/5" />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-        {/* ── Recent contacts strip ─────────────────────────────────────── */}
-        {!isLoading &&
-          !searchQuery &&
-          filterMode === "all" &&
-          recentContacts.length > 0 && (
-            <div className="mb-3">
-              <div className="flex items-center gap-1.5 px-1 mb-1.5">
-                <Clock className="w-3 h-3 text-on-surface-variant/50" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
-                  Recent
-                </span>
+          {/*
+          Empty state: 0 contacts total (onboarding).
+
+          Gated on `!isError` because a failed fetch also produces zero
+          contacts, and telling someone their network is empty when the server
+          merely went away is the most alarming thing this app could say. The
+          ConnectionBanner explains that case instead.
+        */}
+          {!isLoading && !isError && activeContactCount === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-center gap-4 p-6">
+              <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
+                <Users className="w-8 h-8 text-primary" />
               </div>
-              <div className="space-y-1">
-                {recentContacts.map((contact) => (
-                  <ContactListItem
-                    key={`recent-${contact.id}`}
+              <div>
+                <p className="font-bold text-base">Your network is empty</p>
+                <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-[200px] mx-auto">
+                  Add your first contact to get started
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Add Contact{" "}
+                  <kbd className="hidden sm:inline text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">
+                    N
+                  </kbd>
+                </button>
+                <button
+                  onClick={() => setIsSmartPasteOpen(true)}
+                  className="btn-secondary flex items-center justify-center gap-2 text-sm py-2.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Smart Paste{" "}
+                  <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">
+                    V
+                  </kbd>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty state: search/filter has no results */}
+          {!isLoading &&
+            activeContactCount > 0 &&
+            filteredContacts.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
+                <Search className="w-8 h-8 text-on-surface-variant/30" />
+                <div>
+                  <p className="font-bold text-sm">
+                    {searchQuery
+                      ? `No results for "${searchQuery}"`
+                      : "No contacts in this list"}
+                  </p>
+                  {searchQuery && (
+                    <p className="text-xs text-on-surface-variant mt-1">
+                      Try the AI search for deeper results
+                    </p>
+                  )}
+                </div>
+                {searchQuery && (
+                  <button
+                    onClick={() =>
+                      navigate(`/search?q=${encodeURIComponent(searchQuery)}`)
+                    }
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Search with AI
+                  </button>
+                )}
+              </div>
+            )}
+
+          {/* ── Recent contacts strip ─────────────────────────────────────── */}
+          {!isLoading &&
+            !searchQuery &&
+            filterMode === "all" &&
+            recentContacts.length > 0 && (
+              <div className="mb-3">
+                <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                  <Clock className="w-3 h-3 text-on-surface-variant" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Recent
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {recentContacts.map((contact) => (
+                    <ContactListItem
+                      key={`recent-${contact.id}`}
+                      contact={contact}
+                      density={density}
+                      active={id === contact.id}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(contact.id)}
+                      onToggleSelect={toggleSelect}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
+              </div>
+            )}
+
+          <div
+            ref={virtualListRef}
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+              // Keep rows clear of the rail rather than letting it sit on top of
+              // a truncated name.
+              paddingRight: showAlphabetRail ? "1.5rem" : undefined,
+            }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const contact = filteredContacts[virtualItem.index];
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+                    paddingBottom: "8px", // Replaces space-y-2
+                  }}
+                >
+                  <ContactRowWrapper
                     contact={contact}
+                    density={density}
                     active={id === contact.id}
+                    isFlashing={flashId === contact.id}
                     isSelectMode={isSelectMode}
                     isSelected={selectedIds.has(contact.id)}
                     onToggleSelect={toggleSelect}
+                    handleContextMenu={handleContextMenu}
+                    recordVisit={recordVisit}
+                    archiveContact={handleArchiveContact}
+                    navigate={navigate}
                   />
-                ))}
-              </div>
-              <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
 
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: "100%",
-            position: "relative",
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-            const contact = filteredContacts[virtualItem.index];
-            return (
-              <div
-                key={virtualItem.key}
-                data-index={virtualItem.index}
-                ref={rowVirtualizer.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualItem.start}px)`,
-                  paddingBottom: "8px", // Replaces space-y-2
-                }}
-              >
-                <ContactRowWrapper
-                  contact={contact}
-                  active={id === contact.id}
-                  isFlashing={flashId === contact.id}
-                  isSelectMode={isSelectMode}
-                  isSelected={selectedIds.has(contact.id)}
-                  onToggleSelect={toggleSelect}
-                  handleContextMenu={handleContextMenu}
-                  recordVisit={recordVisit}
-                  archiveContact={handleArchiveContact}
-                  navigate={navigate}
-                />
-              </div>
-            );
-          })}
+          {/* Context menu — portal-rendered, shared across all rows */}
+          <ContextMenu {...contextMenu} onClose={closeContextMenu} />
         </div>
 
-        {/* Context menu — portal-rendered, shared across all rows */}
-        <ContextMenu {...contextMenu} onClose={closeContextMenu} />
+        {showAlphabetRail && (
+          <>
+            <AlphabetRail
+              index={bucketIndex}
+              activeBucket={activeBucket}
+              onJump={jumpToIndex}
+            />
+            <AlphabetJumpButtons index={bucketIndex} onJump={jumpToIndex} />
+          </>
+        )}
       </div>
       <AnimatePresence>
         {isSelectMode && selectedCount > 0 && (
           <BulkActionToolbar
-            selectedCount={selectedCount}
             isPending={isPending}
             onArchive={multiSelect.handleBulkArchive}
             onAddToList={() => setIsAddToListOpen(true)}
             onEditField={() => setIsBulkEditOpen(true)}
             onColorChange={multiSelect.handleBulkColorChange}
             onExportCSV={multiSelect.handleExportCSV}
-            onDelete={() => setIsBulkDeleteConfirm(true)}
+            onDelete={multiSelect.handleBulkDelete}
           />
         )}
       </AnimatePresence>
       {/* ── All Modals ───────────────────────────────────────────────── */}
       <ContactListModals
-        isBulkDeleteConfirm={isBulkDeleteConfirm}
-        onCloseBulkDelete={() => setIsBulkDeleteConfirm(false)}
         selectedCount={selectedCount}
-        onBulkDelete={() => {
-          multiSelect.handleBulkDelete();
-          setIsBulkDeleteConfirm(false);
-        }}
-        isBulkDeletePending={multiSelect.isBulkDeletePending}
         isAddToListOpen={isAddToListOpen}
         onCloseAddToList={() => setIsAddToListOpen(false)}
         lists={lists}

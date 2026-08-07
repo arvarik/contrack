@@ -3,20 +3,6 @@ import { ActionItem } from "../types";
 
 const API_BASE = "/api";
 
-export const useActionItems = (contactId?: string) => {
-  return useQuery({
-    queryKey: contactId ? ["actionItems", contactId] : ["actionItems"],
-    queryFn: async (): Promise<ActionItem[]> => {
-      const url = contactId
-        ? `${API_BASE}/contacts/${contactId}/action-items`
-        : `${API_BASE}/action-items`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch action items");
-      return res.json();
-    },
-  });
-};
-
 export const useCompletedActionItems = () => {
   return useQuery({
     queryKey: ["actionItems", "completed"],
@@ -38,35 +24,6 @@ export const useUrgentActionItemCount = () => {
     },
     // We poll this occasionally or rely on invalidation from mutations
     staleTime: 1000 * 60 * 5, // 5 mins
-  });
-};
-
-export const useAddActionItem = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      contactId,
-      data,
-    }: {
-      contactId: string;
-      data: { title: string; dueAt: string };
-    }): Promise<ActionItem> => {
-      const res = await fetch(
-        `${API_BASE}/contacts/${contactId}/action-items`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        },
-      );
-      if (!res.ok) throw new Error("Failed to create action item");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
   });
 };
 
@@ -104,24 +61,6 @@ export const useCompleteActionItem = () => {
         method: "PATCH",
       });
       if (!res.ok) throw new Error("Failed to complete action item");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-  });
-};
-
-export const useDeleteActionItem = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string): Promise<{ success: boolean }> => {
-      const res = await fetch(`${API_BASE}/action-items/${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete action item");
       return res.json();
     },
     onSuccess: () => {

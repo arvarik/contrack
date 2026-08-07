@@ -14,7 +14,7 @@
 
 import { sqlite, db } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
-import { eq } from "drizzle-orm";
+
 import crypto from "crypto";
 import type { HydratedContact, ChildRecordsPayload } from "./types.ts";
 

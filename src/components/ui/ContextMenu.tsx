@@ -115,14 +115,14 @@ export const ContextMenu = ({
                 className={[
                   "w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors text-left",
                   item.danger
-                    ? "text-rose-500 hover:bg-rose-500/10 disabled:opacity-40"
-                    : "text-on-surface hover:bg-surface-container-low disabled:opacity-40",
+                    ? "text-error hover:bg-rose-500/10 disabled:opacity-40"
+                    : "text-on-surface hover:bg-surface-container-low disabled:text-on-surface-variant disabled:cursor-not-allowed",
                 ].join(" ")}
               >
                 {item.icon && (
                   <span
                     className={
-                      item.danger ? "text-rose-400" : "text-on-surface-variant"
+                      item.danger ? "text-error" : "text-on-surface-variant"
                     }
                   >
                     {item.icon}

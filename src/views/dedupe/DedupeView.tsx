@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useMergeCluster } from "../../api";
-import type { DedupeScanMode, DedupeCluster } from "../../types";
+import type { DedupeScanMode } from "../../types";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { EMPTY_HERO, TAB_CONTAINER, tabItem } from "../../lib/styles";
@@ -227,7 +227,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   }[] = [
     {
       mode: "quick",
-      icon: <Shield className="w-5 h-5 text-emerald-500" />,
+      icon: <Shield className="w-5 h-5 text-success" />,
       title: "Quick Scan",
       desc: "Finds contacts with the same email, phone, or name.",
     },
@@ -239,7 +239,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     },
     {
       mode: "full",
-      icon: <Zap className="w-5 h-5 text-amber-500" />,
+      icon: <Zap className="w-5 h-5 text-warning" />,
       title: "Full Scan",
       desc: "Reanalyzes your entire network from scratch.",
     },
@@ -320,7 +320,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     {totalProcessed > 0 && (
                       <div className="flex items-center gap-3 text-xs text-on-surface-variant">
                         {mergedIds.size > 0 && (
-                          <span className="flex items-center gap-1 text-emerald-600">
+                          <span className="flex items-center gap-1 text-success">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             {mergedIds.size} merged
                           </span>
@@ -348,14 +348,14 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     <button
                       onClick={goPrev}
                       disabled={currentIndex === 0}
-                      className="p-1.5 rounded-lg hover:bg-surface-container-high disabled:opacity-30 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
                       onClick={goNext}
                       disabled={currentIndex >= totalActive - 1}
-                      className="p-1.5 rounded-lg hover:bg-surface-container-high disabled:opacity-30 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -639,7 +639,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     </div>
 
                     {/* Help text */}
-                    <p className="text-xs text-on-surface-variant/60 text-center mt-4">
+                    <p className="text-xs text-on-surface-variant text-center mt-4">
                       You can navigate away — the scan will continue in the
                       background
                     </p>
@@ -650,8 +650,8 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
               {/* ═══ Phase 3: Scan error ═══ */}
               {scanError && scan && (
                 <div className="flex flex-col items-center justify-center h-full">
-                  <AlertCircle className="w-12 h-12 text-rose-500 mb-4" />
-                  <p className="text-rose-500 font-bold">Scan failed</p>
+                  <AlertCircle className="w-12 h-12 text-error mb-4" />
+                  <p className="text-error font-bold">Scan failed</p>
                   <p className="text-sm text-on-surface-variant mt-1">
                     {scan.error}
                   </p>
@@ -682,7 +682,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     }}
                     className="p-6 bg-emerald-500/10 rounded-3xl mb-6"
                   >
-                    <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                    <CheckCircle2 className="w-16 h-16 text-success" />
                   </motion.div>
                   <h2 className="text-xl font-headline font-bold mb-2">
                     All clean!
@@ -720,7 +720,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                         }}
                         className="p-6 bg-emerald-500/10 rounded-3xl mb-6"
                       >
-                        <CheckCircle2 className="w-16 h-16 text-emerald-500" />
+                        <CheckCircle2 className="w-16 h-16 text-success" />
                       </motion.div>
                       <h2 className="text-xl font-headline font-bold mb-2">
                         All reviewed!
@@ -731,7 +731,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                           : "All clusters have been reviewed."}
                       </p>
                       {dismissed.size > 0 && (
-                        <p className="text-xs text-on-surface-variant/60 mb-4">
+                        <p className="text-xs text-on-surface-variant mb-4">
                           ({dismissed.size} cluster
                           {dismissed.size > 1 ? "s" : ""} kept separate)
                         </p>
@@ -854,7 +854,7 @@ function PhaseRow({
         className={cn(
           "shrink-0 transition-colors",
           status === "done"
-            ? "text-emerald-500"
+            ? "text-success"
             : status === "active"
               ? "text-primary"
               : "text-on-surface-variant/30",
@@ -875,7 +875,7 @@ function PhaseRow({
             ? "text-on-surface"
             : status === "active"
               ? "text-on-surface font-medium"
-              : "text-on-surface-variant/40",
+              : "text-on-surface-variant",
         )}
       >
         {label}
@@ -884,7 +884,7 @@ function PhaseRow({
         <span
           className={cn(
             "text-xs tabular-nums",
-            status === "done" ? "text-emerald-500" : "text-primary",
+            status === "done" ? "text-success" : "text-primary",
           )}
         >
           {detail}

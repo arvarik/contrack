@@ -67,6 +67,51 @@ describe("trash: soft delete → restore", () => {
     );
   });
 
+  it("bulk restore is the undo path for a bulk delete", async () => {
+    const a = await createContact({ name: "Undo Alpha" });
+    const b = await createContact({ name: "Undo Beta" });
+
+    await request(app)
+      .post("/api/contacts/bulk-delete")
+      .send({ ids: [a, b] })
+      .expect(200);
+    expect((await request(app).get(`/api/contacts/${a}`)).status).toBe(404);
+
+    const undo = await request(app)
+      .post("/api/trash/bulk-restore")
+      .send({ ids: [a, b] });
+    expect(undo.status).toBe(200);
+    expect(undo.body.count).toBe(2);
+
+    expect((await request(app).get(`/api/contacts/${a}`)).status).toBe(200);
+    expect((await request(app).get(`/api/contacts/${b}`)).status).toBe(200);
+  });
+
+  it("bulk restore skips ids that are not in the trash rather than failing", async () => {
+    // Undo has to be forgiving: a double-tap, or a batch where one contact was
+    // already restored by hand, must not throw away the rest of the recovery.
+    const trashed = await createContact({ name: "Half Restored" });
+    const untouched = await createContact({ name: "Still Here" });
+    await request(app).delete(`/api/contacts/${trashed}`);
+
+    const res = await request(app)
+      .post("/api/trash/bulk-restore")
+      .send({ ids: [trashed, untouched, "does-not-exist"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect((await request(app).get(`/api/contacts/${trashed}`)).status).toBe(
+      200,
+    );
+  });
+
+  it("bulk restore rejects an empty id list", async () => {
+    const res = await request(app)
+      .post("/api/trash/bulk-restore")
+      .send({ ids: [] });
+    expect(res.status).toBe(400);
+  });
+
   it("restore of a non-trashed contact 404s", async () => {
     const id = await createContact({ name: "Never Deleted" });
     const res = await request(app).post(`/api/trash/${id}/restore`);

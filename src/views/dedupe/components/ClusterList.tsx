@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import {
   CheckCircle2,
   Loader2,
@@ -19,6 +19,7 @@ import { cn } from "../../../lib/utils";
 import { toast } from "sonner";
 import { useMergeCluster, useMergeClusters } from "../../../api";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { activateOnKey } from "../../../lib/a11y";
 
 // =============================================================================
 // ClusterList — Expandable list of duplicate clusters with bulk merge
@@ -137,7 +138,7 @@ export const ClusterList = ({
   if (clusters.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center py-16">
-        <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
+        <CheckCircle2 className="w-12 h-12 text-success mb-4" />
         <h3 className="text-lg font-headline font-bold mb-2">All clean!</h3>
         <p className="text-sm text-on-surface-variant">
           No duplicate clusters remaining.
@@ -191,7 +192,7 @@ export const ClusterList = ({
           <button
             onClick={handleBulkMerge}
             disabled={mergeClusters.isPending}
-            className="flex items-center gap-2 px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
           >
             {mergeClusters.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -229,6 +230,9 @@ export const ClusterList = ({
               >
                 {/* Summary row */}
                 <div
+                  onKeyDown={activateOnKey(() => toggleExpand(cluster.id))}
+                  tabIndex={0}
+                  role="button"
                   className="flex items-center gap-3 px-5 py-4 cursor-pointer group"
                   onClick={() => toggleExpand(cluster.id)}
                 >
@@ -291,7 +295,7 @@ export const ClusterList = ({
                       {cluster.size}
                     </span>
                     {cluster.hasWeakLink && (
-                      <span className="text-xs font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                      <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-full">
                         Weak
                       </span>
                     )}
@@ -299,10 +303,10 @@ export const ClusterList = ({
                       className={cn(
                         "text-xs font-bold px-2.5 py-1 rounded-full tabular-nums",
                         cluster.aggregateConfidence >= 0.9
-                          ? "text-emerald-600 bg-emerald-500/10"
+                          ? "text-success bg-emerald-500/10"
                           : cluster.aggregateConfidence >= 0.7
                             ? "text-primary bg-primary/10"
-                            : "text-amber-600 bg-amber-500/10",
+                            : "text-warning bg-amber-500/10",
                       )}
                     >
                       {Math.round(cluster.aggregateConfidence * 100)}%
@@ -321,7 +325,7 @@ export const ClusterList = ({
                       });
                     }}
                     aria-label={`Skip cluster ${primary.name}`}
-                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-rose-600 rounded-full transition-colors"
+                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-full transition-colors"
                   >
                     Skip
                   </button>
@@ -334,13 +338,13 @@ export const ClusterList = ({
                     }}
                     disabled={mergeCluster.isPending}
                     aria-label={`Merge ${cluster.size} contacts in this cluster`}
-                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:opacity-50"
+                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
                   >
                     Merge
                   </button>
 
                   {/* Expand chevron */}
-                  <div className="shrink-0 text-on-surface-variant/40">
+                  <div className="shrink-0 text-on-surface-variant">
                     {isExpanded ? (
                       <ChevronUp className="w-4 h-4" />
                     ) : (
@@ -366,8 +370,8 @@ export const ClusterList = ({
                             className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3"
                             role="alert"
                           >
-                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-700 leading-relaxed">
+                            <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                            <p className="text-xs text-warning leading-relaxed">
                               <span className="font-bold">
                                 Large cluster ({cluster.size} contacts).
                               </span>{" "}
@@ -429,7 +433,7 @@ export const ClusterList = ({
                                   {contact.name}
                                 </span>
                                 {contact.id === primaryId && (
-                                  <Crown className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Crown className="w-3.5 h-3.5 text-success" />
                                 )}
                               </button>
                             ))}
@@ -441,7 +445,7 @@ export const ClusterList = ({
                           <ContactCard
                             contact={primary}
                             label="Primary (Keeper)"
-                            labelColor="text-emerald-600 bg-emerald-500/10"
+                            labelColor="text-success bg-emerald-500/10"
                             isPrimary
                           />
                           <div className="space-y-3">
@@ -450,7 +454,7 @@ export const ClusterList = ({
                                 key={dup.id}
                                 contact={dup}
                                 label="Merges In"
-                                labelColor="text-amber-600 bg-amber-500/10"
+                                labelColor="text-warning bg-amber-500/10"
                                 other={primary}
                                 onSetPrimary={() =>
                                   handleSetPrimary(cluster.id, dup.id)

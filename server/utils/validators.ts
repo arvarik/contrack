@@ -208,11 +208,6 @@ export const listUpdateSchema = z
     message: "At least one of name or icon is required",
   });
 
-/** Generic id-in-URL guard. Strips empty/whitespace ids that the router would otherwise pass straight through. */
-export const idParamSchema = z.object({
-  id: z.string().trim().min(1, "id is required"),
-});
-
 // ============================================================================
 // Middleware Factories
 // ============================================================================
@@ -237,32 +232,6 @@ function runOrThrow<T>(
 export const validateBody = (schema: z.ZodTypeAny) => {
   return (req: Request, _res: Response, next: NextFunction) => {
     req.body = runOrThrow(schema, req.body, "body");
-    next();
-  };
-};
-
-export const validateParams = (schema: z.ZodTypeAny) => {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    // Express params are a frozen-ish object on the request; mutate via assign
-    // rather than replacement so downstream code keeps working.
-    const parsed = runOrThrow<Record<string, string>>(
-      schema,
-      req.params,
-      "params",
-    );
-    Object.assign(req.params, parsed);
-    next();
-  };
-};
-
-export const validateQuery = (schema: z.ZodTypeAny) => {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    const parsed = runOrThrow<Record<string, unknown>>(
-      schema,
-      req.query,
-      "query",
-    );
-    Object.assign(req.query, parsed);
     next();
   };
 };

@@ -69,7 +69,7 @@ export const MentionList = forwardRef<
             </div>
             <span className="font-semibold truncate">{item.name}</span>
             {item.isGhost && (
-              <span className="ml-auto text-[10px] uppercase font-bold text-on-surface-variant/50">
+              <span className="ml-auto text-[10px] uppercase font-bold text-on-surface-variant">
                 Ghost
               </span>
             )}

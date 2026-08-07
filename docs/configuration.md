@@ -8,28 +8,29 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable                | Description                                                                                                                                                 | Default                 | Required |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------- |
-| `AI_PROVIDER`           | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                     | `gemini`                | No       |
-| `GEMINI_API_KEY`        | Google Gemini API key                                                                                                                                       | —                       | No       |
-| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                              | —                       | No       |
-| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                           | —                       | No       |
-| `AI_TIER`               | Rate limit profile: `FREE` or `PAID`                                                                                                                        | `FREE`                  | No       |
-| `APP_URL`               | Host URL for self-referential links                                                                                                                         | `http://localhost:3210` | No       |
-| `PORT`                  | Express listening port                                                                                                                                      | `3210`                  | No       |
-| `HOST`                  | Interface to bind. The server has no authentication, so it binds localhost by default; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`             | No       |
-| `CORS_ORIGIN`           | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                  | — (disabled)            | No       |
-| `DATA_DIR`              | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                   | project root            | No       |
-| `MAPBOX_API_KEY`        | Mapbox geocoding API key (higher accuracy)                                                                                                                  | —                       | No       |
-| `AUTH_TOKEN`            | Enables authentication: every `/api` and `/uploads` request must present this token (SPA sign-in, or `Authorization: Bearer`)                               | — (auth off)            | No       |
-| `AUTH_REQUIRED`         | `true` enforces auth with an auto-generated token (persisted to `DATA_DIR/auth-token`, printed in logs on first boot). Set by the Docker image              | `false`                 | No       |
-| `TRASH_RETENTION_DAYS`  | Days a deleted contact stays restorable before permanent purge                                                                                              | `30`                    | No       |
-| `BACKUP_INTERVAL_HOURS` | Automatic SQLite snapshot cadence (`0` disables)                                                                                                            | `24`                    | No       |
-| `BACKUP_KEEP`           | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                    | `7`                     | No       |
-| `AI_QUICK_MODEL`        | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                     | — (auto)                | No       |
-| `AI_DEEP_MODEL`         | Pin the Deep-tasks model                                                                                                                                    | — (auto)                | No       |
-| `AI_RESEARCH_MODEL`     | Pin the Web-research model                                                                                                                                  | — (auto)                | No       |
-| `AI_EMBEDDINGS_MODEL`   | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                      | — (built-in)            | No       |
+| Variable                | Description                                                                                                                                      | Default                 | Required |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | -------- |
+| `AI_PROVIDER`           | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                          | `gemini`                | No       |
+| `GEMINI_API_KEY`        | Google Gemini API key                                                                                                                            | —                       | No       |
+| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                   | —                       | No       |
+| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                | —                       | No       |
+| `AI_TIER`               | Rate limit profile: `FREE` or `PAID`                                                                                                             | `FREE`                  | No       |
+| `APP_URL`               | Host URL for self-referential links                                                                                                              | `http://localhost:3210` | No       |
+| `PORT`                  | Express listening port                                                                                                                           | `3210`                  | No       |
+| `HOST`                  | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`             | No       |
+| `CORS_ORIGIN`           | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                       | — (disabled)            | No       |
+| `DATA_DIR`              | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                        | project root            | No       |
+| `MAPBOX_API_KEY`        | Mapbox geocoding API key (higher accuracy)                                                                                                       | —                       | No       |
+| `AUTH_REQUIRED`         | `true` requires everyone to sign in with an account. First visit walks through creating one                                                      | `false`                 | No       |
+| `API_TOKEN`             | Machine credential for scripts and MCP clients (`Authorization: Bearer <token>`). Setting it also gates the instance                             | — (auth off)            | No       |
+| `AUTH_TOKEN`            | Deprecated alias for `API_TOKEN`, honoured with a startup warning                                                                                | —                       | No       |
+| `TRASH_RETENTION_DAYS`  | Days a deleted contact stays restorable before permanent purge                                                                                   | `30`                    | No       |
+| `BACKUP_INTERVAL_HOURS` | Automatic SQLite snapshot cadence (`0` disables)                                                                                                 | `24`                    | No       |
+| `BACKUP_KEEP`           | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                         | `7`                     | No       |
+| `AI_QUICK_MODEL`        | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                          | — (auto)                | No       |
+| `AI_DEEP_MODEL`         | Pin the Deep-tasks model                                                                                                                         | — (auto)                | No       |
+| `AI_RESEARCH_MODEL`     | Pin the Web-research model                                                                                                                       | — (auto)                | No       |
+| `AI_EMBEDDINGS_MODEL`   | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                           | — (built-in)            | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -160,21 +161,60 @@ Contrack uses **SQLite** in WAL (Write-Ahead Logging) mode for maximum local-fir
 
 ## Authentication & Remote Access
 
-Contrack is single-user. Auth is a single secret token:
+Contrack is single-account. There are two kinds of credential, because people
+and scripts want different things:
+
+|                | People                                    | Scripts, cron, MCP                             |
+| -------------- | ----------------------------------------- | ---------------------------------------------- |
+| Credential     | Username or email + password              | `API_TOKEN`                                    |
+| How it travels | HttpOnly session cookie                   | `Authorization: Bearer <token>`                |
+| Turned on by   | `AUTH_REQUIRED=true`                      | setting `API_TOKEN` (which also gates the app) |
+| Revocable      | Yes — per device, from Settings → Account | No; rotate the variable                        |
 
 - **Local (default):** no auth, server bound to `127.0.0.1` — nothing else on
   your machine or network can reach it.
-- **LAN / remote:** set `HOST=0.0.0.0` **and** `AUTH_TOKEN=<long random string>`
-  (or `AUTH_REQUIRED=true` to have one generated and printed on first boot).
-  The web app shows a sign-in screen; scripts and MCP clients send
-  `Authorization: Bearer <token>`.
-- **Docker:** auth is on by default (`AUTH_REQUIRED=true` in the image). Read
-  the generated token with `docker logs contrack | grep "Access token"`, or
-  set `AUTH_TOKEN` in your compose environment.
+- **LAN / remote:** set `HOST=0.0.0.0` **and** `AUTH_REQUIRED=true`. The first
+  visit shows a one-time setup screen that creates your account; everything
+  already in the database is assigned to it. After that the app asks you to
+  sign in.
+- **Docker:** auth is **off** by default, because the usual setup reaches the
+  container from the host only, or through a reverse proxy that authenticates
+  for it. The container binds `0.0.0.0`, though, so if you publish the port
+  anywhere your LAN can reach, set `AUTH_REQUIRED=true`. The server logs a
+  warning at startup whenever it binds a non-loopback address with auth off.
 
-The session cookie is HttpOnly + SameSite=Strict. For access outside your LAN,
-prefer a private overlay network (e.g. Tailscale) or a reverse proxy with TLS
-in front of the container — the app itself serves plain HTTP.
+Sessions are stored server-side and last 30 days. The cookie holds a random
+secret; the database stores only its SHA-256, so a leaked database (or one of
+the rotating backups) does not hand over live sessions. `Secure` is set
+whenever the request arrived over HTTPS, and `SameSite=Strict` is the CSRF
+defence. Changing your password ends every other session.
+
+Passwords are hashed with scrypt (N=2^16, r=8, p=1). The parameters are stored
+alongside each hash, so raising them later upgrades passwords silently on next
+sign-in rather than locking anyone out.
+
+**Forgot your password?** A self-hosted Contrack has no mail server, so there
+is no reset email. Recover by deleting the account row and letting the setup
+screen run again — your data is not attached to the deletion:
+
+```bash
+# Stop the container first so nothing is mid-write.
+docker stop contrack
+sqlite3 data/curator.db "
+  UPDATE contacts SET ownerId=NULL;  UPDATE lists SET ownerId=NULL;
+  UPDATE ai_invocations SET ownerId=NULL;  UPDATE dedupe_merge_log SET ownerId=NULL;
+  DELETE FROM sessions;  DELETE FROM users;"
+docker start contrack   # first visit shows the setup screen again
+```
+
+The `UPDATE`s are required, not optional: `ownerId` is `ON DELETE RESTRICT`, so
+SQLite refuses to delete an account that still owns contacts. That is
+deliberate — it means no stray `DELETE FROM users` can take your contacts with
+it. Un-owned rows are re-claimed by the next account you create.
+
+For access outside your LAN, prefer a private overlay network (e.g. Tailscale)
+or a reverse proxy with TLS in front of the container — the app itself serves
+plain HTTP.
 
 ## Data Lifecycle
 

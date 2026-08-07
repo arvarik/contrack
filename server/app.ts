@@ -27,8 +27,11 @@ import { aiStatsRouter } from "./routes/aiStats.ts";
 import { logosRouter } from "./routes/logos.ts";
 import { dataLifecycleRouter } from "./routes/dataLifecycle.ts";
 import { aiSettingsRouter } from "./routes/aiSettings.ts";
+import { avatarRouter } from "./routes/avatar.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
-import { authRouter, requireAuth } from "./middleware/auth.ts";
+import { attachPrincipal, requireAuth } from "./middleware/auth.ts";
+import { authRouter } from "./routes/auth.ts";
+import { reconcileOwnership } from "./services/authService.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
 
@@ -58,6 +61,18 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
   app.disable("x-powered-by");
+
+  // Claim rows written while nobody was signed in. Idempotent and a no-op
+  // unless exactly one account exists; lives here rather than in server.ts so
+  // that tests, which build the app directly, get the same behaviour.
+  reconcileOwnership();
+
+  // Express only believes X-Forwarded-* when told to. Needed for two things
+  // behind a reverse proxy: rate limiting by the real client IP rather than
+  // the proxy's, and setting `Secure` on the session cookie when the original
+  // request was HTTPS. Limited to one hop — trusting the whole chain would let
+  // a client forge its own address by sending the header itself.
+  app.set("trust proxy", 1);
 
   // CORS is off by default: the SPA is same-origin (Vite runs as middleware
   // in this process), and this server has no auth. Set CORS_ORIGIN to opt in
@@ -89,9 +104,14 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     );
   }
 
-  // Auth endpoints must stay reachable pre-auth (login/status); everything
-  // mounted after requireAuth — uploads and all other /api routes — is gated
-  // when AUTH_TOKEN / AUTH_REQUIRED is configured.
+  // Identify the caller before anything else looks at the request. Never
+  // rejects — it only decides *who* is asking, which the auth routes need to
+  // know even for callers that are nobody.
+  app.use(attachPrincipal);
+
+  // Auth endpoints must stay reachable pre-auth (status, setup, login);
+  // everything mounted after requireAuth — uploads and all other /api routes —
+  // is gated when AUTH_REQUIRED or API_TOKEN is configured.
   app.use("/api/auth", authRouter);
   app.use(["/api", "/uploads"], requireAuth);
 
@@ -115,6 +135,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }),
   );
 
+  app.use("/api", avatarRouter);
   app.use("/api/link-preview", linkPreviewRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/lists", listsRouter);

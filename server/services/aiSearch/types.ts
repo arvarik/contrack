@@ -6,7 +6,6 @@
 // =============================================================================
 
 import type { HydratedContact } from "../../repositories/types.ts";
-import type { AIProvider } from "../../ai/provider.ts";
 
 // =============================================================================
 // Job Lifecycle

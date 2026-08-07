@@ -2,7 +2,7 @@
 
 All endpoints are prefixed with `/api`. Request and response bodies are `application/json` unless noted otherwise. The server runs on `http://localhost:3210` by default.
 
-**Authentication:** off by default locally. When `AUTH_TOKEN` / `AUTH_REQUIRED` is configured (Docker default), every `/api` and `/uploads` request needs `Authorization: Bearer <token>` or the session cookie set by `POST /api/auth/login`. See [Configuration](configuration.md#authentication--remote-access).
+**Authentication:** off by default. When `AUTH_REQUIRED=true` or `API_TOKEN` is configured, every `/api` and `/uploads` request needs either `Authorization: Bearer <API_TOKEN>` (scripts, MCP) or the session cookie set by `POST /api/auth/login` (the web app). See [Configuration](configuration.md#authentication--remote-access).
 
 **Rate limits:** endpoints that trigger billable AI calls or outbound fetches are limited to 60 requests/minute per client IP (`429 RATE_LIMITED`).
 
@@ -1198,28 +1198,73 @@ curl http://localhost:3210/api/timeline
 
 ## Authentication
 
+Every endpoint under `/api/auth` is mounted **before** the auth gate, so it stays reachable to a caller with no credential. Endpoints marked _(account)_ additionally require a signed-in session — an `API_TOKEN` bearer is not enough, because there is no account behind a shared token (`403 USER_REQUIRED`).
+
 ### `GET /api/auth/status`
 
-Always reachable (even unauthenticated). Reports whether auth is enforced and whether the current request is authenticated.
+Always reachable. One round trip for everything the client needs to pick a screen.
 
 ```bash
 curl http://localhost:3210/api/auth/status
-# → { "authRequired": true, "authenticated": false }
+# → { "authRequired": true, "authenticated": false, "setupRequired": true,
+#     "hasAccounts": false, "user": null }
 ```
+
+`setupRequired` is true only on a gated instance with no accounts.
+
+---
+
+### `POST /api/auth/setup`
+
+Create the first account. Returns `409 SETUP_COMPLETE` once any account exists, so this is not a standing registration endpoint. The new account is an admin, is signed in immediately, and claims every unowned row in the database.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/setup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","username":"you","password":"a long passphrase","displayName":"You"}'
+```
+
+Rate limited to 5/minute per IP.
 
 ---
 
 ### `POST /api/auth/login`
 
-Exchange the access token for an HttpOnly `SameSite=Strict` session cookie (used by the web app).
+Exchange credentials for an HttpOnly `SameSite=Strict` session cookie. `identifier` accepts either the username or the email.
 
 ```bash
 curl -X POST http://localhost:3210/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"token": "<your token>"}'
+  -d '{"identifier": "you", "password": "a long passphrase"}'
 ```
 
-`POST /api/auth/logout` clears the cookie.
+Returns `401 INVALID_CREDENTIALS` for both a wrong password and an unknown account — the two are deliberately indistinguishable. Rate limited to 10/minute per IP.
+
+`POST /api/auth/logout` destroys the session server-side and clears the cookie.
+
+---
+
+### `GET /api/auth/me` _(account)_
+
+The signed-in account. `PATCH /api/auth/me` updates `displayName`, `username`, or `email`; omitted fields are left alone.
+
+---
+
+### `POST /api/auth/change-password` _(account)_
+
+```bash
+curl -X POST http://localhost:3210/api/auth/change-password \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"currentPassword": "old one", "newPassword": "a new long passphrase"}'
+```
+
+Ends every session except the one making the request.
+
+---
+
+### `GET /api/auth/sessions` _(account)_
+
+Live sessions for this account, newest first, with `current: true` on the one making the request. `DELETE /api/auth/sessions` revokes all the others and returns `{ "revoked": n }`.
 
 ---
 

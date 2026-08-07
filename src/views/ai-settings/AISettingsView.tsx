@@ -1,90 +1,37 @@
 import React, { useState } from "react";
 import {
-  Zap,
-  Brain,
-  Dna,
-  Globe,
   Plus,
   RefreshCw,
   Trash2,
   Check,
   AlertTriangle,
-  Info,
   Server,
-  ChevronDown,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAISettings,
-  useCapabilityModels,
   useSetProviderKey,
   useDeleteProviderKey,
   useRefreshModels,
-  useSetCapability,
   useSaveEndpoint,
   useDeleteEndpoint,
   useSetSearxng,
-  type AICapability,
-  type CapabilityAssignment,
 } from "../../api/aiSettings";
 import { Modal } from "../../components/ui/Modal";
+import { CapabilitiesCard } from "./CapabilitiesCard";
 import { CARD, SECTION_HEADING, ICON_BTN } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 // ---------------------------------------------------------------------------
 // AISettingsView — capability-based AI configuration
 // ---------------------------------------------------------------------------
-// Users configure *what runs each kind of AI work*, not "the AI provider".
-// Every capability defaults to Auto, so a user who pastes one key and never
-// opens this page gets sensible behavior with zero configuration.
-// ---------------------------------------------------------------------------
-
-interface CapabilityMeta {
-  key: AICapability;
-  label: string;
-  icon: React.ReactNode;
-  /** What app features this capability powers. */
-  tooltip: string;
-  /** Extra option beyond auto/pinned. */
-  specialMode?: { mode: "auto" | "disabled"; label: string };
-  warning?: string;
-}
-
-const CAPABILITIES: CapabilityMeta[] = [
-  {
-    key: "quick",
-    label: "Quick tasks",
-    icon: <Zap className="w-4 h-4 text-amber-500" />,
-    tooltip:
-      "Magic Paste contact parsing, @mention extraction, search understanding and result verification, daily insights, and search expansion. High volume, low complexity — favors cheap, quick models.",
-  },
-  {
-    key: "deep",
-    label: "Deep tasks",
-    icon: <Brain className="w-4 h-4 text-primary" />,
-    tooltip:
-      "Email (.eml) summarization, duplicate adjudication, and structured extraction from research. Lower volume, higher reasoning — favors stronger models.",
-  },
-  {
-    key: "embeddings",
-    label: "Embeddings",
-    icon: <Dna className="w-4 h-4 text-emerald-500" />,
-    tooltip:
-      "Semantic search ranking and duplicate similarity detection. The built-in model runs locally with no API cost and works offline.",
-    specialMode: { mode: "auto", label: "Built-in (local, recommended)" },
-    warning:
-      "Changing the embedding model rebuilds the vector index and re-embeds every contact in the background.",
-  },
-  {
-    key: "research",
-    label: "Web research",
-    icon: <Globe className="w-4 h-4 text-sky-500" />,
-    tooltip:
-      "AI Search enrichment — researching contacts across the live web. Requires a provider with search grounding, or a self-hosted SearXNG instance.",
-    specialMode: { mode: "disabled", label: "Disabled" },
-  },
-];
-
+// Two cards, in the order the work happens: connect credentials, then decide
+// what each kind of AI work runs on. The second card is its own component —
+// see CapabilitiesCard.
+//
+// Every capability defaults to Automatic, so someone who pastes one key and
+// never opens this page gets sensible behavior with zero configuration.
 // ---------------------------------------------------------------------------
 
 export const AISettingsView = () => {
@@ -109,10 +56,6 @@ export const AISettingsView = () => {
     apiKey: "",
   });
   const [searxngInput, setSearxngInput] = useState<string | null>(null);
-  // Someone with one API key has nothing to decide here, so the per-task rows
-  // stay folded away until they're wanted — or until something is already
-  // pinned, in which case hiding it would misrepresent the configuration.
-  const [showPerTask, setShowPerTask] = useState(false);
 
   if (isLoading || !settings) {
     return (
@@ -159,28 +102,18 @@ export const AISettingsView = () => {
     }
   };
 
-  const hasAnyProvider = settings.providers.length > 0;
-  const customized = Object.values(settings.capabilities).some(
-    (c) => c.assignment.mode !== "auto",
-  );
-  const perTaskOpen = showPerTask || customized;
-  // What Auto actually landed on, for the collapsed summary.
-  const autoTarget = settings.capabilities.quick?.resolved?.providerId;
-  const autoLabel =
-    settings.providers.find((p) => p.id === autoTarget)?.label ?? null;
-
   return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-3xl mx-auto pb-28 md:pb-10">
       {/* ── Providers ─────────────────────────────────────────────────── */}
-      <section className={cn(CARD, "space-y-4")}>
+      <section className={cn(CARD, "space-y-4 p-4 sm:p-6")}>
         <div>
           <h3 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
             <Server className="w-5 h-5 text-primary" />
             Providers
           </h3>
-          <p className="text-sm text-on-surface-variant mt-1">
-            Add the services you have keys for. Contrack picks the right model
-            for each task from whatever is connected.
+          <p className="text-sm text-on-surface-variant mt-1 text-pretty">
+            Add the services you have keys for. Keys are stored in this app's
+            local database and only ever sent to the provider they belong to.
           </p>
         </div>
 
@@ -191,29 +124,38 @@ export const AISettingsView = () => {
               className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-container-low"
             >
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm flex items-center gap-2">
+                <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
                   {provider.label}
                   {provider.source === "env" && (
                     <span className="text-[9px] uppercase tracking-wider bg-surface-container-highest px-1.5 py-0.5 rounded font-bold text-on-surface-variant">
                       from .env
                     </span>
                   )}
+                  {/* Grounding support is a real capability difference between
+                      providers, and it decides whether this one can appear in
+                      the web-research list at all. */}
+                  {provider.supportsGrounding && (
+                    <span className="text-[9px] uppercase tracking-wider bg-sky-500/10 text-info px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                      <Globe className="w-2.5 h-2.5" />
+                      web search
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-on-surface-variant flex items-center gap-2 mt-0.5">
+                <div className="text-xs text-on-surface-variant flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="font-mono">{provider.keyPreview}</span>
                   {provider.modelCount !== null ? (
-                    <span className="text-emerald-600 flex items-center gap-1">
+                    <span className="text-success flex items-center gap-1">
                       <Check className="w-3 h-3" />
                       {provider.modelCount} models
                     </span>
                   ) : (
-                    <span className="text-on-surface-variant/70">
+                    <span className="text-on-surface-variant">
                       not yet discovered
                     </span>
                   )}
                   {provider.modelsError && (
                     <span
-                      className="text-red-500 flex items-center gap-1"
+                      className="text-error flex items-center gap-1"
                       title={provider.modelsError}
                     >
                       <AlertTriangle className="w-3 h-3" />
@@ -250,7 +192,7 @@ export const AISettingsView = () => {
                       .mutateAsync(provider.id)
                       .then(() => toast.success(`${provider.label} removed`))
                   }
-                  className={cn(ICON_BTN, "text-red-500")}
+                  className={cn(ICON_BTN, "text-error")}
                   title="Remove key"
                   aria-label={`Remove ${provider.label} key`}
                 >
@@ -269,7 +211,7 @@ export const AISettingsView = () => {
               }}
               className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
             >
-              <Plus className="w-4 h-4 text-on-surface-variant" />
+              <Plus className="w-4 h-4 text-on-surface-variant shrink-0" />
               <span className="text-sm text-on-surface-variant">
                 Add {provider.label} key
               </span>
@@ -299,7 +241,7 @@ export const AISettingsView = () => {
                     .mutateAsync(endpoint.id)
                     .then(() => toast.success("Endpoint removed"))
                 }
-                className={cn(ICON_BTN, "text-red-500")}
+                className={cn(ICON_BTN, "text-error")}
                 title="Remove endpoint"
                 aria-label={`Remove ${endpoint.label}`}
               >
@@ -311,7 +253,7 @@ export const AISettingsView = () => {
             onClick={() => setEndpointModalOpen(true)}
             className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
           >
-            <Plus className="w-4 h-4 text-on-surface-variant" />
+            <Plus className="w-4 h-4 text-on-surface-variant shrink-0" />
             <span className="text-sm text-on-surface-variant">
               Add an OpenAI-compatible endpoint
             </span>
@@ -320,110 +262,53 @@ export const AISettingsView = () => {
       </section>
 
       {/* ── Capabilities ──────────────────────────────────────────────── */}
-      <section className={cn(CARD, "space-y-4")}>
+      <CapabilitiesCard settings={settings} />
+
+      {/* ── SearXNG ───────────────────────────────────────────────────── */}
+      {/* Its own card rather than a footnote inside Capabilities: it is a
+          separate piece of infrastructure the user runs, not a model pick. */}
+      <section className={cn(CARD, "space-y-3 p-4 sm:p-6")}>
         <div>
           <h3 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
-            <Brain className="w-5 h-5 text-primary" />
-            Capabilities
+            <Globe className="w-5 h-5 text-primary" />
+            Self-hosted search (SearXNG)
           </h3>
-          <p className="text-sm text-on-surface-variant mt-1">
-            Choose what powers each kind of AI work. <strong>Auto</strong> picks
-            the best available option from your connected providers.
+          <p className="text-sm text-on-surface-variant mt-1 text-pretty">
+            A fallback for web research that needs no cloud provider. Point
+            Contrack at your own SearXNG instance and it will be used
+            automatically whenever no connected provider offers web search.
           </p>
         </div>
-
-        {!hasAnyProvider && (
-          <div className="flex items-start gap-2 text-sm text-amber-600 bg-amber-500/10 rounded-xl p-3">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              No providers connected. AI features are disabled — semantic search
-              still works using the built-in local model.
-            </span>
-          </div>
-        )}
-
-        {!perTaskOpen && hasAnyProvider && (
-          <div className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-container-low">
-            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-            <div className="flex-1 min-w-0 text-sm">
-              <span className="font-bold">All tasks</span>
-              <span className="text-on-surface-variant">
-                {" "}
-                → {autoLabel ?? "your connected providers"}, chosen
-                automatically
-              </span>
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setShowPerTask((v) => !v)}
-          aria-expanded={perTaskOpen}
-          className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors"
-        >
-          <ChevronDown
-            className={cn(
-              "w-3.5 h-3.5 transition-transform",
-              perTaskOpen && "rotate-180",
-            )}
-          />
-          {perTaskOpen ? "Hide per-task settings" : "Customize per task"}
-        </button>
-
-        {perTaskOpen && (
-          <div className="space-y-4">
-            {CAPABILITIES.map((meta) => (
-              <CapabilityRow
-                key={meta.key}
-                meta={meta}
-                assignment={settings.capabilities[meta.key]?.assignment}
-                resolved={settings.capabilities[meta.key]?.resolved}
-                unavailableReason={
-                  settings.capabilities[meta.key]?.unavailableReason
-                }
-              />
-            ))}
-          </div>
-        )}
-
-        {/* SearXNG — self-hosted research */}
-        <div className="pt-2 border-t border-on-surface-variant/10 space-y-2">
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-            Self-hosted search (SearXNG)
-          </h4>
-          <p className="text-xs text-on-surface-variant">
-            Enables online research without a cloud provider. Used automatically
-            when no provider offers search grounding.
-          </p>
-          <div className="flex gap-2">
-            {/* The control is nested in its label so the association holds
-                without depending on id resolution. */}
-            <label htmlFor="searxng-url" className="flex-1">
-              <span className="sr-only">SearXNG base URL</span>
-              <input
-                id="searxng-url"
-                type="url"
-                aria-label="SearXNG base URL"
-                value={searxngInput ?? settings.searxngUrl ?? ""}
-                onChange={(e) => setSearxngInput(e.target.value)}
-                placeholder="http://searxng.local:8080"
-                className="w-full px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </label>
-            <button
-              onClick={() =>
-                setSearxng
-                  .mutateAsync(searxngInput ?? "")
-                  .then(() => toast.success("SearXNG endpoint saved"))
-                  .catch((e) => toast.error(String(e.message ?? e)))
-              }
-              disabled={searxngInput === null}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors disabled:opacity-40"
-            >
-              Save
-            </button>
-          </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* The control is nested in its label so the association holds
+              without depending on id resolution. */}
+          <label htmlFor="searxng-url" className="flex-1 min-w-0">
+            <span className="sr-only">SearXNG base URL</span>
+            <input
+              id="searxng-url"
+              type="url"
+              aria-label="SearXNG base URL"
+              value={searxngInput ?? settings.searxngUrl ?? ""}
+              onChange={(e) => setSearxngInput(e.target.value)}
+              placeholder="http://searxng.local:8080"
+              className="w-full px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </label>
+          <button
+            onClick={() =>
+              setSearxng
+                .mutateAsync(searxngInput ?? "")
+                .then(() => {
+                  setSearxngInput(null);
+                  toast.success("SearXNG endpoint saved");
+                })
+                .catch((e) => toast.error(String(e.message ?? e)))
+            }
+            disabled={searxngInput === null}
+            className="px-4 py-2.5 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors shrink-0 disabled:text-on-surface-variant disabled:cursor-not-allowed"
+          >
+            Save
+          </button>
         </div>
       </section>
 
@@ -459,7 +344,7 @@ export const AISettingsView = () => {
             <button
               onClick={handleSaveKey}
               disabled={!keyInput.trim() || setKey.isPending}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
             >
               {setKey.isPending ? "Verifying…" : "Connect"}
             </button>
@@ -527,126 +412,13 @@ export const AISettingsView = () => {
                 !endpointForm.baseUrl.trim() ||
                 saveEndpoint.isPending
               }
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
             >
               {saveEndpoint.isPending ? "Connecting…" : "Connect"}
             </button>
           </div>
         </div>
       </Modal>
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// One capability row: label + tooltip + model dropdown + resolved preview
-// ---------------------------------------------------------------------------
-
-const CapabilityRow = ({
-  meta,
-  assignment,
-  resolved,
-  unavailableReason,
-}: {
-  meta: CapabilityMeta;
-  assignment?: CapabilityAssignment;
-  resolved?: {
-    providerId: string;
-    model?: string;
-    label?: string;
-  } | null;
-  unavailableReason?: string;
-}) => {
-  const { data: groups = [] } = useCapabilityModels(meta.key);
-  const setCapability = useSetCapability();
-
-  const current = assignment ?? {
-    mode: "auto",
-  };
-  const value =
-    current.mode === "pinned" && current.providerId && current.model
-      ? `${current.providerId}::${current.model}`
-      : current.mode;
-
-  const handleChange = (next: string) => {
-    const assignmentNext: CapabilityAssignment = next.includes("::")
-      ? {
-          mode: "pinned",
-          providerId: next.split("::")[0],
-          model: next.split("::").slice(1).join("::"),
-        }
-      : { mode: next as CapabilityAssignment["mode"] };
-
-    setCapability
-      .mutateAsync({ capability: meta.key, assignment: assignmentNext })
-      .then(() => toast.success(`${meta.label} updated`))
-      .catch((err) => toast.error(String(err.message ?? err)));
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        {meta.icon}
-        <span className="text-sm font-bold">{meta.label}</span>
-        <span className="group relative inline-flex">
-          <Info className="w-3.5 h-3.5 text-on-surface-variant/60 cursor-help" />
-          <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 opacity-0 group-hover:opacity-100 transition-opacity bg-surface-container-highest text-xs text-on-surface p-3 rounded-xl shadow-xl z-20">
-            {meta.tooltip}
-          </span>
-        </span>
-      </div>
-
-      <select
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl bg-surface-container-highest text-sm outline-none focus:ring-2 focus:ring-primary/40"
-      >
-        {meta.key !== "embeddings" && (
-          <option value="auto">Auto (recommended)</option>
-        )}
-        {meta.specialMode && (
-          <option value={meta.specialMode.mode}>
-            {meta.specialMode.label}
-          </option>
-        )}
-        {groups.map((group) => (
-          <optgroup key={group.providerId} label={group.providerLabel}>
-            {group.models.map((model) => (
-              <option
-                key={`${group.providerId}::${model.id}`}
-                value={`${group.providerId}::${model.id}`}
-              >
-                {model.label}
-                {model.capabilityConfidence === "guessed" ? " (?)" : ""}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-
-      {current.mode === "auto" && (
-        <div className="text-xs text-on-surface-variant pl-1">
-          {resolved ? (
-            <>
-              → resolves to{" "}
-              <strong>{resolved.label ?? resolved.providerId}</strong>
-              {!resolved.label && resolved.model ? ` · ${resolved.model}` : ""}
-            </>
-          ) : (
-            // Say what is wrong and what to do about it, not just that
-            // something is missing.
-            <span className="text-amber-600">
-              → {unavailableReason ?? "nothing available for this capability"}
-            </span>
-          )}
-        </div>
-      )}
-      {meta.warning && current.mode !== "auto" && (
-        <div className="text-xs text-amber-600 pl-1 flex items-start gap-1.5">
-          <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-          {meta.warning}
-        </div>
-      )}
     </div>
   );
 };

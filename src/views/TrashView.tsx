@@ -70,7 +70,7 @@ export const TrashView = () => {
   if (items.length === 0) {
     return (
       <div className={cn(EMPTY_STATE, "m-6")}>
-        <Trash2 className="w-10 h-10 text-on-surface-variant/40 mx-auto mb-4" />
+        <Trash2 className="w-10 h-10 text-on-surface-variant mx-auto mb-4" />
         <p className="font-bold">Trash is empty</p>
         <p className="text-sm text-on-surface-variant mt-1">
           Deleted contacts stay here for {RETENTION_DAYS} days before being
@@ -117,7 +117,7 @@ export const TrashView = () => {
               <button
                 onClick={() => handleRestore(item)}
                 disabled={restore.isPending}
-                className={cn(ICON_BTN, "text-emerald-600")}
+                className={cn(ICON_BTN, "text-success")}
                 title="Restore contact"
                 aria-label={`Restore ${item.name}`}
               >
@@ -126,7 +126,7 @@ export const TrashView = () => {
               <button
                 onClick={() => setPurgeTarget(item)}
                 disabled={purge.isPending}
-                className={cn(ICON_BTN, "text-red-500")}
+                className={cn(ICON_BTN, "text-error")}
                 title="Delete forever"
                 aria-label={`Permanently delete ${item.name}`}
               >
@@ -144,7 +144,7 @@ export const TrashView = () => {
       >
         <div className="space-y-5">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 shrink-0 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 shrink-0 bg-red-500/10 text-error rounded-full flex items-center justify-center">
               <AlertTriangle className="w-5 h-5" />
             </div>
             <p className="text-sm text-on-surface-variant">

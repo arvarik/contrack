@@ -15,6 +15,21 @@ interface WindowState {
 }
 
 /**
+ * A limiter middleware with its counters exposed for testing.
+ *
+ * `reset` exists because a fixed window is shared state across every request
+ * in a process: a test file that exercises sign-in a dozen times would trip a
+ * limiter meant for real clients, and the alternative — an env var that
+ * loosens the limit under test — means the thing being tested is not the thing
+ * that ships.
+ */
+export interface RateLimiter {
+  (req: Request, res: Response, next: NextFunction): void;
+  /** Forget all windows. */
+  reset(): void;
+}
+
+/**
  * Create a fixed-window rate limiter keyed by client IP.
  * Windows are pruned lazily on access, so memory stays bounded by the number
  * of distinct client IPs seen within one window.
@@ -23,11 +38,15 @@ export function createRateLimiter(options: {
   windowMs: number;
   max: number;
   name: string;
-}) {
+}): RateLimiter {
   const { windowMs, max, name } = options;
   const windows = new Map<string, WindowState>();
 
-  return (req: Request, _res: Response, next: NextFunction): void => {
+  const middleware = (
+    req: Request,
+    _res: Response,
+    next: NextFunction,
+  ): void => {
     const now = Date.now();
     const key = req.ip ?? "unknown";
 
@@ -54,6 +73,9 @@ export function createRateLimiter(options: {
     }
     next();
   };
+
+  middleware.reset = () => windows.clear();
+  return middleware;
 }
 
 /** Paths that trigger billable AI calls or outbound network fetches. */

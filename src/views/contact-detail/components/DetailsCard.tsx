@@ -31,7 +31,6 @@ import {
   SECTION_HEADING,
 } from "../../../lib/styles";
 
-import { EditableField } from "./EditableField";
 import { IndustryField } from "./IndustryField";
 import { BirthdayField } from "./BirthdayField";
 import {
@@ -249,19 +248,20 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                         newPrefs.splice(idx, 1);
                         onUpdate("preferences", newPrefs.join(", "));
                       }}
-                      className="w-4 h-4 rounded-full text-on-surface-variant/40 hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 -mr-1"
+                      className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
                   </div>
                 ))
             ) : (
-              <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">
+              <span className="text-sm font-medium text-on-surface-variant italic">
                 No preferences logged
               </span>
             )}
           </div>
           <input
+            aria-label="Add a preference"
             type="text"
             value={newPreference}
             onChange={(e) => setNewPreference(e.target.value)}
@@ -315,7 +315,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                     </span>
                     <button
                       onClick={() => handleRemoveInterest(interest.id)}
-                      className="w-4 h-4 rounded-full text-on-surface-variant/40 hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0 -mr-1"
+                      className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
@@ -323,12 +323,13 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                 ),
               )
             ) : (
-              <span className="text-sm font-medium text-on-surface-variant opacity-50 italic">
+              <span className="text-sm font-medium text-on-surface-variant italic">
                 No interests logged
               </span>
             )}
           </div>
           <input
+            aria-label="Add an interest"
             type="text"
             value={newInterest}
             onChange={(e) => setNewInterest(e.target.value)}

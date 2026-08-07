@@ -137,7 +137,7 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => {
                             <React.Fragment key={i}>
                               <Kbd>{k}</Kbd>
                               {i < s.keys.length - 1 && (
-                                <span className="text-[10px] text-on-surface-variant/50 mx-0.5">
+                                <span className="text-[10px] text-on-surface-variant mx-0.5">
                                   +
                                 </span>
                               )}
@@ -151,7 +151,7 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => {
               ))}
 
               {/* Footer hint */}
-              <p className="text-center text-[11px] text-on-surface-variant/50 pt-1">
+              <p className="text-center text-[11px] text-on-surface-variant pt-1">
                 Press <Kbd>?</Kbd> anytime to open this
               </p>
             </div>

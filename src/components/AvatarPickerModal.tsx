@@ -17,7 +17,7 @@ const STYLES = [
   { id: "bottts", label: "Bot" },
 ] as const;
 
-type DicebearStyle = (typeof STYLES)[number]["id"];
+type AvatarStyle = (typeof STYLES)[number]["id"];
 
 const SEEDS = [
   "Felix",
@@ -46,20 +46,21 @@ const SEEDS = [
   "Ruby",
 ];
 
-function dicebearUrl(style: DicebearStyle, seed: string) {
-  const base = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
-  const bg = `&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-
-  // Only pass style-specific params — unsupported params cause broken SVGs
-  switch (style) {
-    case "avataaars":
-      return `${base}&mouth=default,smile,serious&skinColor=f8d25c${bg}`;
-    case "lorelei":
-    case "bottts":
-      return `${base}${bg}`;
-    default:
-      return `${base}${bg}`;
-  }
+/**
+ * Point at the app's own avatar route rather than `api.dicebear.com`.
+ *
+ * Every per-style parameter this function used to assemble — friendly mouths,
+ * skin tone, the pastel backgrounds — now lives server-side in
+ * avatarService, applied per style at render time. That removes the failure
+ * mode the old comment warned about (passing a parameter a style does not
+ * support produced a broken SVG), because the caller no longer chooses
+ * parameters at all.
+ *
+ * `bg=1` asks for the pastel wash, which suits this picker grid; avatars in
+ * the contact list stay transparent.
+ */
+function avatarUrl(style: AvatarStyle, seed: string) {
+  return `/api/avatar/${style}?seed=${encodeURIComponent(seed)}&bg=1`;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,19 +71,11 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   contactId: string;
-  contactName: string;
-  currentAvatarUrl?: string;
 }
 
-export const AvatarPickerModal = ({
-  isOpen,
-  onClose,
-  contactId,
-  contactName,
-  currentAvatarUrl,
-}: Props) => {
+export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
   const [tab, setTab] = useState<"avatar" | "upload">("avatar");
-  const [style, setStyle] = useState<DicebearStyle>("avataaars");
+  const [style, setStyle] = useState<AvatarStyle>("avataaars");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [uploadPreview, setUploadPreview] = useState<{
     file: File;
@@ -209,7 +202,7 @@ export const AvatarPickerModal = ({
               {/* Avatar grid */}
               <div className="grid grid-cols-6 gap-2 max-h-[280px] overflow-y-auto scrollbar-hide pr-1">
                 {SEEDS.map((seed) => {
-                  const url = dicebearUrl(style, seed);
+                  const url = avatarUrl(style, seed);
                   const isSelected = selectedUrl === url;
                   return (
                     <button
@@ -330,7 +323,7 @@ export const AvatarPickerModal = ({
           <button
             onClick={handleApply}
             disabled={!canApply || isPending}
-            className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-opacity disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
           >
             {isPending ? "Applying…" : "Apply"}
           </button>

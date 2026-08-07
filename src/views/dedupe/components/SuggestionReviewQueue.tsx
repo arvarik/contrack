@@ -14,7 +14,6 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
-  Inbox,
   Crown,
   AlertTriangle,
   Link2,
@@ -34,6 +33,7 @@ import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import type { Contact, PersistedDedupeSuggestion } from "../../../types";
+import { activateOnKey } from "../../../lib/a11y";
 
 // =============================================================================
 // Lightweight Union-Find for frontend cluster grouping
@@ -391,13 +391,13 @@ export const SuggestionReviewQueue = () => {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="p-4 bg-emerald-500/10 rounded-2xl mb-4">
-          <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+          <CheckCircle2 className="w-10 h-10 text-success" />
         </div>
         <h3 className="text-lg font-headline font-bold mb-1">All caught up!</h3>
         <p className="text-sm text-on-surface-variant">
           No pending suggestions to review.
         </p>
-        <p className="text-xs text-on-surface-variant/60 mt-1">
+        <p className="text-xs text-on-surface-variant mt-1">
           Run a Smart Scan to find new duplicates.
         </p>
       </div>
@@ -443,7 +443,7 @@ export const SuggestionReviewQueue = () => {
               <button
                 onClick={handleBatchDismiss}
                 disabled={isBatchProcessing}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-rose-500 rounded-full transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-full transition-all disabled:text-on-surface-variant disabled:cursor-not-allowed"
               >
                 <X className="w-3.5 h-3.5" />
                 Keep Separate ({selected.size})
@@ -451,7 +451,7 @@ export const SuggestionReviewQueue = () => {
               <button
                 onClick={handleBatchMerge}
                 disabled={isBatchProcessing}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full transition-all disabled:opacity-50 hover:shadow-md hover:shadow-primary/20"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full transition-all hover:shadow-md hover:shadow-primary/20 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {isBatchProcessing ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -568,6 +568,9 @@ function PairRow({
       )}
     >
       <div
+        onKeyDown={activateOnKey(() => setExpanded((e) => !e))}
+        tabIndex={0}
+        role="button"
         className="flex items-center gap-3 px-5 py-4 cursor-pointer group"
         onClick={() => setExpanded((e) => !e)}
       >
@@ -577,7 +580,7 @@ function PairRow({
             e.stopPropagation();
             onToggleSelect();
           }}
-          className="shrink-0 text-on-surface-variant/40 hover:text-primary transition-colors"
+          className="shrink-0 text-on-surface-variant hover:text-primary transition-colors"
         >
           {isSelected ? (
             <CheckSquare className="w-4 h-4 text-primary" />
@@ -638,7 +641,7 @@ function PairRow({
               handleMerge();
             }}
             disabled={mergeSuggestion.isPending}
-            className="px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full transition-all disabled:opacity-50 hover:shadow-md hover:shadow-primary/20"
+            className="px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full transition-all hover:shadow-md hover:shadow-primary/20 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
           >
             Merge
           </button>
@@ -648,14 +651,14 @@ function PairRow({
               handleDismiss();
             }}
             disabled={dismissSuggestion.isPending}
-            className="p-1.5 text-on-surface-variant/50 hover:text-rose-500 hover:bg-rose-500/8 rounded-lg transition-colors"
+            className="p-1.5 text-on-surface-variant hover:text-error hover:bg-rose-500/8 rounded-lg transition-colors"
             title="Not the same person"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="shrink-0 text-on-surface-variant/40">
+        <div className="shrink-0 text-on-surface-variant">
           {expanded ? (
             <ChevronUp className="w-4 h-4" />
           ) : (
@@ -688,7 +691,7 @@ function PairRow({
                   <ContactCard
                     contact={primary}
                     label="Primary (Keeper)"
-                    labelColor="text-emerald-600 bg-emerald-500/10"
+                    labelColor="text-success bg-emerald-500/10"
                     other={duplicate}
                   />
                 </div>
@@ -703,7 +706,7 @@ function PairRow({
                   <ContactCard
                     contact={duplicate}
                     label="Duplicate (Merges In)"
-                    labelColor="text-amber-600 bg-amber-500/10"
+                    labelColor="text-warning bg-amber-500/10"
                     other={primary}
                   />
                 </div>
@@ -798,7 +801,7 @@ function ClusterCard({
       <div className="flex items-start gap-3">
         <button
           onClick={onToggleSelect}
-          className="shrink-0 mt-1 text-on-surface-variant/40 hover:text-primary transition-colors"
+          className="shrink-0 mt-1 text-on-surface-variant hover:text-primary transition-colors"
         >
           {isSelected ? (
             <CheckSquare className="w-4 h-4 text-primary" />
@@ -819,7 +822,7 @@ function ClusterCard({
               {cluster.contacts.length} contacts
             </span>
             {cluster.hasWeakLink && (
-              <span className="text-xs font-bold text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full">
+              <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-full">
                 Weak link
               </span>
             )}
@@ -833,8 +836,8 @@ function ClusterCard({
           className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3 ml-7"
           role="alert"
         >
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-700 leading-relaxed">
+          <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+          <p className="text-xs text-warning leading-relaxed">
             <span className="font-bold">
               Large cluster ({cluster.contacts.length} contacts).
             </span>{" "}
@@ -884,7 +887,7 @@ function ClusterCard({
                   )}
                 </div>
                 {isContactSelected && (
-                  <Crown className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <Crown className="w-4 h-4 text-success shrink-0" />
                 )}
               </button>
             );
@@ -898,7 +901,7 @@ function ClusterCard({
           <ContactCard
             contact={primary}
             label="Primary (Keeper)"
-            labelColor="text-emerald-600 bg-emerald-500/10"
+            labelColor="text-success bg-emerald-500/10"
             isPrimary
           />
         </div>
@@ -908,7 +911,7 @@ function ClusterCard({
               key={dup.id}
               contact={dup}
               label="Merges In"
-              labelColor="text-amber-600 bg-amber-500/10"
+              labelColor="text-warning bg-amber-500/10"
               other={primary}
               onSetPrimary={() => setSelectedPrimaryId(dup.id)}
             />
@@ -962,7 +965,7 @@ function ClusterCard({
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 ml-7">
         <button
           onClick={handleDismissAll}
-          className="group flex items-center gap-3 px-6 py-3 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-rose-600 w-full sm:w-auto justify-center"
+          className="group flex items-center gap-3 px-6 py-3 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-error w-full sm:w-auto justify-center"
         >
           <X className="w-5 h-5 group-hover:scale-110 transition-transform" />
           <div className="text-left">
@@ -972,7 +975,7 @@ function ClusterCard({
         <button
           onClick={handleMergeAll}
           disabled={isMerging}
-          className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 w-full sm:w-auto justify-center"
+          className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all w-full sm:w-auto justify-center disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
         >
           <div className="text-right">
             <div className="text-sm font-bold">

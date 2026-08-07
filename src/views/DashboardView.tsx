@@ -27,7 +27,6 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
-  Keyboard,
   Inbox,
   LayoutDashboard,
 } from "lucide-react";
@@ -40,6 +39,7 @@ import {
   tabItem,
 } from "../lib/styles";
 import { cn } from "../lib/utils";
+import { tileDelay } from "../lib/motion";
 import { motion, AnimatePresence } from "motion/react";
 import { format, addDays } from "date-fns";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -96,7 +96,7 @@ const CompletedActionsBar = () => {
                     {item.title}
                   </span>
                   <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                    <span className="text-xs font-semibold text-on-surface-variant/80 truncate">
+                    <span className="text-xs font-semibold text-on-surface-variant truncate">
                       {item.contactName || "Unknown"}
                     </span>
                   </div>
@@ -175,6 +175,9 @@ export const DashboardView = () => {
         particleCount: 150,
         spread: 70,
         origin: { y: 0.6 },
+        // Deliberately the vivid pre-accessibility palette: confetti carries
+        // no text and has no contrast duty, and the AA-safe tones read as
+        // muted when the point is celebration.
         colors: ["#009EDB", "#10B981", "#F59E0B"],
       });
     }
@@ -226,24 +229,17 @@ export const DashboardView = () => {
 
   return (
     <div className="w-full h-full overflow-y-auto bg-surface nice-scrollbar relative">
-      <div className="max-w-5xl mx-auto p-6 md:p-10 flex flex-col gap-8 pb-32">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex items-end justify-between"
-        >
-          <div>
-            <h1 className={PAGE_TITLE}>Pulse</h1>
-          </div>
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
+        {/* Header — stacks under 640px so the tab bar never squeezes the title */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <h1 className={PAGE_TITLE}>Pulse</h1>
           {/* Tabs */}
-          <div className={cn(TAB_CONTAINER, "w-fit")}>
+          <div className={cn(TAB_CONTAINER, "w-full sm:w-fit")}>
             <button
               onClick={() => setActiveTab("pulse")}
               className={cn(
                 tabItem(activeTab === "pulse"),
-                "flex items-center gap-2",
+                "flex flex-1 sm:flex-none items-center justify-center gap-2",
               )}
             >
               <LayoutDashboard className="w-4 h-4" />
@@ -253,7 +249,7 @@ export const DashboardView = () => {
               onClick={() => setActiveTab("suggestions")}
               className={cn(
                 tabItem(activeTab === "suggestions"),
-                "flex items-center gap-2 relative",
+                "flex flex-1 sm:flex-none items-center justify-center gap-2 relative",
               )}
             >
               <Inbox className="w-4 h-4" />
@@ -265,20 +261,20 @@ export const DashboardView = () => {
               )}
             </button>
           </div>
-        </motion.div>
+        </div>
 
         {/* Loading State */}
         {activeTab === "pulse" && (isDashboardLoading || !dashboard) ? (
           <DashboardSkeleton />
         ) : activeTab === "pulse" && dashboard ? (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            {/* Top KPI Row */}
-            <div className="col-span-full grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 items-start">
+            {/* Top KPI Row — 1 up on phones, 3 up from md */}
+            <div className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
               <MetricCard
                 label="Active Network"
                 value={dashboard.metrics.totalActive}
                 icon={Users}
-                delay={0.1}
+                delay={tileDelay(0)}
                 onClick={() => setIsCompositionOpen(true)}
               />
               <MetricCard
@@ -286,7 +282,7 @@ export const DashboardView = () => {
                 value={dashboard.metrics.totalInteractions30d}
                 subValue="interactions last month"
                 icon={ActivitySquare}
-                delay={0.2}
+                delay={tileDelay(1)}
                 onClick={() => setIsVelocityOpen(true)}
               />
               <MetricCard
@@ -294,7 +290,7 @@ export const DashboardView = () => {
                 value={dashboard.metrics.newContacts30d}
                 subValue="added this month"
                 icon={UserPlus}
-                delay={0.3}
+                delay={tileDelay(2)}
                 onClick={() => setIsGrowthOpen(true)}
               />
             </div>
@@ -303,17 +299,15 @@ export const DashboardView = () => {
             <DailyInsightCard
               insight={insight}
               isLoading={isInsightLoading}
-              delay={0.4}
+              delay={tileDelay(3)}
             />
 
             {/* Left Column: Action Items */}
-            <div className="col-span-full xl:col-span-8 flex flex-col gap-8">
+            <div className="col-span-full xl:col-span-8 flex flex-col gap-6 sm:gap-8">
               {!hasActionItems ? (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.6, delay: 0.5, type: "spring" }}
-                  className={EMPTY_HERO}
+                <div
+                  style={{ animationDelay: tileDelay(4) }}
+                  className={cn(EMPTY_HERO, "tile-enter py-10")}
                 >
                   <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-6">
                     <PartyPopper className="w-10 h-10 text-primary" />
@@ -321,28 +315,28 @@ export const DashboardView = () => {
                   <h2 className="text-2xl font-bold text-on-surface">
                     No Followups
                   </h2>
-                </motion.div>
+                </div>
               ) : (
                 <div className="flex flex-col gap-6">
                   <ActionItemSwimlane
                     title="Overdue"
                     items={dashboard.overdue}
                     theme="urgent"
-                    delay={0.4}
+                    delay={tileDelay(4)}
                     firstActionItemId={firstActionItem?.id}
                   />
                   <ActionItemSwimlane
                     title="Due Today"
                     items={dashboard.dueToday}
                     theme="today"
-                    delay={0.5}
+                    delay={tileDelay(5)}
                     firstActionItemId={firstActionItem?.id}
                   />
                   <ActionItemSwimlane
                     title="Upcoming"
                     items={dashboard.upcoming}
                     theme="upcoming"
-                    delay={0.6}
+                    delay={tileDelay(6)}
                     firstActionItemId={firstActionItem?.id}
                   />
                 </div>
@@ -354,7 +348,7 @@ export const DashboardView = () => {
 
             {/* Right Column: Network Health */}
             <div className="col-span-full xl:col-span-4 flex flex-col gap-6">
-              <NetworkHealthPanel payload={dashboard} delay={0.7} />
+              <NetworkHealthPanel payload={dashboard} delay={tileDelay(5)} />
             </div>
           </div>
         ) : activeTab === "suggestions" ? (

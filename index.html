@@ -2,17 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover lets the app paint into the display cutout area; the
+      mobile tab bar pads itself with env(safe-area-inset-bottom) so it still
+      clears the iOS home indicator.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <meta
       name="description"
       content="Contrack — A self-hosted People CRM for managing your personal and professional network. Keyboard-first, privacy-focused."
     />
+    <meta name="theme-color" content="#009edb" />
+
+    <!--
+      Preload the two Latin faces. They are self-hosted (see src/fonts.css) and
+      always needed, but the browser only discovers them after it has parsed
+      the CSS — which is a whole round trip late. `crossorigin` is required
+      even same-origin, because font fetches are CORS-mode and a preload
+      without it is a second, unused fetch.
+
+      Only the `latin` subsets are preloaded; every other subset stays lazy
+      behind its unicode-range, which is the point of shipping them separately.
+    -->
     <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📇</text></svg>"
+      rel="preload"
+      href="/fonts/inter-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
-    <title>Contrack — People CRM</title>
+    <link
+      rel="preload"
+      href="/fonts/manrope-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
+    <!-- Brand mark — see public/favicon.svg -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!--
+      Base title only. Every route sets its own via usePageTitle(), which
+      renders "Contrack - <Page>"; this is what shows before React mounts.
+    -->
+    <title>Contrack</title>
   </head>
   <body>
     <div id="root"></div>

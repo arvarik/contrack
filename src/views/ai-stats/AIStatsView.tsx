@@ -7,9 +7,9 @@
  * 3. Cache Tiers accordion (from summary data)
  */
 import React, { useState, useCallback } from "react";
-import { motion } from "motion/react";
 import { Activity, Coins, Gauge, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { tileDelay } from "../../lib/motion";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { MetricCard } from "../dashboard/MetricCard";
 import { useAIStatsSummary, useAIStatsFeed } from "../../api";
@@ -113,21 +113,21 @@ export const AIStatsView = () => {
       {/* Zone 1: Summary Bar */}
       <SummaryBar summary={summary} isLoading={summaryLoading} />
 
-      {/* Zone 1b: KPI Row */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Zone 1b: KPI Row — stacked on phones, 3 up from sm */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <MetricCard
           label="Invocations"
           value={formatCompact(invocations)}
           subValue={invocationSub}
           icon={Activity}
-          delay={0.1}
+          delay={tileDelay(0)}
         />
         <MetricCard
           label="Tokens Used"
           value={formatCompact(tokens)}
           subValue={tokenSub}
           icon={Coins}
-          delay={0.15}
+          delay={tileDelay(1)}
         />
         <MetricCard
           label="Cache Hit Rate"
@@ -136,25 +136,23 @@ export const AIStatsView = () => {
             invocations > 0 ? `${session!.cachedCalls} hits` : undefined
           }
           icon={Gauge}
-          delay={0.2}
+          delay={tileDelay(2)}
           highlight={cacheHitRate >= 0.5}
         />
       </div>
 
       {/* Zone 2: Activity Feed */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.25, ease: "easeOut" }}
-        className={cn(CARD, "space-y-3")}
+      <div
+        style={{ animationDelay: tileDelay(3) }}
+        className={cn(CARD, "tile-enter space-y-3")}
       >
         <div className="flex items-center gap-2 mb-1">
           <span className={cn(SECTION_HEADING, "mb-0")}>Activity Feed</span>
           {feedFetching && !feedLoading && (
-            <Loader2 className="w-3 h-3 animate-spin text-primary/50" />
+            <Loader2 className="w-3 h-3 animate-spin text-primary" />
           )}
           {feed && (
-            <span className="text-[10px] font-bold text-on-surface-variant/50 bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
+            <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
               {feed.pagination.totalCount}
             </span>
           )}
@@ -170,8 +168,8 @@ export const AIStatsView = () => {
         {/* Feed items */}
         <div className="divide-y divide-outline-variant/10">
           {feedLoading ? (
-            <div className="py-8 text-center text-sm text-on-surface-variant/50">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary/40" />
+            <div className="py-8 text-center text-sm text-on-surface-variant">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
               Loading activity...
             </div>
           ) : feed && feed.items.length > 0 ? (
@@ -200,7 +198,7 @@ export const AIStatsView = () => {
           ) : (
             <div className="py-10 text-center">
               <Activity className="w-8 h-8 mx-auto mb-2 text-on-surface-variant/20" />
-              <p className="text-sm text-on-surface-variant/50">
+              <p className="text-sm text-on-surface-variant">
                 No AI activity recorded yet.
               </p>
               <p className="text-xs text-on-surface-variant/30 mt-1">
@@ -210,17 +208,13 @@ export const AIStatsView = () => {
             </div>
           )}
         </div>
-      </motion.div>
+      </div>
 
       {/* Zone 3: Cache Tiers */}
       {summary?.cacheTiers && (
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
-        >
+        <div className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
           <CacheTiersAccordion cacheTiers={summary.cacheTiers} />
-        </motion.div>
+        </div>
       )}
     </div>
   );

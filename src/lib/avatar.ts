@@ -1,12 +1,14 @@
 /**
  * Shared fallback avatar URL builder for the frontend.
  *
- * When a contact has no `avatarUrl`, this generates a consistent
- * DiceBear avataaars URL with emoji-yellow skin tone.
+ * When a contact has no `avatarUrl`, this points at the app's own avatar route,
+ * which generates the SVG in-process (see server/services/avatarService).
  *
- * Centralised here so all components use the same defaults and
- * version — avoids the DRY violation of 17 inline template strings.
+ * This used to return an `api.dicebear.com` URL with the contact's name in the
+ * query string, so rendering the contact list announced the name of every
+ * person the user knows to a third party — and broke entirely offline. Same
+ * artwork, same deterministic faces, no request leaving the machine.
  */
 export function fallbackAvatarUrl(name: string): string {
-  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(name)}&mouth=default,smile,serious&skinColor=f8d25c`;
+  return `/api/avatar/avataaars?seed=${encodeURIComponent(name)}`;
 }

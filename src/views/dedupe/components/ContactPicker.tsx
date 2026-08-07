@@ -99,13 +99,16 @@ export const ContactPicker = ({
 
       {/* Search */}
       <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/50" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
         <input
+          aria-label="Search contacts to merge"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search contacts by name, email, company..."
           className={cn(SEARCH_INPUT)}
+          // Search field in a picker the user just opened.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
         />
         {query && (
@@ -127,7 +130,7 @@ export const ContactPicker = ({
         <span
           className={cn(
             "text-[10px] font-bold uppercase tracking-widest",
-            atMax ? "text-amber-500" : "text-on-surface-variant",
+            atMax ? "text-warning" : "text-on-surface-variant",
           )}
         >
           {selected.length} / {maxSelection} selected
