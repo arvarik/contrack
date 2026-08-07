@@ -175,10 +175,22 @@ jobs:
           TAG=$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
           echo "Inspecting $TAG"
           docker buildx imagetools inspect "$TAG"
+
+          # Parse the index with jq rather than grepping the raw JSON. The
+          # previous `grep '"architecture":"amd64"'` assumed compact output;
+          # current buildx pretty-prints `--raw`, so the pattern never matched
+          # and this step failed every run on a perfectly good image.
+          #
+          # The `os == "linux"` filter matters too: buildx attaches a
+          # provenance attestation per platform, and those manifests carry
+          # `"architecture": "unknown", "os": "unknown"`.
+          RAW=$(docker buildx imagetools inspect "$TAG" --raw)
           for arch in amd64 arm64; do
-            docker buildx imagetools inspect "$TAG" --raw \
-              | grep -q "\"architecture\":\"$arch\"" \
+            echo "$RAW" | jq -e --arg a "$arch" \
+              'any(.manifests[]?; .platform.os == "linux" and .platform.architecture == $a)' \
+              > /dev/null \
               || { echo "::error::$TAG is missing linux/$arch"; exit 1; }
+            echo "  ✓ linux/$arch"
           done
 
   # Version tags (vX.Y.Z) get a GitHub Release. Created only if one doesn't
