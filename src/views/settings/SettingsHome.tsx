@@ -381,17 +381,24 @@ export const SettingsHome = () => {
       <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
         <GroupHeading>Organize</GroupHeading>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SettingsLink
-            to="/settings/lists"
-            icon={List}
-            title="Lists"
-            description="Reorder, rename, and delete lists, and manage who belongs to each."
-          />
+          {/*
+            Duplicates leads the group. It is the one destination here that
+            has work queued behind it — the sidebar already carries a badge for
+            pending suggestions — and a queue nobody sees is a queue nobody
+            clears. Lists are browsed when you go looking for them; duplicates
+            need to be offered.
+          */}
           <SettingsLink
             to="/settings/dedupe"
             icon={Copy}
             title="Duplicates"
             description="Find and merge duplicate contacts, automatically or by hand."
+          />
+          <SettingsLink
+            to="/settings/lists"
+            icon={List}
+            title="Lists"
+            description="Reorder, rename, and delete lists, and manage who belongs to each."
           />
         </div>
       </section>

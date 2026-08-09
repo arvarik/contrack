@@ -18,7 +18,6 @@ import {
   Sparkles,
   Activity,
   Keyboard,
-  LogOut,
 } from "lucide-react";
 import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -27,7 +26,6 @@ import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
 import { openKeyboardShortcuts } from "../../lib/appEvents";
-import { useAuth } from "../auth/AuthGate";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -101,7 +99,6 @@ export const Sidebar = () => {
   const { lastContactId } = useRecent();
   const isMap = location.pathname.startsWith("/map");
   const isCleanup = location.pathname.startsWith("/settings");
-  const { user, authRequired, signOut } = useAuth();
   const isSearch = location.pathname.startsWith("/search");
   const isPulse = location.pathname.startsWith("/pulse");
   const isHome =
@@ -224,30 +221,6 @@ export const Sidebar = () => {
             <SettingsIcon className="w-6 h-6" />
           </Link>
         </SidebarTooltip>
-
-        {/*
-          Sign-out sits in the utility group rather than buried three levels
-          into Settings, because "get me out of here" is not something anyone
-          should have to navigate for — and it only appears when there is
-          actually a session to end.
-
-          The tooltip names the account: on a shared machine the useful
-          question before signing out is "signed in as whom".
-        */}
-        {authRequired && user && (
-          <SidebarTooltip
-            label={`Sign out — ${user.displayName || user.username}`}
-          >
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className={navLink(false)}
-              aria-label={`Sign out of ${user.displayName || user.username}'s account`}
-            >
-              <LogOut className="w-6 h-6" />
-            </button>
-          </SidebarTooltip>
-        )}
       </div>
     </aside>
   );
