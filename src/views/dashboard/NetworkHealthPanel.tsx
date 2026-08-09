@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { Ghost, HeartPulse, Sparkles, Clock } from "lucide-react";
 import { FloatingContactCard } from "../../components/FloatingContactCard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { ScoreBreakdown } from "../../components/ScoreBreakdown";
 
 interface NetworkHealthProps {
   payload: DashboardPayload;
@@ -104,31 +105,47 @@ export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
           </div>
           <div className="flex flex-col gap-2">
             {payload.atRisk.map((c) => (
-              <Link
-                key={c.id}
-                to={`/contact/${c.id}`}
-                className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container-low transition-colors group"
-              >
-                <div className="relative">
+              /*
+                The score badge is a *sibling* of the row link, overlaid on the
+                avatar, rather than a child of it. Two reasons, and the second
+                is the one that matters: a button inside an anchor is invalid
+                HTML that browsers resolve however they like, and a click on
+                the badge would otherwise navigate away from the very contact
+                whose score you asked about.
+              */
+              <div key={c.id} className="relative">
+                <Link
+                  to={`/contact/${c.id}`}
+                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container-low transition-colors group"
+                >
                   <Avatar url={c.avatarUrl} name={c.name} size="w-9 h-9" />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-error rounded-full border-2 border-surface flex items-center justify-center">
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="text-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">
+                      {c.name}
+                    </span>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-error opacity-80">
+                      {c.daysSinceContact} days silent
+                    </span>
+                  </div>
+                  <div className="shrink-0 p-2 bg-surface-container text-on-surface-variant rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                </Link>
+
+                {/* Sits on the avatar's bottom-right: 8px row padding + 36px
+                    avatar − half the 16px badge. */}
+                <ScoreBreakdown
+                  contactId={c.id}
+                  score={Math.round(c.relationshipScore)}
+                  className="absolute left-[34px] top-[34px]"
+                >
+                  <span className="w-4 h-4 bg-error rounded-full border-2 border-surface flex items-center justify-center">
                     <span className="text-[7px] font-bold text-white leading-none">
                       {Math.round(c.relationshipScore)}
                     </span>
-                  </div>
-                </div>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <span className="text-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">
-                    {c.name}
                   </span>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-error opacity-80">
-                    {c.daysSinceContact} days silent
-                  </span>
-                </div>
-                <div className="shrink-0 p-2 bg-surface-container text-on-surface-variant rounded-lg group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-              </Link>
+                </ScoreBreakdown>
+              </div>
             ))}
           </div>
         </div>

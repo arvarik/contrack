@@ -62,6 +62,11 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<GateState>("checking");
   const [user, setUser] = useState<AccountUser | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
+  const [existingContacts, setExistingContacts] = useState(0);
+  // Why the sign-in screen is showing. Null when the user asked for it
+  // (sign-out) or simply arrived signed-out; "expired" when the server stopped
+  // accepting a credential we had.
+  const [signInReason, setSignInReason] = useState<"expired" | null>(null);
   const queryClient = useQueryClient();
 
   const check = useCallback(async () => {
@@ -69,6 +74,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       const status = await fetchAuthStatus();
       setAuthRequired(status.authRequired);
       setUser(status.user);
+      setExistingContacts(status.existingContacts ?? 0);
       if (status.setupRequired) setState("setup");
       else if (status.authRequired && !status.authenticated) setState("signin");
       else setState("open");
@@ -96,6 +102,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
    */
   const handleAuthenticated = useCallback(async () => {
     queryClient.clear();
+    setSignInReason(null);
     await check();
   }, [check, queryClient]);
 
@@ -109,6 +116,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     }
     queryClient.clear();
     setUser(null);
+    setSignInReason(null); // deliberate sign-out, not an expiry
     setState(authRequired ? "signin" : "open");
   }, [authRequired, queryClient]);
 
@@ -121,6 +129,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         if (current !== "open") return current;
         queryClient.clear();
         setUser(null);
+        setSignInReason("expired");
         return "signin";
       });
     };
@@ -133,8 +142,15 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   // chrome, not feedback.
   if (state === "checking") return null;
 
-  if (state === "setup") return <SetupWizard onCreated={handleAuthenticated} />;
-  if (state === "signin") return <SignIn onSignedIn={handleAuthenticated} />;
+  if (state === "setup")
+    return (
+      <SetupWizard
+        onCreated={handleAuthenticated}
+        existingContacts={existingContacts}
+      />
+    );
+  if (state === "signin")
+    return <SignIn onSignedIn={handleAuthenticated} reason={signInReason} />;
 
   return (
     <AuthContext.Provider

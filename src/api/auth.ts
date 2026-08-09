@@ -34,6 +34,15 @@ export interface AuthStatus {
   setupRequired: boolean;
   hasAccounts: boolean;
   user: AccountUser | null;
+  /** Contacts already here awaiting an owner. Only meaningful during setup. */
+  existingContacts: number;
+}
+
+export interface SessionPolicy {
+  sessionTtlDays: number;
+  min: number;
+  max: number;
+  default: number;
 }
 
 export interface SessionSummary {
@@ -138,4 +147,19 @@ export function fetchSessions(): Promise<{ sessions: SessionSummary[] }> {
 /** Sign out every other device, keeping this one. */
 export function revokeOtherSessions(): Promise<{ revoked: number }> {
   return authFetch("/sessions", { method: "DELETE" });
+}
+
+/** How long new sessions last, plus the supported range. */
+export function fetchSessionPolicy(): Promise<SessionPolicy> {
+  return authFetch("/session-policy");
+}
+
+/** Change the session lifetime. Applies to sessions created from now on. */
+export function updateSessionPolicy(
+  sessionTtlDays: number,
+): Promise<{ sessionTtlDays: number }> {
+  return authFetch("/session-policy", {
+    method: "PUT",
+    body: JSON.stringify({ sessionTtlDays }),
+  });
 }

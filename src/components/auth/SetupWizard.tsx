@@ -53,7 +53,14 @@ function validate(
   return errors;
 }
 
-export const SetupWizard = ({ onCreated }: { onCreated: () => void }) => {
+export const SetupWizard = ({
+  onCreated,
+  existingContacts = 0,
+}: {
+  onCreated: () => void;
+  /** Contacts already in this database, waiting to be claimed. */
+  existingContacts?: number;
+}) => {
   const [values, setValues] = useState<Record<Field, string>>({
     displayName: "",
     email: "",
@@ -118,9 +125,26 @@ export const SetupWizard = ({ onCreated }: { onCreated: () => void }) => {
     <AuthShell
       icon={<ShieldCheck className="w-7 h-7" />}
       title="Set up Contrack"
-      subtitle="This instance is protected. Create the account you'll sign in with — you're the only one who can, and it becomes the admin."
+      subtitle={
+        existingContacts > 0 ? (
+          <>
+            This Contrack already holds{" "}
+            <strong className="text-on-surface">
+              {existingContacts.toLocaleString()} contacts
+            </strong>
+            . Create the account you'll sign in with — they'll be assigned to
+            it, and nothing is lost.
+          </>
+        ) : (
+          "This instance is protected. Create the account you'll sign in with — you're the only one who can, and it becomes the admin."
+        )
+      }
       onSubmit={handleSubmit}
-      footer="Anything already in this Contrack — contacts, notes, lists — is assigned to this account when you create it."
+      footer={
+        existingContacts > 0
+          ? "Seeing this unexpectedly? Your data is still here — this screen appears whenever the app has contacts but no account yet."
+          : "You're the only one who can create this account. It becomes the admin."
+      }
     >
       <div className="space-y-4">
         <AuthField

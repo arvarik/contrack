@@ -66,7 +66,8 @@ interface ContactListItemProps {
   active: boolean;
   isSelectMode: boolean;
   isSelected: boolean;
-  onToggleSelect: (id: string) => void;
+  /** `extend` is true for a shift-click: select the range, don't toggle. */
+  onToggleSelect: (id: string, extend: boolean) => void;
 }
 
 const ContactListItemInner = ({
@@ -125,7 +126,7 @@ const ContactListItemInner = ({
   const handleClick = (e: React.MouseEvent) => {
     if (isSelectMode) {
       e.preventDefault();
-      onToggleSelect(contact.id);
+      onToggleSelect(contact.id, e.shiftKey);
     }
   };
 

@@ -28,6 +28,7 @@ import {
   Copy,
   Gauge,
   List,
+  Search,
   Sparkles,
   HardDrive,
   Trash2,
@@ -66,13 +67,17 @@ const SettingsLink = ({
   title,
   description,
   tone = "primary",
+  show = true,
 }: {
   to: string;
   icon: LucideIcon;
   title: string;
   description: string;
   tone?: "primary" | "amber" | "danger";
+  /** False when the active filter excludes this row. */
+  show?: boolean;
 }) => {
+  if (!show) return null;
   const tones = {
     primary: "bg-primary/10 text-primary",
     amber: "bg-amber-500/10 text-warning",
@@ -118,21 +123,25 @@ const PreferenceRow = ({
   title,
   description,
   children,
+  show = true,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
-}) => (
-  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
-    <div className="min-w-0">
-      <h3 className="font-bold text-sm text-on-surface">{title}</h3>
-      <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
-        {description}
-      </p>
+  /** False when the active filter excludes this row. */
+  show?: boolean;
+}) =>
+  !show ? null : (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <h3 className="font-bold text-sm text-on-surface">{title}</h3>
+        <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
+          {description}
+        </p>
+      </div>
+      <div className="shrink-0 sm:ml-4">{children}</div>
     </div>
-    <div className="shrink-0 sm:ml-4">{children}</div>
-  </div>
-);
+  );
 
 /** Segmented control — the app's standard pill-in-a-trough toggle. */
 const Segmented = <T extends string>({
@@ -218,6 +227,41 @@ const Stepper = ({
   );
 };
 
+/**
+ * Filter box for the settings page.
+ *
+ * Five groups and a dozen destinations is past the point where scanning
+ * headings beats typing. People remember *what* they want to change — "trash",
+ * "password", "celsius" — not which group a curator filed it under.
+ *
+ * Items match on synonyms as well as their visible label (below), so "logout"
+ * finds Account and "dedupe" finds Duplicates.
+ */
+const SettingsFilter = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) => (
+  <div className="relative">
+    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none" />
+    <input
+      type="search"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="Search settings"
+      aria-label="Search settings"
+      className={cn(
+        "w-full pl-10 pr-4 py-3 rounded-xl bg-surface-container-highest",
+        // 16px on mobile keeps iOS Safari from zooming the viewport on focus.
+        "text-base sm:text-sm",
+        "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+      )}
+    />
+  </div>
+);
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -239,6 +283,80 @@ export const SettingsHome = () => {
   const { preset, setPreset } = useDedupeSettings();
   const { density, setDensity } = useListDensity();
   const { user, authRequired } = useAuth();
+  const [query, setQuery] = React.useState("");
+
+  const q = query.trim().toLowerCase();
+  /** True when no filter is active, or any of `terms` contains it. */
+  const hit = (...terms: string[]) =>
+    !q || terms.some((t) => t.toLowerCase().includes(q));
+
+  // Synonyms live here rather than in each label, so the words people actually
+  // type ("logout", "bin", "api key") find the right row.
+  const show = {
+    account:
+      authRequired &&
+      hit(
+        "account",
+        "profile",
+        "password",
+        "sign out",
+        "logout",
+        "devices",
+        "session",
+        "email",
+        "username",
+        "security",
+      ),
+    tempUnit: hit(
+      "temperature unit",
+      "celsius",
+      "fahrenheit",
+      "weather",
+      "degrees",
+    ),
+    density: hit("list density", "compact", "comfortable", "rows", "spacing"),
+    recent: hit("recent contacts", "recently visited", "history", "pinned"),
+    sensitivity: hit(
+      "auto-merge sensitivity",
+      "duplicates",
+      "dedupe",
+      "merge",
+      "threshold",
+    ),
+    aiConfig: hit(
+      "ai configuration",
+      "providers",
+      "models",
+      "gemini",
+      "openai",
+      "anthropic",
+      "ollama",
+      "api key",
+      "capabilities",
+    ),
+    aiSearch: hit(
+      "contact enrichment",
+      "ai search",
+      "research",
+      "web",
+      "hydrate",
+    ),
+    aiStats: hit("ai usage", "stats", "tokens", "cost", "cache", "invocations"),
+    dedupe: hit("duplicates", "dedupe", "merge", "suggestions"),
+    lists: hit("lists", "groups", "members", "reorder"),
+    archived: hit("archived contacts", "archive", "hidden"),
+    trash: hit("trash", "deleted", "restore", "bin", "recycle"),
+  };
+
+  const groupShown = {
+    account: show.account,
+    preferences:
+      show.tempUnit || show.density || show.recent || show.sensitivity,
+    intelligence: show.aiConfig || show.aiSearch || show.aiStats,
+    organize: show.dedupe || show.lists,
+    data: show.archived || show.trash,
+  };
+  const nothingMatches = !Object.values(groupShown).some(Boolean);
 
   React.useEffect(() => {
     const saved = localStorage.getItem(TEMP_UNIT_KEY);
@@ -253,12 +371,20 @@ export const SettingsHome = () => {
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+      <SettingsFilter value={query} onChange={setQuery} />
+
+      {nothingMatches && (
+        <p className="text-sm text-on-surface-variant text-center py-8">
+          Nothing in Settings matches “{query.trim()}”.
+        </p>
+      )}
+
       {/*
         Account leads, but only on an instance that asks anyone to sign in.
         On the default local setup there is no account, and a link whose only
         content is "this does not apply to you" is worse than no link.
       */}
-      {authRequired && (
+      {groupShown.account && (
         <section
           className="tile-enter"
           style={{ animationDelay: tileDelay(0) }}
@@ -276,153 +402,184 @@ export const SettingsHome = () => {
       )}
 
       {/* ── Preferences — changed in place, so they lead ─────────────── */}
-      <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
-        <GroupHeading>Preferences</GroupHeading>
-        <div
-          className={cn(CARD, "p-4 sm:p-6 divide-y divide-surface-container")}
+      {groupShown.preferences && (
+        <section
+          className="tile-enter"
+          style={{ animationDelay: tileDelay(1) }}
         >
-          <PreferenceRow
-            title="Temperature unit"
-            description="How weather reads on a contact's local-time badge."
+          <GroupHeading>Preferences</GroupHeading>
+          <div
+            className={cn(CARD, "p-4 sm:p-6 divide-y divide-surface-container")}
           >
-            <Segmented
-              label="Temperature unit"
-              value={tempUnit}
-              onChange={handleUnitChange}
-              options={[
-                { value: "celsius", label: "°C" },
-                { value: "fahrenheit", label: "°F" },
-              ]}
-            />
-          </PreferenceRow>
+            <PreferenceRow
+              show={show.tempUnit}
+              title="Temperature unit"
+              description="How weather reads on a contact's local-time badge."
+            >
+              <Segmented
+                label="Temperature unit"
+                value={tempUnit}
+                onChange={handleUnitChange}
+                options={[
+                  { value: "celsius", label: "°C" },
+                  { value: "fahrenheit", label: "°F" },
+                ]}
+              />
+            </PreferenceRow>
 
-          <PreferenceRow
-            title="List density"
-            description={
-              density === "compact"
-                ? "Compact — more contacts per screen, same details."
-                : "Comfortable — roomier rows, easier to scan."
-            }
-          >
-            <Segmented
-              label="List density"
-              value={density}
-              onChange={setDensity}
-              options={[
-                { value: "comfortable", label: "Comfortable" },
-                { value: "compact", label: "Compact" },
-              ]}
-            />
-          </PreferenceRow>
+            <PreferenceRow
+              show={show.density}
+              title="List density"
+              description={
+                density === "compact"
+                  ? "Compact — more contacts per screen, same details."
+                  : "Comfortable — roomier rows, easier to scan."
+              }
+            >
+              <Segmented
+                label="List density"
+                value={density}
+                onChange={setDensity}
+                options={[
+                  { value: "comfortable", label: "Comfortable" },
+                  { value: "compact", label: "Compact" },
+                ]}
+              />
+            </PreferenceRow>
 
-          <PreferenceRow
-            title="Recent contacts"
-            description="How many recently visited contacts pin to the top of your Network. Set to 0 to hide the row."
-          >
-            <Stepper
-              label="recent contacts"
-              value={recentLimit}
-              onChange={setRecentLimit}
-              min={MIN_RECENT_LIMIT}
-              max={MAX_RECENT_LIMIT}
-            />
-          </PreferenceRow>
+            <PreferenceRow
+              show={show.recent}
+              title="Recent contacts"
+              description="How many recently visited contacts pin to the top of your Network. Set to 0 to hide the row."
+            >
+              <Stepper
+                label="recent contacts"
+                value={recentLimit}
+                onChange={setRecentLimit}
+                min={MIN_RECENT_LIMIT}
+                max={MAX_RECENT_LIMIT}
+              />
+            </PreferenceRow>
 
-          {/*
+            {/*
             This slider used to be bolted to the bottom of the Dedupe Engine
             navigation card, where it read as part of the link. It is a
             preference, so it lives with the preferences; the engine itself is
             a destination under Organize.
           */}
-          <PreferenceRow
-            title="Auto-merge sensitivity"
-            description={DEDUPE_PRESET_COPY[preset]}
-          >
-            <Segmented
-              label="Auto-merge sensitivity"
-              value={preset}
-              onChange={setPreset}
-              options={[
-                { value: "conservative", label: "Cautious" },
-                { value: "default", label: "Balanced" },
-                { value: "aggressive", label: "Eager" },
-              ]}
-            />
-          </PreferenceRow>
-        </div>
-      </section>
+            <PreferenceRow
+              show={show.sensitivity}
+              title="Auto-merge sensitivity"
+              description={DEDUPE_PRESET_COPY[preset]}
+            >
+              <Segmented
+                label="Auto-merge sensitivity"
+                value={preset}
+                onChange={setPreset}
+                options={[
+                  { value: "conservative", label: "Cautious" },
+                  { value: "default", label: "Balanced" },
+                  { value: "aggressive", label: "Eager" },
+                ]}
+              />
+            </PreferenceRow>
+          </div>
+        </section>
+      )}
 
       {/* ── Intelligence ─────────────────────────────────────────────── */}
-      <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>
-        <GroupHeading>Intelligence</GroupHeading>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SettingsLink
-            to="/settings/ai-config"
-            icon={Brain}
-            title="AI Configuration"
-            description="Connect providers and choose what powers each kind of AI work."
-          />
-          <SettingsLink
-            to="/settings/ai-search"
-            icon={Sparkles}
-            title="Contact Enrichment"
-            description="Research and fill in contact profiles from the live web."
-          />
-          <SettingsLink
-            to="/settings/ai-stats"
-            icon={Gauge}
-            title="AI Usage"
-            description="Invocations, token spend, cache hit rate, and approximate cost."
-          />
-        </div>
-      </section>
+      {groupShown.intelligence && (
+        <section
+          className="tile-enter"
+          style={{ animationDelay: tileDelay(2) }}
+        >
+          <GroupHeading>Intelligence</GroupHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SettingsLink
+              show={show.aiConfig}
+              to="/settings/ai-config"
+              icon={Brain}
+              title="AI Configuration"
+              description="Connect providers and choose what powers each kind of AI work."
+            />
+            <SettingsLink
+              show={show.aiSearch}
+              to="/settings/ai-search"
+              icon={Sparkles}
+              title="Contact Enrichment"
+              description="Research and fill in contact profiles from the live web."
+            />
+            <SettingsLink
+              show={show.aiStats}
+              to="/settings/ai-stats"
+              icon={Gauge}
+              title="AI Usage"
+              description="Invocations, token spend, cache hit rate, and approximate cost."
+            />
+          </div>
+        </section>
+      )}
 
       {/* ── Organize ─────────────────────────────────────────────────── */}
-      <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
-        <GroupHeading>Organize</GroupHeading>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/*
+      {groupShown.organize && (
+        <section
+          className="tile-enter"
+          style={{ animationDelay: tileDelay(3) }}
+        >
+          <GroupHeading>Organize</GroupHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/*
             Duplicates leads the group. It is the one destination here that
             has work queued behind it — the sidebar already carries a badge for
             pending suggestions — and a queue nobody sees is a queue nobody
             clears. Lists are browsed when you go looking for them; duplicates
             need to be offered.
           */}
-          <SettingsLink
-            to="/settings/dedupe"
-            icon={Copy}
-            title="Duplicates"
-            description="Find and merge duplicate contacts, automatically or by hand."
-          />
-          <SettingsLink
-            to="/settings/lists"
-            icon={List}
-            title="Lists"
-            description="Reorder, rename, and delete lists, and manage who belongs to each."
-          />
-        </div>
-      </section>
+            <SettingsLink
+              show={show.dedupe}
+              to="/settings/dedupe"
+              icon={Copy}
+              title="Duplicates"
+              description="Find and merge duplicate contacts, automatically or by hand."
+            />
+            <SettingsLink
+              show={show.lists}
+              to="/settings/lists"
+              icon={List}
+              title="Lists"
+              description="Reorder, rename, and delete lists, and manage who belongs to each."
+            />
+          </div>
+        </section>
+      )}
 
       {/* ── Data ─────────────────────────────────────────────────────── */}
-      <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
-        <GroupHeading>Data</GroupHeading>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SettingsLink
-            to="/settings/archived"
-            icon={Archive}
-            tone="amber"
-            title="Archived contacts"
-            description="Hidden from your Network and Map. Restore them at any time."
-          />
-          <SettingsLink
-            to="/settings/trash"
-            icon={Trash2}
-            tone="danger"
-            title="Trash"
-            description="Recently deleted contacts. Empties itself after 30 days."
-          />
-        </div>
-      </section>
+      {groupShown.data && (
+        <section
+          className="tile-enter"
+          style={{ animationDelay: tileDelay(4) }}
+        >
+          <GroupHeading>Data</GroupHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SettingsLink
+              show={show.archived}
+              to="/settings/archived"
+              icon={Archive}
+              tone="amber"
+              title="Archived contacts"
+              description="Hidden from your Network and Map. Restore them at any time."
+            />
+            <SettingsLink
+              show={show.trash}
+              to="/settings/trash"
+              icon={Trash2}
+              tone="danger"
+              title="Trash"
+              description="Recently deleted contacts. Empties itself after 30 days."
+            />
+          </div>
+        </section>
+      )}
 
       {/* Quiet footer — orients without competing with the groups above. */}
       <p className="flex items-center gap-1.5 text-xs text-on-surface-variant px-1">

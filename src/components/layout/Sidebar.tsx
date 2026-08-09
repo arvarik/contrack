@@ -114,6 +114,25 @@ export const Sidebar = () => {
   const { data: dedupeCount } = useDedupeCount();
   const pendingSuggestions = dedupeCount?.count || 0;
 
+  /**
+   * The badges are `aria-hidden` graphics, so whatever they convey has to be
+   * said in the link's accessible name instead — otherwise a screen-reader
+   * user gets "Relationship Pulse" and no hint that anything is waiting.
+   */
+  const pulseBadges = [
+    urgentCount > 0 &&
+      `${urgentCount} urgent follow-up${urgentCount === 1 ? "" : "s"}`,
+    pendingSuggestions > 0 &&
+      `${pendingSuggestions} possible duplicate${pendingSuggestions === 1 ? "" : "s"}`,
+  ].filter(Boolean) as string[];
+
+  const pulseLabel = pulseBadges.length
+    ? `Relationship Pulse — ${pulseBadges.join(", ")}`
+    : "Relationship Pulse";
+  const pulseTooltip = pulseBadges.length
+    ? `Relationship Pulse · ${pulseBadges.join(" · ")}`
+    : "Relationship Pulse";
+
   return (
     <aside
       className={cn(
@@ -145,29 +164,50 @@ export const Sidebar = () => {
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label="Relationship Pulse" shortcut="⌘⇧P">
+      <SidebarTooltip label={pulseTooltip} shortcut="⌘⇧P">
         <Link
           to="/pulse"
           className={navLink(isPulse, "relative")}
-          aria-label="Relationship Pulse"
+          aria-label={pulseLabel}
         >
           <Activity className="w-6 h-6" />
-          {/* Urgent action items — red dot (top-right) */}
+
+          {/*
+            Two different signals, so two different treatments.
+
+            Urgent follow-ups are about *time* — something is due — so they
+            keep the pinging red dot. A count would invite comparison
+            ("only 3") when the point is that any number above zero needs
+            attention today.
+
+            Pending duplicates are about *volume*: clearing 3 is a coffee
+            break and clearing 180 is an afternoon, and a dot renders those
+            identically. So that one carries the number.
+
+            They sit on opposite corners rather than side by side, because a
+            numeric pill next to a dot on a 24px icon reads as one smudge.
+          */}
           {urgentCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+            <span
+              className="absolute top-1.5 right-1.5 flex h-2 w-2"
+              aria-hidden="true"
+            >
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-error" />
             </span>
           )}
-          {/* Pending suggestions — blue dot (top-right, offset left of urgent dot) */}
+
           {pendingSuggestions > 0 && (
             <span
               className={cn(
-                "absolute top-1.5 flex h-2 w-2",
-                urgentCount > 0 ? "right-4" : "right-1.5",
+                "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1",
+                "flex items-center justify-center rounded-full",
+                "bg-primary text-on-primary text-[10px] font-bold leading-none",
+                "tabular-nums ring-2 ring-surface-container",
               )}
+              aria-hidden="true"
             >
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              {pendingSuggestions > 99 ? "99+" : pendingSuggestions}
             </span>
           )}
         </Link>

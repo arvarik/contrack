@@ -53,10 +53,45 @@ function recencyScore(daysSinceContact: number, cadenceDays: number): number {
 }
 
 /**
+ * The five signals behind a score, each 0–100, with the weight applied to it.
+ *
+ * Returned rather than discarded because a bare number out of 100 attached to
+ * a person is a judgement nobody can check. "42" means nothing; "you last
+ * spoke 8 months ago, against a 90-day cadence" is something you can act on or
+ * disagree with.
+ */
+export interface ScoreBreakdown {
+  score: number;
+  components: {
+    key: "recency" | "frequency" | "depth" | "reciprocity" | "momentum";
+    label: string;
+    /** 0–100 for this signal alone. */
+    value: number;
+    /** Its share of the composite, 0–1. */
+    weight: number;
+    /** What this signal measured, in words. */
+    detail: string;
+  }[];
+}
+
+const WEIGHTS = {
+  recency: 0.4,
+  frequency: 0.25,
+  depth: 0.15,
+  reciprocity: 0.1,
+  momentum: 0.1,
+} as const;
+
+/**
  * Compute a single contact's relationship score.
  * Returns a clamped integer 0-100.
  */
 function computeScoreForContact(contact: ContactScoreRow): number {
+  return computeBreakdown(contact).score;
+}
+
+/** Compute the score *and* the reasoning behind it. */
+function computeBreakdown(contact: ContactScoreRow): ScoreBreakdown {
   const cadence = contact.cadenceDays || 90;
 
   // ── Recency (40%) ──────────────────────────────────────────────────────
@@ -119,12 +154,71 @@ function computeScoreForContact(contact: ContactScoreRow): number {
 
   // ── Weighted composite ─────────────────────────────────────────────────
   const raw =
-    0.4 * recency +
-    0.25 * frequency +
-    0.15 * depth +
-    0.1 * reciprocity +
-    0.1 * momentum;
-  return Math.round(Math.max(0, Math.min(100, raw)));
+    WEIGHTS.recency * recency +
+    WEIGHTS.frequency * frequency +
+    WEIGHTS.depth * depth +
+    WEIGHTS.reciprocity * reciprocity +
+    WEIGHTS.momentum * momentum;
+
+  const daysSince = contact.lastContactedAt
+    ? Math.floor(
+        (Date.now() - new Date(contact.lastContactedAt).getTime()) /
+          (1000 * 60 * 60 * 24),
+      )
+    : null;
+
+  const plural = (n: number, one: string, many = one + "s") =>
+    `${n} ${n === 1 ? one : many}`;
+
+  return {
+    score: Math.round(Math.max(0, Math.min(100, raw))),
+    components: [
+      {
+        key: "recency",
+        label: "Recency",
+        value: Math.round(recency),
+        weight: WEIGHTS.recency,
+        detail:
+          daysSince === null
+            ? "No interaction logged yet"
+            : `Last contact ${daysSince === 0 ? "today" : plural(daysSince, "day") + " ago"}, against a ${cadence}-day cadence`,
+      },
+      {
+        key: "frequency",
+        label: "Frequency",
+        value: Math.round(frequency),
+        weight: WEIGHTS.frequency,
+        detail: `${plural(stats.total90d, "interaction")} in the last 90 days`,
+      },
+      {
+        key: "depth",
+        label: "Depth",
+        value: Math.round(depth),
+        weight: WEIGHTS.depth,
+        detail:
+          stats.avgContentLength > 0
+            ? `Notes average ${Math.round(stats.avgContentLength)} characters`
+            : "No notes recorded on recent interactions",
+      },
+      {
+        key: "reciprocity",
+        label: "Reciprocity",
+        value: Math.round(reciprocity),
+        weight: WEIGHTS.reciprocity,
+        detail:
+          stats.totalTypeCount > 0
+            ? `${stats.bidirectionalCount} of ${stats.totalTypeCount} were two-way (meeting, call, email)`
+            : "Nothing recent to judge from",
+      },
+      {
+        key: "momentum",
+        label: "Momentum",
+        value: Math.round(momentum),
+        weight: WEIGHTS.momentum,
+        detail: `${plural(stats.total30d, "interaction")} in the last 30 days vs ${stats.totalPrev30d} in the 30 before`,
+      },
+    ],
+  };
 }
 
 // =============================================================================
@@ -132,6 +226,34 @@ function computeScoreForContact(contact: ContactScoreRow): number {
 // =============================================================================
 
 export const relationshipService = {
+  /**
+   * The score for a contact, together with the five signals that produced it.
+   * Computed fresh rather than read from the stored scalar, so the explanation
+   * always matches the number it is explaining.
+   */
+  explainScore(contactId: string): ScoreBreakdown | null {
+    const contact = sqlite
+      .prepare(
+        `SELECT id, cadenceDays, lastContactedAt FROM contacts WHERE id = ?`,
+      )
+      .get(contactId) as ContactScoreRow | undefined;
+    if (!contact) return null;
+
+    const breakdown = computeBreakdown(contact);
+
+    // Write the fresh score back. `contacts.relationshipScore` is a cache
+    // refreshed hourly, so by the time someone asks *why* a score is what it
+    // is, the stored number can be an hour stale — and an explanation that
+    // adds up to 42 sitting next to a badge reading 45 undermines the very
+    // trust the explanation exists to build. Recomputing already happened
+    // above; persisting it costs one indexed write and makes the two agree.
+    sqlite
+      .prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?")
+      .run(breakdown.score, contactId);
+
+    return breakdown;
+  },
+
   /**
    * Compute and persist the relationship score for a single contact.
    * Called after each interaction creation for immediate feedback.

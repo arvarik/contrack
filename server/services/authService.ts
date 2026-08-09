@@ -18,6 +18,7 @@ import crypto from "crypto";
 import { sqlite, OWNED_TABLES } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { AppError, ConflictError, ValidationError } from "../utils/AppError.ts";
+import { getSetting, setSetting } from "./settingsService.ts";
 import {
   hashPassword,
   verifyPassword,
@@ -25,8 +26,58 @@ import {
   validatePassword,
 } from "./passwords.ts";
 
-/** How long a browser session stays valid without re-authenticating. */
-const SESSION_TTL_DAYS = 30;
+/**
+ * How long a browser session stays valid without re-authenticating.
+ *
+ * Configurable rather than fixed, because the right answer depends entirely on
+ * where the instance lives: a laptop-only install wants months of not being
+ * asked, and one exposed through a tunnel wants a day. Stored in app_settings
+ * so it survives restarts and can be changed from the UI without a redeploy.
+ *
+ * Applies to sessions created after the change — shortening it does not
+ * retroactively expire the session you are currently using, which is
+ * deliberate: locking yourself out by adjusting a setting is a bad surprise.
+ * "Sign out other devices" is the button for that.
+ */
+export const SESSION_TTL_SETTING = "auth.sessionTtlDays";
+export const DEFAULT_SESSION_TTL_DAYS = 30;
+export const MIN_SESSION_TTL_DAYS = 1;
+export const MAX_SESSION_TTL_DAYS = 365;
+
+export function getSessionTtlDays(): number {
+  const stored = getSetting<number>(SESSION_TTL_SETTING);
+  if (typeof stored !== "number" || !Number.isFinite(stored)) {
+    return DEFAULT_SESSION_TTL_DAYS;
+  }
+  // Clamp rather than trust: the value round-trips through a JSON blob that a
+  // determined person can edit by hand, and a session lasting zero days or a
+  // century is worse than the default either way.
+  return Math.min(
+    MAX_SESSION_TTL_DAYS,
+    Math.max(MIN_SESSION_TTL_DAYS, Math.round(stored)),
+  );
+}
+
+/**
+ * Set the session lifetime.
+ *
+ * @throws ValidationError when the value is not a whole number of days inside
+ *   the supported range
+ */
+export function setSessionTtlDays(value: unknown): number {
+  const days = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(days) || !Number.isInteger(days)) {
+    throw new ValidationError("Session length must be a whole number of days.");
+  }
+  if (days < MIN_SESSION_TTL_DAYS || days > MAX_SESSION_TTL_DAYS) {
+    throw new ValidationError(
+      `Session length must be between ${MIN_SESSION_TTL_DAYS} and ${MAX_SESSION_TTL_DAYS} days.`,
+    );
+  }
+  setSetting(SESSION_TTL_SETTING, days);
+  log.info("Auth", `Session lifetime set to ${days} day(s)`);
+  return days;
+}
 
 /** Cap on the stored User-Agent — enough to name a device, not a fingerprint. */
 const USER_AGENT_MAX = 200;
@@ -126,6 +177,21 @@ export function validateEmail(email: string): string | null {
 
 const USER_COLUMNS = `id, email, username, displayName, passwordHash, role,
                       createdAt, updatedAt, lastLoginAt`;
+
+/**
+ * Contacts not yet assigned to any account — what the first account will
+ * claim. Excludes trashed rows, so the number matches what the app will
+ * actually show once you are inside.
+ */
+export function countUnownedContacts(): number {
+  const row = sqlite
+    .prepare(
+      `SELECT COUNT(*) AS n FROM contacts
+        WHERE ownerId IS NULL AND deletedAt IS NULL AND isGhost = 0`,
+    )
+    .get() as { n: number };
+  return row.n;
+}
 
 /** How many accounts exist. Drives the first-run setup screen. */
 export function countUsers(): number {
@@ -461,7 +527,7 @@ export function createSession(
 ): { secret: string; expiresAt: string } {
   const secret = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(
-    Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+    Date.now() + getSessionTtlDays() * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   sqlite

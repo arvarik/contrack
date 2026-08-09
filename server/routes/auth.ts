@@ -36,6 +36,12 @@ import {
   listSessions,
   revokeOtherSessions,
   publicUser,
+  countUnownedContacts,
+  getSessionTtlDays,
+  setSessionTtlDays,
+  MIN_SESSION_TTL_DAYS,
+  MAX_SESSION_TTL_DAYS,
+  DEFAULT_SESSION_TTL_DAYS,
 } from "../services/authService.ts";
 
 const router = Router();
@@ -89,12 +95,20 @@ function bodyString(req: Request, field: string): string {
 router.get("/status", (req, res) => {
   const authRequired = isAuthRequired();
   const user = currentUser(req);
+  const accounts = countUsers();
+  const setupRequired = authRequired && accounts === 0;
+
   res.json({
     authRequired,
     authenticated: isAuthenticated(req),
-    setupRequired: authRequired && countUsers() === 0,
-    hasAccounts: countUsers() > 0,
+    setupRequired,
+    hasAccounts: accounts > 0,
     user: user ? publicUser(user) : null,
+    // How much data is sitting here waiting to be claimed. Only computed for
+    // the setup screen, which is the one place it changes what someone should
+    // believe: "create an account" reads very differently when you know 431
+    // contacts are already here and are about to be assigned to it.
+    existingContacts: setupRequired ? countUnownedContacts() : 0,
   });
 });
 
@@ -231,5 +245,32 @@ router.delete("/sessions", requireUser, (req, res) => {
   );
   res.json({ revoked });
 });
+
+// =============================================================================
+// Session policy
+// =============================================================================
+
+/**
+ * How long new sessions last. Read is open to any authenticated caller;
+ * writing needs a real account, since it is a security setting.
+ */
+router.get("/session-policy", requireUser, (_req, res) => {
+  res.json({
+    sessionTtlDays: getSessionTtlDays(),
+    min: MIN_SESSION_TTL_DAYS,
+    max: MAX_SESSION_TTL_DAYS,
+    default: DEFAULT_SESSION_TTL_DAYS,
+  });
+});
+
+router.put(
+  "/session-policy",
+  requireUser,
+  asyncHandler(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const sessionTtlDays = setSessionTtlDays(body.sessionTtlDays);
+    res.json({ sessionTtlDays });
+  }),
+);
 
 export const authRouter = router;

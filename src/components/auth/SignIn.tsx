@@ -11,7 +11,14 @@ import { signIn } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
 
-export const SignIn = ({ onSignedIn }: { onSignedIn: () => void }) => {
+export const SignIn = ({
+  onSignedIn,
+  reason,
+}: {
+  onSignedIn: () => void;
+  /** Why this screen appeared, when it was not the user's own doing. */
+  reason?: "expired" | null;
+}) => {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +53,12 @@ export const SignIn = ({ onSignedIn }: { onSignedIn: () => void }) => {
   return (
     <AuthShell
       icon={<Lock className="w-7 h-7" />}
-      title="Welcome back"
-      subtitle="Sign in to your Contrack account."
+      title={reason === "expired" ? "Signed out" : "Welcome back"}
+      subtitle={
+        reason === "expired"
+          ? "Your session expired, so Contrack signed you out. Sign in to pick up where you left off."
+          : "Sign in to your Contrack account."
+      }
       onSubmit={handleSubmit}
       footer="Forgot your password? A self-hosted Contrack has no way to email you a reset — see the configuration docs for the recovery steps."
     >

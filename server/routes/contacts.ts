@@ -4,6 +4,7 @@ import { AVATARS_DIR, ensureDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
+import { relationshipService } from "../services/relationshipService.ts";
 import { parseContactRecord } from "../ai/aiService.ts";
 import {
   validateBody,
@@ -128,6 +129,22 @@ router.get(
       throw new AppError("Not found", 404);
     }
     res.json(contact);
+  }),
+);
+
+/**
+ * Why a contact scores what it scores.
+ *
+ * Separate from the contact payload rather than folded into it: computing the
+ * breakdown runs an aggregate query per contact, which is fine on demand for
+ * one contact and wasteful on a list of four hundred.
+ */
+router.get(
+  "/contacts/:id/score",
+  asyncHandler(async (req, res) => {
+    const breakdown = relationshipService.explainScore(String(req.params.id));
+    if (!breakdown) throw new AppError("Not found", 404);
+    res.json(breakdown);
   }),
 );
 

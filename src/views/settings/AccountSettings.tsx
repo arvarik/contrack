@@ -30,6 +30,8 @@ import {
   fetchSessions,
   revokeOtherSessions,
   updateProfile,
+  fetchSessionPolicy,
+  updateSessionPolicy,
   type SessionSummary,
 } from "../../api/auth";
 import { useAuth } from "../../components/auth/AuthGate";
@@ -362,6 +364,115 @@ const SessionsCard = () => {
   );
 };
 
+/**
+ * How long a sign-in lasts.
+ *
+ * Offered as presets rather than a free number field: the meaningful choice is
+ * "this machine is mine" versus "this thing is on the internet", and asking
+ * someone to pick between 44 and 46 days is a question with no right answer.
+ * The server still accepts any value in range, so a custom setting made
+ * elsewhere is shown rather than silently snapped to a preset.
+ */
+const TTL_PRESETS = [
+  { days: 1, label: "1 day", hint: "Exposed to the internet" },
+  { days: 7, label: "1 week", hint: "Shared or portable machine" },
+  { days: 30, label: "30 days", hint: "Default" },
+  { days: 365, label: "1 year", hint: "Private machine only" },
+] as const;
+
+const SessionLengthCard = () => {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["auth", "session-policy"],
+    queryFn: fetchSessionPolicy,
+    staleTime: 60_000,
+  });
+
+  const save = useMutation({
+    mutationFn: updateSessionPolicy,
+    onSuccess: ({ sessionTtlDays }) => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "session-policy"] });
+      toast.success(
+        `New sign-ins will last ${sessionTtlDays === 1 ? "1 day" : `${sessionTtlDays} days`}`,
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const current = data?.sessionTtlDays ?? 30;
+  const isCustom = !TTL_PRESETS.some((p) => p.days === current);
+
+  return (
+    <div className={cn(CARD, "p-4 sm:p-6 space-y-4")}>
+      <p className="text-sm text-on-surface-variant text-pretty">
+        How long a sign-in lasts before Contrack asks for your password again.
+      </p>
+
+      {isLoading ? (
+        <p className="text-sm text-on-surface-variant">Loading…</p>
+      ) : (
+        <div
+          role="radiogroup"
+          aria-label="Session length"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+        >
+          {TTL_PRESETS.map((preset) => {
+            const active = preset.days === current;
+            return (
+              <button
+                key={preset.days}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={save.isPending}
+                onClick={() => !active && save.mutate(preset.days)}
+                className={cn(
+                  "text-left px-4 py-3 rounded-xl transition-colors",
+                  "disabled:cursor-not-allowed",
+                  active
+                    ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                    : "bg-surface-container-highest hover:bg-surface-container-high",
+                )}
+              >
+                <span
+                  className={cn(
+                    "block text-sm font-bold",
+                    active ? "text-primary" : "text-on-surface",
+                  )}
+                >
+                  {preset.label}
+                </span>
+                <span className="block text-xs text-on-surface-variant mt-0.5">
+                  {preset.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {isCustom && !isLoading && (
+        <p className="text-xs text-on-surface-variant">
+          Currently set to {current} days, which isn't one of the presets.
+          Choosing one above will replace it.
+        </p>
+      )}
+
+      {/*
+        Said plainly because the opposite assumption is the dangerous one:
+        someone shortening this to lock out a device they lost will otherwise
+        believe they have done it.
+      */}
+      <p className="text-xs text-on-surface-variant text-pretty">
+        This applies to sign-ins from now on. Sessions that already exist keep
+        the length they were created with — use{" "}
+        <strong className="text-on-surface">Sign out other devices</strong> to
+        end those now.
+      </p>
+    </div>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -406,6 +517,11 @@ export const AccountSettings = () => {
       </section>
 
       <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
+        <GroupHeading>Session length</GroupHeading>
+        <SessionLengthCard />
+      </section>
+
+      <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
         <GroupHeading>Session</GroupHeading>
         <div
           className={cn(

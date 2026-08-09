@@ -17,6 +17,7 @@ import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
+import { clearSettingsCache } from "../../server/services/settingsService.ts";
 
 const app = makeTestApp();
 
@@ -637,3 +638,140 @@ function countUsers(): number {
   return (sqlite.prepare("SELECT COUNT(*) n FROM users").get() as { n: number })
     .n;
 }
+
+// =============================================================================
+
+describe("session policy", () => {
+  let cookie: string[];
+
+  beforeEach(async () => {
+    wipeAccounts();
+    delete process.env.API_TOKEN;
+    sqlite.exec("DELETE FROM app_settings WHERE key = 'auth.sessionTtlDays'");
+    clearSettingsCache();
+    const created = await setupAccount();
+    cookie = created.cookie;
+    __resetAuthRateLimits();
+  });
+
+  afterAll(() => {
+    sqlite.exec("DELETE FROM app_settings WHERE key = 'auth.sessionTtlDays'");
+    clearSettingsCache();
+  });
+
+  it("defaults to 30 days and reports its range", async () => {
+    const res = await request(app)
+      .get("/api/auth/session-policy")
+      .set("Cookie", cookie);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ sessionTtlDays: 30, min: 1, max: 365 });
+  });
+
+  it("changes the lifetime of sessions created afterwards", async () => {
+    const put = await request(app)
+      .put("/api/auth/session-policy")
+      .set("Cookie", cookie)
+      .send({ sessionTtlDays: 1 });
+    expect(put.status, JSON.stringify(put.body)).toBe(200);
+    expect(put.body.sessionTtlDays).toBe(1);
+
+    __resetAuthRateLimits();
+    await signIn("theowner", ACCOUNT.password);
+
+    // Ordered by rowid, not createdAt: CURRENT_TIMESTAMP has one-second
+    // resolution and both sessions are created inside the same second, so
+    // ordering by it picks a row at random.
+    const row = sqlite
+      .prepare("SELECT expiresAt FROM sessions ORDER BY rowid DESC LIMIT 1")
+      .get() as { expiresAt: string };
+    const days = (new Date(row.expiresAt).getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(0.9);
+    expect(days).toBeLessThan(1.1);
+  });
+
+  it("leaves existing sessions alone, so a change cannot lock you out", async () => {
+    const before = sqlite
+      .prepare("SELECT expiresAt FROM sessions LIMIT 1")
+      .get() as { expiresAt: string };
+
+    await request(app)
+      .put("/api/auth/session-policy")
+      .set("Cookie", cookie)
+      .send({ sessionTtlDays: 1 });
+
+    const after = sqlite
+      .prepare("SELECT expiresAt FROM sessions LIMIT 1")
+      .get() as { expiresAt: string };
+    expect(after.expiresAt).toBe(before.expiresAt);
+
+    // ...and that session still works.
+    expect(
+      (await request(app).get("/api/contacts").set("Cookie", cookie)).status,
+    ).toBe(200);
+  });
+
+  it("rejects values outside the supported range", async () => {
+    for (const bad of [0, -5, 366, 1.5, "thirty", null]) {
+      const res = await request(app)
+        .put("/api/auth/session-policy")
+        .set("Cookie", cookie)
+        .send({ sessionTtlDays: bad });
+      expect(res.status, `value ${String(bad)}`).toBe(400);
+    }
+    // ...and the stored value is untouched.
+    const res = await request(app)
+      .get("/api/auth/session-policy")
+      .set("Cookie", cookie);
+    expect(res.body.sessionTtlDays).toBe(30);
+  });
+
+  it("needs an account, not just a token", async () => {
+    process.env.API_TOKEN = "policy-token";
+    try {
+      const res = await request(app)
+        .get("/api/auth/session-policy")
+        .set("Authorization", "Bearer policy-token");
+      expect(res.status).toBe(403);
+    } finally {
+      delete process.env.API_TOKEN;
+    }
+  });
+});
+
+// =============================================================================
+
+describe("setup reports what is waiting", () => {
+  beforeEach(() => {
+    wipeAccounts();
+    delete process.env.API_TOKEN;
+    __resetAuthRateLimits();
+  });
+
+  it("counts unowned contacts so the setup screen can name them", async () => {
+    sqlite.exec(`
+      INSERT INTO contacts (id, name, ownerId) VALUES ('cnt-1', 'Waiting One', NULL);
+      INSERT INTO contacts (id, name, ownerId) VALUES ('cnt-2', 'Waiting Two', NULL);
+    `);
+    const res = await request(app).get("/api/auth/status");
+    expect(res.body.setupRequired).toBe(true);
+    expect(res.body.existingContacts).toBeGreaterThanOrEqual(2);
+    sqlite.exec("DELETE FROM contacts WHERE id IN ('cnt-1','cnt-2')");
+  });
+
+  it("excludes trashed and ghost contacts from that count", async () => {
+    sqlite.exec(`
+      INSERT INTO contacts (id, name, deletedAt) VALUES ('cnt-del', 'Trashed', '2020-01-01');
+      INSERT INTO contacts (id, name, isGhost) VALUES ('cnt-ghost', 'Ghosty', 1);
+    `);
+    const res = await request(app).get("/api/auth/status");
+    expect(res.body.existingContacts).toBe(0);
+    sqlite.exec("DELETE FROM contacts WHERE id IN ('cnt-del','cnt-ghost')");
+  });
+
+  it("reports zero once an account exists", async () => {
+    await setupAccount();
+    const res = await request(app).get("/api/auth/status");
+    expect(res.body.setupRequired).toBe(false);
+    expect(res.body.existingContacts).toBe(0);
+  });
+});

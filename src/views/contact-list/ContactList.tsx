@@ -10,7 +10,13 @@
  * The component itself handles only layout rendering and UX hooks
  * (scroll restoration, pull-to-refresh, context menus, drag-to-reorder).
  */
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -352,6 +358,32 @@ export const ContactList = () => {
     selectAll,
     isPending,
   } = multiSelect;
+
+  /**
+   * Cmd/Ctrl+A selects every visible contact while in select mode.
+   *
+   * Only while selecting, and only when focus is not in a field: outside those
+   * two conditions Cmd+A means "select all text", and stealing that is the
+   * kind of shortcut hijack that makes an app feel hostile. Selects the
+   * *filtered* set, matching what the "Select all" button already does.
+   */
+  useEffect(() => {
+    if (!isSelectMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "a" || !(event.metaKey || event.ctrlKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      selectAll();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isSelectMode, selectAll]);
 
   // ── Derived data (hoisted out of JSX to avoid recomputing per render) ──
   const activeContactCount = useMemo(
@@ -722,20 +754,26 @@ export const ContactList = () => {
               </div>
               <div>
                 <p className="font-bold text-base">Your network is empty</p>
-                <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-[200px] mx-auto">
-                  Add your first contact to get started
+                <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-[240px] mx-auto text-pretty">
+                  Bring in the contacts you already have, or start one at a
+                  time.
                 </p>
               </div>
-              <div className="flex flex-col gap-2 w-full max-w-[200px]">
+              {/*
+                Import leads. Nobody builds a personal CRM by typing four
+                hundred people in by hand — they arrive with an export from
+                Apple, Google or LinkedIn, and the first screen either meets
+                that or wastes their time. "Add contact" was the primary
+                action here, which quietly framed the product as a place to
+                do data entry.
+              */}
+              <div className="flex flex-col gap-2 w-full max-w-[220px]">
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => setIsImportOpen(true)}
                   className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
                 >
-                  <UserPlus className="w-4 h-4" />
-                  Add Contact{" "}
-                  <kbd className="hidden sm:inline text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono">
-                    N
-                  </kbd>
+                  <Upload className="w-4 h-4" />
+                  Import contacts
                 </button>
                 <button
                   onClick={() => setIsSmartPasteOpen(true)}
@@ -747,7 +785,21 @@ export const ContactList = () => {
                     V
                   </kbd>
                 </button>
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center justify-center gap-2 text-sm py-2 text-on-surface-variant hover:text-on-surface transition-colors font-bold"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Add one by hand{" "}
+                  <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">
+                    N
+                  </kbd>
+                </button>
               </div>
+              <p className="text-[11px] text-on-surface-variant max-w-[240px] text-pretty">
+                Apple, Google and LinkedIn exports all work — Contrack merges
+                duplicates across them for you.
+              </p>
             </div>
           )}
 
@@ -863,6 +915,35 @@ export const ContactList = () => {
 
         {showAlphabetRail && (
           <>
+            {/*
+              Where-am-I marker for pointer users.
+
+              The rail already highlights the active letter, but at 9px inside
+              a 24px strip that is a hint you have to go looking for — fine on
+              a phone where your thumb is already on it, close to invisible on
+              a wide screen where the rail is a sliver at the far edge. This is
+              the same information at a size you notice without trying.
+
+              Deliberately one floating marker rather than inline headers per
+              section: headers would mean interleaving header rows into the
+              virtualizer's flat list, which re-indexes every row and breaks
+              the bucket→index map the rail jumps by. Same orientation, none of
+              that risk.
+            */}
+            <div
+              aria-hidden="true"
+              className={cn(
+                "hidden md:flex absolute top-2 left-4 z-10 pointer-events-none",
+                "items-center justify-center w-8 h-8 rounded-xl",
+                "bg-surface-container-high/85 backdrop-blur-sm shadow-sm",
+                "text-sm font-extrabold text-on-surface-variant",
+                "transition-opacity duration-150",
+                activeBucket ? "opacity-100" : "opacity-0",
+              )}
+            >
+              {activeBucket ?? ""}
+            </div>
+
             <AlphabetRail
               index={bucketIndex}
               activeBucket={activeBucket}
