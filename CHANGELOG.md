@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Swipe-merge stayed blocked after confirming a large cluster.** The drag
+  handler captured the confirmation flag once and never saw it change — a
+  stale closure the exhaustive-deps burn-down surfaced. The merge buttons
+  worked; the swipe silently did not.
+- The scroll-position save on unmount read a ref React had already cleared,
+  so leaving a list mid-scroll saved nothing and the position restored stale.
+- The command palette re-bound its document key listener on every keystroke
+  (the action list was rebuilt each render into the handler's dependency
+  list), and the AI-result array was minted fresh per render into a memo.
+
 - **A DNS-rebinding hole in the outbound fetch guard.** The SSRF check
   resolved a hostname, validated the address, and then `fetch()` resolved the
   same name again to dial — two queries a hostile DNS server answers
@@ -47,6 +57,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/uploads` only), `X-Frame-Options: DENY`, and a referrer policy. Production
   adds a CSP with `script-src 'self'` — the built `index.html` has no inline
   script, which is what makes the strict policy possible.
+- **`aiService.ts` (1,557 lines, four unrelated domains) is now five domain
+  modules** — contact parsing, relationship intelligence, mentions, search
+  intelligence, shared helpers — behind the same import path, so no call
+  site changed.
+- **One schema translator serves all three AI adapters.** The three copies
+  had drifted; the OpenAI/compat copy dropped a nullable object's properties
+  outright. The dialect differences (nullable form, object sealing) are now
+  two documented options, and the trap is closed with a test on it.
+- The four SQL statements on the per-request auth path are compiled once at
+  module load instead of per call (measured ~6× per statement), matching the
+  repository's existing convention. `PRAGMA optimize` now runs daily and on
+  shutdown.
+- `react-hooks/exhaustive-deps` is an error now that its count is zero —
+  all 14 warnings reviewed and fixed individually, per the config's ratchet
+  policy.
 
 ## [1.5.3] — 2026-08-09
 
