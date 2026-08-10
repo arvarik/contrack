@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The process now survives `docker stop`.** SIGTERM/SIGINT drain in-flight
+  requests, close SQLite with its WAL checkpoint, and exit 0 — previously the
+  process rode Docker's grace period into a SIGKILL on every stop, closing the
+  database uncleanly each time. An 8-second internal deadline keeps a hung
+  handler from reaching the SIGKILL anyway.
+- **`/healthz` and a Docker HEALTHCHECK.** The probe lives outside the auth
+  gate (a health check holds no credential), proves both the event loop and
+  SQLite answer, and reports nothing else. Docker can now see a process that
+  is alive but wedged; `restart: unless-stopped` only ever noticed dead ones.
+- Boot failures exit non-zero with a log line naming startup;
+  `unhandledRejection` logs with the stack instead of crashing bare;
+  `uncaughtException` closes the database before exiting.
+
+### Fixed
+
+- **A DNS-rebinding hole in the outbound fetch guard.** The SSRF check
+  resolved a hostname, validated the address, and then `fetch()` resolved the
+  same name again to dial — two queries a hostile DNS server answers
+  differently, passing the check with a public address and serving the
+  connect `127.0.0.1`. Validation now runs inside the resolver the socket
+  actually uses, checks every address in the answer, and fails closed on a
+  public/private mix.
+- **Every route accepted a 50 MB body**, unauthenticated ones included — a
+  limit sized for bulk import, inherited globally. The default is now 1 MB
+  with the import route exempt, and an over-limit body answers a clean
+  `413 PAYLOAD_TOO_LARGE` instead of a stack-logging 500.
+- The SPA fallback answered every HTTP method with `index.html` — a POST to a
+  mistyped path returned 200, which reads as success to a script. Navigation
+  is GET/HEAD; everything else now 404s.
+- Node's 5-second keep-alive default sat below every reverse proxy's reuse
+  window, surfacing as sporadic 502s. Now 65 seconds.
+
+### Changed
+
+- Every response carries `X-Content-Type-Options: nosniff` (previously
+  `/uploads` only), `X-Frame-Options: DENY`, and a referrer policy. Production
+  adds a CSP with `script-src 'self'` — the built `index.html` has no inline
+  script, which is what makes the strict policy possible.
+
 ## [1.5.3] — 2026-08-09
 
 A self-hosted release. The headline fix is that a local model server connected
