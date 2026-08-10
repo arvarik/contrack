@@ -25,6 +25,10 @@ import type {
 } from "../types.ts";
 import { log } from "../../utils/logger.ts";
 import {
+  translateSchemaNode as translateSchema,
+  type TranslateOptions,
+} from "../schemaTranslation.ts";
+import {
   withTimeout,
   withRetry,
   parseAIJson,
@@ -62,33 +66,16 @@ function supportsWebSearch(modelId: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Schema Translation (unchanged — OpenAI still needs nullable→anyOf)
+// Schema Translation — shared translator, OpenAI dialect (nullable→anyOf)
 // ---------------------------------------------------------------------------
 
+const SCHEMA_DIALECT: TranslateOptions = {
+  nullableStyle: "anyOf",
+  sealObjects: "with-properties",
+};
+
 function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-
-  if (node.nullable) {
-    return { anyOf: [{ type: node.type }, { type: "null" }] };
-  }
-
-  result.type = node.type;
-  if (node.enum) result.enum = node.enum;
-  if (node.description) result.description = node.description;
-
-  if (node.properties) {
-    result.properties = {};
-    for (const [key, value] of Object.entries(node.properties)) {
-      (result.properties as Record<string, unknown>)[key] =
-        translateSchemaNode(value);
-    }
-    result.additionalProperties = false;
-  }
-
-  if (node.items) result.items = translateSchemaNode(node.items);
-  if (node.required) result.required = node.required;
-
-  return result;
+  return translateSchema(node, SCHEMA_DIALECT);
 }
 
 // ---------------------------------------------------------------------------

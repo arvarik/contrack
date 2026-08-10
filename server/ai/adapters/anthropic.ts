@@ -27,6 +27,10 @@ import {
   parseAIJson,
   AI_DEFAULTS,
 } from "../resilience.ts";
+import {
+  translateSchemaNode as translateSchema,
+  type TranslateOptions,
+} from "../schemaTranslation.ts";
 
 // ---------------------------------------------------------------------------
 // Model Class Mapping
@@ -60,28 +64,19 @@ function supportsWebSearch(modelId: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Schema Translation — Anthropic supports nullable natively
+// Schema Translation — shared translator, Anthropic dialect
 // ---------------------------------------------------------------------------
+// Claude's grammar compiler accepts the JSON-Schema type union directly and
+// wants additionalProperties:false on every object node, declared properties
+// or not.
+
+const SCHEMA_DIALECT: TranslateOptions = {
+  nullableStyle: "type-array",
+  sealObjects: "objects",
+};
 
 function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
-  // JSON Schema expresses nullability as a type union, not OpenAPI's `nullable`.
-  const result: Record<string, unknown> = {
-    type: node.nullable ? [node.type, "null"] : node.type,
-  };
-  if (node.enum) result.enum = node.enum;
-  if (node.description) result.description = node.description;
-
-  if (node.properties) {
-    result.properties = {};
-    for (const [key, value] of Object.entries(node.properties)) {
-      (result.properties as Record<string, unknown>)[key] =
-        translateSchemaNode(value);
-    }
-  }
-  if (node.type === "object") result.additionalProperties = false;
-  if (node.items) result.items = translateSchemaNode(node.items);
-  if (node.required) result.required = node.required;
-  return result;
+  return translateSchema(node, SCHEMA_DIALECT);
 }
 
 /**

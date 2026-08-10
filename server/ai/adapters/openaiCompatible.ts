@@ -33,6 +33,10 @@ import {
   parseAIJson,
   AI_DEFAULTS,
 } from "../resilience.ts";
+import {
+  translateSchemaNode as translateSchema,
+  type TranslateOptions,
+} from "../schemaTranslation.ts";
 
 export interface OpenAICompatibleOptions {
   baseUrl: string;
@@ -61,25 +65,14 @@ function isParseableJson(text: string): boolean {
   }
 }
 
+/** OpenAI wire format: nullability via anyOf; see schemaTranslation.ts. */
+const SCHEMA_DIALECT: TranslateOptions = {
+  nullableStyle: "anyOf",
+  sealObjects: "with-properties",
+};
+
 function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  if (node.nullable) {
-    return { anyOf: [{ type: node.type }, { type: "null" }] };
-  }
-  result.type = node.type;
-  if (node.enum) result.enum = node.enum;
-  if (node.description) result.description = node.description;
-  if (node.properties) {
-    const properties: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(node.properties)) {
-      properties[key] = translateSchemaNode(value);
-    }
-    result.properties = properties;
-    result.additionalProperties = false;
-  }
-  if (node.items) result.items = translateSchemaNode(node.items);
-  if (node.required) result.required = node.required;
-  return result;
+  return translateSchema(node, SCHEMA_DIALECT);
 }
 
 export class OpenAICompatibleAdapter implements AIProvider {
