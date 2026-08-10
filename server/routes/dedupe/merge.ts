@@ -2,7 +2,10 @@ import { Router } from "express";
 import { AppError } from "../../utils/AppError.ts";
 import { asyncHandler } from "../../utils/asyncHandler.ts";
 import { log } from "../../utils/logger.ts";
-import { dedupeService } from "../../services/dedupe/index.ts";
+import {
+  dedupeService,
+  clearStaleSuggestions,
+} from "../../services/dedupe/index.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerMergeRoutes(router: Router) {
@@ -76,6 +79,10 @@ export function registerMergeRoutes(router: Router) {
       }
 
       const succeeded = results.filter((r) => r.success).length;
+      // Merging tombstones contacts, which can strand OTHER pending
+      // suggestions that reference them. Clear them now, exactly as a scan
+      // does, so the review queue never shows a pair that can no longer merge.
+      if (succeeded > 0) clearStaleSuggestions();
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge-batch → ${succeeded}/${merges.length} merged`,
@@ -122,6 +129,10 @@ export function registerMergeRoutes(router: Router) {
         }
       }
 
+      // Resolve the pending suggestions this merge just satisfied (and any
+      // others stranded by the tombstones) — otherwise the review queue keeps
+      // offering pairs whose contacts no longer exist as separate rows.
+      if (merged > 0) clearStaleSuggestions();
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge-cluster → merged ${merged}/${duplicateIds.length} into ${primaryId}`,
@@ -193,6 +204,8 @@ export function registerMergeRoutes(router: Router) {
         totalFailed += failed;
       }
 
+      // Same stale-suggestion cleanup as the single-cluster route.
+      if (totalMerged > 0) clearStaleSuggestions();
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge-clusters → ${totalMerged} merged, ${totalFailed} failed across ${clusters.length} clusters`,

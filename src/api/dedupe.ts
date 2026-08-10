@@ -15,6 +15,7 @@
 import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Contact, DedupeScanMode, DedupeScanProgress } from "../types";
+import { suggestionKeys } from "./suggestions";
 
 const API_BASE = "/api";
 
@@ -233,6 +234,11 @@ export const useMergeCluster = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      // The server resolves the pending suggestions this merge satisfied; the
+      // review queue and its badge must drop them without a reload.
+      queryClient.invalidateQueries({ queryKey: suggestionKeys.pending });
+      queryClient.invalidateQueries({ queryKey: suggestionKeys.count });
+      queryClient.invalidateQueries({ queryKey: suggestionKeys.mergeLog });
     },
   });
 };

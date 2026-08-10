@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
+import { sqlite } from "../../server/db.ts";
 import { softMergeContacts } from "../../server/services/dedupe/merging.ts";
 
 const app = makeTestApp();
@@ -149,5 +150,112 @@ describe("dashboard + zero state + MCP", () => {
     await createContact({ name: "MCP Contact" });
     const res = await request(app).get("/api/query/contacts?limit=999999999");
     expect(res.status).toBe(200);
+  });
+});
+
+// =============================================================================
+// Cluster merges from overlapping suggestions — the select-all path
+// =============================================================================
+// The review queue groups pairwise suggestions into clusters. Merging a
+// cluster used to walk its SUGGESTIONS one by one under the cluster's chosen
+// primary — but a pair like (B,C) does not contain primary A, and the server
+// silently treated A as "not contactIdA, so contactIdA must be the
+// duplicate", re-merging a tombstoned contact. Select-all reliably failed.
+// These tests pin the correct path (merge-cluster) and the server guard.
+
+describe("cluster merge from overlapping suggestions", () => {
+  /** Seed a pending suggestion directly — scans are not under test here. */
+  const seedSuggestion = (idA: string, idB: string): string => {
+    const id = `sugg-${idA}-${idB}`;
+    sqlite
+      .prepare(
+        `INSERT OR IGNORE INTO dedupe_suggestions
+           (id, contactIdA, contactIdB, matchType, confidence, reasoning, matchedField, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      )
+      .run(id, idA, idB, "name", 0.9, "test", "name");
+    return id;
+  };
+
+  const pendingCount = (): number =>
+    (
+      sqlite
+        .prepare(
+          "SELECT COUNT(*) n FROM dedupe_suggestions WHERE status = 'pending'",
+        )
+        .get() as { n: number }
+    ).n;
+
+  it("rejects a suggestion merge whose primary is not part of the pair", async () => {
+    const a = await createContact({ name: "Overlap A" });
+    const b = await createContact({ name: "Overlap B" });
+    const c = await createContact({ name: "Overlap C" });
+    const suggestionBC = seedSuggestion(b, c);
+
+    // The old behaviour: primary A (not in the pair) silently picked B as
+    // the duplicate. It must refuse instead.
+    const res = await request(app)
+      .post(`/api/dedupe/suggestions/${suggestionBC}/merge`)
+      .send({ primaryId: a });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/must be one of the suggestion/i);
+
+    // Nothing merged, suggestion untouched.
+    const contacts = await slimContacts();
+    expect(contacts.map((x) => x.id)).toEqual(
+      expect.arrayContaining([a, b, c]),
+    );
+  });
+
+  it("merges an overlapping cluster in one call and clears its suggestions", async () => {
+    const a = await createContact({ name: "Cluster A" });
+    const b = await createContact({ name: "Cluster B" });
+    const c = await createContact({ name: "Cluster C" });
+    // The overlapping shape select-all produces: (A,B) and (B,C) → one
+    // 3-contact cluster with best primary A.
+    seedSuggestion(a, b);
+    seedSuggestion(b, c);
+    const before = pendingCount();
+    expect(before).toBeGreaterThanOrEqual(2);
+
+    const res = await request(app)
+      .post("/api/contacts/merge-cluster")
+      .send({ primaryId: a, duplicateIds: [b, c] });
+    expect(res.status).toBe(200);
+    expect(res.body.merged).toBe(2);
+    expect(res.body.failed).toBe(0);
+
+    // Both duplicates are tombstoned into A…
+    const active = await slimContacts();
+    const activeIds = active.map((x) => x.id);
+    expect(activeIds).toContain(a);
+    expect(activeIds).not.toContain(b);
+    expect(activeIds).not.toContain(c);
+
+    // …and the satisfied suggestions left the pending queue, so the review
+    // queue cannot offer pairs that no longer exist as separate contacts.
+    expect(pendingCount()).toBe(before - 2);
+  });
+
+  it("clears stranded suggestions after a batch merge too", async () => {
+    const a = await createContact({ name: "Batch A" });
+    const b = await createContact({ name: "Batch B" });
+    const c = await createContact({ name: "Batch C" });
+    seedSuggestion(a, b);
+    seedSuggestion(b, c); // stranded once B merges
+
+    const res = await request(app)
+      .post("/api/contacts/merge-batch")
+      .send({ merges: [{ primaryId: a, duplicateId: b }] });
+    expect(res.status).toBe(200);
+    expect(res.body.succeeded).toBe(1);
+
+    // The (B,C) suggestion references a tombstone now — it must be gone.
+    const stranded = sqlite
+      .prepare(
+        "SELECT COUNT(*) n FROM dedupe_suggestions WHERE status = 'pending' AND (contactIdA = ? OR contactIdB = ?)",
+      )
+      .get(b, b) as { n: number };
+    expect(stranded.n).toBe(0);
   });
 });

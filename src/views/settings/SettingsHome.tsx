@@ -273,16 +273,17 @@ const TEMP_UNIT_KEY = "contrack_temp_unit";
  * What each sensitivity actually does, in the terms that matter: the
  * confidence a pair needs before Contrack merges it without asking.
  *
- * The old copy ("Balanced", "Only near-certain matches") described a feeling
- * rather than a behaviour, and left the two questions people actually have
- * unanswered: when does this run, and can I undo it.
+ * Each line carries exactly one number and one trade-off. The shared facts
+ * (runs only during a scan you start, always undoable) live once, in the
+ * sentence under the control — an earlier draft repeated them per preset and
+ * read as a paragraph.
  */
 const DEDUPE_PRESET_COPY = {
   conservative:
-    "Merges only at 97% confidence or above. Fewest automatic merges, most left for you to review.",
-  default: "Merges at 93% confidence or above.",
+    "Auto-merges only pairs at 97%+ confidence. Fewest merges; most left for review.",
+  default: "Auto-merges pairs at 93%+ confidence.",
   aggressive:
-    "Merges at 88% confidence or above. Fewer pairs to review, and more chance of a merge you disagree with.",
+    "Auto-merges pairs at 88%+ confidence. Fewer to review; more misfires to undo.",
 } as const;
 
 export const SettingsHome = () => {
@@ -485,17 +486,15 @@ export const SettingsHome = () => {
                 <>
                   <span className="block">{DEDUPE_PRESET_COPY[preset]}</span>
                   <span className="block mt-1.5">
-                    Contrack merges pairs above this confidence during a
-                    duplicate scan. You start each scan yourself from{" "}
+                    Runs only during scans you start from{" "}
                     <Link
                       to="/settings/dedupe"
                       className="font-bold text-primary hover:underline"
                     >
                       Duplicates
-                    </Link>
-                    . Contrack never merges contacts in the background. Every
-                    automatic merge is reversible from the activity list on that
-                    page.
+                    </Link>{" "}
+                    — never in the background. Every auto-merge is undoable
+                    there.
                   </span>
                 </>
               }

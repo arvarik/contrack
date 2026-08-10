@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import {
   usePendingSuggestions,
   useMergeSuggestion,
+  useMergeCluster,
   useDismissSuggestion,
 } from "../../../api";
 import { ContactCard } from "./shared/ContactCard";
@@ -196,6 +197,7 @@ function buildSuggestionClusters(
 export const SuggestionReviewQueue = () => {
   const { data: suggestions = [], isLoading } = usePendingSuggestions();
   const mergeSuggestion = useMergeSuggestion();
+  const mergeCluster = useMergeCluster();
   const dismissSuggestion = useDismissSuggestion();
 
   const clusters = useMemo(
@@ -229,21 +231,36 @@ export const SuggestionReviewQueue = () => {
     [clusters, selected],
   );
 
+  // One merge-cluster call per selected group. The previous version walked
+  // each cluster's pairwise SUGGESTIONS and merged them one by one under the
+  // cluster's primary — but a pair like (B,C) doesn't contain the cluster
+  // primary A, and once B merged into A the next pair referenced a tombstone.
+  // Select-all reliably hit both, aborted the loop, and reported failure.
+  // The cluster endpoint merges members, tolerates per-member errors, and
+  // resolves the satisfied suggestions server-side.
   const handleBatchMerge = useCallback(async () => {
     if (isBatchProcessing || selectedClusters.length === 0) return;
     setIsBatchProcessing(true);
+    let groups = 0;
+    let failedMembers = 0;
     try {
       for (const cluster of selectedClusters) {
-        for (const s of cluster.suggestions) {
-          await mergeSuggestion.mutateAsync({
-            suggestionId: s.id,
-            primaryId: cluster.bestPrimaryId,
-          });
-        }
+        const result = await mergeCluster.mutateAsync({
+          primaryId: cluster.bestPrimaryId,
+          duplicateIds: cluster.contacts
+            .map((c) => c.id)
+            .filter((id) => id !== cluster.bestPrimaryId),
+        });
+        if (result.merged > 0) groups++;
+        failedMembers += result.failed;
       }
-      toast.success(
-        `Merged ${selectedClusters.length} group${selectedClusters.length !== 1 ? "s" : ""}`,
-      );
+      if (failedMembers === 0) {
+        toast.success(`Merged ${groups} group${groups !== 1 ? "s" : ""}`);
+      } else {
+        toast.warning(
+          `Merged ${groups} group${groups !== 1 ? "s" : ""}; ${failedMembers} contact${failedMembers !== 1 ? "s" : ""} could not be merged`,
+        );
+      }
       setSelected(new Set());
     } catch (err: unknown) {
       toast.error(
@@ -252,7 +269,7 @@ export const SuggestionReviewQueue = () => {
     } finally {
       setIsBatchProcessing(false);
     }
-  }, [selectedClusters, mergeSuggestion, isBatchProcessing]);
+  }, [selectedClusters, mergeCluster, isBatchProcessing]);
 
   const handleBatchDismiss = useCallback(async () => {
     if (isBatchProcessing || selectedClusters.length === 0) return;
@@ -333,15 +350,25 @@ export const SuggestionReviewQueue = () => {
           e.preventDefault();
           if (focusedIndex >= 0 && focusedIndex < clusters.length) {
             const cluster = clusters[focusedIndex];
-            for (const s of cluster.suggestions) {
-              mergeSuggestion
-                .mutateAsync({
-                  suggestionId: s.id,
-                  primaryId: cluster.bestPrimaryId,
-                })
-                .catch(() => {});
-            }
-            toast.success("Merged");
+            // One cluster call, not a per-suggestion loop — see
+            // handleBatchMerge for the overlap failure the loop caused.
+            mergeCluster
+              .mutateAsync({
+                primaryId: cluster.bestPrimaryId,
+                duplicateIds: cluster.contacts
+                  .map((c) => c.id)
+                  .filter((id) => id !== cluster.bestPrimaryId),
+              })
+              .then((r) =>
+                r.failed === 0
+                  ? toast.success("Merged")
+                  : toast.warning(`Merged with ${r.failed} failure(s)`),
+              )
+              .catch((err: unknown) =>
+                toast.error(
+                  `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
+                ),
+              );
           }
           break;
         }
@@ -371,13 +398,7 @@ export const SuggestionReviewQueue = () => {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [
-    clusters,
-    focusedIndex,
-    mergeSuggestion,
-    dismissSuggestion,
-    toggleSelect,
-  ]);
+  }, [clusters, focusedIndex, mergeCluster, dismissSuggestion, toggleSelect]);
 
   if (isLoading) {
     return (
@@ -491,7 +512,7 @@ export const SuggestionReviewQueue = () => {
           ) : (
             <ClusterCard
               cluster={cluster}
-              mergeSuggestion={mergeSuggestion}
+              mergeCluster={mergeCluster}
               dismissSuggestion={dismissSuggestion}
               isSelected={selected.has(cluster.id)}
               onToggleSelect={() => toggleSelect(cluster.id)}
@@ -733,13 +754,13 @@ function PairRow({
 
 function ClusterCard({
   cluster,
-  mergeSuggestion,
+  mergeCluster,
   dismissSuggestion,
   isSelected,
   onToggleSelect,
 }: {
   cluster: SuggestionCluster;
-  mergeSuggestion: ReturnType<typeof useMergeSuggestion>;
+  mergeCluster: ReturnType<typeof useMergeCluster>;
   dismissSuggestion: ReturnType<typeof useDismissSuggestion>;
   isSelected: boolean;
   onToggleSelect: () => void;
@@ -759,13 +780,19 @@ function ClusterCard({
     if (isMerging) return;
     setIsMerging(true);
     try {
-      for (const s of cluster.suggestions) {
-        await mergeSuggestion.mutateAsync({
-          suggestionId: s.id,
-          primaryId: selectedPrimaryId,
-        });
+      // One cluster call — the per-suggestion loop failed on any pair not
+      // containing the chosen primary (see handleBatchMerge).
+      const result = await mergeCluster.mutateAsync({
+        primaryId: selectedPrimaryId,
+        duplicateIds: duplicates.map((c) => c.id),
+      });
+      if (result.failed === 0) {
+        toast.success(`Merged ${cluster.contacts.length} contacts into one`);
+      } else {
+        toast.warning(
+          `Merged ${result.merged} contact${result.merged !== 1 ? "s" : ""}; ${result.failed} failed`,
+        );
       }
-      toast.success(`Merged ${cluster.contacts.length} contacts into one`);
     } catch (err: unknown) {
       toast.error(
         `Merge failed: ${err instanceof Error ? err.message : String(err)}`,
