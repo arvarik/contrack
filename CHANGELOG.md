@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] — 2026-08-09
+
+Corrections from an independent review of the v1.5.4 release, run with fresh
+context specifically to catch what the author could not see in their own
+work. It caught one real regression — proven live before the fix shipped.
+
+### Fixed
+
+- **v1.5.4's docker-compose file silently disabled scheduled backups.** The
+  new env passthrough rendered an absent `BACKUP_INTERVAL_HOURS` as an empty
+  string — set, but empty — and the schedule guard's `!== undefined` check
+  read that as an explicit `0`: disabled. Any Compose user upgrading through
+  v1.5.4 lost the default 24-hour snapshots without a word (our own
+  deployment included, which is how the finding was confirmed). Empty now
+  means unset; only an explicit `0` disables. All eight forwarded variables
+  were audited for the same trap — this was the only one using a presence
+  check — and a regression test pins the exact empty-string shape Compose
+  sends.
+- **Seeding a brand-new data directory failed** with "no such table" — the
+  seed scripts opened a private connection before any migration ran. They
+  now use the server's own database module, which migrates on import.
+  Verified: fresh empty `DATA_DIR` → first run inserts, second run skips.
+- **The SSRF guard missed private addresses wrapped in IPv6.** It knew three
+  hardcoded `::ffff:` prefixes; `::ffff:169.254.169.254` (cloud metadata),
+  CGNAT, `172.16/12`, and NAT64 (`64:ff9b::`) wrappings all walked past it.
+  The gap predates 1.5.4, but the connect-time rebinding guard added there
+  leans on this function. Any IPv6 address embedding an IPv4 — dotted or
+  hex-group form — is now judged by the full IPv4 policy, block and pass
+  cases pinned in tests.
+- The scripts table in getting-started still claimed `npm run seed` clears
+  the database — the one line the docs audit missed. The table now matches
+  the code and lists the scripts CI actually enforces.
+
 ## [1.5.4] — 2026-08-09
 
 The clone-and-host release. Four independent verification passes — a clean-
@@ -487,7 +520,8 @@ indexes below repair themselves automatically on first start.
 Initial release: local-first AI-powered personal CRM with contact
 management, semantic search, AI enrichment, and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v1.5.4...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v1.5.5...HEAD
+[1.5.5]: https://github.com/arvarik/contrack/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/arvarik/contrack/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/arvarik/contrack/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/arvarik/contrack/compare/v1.4.0...v1.5.2
