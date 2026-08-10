@@ -171,6 +171,23 @@ async function startServer() {
   refreshModelCatalogs();
   setInterval(refreshModelCatalogs, 24 * 60 * 60 * 1000);
 
+  // Query-planner statistics refresh. SQLite recommends a periodic
+  // `PRAGMA optimize` for connections that stay open for days — it re-runs
+  // ANALYZE only for tables whose shape drifted, so the common case is a
+  // no-op. Daily matches the other maintenance timers; shutdown runs it too.
+  if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
+    setInterval(
+      () => {
+        try {
+          sqlite.pragma("optimize");
+        } catch (err) {
+          log.warn("Server", `PRAGMA optimize failed: ${getErrorMessage(err)}`);
+        }
+      },
+      24 * 60 * 60 * 1000,
+    ).unref();
+  }
+
   // Relationship scoring: chunked recompute on startup, then hourly sweep.
   // recomputeAll yields to the event loop between batches so requests are
   // never starved by a long synchronous scoring pass.
@@ -250,6 +267,10 @@ function registerShutdownHandlers(server: import("http").Server): void {
     // keep-alive sockets so they can't hold the close open for 65 seconds.
     server.close(() => {
       try {
+        // SQLite's own recommendation for long-lived connections: run
+        // `optimize` on close so query-planner statistics reflect the
+        // session's writes. Bounded work, milliseconds in practice.
+        sqlite.pragma("optimize");
         sqlite.close();
         log.info("Server", "Database closed cleanly");
       } catch (err) {

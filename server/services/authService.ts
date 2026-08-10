@@ -178,6 +178,28 @@ export function validateEmail(email: string): string | null {
 const USER_COLUMNS = `id, email, username, displayName, passwordHash, role,
                       createdAt, updatedAt, lastLoginAt`;
 
+// =============================================================================
+// Hot-path prepared statements
+// =============================================================================
+// attachPrincipal runs on EVERY request, and with a session cookie present it
+// reaches resolveSession → getUserById. `sqlite.prepare()` compiles the SQL
+// each call — better-sqlite3 keeps no internal cache — so these four were
+// being recompiled one to three times per request. Compiled once here instead,
+// matching the `stmts` convention in contactRepository. Statements that run
+// on sign-in, setup, or settings stay inline: those paths fire a few times a
+// day, not a few times per request.
+
+const stmts = {
+  sessionById: sqlite.prepare(
+    `SELECT userId, expiresAt, lastSeenAt FROM sessions WHERE id = ?`,
+  ),
+  deleteSessionById: sqlite.prepare(`DELETE FROM sessions WHERE id = ?`),
+  touchSession: sqlite.prepare(
+    `UPDATE sessions SET lastSeenAt = CURRENT_TIMESTAMP WHERE id = ?`,
+  ),
+  userById: sqlite.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`),
+};
+
 /**
  * Contacts not yet assigned to any account — what the first account will
  * claim. Excludes trashed rows, so the number matches what the app will
@@ -202,9 +224,7 @@ export function countUsers(): number {
 }
 
 export function getUserById(id: string): User | null {
-  const row = sqlite
-    .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`)
-    .get(id) as UserRow | undefined;
+  const row = stmts.userById.get(id) as UserRow | undefined;
   return row ? stripHash(row) : null;
 }
 
@@ -559,14 +579,12 @@ export function resolveSession(
   if (!secret) return null;
   const id = sessionKey(secret);
 
-  const row = sqlite
-    .prepare(`SELECT userId, expiresAt, lastSeenAt FROM sessions WHERE id = ?`)
-    .get(id) as
+  const row = stmts.sessionById.get(id) as
     { userId: string; expiresAt: string; lastSeenAt: string } | undefined;
   if (!row) return null;
 
   if (new Date(row.expiresAt).getTime() <= Date.now()) {
-    sqlite.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+    stmts.deleteSessionById.run(id);
     return null;
   }
 
@@ -574,17 +592,13 @@ export function resolveSession(
   if (!user) {
     // Account deleted out from under the session (FK cascade should prevent
     // this, but a session with no user must not authenticate anybody).
-    sqlite.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+    stmts.deleteSessionById.run(id);
     return null;
   }
 
   const lastSeen = new Date(row.lastSeenAt).getTime();
   if (!Number.isFinite(lastSeen) || Date.now() - lastSeen > 60 * 60 * 1000) {
-    sqlite
-      .prepare(
-        `UPDATE sessions SET lastSeenAt = CURRENT_TIMESTAMP WHERE id = ?`,
-      )
-      .run(id);
+    stmts.touchSession.run(id);
   }
 
   return { user, sessionId: id };
@@ -593,7 +607,7 @@ export function resolveSession(
 /** End one session. Safe to call with a secret that no longer resolves. */
 export function destroySession(secret: string): void {
   if (!secret) return;
-  sqlite.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionKey(secret));
+  stmts.deleteSessionById.run(sessionKey(secret));
 }
 
 /** List a user's live sessions, newest first. */
