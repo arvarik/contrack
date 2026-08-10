@@ -1031,6 +1031,15 @@ llama.cpp, OpenRouter…). Validates connectivity by listing models; the endpoin
 is stored even when that fails, so an offline server can be configured ahead of
 time.
 
+`baseUrl` must include the API prefix the server actually serves — `/v1` for
+Ollama. The endpoint becomes the provider id `custom:<id>`, which is what the
+other routes take: `POST /api/settings/ai/providers/custom:homelab/refresh-models`,
+`{"providerId": "custom:homelab"}` when pinning a capability.
+
+A capability left on `auto` resolves to the first **chat** model in the
+discovered catalog. Until discovery finds one, the endpoint is skipped and the
+capability reports itself unavailable rather than being called with no model.
+
 ```bash
 curl -X PUT http://localhost:3210/api/settings/ai/endpoints \
   -H "Content-Type: application/json" \
@@ -1041,7 +1050,9 @@ curl -X PUT http://localhost:3210/api/settings/ai/endpoints \
 
 ### `DELETE /api/settings/ai/endpoints/:id`
 
-Remove a custom endpoint.
+Remove a custom endpoint. Any capability pinned to it returns to `auto`, so a
+removed endpoint cannot leave embeddings pointing at a provider that no longer
+exists.
 
 ---
 

@@ -65,6 +65,17 @@ export const AISettingsView = () => {
     );
   }
 
+  // A custom endpoint is a provider on the server, so it arrives in *both*
+  // lists. Rendering both listed it twice, and the second row carried a
+  // "remove key" button that deletes from the provider-key store — where a
+  // custom endpoint has no entry, so it reported success and removed nothing.
+  // The endpoint section below owns them, discovery status included.
+  const builtInProviders = settings.providers.filter(
+    (provider) => provider.kind !== "openai-compatible",
+  );
+  const endpointStatus = (id: string) =>
+    settings.providers.find((provider) => provider.id === `custom:${id}`);
+
   const handleSaveKey = async () => {
     if (!keyModalProvider || !keyInput.trim()) return;
     try {
@@ -118,7 +129,7 @@ export const AISettingsView = () => {
         </div>
 
         <div className="space-y-2">
-          {settings.providers.map((provider) => (
+          {builtInProviders.map((provider) => (
             <div
               key={provider.id}
               className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-container-low"
@@ -224,31 +235,77 @@ export const AISettingsView = () => {
           <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
             Custom endpoints (Ollama, vLLM, LM Studio, xAI…)
           </div>
-          {settings.customEndpoints.map((endpoint) => (
-            <div
-              key={endpoint.id}
-              className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-container-low"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm">{endpoint.label}</div>
-                <div className="text-xs text-on-surface-variant font-mono truncate">
-                  {endpoint.baseUrl}
-                </div>
-              </div>
-              <button
-                onClick={() =>
-                  deleteEndpoint
-                    .mutateAsync(endpoint.id)
-                    .then(() => toast.success("Endpoint removed"))
-                }
-                className={cn(ICON_BTN, "text-error")}
-                title="Remove endpoint"
-                aria-label={`Remove ${endpoint.label}`}
+          {settings.customEndpoints.map((endpoint) => {
+            const status = endpointStatus(endpoint.id);
+            return (
+              <div
+                key={endpoint.id}
+                className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-container-low"
               >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm">{endpoint.label}</div>
+                  <div className="text-xs text-on-surface-variant font-mono truncate">
+                    {endpoint.baseUrl}
+                  </div>
+                  {/* Discovery status decides whether this endpoint can serve
+                      anything at all: with no models found there is nothing to
+                      call, so saying "connected" alone would be misleading. */}
+                  <div className="text-xs flex items-center gap-2 mt-0.5 flex-wrap">
+                    {status?.modelCount ? (
+                      <span className="text-success flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        {status.modelCount} models
+                      </span>
+                    ) : (
+                      <span className="text-warning flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        no models found — refresh to retry
+                      </span>
+                    )}
+                    {status?.modelsError && (
+                      <span
+                        className="text-error truncate"
+                        title={status.modelsError}
+                      >
+                        {status.modelsError}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() =>
+                    refreshModels
+                      .mutateAsync(`custom:${endpoint.id}`)
+                      .then((r) => toast.success(`${r.modelCount} models`))
+                      .catch((e) => toast.error(String(e.message ?? e)))
+                  }
+                  disabled={refreshModels.isPending}
+                  className={ICON_BTN}
+                  title="Refresh model list"
+                  aria-label={`Refresh models for ${endpoint.label}`}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "w-4 h-4",
+                      refreshModels.isPending && "animate-spin",
+                    )}
+                  />
+                </button>
+                <button
+                  onClick={() =>
+                    deleteEndpoint
+                      .mutateAsync(endpoint.id)
+                      .then(() => toast.success("Endpoint removed"))
+                  }
+                  className={cn(ICON_BTN, "text-error")}
+                  title="Remove endpoint"
+                  aria-label={`Remove ${endpoint.label}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
           <button
             onClick={() => setEndpointModalOpen(true)}
             className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
@@ -363,6 +420,22 @@ export const AISettingsView = () => {
             Works with Ollama, vLLM, LM Studio, llama.cpp, xAI, DeepSeek,
             Mistral — anything speaking the OpenAI API format.
           </p>
+          {/* The two mistakes that make a working server look broken. Both
+              produce the same "could not reach endpoint" error, and neither is
+              guessable from it. */}
+          <ul className="text-xs text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2 space-y-1 list-disc list-inside">
+            <li>
+              End the URL with <code className="font-mono">/v1</code> — Ollama
+              serves its OpenAI API at{" "}
+              <code className="font-mono">:11434/v1</code>, not at the root.
+            </li>
+            <li>
+              Running Contrack in Docker?{" "}
+              <code className="font-mono">localhost</code> means the container.
+              Use <code className="font-mono">host.docker.internal</code> or the
+              machine&rsquo;s LAN address to reach a server on your host.
+            </li>
+          </ul>
           {(
             [
               { key: "id", label: "ID", placeholder: "homelab" },

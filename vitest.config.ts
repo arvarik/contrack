@@ -46,22 +46,23 @@ export default defineConfig({
           setupFiles: ["./tests/integration-setup.ts"],
           testTimeout: 20_000,
           /**
-           * Retry twice, for transport flakiness rather than logic.
+           * No retries. There were two, absorbing socket-layer noise from
+           * supertest binding and closing a fresh HTTP server for every single
+           * request — roughly 500 listen/close cycles a run, which recycles
+           * ephemeral ports faster than closed sockets leave TIME_WAIT.
            *
-           * supertest binds a fresh HTTP server and socket for every single
-           * request. Across ~130 requests per run on a loaded machine, a small
-           * number fail at the socket layer: ECONNRESET, ETIMEDOUT, and
-           * occasionally a status from a connection that never completed. One
-           * measured example took 7.8 seconds on a test that normally finishes
-           * in two milliseconds.
+           * `makeTestApp` now listens once per file and every request goes to
+           * that server, which removes the recycling rather than retrying past
+           * it. Measured at roughly one failed run in six before, and none in
+           * thirty after.
            *
-           * This does not paper over real failures. A logic bug fails on every
-           * attempt, so retries change nothing for it; only the transport
-           * noise is absorbed. The proper fix is one server per file rather
-           * than one per request, which is a test-infrastructure change worth
-           * doing on its own rather than inside a UI branch.
+           * Retries are not reinstated without a cause: they hide exactly the
+           * kind of order- and state-dependent bug this suite exists to catch,
+           * and the flakes they were absorbing here presented as impossible
+           * statuses — a 404 from a registered route, a 403 from a router with
+           * no 403 in it — which cost far more to diagnose than they would
+           * have to fail honestly.
            */
-          retry: 2,
           // One PROCESS per file, not one worker thread.
           //
           // These tests configure the server through `process.env` — the auth

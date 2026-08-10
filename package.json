@@ -1,6 +1,6 @@
 {
   "name": "contrack",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "A local-first, AI-powered personal CRM for high-leverage individuals. Built with React 19, Express, SQLite, and Gemini.",
   "private": true,
   "type": "module",

@@ -789,8 +789,6 @@ sqlite.exec(`
   );
 `);
 
-log.info("Database", "contact_embeddings vec0 table ready (768-dim)");
-
 // 9f-b. Search embedding vector storage (local model, 384-dim)
 // Separate from dedupe embeddings — optimized for search with local model
 sqlite.exec(`
@@ -800,9 +798,31 @@ sqlite.exec(`
   );
 `);
 
+/**
+ * The width a vec0 table actually has, read back from its DDL.
+ *
+ * The widths above are creation defaults and apply only on a fresh database.
+ * Choosing a non-default embeddings model rebuilds these tables at that
+ * model's width (see ensureEmbeddingStore / ensureDedupeEmbeddingStore), and
+ * `IF NOT EXISTS` then leaves the existing table alone. Logging the literal
+ * from the CREATE therefore reported 768/384 on every boot no matter what the
+ * tables held — which is worse than saying nothing, because vector width is
+ * the first thing you check when embeddings misbehave.
+ */
+function vecTableWidth(table: string): string {
+  const row = sqlite
+    .prepare("SELECT sql FROM sqlite_master WHERE name = ?")
+    .get(table) as { sql?: string } | undefined;
+  return row?.sql?.match(/FLOAT\[(\d+)\]/)?.[1] ?? "unknown";
+}
+
 log.info(
   "Database",
-  "search_embeddings vec0 table ready (384-dim, local model)",
+  `contact_embeddings vec0 table ready (${vecTableWidth("contact_embeddings")}-dim, dedupe)`,
+);
+log.info(
+  "Database",
+  `search_embeddings vec0 table ready (${vecTableWidth("search_embeddings")}-dim, search)`,
 );
 
 // 9g. Embedding metadata: tracks when each contact was last embedded

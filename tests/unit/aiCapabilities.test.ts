@@ -30,6 +30,35 @@ const { resolveCapability, capabilityAvailability } =
 const { getProviderConfigs, invalidateProviderCache } =
   await import("../../server/ai/providerRegistry.ts");
 
+/**
+ * Connect a custom endpoint the way saving one in Settings does: the endpoint
+ * itself *and* the model catalog discovered from it. Tests that set only the
+ * endpoint describe a state the app never reaches, because `PUT /endpoints`
+ * refuses to save an endpoint it cannot list models from.
+ */
+function connectOllama(
+  models: Array<{
+    id: string;
+    label: string;
+    capabilities: string[];
+    capabilityConfidence: string;
+  }> = [
+    {
+      id: "llama3.2",
+      label: "llama3.2",
+      capabilities: ["chat"],
+      capabilityConfidence: "guessed",
+    },
+  ],
+): void {
+  settingsStore.set("ai.customEndpoints", [
+    { id: "homelab", label: "Ollama", baseUrl: "http://alpha:11434/v1" },
+  ]);
+  settingsStore.set("ai.modelCache", {
+    "custom:homelab": { models, fetchedAt: new Date().toISOString() },
+  });
+}
+
 const ENV_KEYS = [
   "GEMINI_API_KEY",
   "OPENAI_API_KEY",
@@ -208,9 +237,7 @@ describe("capability resolution — explicit configuration", () => {
 
 describe("capability resolution — research grounding constraint", () => {
   it("never selects an OpenAI-compatible endpoint for research", () => {
-    settingsStore.set("ai.customEndpoints", [
-      { id: "homelab", label: "Ollama", baseUrl: "http://alpha:11434/v1" },
-    ]);
+    connectOllama();
     // The compat endpoint can serve chat…
     expect(resolveCapability("quick")?.providerId).toBe("custom:homelab");
     // …but cannot ground research.
@@ -219,10 +246,96 @@ describe("capability resolution — research grounding constraint", () => {
 
   it("prefers a grounding-capable provider for research when both exist", () => {
     process.env.ANTHROPIC_API_KEY = "a-key";
-    settingsStore.set("ai.customEndpoints", [
-      { id: "homelab", label: "Ollama", baseUrl: "http://alpha:11434/v1" },
-    ]);
+    connectOllama();
     expect(resolveCapability("research")?.providerId).toBe("anthropic");
+  });
+});
+
+/**
+ * An Ollama-only install leaves every capability on "Automatic", so auto mode
+ * has to produce a *model*, not just a provider. It previously produced only
+ * the provider, and the compat adapter refuses to be called without a model —
+ * so a correctly connected endpoint failed every AI request.
+ */
+describe("capability resolution — OpenAI-compatible endpoints in auto mode", () => {
+  it("names a discovered chat model instead of leaving the model unset", () => {
+    connectOllama();
+    const resolved = resolveCapability("quick");
+    expect(resolved?.providerId).toBe("custom:homelab");
+    expect(resolved?.model).toBe("llama3.2");
+  });
+
+  it("never picks an embedding-only model for a chat capability", () => {
+    connectOllama([
+      {
+        id: "nomic-embed-text",
+        label: "nomic-embed-text",
+        capabilities: ["embeddings"],
+        capabilityConfidence: "guessed",
+      },
+      {
+        id: "qwen3:8b",
+        label: "qwen3:8b",
+        capabilities: ["chat"],
+        capabilityConfidence: "guessed",
+      },
+    ]);
+    expect(resolveCapability("deep")?.model).toBe("qwen3:8b");
+  });
+
+  it("resolves the same model on every call", () => {
+    connectOllama([
+      {
+        id: "llama3.2",
+        label: "llama3.2",
+        capabilities: ["chat"],
+        capabilityConfidence: "guessed",
+      },
+      {
+        id: "qwen3:8b",
+        label: "qwen3:8b",
+        capabilities: ["chat"],
+        capabilityConfidence: "guessed",
+      },
+    ]);
+    expect(resolveCapability("quick")?.model).toBe(
+      resolveCapability("quick")?.model,
+    );
+    // Quick and deep share the model: nothing in a compat catalog ranks them.
+    expect(resolveCapability("deep")?.model).toBe(
+      resolveCapability("quick")?.model,
+    );
+  });
+
+  it("reports the capability unavailable when no chat model was discovered", () => {
+    // Endpoint saved while unreachable: the catalog is empty, so there is no
+    // model to call. Failing here beats calling the adapter with no model.
+    connectOllama([]);
+    expect(resolveCapability("quick")).toBeNull();
+    expect(capabilityAvailability()).toEqual({
+      quick: false,
+      deep: false,
+      research: false,
+    });
+  });
+
+  it("falls through to a native provider when the endpoint has no models", () => {
+    process.env.GEMINI_API_KEY = "g-key";
+    process.env.AI_PROVIDER = "custom:homelab";
+    connectOllama([]);
+    expect(resolveCapability("quick")?.providerId).toBe("gemini");
+  });
+
+  it("still honors an explicit pin, which carries its own model", () => {
+    connectOllama();
+    settingsStore.set("ai.capabilities", {
+      deep: {
+        mode: "pinned",
+        providerId: "custom:homelab",
+        model: "qwen3:32b",
+      },
+    });
+    expect(resolveCapability("deep")?.model).toBe("qwen3:32b");
   });
 });
 

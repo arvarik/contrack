@@ -121,7 +121,10 @@ export const useSetProviderKey = () => {
       });
       return res.json();
     },
-    onSuccess: () => {
+    // Settled, not success: the server stores the credential and *then*
+    // validates it, so a discovery failure still changed the view. Refreshing
+    // only on success left the newly-connected provider invisible until reload.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["ai-settings"] });
     },
   });
@@ -193,7 +196,9 @@ export const useSaveEndpoint = () => {
       });
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai-settings"] }),
+    // The endpoint is saved before its connectivity is checked, so a failed
+    // check still added a row. See useSetProviderKey.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["ai-settings"] }),
   });
 };
 

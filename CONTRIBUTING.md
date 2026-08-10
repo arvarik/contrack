@@ -84,7 +84,7 @@ contrack/
 Run the full test suite:
 
 ```bash
-npm test              # Unit + integration (390 tests, no API keys needed)
+npm test              # Unit + integration (496 tests, no API keys needed)
 npm run test:coverage # ...with a coverage report
 npm run lint          # ESLint + tsc --noEmit (strict)
 ```

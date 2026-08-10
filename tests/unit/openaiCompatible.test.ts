@@ -191,11 +191,15 @@ describe("reasoning models", () => {
 });
 
 describe("guard rails", () => {
-  it("requires an explicit model — compat endpoints have no default", async () => {
+  it("requires an explicit model, and says how to supply one", async () => {
+    // Capability resolution names a model from the discovered catalog, so an
+    // adapter reached with none means discovery never produced one. The error
+    // has to name the fix — this is what a self-hosted user sees when their
+    // endpoint was saved while unreachable.
     responder = () => ok("x");
     await expect(
       adapter.generate({ prompt: "hi", responseFormat: "text" }),
-    ).rejects.toThrow(/model must be selected/i);
+    ).rejects.toThrow(/refresh this endpoint's model list/i);
   });
 
   it("never claims search grounding", () => {

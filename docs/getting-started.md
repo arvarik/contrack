@@ -13,7 +13,10 @@ This guide walks you through installing Contrack, running it locally, and unders
   - [Anthropic](https://console.anthropic.com/settings/keys)
 
   You can also point Contrack at a self-hosted OpenAI-compatible server
-  (Ollama, vLLM, LM Studio) from Settings → AI instead of using a key.
+  (Ollama, vLLM, LM Studio) from Settings → AI instead of using a key. Add it
+  as a **custom endpoint** whose base URL ends in `/v1` — for Ollama that is
+  `http://localhost:11434/v1`. See
+  [Configuration](configuration.md#custom-endpoints-self-hosted--other-vendors).
 
 ## Quick Start
 

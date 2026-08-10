@@ -348,6 +348,45 @@ describe("custom OpenAI-compatible endpoints", () => {
     const view = await request(app).get("/api/settings/ai");
     expect(view.body.customEndpoints).toEqual([]);
   });
+
+  it("returns a capability pinned to a deleted endpoint to auto", async () => {
+    // A pin outliving its provider is not harmless. Generation capabilities
+    // warn and fall back, but embeddings resolves straight to the dead
+    // provider and every embed throws — semantic search and duplicate
+    // detection stop working with nothing in the UI to explain why.
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "doomed",
+      label: "Doomed",
+      baseUrl: "http://127.0.0.1:59999/v1",
+    });
+    await request(app).put("/api/settings/ai/capabilities/deep").send({
+      mode: "pinned",
+      providerId: "custom:doomed",
+      model: "llama3.2",
+    });
+
+    await request(app).delete("/api/settings/ai/endpoints/doomed");
+
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.capabilities.deep.assignment).toEqual({ mode: "auto" });
+  });
+
+  it("explains an endpoint that produced no chat models", async () => {
+    // The endpoint saved but discovery failed, so there is no model to call.
+    // "No connected provider can serve this" would send the user hunting for a
+    // second provider when the one they have just needs a refresh.
+    await request(app).put("/api/settings/ai/endpoints").send({
+      id: "silent",
+      label: "Silent Server",
+      baseUrl: "http://127.0.0.1:59999/v1",
+    });
+
+    const view = await request(app).get("/api/settings/ai");
+    expect(view.body.capabilities.quick.resolved).toBeNull();
+    expect(view.body.capabilities.quick.unavailableReason).toMatch(
+      /no chat models discovered on Silent Server/i,
+    );
+  });
 });
 
 describe("model catalog", () => {

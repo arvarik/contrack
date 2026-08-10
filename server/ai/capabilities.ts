@@ -24,8 +24,11 @@ import type { AIProvider } from "./provider.ts";
 import type { ModelClass } from "./routing/registry.ts";
 import {
   getProvider,
+  getProviderConfig,
   getProviderConfigs,
+  getCachedModels,
   defaultProviderId,
+  type ProviderConfig,
 } from "./providerRegistry.ts";
 import { getSetting, SETTING_KEYS } from "../services/settingsService.ts";
 import { log } from "../utils/logger.ts";
@@ -129,6 +132,34 @@ export function parseEnvOverride(
 }
 
 /**
+ * The model auto mode should use on a provider with no internal router.
+ *
+ * The three native adapters own a model map: given a model class they pick a
+ * concrete model themselves, so auto mode passes them no model and they
+ * decide. An OpenAI-compatible endpoint has no such map — its model ids are
+ * whatever the operator happens to have pulled — so auto mode has to name one
+ * itself. Naming nothing means the adapter is called with no model at all,
+ * which fails every request on an endpoint the user has correctly connected.
+ *
+ * The source is the catalog discovered when the endpoint was saved. Order
+ * follows the endpoint's own listing, so the same model is chosen on every
+ * call. Quick and deep therefore land on the same model: nothing in the compat
+ * catalog says which model is the cheaper one, and inventing a ranking from
+ * model names would be a guess the user cannot see. Pin the capabilities in
+ * Settings → AI to split them.
+ *
+ * Returns undefined for native providers (they route themselves) and when no
+ * chat model is cached, which `resolveCapability` treats as "this provider
+ * cannot serve the capability" rather than calling it and failing.
+ */
+function autoModelFor(config: ProviderConfig): string | undefined {
+  if (config.kind !== "openai-compatible") return undefined;
+  return getCachedModels(config.id).find((model) =>
+    model.capabilities.includes("chat"),
+  )?.id;
+}
+
+/**
  * Resolve a generation capability to a concrete provider + model.
  * Returns null when nothing is configured (callers fall back to mock mode)
  * or when the capability is explicitly disabled.
@@ -145,11 +176,15 @@ export function resolveCapability(
   if (assignment.mode === "pinned" && assignment.providerId) {
     const provider = getProvider(assignment.providerId);
     if (provider) {
+      const config = getProviderConfig(assignment.providerId);
       return {
         capability,
         providerId: assignment.providerId,
         provider,
-        model: assignment.model,
+        // A pin may name a provider and leave the model out — the API accepts
+        // that, and it means "use this endpoint, you choose". Native adapters
+        // choose for themselves; a compat endpoint needs one named here.
+        model: assignment.model ?? (config ? autoModelFor(config) : undefined),
         modelClass,
       };
     }
@@ -201,11 +236,22 @@ export function resolveCapability(
     ) {
       continue;
     }
+    // A compat endpoint with no discovered chat model cannot be called at all.
+    // Skipping it here surfaces the actionable "no provider can serve this"
+    // message instead of an adapter error about a missing model id.
+    const model = autoModelFor(config);
+    if (config.kind === "openai-compatible" && !model) {
+      log.warn(
+        "AICapabilities",
+        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → AI`,
+      );
+      continue;
+    }
     return {
       capability,
       providerId: id,
       provider,
-      model: undefined,
+      model,
       modelClass,
     };
   }

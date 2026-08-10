@@ -134,8 +134,13 @@ export class OpenAICompatibleAdapter implements AIProvider {
   async generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
     const model = options.model;
     if (!model) {
-      throw new Error(
-        `${this.name}: a model must be selected for OpenAI-compatible endpoints (no default model map exists)`,
+      // Auto mode names a model from the discovered catalog, so reaching here
+      // means the catalog is empty — the endpoint was saved while it was
+      // unreachable, or it serves no chat models.
+      throw new AppError(
+        `${this.name}: no model to call. Open Settings → AI, refresh this endpoint's model list, then choose a model for this task.`,
+        503,
+        { code: "AI_NO_MODEL_SELECTED" },
       );
     }
     if (options.enableSearchGrounding) {

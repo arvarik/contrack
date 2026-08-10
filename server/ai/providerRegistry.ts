@@ -10,7 +10,7 @@
 // stays singleton per provider.
 // =============================================================================
 
-import type { AIProvider } from "./provider.ts";
+import type { AIProvider, ModelInfo } from "./provider.ts";
 import { GeminiAdapter } from "./adapters/gemini.ts";
 import { OpenAIAdapter } from "./adapters/openai.ts";
 import { AnthropicAdapter } from "./adapters/anthropic.ts";
@@ -127,6 +127,21 @@ export function getProviderConfigs(): ProviderConfig[] {
 /** Look up one provider's config by id. */
 export function getProviderConfig(id: string): ProviderConfig | null {
   return getProviderConfigs().find((c) => c.id === id) ?? null;
+}
+
+/**
+ * Models discovered for a provider, as cached by the settings service when the
+ * key or endpoint was saved. Returns an empty list when discovery never ran.
+ *
+ * This lives here rather than in aiSettingsService because capability
+ * resolution needs it, and aiSettingsService already imports this module —
+ * the reverse direction would be a cycle.
+ */
+export function getCachedModels(providerId: string): ModelInfo[] {
+  const cache = getSetting<Record<string, { models?: ModelInfo[] }>>(
+    SETTING_KEYS.aiModelCache,
+  );
+  return cache?.[providerId]?.models ?? [];
 }
 
 /** True when the provider has usable credentials right now. */

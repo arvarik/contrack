@@ -81,6 +81,21 @@ Base URL: http://alpha:11434/v1
 API key:  (blank for Ollama)
 ```
 
+There is no separate "Ollama provider" and no base-URL override on the built-in
+OpenAI provider: a local server is a custom endpoint. `OPENAI_API_KEY` always
+talks to OpenAI itself.
+
+**The base URL must end in `/v1`.** Ollama serves its OpenAI-compatible API
+under `/v1` (`http://host:11434/v1`), not at the root. Without the suffix,
+model discovery requests `/models`, Ollama answers 404, and the endpoint saves
+but finds no models.
+
+**In Docker, `localhost` is the container.** A server running on the host
+machine is not reachable at `http://localhost:11434/v1` from inside the
+Contrack container. Use `http://host.docker.internal:11434/v1`, or the host's
+LAN address. Ollama must also be listening on more than loopback for this to
+work — set `OLLAMA_HOST=0.0.0.0` on the host.
+
 These can serve Quick, Deep, and Embeddings. They cannot serve Online research —
 there is no standard grounding API in the OpenAI format — so use SearXNG for
 self-hosted web research.
@@ -88,6 +103,20 @@ self-hosted web research.
 Structured output is negotiated automatically: Contrack tries strict JSON
 schema, falls back to JSON mode, then to prompt-based JSON, and remembers what
 each model supports.
+
+#### What Auto picks on a custom endpoint
+
+The built-in providers map each capability onto a model they choose themselves.
+A custom endpoint has no such map — its models are whatever you have pulled —
+so Auto uses **the first chat model in the endpoint's discovered list**, and
+uses the same one for both Quick and Deep. Nothing in the OpenAI-compatible
+model list says which of your models is the cheap one, so Contrack does not
+guess. Pin Quick and Deep in **Settings → AI** to split them, which is worth
+doing if you run both a small and a large model.
+
+If discovery found no chat models, Auto skips the endpoint entirely and the
+capability reports itself unavailable, rather than calling a model that does
+not exist. Refresh the endpoint's model list to fix it.
 
 ### Model discovery
 

@@ -12,6 +12,7 @@ import { getSetting, setSetting, SETTING_KEYS } from "./settingsService.ts";
 import {
   getProvider,
   getProviderConfigs,
+  getCachedModels,
   invalidateProviderCache,
   type CustomEndpointConfig,
   type ProviderConfig,
@@ -67,7 +68,33 @@ export function deleteProviderKey(providerId: string): void {
     getSetting<Record<string, string>>(SETTING_KEYS.aiProviderKeys) ?? {};
   delete keys[providerId];
   setSetting(SETTING_KEYS.aiProviderKeys, keys);
+  releasePinsFor(providerId);
   invalidateProviderCache();
+}
+
+/**
+ * Return any capability pinned to a departing provider to Auto.
+ *
+ * A pin outliving its provider fails differently per capability, and one of
+ * those ways is silent: quick/deep/research fall back to auto with a warning,
+ * but embeddings resolves straight to the dead provider and every embed call
+ * throws — semantic search and duplicate detection stop working with nothing
+ * in the UI to explain it, because the pin still *looks* valid.
+ */
+function releasePinsFor(providerId: string): void {
+  const assignments = getCapabilityAssignments();
+  let changed = false;
+  for (const [capability, assignment] of Object.entries(assignments)) {
+    if (assignment?.mode === "pinned" && assignment.providerId === providerId) {
+      assignments[capability as AICapability] = { mode: "auto" };
+      changed = true;
+      log.info(
+        "AISettings",
+        `${capability} was pinned to removed provider "${providerId}" — reset to auto`,
+      );
+    }
+  }
+  if (changed) setSetting(SETTING_KEYS.aiCapabilities, assignments);
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +126,7 @@ export function deleteCustomEndpoint(id: string): void {
     SETTING_KEYS.aiCustomEndpoints,
     listCustomEndpoints().filter((e) => e.id !== id),
   );
+  releasePinsFor(`custom:${id}`);
   invalidateProviderCache();
 }
 
@@ -361,6 +389,19 @@ function reasonFor(
       return "No connected provider offers web search, so research runs through your SearXNG instance.";
     }
     return "No connected provider offers web search. Connect Gemini, OpenAI, or Anthropic, or set a SearXNG URL below.";
+  }
+  // The common self-hosted case: the only provider is a custom endpoint whose
+  // model list was never discovered, so there is no model to call. "No provider
+  // can serve this" would send the user looking for a second provider when the
+  // one they have needs a refresh.
+  const compatWithoutModels = configs.filter(
+    (config) =>
+      config.kind === "openai-compatible" &&
+      !getCachedModels(config.id).some((m) => m.capabilities.includes("chat")),
+  );
+  if (compatWithoutModels.length === configs.length) {
+    const names = compatWithoutModels.map((c) => c.label).join(", ");
+    return `No chat models discovered on ${names}. Refresh its model list above — if it stays empty, the endpoint is unreachable or serves no chat models.`;
   }
   return "No connected provider can serve this capability.";
 }

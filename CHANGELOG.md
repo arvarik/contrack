@@ -7,6 +7,150 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3] — 2026-08-09
+
+A self-hosted release. The headline fix is that a local model server connected
+through Settings → AI now actually answers requests; the rest is a sweep of
+readability and clarity work across the UI, and the end of a long-running test
+flake.
+
+### Fixed
+
+- **A custom OpenAI-compatible endpoint failed every AI request while
+  appearing correctly connected.** Adding an Ollama, vLLM, or LM Studio server
+  and leaving the capabilities on **Automatic** — which is what you get by
+  adding an endpoint and changing nothing else — resolved to the endpoint but
+  named no model, and the compat adapter refuses to be called without one. The
+  result was `a model must be selected for OpenAI-compatible endpoints` on
+  every Magic Paste, mention, or summary, from a settings page reporting the
+  endpoint as connected.
+
+  The three built-in providers map a capability onto a model themselves, so
+  Automatic passes them no model on purpose. A compat endpoint has no such map,
+  so Automatic now names one: the first chat model in the catalog discovered
+  from the endpoint. Quick and Deep get the same model, because nothing in the
+  OpenAI-compatible model list says which of yours is the cheaper one and
+  guessing from model names would be a judgement the user cannot see — pin them
+  separately if you run both a small and a large model.
+
+  When discovery found no chat model there is nothing to call, so Automatic now
+  skips the endpoint and the capability reports itself unavailable naming the
+  endpoint and the fix, instead of failing later with a message about model
+  ids.
+
+- **Settings → AI listed every custom endpoint twice**, and the second copy
+  carried a "remove" button that removed nothing: it deleted from the
+  provider-key store, where an endpoint has no entry, then reported success.
+  Endpoints now appear once, in their own section, which is also where their
+  discovered model count, discovery errors, and a refresh button now live.
+
+- **A capability pinned to a deleted provider kept pointing at it.** Quick,
+  Deep, and Research fall back to Automatic with a warning, but Embeddings
+  resolved straight to the dead provider and every embed threw — semantic
+  search and duplicate detection stopped working with nothing in the UI to
+  explain why, because the pin still looked valid. Removing a provider or an
+  endpoint now returns anything pinned to it to Automatic.
+
+- Saving a provider key or an endpoint that then fails its connectivity check
+  left the settings list stale. The credential is stored before it is
+  validated — deliberately, so a typo does not cost you the key you just typed
+  — so the failed save had still changed the page.
+
+- **The duplicate badge counted the wrong thing.** It read pending _pairs_
+  while the review queue groups pairs into clusters, because (A,B) and (B,C)
+  are one problem with three people rather than two problems. The badge
+  promised 7 and the page showed 3.
+
+- The bulk selection toolbar was 80% transparent, so the contact list showed
+  through the controls that archive and delete in bulk. The map opened centred
+  on longitude 0, putting the Atlantic in the middle, and left empty background
+  above and below the world on a tall window. The AI usage feed's separators
+  referenced a colour token that did not exist, so Tailwind dropped the class
+  and they rendered in near-black.
+
+- An un-researched contact's Dossier tab was blank — every section in it is
+  conditional. It now says what a dossier holds and links to Contact
+  Enrichment.
+
+- Five of the fourteen AI cache tiers and operations had no display name, so
+  the tier table and activity feed printed raw keys like `queryParse` beside
+  properly named rows. All fourteen now have a name and an explanation of what
+  the tier caches.
+
+- Startup logged both vector stores at their creation width — 768 for
+  `contact_embeddings`, 384 for `search_embeddings` — regardless of what they
+  actually held. Those literals only apply to a fresh database; choosing a different
+  embeddings model rebuilds the tables at that model's width. Vector width is
+  the first thing you check when embeddings misbehave, so a hardcoded number
+  there is worse than no number. Both lines now read the width back from the
+  table.
+
+- **CI's image-architecture check could only ever fail.** It grepped the raw
+  manifest for `"architecture":"amd64"`, but current buildx pretty-prints
+  `--raw`, so the compact-JSON pattern never matched and `merge-image` reported
+  a missing platform on every push while publishing a perfectly good
+  two-architecture image. Parsed with `jq` now, filtered to `os == "linux"` so
+  the per-platform provenance attestations are not counted as platforms.
+
+- **The integration suite's long-running flake is fixed at the source.**
+  `request(app)` makes supertest bind a fresh HTTP server and tear it down for
+  every single request — roughly 500 listen/close cycles a run. Ephemeral ports
+  recycle faster than closed sockets leave `TIME_WAIT`, so a new server
+  occasionally inherited a port a previous connection was still addressing and
+  a request was answered by the wrong socket. The symptom was a status the
+  route cannot produce: a 404 from a registered path, a 403 from a router with
+  no 403 in it, a 401 on an un-gated instance — each one an invitation to audit
+  auth code that was never involved.
+
+  Each test file now listens once and every request goes to that server, which
+  removes the recycling. Measured at roughly one failed run in six before, and
+  none in thirty after; the `retry: 2` that had been absorbing it is gone, so
+  the suite reports instability instead of hiding it.
+
+### Added
+
+- **The health score explains itself.** Clicking the badge on the Pulse
+  at-risk list breaks the number into its five signals with the measurement
+  behind each — "last contact 200 days ago, against a 90-day cadence" rather
+  than "42". A score attached to a person is a judgement, and one you cannot
+  interrogate is one you either over-trust or ignore.
+- **Settings has a filter.** Five groups and a dozen destinations is past where
+  scanning beats typing. Items match synonyms too, so "logout" finds Account
+  and "bin" finds Trash.
+- **Shift-click selects a range and Cmd/Ctrl+A selects everything visible.**
+  Ranges add rather than toggle — shift-clicking across selected rows and
+  having them flip off is never what "select from here to there" means. The
+  shortcut is ignored while focus is in a field.
+- **Session lifetime is configurable** (1 day to 1 year, presets in Settings →
+  Account) rather than fixed at 30 days. It applies to new sign-ins only, which
+  the card says out loud, because someone shortening it to lock out a lost
+  device would otherwise believe they had.
+- A tooltip on every AI cache tier explaining what it caches and what a hit
+  saved. It opens on click as well as hover, because neither hover nor the
+  `title` attribute exists on a phone.
+- An end-to-end test suite for compat endpoints, running against a stub server
+  that speaks the OpenAI wire format. It covers the case the bug above lived
+  in — an install whose only provider is a custom endpoint, with everything on
+  Automatic — through the real adapter, real base-URL handling, and real model
+  discovery.
+
+### Changed
+
+- Duplicates now leads the Organize group, ahead of Lists. It is the one
+  destination there with work queued behind it, and a queue nobody sees is a
+  queue nobody clears.
+- Sign-out lives only on Settings → Account. Two doors to the same action is
+  one more than it needs.
+- The empty Network view leads with Import rather than "Add contact". Nobody
+  builds a personal CRM by typing four hundred people in by hand.
+- The first-run setup screen names how many contacts are waiting and states
+  they will be assigned to the account being created; the sign-in screen now
+  distinguishes an expired session from an ordinary visit.
+- The active letter on the alphabet rail is marked on the rail itself. The
+  floating marker it replaces covered contact names.
+
+## [1.5.2] — 2026-08-07
+
 ### Added
 
 - **Accounts replace the access token.** A gated instance now shows a one-time
@@ -218,7 +362,9 @@ indexes below repair themselves automatically on first start.
 Initial release: local-first AI-powered personal CRM with contact
 management, semantic search, AI enrichment, and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v1.4.0...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v1.5.3...HEAD
+[1.5.3]: https://github.com/arvarik/contrack/compare/v1.5.2...v1.5.3
+[1.5.2]: https://github.com/arvarik/contrack/compare/v1.4.0...v1.5.2
 [1.4.0]: https://github.com/arvarik/contrack/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/arvarik/contrack/compare/v1.1.0...v1.3.0
 [1.1.0]: https://github.com/arvarik/contrack/compare/v1.0.0...v1.1.0
