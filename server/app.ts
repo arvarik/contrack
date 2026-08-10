@@ -31,6 +31,7 @@ import { avatarRouter } from "./routes/avatar.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import { attachPrincipal, requireAuth } from "./middleware/auth.ts";
 import { authRouter } from "./routes/auth.ts";
+import { healthRouter } from "./routes/health.ts";
 import { reconcileOwnership } from "./services/authService.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
@@ -103,6 +104,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       }),
     );
   }
+
+  // Liveness probe, mounted OUTSIDE /api so the auth gate never touches it.
+  // Docker's HEALTHCHECK holds no credential.
+  app.use(healthRouter);
 
   // Identify the caller before anything else looks at the request. Never
   // rejects — it only decides *who* is asking, which the auth routes need to

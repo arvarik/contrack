@@ -59,4 +59,12 @@ USER node
 
 EXPOSE 3210
 
+# /healthz sits outside the auth gate, so this works on a gated instance too.
+# `restart: unless-stopped` only reacts to a dead process; the health check is
+# what catches a process that is alive but no longer answering. start-period
+# covers first-boot migrations and the embedding model load. No curl in the
+# slim image — Node's own fetch does the probe.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3210)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["tsx", "server.ts"]

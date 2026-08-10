@@ -10,6 +10,7 @@ import express from "express";
 import path from "path";
 
 import { log } from "./server/utils/logger.ts";
+import { sqlite } from "./server/db.ts";
 import { startRetroactiveGeocoding } from "./server/services/geocoding/index.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import { isAuthRequired } from "./server/middleware/auth.ts";
@@ -109,12 +110,23 @@ async function startServer() {
   // (stack, cause) before responding in production.
   finalizeApp(app);
 
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     log.info("Server", `Contrack CRM running on http://localhost:${PORT}`);
     log.info("Server", `Bound to ${HOST}`);
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   });
+
+  // Node closes idle keep-alive sockets after 5 seconds by default. A reverse
+  // proxy (OrbStack, nginx, Caddy) reuses connections for longer than that,
+  // and a request sent down a socket Node has just closed surfaces to the
+  // user as a sporadic 502. The server must always outlast the proxy, so:
+  // longer than any common proxy default, and headersTimeout one second more
+  // so a request already in flight when the keep-alive expires still parses.
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+
+  registerShutdownHandlers(server);
 
   startRetroactiveGeocoding();
 
@@ -202,4 +214,92 @@ async function startServer() {
     });
 }
 
-startServer();
+// =============================================================================
+// Shutdown and failure handling
+// =============================================================================
+
+/**
+ * Close cleanly on SIGTERM/SIGINT.
+ *
+ * `docker stop` sends SIGTERM, waits 10 seconds, then SIGKILLs. Before this
+ * handler existed the process took the SIGKILL every time — dropping in-flight
+ * requests and closing the database without the WAL checkpoint that a clean
+ * `close()` performs. The database is the entire product here; it gets a
+ * clean close on every path we control.
+ */
+function registerShutdownHandlers(server: import("http").Server): void {
+  let shuttingDown = false;
+
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (shuttingDown) {
+      // A second signal means "stop waiting" — the operator pressed Ctrl-C
+      // twice, or Docker's grace period is about to expire anyway.
+      log.warn("Server", `Second ${signal} — exiting immediately`);
+      process.exit(1);
+    }
+    shuttingDown = true;
+    log.info("Server", `${signal} received — draining connections`);
+
+    // Refuse new connections, let in-flight requests finish, drop idle
+    // keep-alive sockets so they can't hold the close open for 65 seconds.
+    server.close(() => {
+      try {
+        sqlite.close();
+        log.info("Server", "Database closed cleanly");
+      } catch (err) {
+        log.warn("Server", `Database close failed: ${getErrorMessage(err)}`);
+      }
+      process.exit(0);
+    });
+    server.closeIdleConnections();
+
+    // Hard deadline inside Docker's 10-second grace: a hung handler must not
+    // ride the close all the way into a SIGKILL mid-write. Closing the
+    // database first is the whole point of shutting down at all.
+    setTimeout(() => {
+      log.warn("Server", "Drain deadline reached — forcing close");
+      server.closeAllConnections();
+      try {
+        sqlite.close();
+      } catch {
+        /* already closed, or beyond help — exiting either way */
+      }
+      process.exit(1);
+    }, 8_000).unref();
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+}
+
+// A rejected promise nobody awaited crashes Node with a bare stack by
+// default. Every background chain in startServer carries its own .catch, so
+// anything landing here is a bug — log it loudly and keep serving; the state
+// is not corrupted by a stray rejection.
+process.on("unhandledRejection", (reason) => {
+  log.error(
+    "Server",
+    `Unhandled promise rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+  );
+});
+
+// A synchronous throw that escaped every handler leaves the process state
+// unknown — continuing risks serving garbage. Close the database and exit
+// non-zero so Docker's restart policy brings up a clean process.
+process.on("uncaughtException", (err) => {
+  log.error("Server", `Uncaught exception: ${err.stack ?? err.message}`);
+  try {
+    sqlite.close();
+  } catch {
+    /* nothing left to do with it */
+  }
+  process.exit(1);
+});
+
+startServer().catch((err) => {
+  // Boot failed — a port already bound, a broken migration. Without this
+  // catch the rejection lands in the handler above with a vaguer shape;
+  // with it, the log names boot explicitly and the exit code is honest.
+  log.error("Server", `Startup failed: ${getErrorMessage(err)}`);
+  process.exit(1);
+});
