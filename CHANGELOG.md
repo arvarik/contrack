@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.4] — 2026-08-09
+
+The clone-and-host release. Four independent verification passes — a clean-
+clone install test, a full Docker hosting pass, an adversarial review of every
+change since 1.5.3, and a docs-vs-reality audit — ran against this tree, and
+everything they found is fixed here. The result: `git clone`, one command, and
+a running instance, with an API key, a self-hosted OpenAI-compatible endpoint,
+or no AI at all.
+
 ### Added
 
 - **A fresh clone installs again.** `npm install` failed outright with an
@@ -478,7 +487,8 @@ indexes below repair themselves automatically on first start.
 Initial release: local-first AI-powered personal CRM with contact
 management, semantic search, AI enrichment, and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v1.5.3...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v1.5.4...HEAD
+[1.5.4]: https://github.com/arvarik/contrack/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/arvarik/contrack/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/arvarik/contrack/compare/v1.4.0...v1.5.2
 [1.4.0]: https://github.com/arvarik/contrack/compare/v1.3.0...v1.4.0
