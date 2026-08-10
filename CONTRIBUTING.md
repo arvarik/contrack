@@ -16,11 +16,14 @@ Thank you for your interest in contributing to Contrack! This guide outlines the
 contrack/
 ├── server/                  # Express backend (TypeScript, run via tsx)
 │   ├── ai/                  # AI module — provider-agnostic adapter pattern
-│   │   ├── adapters/        #   Concrete LLM adapters (gemini, openai, anthropic)
+│   │   ├── adapters/        #   Concrete LLM adapters (gemini, openai, anthropic, compat)
 │   │   ├── routing/         #   SmartRouter, QuotaTracker, ParallelQueue
-│   │   ├── aiService.ts     #   Business-logic facade (9 exported functions)
+│   │   ├── services/        #   Domain logic (parsing, mentions, search intel…)
+│   │   ├── aiService.ts     #   Stable import path — re-exports services/
+│   │   ├── schemaTranslation.ts  # Shared JSON-schema translator (per-dialect)
 │   │   ├── provider.ts      #   Abstract AIProvider interface
 │   │   └── types.ts         #   Shared type definitions
+│   ├── middleware/          # auth, rate limiting, error handling
 │   ├── routes/              # Express route handlers (thin controllers)
 │   │   └── dedupe/          #   Dedupe-specific routes (scan, merge, suggestions)
 │   ├── services/            # Core business logic
@@ -84,7 +87,7 @@ contrack/
 Run the full test suite:
 
 ```bash
-npm test              # Unit + integration (496 tests, no API keys needed)
+npm test              # Unit + integration (500+ tests, no API keys needed)
 npm run test:coverage # ...with a coverage report
 npm run lint          # ESLint + tsc --noEmit (strict)
 ```

@@ -131,6 +131,14 @@ server/ai/
 ├── embeddings.ts    # Embeddings capability + vector dimension lifecycle
 ├── gateway.ts       # generateFor(capability, opts) — the entry point for all generation
 ├── providerRegistry.ts # Every configured provider (env keys, stored keys, custom endpoints)
+├── schemaTranslation.ts # One JSON-schema translator, per-dialect options
+├── services/        # Domain business logic behind the aiService.ts barrel
+│   ├── contactParsing.ts    # Magic Paste, bulk import parsing
+│   ├── relationshipIntel.ts # Briefings, EML digests, daily insight
+│   ├── mentions.ts          # @mention entity extraction
+│   ├── searchIntel.ts       # Query planning, HyDE, rerank, synthesis
+│   └── shared.ts            # isMockMode, safeParseJson
+├── aiService.ts     # Stable import path — re-exports services/
 ├── singleton.ts     # Default-provider proxy (back-compat surface)
 ├── types.ts         # Shared types (DiagnosticsSnapshot, etc.)
 └── index.ts         # Exports configured provider as `ai`

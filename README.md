@@ -8,7 +8,7 @@
 [![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
 [![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-474_passing-brightgreen)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-518_passing-brightgreen)](https://vitest.dev/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 </div>
 
@@ -144,36 +144,50 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ## 🚀 Quick Start
 
-**Try it locally in under 60 seconds.**
+**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → AI** after first boot, or run with no AI at all — contact management and semantic search work offline on the built-in local embedding model.
 
-### Option 1: Docker (Recommended)
+### Option 1: Docker, prebuilt image (fastest)
 
-The easiest way to run Contrack is via Docker Compose. This ensures all native dependencies (like `sqlite-vec`) work perfectly.
+CI publishes a multi-arch image (amd64 + arm64) on every release:
+
+```bash
+docker run -d --name contrack \
+  -p 3210:3210 \
+  -v "$PWD/contrack-data":/app/data \
+  -e GEMINI_API_KEY=your-key \
+  ghcr.io/arvarik/contrack:latest
+```
+
+Open **http://localhost:3210**. Everything that must survive a restart — database, uploads, backups, the embedding-model cache — lives in `/app/data`, so that one volume is the whole persistence story. The container reports its own health (`docker ps` shows `healthy` once the app answers), and `docker stop` shuts down cleanly.
+
+Authentication is off by default, on the assumption that the container is reached from this machine only — set `-e AUTH_REQUIRED=true` if the port is reachable by anything else, and the first visit will walk you through creating an account.
+
+### Option 2: Docker Compose (build from source)
 
 ```bash
 git clone https://github.com/arvarik/contrack.git
 cd contrack
 cp .env.example .env
-# Add your API key (GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)
-docker-compose up -d
+# Optional: add an API key — or skip this and connect a provider in Settings → AI
+docker compose up -d
 ```
 
-Open **http://localhost:3210**. Data is automatically persisted to `./data`. Authentication is off by default, on the assumption that the container is reached from this machine only — set `AUTH_REQUIRED=true` if the port is reachable by anything else, and the first visit will walk you through creating an account.
+Same behavior as Option 1; data persists to `./data`. The first build compiles native modules and takes a few minutes.
 
-### Option 2: Native Installation
+### Option 3: Native installation
 
 ```bash
 git clone https://github.com/arvarik/contrack.git
 cd contrack
 npm install
 cp .env.example .env
-# Add your API key (GEMINI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY)
+# Optional: add an API key — or skip this and connect a provider in Settings → AI
 npm run dev
 ```
 
-Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks.
+Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks. Requires Node.js 22+.
 
-> **Seed data:** Run `npm run seed` to populate with demo contacts.
+> **Demo data:** Run `npm run db:seed` to generate ~30 realistic demo contacts, or `npm run seed` to add a single example contact to an empty database. Neither deletes existing data.
 
 ---
 
@@ -187,7 +201,7 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 | **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
 | **Mapping**  | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding           |
-| **Testing**  | Vitest — 180 tests, <600ms                                            |
+| **Testing**  | Vitest — 500+ unit & integration tests, no API keys needed            |
 
 ---
 
@@ -201,6 +215,7 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | [Configuration](docs/configuration.md)     | Environment variables, AI provider setup, tier tuning |
 | [Architecture](docs/architecture.md)       | System overview, data flow, schema, caching           |
 | [API Reference](docs/api-reference.md)     | Complete REST API with curl and JavaScript examples   |
+| [CI & Release](docs/ci-and-release.md)     | Pipeline, published images, release procedure         |
 
 ### Feature Guides
 
@@ -218,21 +233,23 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 ## 🔐 Environment Variables
 
-| Variable            | Description                                               | Default      |
-| ------------------- | --------------------------------------------------------- | ------------ |
-| `AI_PROVIDER`       | Preferred provider for capabilities set to Auto           | `gemini`     |
-| `GEMINI_API_KEY`    | Gemini API key                                            | —            |
-| `OPENAI_API_KEY`    | OpenAI API key                                            | —            |
-| `ANTHROPIC_API_KEY` | Anthropic API key                                         | —            |
-| `AI_TIER`           | `FREE` or `PAID` rate limit profile                       | `FREE`       |
-| `PORT`              | Express listening port                                    | `3210`       |
-| `HOST`              | Bind interface (`0.0.0.0` to expose on LAN)               | `127.0.0.1`  |
-| `AUTH_REQUIRED`     | `true` = require sign-in with an account                  | `false`      |
-| `API_TOKEN`         | Machine credential for scripts/MCP (`Bearer`); also gates | — (off)      |
-| `DATA_DIR`          | Root for runtime data (DB, uploads, model cache)          | project root |
-| `MAPBOX_API_KEY`    | Mapbox geocoding (optional, higher accuracy)              | —            |
+| Variable                | Description                                               | Default      |
+| ----------------------- | --------------------------------------------------------- | ------------ |
+| `AI_PROVIDER`           | Preferred provider for capabilities set to Auto           | `gemini`     |
+| `GEMINI_API_KEY`        | Gemini API key                                            | —            |
+| `OPENAI_API_KEY`        | OpenAI API key                                            | —            |
+| `ANTHROPIC_API_KEY`     | Anthropic API key                                         | —            |
+| `AI_TIER`               | `FREE` or `PAID` rate limit profile                       | `FREE`       |
+| `PORT`                  | Express listening port                                    | `3210`       |
+| `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)               | `127.0.0.1`  |
+| `AUTH_REQUIRED`         | `true` = require sign-in with an account                  | `false`      |
+| `API_TOKEN`             | Machine credential for scripts/MCP (`Bearer`); also gates | — (off)      |
+| `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache) | project root |
+| `MAPBOX_API_KEY`        | Mapbox geocoding (optional, higher accuracy)              | —            |
+| `BACKUP_INTERVAL_HOURS` | Hours between automatic DB snapshots (`0` disables)       | `24`         |
+| `BACKUP_KEEP`           | Rotation depth for automatic snapshots                    | `7`          |
 
-See [Configuration Guide](docs/configuration.md) for full details.
+More variables (per-capability model pins, CORS, trash retention, background-job control) in the [Configuration Guide](docs/configuration.md). A liveness probe lives at `GET /healthz` — always reachable without a credential, used by the Docker `HEALTHCHECK`, and safe to point an uptime monitor at.
 
 ---
 

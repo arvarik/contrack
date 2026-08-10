@@ -1,8 +1,13 @@
+import "dotenv/config";
+import path from "path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../src/db/schema.ts";
 
-const DB_PATH = "curator.db";
+// Same resolution as server/db.ts: the database lives in DATA_DIR. The old
+// hardcoded "curator.db" wrote to the CWD, which on a DATA_DIR install
+// (Docker sets /app/data) seeded a stray database the app never reads.
+const DB_PATH = path.join(process.env.DATA_DIR ?? process.cwd(), "curator.db");
 const sqlite = new Database(DB_PATH);
 const db = drizzle(sqlite, { schema });
 

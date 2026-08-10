@@ -49,10 +49,16 @@ All of this is non-blocking — the UI is fully usable while background tasks ru
 Populate the database with realistic demo contacts for testing:
 
 ```bash
-npm run seed
+npm run db:seed
 ```
 
-This creates ~50 demo contacts with names, companies, emails, phone numbers, tags, interactions, and relationship history. **Warning**: seeding clears the existing database.
+This generates ~30 demo contacts with names, companies, emails, phone numbers,
+tags, interactions, and relationship history. It only adds — **nothing is
+deleted**, and it never clears the database.
+
+There is also `npm run seed`, which inserts a single hand-written example
+contact and skips entirely when the database already has any contacts. Both
+scripts write to the same database the server uses (they honour `DATA_DIR`).
 
 ## Production Deployment
 
@@ -61,7 +67,16 @@ npm run build
 NODE_ENV=production npx tsx server.ts
 ```
 
-> **Docker note:** Mount a persistent volume for the SQLite database file (`curator.db`). Ephemeral containers will destroy data on restart.
+The production server serves the built `dist/`, enables the security headers
+and CSP, and answers health probes at `GET /healthz` (no credential needed).
+SIGTERM shuts it down cleanly — in-flight requests drain and the database
+checkpoints before exit.
+
+> **Docker note:** mount **`/app/data`** as a persistent volume — it holds
+> the database, uploads, backups, and the embedding-model cache. That one
+> mount is the entire persistence story; an ephemeral container loses all
+> four on restart. See
+> [Configuration → Database & Persistence](configuration.md#database--persistence).
 
 ---
 

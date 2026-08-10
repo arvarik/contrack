@@ -2,9 +2,23 @@
 
 All endpoints are prefixed with `/api`. Request and response bodies are `application/json` unless noted otherwise. The server runs on `http://localhost:3210` by default.
 
-**Authentication:** off by default. When `AUTH_REQUIRED=true` or `API_TOKEN` is configured, every `/api` and `/uploads` request needs either `Authorization: Bearer <API_TOKEN>` (scripts, MCP) or the session cookie set by `POST /api/auth/login` (the web app). See [Configuration](configuration.md#authentication--remote-access).
+**Authentication:** off by default. When `AUTH_REQUIRED=true` or `API_TOKEN` is configured, every `/api` and `/uploads` request needs either `Authorization: Bearer <API_TOKEN>` (scripts, MCP) or the session cookie set by `POST /api/auth/login` (the web app). Reachable without a credential even when gated: `/api/auth/*` (sign-in must work), `GET /healthz` (health checks hold no secrets), and the static frontend bundle (the SPA must load to show the sign-in screen). See [Configuration](configuration.md#authentication--remote-access).
 
 **Rate limits:** endpoints that trigger billable AI calls or outbound fetches are limited to 60 requests/minute per client IP (`429 RATE_LIMITED`).
+
+**Body size:** JSON bodies are capped at **1 MB**; the one exception is `POST /api/contacts/bulk` (50 MB) for imports. Over the limit the server responds `413` with code `PAYLOAD_TOO_LARGE`. Unknown `/api` paths return 404; non-GET requests to non-API paths are not swallowed by the SPA fallback and also 404.
+
+---
+
+## Health
+
+### `GET /healthz`
+
+Liveness probe, mounted at the root (not under `/api`) and always reachable without a credential. Returns `200 {"status":"ok"}` when the event loop and SQLite both answer, `503 {"status":"unavailable"}` otherwise. This is what the Docker `HEALTHCHECK` polls; point uptime monitors here.
+
+```bash
+curl http://localhost:3210/healthz
+```
 
 ---
 
@@ -1330,6 +1344,29 @@ Downloads a flat, RFC-4180-escaped CSV of all non-trashed contacts.
 ```bash
 curl -OJ http://localhost:3210/api/export/csv
 ```
+
+---
+
+## Additional Endpoints
+
+Smaller surfaces, documented compactly. Shapes follow the conventions above.
+
+| Endpoint                                    | What it does                                                                           |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GET /api/contacts/:id/score`               | The contact's relationship-score breakdown (the five signals behind the number)        |
+| `GET /api/contacts/:id/relationships`       | The contact's @mention relationship graph                                              |
+| `GET /api/avatar/:style`                    | Generated avatar SVG for a style + seed (query `seed=`)                                |
+| `POST /api/contacts/merge-batch`            | Merge many independent pairs in one call                                               |
+| `POST /api/contacts/merge-clusters`         | Merge many clusters in one call (auto-merge flow)                                      |
+| `GET /api/dedupe/stream`                    | SSE progress stream for a running scan (query `scanId=`)                               |
+| `GET /api/dedupe/active`                    | The in-progress scan, if any (page-refresh recovery)                                   |
+| `GET /api/dedupe/status`                    | Status of a scan by id (query `scanId=`)                                               |
+| `GET /api/dedupe/suggestion-for/:contactId` | Pending duplicate suggestion involving a contact                                       |
+| `POST /api/dedupe/backfill-embeddings`      | Kick off dedupe-embedding backfill (rate-limited)                                      |
+| `GET /api/dedupe/embedding-status`          | Embedding coverage for the dedupe index                                                |
+| `POST /api/trash/bulk-restore`              | Restore many trashed contacts (`{"ids": [...]}`)                                       |
+| `GET /api/auth/session-policy`              | Current session lifetime in days _(account session required)_                          |
+| `PUT /api/auth/session-policy`              | Set session lifetime, 1–365 days; applies to new sign-ins _(account session required)_ |
 
 ---
 

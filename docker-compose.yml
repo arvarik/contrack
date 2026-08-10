@@ -21,4 +21,16 @@ services:
       # Machine credential for scripts and MCP clients. Setting it also gates
       # the instance. Generate one with: openssl rand -hex 32
       - API_TOKEN=${API_TOKEN:-}
+      # Everything below is optional tuning, forwarded so a value in .env
+      # actually reaches the container — previously only the eight variables
+      # above made it through, and a documented setting like BACKUP_KEEP was
+      # silently ignored on the Docker path.
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - TRASH_RETENTION_DAYS=${TRASH_RETENTION_DAYS:-}
+      - BACKUP_INTERVAL_HOURS=${BACKUP_INTERVAL_HOURS:-}
+      - BACKUP_KEEP=${BACKUP_KEEP:-}
+      - AI_QUICK_MODEL=${AI_QUICK_MODEL:-}
+      - AI_DEEP_MODEL=${AI_DEEP_MODEL:-}
+      - AI_RESEARCH_MODEL=${AI_RESEARCH_MODEL:-}
+      - AI_EMBEDDINGS_MODEL=${AI_EMBEDDINGS_MODEL:-}
     restart: unless-stopped

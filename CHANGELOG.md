@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A fresh clone installs again.** `npm install` failed outright with an
+  ERESOLVE peer conflict — `eslint-plugin-jsx-a11y` (at its latest, 6.10.2)
+  declares peer support only through eslint 9 while the project uses
+  eslint 10. The Dockerfile and CI already passed `--legacy-peer-deps`;
+  humans following the README had no such luck. A committed `.npmrc` now
+  makes `npm install` and `npm ci` work exactly as the docs write them.
+- **A prebuilt-image quick start.** CI has published multi-arch images to
+  `ghcr.io/arvarik/contrack` all along; the README finally says so, with a
+  one-command `docker run` that skips the from-source build entirely.
+- A "Running as a Service" section in the configuration guide: `/healthz`,
+  the Docker HEALTHCHECK, SIGTERM drain semantics, the 65-second keep-alive
+  and why it matters behind a proxy, and what the production CSP will block.
+  The API reference now documents `/healthz`, the 1 MB body limit with its
+  single 50 MB exemption, the true pre-auth surface, and fourteen endpoints
+  that existed only in code.
+
 - **The process now survives `docker stop`.** SIGTERM/SIGINT drain in-flight
   requests, close SQLite with its WAL checkpoint, and exit 0 — previously the
   process rode Docker's grace period into a SIGKILL on every stop, closing the
@@ -23,6 +39,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `uncaughtException` closes the database before exiting.
 
 ### Fixed
+
+- **The seed scripts wrote to the wrong database on any `DATA_DIR` install**
+  (Docker included): both hardcoded `curator.db` in the working directory
+  while the server reads `$DATA_DIR/curator.db`. Seeding a Docker instance
+  created a stray database the app never opens. Both scripts now resolve the
+  path exactly as the server does.
+- **The configuration guide told Docker users to mount the project root** as
+  their persistence volume — advice that would shadow the built app and
+  `node_modules` inside the image and break the container. It now says what
+  `docker-compose.yml` actually does: mount `/app/data`, which holds the
+  database, uploads, backups, and the embedding-model cache, and is the
+  entire persistence story.
+- **Seeding docs described a destructive import that never existed.**
+  `npm run seed` inserts one example contact and skips a non-empty database —
+  it deletes nothing, ever. The "~50 demo contacts" (actually ~30, from
+  `npm run db:seed`) and the false "seeding clears the existing database"
+  warning are corrected everywhere.
+- **An OpenAI- or Anthropic-only install booted to a false alarm.** Startup
+  validated only the key matching `AI_PROVIDER` (default `gemini`), so a
+  working OpenAI-only setup was greeted with "GEMINI_API_KEY is not
+  configured — AI features will fail gracefully", which was simply untrue.
+  Boot now reports the providers actually configured, and with none it says
+  what to do (Settings → AI) instead of implying something is broken.
+- `docker-compose.yml` forwarded only eight environment variables, so a
+  documented setting like `BACKUP_KEEP=30` in `.env` was silently ignored on
+  the Docker path. The optional tuning variables now pass through.
+- `APP_URL` was documented in two places and read by zero lines of code —
+  removed from the docs and `.env.example`. `DISABLE_BACKGROUND_JOBS`,
+  `NODE_ENV`, and the configurable session lifetime were the reverse (real
+  behaviour, documented nowhere) and are now in the reference.
+- The README's two contradictory test counts (474 in the badge, "180 tests,
+  <600ms" in the table) both now reflect the real suite, and the Vite config
+  no longer triggers a loader warning on every boot (`__dirname` in an ESM
+  config, replaced with `import.meta.dirname`).
 
 - **Swipe-merge stayed blocked after confirming a large cluster.** The drag
   handler captured the confirmation flag once and never saw it change — a

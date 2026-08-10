@@ -7,7 +7,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
+      // import.meta.dirname, not __dirname: this config is ESM, and Vite's
+      // native config loader warns on the CJS global at every boot.
+      "@": path.resolve(import.meta.dirname, "."),
     },
   },
   server: {

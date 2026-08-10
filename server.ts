@@ -29,24 +29,40 @@ import {
   ensureEmbeddingStore,
 } from "./server/services/search/localEmbeddings.ts";
 
-// ── Provider-aware API key validation ────────────────────────────────────────
-const AI_PROVIDER = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-const API_KEY_MAP: Record<string, string> = {
-  gemini: "GEMINI_API_KEY",
-  openai: "OPENAI_API_KEY",
-  anthropic: "ANTHROPIC_API_KEY",
-};
-const KEY_VAR = API_KEY_MAP[AI_PROVIDER] ?? "GEMINI_API_KEY";
-const KEY_VALUE = process.env[KEY_VAR];
+// ── AI posture at boot ───────────────────────────────────────────────────────
+// This used to check only the key matching AI_PROVIDER (default gemini), so
+// an OpenAI-only install booted to "GEMINI_API_KEY is not configured!" —
+// telling the user their working setup was broken. Auto-resolution serves
+// every capability from ANY configured provider, so report what is actually
+// configured instead.
+{
+  const keyed = (
+    [
+      ["gemini", "GEMINI_API_KEY"],
+      ["openai", "OPENAI_API_KEY"],
+      ["anthropic", "ANTHROPIC_API_KEY"],
+    ] as const
+  )
+    .filter(([, envVar]) => {
+      const value = process.env[envVar];
+      return !!value && value !== "dummy_key";
+    })
+    .map(([name]) => name);
 
-if (!KEY_VALUE || (AI_PROVIDER === "gemini" && KEY_VALUE === "dummy_key")) {
-  log.warn("Server", `${KEY_VAR} is not configured inside .env!`);
-  log.warn(
-    "Server",
-    `AI provider "${AI_PROVIDER}" will not be available. AI features will fail gracefully.`,
-  );
-} else {
-  log.info("Server", `AI Provider: ${AI_PROVIDER} (${KEY_VAR} configured)`);
+  if (keyed.length > 0) {
+    log.info(
+      "Server",
+      `AI providers from env: ${keyed.join(", ")} (default: ${(process.env.AI_PROVIDER ?? "gemini").toLowerCase()})`,
+    );
+  } else {
+    // Keys stored through Settings → AI and custom endpoints live in the
+    // database, so "no env key" is not "no AI" — say what to do, not that
+    // something is wrong.
+    log.info(
+      "Server",
+      "No AI provider key in the environment. Connect one in Settings → AI (API key or OpenAI-compatible endpoint) — until then AI features degrade gracefully and local semantic search still works.",
+    );
+  }
 }
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;

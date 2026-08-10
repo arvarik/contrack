@@ -1,3 +1,8 @@
+# check=skip=SecretsUsedInArgOrEnv
+# (BuildKit's linter flags the ENV name AUTH_REQUIRED as a possible secret.
+#  It is a boolean feature flag; the directive silences the false positive so
+#  a first-time builder doesn't see a scary "secrets" warning.)
+
 # Stage 1: Build the frontend
 FROM node:22-bookworm AS builder
 

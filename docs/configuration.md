@@ -8,34 +8,40 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable                | Description                                                                                                                                      | Default                 | Required |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | -------- |
-| `AI_PROVIDER`           | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                          | `gemini`                | No       |
-| `GEMINI_API_KEY`        | Google Gemini API key                                                                                                                            | —                       | No       |
-| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                   | —                       | No       |
-| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                | —                       | No       |
-| `AI_TIER`               | Rate limit profile: `FREE` or `PAID`                                                                                                             | `FREE`                  | No       |
-| `APP_URL`               | Host URL for self-referential links                                                                                                              | `http://localhost:3210` | No       |
-| `PORT`                  | Express listening port                                                                                                                           | `3210`                  | No       |
-| `HOST`                  | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`             | No       |
-| `CORS_ORIGIN`           | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                       | — (disabled)            | No       |
-| `DATA_DIR`              | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                        | project root            | No       |
-| `MAPBOX_API_KEY`        | Mapbox geocoding API key (higher accuracy)                                                                                                       | —                       | No       |
-| `AUTH_REQUIRED`         | `true` requires everyone to sign in with an account. First visit walks through creating one                                                      | `false`                 | No       |
-| `API_TOKEN`             | Machine credential for scripts and MCP clients (`Authorization: Bearer <token>`). Setting it also gates the instance                             | — (auth off)            | No       |
-| `AUTH_TOKEN`            | Deprecated alias for `API_TOKEN`, honoured with a startup warning                                                                                | —                       | No       |
-| `TRASH_RETENTION_DAYS`  | Days a deleted contact stays restorable before permanent purge                                                                                   | `30`                    | No       |
-| `BACKUP_INTERVAL_HOURS` | Automatic SQLite snapshot cadence (`0` disables)                                                                                                 | `24`                    | No       |
-| `BACKUP_KEEP`           | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                         | `7`                     | No       |
-| `AI_QUICK_MODEL`        | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                          | — (auto)                | No       |
-| `AI_DEEP_MODEL`         | Pin the Deep-tasks model                                                                                                                         | — (auto)                | No       |
-| `AI_RESEARCH_MODEL`     | Pin the Web-research model                                                                                                                       | — (auto)                | No       |
-| `AI_EMBEDDINGS_MODEL`   | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                           | — (built-in)            | No       |
+| Variable                  | Description                                                                                                                                      | Default      | Required |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | -------- |
+| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                          | `gemini`     | No       |
+| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                            | —            | No       |
+| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                   | —            | No       |
+| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                | —            | No       |
+| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                             | `FREE`       | No       |
+| `PORT`                    | Express listening port                                                                                                                           | `3210`       | No       |
+| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`  | No       |
+| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                       | — (disabled) | No       |
+| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                        | project root | No       |
+| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                       | —            | No       |
+| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                      | `false`      | No       |
+| `API_TOKEN`               | Machine credential for scripts and MCP clients (`Authorization: Bearer <token>`). Setting it also gates the instance                             | — (auth off) | No       |
+| `AUTH_TOKEN`              | Deprecated alias for `API_TOKEN`, honoured with a startup warning                                                                                | —            | No       |
+| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                   | `30`         | No       |
+| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                 | `24`         | No       |
+| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                         | `7`          | No       |
+| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                          | — (auto)     | No       |
+| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                         | — (auto)     | No       |
+| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                       | — (auto)     | No       |
+| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                           | — (built-in) | No       |
+| `DISABLE_BACKGROUND_JOBS` | `true` turns off scheduled work: backups, trash purge, geocoding queue, model-catalog refresh, `PRAGMA optimize`. For CI and secondary instances | `false`      | No       |
+| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                | — (dev)      | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
 > link unfurling, embedding backfill) are limited to 60 requests/minute per
 > client IP. Exceeding the window returns `429 RATE_LIMITED`.
+
+> **Body size:** JSON request bodies are capped at **1 MB**, except
+> `POST /api/contacts/bulk` (50 MB) for imports. Over the limit the server
+> answers `413 PAYLOAD_TOO_LARGE`. File uploads travel as multipart and have
+> their own caps (10 MB avatars, 50 MB attachments).
 
 ---
 
@@ -176,15 +182,60 @@ Mapbox becomes the primary geocoder; Nominatim serves as the fallback.
 
 ---
 
-## Database
+## Database & Persistence
 
 Contrack uses **SQLite** in WAL (Write-Ahead Logging) mode for maximum local-first performance:
 
-- **Database file:** `curator.db` in the project root
+- **Database file:** `curator.db` inside `DATA_DIR` — the project root when
+  `DATA_DIR` is unset (native runs), `/app/data` in Docker.
 - **ORM:** Drizzle ORM with auto-migrations on startup
 - **Virtual tables:** FTS5 (full-text search), vec0 (vector embeddings)
 
-**Docker deployment:** Mount the project root as a persistent volume to preserve the database across container restarts.
+`DATA_DIR` is the whole persistence story, not just the database. It holds:
+
+| Path inside `DATA_DIR` | Contents                                          |
+| ---------------------- | ------------------------------------------------- |
+| `curator.db`           | The database (plus `-wal`/`-shm` while running)   |
+| `uploads/`             | Avatars and interaction attachments               |
+| `backups/`             | Rotating automatic snapshots                      |
+| `.cache/`              | The local embedding model (re-downloaded if lost) |
+
+**Docker deployment:** mount **`/app/data`** — and only that — as a
+persistent volume, exactly as `docker-compose.yml` does (`./data:/app/data`).
+Do not mount the project root over `/app`: it would shadow the built app and
+`node_modules` inside the image. Mounting only the `curator.db` file is also
+wrong — you would keep the database but lose uploads, backups, and the model
+cache on every recreate.
+
+---
+
+## Running as a Service (health, shutdown, proxies)
+
+Everything here is what a reverse proxy, systemd unit, or uptime monitor
+needs to know:
+
+- **Liveness:** `GET /healthz` answers `200 {"status":"ok"}` when the event
+  loop and SQLite both respond, `503` otherwise. It is reachable **without a
+  credential** even on a gated instance — health checks hold no secrets. The
+  Docker image already probes it (`HEALTHCHECK`, 30s interval, 60s start
+  period to cover first-boot migrations and the embedding-model load), so
+  `docker ps` shows real health.
+- **Shutdown:** SIGTERM and SIGINT drain in-flight requests, checkpoint and
+  close the database, then exit 0 — `docker stop` and systemd's default stop
+  behaviour are safe. A hung handler is cut off after 8 seconds, inside
+  Docker's 10-second grace period.
+- **Keep-alive:** the server holds idle connections for 65 seconds —
+  deliberately longer than common proxy defaults (nginx, Caddy), so a proxy
+  never reuses a socket the app has already closed (the classic source of
+  sporadic 502s). If you raise your proxy's upstream keep-alive above 65s,
+  raise the app's to stay above it.
+- **Security headers:** every response carries `nosniff`,
+  `X-Frame-Options: DENY`, and a referrer policy. With `NODE_ENV=production`
+  the app also serves a Content-Security-Policy with `script-src 'self'` and
+  `connect-src 'self' https://api.open-meteo.com`. If you front Contrack with
+  something that injects scripts or widgets into pages, that injection will
+  be blocked — serve such tooling from your proxy's own domain or drop the
+  header there.
 
 ---
 
@@ -212,11 +263,18 @@ and scripts want different things:
   anywhere your LAN can reach, set `AUTH_REQUIRED=true`. The server logs a
   warning at startup whenever it binds a non-loopback address with auth off.
 
-Sessions are stored server-side and last 30 days. The cookie holds a random
-secret; the database stores only its SHA-256, so a leaked database (or one of
-the rotating backups) does not hand over live sessions. `Secure` is set
-whenever the request arrived over HTTPS, and `SameSite=Strict` is the CSRF
-defence. Changing your password ends every other session.
+Sessions are stored server-side and last 30 days by default; the lifetime is
+configurable from 1 to 365 days in **Settings → Account** (it applies to new
+sign-ins only). The cookie holds a random secret; the database stores only its
+SHA-256, so a leaked database (or one of the rotating backups) does not hand
+over live sessions. `Secure` is set whenever the request arrived over HTTPS,
+and `SameSite=Strict` is the CSRF defence. Changing your password ends every
+other session.
+
+Two things stay reachable without a credential on a gated instance, by design:
+`GET /healthz` (so health checks need no secret) and the static frontend
+bundle itself (the SPA must load before it can show the sign-in screen). All
+data — everything under `/api` and `/uploads` — is gated.
 
 Passwords are hashed with scrypt (N=2^16, r=8, p=1). The parameters are stored
 alongside each hash, so raising them later upgrades passwords silently on next

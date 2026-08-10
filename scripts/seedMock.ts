@@ -1,10 +1,13 @@
+import "dotenv/config";
+import path from "path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../src/db/schema";
 import { faker } from "@faker-js/faker";
 import crypto from "crypto";
 
-const DB_PATH = "curator.db";
+// Same resolution as server/db.ts — see the note in seed.ts.
+const DB_PATH = path.join(process.env.DATA_DIR ?? process.cwd(), "curator.db");
 const sqlite = new Database(DB_PATH);
 const db = drizzle(sqlite, { schema });
 
