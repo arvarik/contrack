@@ -21,6 +21,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
 } from "react";
 import {
   useStartDedupeScan,
@@ -60,6 +61,15 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const [clusters, setClusters] = useState<DedupeCluster[]>([]);
   const startMutation = useStartDedupeScan();
 
+  // The mount-only recovery below must read the scanId AT RESOLVE TIME — a
+  // scan the user starts while the fetch is in flight must win. Depending on
+  // scanId would refire the fetch instead; a ref carries the live value into
+  // the closure without re-running the effect.
+  const liveScanId = useRef(scanId);
+  useEffect(() => {
+    liveScanId.current = scanId;
+  }, [scanId]);
+
   // On mount, check if the server has an in-progress scan and recover state.
   // This handles page refresh during an active scan — without it, the user
   // would see the pre-scan page while the server is still processing.
@@ -68,7 +78,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     fetchActiveScan().then((activeScan) => {
       if (cancelled || !activeScan) return;
       // Only recover if we don't already have a scan in progress
-      if (!scanId) {
+      if (!liveScanId.current) {
         setScan(activeScan);
         setScanId(activeScan.scanId);
       }

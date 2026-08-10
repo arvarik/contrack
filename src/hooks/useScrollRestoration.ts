@@ -52,13 +52,11 @@ export const useScrollRestoration = <T extends HTMLElement = HTMLDivElement>(
     return () => {
       el.removeEventListener("scroll", onScroll);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      // Also save on unmount (catch cases where scroll didn't fire)
-      if (ref.current) {
-        sessionStorage.setItem(
-          `${STORAGE_PREFIX}${key}`,
-          String(ref.current.scrollTop),
-        );
-      }
+      // Also save on unmount (catch cases where scroll didn't fire).
+      // `el` is captured from effect setup — by cleanup time `ref.current`
+      // may already be null (React detaches refs before running cleanups),
+      // which silently skipped this save.
+      sessionStorage.setItem(`${STORAGE_PREFIX}${key}`, String(el.scrollTop));
     };
   }, [key]);
 

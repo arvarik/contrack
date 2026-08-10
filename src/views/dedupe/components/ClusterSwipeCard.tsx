@@ -114,7 +114,19 @@ export const ClusterSwipeCard = ({
         });
       }
     },
-    [controls, onMerge, onDismiss, selectedPrimaryId, duplicateIds],
+    // requiresConfirmation/largeClusterConfirmed were missing here — a real
+    // stale closure: after the user ticked the large-cluster confirmation,
+    // the swipe handler still held the pre-confirmation value and silently
+    // kept blocking the merge. The buttons worked; the swipe did not.
+    [
+      controls,
+      onMerge,
+      onDismiss,
+      selectedPrimaryId,
+      duplicateIds,
+      cluster.requiresConfirmation,
+      largeClusterConfirmed,
+    ],
   );
 
   const handleButtonMerge = useCallback(async () => {

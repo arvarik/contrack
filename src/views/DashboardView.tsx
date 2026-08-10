@@ -131,13 +131,16 @@ export const DashboardView = () => {
     isError,
   } = useDashboard();
 
+  // Presence is the signal, not the object: depending on `dashboard` itself
+  // would re-log on every refetch instead of once when data first arrives.
+  const hasDashboard = !!dashboard;
   useEffect(() => {
-    if (!isDashboardLoading && dashboard && import.meta.env.DEV) {
+    if (!isDashboardLoading && hasDashboard && import.meta.env.DEV) {
       console.log(
         `[Perf] DashboardView data ready: time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`,
       );
     }
-  }, [isDashboardLoading, !!dashboard]);
+  }, [isDashboardLoading, hasDashboard]);
 
   const { data: insight, isLoading: isInsightLoading } = useDailyInsight();
   const [isCompositionOpen, setIsCompositionOpen] = useState(false);

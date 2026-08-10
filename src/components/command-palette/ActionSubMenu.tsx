@@ -8,7 +8,13 @@
  *
  * @module components/command-palette/ActionSubMenu
  */
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useCallback,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import { motion } from "motion/react";
 import {
   User,
@@ -61,43 +67,49 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // ── Action items ────────────────────────────────────────────────────────
-  const actions: ActionItem[] = [
-    {
-      id: "view",
-      label: "View Profile",
-      icon: <User className="w-4 h-4" />,
-      shortcut: "↵",
-      handler: onViewProfile,
-    },
-    {
-      id: "note",
-      label: "Log Note",
-      icon: <FileText className="w-4 h-4" />,
-      shortcut: "N",
-      handler: () => setMode("note"),
-    },
-    {
-      id: "call",
-      label: "Log Call",
-      icon: <Phone className="w-4 h-4" />,
-      shortcut: "C",
-      handler: () => setMode("call"),
-    },
-    {
-      id: "brief",
-      label: "Catch Me Up",
-      icon: <Sparkles className="w-4 h-4" />,
-      shortcut: "B",
-      handler: onCatchMeUp,
-    },
-    {
-      id: "list",
-      label: "Add to List",
-      icon: <ListPlus className="w-4 h-4" />,
-      shortcut: "L",
-      handler: () => setMode("list"),
-    },
-  ];
+  // Memoized: this array feeds the keyboard handler's dependency list, and a
+  // fresh array each render re-created the handler and re-bound the document
+  // key listener on every keystroke.
+  const actions: ActionItem[] = useMemo(
+    () => [
+      {
+        id: "view",
+        label: "View Profile",
+        icon: <User className="w-4 h-4" />,
+        shortcut: "↵",
+        handler: onViewProfile,
+      },
+      {
+        id: "note",
+        label: "Log Note",
+        icon: <FileText className="w-4 h-4" />,
+        shortcut: "N",
+        handler: () => setMode("note"),
+      },
+      {
+        id: "call",
+        label: "Log Call",
+        icon: <Phone className="w-4 h-4" />,
+        shortcut: "C",
+        handler: () => setMode("call"),
+      },
+      {
+        id: "brief",
+        label: "Catch Me Up",
+        icon: <Sparkles className="w-4 h-4" />,
+        shortcut: "B",
+        handler: onCatchMeUp,
+      },
+      {
+        id: "list",
+        label: "Add to List",
+        icon: <ListPlus className="w-4 h-4" />,
+        shortcut: "L",
+        handler: () => setMode("list"),
+      },
+    ],
+    [onViewProfile, onCatchMeUp],
+  );
 
   // ── Keyboard handling ───────────────────────────────────────────────────
   const handleKeyDown = useCallback(

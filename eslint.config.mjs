@@ -81,9 +81,12 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      // Dependency fixes can change runtime behavior (effects re-firing), so
-      // this starts as a warning to burn down deliberately, not mechanically.
-      "react-hooks/exhaustive-deps": "warn",
+      // Burned down to zero on 2026-08-09 (14 warnings, each reviewed
+      // individually — one was a live stale-closure bug in ClusterSwipeCard).
+      // Locked at error so the count cannot quietly climb back; a legitimate
+      // mount-only effect documents itself with a targeted disable comment
+      // rather than relying on the rule staying soft.
+      "react-hooks/exhaustive-deps": "error",
     },
   },
   // Accessibility — the recommended set. Rules start as warnings and are

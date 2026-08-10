@@ -109,6 +109,14 @@ export const CommandPalette = () => {
   const searchHistory = useSearchHistory();
   const { data: zeroState } = useZeroState();
 
+  // Both hooks return a FRESH object every render around methods that are
+  // themselves stable useCallbacks. Effects and callbacks below depend on
+  // the destructured methods, which satisfies exhaustive-deps without
+  // re-firing on every render the way depending on the wrapper object would.
+  const { mutate: runSemanticSearch, reset: resetSemanticSearch } =
+    semanticSearch;
+  const { addEntry, resetNavigation, historyIndex } = searchHistory;
+
   // Enrichment hooks for StaleChip refresh action
   const { data: groundingCapacity } = useGroundingCapacity();
   const enrichContact = useEnrichContact();
@@ -163,9 +171,14 @@ export const CommandPalette = () => {
   const debouncedAiQuery =
     mode === "ai" ? debouncedSearch.replace(/^\?+\s*/, "").trim() : "";
 
-  // Derive AI results directly from mutation data (reactive, no extra useState)
-  const aiResults: SemanticMatch[] =
-    mode === "ai" && semanticSearch.data ? semanticSearch.data.matches : [];
+  // Derive AI results directly from mutation data (reactive, no extra
+  // useState). Memoized so downstream memos/effects see a stable identity —
+  // the bare conditional produced a new [] every render.
+  const aiResults: SemanticMatch[] = useMemo(
+    () =>
+      mode === "ai" && semanticSearch.data ? semanticSearch.data.matches : [],
+    [mode, semanticSearch.data],
+  );
   const aiFallback: boolean = mode === "ai" && !!semanticSearch.data?.fallback;
 
   // Build a lookup map from search results for O(1) peek resolution
@@ -193,16 +206,16 @@ export const CommandPalette = () => {
     if (mode !== "ai" || debouncedAiQuery.length < 3) return;
     if (debouncedAiQuery === prevAiQueryRef.current) return;
     prevAiQueryRef.current = debouncedAiQuery;
-    semanticSearch.mutate(debouncedAiQuery);
-  }, [mode, debouncedAiQuery]);
+    runSemanticSearch(debouncedAiQuery);
+  }, [mode, debouncedAiQuery, runSemanticSearch]);
 
   // Reset mutation state when mode changes away from AI
   useEffect(() => {
     if (mode !== "ai") {
-      semanticSearch.reset();
+      resetSemanticSearch();
       prevAiQueryRef.current = "";
     }
-  }, [mode]);
+  }, [mode, resetSemanticSearch]);
 
   // Note: normal (FTS) searches are intentionally NOT recorded on debounce.
   // Debounced recording inevitably leaks prefixes ("Ri", "Ric", "Rich"...) as
@@ -224,9 +237,15 @@ export const CommandPalette = () => {
       debouncedAiQuery !== lastRecordedAiRef.current
     ) {
       lastRecordedAiRef.current = debouncedAiQuery;
-      searchHistory.addEntry(`? ${debouncedAiQuery}`, "ai");
+      addEntry(`? ${debouncedAiQuery}`, "ai");
     }
-  }, [semanticSearch.isSuccess, aiResults.length, debouncedAiQuery, mode]);
+  }, [
+    semanticSearch.isSuccess,
+    aiResults.length,
+    debouncedAiQuery,
+    mode,
+    addEntry,
+  ]);
 
   // Action mode (> prefix)
   const isAction = mode === "action";
@@ -268,15 +287,15 @@ export const CommandPalette = () => {
   const handleClose = useCallback(() => {
     setOpen(false);
     setSearch("");
-    semanticSearch.reset();
+    resetSemanticSearch();
     prevAiQueryRef.current = "";
     lastRecordedAiRef.current = "";
-    searchHistory.resetNavigation();
+    resetNavigation();
     clearFilters();
     setSubMenuContactId(null);
     setSubMenuContactName("");
     setSubMenuContactAvatar(null);
-  }, [clearFilters]);
+  }, [clearFilters, resetSemanticSearch, resetNavigation]);
 
   const handleCreateContact = async () => {
     if (!search.trim()) return;
@@ -353,10 +372,13 @@ export const CommandPalette = () => {
     [navigate, handleClose, recordVisit],
   );
 
-  const handleSelectHistory = useCallback((query: string) => {
-    setSearch(query);
-    searchHistory.resetNavigation();
-  }, []);
+  const handleSelectHistory = useCallback(
+    (query: string) => {
+      setSearch(query);
+      resetNavigation();
+    },
+    [resetNavigation],
+  );
 
   // Commit-on-selection recording for normal-mode contact picks.
   // This is the single place a contact-search query becomes a "recent" — no
@@ -486,15 +508,15 @@ export const CommandPalette = () => {
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
-      if (searchHistory.historyIndex >= 0) {
-        searchHistory.resetNavigation();
+      if (historyIndex >= 0) {
+        resetNavigation();
       }
       // Clear sub-menu if user starts typing again
       if (subMenuContactId) {
         setSubMenuContactId(null);
       }
     },
-    [searchHistory.historyIndex, subMenuContactId],
+    [historyIndex, resetNavigation, subMenuContactId],
   );
 
   // AI loading: mutation is pending AND query is long enough

@@ -7,7 +7,7 @@
  *  - "View in Network" deep-link: navigates to /?list=<id>
  *  - Danger zone: delete list with inline confirmation
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { X, ExternalLink, Trash2, Check, UserMinus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -104,13 +104,19 @@ export const ListDetailPanel = ({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Keep local state in sync when the list prop changes (e.g. after save)
-  useEffect(() => {
+  // Reset the draft when a DIFFERENT list arrives — and only then. A refetch
+  // of the same list must not clobber an in-progress edit, which is why the
+  // trigger is the id and not the name/icon. Adjusting during render (the
+  // documented pattern for prop-keyed state) replaces the old effect: same
+  // semantics, one render earlier, no stale frame of the previous list.
+  const [lastListId, setLastListId] = useState(list.id);
+  if (lastListId !== list.id) {
+    setLastListId(list.id);
     setEditName(list.name);
     setEditIcon(list.icon);
     setIsDirty(false);
     setShowDeleteConfirm(false);
-  }, [list.id]);
+  }
 
   const handleNameChange = (v: string) => {
     setEditName(v);
