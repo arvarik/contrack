@@ -39,16 +39,39 @@ export function isPrivateAddress(address: string): boolean {
     );
   }
   const lower = address.toLowerCase();
+
+  // An IPv6 address that EMBEDS an IPv4 address is exactly as private as the
+  // IPv4 it embeds. The previous check hardcoded three ::ffff: prefixes and
+  // missed the rest — ::ffff:169.254.169.254 (cloud metadata) walked past
+  // the guard. Extract the embedded IPv4 and reuse the full IPv4 policy.
+  //   ::ffff:a.b.c.d      — IPv4-mapped (RFC 4291), dotted form
+  //   ::ffff:aabb:ccdd    — IPv4-mapped, hex form
+  //   64:ff9b::a.b.c.d    — NAT64 well-known prefix (RFC 6052)
+  const embedded = extractEmbeddedIPv4(lower);
+  if (embedded) return isPrivateAddress(embedded);
+
   return (
     lower === "::1" ||
     lower === "::" ||
     lower.startsWith("fe80:") || // link-local
     lower.startsWith("fc") || // unique-local fc00::/7
-    lower.startsWith("fd") ||
-    lower.startsWith("::ffff:127.") || // IPv4-mapped loopback
-    lower.startsWith("::ffff:10.") ||
-    lower.startsWith("::ffff:192.168.")
+    lower.startsWith("fd")
   );
+}
+
+/** The IPv4 inside an IPv4-mapped or NAT64 IPv6 address, or null. */
+function extractEmbeddedIPv4(lowerIPv6: string): string | null {
+  const mapped = lowerIPv6.match(/^::ffff:(.+)$/);
+  const nat64 = lowerIPv6.match(/^64:ff9b::(.+)$/);
+  const tail = mapped?.[1] ?? nat64?.[1];
+  if (!tail) return null;
+  if (net.isIPv4(tail)) return tail;
+  // Hex form: two 16-bit groups carrying the four octets.
+  const hex = tail.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (!hex) return null;
+  const high = parseInt(hex[1], 16);
+  const low = parseInt(hex[2], 16);
+  return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
 }
 
 /**

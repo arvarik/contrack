@@ -82,16 +82,22 @@ checkpoints before exit.
 
 ## Available Scripts
 
-| Script                | Description                                           |
-| --------------------- | ----------------------------------------------------- |
-| `npm run dev`         | Start Vite + Express dev server with HMR              |
-| `npm run build`       | Compile production bundle via Vite                    |
-| `npm run preview`     | Preview production build locally                      |
-| `npm run seed`        | Clear DB and repopulate with demo data                |
-| `npm run lint`        | ESLint + TypeScript strict type-check                 |
-| `npm test`            | Run the full Vitest suite (unit + integration)        |
-| `npm run db:generate` | Generate a Drizzle Kit migration after schema changes |
-| `npm run clean`       | Purge `dist/` build cache                             |
+| Script                  | Description                                                |
+| ----------------------- | ---------------------------------------------------------- |
+| `npm run dev`           | Start Vite + Express dev server with HMR                   |
+| `npm run build`         | Compile production bundle via Vite                         |
+| `npm run preview`       | Preview production build locally                           |
+| `npm run db:seed`       | Generate ~30 realistic demo contacts (adds, never deletes) |
+| `npm run seed`          | Insert one example contact; skips a non-empty database     |
+| `npm run lint`          | ESLint + TypeScript strict type-check                      |
+| `npm test`              | Run the full Vitest suite (unit + integration)             |
+| `npm run test:watch`    | The same suite in watch mode                               |
+| `npm run test:coverage` | The suite with a coverage report                           |
+| `npm run test:contract` | Optional: real provider APIs (skips without keys)          |
+| `npm run format`        | Prettier write; `format:check` is what CI enforces         |
+| `npm run db:generate`   | Generate a Drizzle Kit migration after schema changes      |
+| `npm run db:push`       | Push the Drizzle schema directly (dev only)                |
+| `npm run clean`         | Purge `dist/` build cache                                  |
 
 ---
 

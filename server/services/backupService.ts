@@ -100,12 +100,17 @@ export async function runBackup(): Promise<BackupInfo> {
 export function startBackupSchedule(): NodeJS.Timeout | null {
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;
 
-  const hours =
-    process.env.BACKUP_INTERVAL_HOURS !== undefined
-      ? Number(process.env.BACKUP_INTERVAL_HOURS)
-      : DEFAULT_INTERVAL_HOURS;
+  // Empty string means UNSET, not zero. docker-compose renders an absent
+  // variable as `BACKUP_INTERVAL_HOURS: ""`, and Number("") is 0 — under the
+  // old `!== undefined` check that combination silently disabled the default
+  // 24h snapshots for every Compose user. Only an explicit value counts.
+  const raw = process.env.BACKUP_INTERVAL_HOURS?.trim();
+  const hours = raw ? Number(raw) : DEFAULT_INTERVAL_HOURS;
   if (!Number.isFinite(hours) || hours <= 0) {
-    log.info("Backup", "Scheduled backups disabled (BACKUP_INTERVAL_HOURS=0)");
+    log.info(
+      "Backup",
+      `Scheduled backups disabled (BACKUP_INTERVAL_HOURS=${raw})`,
+    );
     return null;
   }
 

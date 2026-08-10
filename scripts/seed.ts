@@ -1,15 +1,11 @@
 import "dotenv/config";
-import path from "path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../src/db/schema.ts";
-
-// Same resolution as server/db.ts: the database lives in DATA_DIR. The old
-// hardcoded "curator.db" wrote to the CWD, which on a DATA_DIR install
-// (Docker sets /app/data) seeded a stray database the app never reads.
-const DB_PATH = path.join(process.env.DATA_DIR ?? process.cwd(), "curator.db");
-const sqlite = new Database(DB_PATH);
-const db = drizzle(sqlite, { schema });
+// The server's own database module, not a private connection: this resolves
+// DATA_DIR identically to the app AND runs migrations on import, so seeding
+// a brand-new data directory works instead of dying on "no such table".
+// (The old private connection hardcoded ./curator.db — on a DATA_DIR install
+// it seeded a stray database the app never reads.)
+import { db, sqlite } from "../server/db.ts";
 
 const contactCount = sqlite
   .prepare("SELECT COUNT(*) as count FROM contacts")

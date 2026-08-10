@@ -37,14 +37,35 @@ describe("guardedLookup", () => {
     expect(err?.code).toBe("ERR_PRIVATE_ADDRESS");
   });
 
-  it.each(["10.0.0.8", "192.168.1.20", "169.254.169.254", "::1"])(
-    "blocks %s",
+  it.each([
+    "10.0.0.8",
+    "192.168.1.20",
+    "169.254.169.254",
+    "::1",
+    // IPv6 forms that EMBED a private IPv4 — the guard must see through the
+    // wrapping. The metadata address in ::ffff: form walked past the old
+    // three-prefix check; found by the independent v1.5.4 review.
+    "::ffff:169.254.169.254",
+    "::ffff:172.16.0.9",
+    "::ffff:100.64.0.1",
+    "::ffff:a9fe:a9fe", // 169.254.169.254 in hex-group form
+    "64:ff9b::a9fe:a9fe", // NAT64 well-known prefix wrapping the same
+  ])("blocks %s", async (address) => {
+    lookupMock.mockImplementation((_h, _o, cb) =>
+      cb(null, address, address.includes(":") ? 6 : 4),
+    );
+    const { err } = await resolve("internal.example");
+    expect(err?.code).toBe("ERR_PRIVATE_ADDRESS");
+  });
+
+  it.each(["93.184.216.34", "2606:4700:4700::1111", "::ffff:8.8.8.8"])(
+    "passes public %s",
     async (address) => {
       lookupMock.mockImplementation((_h, _o, cb) =>
         cb(null, address, address.includes(":") ? 6 : 4),
       );
-      const { err } = await resolve("internal.example");
-      expect(err?.code).toBe("ERR_PRIVATE_ADDRESS");
+      const { err } = await resolve("public.example");
+      expect(err).toBeNull();
     },
   );
 
