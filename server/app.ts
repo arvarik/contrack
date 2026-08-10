@@ -59,9 +59,53 @@ export interface CreateAppOptions {
  * (server.ts) may append SPA/Vite handling between notFoundHandler and
  * errorHandler via the returned app.
  */
+/**
+ * The one route that legitimately carries multi-megabyte JSON: bulk import
+ * posts the parsed contents of a whole CSV/vCard export. Everything else on
+ * the API speaks in kilobytes, and a limit sized for the import was letting
+ * any caller hold 50 MB of server memory per request on any route —
+ * including the unauthenticated ones under /api/auth.
+ */
+const LARGE_JSON_PATHS = new Set(["/api/contacts/bulk"]);
+
+/**
+ * Response headers served on everything.
+ *
+ * The CSP is production-only: Vite's dev client injects inline script for
+ * HMR, so enforcing in dev would break the dev loop while protecting nobody.
+ * The built index.html contains no inline script, which is what makes the
+ * strict `script-src 'self'` possible. img-src stays open to https: because
+ * imported contacts carry avatar URLs pointing at arbitrary hosts;
+ * connect-src names the one external API the client calls (Open-Meteo).
+ */
+const CSP_PRODUCTION = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'", // Leaflet and React set style attributes
+  "img-src 'self' data: blob: https:",
+  "font-src 'self'",
+  "connect-src 'self' https://api.open-meteo.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
   app.disable("x-powered-by");
+
+  app.use((_req, res, next) => {
+    // nosniff was previously set on /uploads alone; every response deserves
+    // it. DENY matches the CSP's frame-ancestors for older browsers.
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (process.env.NODE_ENV === "production") {
+      res.setHeader("Content-Security-Policy", CSP_PRODUCTION);
+    }
+    next();
+  });
 
   // Claim rows written while nobody was signed in. Idempotent and a no-op
   // unless exactly one account exists; lives here rather than in server.ts so
@@ -81,8 +125,19 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   if (process.env.CORS_ORIGIN) {
     app.use(cors({ origin: process.env.CORS_ORIGIN }));
   }
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+  // The parser must be chosen BEFORE parsing starts — a global 50 MB parser
+  // with a stricter one nested in the route never runs the strict one,
+  // because the body is already consumed by the time routing happens.
+  const defaultJson = express.json({ limit: "1mb" });
+  const importJson = express.json({ limit: "50mb" });
+  app.use((req, res, next) =>
+    LARGE_JSON_PATHS.has(req.path)
+      ? importJson(req, res, next)
+      : defaultJson(req, res, next),
+  );
+  // Nothing posts forms; uploads travel as multipart through multer, which
+  // carries its own per-route file-size limits.
+  app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   if (!options.disableRateLimit) {
     app.use(aiEndpointRateLimit);
   }

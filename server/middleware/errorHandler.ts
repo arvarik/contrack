@@ -78,6 +78,18 @@ function translate(err: unknown): {
     };
   }
 
+  // body-parser's over-limit rejection. Without this branch it fell into the
+  // generic 500 with a full stack logged at error level — for a request the
+  // server refused by policy, not a bug.
+  if (e?.type === "entity.too.large") {
+    return {
+      statusCode: 413,
+      code: "PAYLOAD_TOO_LARGE",
+      message: "Request body exceeds the size limit for this endpoint",
+      isOperational: true,
+    };
+  }
+
   if (e?.code === "SQLITE_CONSTRAINT") {
     return {
       statusCode: 400,

@@ -102,7 +102,13 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.use((_req, res) => res.sendFile(path.join(distPath, "index.html")));
+    // SPA fallback for navigation only. This used to answer EVERY method —
+    // a POST to any unknown path returned index.html with a 200, which reads
+    // as success to a script that mistyped an endpoint.
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   }
 
   // Centralized error handler. Translates AppError / ZodError / SQLite

@@ -103,6 +103,7 @@
     "tailwind-merge": "^3.5.0",
     "tippy.js": "^6.3.7",
     "tz-lookup": "^6.1.25",
+    "undici": "^8.10.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

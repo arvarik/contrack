@@ -8,6 +8,12 @@
 
 import net from "net";
 import dns from "dns/promises";
+import {
+  lookup as dnsCallbackLookup,
+  type LookupOptions,
+  type LookupAddress,
+} from "dns";
+import { Agent, fetch as undiciFetch } from "undici";
 import { AppError, ValidationError } from "./AppError.ts";
 
 /** Cap responses so a hostile page can't exhaust memory. */
@@ -104,6 +110,64 @@ export async function readBodyCapped(
 }
 
 /**
+ * DNS lookup that refuses private addresses AT CONNECT TIME.
+ *
+ * `assertPublicHttpUrl` resolves the hostname, checks the address, and then
+ * fetch() resolves the name AGAIN to open the socket. Those are two separate
+ * queries, which is a rebinding hole: an attacker's DNS server answers the
+ * check with a public address and the connect with 127.0.0.1, and the guard
+ * passes a request it exists to block. Enforcing inside the resolver the
+ * socket actually uses closes the gap — the address that passed the check IS
+ * the address dialed, on the first request and on every redirect hop.
+ *
+ * Exported for tests only.
+ */
+export function guardedLookup(
+  hostname: string,
+  options: LookupOptions,
+  callback: (
+    err: NodeJS.ErrnoException | null,
+    address: string | LookupAddress[],
+    family?: number,
+  ) => void,
+): void {
+  dnsCallbackLookup(
+    hostname,
+    options,
+    (
+      err: NodeJS.ErrnoException | null,
+      result: string | LookupAddress[],
+      family?: number,
+    ) => {
+      if (err) return callback(err, result, family);
+      // net asks with all:true (Happy Eyeballs) and dials ITS pick from the
+      // set, so every member is validated — one clean address in the answer
+      // proves nothing about the one the socket chooses. A name that mixes
+      // public and private addresses fails closed: that mix is the rebinding
+      // shape, not a legitimate host.
+      const addresses = Array.isArray(result)
+        ? result.map((entry) => entry.address)
+        : [String(result)];
+      if (addresses.some((address) => isPrivateAddress(address))) {
+        const blocked: NodeJS.ErrnoException = new Error(
+          "URL resolves to a private address",
+        );
+        blocked.code = "ERR_PRIVATE_ADDRESS";
+        return callback(blocked, result, family);
+      }
+      callback(null, result, family);
+    },
+  );
+}
+
+/**
+ * One shared dispatcher for every outbound unfurl/research fetch. The custom
+ * lookup enforces the private-address policy; sharing the agent also pools
+ * connections across calls instead of dialing fresh each time.
+ */
+const pinnedAgent = new Agent({ connect: { lookup: guardedLookup } });
+
+/**
  * Fetch a public http(s) URL with SSRF protection on every redirect hop.
  * Returns the response and the final URL, or throws AppError/ValidationError.
  */
@@ -119,10 +183,15 @@ export async function safeFetch(
   try {
     let currentUrl = targetUrl;
     for (let hop = 0; hop <= maxRedirects; hop++) {
-      const response = await fetch(currentUrl, {
+      // undici's own fetch, not the global: the global accepts no dispatcher
+      // in its published types, and the dispatcher is where the rebinding
+      // guard lives. The returned Response implements the same WHATWG shape
+      // the callers consume, so only the nominal type needs the cast.
+      const response = (await undiciFetch(currentUrl, {
         signal: controller.signal,
         redirect: "manual",
-      });
+        dispatcher: pinnedAgent,
+      })) as unknown as globalThis.Response;
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (!location) return { response, finalUrl: currentUrl };
