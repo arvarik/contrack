@@ -915,35 +915,6 @@ export const ContactList = () => {
 
         {showAlphabetRail && (
           <>
-            {/*
-              Where-am-I marker for pointer users.
-
-              The rail already highlights the active letter, but at 9px inside
-              a 24px strip that is a hint you have to go looking for — fine on
-              a phone where your thumb is already on it, close to invisible on
-              a wide screen where the rail is a sliver at the far edge. This is
-              the same information at a size you notice without trying.
-
-              Deliberately one floating marker rather than inline headers per
-              section: headers would mean interleaving header rows into the
-              virtualizer's flat list, which re-indexes every row and breaks
-              the bucket→index map the rail jumps by. Same orientation, none of
-              that risk.
-            */}
-            <div
-              aria-hidden="true"
-              className={cn(
-                "hidden md:flex absolute top-2 left-4 z-10 pointer-events-none",
-                "items-center justify-center w-8 h-8 rounded-xl",
-                "bg-surface-container-high/85 backdrop-blur-sm shadow-sm",
-                "text-sm font-extrabold text-on-surface-variant",
-                "transition-opacity duration-150",
-                activeBucket ? "opacity-100" : "opacity-0",
-              )}
-            >
-              {activeBucket ?? ""}
-            </div>
-
             <AlphabetRail
               index={bucketIndex}
               activeBucket={activeBucket}

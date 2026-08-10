@@ -21,6 +21,8 @@ const TIER_LABELS: Record<string, string> = {
   synthesis: "Synthesis",
   mentions: "Mentions",
   dailyInsight: "Daily Insight",
+  queryParse: "Query Parse",
+  hyde: "Query Expansion",
 };
 
 /**
@@ -41,6 +43,9 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
     "Finding the people named inside a note you wrote. A hit means that exact note text was already parsed.",
   dailyInsight:
     "The daily observation shown on the Relationship Pulse page. A hit means today's insight was already generated.",
+  queryParse:
+    "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. A hit means this question was read before.",
+  hyde: "An expanded version of your question, used to search by meaning instead of by keyword. A hit means the same question was expanded before.",
 };
 
 function formatTTL(ms: number): string {
@@ -61,7 +66,6 @@ export const CacheTiersAccordion = ({
 }: CacheTiersAccordionProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const tiers = Object.entries(cacheTiers);
-  const totalEntries = tiers.reduce((acc, [, t]) => acc + t.entries, 0);
 
   return (
     <div className={CARD}>
@@ -72,9 +76,6 @@ export const CacheTiersAccordion = ({
       >
         <DatabaseZap className="w-4 h-4 text-primary" />
         <span className={cn(SECTION_HEADING, "mb-0")}>Cache Tiers</span>
-        <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
-          {totalEntries}
-        </span>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}

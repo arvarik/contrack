@@ -23,6 +23,7 @@ import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { AppError } from "../../utils/AppError.ts";
 import type { HydratedContact } from "./types.ts";
+import { UnionFind } from "../../utils/unionFind.ts";
 
 // =============================================================================
 // Types
@@ -82,6 +83,10 @@ const _stmts = {
 
   getPendingCount: sqlite.prepare(`
     SELECT COUNT(*) AS cnt FROM dedupe_suggestions WHERE status = 'pending'
+  `),
+
+  getPendingPairs: sqlite.prepare(`
+    SELECT contactIdA, contactIdB FROM dedupe_suggestions WHERE status = 'pending'
   `),
 
   getById: sqlite.prepare(`
@@ -245,6 +250,32 @@ export function getPendingSuggestions(limit: number = 100): DedupeSuggestion[] {
 /** Get the count of pending suggestions (for sidebar badge). */
 export function getPendingCount(): number {
   return (_stmts.getPendingCount.get() as { cnt: number }).cnt;
+}
+
+/**
+ * The number of review cards the Duplicates page will show.
+ *
+ * `getPendingCount` counts pending PAIRS. The review queue groups those pairs
+ * into clusters with union-find, because pairs (A,B) and (B,C) describe one
+ * problem with three contacts, not two problems. The sidebar badge read the
+ * pair count, so it promised 7 items and the page then showed 3.
+ *
+ * This counts clusters, so the badge and the page agree. The work is a scan of
+ * the pending table plus one union per row, which is near constant time each;
+ * the pending set is tens of rows, not thousands.
+ *
+ * @returns the count of connected groups among pending suggestions
+ */
+export function getPendingClusterCount(): number {
+  const pairs = _stmts.getPendingPairs.all() as {
+    contactIdA: string;
+    contactIdB: string;
+  }[];
+  if (pairs.length === 0) return 0;
+
+  const uf = new UnionFind();
+  for (const pair of pairs) uf.union(pair.contactIdA, pair.contactIdB);
+  return uf.getClusters().size;
 }
 
 /** Get a suggestion by ID. */

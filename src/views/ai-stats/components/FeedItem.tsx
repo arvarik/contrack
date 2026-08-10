@@ -14,7 +14,14 @@ interface FeedItemProps {
   index: number;
 }
 
-/** Human-readable labels for operation codes. */
+/**
+ * Human-readable labels for operation codes.
+ *
+ * Covers every entry in AI_OPERATIONS (server/services/aiStatsService.ts).
+ * Five were missing, so the feed printed raw keys such as "queryParse" and
+ * "aiSearchGrounding" next to properly named rows. Add a label here whenever
+ * you add an operation there.
+ */
 const OP_LABELS: Record<string, string> = {
   briefing: "Briefing",
   rerank: "Rerank",
@@ -23,8 +30,13 @@ const OP_LABELS: Record<string, string> = {
   parse: "Parse",
   searchExpansion: "Search Expansion",
   dailyInsight: "Daily Insight",
-  emlSummary: "EML Summary",
+  emlSummary: "Email Summary",
   bulkParse: "Bulk Parse",
+  queryParse: "Query Parse",
+  hyde: "Query Expansion",
+  aiSearchGrounding: "Web Research",
+  aiSearchExtraction: "Research Extraction",
+  aiSearchSinglePass: "Research (Single Pass)",
 };
 
 function formatRelativeTime(iso: string): string {

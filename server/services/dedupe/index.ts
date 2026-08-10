@@ -15,6 +15,7 @@ export {
   storeSuggestions,
   getPendingSuggestions,
   getPendingCount,
+  getPendingClusterCount,
   getSuggestionById,
   getSuggestionForContact,
   dismissSuggestion,

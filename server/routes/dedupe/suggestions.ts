@@ -5,6 +5,7 @@ import { log } from "../../utils/logger.ts";
 import {
   getPendingSuggestions,
   getPendingCount,
+  getPendingClusterCount,
   getSuggestionById,
   getSuggestionForContact,
   dismissSuggestion,
@@ -27,8 +28,10 @@ export function registerSuggestionRoutes(router: Router) {
   router.get(
     "/dedupe/suggestions/count",
     asyncHandler(async (_req, res) => {
-      const count = getPendingCount();
-      res.json({ count });
+      // `count` drives the sidebar badge, so it reports clusters: the number
+      // of cards the review queue will actually show. `pairs` is the raw
+      // pending row count, kept for anything that needs the finer number.
+      res.json({ count: getPendingClusterCount(), pairs: getPendingCount() });
     }),
   );
 

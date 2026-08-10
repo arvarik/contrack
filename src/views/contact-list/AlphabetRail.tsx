@@ -124,14 +124,27 @@ export const AlphabetRail = ({
         return (
           <span
             key={letter}
-            className={cn(
-              "flex-1 min-h-0 flex items-center justify-center text-[9px] font-bold leading-none transition-colors",
-              letter === activeBucket
-                ? "text-primary"
-                : "text-on-surface-variant",
-            )}
+            className="flex-1 min-h-0 flex items-center justify-center"
           >
             {/*
+              The active letter wears a filled circle.
+
+              A colour change alone is easy to miss at 9px on a strip this
+              narrow, which is why a floating letter marker was tried over the
+              list first. That marker covered contact names and the "Recent"
+              heading, so the indicator belongs on the rail itself, where it
+              blocks nothing. The circle is 16px, larger than the glyph, so the
+              current position reads at a glance without the letters moving.
+            */}
+            <span
+              className={cn(
+                "flex items-center justify-center rounded-full text-[9px] font-bold leading-none transition-colors",
+                letter === activeBucket
+                  ? "w-4 h-4 bg-primary text-on-primary"
+                  : "text-on-surface-variant",
+              )}
+            >
+              {/*
               Letters with no contacts render as a dot rather than dimmed text.
               Faded-out text was the obvious first move and measured 1.57:1 —
               invisible, and flagged by `npm run audit:contrast`. A dot is a
@@ -139,11 +152,12 @@ export const AlphabetRail = ({
               keeps the 27 evenly-spaced slots the pointer maths depends on,
               and it is what a phone address book does anyway.
             */}
-            {present ? (
-              letter
-            ) : (
-              <span className="h-[3px] w-[3px] rounded-full bg-on-surface-variant/40" />
-            )}
+              {present ? (
+                letter
+              ) : (
+                <span className="h-[3px] w-[3px] rounded-full bg-on-surface-variant/40" />
+              )}
+            </span>
           </span>
         );
       })}

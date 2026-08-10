@@ -197,7 +197,10 @@ export const MapView = () => {
         </div>
       )}
       <MapContainer
-        center={[20, 0]}
+        // Opens over the Americas rather than the Atlantic. Longitude 0 put
+        // the prime meridian in the middle of the screen, which shows Africa
+        // and Europe first and pushes the Americas to the left edge.
+        center={[20, -95]}
         zoom={2}
         scrollWheelZoom={true}
         style={{
