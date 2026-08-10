@@ -34,15 +34,21 @@ import { buttonLike } from "../lib/a11y";
  * makes it worse, not better.
  *
  * So the minimum zoom is not a constant, it is a function of the viewport:
- * the smallest z where 256 * 2^z covers the container's height. On a 900px
- * window that is 2; on a 1400px window it is 3. Recomputed on resize, because
- * the same browser is a different device once you drag the window or turn a
- * tablet sideways.
+ * the smallest z where 256 * 2^z covers the container's LARGER dimension.
+ * Recomputed on resize, because the same browser is a different device once
+ * you drag the window or turn a tablet sideways.
  *
- * Width is deliberately not part of the calculation. Leaflet repeats tiles
- * horizontally, so a wide window shows more copies of the world rather than
- * empty space, and folding width in would force a needlessly deep zoom on
- * every widescreen monitor.
+ * Width MUST be part of the calculation, and the first version of this code
+ * got that wrong. It reasoned "Leaflet repeats tiles horizontally, so a wide
+ * window shows more copies of the world rather than empty space" — true for
+ * TILES, false for MARKERS, which render exactly once at their canonical
+ * longitude. On a desktop wider than the world (2560px window, zoom 3 world =
+ * 2048px) the sides filled with wrapped continent copies that carry no pins,
+ * and maxBounds clamped the center back to longitude 0 — so the user saw a
+ * USA with its pins one world-copy away, sitting in the ocean. Covering the
+ * width means one world copy fills the view and every continent on screen is
+ * the one the pins live on. noWrap on the tile layer is the second half of
+ * the same guarantee: wrapped copies never render at all.
  */
 /** The full Mercator world. Latitude stops at ±85.05°; there is no map past it. */
 const WORLD_BOUNDS = L.latLngBounds(
@@ -58,12 +64,15 @@ const FitWorldToViewport = () => {
 
     const apply = () => {
       const height = container.clientHeight;
-      if (!height) return;
+      const width = container.clientWidth;
+      if (!height || !width) return;
 
       const TILE_SIZE = 256;
-      const needed = Math.ceil(Math.log2(height / TILE_SIZE));
+      // The world must cover BOTH dimensions — see the header comment for
+      // the marker-displacement bug that height-only produced.
+      const needed = Math.ceil(Math.log2(Math.max(width, height) / TILE_SIZE));
       // Never below Leaflet's own floor, and never so deep that the whole
-      // world stops being reachable on a very tall screen.
+      // world stops being reachable on a very large screen.
       const minZoom = Math.max(0, Math.min(needed, 5));
 
       if (map.getMinZoom() !== minZoom) map.setMinZoom(minZoom);
@@ -219,6 +228,10 @@ export const MapView = () => {
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          // Never draw wrapped world copies: markers render only on the
+          // canonical copy, so a wrapped continent is a continent with its
+          // pins missing — which reads as "my contacts are in the ocean".
+          noWrap
         />
 
         <MarkerClusterGroup
