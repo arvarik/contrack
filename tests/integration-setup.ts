@@ -8,9 +8,24 @@
 // its own database connection, migrations, and FTS index.
 // =============================================================================
 
+import { vi } from "vitest";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
+
+/**
+ * Integration tests use the REAL database. Said explicitly, because the unit
+ * project's setup (tests/setup.ts) replaces `server/db.ts` with stubs whose
+ * `get()` returns undefined, and `npm test` runs both projects in one command.
+ *
+ * When a worker carried that mock into an integration file, the symptoms were
+ * a 404 where a 400 was expected and a contact with no `lastContactedAt`:
+ * nothing that points at a mocked database, which is what made it expensive to
+ * chase. Declaring the unmock costs nothing and removes the possibility.
+ * `makeTestApp` also asserts the connection is real, so if this ever stops
+ * working the failure names itself.
+ */
+vi.unmock("../server/db.ts");
 
 process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "contrack-int-"));
 

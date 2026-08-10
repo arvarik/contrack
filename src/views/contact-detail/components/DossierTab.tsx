@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import { Briefcase, ChevronDown, FileText, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
+import { Link } from "react-router-dom";
 
 import type {
   Contact,
@@ -32,7 +33,57 @@ export interface DossierTabProps {
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Shown when a contact has no dossier content at all.
+ *
+ * The tab previously rendered an empty container: every section is
+ * conditional, so a contact nobody has researched produced a blank panel with
+ * no indication of whether the feature was broken, still loading, or simply
+ * had nothing to say. An empty state has to answer "what is missing and how do
+ * I get it", and here the answer is a specific place to go.
+ */
+const EmptyDossier = ({ name }: { name: string }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    className={cn(CARD, "flex flex-col items-center text-center gap-4 py-10")}
+  >
+    <span className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+      <FileText className="w-7 h-7" />
+    </span>
+    <div className="space-y-1.5 max-w-sm">
+      <h3 className="font-bold text-on-surface">No dossier yet</h3>
+      <p className="text-sm text-on-surface-variant text-pretty">
+        The dossier collects background on {name}: what they do, where they have
+        worked and studied, and anything else worth remembering. Contact
+        Enrichment researches that from the web and fills it in.
+      </p>
+    </div>
+    <Link
+      to="/settings/ai-search"
+      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-opacity"
+    >
+      <Sparkles className="w-4 h-4" />
+      Enrich contacts
+    </Link>
+    <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
+      You can also fill any of this in by hand from the contact&rsquo;s details,
+      or paste a bio into a note and let Contrack pull it apart.
+    </p>
+  </motion.div>
+);
+
 const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
+  // Every section below is conditional, so "nothing to show" needs answering
+  // once, here, rather than as a blank space.
+  const hasContent =
+    !!contact.about ||
+    (contact.attributes?.length ?? 0) > 0 ||
+    (contact.experience?.length ?? 0) > 0 ||
+    (contact.education?.length ?? 0) > 0;
+
+  if (!hasContent) return <EmptyDossier name={contact.name} />;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}

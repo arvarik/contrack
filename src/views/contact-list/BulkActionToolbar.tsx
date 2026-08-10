@@ -34,7 +34,7 @@ const BulkActionBtn = ({
     )}
   >
     {icon}
-    <span className="text-[8px] font-bold uppercase tracking-wider opacity-80 whitespace-nowrap">
+    <span className="text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
       {label}
     </span>
   </button>
@@ -84,7 +84,21 @@ export const BulkActionToolbar = ({
       transition={{ type: "spring", damping: 22, stiffness: 300 }}
       className="absolute bottom-24 md:bottom-0 left-0 right-0 z-40 px-3 pb-2 md:pb-4"
     >
-      <div className="glass-panel rounded-2xl shadow-2xl px-3 py-2.5 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
+      {/*
+        Opaque, not glass.
+
+        This bar floats over a dense list of avatars and names, and
+        `.glass-panel` is 80% white: whatever is underneath bleeds through and
+        every label fights it for contrast. A translucent surface is a fine
+        choice for something decorative; it is the wrong one for the only
+        controls that can archive or delete forty contacts at once. Those need
+        to be unambiguously readable over whatever happens to be behind them.
+
+        The blur stays for depth, but at 98% the panel is effectively solid,
+        and a ring plus a stronger shadow separate it from the list rather than
+        relying on transparency to imply layering.
+      */}
+      <div className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
         {/* Action buttons */}
         <BulkActionBtn
           icon={<Archive className="w-4 h-4" />}
@@ -121,7 +135,7 @@ export const BulkActionToolbar = ({
             )}
           >
             <Palette className="w-4 h-4" />
-            <span className="text-[8px] font-bold uppercase tracking-wider opacity-80 whitespace-nowrap">
+            <span className="text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
               Color
             </span>
           </button>

@@ -86,6 +86,16 @@
   --color-surface-container-high: #e0e3e6; /* Elevated/emphasis */
   --color-surface-container-highest: #d9e4e8;
 
+  /*
+    Hairline separator. Two files already reached for `outline-variant` — the
+    Material 3 name for exactly this — but it was never defined, so Tailwind
+    dropped `divide-outline-variant/10` entirely and `divide-y` fell back to
+    its v4 default of `currentColor`. That rendered the AI-usage feed's row
+    separators in near-black text colour, which is what made them look wrong.
+    Defining the token makes the intent land.
+  */
+  --color-outline-variant: #c9d3d9;
+
   /* ── Radii ─────────────────────────────────────────────────────── */
   --radius-DEFAULT: 1rem;
   --radius-lg: 1.5rem;

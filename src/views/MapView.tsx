@@ -4,7 +4,7 @@
  * Renders geocoded contacts on a world map with clustered avatar markers.
  * Clicking a marker navigates to the contact detail overlay within the map context.
  */
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -12,6 +12,7 @@ import {
   ZoomControl,
   Popup,
   useMapEvents,
+  useMap,
 } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import "leaflet/dist/leaflet.css";
@@ -22,6 +23,71 @@ import { fallbackAvatarUrl } from "../lib/avatar";
 import { escapeHtml } from "../lib/utils";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { buttonLike } from "../lib/a11y";
+
+/**
+ * Keeps the world filling the window, whatever the window is.
+ *
+ * Leaflet's world is a square: at zoom z it is 256 * 2^z pixels tall, and
+ * Mercator stops at ±85° latitude, so there is nothing to draw beyond it. On a
+ * tall desktop window at the default zoom 2 the world is 1024px high and the
+ * remaining height is empty background above and below the map. Zooming out
+ * makes it worse, not better.
+ *
+ * So the minimum zoom is not a constant, it is a function of the viewport:
+ * the smallest z where 256 * 2^z covers the container's height. On a 900px
+ * window that is 2; on a 1400px window it is 3. Recomputed on resize, because
+ * the same browser is a different device once you drag the window or turn a
+ * tablet sideways.
+ *
+ * Width is deliberately not part of the calculation. Leaflet repeats tiles
+ * horizontally, so a wide window shows more copies of the world rather than
+ * empty space, and folding width in would force a needlessly deep zoom on
+ * every widescreen monitor.
+ */
+/** The full Mercator world. Latitude stops at ±85.05°; there is no map past it. */
+const WORLD_BOUNDS = L.latLngBounds(
+  L.latLng(-85.05112878, -180),
+  L.latLng(85.05112878, 180),
+);
+
+const FitWorldToViewport = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+
+    const apply = () => {
+      const height = container.clientHeight;
+      if (!height) return;
+
+      const TILE_SIZE = 256;
+      const needed = Math.ceil(Math.log2(height / TILE_SIZE));
+      // Never below Leaflet's own floor, and never so deep that the whole
+      // world stops being reachable on a very tall screen.
+      const minZoom = Math.max(0, Math.min(needed, 5));
+
+      if (map.getMinZoom() !== minZoom) map.setMinZoom(minZoom);
+      if (map.getZoom() < minZoom) map.setZoom(minZoom);
+
+      // A large enough world is necessary but not sufficient. The view starts
+      // at latitude 20 and the user can drag, so a 1024px world in a 1000px
+      // window still showed a 46px band of background at the top. Locking the
+      // view to the world's own bounds removes the last gap and stops anyone
+      // dragging the map off the edge of itself.
+      map.setMaxBounds(WORLD_BOUNDS);
+      // The container's pixel size changed under Leaflet; without this it
+      // keeps rendering at the old size and leaves a grey band.
+      map.invalidateSize();
+    };
+
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
+
+  return null;
+};
 
 const MapClickHandler = () => {
   const navigate = useNavigate();
@@ -140,7 +206,11 @@ export const MapView = () => {
           background: "var(--color-surface-container-low)",
         }}
         zoomControl={false}
+        // Makes the maxBounds set in FitWorldToViewport a hard edge rather than
+        // an elastic one, so a drag cannot expose background behind the world.
+        maxBoundsViscosity={1.0}
       >
+        <FitWorldToViewport />
         <MapClickHandler />
         <ZoomControl position="bottomright" />
         <TileLayer

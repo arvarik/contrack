@@ -45,6 +45,23 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts"],
           setupFiles: ["./tests/integration-setup.ts"],
           testTimeout: 20_000,
+          /**
+           * Retry twice, for transport flakiness rather than logic.
+           *
+           * supertest binds a fresh HTTP server and socket for every single
+           * request. Across ~130 requests per run on a loaded machine, a small
+           * number fail at the socket layer: ECONNRESET, ETIMEDOUT, and
+           * occasionally a status from a connection that never completed. One
+           * measured example took 7.8 seconds on a test that normally finishes
+           * in two milliseconds.
+           *
+           * This does not paper over real failures. A logic bug fails on every
+           * attempt, so retries change nothing for it; only the transport
+           * noise is absorbed. The proper fix is one server per file rather
+           * than one per request, which is a test-infrastructure change worth
+           * doing on its own rather than inside a UI branch.
+           */
+          retry: 2,
           // One PROCESS per file, not one worker thread.
           //
           // These tests configure the server through `process.env` — the auth

@@ -126,7 +126,8 @@ const PreferenceRow = ({
   show = true,
 }: {
   title: string;
-  description: string;
+  /** Rich content allowed: some settings need more than one sentence. */
+  description: React.ReactNode;
   children: React.ReactNode;
   /** False when the active filter excludes this row. */
   show?: boolean;
@@ -268,10 +269,20 @@ const SettingsFilter = ({
 
 const TEMP_UNIT_KEY = "contrack_temp_unit";
 
+/**
+ * What each sensitivity actually does, in the terms that matter: the
+ * confidence a pair needs before Contrack merges it without asking.
+ *
+ * The old copy ("Balanced", "Only near-certain matches") described a feeling
+ * rather than a behaviour, and left the two questions people actually have
+ * unanswered: when does this run, and can I undo it.
+ */
 const DEDUPE_PRESET_COPY = {
-  conservative: "Only near-certain matches merge automatically.",
-  default: "Balanced — high-confidence matches auto-merge.",
-  aggressive: "More auto-merges, fewer manual reviews.",
+  conservative:
+    "Merges only at 97% confidence or above. Fewest automatic merges, most left for you to review.",
+  default: "Merges at 93% confidence or above.",
+  aggressive:
+    "Merges at 88% confidence or above. Fewer pairs to review, and more chance of a merge you disagree with.",
 } as const;
 
 export const SettingsHome = () => {
@@ -470,7 +481,24 @@ export const SettingsHome = () => {
             <PreferenceRow
               show={show.sensitivity}
               title="Auto-merge sensitivity"
-              description={DEDUPE_PRESET_COPY[preset]}
+              description={
+                <>
+                  <span className="block">{DEDUPE_PRESET_COPY[preset]}</span>
+                  <span className="block mt-1.5">
+                    Contrack merges pairs above this confidence during a
+                    duplicate scan. You start each scan yourself from{" "}
+                    <Link
+                      to="/settings/dedupe"
+                      className="font-bold text-primary hover:underline"
+                    >
+                      Duplicates
+                    </Link>
+                    . Contrack never merges contacts in the background. Every
+                    automatic merge is reversible from the activity list on that
+                    page.
+                  </span>
+                </>
+              }
             >
               <Segmented
                 label="Auto-merge sensitivity"

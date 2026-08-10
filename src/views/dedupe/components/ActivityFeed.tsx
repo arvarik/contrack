@@ -8,6 +8,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useMergeLog, useUndoMerge } from "../../../api";
 import { cn } from "../../../lib/utils";
@@ -16,6 +17,30 @@ import type { MergeLogEntry } from "../../../types";
 // =============================================================================
 // ActivityFeed — Merge audit log with undo capability
 // =============================================================================
+
+/**
+ * "3 hours ago" for the row, the full local timestamp for the tooltip.
+ *
+ * The feed already groups by Today / Yesterday / This Week, which answers
+ * "roughly when" — but inside a group every entry looked simultaneous, and
+ * for an audit log of destructive operations the order and spacing of events
+ * is most of the value. date-fns is already a dependency and is what the rest
+ * of the app uses for relative time.
+ */
+function relativeTime(iso: string): string {
+  const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  return formatDistanceToNow(date, { addSuffix: true });
+}
+
+function exactTime(iso: string): string {
+  const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, {
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+}
 
 /** Group entries by relative date. */
 function groupByDate(
@@ -162,6 +187,14 @@ export const ActivityFeed = () => {
                       )}
                     </p>
                     <p className="text-[11px] text-on-surface-variant mt-0.5">
+                      <time
+                        dateTime={entry.mergedAt}
+                        title={exactTime(entry.mergedAt)}
+                        className="font-bold"
+                      >
+                        {relativeTime(entry.mergedAt)}
+                      </time>
+                      {" · "}
                       {isUndone
                         ? "Undone"
                         : `${(entry.confidence * 100).toFixed(0)}% confidence`}

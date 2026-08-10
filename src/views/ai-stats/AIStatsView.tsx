@@ -165,8 +165,13 @@ export const AIStatsView = () => {
           onSortChange={handleSortChange}
         />
 
-        {/* Feed items */}
-        <div className="divide-y divide-outline-variant/10">
+        {/*
+          Feed items — separated by spacing and a surface shift rather than
+          rules. Each entry is a small card, matching the merge activity feed
+          in Settings → Duplicates, so the two audit logs in this app read as
+          the same kind of object.
+        */}
+        <div className="space-y-1.5">
           {feedLoading ? (
             <div className="py-8 text-center text-sm text-on-surface-variant">
               <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />

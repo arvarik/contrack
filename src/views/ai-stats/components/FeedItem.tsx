@@ -60,8 +60,11 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.03, ease: "easeOut" }}
       className={cn(
-        "flex items-start gap-3 py-2.5 px-1 -mx-1 rounded-lg transition-colors",
-        "hover:bg-surface-container-low/50",
+        // A contained row rather than a ruled one: the bottom-only border read
+        // as an unfinished table, and the app separates things by surface
+        // elsewhere (see the sidebar utility group).
+        "flex items-start gap-3 px-3 py-2.5 rounded-xl transition-colors",
+        "bg-surface-container-lowest hover:bg-surface-container-low",
       )}
     >
       {/* Cache dot */}
