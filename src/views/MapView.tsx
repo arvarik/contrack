@@ -4,7 +4,13 @@
  * Renders geocoded contacts on a world map with clustered avatar markers.
  * Clicking a marker navigates to the contact detail overlay within the map context.
  */
-import React, { useMemo, useEffect } from "react";
+import React, {
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   MapContainer,
   TileLayer,
@@ -35,20 +41,23 @@ import { buttonLike } from "../lib/a11y";
  *
  * So the minimum zoom is not a constant, it is a function of the viewport:
  * the smallest z where 256 * 2^z covers the container's LARGER dimension.
- * Recomputed on resize, because the same browser is a different device once
- * you drag the window or turn a tablet sideways.
+ * Width matters as much as height: markers render exactly once, at their
+ * canonical longitude, so a window wider than the world fills its edges with
+ * wrapped continent copies that carry no pins — contacts "in the ocean".
+ * noWrap on the tile layer is the second half of that guarantee: wrapped
+ * copies never render at all.
  *
- * Width MUST be part of the calculation, and the first version of this code
- * got that wrong. It reasoned "Leaflet repeats tiles horizontally, so a wide
- * window shows more copies of the world rather than empty space" — true for
- * TILES, false for MARKERS, which render exactly once at their canonical
- * longitude. On a desktop wider than the world (2560px window, zoom 3 world =
- * 2048px) the sides filled with wrapped continent copies that carry no pins,
- * and maxBounds clamped the center back to longitude 0 — so the user saw a
- * USA with its pins one world-copy away, sitting in the ocean. Covering the
- * width means one world copy fills the view and every continent on screen is
- * the one the pins live on. noWrap on the tile layer is the second half of
- * the same guarantee: wrapped copies never render at all.
+ * JUST AS IMPORTANT is WHEN this is applied. A previous version mounted the
+ * map at zoom 2 and then, in an effect, called setZoom() (animated by
+ * default), setMaxBounds(), and invalidateSize() — the last two landing in
+ * the middle of the zoom animation. Mutating the view mid-animation is the
+ * classic way to desynchronize Leaflet's marker pane from its tile pane:
+ * tiles looked right, every pin sat offset into the ocean, and only on a
+ * fresh load (refresh), because only init ran that sequence. So the map is
+ * now BORN correct — the container is measured before the map exists, and
+ * minZoom / zoom / maxBounds are constructor props. Nothing animates and
+ * nothing mutates at mount. The only post-init work is the resize path,
+ * which runs outside any animation and explicitly animates nothing.
  */
 /** The full Mercator world. Latitude stops at ±85.05°; there is no map past it. */
 const WORLD_BOUNDS = L.latLngBounds(
@@ -56,40 +65,39 @@ const WORLD_BOUNDS = L.latLngBounds(
   L.latLng(85.05112878, 180),
 );
 
-const FitWorldToViewport = () => {
+const TILE_SIZE = 256;
+
+/** Smallest zoom whose world covers both container dimensions (capped at 5). */
+const minZoomFor = (width: number, height: number): number => {
+  const needed = Math.ceil(Math.log2(Math.max(width, height) / TILE_SIZE));
+  // Never below Leaflet's own floor, and never so deep that the whole world
+  // stops being reachable on a very large screen.
+  return Math.max(0, Math.min(needed, 5));
+};
+
+/**
+ * Resize handling ONLY — initial sizing is done before the map is created.
+ * Every operation here is non-animated and idempotent, so the initial
+ * ResizeObserver callback (which fires once on observe) is a no-op.
+ */
+const KeepWorldCovering = () => {
   const map = useMap();
 
   useEffect(() => {
     const container = map.getContainer();
 
     const apply = () => {
-      const height = container.clientHeight;
-      const width = container.clientWidth;
-      if (!height || !width) return;
+      const { clientWidth: width, clientHeight: height } = container;
+      if (!width || !height) return;
 
-      const TILE_SIZE = 256;
-      // The world must cover BOTH dimensions — see the header comment for
-      // the marker-displacement bug that height-only produced.
-      const needed = Math.ceil(Math.log2(Math.max(width, height) / TILE_SIZE));
-      // Never below Leaflet's own floor, and never so deep that the whole
-      // world stops being reachable on a very large screen.
-      const minZoom = Math.max(0, Math.min(needed, 5));
-
+      const minZoom = minZoomFor(width, height);
       if (map.getMinZoom() !== minZoom) map.setMinZoom(minZoom);
-      if (map.getZoom() < minZoom) map.setZoom(minZoom);
-
-      // A large enough world is necessary but not sufficient. The view starts
-      // at latitude 20 and the user can drag, so a 1024px world in a 1000px
-      // window still showed a 46px band of background at the top. Locking the
-      // view to the world's own bounds removes the last gap and stops anyone
-      // dragging the map off the edge of itself.
-      map.setMaxBounds(WORLD_BOUNDS);
+      if (map.getZoom() < minZoom) map.setZoom(minZoom, { animate: false });
       // The container's pixel size changed under Leaflet; without this it
       // keeps rendering at the old size and leaves a grey band.
-      map.invalidateSize();
+      map.invalidateSize({ animate: false });
     };
 
-    apply();
     const observer = new ResizeObserver(apply);
     observer.observe(container);
     return () => observer.disconnect();
@@ -179,6 +187,23 @@ const createClusterCustomIcon = function (cluster: {
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
+
+  // Measure BEFORE the map exists — see the header comment. useLayoutEffect
+  // runs after layout but before paint, so the map still appears on the
+  // first painted frame; it just appears with the right zoom instead of
+  // animating into it.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [initialMinZoom, setInitialMinZoom] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const { clientWidth, clientHeight } = el;
+    // A zero-size flash (layout not settled) falls back to Leaflet's classic
+    // floor rather than blocking the map; the resize observer corrects it.
+    setInitialMinZoom(
+      clientWidth && clientHeight ? minZoomFor(clientWidth, clientHeight) : 2,
+    );
+  }, []);
   const navigate = useNavigate();
 
   usePageTitle("Map");
@@ -197,7 +222,10 @@ export const MapView = () => {
   }, [contacts]);
 
   return (
-    <div className="w-full h-full relative bg-surface-container-lowest z-0">
+    <div
+      ref={wrapperRef}
+      className="w-full h-full relative bg-surface-container-lowest z-0"
+    >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center z-[1000] bg-surface/50 backdrop-blur-sm">
           <span className="text-primary font-bold animate-pulse">
@@ -205,105 +233,116 @@ export const MapView = () => {
           </span>
         </div>
       )}
-      <MapContainer
-        // Opens over the Americas rather than the Atlantic. Longitude 0 put
-        // the prime meridian in the middle of the screen, which shows Africa
-        // and Europe first and pushes the Americas to the left edge.
-        center={[20, -95]}
-        zoom={2}
-        scrollWheelZoom={true}
-        style={{
-          height: "100%",
-          width: "100%",
-          background: "var(--color-surface-container-low)",
-        }}
-        zoomControl={false}
-        // Makes the maxBounds set in FitWorldToViewport a hard edge rather than
-        // an elastic one, so a drag cannot expose background behind the world.
-        maxBoundsViscosity={1.0}
-      >
-        <FitWorldToViewport />
-        <MapClickHandler />
-        <ZoomControl position="bottomright" />
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          // Never draw wrapped world copies: markers render only on the
-          // canonical copy, so a wrapped continent is a continent with its
-          // pins missing — which reads as "my contacts are in the ocean".
-          noWrap
-        />
-
-        <MarkerClusterGroup
-          chunkedLoading
-          iconCreateFunction={createClusterCustomIcon}
-          maxClusterRadius={50}
-          showCoverageOnHover={false}
-          spiderLegPolylineOptions={{ weight: 0, opacity: 0 }}
+      {/* The map renders only after the wrapper is measured, so its zoom,
+          floor, and bounds are constructor props — nothing mutates the view
+          at mount. See the header comment for the pane-desync bug this
+          prevents. One frame without a map is invisible; pins in the ocean
+          were not. */}
+      {initialMinZoom !== null && (
+        <MapContainer
+          // Opens over the Americas rather than the Atlantic. Longitude 0 put
+          // the prime meridian in the middle of the screen, which shows Africa
+          // and Europe first and pushes the Americas to the left edge.
+          center={[20, -95]}
+          zoom={Math.max(2, initialMinZoom)}
+          minZoom={initialMinZoom}
+          maxBounds={WORLD_BOUNDS}
+          scrollWheelZoom={true}
+          style={{
+            height: "100%",
+            width: "100%",
+            background: "var(--color-surface-container-low)",
+          }}
+          zoomControl={false}
+          // Makes maxBounds a hard edge rather than an elastic one, so a drag
+          // cannot expose background behind the world.
+          maxBoundsViscosity={1.0}
         >
-          {contacts.map((contact) => (
-            <Marker
-              key={contact.id}
-              position={[contact.lat, contact.lng]}
-              icon={markerIcons.get(
-                contact.avatarUrl || fallbackAvatarUrl(contact.name || ""),
-              )}
-              eventHandlers={{
-                click: () => navigate(`/map/contact/${contact.id}`),
-                mouseover: (e) => e.target.openPopup(),
-                mouseout: (e) => e.target.closePopup(),
-              }}
-            >
-              {/* Popup clarifies which location is pinned when a contact has
+          <KeepWorldCovering />
+          <MapClickHandler />
+          <ZoomControl position="bottomright" />
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            // Never draw wrapped world copies: markers render only on the
+            // canonical copy, so a wrapped continent is a continent with its
+            // pins missing — which reads as "my contacts are in the ocean".
+            noWrap
+          />
+
+          <MarkerClusterGroup
+            chunkedLoading
+            iconCreateFunction={createClusterCustomIcon}
+            maxClusterRadius={50}
+            showCoverageOnHover={false}
+            spiderLegPolylineOptions={{ weight: 0, opacity: 0 }}
+          >
+            {contacts.map((contact) => (
+              <Marker
+                key={contact.id}
+                position={[contact.lat, contact.lng]}
+                icon={markerIcons.get(
+                  contact.avatarUrl || fallbackAvatarUrl(contact.name || ""),
+                )}
+                eventHandlers={{
+                  click: () => navigate(`/map/contact/${contact.id}`),
+                  mouseover: (e) => e.target.openPopup(),
+                  mouseout: (e) => e.target.closePopup(),
+                }}
+              >
+                {/* Popup clarifies which location is pinned when a contact has
                   multiple addresses — hover the pin to see before navigating */}
-              <Popup closeButton={false} offset={[0, -24]}>
-                <div
-                  {...buttonLike(() => navigate(`/map/contact/${contact.id}`))}
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    padding: "4px 8px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <p
+                <Popup closeButton={false} offset={[0, -24]}>
+                  <div
+                    {...buttonLike(() =>
+                      navigate(`/map/contact/${contact.id}`),
+                    )}
                     style={{
-                      fontWeight: 800,
-                      fontSize: "14px",
-                      color: "var(--color-on-surface)",
-                      margin: "0 0 2px",
+                      fontFamily: "var(--font-body)",
+                      padding: "4px 8px",
+                      cursor: "pointer",
                     }}
                   >
-                    {contact.name}
-                  </p>
-                  {contact.company && (
                     <p
                       style={{
-                        fontSize: "12px",
-                        color: "var(--color-on-surface-variant)",
+                        fontWeight: 800,
+                        fontSize: "14px",
+                        color: "var(--color-on-surface)",
                         margin: "0 0 2px",
                       }}
                     >
-                      {contact.company}
+                      {contact.name}
                     </p>
-                  )}
-                  {contact.location && (
-                    <p
-                      style={{
-                        fontSize: "11px",
-                        color: "var(--color-primary)",
-                        fontWeight: 600,
-                        margin: "0",
-                      }}
-                    >
-                      📍 {contact.location}
-                    </p>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-        </MarkerClusterGroup>
-      </MapContainer>
+                    {contact.company && (
+                      <p
+                        style={{
+                          fontSize: "12px",
+                          color: "var(--color-on-surface-variant)",
+                          margin: "0 0 2px",
+                        }}
+                      >
+                        {contact.company}
+                      </p>
+                    )}
+                    {contact.location && (
+                      <p
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--color-primary)",
+                          fontWeight: 600,
+                          margin: "0",
+                        }}
+                      >
+                        📍 {contact.location}
+                      </p>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MarkerClusterGroup>
+        </MapContainer>
+      )}
     </div>
   );
 };
