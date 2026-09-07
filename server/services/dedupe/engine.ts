@@ -238,14 +238,24 @@ export const dedupeService = {
       }
 
       let autoMergedCount = 0;
+      const autoMergeIds = [
+        ...new Set(autoMergePairs.flatMap((p) => [p.idA, p.idB])),
+      ];
+      const autoMergeRawRows = autoMergeIds
+        .map((id) => ctx.contactMap.get(id))
+        .filter(Boolean);
+      const autoMergeHydratedMap = new Map(
+        contactRepo.hydrateMany(autoMergeRawRows).map((c) => [c.id, c]),
+      );
+
       for (const pair of autoMergePairs) {
         try {
-          const rawA = ctx.contactMap.get(pair.idA);
-          const rawB = ctx.contactMap.get(pair.idB);
-          if (!rawA || !rawB) continue;
+          const hydratedA = autoMergeHydratedMap.get(pair.idA);
+          const hydratedB = autoMergeHydratedMap.get(pair.idB);
+          if (!hydratedA || !hydratedB) continue;
 
-          const scoreA = computePrimaryScore(contactRepo.hydrate(rawA));
-          const scoreB = computePrimaryScore(contactRepo.hydrate(rawB));
+          const scoreA = computePrimaryScore(hydratedA);
+          const scoreB = computePrimaryScore(hydratedB);
           const [primaryId, duplicateId] =
             scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
 
@@ -495,19 +505,34 @@ export const dedupeService = {
         return;
       }
 
-      for (const pair of pairs) {
-        if (pair.confidence >= autoMergeThreshold) {
+      const qualifyingPairs = pairs.filter(
+        (p) => p.confidence >= autoMergeThreshold,
+      );
+      const pendingPairs = pairs.filter(
+        (p) => p.confidence < autoMergeThreshold,
+      );
+      for (const pair of pendingPairs) {
+        storeSuggestion(pair, "pending");
+      }
+
+      if (qualifyingPairs.length > 0) {
+        const pairIds = [
+          ...new Set(qualifyingPairs.flatMap((p) => [p.idA, p.idB])),
+        ];
+        const placeholders = pairIds.map(() => "?").join(",");
+        const rawContacts = sqlite
+          .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
+          .all(pairIds);
+        const pairHydratedMap = new Map(
+          contactRepo.hydrateMany(rawContacts).map((c) => [c.id, c]),
+        );
+
+        for (const pair of qualifyingPairs) {
           try {
-            const rawA = contactRepo.hydrate(
-              sqlite
-                .prepare("SELECT * FROM contacts WHERE id = ?")
-                .get(pair.idA),
-            );
-            const rawB = contactRepo.hydrate(
-              sqlite
-                .prepare("SELECT * FROM contacts WHERE id = ?")
-                .get(pair.idB),
-            );
+            const rawA = pairHydratedMap.get(pair.idA);
+            const rawB = pairHydratedMap.get(pair.idB);
+            if (!rawA || !rawB) continue;
+
             const scoreA = computePrimaryScore(rawA);
             const scoreB = computePrimaryScore(rawB);
             const [primaryId, duplicateId] =
@@ -528,8 +553,6 @@ export const dedupeService = {
             );
             storeSuggestion(pair, "pending");
           }
-        } else {
-          storeSuggestion(pair, "pending");
         }
       }
 
