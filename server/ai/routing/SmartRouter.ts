@@ -14,7 +14,12 @@
 //                        with paid limits (if allowed by policy)
 // =============================================================================
 
-import { GEMINI_REGISTRY, getActiveLimits, type AITier } from "./registry.ts";
+import {
+  getActiveGeminiRegistry,
+  getActiveLimits,
+  type AITier,
+  type ModelConfig,
+} from "./registry.ts";
 import type { QuotaTracker } from "./QuotaTracker.ts";
 import type { RoutingPolicy } from "../types.ts";
 import { log } from "../../utils/logger.ts";
@@ -38,10 +43,21 @@ export interface RouteDecision {
 // ---------------------------------------------------------------------------
 
 export class SmartRouter {
+  private registryFn: () => ModelConfig[];
+
   constructor(
     private tracker: QuotaTracker,
     private aiTier: AITier,
-  ) {}
+    registry?: ModelConfig[] | (() => ModelConfig[]),
+  ) {
+    if (typeof registry === "function") {
+      this.registryFn = registry;
+    } else if (Array.isArray(registry)) {
+      this.registryFn = () => registry;
+    } else {
+      this.registryFn = getActiveGeminiRegistry;
+    }
+  }
 
   /**
    * Find the next available model for a request.
@@ -68,7 +84,7 @@ export class SmartRouter {
     const effectiveAllowPreview = policy.allowPreview ?? !!policy.prefer;
 
     // ── Pass 1: Filter ────────────────────────────────────────────────
-    const candidates = GEMINI_REGISTRY.filter((m) => {
+    const candidates = this.registryFn().filter((m) => {
       // Circuit breaker: model is temporarily banned (recently hit 429)
       if (circuitBreakers.has(m.id)) return false;
 

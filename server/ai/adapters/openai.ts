@@ -23,6 +23,7 @@ import type {
   AIGenerateResult,
   JsonSchemaNode,
 } from "../types.ts";
+import { getLatestDiscoveredModel } from "../modelFilter.ts";
 import { log } from "../../utils/logger.ts";
 import {
   translateSchemaNode as translateSchema,
@@ -128,9 +129,13 @@ export class OpenAIAdapter implements AIProvider {
     return models;
   }
 
-  /** OpenAI has fixed per-class models; no dynamic routing to preview. */
+  /** OpenAI defaults to latest discovered models, falling back to static map. */
   defaultModelFor(modelClass: ModelClass): string | undefined {
-    return MODEL_MAP[modelClass] ?? MODEL_MAP[DEFAULT_MODEL_CLASS];
+    return (
+      getLatestDiscoveredModel("openai", modelClass) ??
+      MODEL_MAP[modelClass] ??
+      MODEL_MAP[DEFAULT_MODEL_CLASS]
+    );
   }
 
   /** Embeddings via /v1/embeddings. */
@@ -144,8 +149,11 @@ export class OpenAIAdapter implements AIProvider {
 
   resolveModel(prefer?: string, modelOverride?: string): string {
     if (modelOverride) return modelOverride;
+    const targetClass = (prefer ?? DEFAULT_MODEL_CLASS) as ModelClass;
     return (
-      MODEL_MAP[prefer ?? DEFAULT_MODEL_CLASS] ?? MODEL_MAP[DEFAULT_MODEL_CLASS]
+      getLatestDiscoveredModel("openai", targetClass) ??
+      MODEL_MAP[targetClass] ??
+      MODEL_MAP[DEFAULT_MODEL_CLASS]
     );
   }
 

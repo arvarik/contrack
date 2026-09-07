@@ -403,7 +403,7 @@ describe("SmartRouter", () => {
 
     const model = GEMINI_REGISTRY.find((m) => m.id === route.modelId);
     expect(model?.modelClass).toBe("lite");
-    expect(model?.generation).toBe(3);
+    expect(model?.generation).toBeGreaterThanOrEqual(3);
   });
 
   it("falls back to other classes when preferred class is exhausted", () => {

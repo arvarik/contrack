@@ -111,8 +111,19 @@ export const GROUNDING_LIMITS = {
 // as a tiebreaker keeps behavior deterministic.
 // =============================================================================
 
+import {
+  isChatModel,
+  inferModelFamily,
+  familyToModelClass,
+  extractGeneration,
+  isPreviewVariant,
+  getDiscoveredModelsForProvider,
+} from "../modelFilter.ts";
+
 export const GEMINI_REGISTRY: ModelConfig[] = [
-  // ── Stable Models (enabled by default) ─────────────────────────────
+  // ── Baseline Stable Models (ordered by tier & generation) ───────────
+  // Note: gemini-2.5-flash-lite ($0.40/M) is preserved at index 0 for
+  // cheapest-tiebreaker and legacy unit tests.
   {
     id: "gemini-2.5-flash-lite",
     modelClass: "lite",
@@ -122,6 +133,61 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     freeLimits: { rpm: 10, tpm: 250_000, rpd: 500 },
     paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: Infinity },
     costPerM: 0.4,
+    supportsGrounding: true,
+  },
+  {
+    id: "gemini-3.8-flash",
+    modelClass: "flash",
+    generation: 3.8,
+    stability: "stable",
+    hasFreeTier: true,
+    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
+    paidLimits: { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 },
+    costPerM: 2.5,
+    supportsGrounding: true,
+  },
+  {
+    id: "gemini-3.5-flash-lite",
+    modelClass: "lite",
+    generation: 3.5,
+    stability: "stable",
+    hasFreeTier: true,
+    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
+    paidLimits: { rpm: 10_000, tpm: 10_000_000, rpd: Infinity },
+    costPerM: 0.4,
+    supportsGrounding: true,
+  },
+  {
+    id: "gemini-3.6-flash",
+    modelClass: "flash",
+    generation: 3.6,
+    stability: "stable",
+    hasFreeTier: true,
+    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
+    paidLimits: { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 },
+    costPerM: 2.5,
+    supportsGrounding: true,
+  },
+  {
+    id: "gemini-3.5-flash",
+    modelClass: "flash",
+    generation: 3.5,
+    stability: "stable",
+    hasFreeTier: true,
+    freeLimits: { rpm: 15, tpm: 1_000_000, rpd: 1_500 },
+    paidLimits: { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 },
+    costPerM: 2.5,
+    supportsGrounding: true,
+  },
+  {
+    id: "gemini-3.1-pro-preview",
+    modelClass: "pro",
+    generation: 3.1,
+    stability: "preview",
+    hasFreeTier: true,
+    freeLimits: { rpm: 2, tpm: 32_000, rpd: 50 },
+    paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
+    costPerM: 10.0,
     supportsGrounding: true,
   },
   {
@@ -146,15 +212,10 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     costPerM: 10.0,
     supportsGrounding: true,
   },
-
-  // gemini-3.1-flash-lite went GA on 2026-05-07 — promoted from preview.
-  // Still paid-only at launch (no documented free-tier RPM/TPM/RPD).
-  // SmartRouter prefers higher-generation models within a class, so on
-  // AI_TIER=PAID this is now the default lite-class pick.
   {
     id: "gemini-3.1-flash-lite",
     modelClass: "lite",
-    generation: 3,
+    generation: 3.1,
     stability: "stable",
     hasFreeTier: false,
     freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
@@ -162,8 +223,6 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     costPerM: 1.5,
     supportsGrounding: true,
   },
-
-  // ── Preview Models (opt-in only — typically paid-tier only) ────────
   {
     id: "gemini-3-flash-preview",
     modelClass: "flash",
@@ -175,22 +234,64 @@ export const GEMINI_REGISTRY: ModelConfig[] = [
     costPerM: 3.0,
     supportsGrounding: true,
   },
-  {
-    id: "gemini-3.1-pro-preview",
-    modelClass: "pro",
-    generation: 3,
-    stability: "preview",
-    hasFreeTier: false,
-    freeLimits: { rpm: 0, tpm: 0, rpd: 0 },
-    paidLimits: { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
-    costPerM: 12.0,
-    supportsGrounding: true,
-  },
 ];
 
 // =============================================================================
 // Registry Helpers
 // =============================================================================
+
+/**
+ * Return the active Gemini registry, dynamically enriched with newly discovered
+ * models from provider discovery so newer versions (e.g. gemini-3.9+, gemini-4+)
+ * are automatically available without requiring manual code changes.
+ */
+export function getActiveGeminiRegistry(): ModelConfig[] {
+  const base = [...GEMINI_REGISTRY];
+  try {
+    const discovered = getDiscoveredModelsForProvider("gemini");
+    if (!discovered || discovered.length === 0) return base;
+
+    const chatModels = discovered.filter((m) => isChatModel(m.id));
+    const knownIds = new Set(base.map((m) => m.id));
+
+    for (const m of chatModels) {
+      if (knownIds.has(m.id)) continue;
+      const family = inferModelFamily("gemini", m.id);
+      const modelClass = familyToModelClass("gemini", family);
+      if (!modelClass) continue;
+
+      const gen = extractGeneration(m.id) ?? 3;
+      const isPreview = isPreviewVariant(m.id);
+
+      base.push({
+        id: m.id,
+        modelClass,
+        generation: gen,
+        stability: isPreview ? "preview" : "stable",
+        hasFreeTier: true,
+        freeLimits:
+          modelClass === "lite"
+            ? { rpm: 15, tpm: 1_000_000, rpd: 1_500 }
+            : modelClass === "flash"
+              ? { rpm: 15, tpm: 1_000_000, rpd: 1_500 }
+              : { rpm: 2, tpm: 32_000, rpd: 50 },
+        paidLimits:
+          modelClass === "lite"
+            ? { rpm: 10_000, tpm: 10_000_000, rpd: Infinity }
+            : modelClass === "flash"
+              ? { rpm: 2_000, tpm: 4_000_000, rpd: 100_000 }
+              : { rpm: 1_000, tpm: 5_000_000, rpd: 50_000 },
+        costPerM:
+          modelClass === "lite" ? 0.4 : modelClass === "flash" ? 2.5 : 10.0,
+        supportsGrounding: true,
+      });
+      knownIds.add(m.id);
+    }
+  } catch {
+    // If settings service / DB isn't available, fall back to base
+  }
+  return base;
+}
 
 /**
  * Read the AI_TIER from environment.
@@ -217,7 +318,7 @@ export function getGroundingRPDLimit(tier: AITier): number {
 
 /** Lookup a model config by ID. Returns undefined if not registered. */
 export function getModelConfig(modelId: string): ModelConfig | undefined {
-  return GEMINI_REGISTRY.find((m) => m.id === modelId);
+  return getActiveGeminiRegistry().find((m) => m.id === modelId);
 }
 
 /**
@@ -226,8 +327,9 @@ export function getModelConfig(modelId: string): ModelConfig | undefined {
  * - PAID: all models (paid-only models become available)
  */
 export function getAvailableModels(tier: AITier): ModelConfig[] {
-  if (tier === "PAID") return GEMINI_REGISTRY;
-  return GEMINI_REGISTRY.filter((m) => m.hasFreeTier);
+  const registry = getActiveGeminiRegistry();
+  if (tier === "PAID") return registry;
+  return registry.filter((m) => m.hasFreeTier);
 }
 
 /**
@@ -249,7 +351,7 @@ export function previewModelForClass(
 ): string | undefined {
   // Preview models are opt-in in the router only when a class preference is
   // set — which is exactly the case here, so they are in scope.
-  const candidates = GEMINI_REGISTRY.filter((m) => {
+  const candidates = getAvailableModels(tier).filter((m) => {
     if (tier === "FREE" && !m.hasFreeTier) return false;
     if (requiresGrounding && !m.supportsGrounding) return false;
     return true;

@@ -28,6 +28,7 @@ import type { ModelInfo } from "../ai/provider.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
+import { applyCatalogGuardrails } from "../ai/modelFilter.ts";
 
 /** Model list cached per provider. */
 export interface CachedModelList {
@@ -197,7 +198,8 @@ export async function refreshModels(
 
   const cache = readModelCache();
   try {
-    const models = await provider.listModels();
+    const rawModels = await provider.listModels();
+    const models = applyCatalogGuardrails(rawModels);
     const entry: CachedModelList = {
       models,
       fetchedAt: new Date().toISOString(),
@@ -206,7 +208,7 @@ export async function refreshModels(
     writeModelCache(cache);
     log.info(
       "AISettings",
-      `Discovered ${models.length} models for ${providerId}`,
+      `Discovered ${models.length} models for ${providerId} (${rawModels.length} raw)`,
     );
     return entry;
   } catch (err) {

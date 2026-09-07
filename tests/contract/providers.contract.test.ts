@@ -89,7 +89,7 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
         jsonSchema: CONTACT_SCHEMA,
-        model: modelFor("gemini", "gemini-2.5-flash"),
+        model: modelFor("gemini", "gemini-3.8-flash"),
       });
       expectUsableExtraction(result.text);
     },
