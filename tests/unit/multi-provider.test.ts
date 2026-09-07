@@ -418,6 +418,16 @@ describe("AI Search Strategy Selection", () => {
     const strategy = getStrategy();
     expect(strategy.name).toBe("two-pass");
   });
+
+  it("getDefaultStrategyForProvider resolves appropriate strategy per provider", async () => {
+    const { getDefaultStrategyForProvider } =
+      await import("../../server/services/aiSearch/strategies/index.ts");
+    expect(getDefaultStrategyForProvider("openai")).toBe("single-pass");
+    expect(getDefaultStrategyForProvider("anthropic")).toBe("single-pass");
+    expect(getDefaultStrategyForProvider("gemini")).toBe("two-pass");
+    // When provider is null and no SearXNG is configured, fallback is two-pass
+    expect(getDefaultStrategyForProvider(null)).toBe("two-pass");
+  });
 });
 
 // =============================================================================
