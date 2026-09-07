@@ -355,6 +355,13 @@ class AISearchJobQueue extends EventEmitter {
       log.debug("AISearchQueue", `GC: cleaned ${cleaned} stale batch(es)`);
     }
   }
+
+  /** Reset queue state for tests. */
+  __resetForTests(): void {
+    this.batches.clear();
+    this.processing = false;
+    this.lastBatchCompletedAt = null;
+  }
 }
 
 // Singleton instance
