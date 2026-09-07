@@ -42,10 +42,15 @@ export function computePrimaryScore(candidate: HydratedContact | null): number {
   score += (contact.education?.length ?? 0) * 2;
   score += (contact.experience?.length ?? 0) * 2;
 
-  const row = sqlite
-    .prepare("SELECT COUNT(*) as c FROM interactions WHERE contactId = ?")
-    .get(contact.id) as { c: number } | undefined;
-  score += (row?.c ?? 0) * 5;
+  const interactionCount =
+    contact.interactionCount ??
+    (
+      sqlite
+        .prepare("SELECT COUNT(*) as c FROM interactions WHERE contactId = ?")
+        .get(contact.id) as { c: number } | undefined
+    )?.c ??
+    0;
+  score += interactionCount * 5;
 
   if (contact.updatedAt) {
     const ageMs = Date.now() - new Date(contact.updatedAt).getTime();
@@ -61,6 +66,9 @@ export function computePrimaryScore(candidate: HydratedContact | null): number {
 export function selectBestPrimary(
   contacts: HydratedContact[],
 ): HydratedContact {
+  if (contacts.length === 0) {
+    throw new Error("Cannot select primary contact from empty array");
+  }
   let best = contacts[0];
   let bestScore = computePrimaryScore(best);
   for (let i = 1; i < contacts.length; i++) {
@@ -161,13 +169,19 @@ export function buildClusters(
   const clusterGroups = uf.getClusters();
   const clusters: DedupeCluster[] = [];
 
+  // Pre-hydrate all cluster member contacts in a single batch to avoid N+1 queries
+  const allMemberIds = [
+    ...new Set(Array.from(clusterGroups.values()).flatMap((ids) => ids)),
+  ];
+  const rawRows = allMemberIds.map((id) => contactMap.get(id)).filter(Boolean);
+  const hydratedMap = new Map(
+    contactRepo.hydrateMany(rawRows).map((c) => [c.id, c]),
+  );
+
   for (const [, memberIds] of clusterGroups) {
     const contacts = memberIds
-      .map((id) => contactMap.get(id))
-      .filter(Boolean)
-      // Non-null assertion: hydrate() only returns null for malformed rows,
-      // and every input here is a live row from contactMap.
-      .map((raw) => contactRepo.hydrate(raw)!);
+      .map((id) => hydratedMap.get(id))
+      .filter((c): c is HydratedContact => !!c);
 
     if (contacts.length < 2) continue;
 

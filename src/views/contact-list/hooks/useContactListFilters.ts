@@ -205,10 +205,10 @@ export function useContactListFilters(contacts: Contact[]) {
         if (sortBy === "name") {
           cmp = (a.name || "").localeCompare(b.name || "");
         } else {
-          // Date added — newer first by default (desc)
-          const da = new Date(a.addedAt || 0).getTime();
-          const db = new Date(b.addedAt || 0).getTime();
-          cmp = da - db;
+          // Date added — newer first by default (desc). ISO strings sort lexicographically without Date allocations.
+          const da = a.addedAt || "";
+          const db = b.addedAt || "";
+          cmp = da.localeCompare(db);
         }
         return sortDir === "asc" ? cmp : -cmp;
       });
