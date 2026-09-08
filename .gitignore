@@ -37,6 +37,8 @@ Thumbs.db
 *.swp
 *.swo
 .cursorrules
+.obsidian/
+**/.obsidian/
 
 # Test / scratch artifacts
 test.eml
@@ -51,3 +53,6 @@ docs/designs/
 docs/explorations/
 docs/plans/
 docs/recommendations/
+
+# Multi-tenant implementation plan — working design docs, not shipped
+docs/multi-tenant-plan/
