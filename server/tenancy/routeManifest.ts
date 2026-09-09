@@ -522,18 +522,18 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "scoped",
     isolated: false,
   },
-  { method: "GET", path: "/api/search", class: "scoped", isolated: false },
+  { method: "GET", path: "/api/search", class: "scoped", isolated: true },
   {
     method: "POST",
     path: "/api/search/semantic",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
     path: "/api/search/synthesize",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",

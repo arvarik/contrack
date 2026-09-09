@@ -46,6 +46,11 @@ import path from "path";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
+import {
+  WEIGHTS,
+  lexicalSearch,
+} from "../../server/services/search/lexical.ts";
+import { ownerToken } from "../../server/tenancy/scope.ts";
 import { LOGOS_DIR, UPLOADS_DIR, ensureDir } from "../../server/utils/paths.ts";
 import {
   asUser,
@@ -83,6 +88,7 @@ const COVERED = [
   "GET /api/dashboard/insight",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
+  "GET /api/search",
   "PATCH /api/action-items/:id",
   "PATCH /api/action-items/:id/complete",
   "PATCH /api/contacts/:id",
@@ -101,6 +107,8 @@ const COVERED = [
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
+  "POST /api/search/semantic",
+  "POST /api/search/synthesize",
   "PUT /api/contacts/:id",
   "PUT /api/contacts/bulk-update",
   "PUT /api/lists/reorder",
@@ -121,6 +129,15 @@ let seedA: Seeded;
 let seedB: Seeded;
 /** A's avatar URL, uploaded through the route so the file really exists. */
 let avatarUrlA: string;
+/**
+ * A's contact with a name nobody else on the instance shares.
+ *
+ * Every search channel is asked for this token by an account that does not own
+ * it. "Zebulon Quarrington" appears in no other row, so a single hit anywhere
+ * in a response is proof the channel crossed an owner boundary.
+ */
+let zebulonId: string;
+const ZEBULON = "Zebulon Quarrington";
 
 const randomId = () => crypto.randomUUID();
 const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
@@ -198,6 +215,16 @@ beforeAll(async () => {
     actionItems: 5,
   });
   seedB = await seedOwner(app, B, { contacts: 5 });
+
+  const rare = await asUser(A)(
+    request(app).post("/api/contacts").send({
+      name: ZEBULON,
+      company: "Quarrington Holdings",
+      role: "Actuary",
+    }),
+  );
+  expect(rare.status).toBe(201);
+  zebulonId = rare.body.id;
 
   // A puts a real file on disk through the real upload route.
   const uploaded = await asUser(A)(
@@ -1244,6 +1271,228 @@ describe("GET /api/command-palette/zero-state", () => {
       forA.body.insights as { type: string; count?: number }[]
     ).find((i) => i.type === "action_items");
     expect(urgent?.count).toBe(1);
+  });
+});
+
+// =============================================================================
+// Search
+// =============================================================================
+// Every search channel reads from an index that holds the whole instance, so
+// each one is asked for A's rare name by an account that does not own it.
+
+describe("GET /api/search", () => {
+  it("finds A's rare contact for A and for nobody else", async () => {
+    const forA = await asUser(A)(
+      request(app).get("/api/search").query({ q: "Quarrington" }),
+    );
+    expect(forA.status).toBe(200);
+    expect(ids(forA.body)).toEqual([zebulonId]);
+
+    for (const other of [B, C]) {
+      const res = await asUser(other)(
+        request(app).get("/api/search").query({ q: "Quarrington" }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    }
+  });
+
+  it("returns only the caller's rows for a token both accounts share", async () => {
+    // Both seeds contain the word "Contact", so this asks the ranking path,
+    // not the empty-result path.
+    const forB = await asUser(B)(
+      request(app).get("/api/search").query({ q: "Contact" }),
+    );
+    expect(forB.status).toBe(200);
+    expect(forB.body.length).toBeGreaterThan(0);
+    for (const row of forB.body as { id: string }[]) {
+      expect(snapshotRow("contacts", row.id)?.ownerId).toBe(B.user.id);
+    }
+  });
+
+  it("applies a facet filter inside the caller's own rows", async () => {
+    const filters = JSON.stringify([
+      { field: "company", value: "Quarrington Holdings" },
+    ]);
+    const forA = await asUser(A)(
+      request(app).get("/api/search").query({ q: "Quarrington", filters }),
+    );
+    expect(ids(forA.body)).toEqual([zebulonId]);
+    const forB = await asUser(B)(
+      request(app).get("/api/search").query({ q: "Quarrington", filters }),
+    );
+    expect(forB.body).toEqual([]);
+  });
+
+  it("filters inside the FTS index, before any hydration guard runs", () => {
+    // The route is guarded twice: the owner token restricts the index, and
+    // hydration then loads rows through a scoped finder. This calls the index
+    // layer on its own, so removing the token fails here rather than being
+    // covered up by the second guard.
+    expect(
+      lexicalSearch(A.scope, "Quarrington").map((r) => r.contactId),
+    ).toEqual([zebulonId]);
+    expect(lexicalSearch(B.scope, "Quarrington")).toEqual([]);
+    expect(lexicalSearch(C.scope, "Quarrington")).toEqual([]);
+  });
+
+  it("answers the owner token from the FTS index, not from a post-filter", () => {
+    // The whole point of an indexed ownerTok column: FTS5 intersects the
+    // owner's posting list with the query's inside the index. A plan with a
+    // scan of `contacts` would mean the owner was applied after the fact, over
+    // rows the caller may not read. The statement mirrors lexical.ts.
+    const detail = (
+      sqlite
+        .prepare(
+          `EXPLAIN QUERY PLAN
+             SELECT c.id FROM contacts_fts f
+             JOIN contacts c ON c.rowid = f.rowid
+             WHERE contacts_fts MATCH ? AND c.ownerId = ?
+               AND c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
+               AND c.canonicalId IS NULL AND c.deletedAt IS NULL
+             ORDER BY bm25(contacts_fts, ${WEIGHTS}), c.id LIMIT ?`,
+        )
+        .all(
+          `ownerTok:${ownerToken(A.scope)} AND ("quar"*)`,
+          A.user.id,
+          20,
+        ) as {
+        detail: string;
+      }[]
+    )
+      .map((r) => r.detail)
+      .join(" | ");
+
+    // "SCAN f VIRTUAL TABLE INDEX 0:M11" is FTS5 answering the MATCH from its
+    // own index, and the contact row is then fetched by rowid. Neither side
+    // reads a row the owner token did not already choose.
+    expect(detail).toContain("VIRTUAL TABLE INDEX");
+    expect(detail).toContain("SEARCH c USING INTEGER PRIMARY KEY");
+    expect(detail).not.toContain("SCAN contacts");
+  });
+
+  it("seeks the owner composite index for the hard-filter corpus", () => {
+    // The corpus query behind the query plan's `must` filters. It reads every
+    // active contact of one owner, so it must start at that owner rather than
+    // scan the table. The statement mirrors hybridRetrieval.applyHardFilters.
+    const detail = (
+      sqlite
+        .prepare(
+          `EXPLAIN QUERY PLAN
+             SELECT c.id, c.location, c.company, c.role, c.headline, c.industry
+             FROM contacts c
+             WHERE c.ownerId = ? AND c.isGhost = 0
+               AND COALESCE(c.isArchived, 0) = 0
+               AND c.canonicalId IS NULL AND c.deletedAt IS NULL`,
+        )
+        .all(A.user.id) as { detail: string }[]
+    )
+      .map((r) => r.detail)
+      .join(" | ");
+
+    expect(detail).toContain("idx_contacts_owner_status");
+    expect(detail).not.toContain("SCAN contacts");
+  });
+});
+
+describe("POST /api/search/semantic", () => {
+  const ask = (actor: Actor, ndjson: boolean) => {
+    const req = request(app)
+      .post("/api/search/semantic")
+      .send({ query: "Quarrington" });
+    return asUser(actor)(
+      ndjson ? req.set("Accept", "application/x-ndjson") : req,
+    );
+  };
+
+  it("returns A's only match to A and nothing to B as JSON", async () => {
+    const forA = await ask(A, false);
+    expect(forA.status).toBe(200);
+    expect(ids(forA.body.matches)).toEqual([zebulonId]);
+
+    const forB = await ask(B, false);
+    expect(forB.status).toBe(200);
+    expect(forB.body.matches).toEqual([]);
+  });
+
+  it("carries A's match in no NDJSON chunk sent to B", async () => {
+    const forB = await ask(B, true);
+    expect(forB.status).toBe(200);
+    const chunks = forB.text
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { matches?: { id: string }[] });
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(ids(chunk.matches ?? [])).not.toContain(zebulonId);
+    }
+    // A's own stream still carries it, so the assertion above is not passing
+    // because the stream is empty for everybody.
+    const forA = await ask(A, true);
+    expect(forA.text).toContain(zebulonId);
+  });
+
+  it("never serves B the result A cached for the same query", async () => {
+    // The rerank tier holds a list of hydrated contacts. Before 2c the key was
+    // the query text alone, so B asking the same words was served A's rows
+    // from memory, without a database read at all. A word no earlier test has
+    // used keeps the four steps below in a known order.
+    const phrase = { query: "Zebulon" };
+    const send = (actor: Actor) =>
+      asUser(actor)(request(app).post("/api/search/semantic").send(phrase));
+
+    const firstA = await send(A);
+    expect(ids(firstA.body.matches)).toEqual([zebulonId]);
+    expect(firstA.body.cached).toBeUndefined();
+
+    const firstB = await send(B);
+    expect(firstB.body.matches).toEqual([]);
+
+    const againA = await send(A);
+    expect(againA.body.cached).toBe(true);
+    expect(ids(againA.body.matches)).toEqual([zebulonId]);
+
+    // B's second call is also a hit, on B's own empty entry. Two accounts,
+    // two entries, one query text.
+    const againB = await send(B);
+    expect(againB.body.cached).toBe(true);
+    expect(againB.body.matches).toEqual([]);
+  });
+});
+
+describe("POST /api/search/synthesize", () => {
+  const synthesize = (actor: Actor, contactIds: string[]) =>
+    asUser(actor)(
+      request(app)
+        .post("/api/search/synthesize")
+        .send({ query: "Quarrington", contactIds }),
+    );
+
+  it("refuses A's contact id with the answer a deleted id gets", async () => {
+    const foreign = await synthesize(B, [zebulonId]);
+    const missing = await synthesize(B, [randomId()]);
+    expect(foreign.status).toBe(409);
+    expect(missing.status).toBe(409);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(missing.body),
+    );
+  });
+
+  it("refuses a mixed list rather than summarising the half it owns", async () => {
+    // A contact created here, rather than one from the seed, because earlier
+    // tests in this file archive and delete B's rows. The two calls below
+    // differ by one id, so the 409 can only be about ownership.
+    const mine = await asUser(B)(
+      request(app).post("/api/contacts").send({ name: "Bob Fresh Contact" }),
+    );
+    expect(mine.status).toBe(201);
+
+    const ownOnly = await synthesize(B, [mine.body.id]);
+    expect(ownOnly.status).toBe(200);
+
+    const mixed = await synthesize(B, [mine.body.id, zebulonId]);
+    expect(mixed.status).toBe(409);
   });
 });
 
