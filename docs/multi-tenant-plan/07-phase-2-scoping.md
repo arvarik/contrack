@@ -51,6 +51,37 @@ complete inventory is [appendix-a-query-inventory.md](appendix-a-query-inventory
 > - **`tenant-lint --strict` takes several globs.** Each sub-phase adds its
 >   files. 2i still replaces the list with one `server/**/*.ts`.
 
+> **What 2b and 2d shipped, where they differ from this document.**
+>
+> - **2b and 2d shipped as one PR.** `dashboardService.getDashboardPayload`
+>   calls `actionItemService.getAllPending`, so 2b cannot change that signature
+>   without giving the dashboard a scope, and giving the dashboard a scope is
+>   2d. Splitting them would have merged a dashboard whose follow-up counts
+>   were per owner beside metrics that were still instance-wide.
+> - **`assertContactExists` is gone.** 2a kept the unscoped guard for the three
+>   services 2b converts. Those three now call `assertOwnedContact`, so the
+>   unscoped form had no callers and was deleted rather than left as a loaded
+>   gun for the next service.
+> - **`reorderLists` answers two different refusals.** A list id the caller
+>   does not own is a 404, as the acceptance list requires. A set built only
+>   from the caller's own ids that is still incomplete keeps the 400 the
+>   endpoint has always returned, because that is a malformed request and not a
+>   missing row.
+> - **`DELETE /api/lists/:id` stays idempotent.** A missing list is a 200 with
+>   "already deleted", by an earlier decision. A foreign id gets exactly that
+>   same answer, which satisfies rule 4 without changing the contract, and the
+>   test asserts the two bodies are equal and that the list survives.
+> - **`mcpService` was left alone.** The 2b table offers to add the owner
+>   predicate to its two interaction statements. Doing that needs a scope
+>   parameter, which needs `routes/mcp.ts` to pass one, and the file's other
+>   four statements would still be unscoped, so the file could not go strict
+>   either way. 2g converts it in one piece.
+> - **`bulkAddMembers` aborts rather than filtering.** The matrix's bulk row
+>   says a mixed id list affects only the caller's rows. This endpoint has
+>   always aborted on an unusable id, and 2b keeps that, so a foreign id in the
+>   array adds nobody. The contacts bulk endpoints 2a converted still filter
+>   and report a count.
+
 ---
 
 ## 0. Context for the implementer
@@ -406,6 +437,30 @@ or write attributable rows run per owner inside a context.
 - [x] `isolated: true` for the fifteen routes this sub-phase proved, and the
       manifest test names them.
 - [x] CHANGELOG has a Phase 2a block.
+
+### 2b and 2d (shipped)
+
+- [x] Every function in the 2b and 2d tables takes `scope` first, and the
+      owner predicate is in the same statement as the id.
+- [x] Both mention paths guard ownership. A name the extractor returns is
+      matched against the caller's contacts only, and an unmatched name becomes
+      a ghost the caller owns. A client-supplied contact id in the editor's
+      `data-id` markup is dropped unless the caller owns it.
+- [x] Each owner's lists number from zero. `reorderLists` answers 404 for a
+      list id the caller does not own. `removeMember` and `bulkAddMembers`
+      check both the list and every contact.
+- [x] The pending, completed, and urgent action item queries use
+      `idx_action_items_owner_due` and `idx_action_items_owner_done`, asserted
+      with `EXPLAIN QUERY PLAN` in the matrix file.
+- [x] Dashboard, insight, and zero-state scoped. `dailyInsight` is keyed with
+      the owner id and holds 100 entries.
+- [x] `tenant-lint --strict` passes for the nine files, plus
+      `relationshipService.ts` (comments only) and `contactGuard.ts`.
+- [x] Matrix tests are real and green for all 28 routes in the four route
+      files, and `isolated: true` for each.
+- [x] The existing interaction, action item, list, and dashboard suites pass
+      unchanged.
+- [x] CHANGELOG has Phase 2b and Phase 2d blocks.
 
 ### The whole phase
 

@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2b.** Interactions, action items, and lists belong to the account
+  that created them. Every timeline, briefing, attachment, follow-up task, and
+  list endpoint reads and writes the caller's rows only. Another account's id
+  answers `404` with the same body an id that never existed answers.
+- **Phase 2b.** A note that mentions somebody now stays inside the writer's
+  own contacts. Two paths handle mentions and both were open: the AI extractor
+  matched a name against every contact on the instance, so a note could link to
+  a stranger's row instead of creating a ghost, and the editor's own mention
+  markup was inserted with no check at all, so any contact id in the request
+  body was linked. The extractor matches the caller's contacts and creates a
+  ghost the caller owns. The markup path drops any id the caller does not own.
+- **Phase 2b.** Each account's lists number from zero. `sortOrder` came from
+  the highest number on the instance, so a new account's first list started
+  above every list stored on that box.
+- **Phase 2b.** Removing a contact from a list and adding contacts in bulk now
+  check both the list and the contact. Removing checked nothing at all, and
+  bulk adding checked only the list. Reordering answers `404` when the request
+  names a list the caller does not own, and keeps its `400` for a set of the
+  caller's own lists that is not complete.
+- **Phase 2d.** The dashboard, the daily insight, and the command palette
+  zero-state count the caller's own contacts, interactions, follow-ups, and
+  duplicate suggestions. Every number on those three screens described the
+  whole instance before.
+- **Phase 2d.** The daily insight is cached per account. One account's
+  AI-written paragraph about their own network was cached under a key that
+  described the instance, so whoever opened the dashboard first had their
+  insight served to every other account for 24 hours. The cache now holds one
+  entry per account.
+
 - **Phase 2a.** Contacts belong to the account that created them. Every
   contact endpoint reads and writes the caller's rows only: the list, the map,
   the archive, the trash, one contact by id, the score breakdown, both bulk
