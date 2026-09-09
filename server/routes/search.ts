@@ -12,7 +12,9 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const q = req.query.q as string;
+    const q = req.query.q;
+    if (q !== undefined && typeof q !== "string")
+      throw new AppError("q must be a string", 400);
 
     if (!q) return res.json([]);
     if (q.length > 500) throw new AppError("q must be ≤ 500 characters", 400);

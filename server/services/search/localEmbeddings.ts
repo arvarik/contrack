@@ -17,6 +17,8 @@
 
 import path from "path";
 import { sqlite } from "../../db.ts";
+import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
+import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
@@ -94,7 +96,11 @@ export async function initLocalEmbeddings(): Promise<void> {
     }
   })();
 
-  return initPromise;
+  try {
+    await initPromise;
+  } finally {
+    initPromise = null;
+  }
 }
 
 /** Check if the local embedding model is ready. */
@@ -143,7 +149,7 @@ async function embedTexts(texts: string[]): Promise<Float32Array[]> {
     const vec = new Float32Array(values);
     // Guards against a silent local-model swap by a contributor.
     if (vec.length !== BUILTIN_DIMENSION) {
-      throw new Error(
+      throw new AppError(
         `Expected ${BUILTIN_DIMENSION}-dim vector from the built-in model, got ${vec.length}`,
       );
     }
@@ -217,7 +223,7 @@ export function upsertSearchEmbedding(
 ): void {
   // Defensive copy — Buffer.from(arrayBuffer) is zero-copy, which risks
   // corruption if Transformers.js reclaims the underlying ArrayBuffer.
-  const buf = Buffer.from(embedding.buffer.slice(0));
+  const buf = Buffer.from(new Float32Array(embedding).buffer);
   _upsertTxn(contactId, buf);
 }
 
@@ -229,29 +235,24 @@ export function findSearchNeighbors(
   k: number,
   preFilterIds?: Set<string>,
 ): { contactId: string; distance: number }[] {
-  const buf = Buffer.from(queryVec.buffer.slice(0));
-
-  // Brute-force KNN via sqlite-vec — perfect for ~960 rows (<0.5ms).
-  // NOTE: If the dataset exceeds ~10K contacts, consider switching to an
-  // approximate nearest neighbor index (e.g., HNSW) or pre-filtering in SQL.
-  const rows = sqlite
+  if (preFilterIds?.size === 0 || !Number.isFinite(k) || k < 1) return [];
+  const buf = Buffer.from(new Float32Array(queryVec).buffer);
+  const scope = preFilterIds
+    ? "AND c.id IN (SELECT value FROM json_each(?))"
+    : "";
+  const params = preFilterIds
+    ? [buf, JSON.stringify([...preFilterIds]), Math.min(Math.floor(k), 500)]
+    : [buf, Math.min(Math.floor(k), 500)];
+  return sqlite
     .prepare(
       `
-    SELECT contactId, distance
-    FROM search_embeddings
+    SELECT contactId, distance FROM search_embeddings
     WHERE embedding MATCH ?
-    ORDER BY distance
-    LIMIT ?
+      AND contactId IN (SELECT c.id FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} ${scope})
+      AND k = ? ORDER BY distance
   `,
     )
-    .all(buf, Math.min(k, 500)) as { contactId: string; distance: number }[];
-
-  // Apply pre-filter if provided
-  if (preFilterIds) {
-    return rows.filter((r) => preFilterIds.has(r.contactId));
-  }
-
-  return rows;
+    .all(...params) as { contactId: string; distance: number }[];
 }
 
 /** Count of contacts with search embeddings. */
@@ -299,10 +300,10 @@ export async function ensureEmbeddingStore(): Promise<number> {
     state.dimension !== dimension;
   if (!changed) return 0;
 
-  if (state) {
+  if (state || dimension !== BUILTIN_DIMENSION) {
     log.info(
       "LocalEmbeddings",
-      `Embeddings changed (${state.signature} → ${resolved.signature}); rebuilding vector store`,
+      `Embeddings changed (${state?.signature ?? "unversioned"} → ${resolved.signature}); rebuilding vector store`,
     );
     rebuildSearchEmbeddingTable(dimension);
   }
@@ -334,8 +335,7 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     SELECT c.id, c.name, c.company, c.role, c.location, c.industry,
            c.headline, c.about, c.preferences, c.searchExpansion
     FROM contacts c
-    WHERE c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL)
-      AND c.canonicalId IS NULL
+    WHERE ${ACTIVE_CONTACT_SQL}
       AND c.id NOT IN (SELECT contactId FROM search_embeddings)
   `,
     )
@@ -375,11 +375,13 @@ export async function backfillSearchEmbeddings(): Promise<number> {
       return contactToSearchText(c, tags, interests);
     });
 
+    const signature = resolveEmbeddings().signature;
     const vectors = await embedBatch(texts);
+    if (signature !== resolveEmbeddings().signature) return embedded;
 
     // Store in transaction for speed
     if (vectors.length !== batch.length) {
-      throw new Error(
+      throw new AppError(
         `Embedding backend returned ${vectors.length} vectors for ${batch.length} contacts — refusing to write a partial index`,
       );
     }
@@ -387,7 +389,7 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     const txn = sqlite.transaction(() => {
       for (let j = 0; j < batch.length; j++) {
         const vec = vectors[j];
-        if (!vec) continue;
+        if (!vec || currentSearchText(batch[j].id) !== texts[j]) continue;
         const buf = Buffer.from(vec.buffer.slice(0));
         deleteStmt.run(batch[j].id);
         insertStmt.run(batch[j].id, buf);
@@ -409,13 +411,13 @@ export async function backfillSearchEmbeddings(): Promise<number> {
  * Called on contact create/update.
  */
 export async function embedContact(contactId: string): Promise<void> {
-  if (!modelReady) return;
+  if (!isSearchEmbeddingReady()) return;
 
   const row = sqlite
     .prepare(
       `
     SELECT id, name, company, role, location, industry, headline, about, preferences, searchExpansion
-    FROM contacts WHERE id = ?
+    FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}
   `,
     )
     .get(contactId) as SearchTextRow | undefined;
@@ -434,9 +436,15 @@ export async function embedContact(contactId: string): Promise<void> {
   ).map((t) => t.interest);
 
   const text = contactToSearchText(row, tags, interests);
+  const signature = resolveEmbeddings().signature;
   const vec = await embedText(text);
   if (!vec) return;
 
+  if (
+    signature !== resolveEmbeddings().signature ||
+    text !== currentSearchText(contactId)
+  )
+    return;
   upsertSearchEmbedding(contactId, vec);
 }
 
@@ -480,4 +488,25 @@ function contactToSearchText(
   if (interests.length) parts.push(interests.join(", "));
   if (row.searchExpansion) parts.push(row.searchExpansion);
   return parts.join(" | ");
+}
+
+/** Read current source text after an asynchronous embedding call. */
+function currentSearchText(contactId: string): string | null {
+  const row = sqlite
+    .prepare(
+      `SELECT c.* FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}`,
+    )
+    .get(contactId) as SearchTextRow | undefined;
+  if (!row) return null;
+  const tags = (
+    sqlite
+      .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+      .all(contactId) as { tag: string }[]
+  ).map((t) => t.tag);
+  const interests = (
+    sqlite
+      .prepare("SELECT interest FROM contact_interests WHERE contactId = ?")
+      .all(contactId) as { interest: string }[]
+  ).map((t) => t.interest);
+  return contactToSearchText(row, tags, interests);
 }

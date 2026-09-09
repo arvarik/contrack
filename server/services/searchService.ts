@@ -20,6 +20,8 @@
 // =============================================================================
 
 import { sqlite } from "../db.ts";
+import { lexicalSearch } from "./search/lexical.ts";
+import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import { log } from "../utils/logger.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { rerankCandidates, type CompressedContact } from "../ai/aiService.ts";
@@ -86,7 +88,9 @@ function hydrateCandidates(
   // per-id hydrate() here previously cost ~13 queries per candidate.
   const placeholders = topIds.map(() => "?").join(",");
   const rows = sqlite
-    .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
+    .prepare(
+      `SELECT c.* FROM contacts c WHERE c.id IN (${placeholders}) AND ${ACTIVE_CONTACT_SQL}`,
+    )
     .all(topIds);
   const hydratedRows = contactRepo.hydrateMany(rows);
   const byId = new Map(hydratedRows.map((r) => [r.id, r]));
@@ -168,7 +172,9 @@ function hydrateAiMatches(
   const placeholders = ids.map(() => "?").join(",");
 
   const rows = sqlite
-    .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
+    .prepare(
+      `SELECT c.* FROM contacts c WHERE c.id IN (${placeholders}) AND ${ACTIVE_CONTACT_SQL}`,
+    )
     .all(ids);
   const hydratedRows = contactRepo.hydrateMany(rows);
 
@@ -193,18 +199,8 @@ export const searchService = {
    * Simple, fast, exact-match search.
    */
   searchFts(q: string) {
-    const safeQ = q.replace(/['"]/g, "");
-    const results = sqlite
-      .prepare(
-        `
-      SELECT c.* FROM contacts c
-      JOIN contacts_fts fts ON c.id = fts.contactId
-      WHERE contacts_fts MATCH ?
-      ORDER BY rank LIMIT 20
-    `,
-      )
-      .all(`"${safeQ}"*`);
-    return contactRepo.hydrateMany(results);
+    const ids = lexicalSearch(q).map((row) => row.contactId);
+    return [...hydrateCandidates(ids, 20).values()];
   },
 
   // ===========================================================================
@@ -229,9 +225,15 @@ export const searchService = {
     signal?: AbortSignal,
   ) {
     const startTime = Date.now();
+    const revision = (
+      sqlite
+        .prepare("SELECT revision FROM search_revision WHERE id = 1")
+        .get() as { revision: number }
+    ).revision;
+    const cacheKey = `${revision}:${Math.floor(startTime / 300_000)}:${query.trim().toLowerCase()}`;
 
     // ── 1. Cache check ─────────────────────────────────────────────────
-    const cached = getCachedSearch(query);
+    const cached = getCachedSearch(cacheKey);
     if (cached) {
       log.info(
         "SemanticSearch",
@@ -330,7 +332,7 @@ export const searchService = {
     // ── 5. Short-circuit: high-confidence → skip LLM ──────────────────
     if (retrieval.highConfidence) {
       // Cache the high-confidence result (no need for LLM enrichment)
-      setCachedSearch(query, { matches: phase1Matches, fallback: false });
+      setCachedSearch(cacheKey, { matches: phase1Matches, fallback: false });
       recordInvocation({
         operation: "rerank",
         latencyMs: Date.now() - startTime,
@@ -375,7 +377,7 @@ export const searchService = {
         );
 
         const result = { matches: enrichedMatches, fallback: false };
-        setCachedSearch(query, result);
+        setCachedSearch(cacheKey, result);
 
         res.write(
           JSON.stringify({
@@ -388,7 +390,7 @@ export const searchService = {
         );
       } else {
         // LLM returned 0 matches — keep Phase 1 results
-        setCachedSearch(query, { matches: phase1Matches, fallback: false });
+        setCachedSearch(cacheKey, { matches: phase1Matches, fallback: false });
       }
     } catch (aiErr: unknown) {
       log.warn(
@@ -412,9 +414,15 @@ export const searchService = {
    */
   async semanticSearch(query: string, rid: string) {
     const startTime = Date.now();
+    const revision = (
+      sqlite
+        .prepare("SELECT revision FROM search_revision WHERE id = 1")
+        .get() as { revision: number }
+    ).revision;
+    const cacheKey = `${revision}:${Math.floor(startTime / 300_000)}:${query.trim().toLowerCase()}`;
 
     // 1. Cache check
-    const cached = getCachedSearch(query);
+    const cached = getCachedSearch(cacheKey);
     if (cached) {
       log.info(
         "SemanticSearch",
@@ -456,7 +464,7 @@ export const searchService = {
         "SemanticSearch",
         `[${rid}] v3 "${query}" → ${hydratedPhase1.length} results (high confidence, skipped LLM) in ${elapsed}ms`,
       );
-      setCachedSearch(query, { matches: hydratedPhase1, fallback: false });
+      setCachedSearch(cacheKey, { matches: hydratedPhase1, fallback: false });
       recordInvocation({
         operation: "rerank",
         latencyMs: elapsed,
@@ -490,7 +498,7 @@ export const searchService = {
         );
 
         const result = { matches: enriched, fallback: false };
-        setCachedSearch(query, result);
+        setCachedSearch(cacheKey, result);
         return { ...result, cached: false };
       }
     } catch {

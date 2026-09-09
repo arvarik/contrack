@@ -1,3 +1,4 @@
+import { scheduleSearchIndex } from "../search/indexQueue.ts";
 import { sqlite, db } from "../../db.ts";
 import * as schema from "../../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -347,6 +348,7 @@ export function mergeContacts(
   });
 
   mergeTxn();
+  scheduleSearchIndex(primaryId);
   return contactRepo.hydrate(
     sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId),
   );

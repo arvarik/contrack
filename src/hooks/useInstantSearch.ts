@@ -92,8 +92,12 @@ export function useInstantSearch(
     return debouncedQuery;
   }, [debouncedQuery, enabled]);
 
-  const { data: ftsResults = [], isLoading: ftsLoading } =
-    useSearchContacts(serverQuery);
+  const {
+    data: ftsResults = [],
+    isFetching: ftsLoading,
+    isPlaceholderData,
+    isSuccess,
+  } = useSearchContacts(serverQuery);
 
   // ── 3. Apply facet post-filter on FTS results ───────────────────────────
   // FTS results are server-side; we still need to filter by any active facets
@@ -107,11 +111,15 @@ export function useInstantSearch(
   // ── 4. Handover logic ───────────────────────────────────────────────────
   // FTS results replace client results when available
   const hasActiveFts =
-    filteredFtsResults.length > 0 && debouncedQuery.trim().length > 0;
+    enabled &&
+    serverQuery.length > 0 &&
+    serverQuery === query &&
+    isSuccess &&
+    !isPlaceholderData;
   const hasClientResults = clientResults.length > 0;
 
   return {
-    results: hasActiveFts ? filteredFtsResults : clientResults,
+    results: !enabled ? [] : hasActiveFts ? filteredFtsResults : clientResults,
     isInstant: !hasActiveFts && hasClientResults,
     isFtsLoading: ftsLoading && !!debouncedQuery.trim(),
   };
