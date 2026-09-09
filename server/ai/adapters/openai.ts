@@ -245,6 +245,8 @@ export class OpenAIAdapter implements AIProvider {
     messages.push({ role: "user", content: options.prompt });
 
     const requestParams: Record<string, unknown> = { model, messages };
+    if (options.maxOutputTokens)
+      requestParams.max_completion_tokens = options.maxOutputTokens;
     if (options.responseFormat === "json" && options.jsonSchema) {
       requestParams.response_format = this.translateSchema(options.jsonSchema);
     } else if (options.responseFormat === "json") {
@@ -307,6 +309,8 @@ export class OpenAIAdapter implements AIProvider {
       }>;
       usage?: { total_tokens?: number };
     }
+    if (options.maxOutputTokens)
+      requestParams.max_output_tokens = options.maxOutputTokens;
     const response = (await this.client.responses.create(
       requestParams as unknown as Parameters<
         typeof this.client.responses.create

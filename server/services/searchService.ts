@@ -1,25 +1,4 @@
 import { matchesFacet, type FacetFilter } from "../../shared/searchFacets.ts";
-// =============================================================================
-// Search Service — Ask Contrack v3 "Spotlight" Pipeline Orchestrator
-// =============================================================================
-// Orchestrates the full Ask Contrack search pipeline with two-phase delivery:
-//
-//   Cache → Pre-Filter → Hybrid Retrieval → Hydrate → Deliver Phase 1 (instant)
-//                                                    → LLM Rerank → Deliver Phase 2 (async enriched)
-//
-// v3 "Spotlight" Architecture:
-// - Phase 1 renders results to the user in <15ms (zero API calls)
-// - Phase 2 streams AI reasons back asynchronously (~500ms later)
-// - Short-circuit bypass: skip LLM for high-confidence keyword matches
-// - SQL pre-filters via chrono-node, not parallel RRF channel
-// - Local embeddings via Transformers.js, not Gemini API
-//
-// Graceful degradation at each stage:
-// - Local model not loaded → skip vector channel, use FTS5 only
-// - LLM reranking fails   → keep Phase 1 results (no AI reasons)
-// - Everything fails       → FTS5 keyword fallback
-// =============================================================================
-
 import { sqlite } from "../db.ts";
 import { lexicalSearch } from "./search/lexical.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
@@ -27,13 +6,11 @@ import { log } from "../utils/logger.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { rerankCandidates, type CompressedContact } from "../ai/aiService.ts";
 import { getCachedSearch, setCachedSearch } from "../utils/aiCache.ts";
-import {
-  hybridRetrieval,
-  type RetrievalResult,
-} from "./search/hybridRetrieval.ts";
+import { hybridRetrieval } from "./search/hybridRetrieval.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
-import { recordInvocation } from "./aiStatsService.ts";
+import { resolveCapability } from "../ai/capabilities.ts";
+import { withTimeout } from "../ai/resilience.ts";
 
 // =============================================================================
 // Constants
@@ -111,83 +88,163 @@ function hydrateCandidates(
  * Strips heavy fields (avatar, timestamps, child arrays) to minimize token usage.
  */
 function buildCompressedCandidates(
-  candidateIds: string[],
-  limit: number,
+  matches: HydratedMatch[],
 ): CompressedContact[] {
-  const tagsStmt = sqlite.prepare(
-    "SELECT tag FROM contact_tags WHERE contactId = ?",
-  );
-  const interestsStmt = sqlite.prepare(
-    "SELECT interest FROM contact_interests WHERE contactId = ?",
-  );
-
   const compressed: CompressedContact[] = [];
-
-  for (const id of candidateIds.slice(0, limit)) {
-    const row = sqlite
-      .prepare(
-        "SELECT id, name, role, company, location, about, industry, preferences FROM contacts WHERE id = ?",
-      )
-      .get(id) as
-      | {
-          id: string;
-          name: string;
-          role: string | null;
-          company: string | null;
-          location: string | null;
-          about: string | null;
-          industry: string | null;
-          preferences: string | null;
-        }
-      | undefined;
-    if (!row) continue;
-
-    const tags = (tagsStmt.all(id) as { tag: string }[]).map((t) => t.tag);
-    const interests = (interestsStmt.all(id) as { interest: string }[]).map(
-      (t) => t.interest,
-    );
-
-    const entry: CompressedContact = { id: row.id, name: row.name };
-    if (row.role) entry.role = row.role;
-    if (row.company) entry.company = row.company;
-    if (row.location) entry.location = row.location;
-    if (row.about) entry.about = row.about;
-    if (row.industry) entry.industry = row.industry;
-    if (row.preferences) entry.preferences = row.preferences;
-    if (tags.length || interests.length)
-      entry.interests = [...tags, ...interests].join(", ");
+  let size = 2;
+  for (const match of matches.slice(0, RERANKER_LIMIT)) {
+    const entry: CompressedContact = {
+      id: match.id,
+      name: match.name.slice(0, 160),
+    };
+    for (const field of [
+      "headline",
+      "role",
+      "company",
+      "location",
+      "about",
+      "industry",
+      "preferences",
+    ] as const) {
+      if (typeof match[field] === "string")
+        entry[field] = match[field].slice(0, field === "about" ? 500 : 200);
+    }
+    const tags = Array.isArray(match.tags) ? match.tags : [];
+    const interests = Array.isArray(match.interests) ? match.interests : [];
+    entry.interests = [
+      ...tags.map((t) => t.tag),
+      ...interests.map((t) => t.interest),
+    ]
+      .filter((v) => typeof v === "string")
+      .join(", ")
+      .slice(0, 400);
+    const bytes = JSON.stringify(entry).length + 1;
+    if (size + bytes > 23_000) break;
     compressed.push(entry);
+    size += bytes;
   }
-
   return compressed;
 }
 
-/**
- * Hydrate AI reranker results into full contact objects with AI reasons.
- */
-function hydrateAiMatches(
-  aiMatches: { contact_id: string; reason: string }[],
-): HydratedMatch[] {
-  if (!aiMatches.length) return [];
-  const ids = aiMatches.map((m) => m.contact_id);
-  const placeholders = ids.map(() => "?").join(",");
+function searchRevision(): number {
+  return (
+    sqlite.prepare("SELECT revision FROM search_revision WHERE id=1").get() as {
+      revision: number;
+    }
+  ).revision;
+}
 
-  const rows = sqlite
-    .prepare(
-      `SELECT c.* FROM contacts c WHERE c.id IN (${placeholders}) AND ${ACTIVE_CONTACT_SQL}`,
-    )
-    .all(ids);
-  const hydratedRows = contactRepo.hydrateMany(rows);
+interface SearchResult {
+  matches: HydratedMatch[];
+  fallback: boolean;
+  cached?: boolean;
+}
+interface SearchChunk extends SearchResult {
+  phase: "instant" | "complete";
+  latencyMs?: number;
+}
 
-  const hydratedMap = new Map(hydratedRows.map((r) => [r.id, r]));
-
-  return aiMatches
-    .map((m) => {
-      const fullContact = hydratedMap.get(m.contact_id);
-      if (!fullContact) return null;
-      return { ...fullContact, aiReason: m.reason };
+/** A short name prefix can use the local index without an AI generation. */
+function isNameLookup(query: string, matches: HydratedMatch[]): boolean {
+  const tokens = query.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return (
+    matches.length > 0 &&
+    tokens.length > 0 &&
+    tokens.length <= 3 &&
+    matches.every((match) => {
+      const names =
+        match.name.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+      return tokens.every((token) =>
+        names.some((name) => name.startsWith(token)),
+      );
     })
-    .filter(Boolean) as HydratedMatch[];
+  );
+}
+
+/** One pipeline supplies both streaming and JSON callers. */
+async function runSearch(
+  query: string,
+  rid: string,
+  emit?: (chunk: SearchChunk) => void,
+  signal?: AbortSignal,
+): Promise<SearchResult> {
+  signal?.throwIfAborted();
+  const start = Date.now();
+  const revision = searchRevision();
+  const capability = resolveCapability("quick");
+  const cacheKey = `${revision}:${Math.floor(start / 300_000)}:${capability?.providerId}:${capability?.model}:${query.trim().toLowerCase()}`;
+  const cached = getCachedSearch(cacheKey);
+  if (cached)
+    return {
+      ...cached,
+      matches: cached.matches as HydratedMatch[],
+      cached: true,
+    };
+  const keyword = searchService.searchFts(query);
+  if (isNameLookup(query, keyword)) {
+    const result = { matches: keyword, fallback: false };
+    setCachedSearch(cacheKey, result);
+    return result;
+  }
+  emit?.({
+    phase: "instant",
+    matches: keyword,
+    fallback: true,
+    latencyMs: Date.now() - start,
+  });
+  let result: SearchResult;
+  try {
+    result = await withTimeout(
+      async (budget) => {
+        const retrieval = await hybridRetrieval(query, rid, budget);
+        budget.throwIfAborted();
+        if (!retrieval.candidates.length)
+          return { matches: [], fallback: false };
+        const candidates = [
+          ...hydrateCandidates(
+            retrieval.candidates.map((c) => c.contactId),
+            PHASE1_LIMIT,
+          ).values(),
+        ];
+        const verified = await rerankCandidates(
+          query,
+          buildCompressedCandidates(candidates),
+          retrieval.plan,
+          budget,
+        );
+        budget.throwIfAborted();
+        const allowed = new Set(candidates.map((c) => c.id));
+        const fresh = hydrateCandidates(
+          verified
+            .filter((match) => allowed.has(match.contact_id))
+            .map((match) => match.contact_id),
+          PHASE1_LIMIT,
+        );
+        return {
+          matches: verified.flatMap((match) => {
+            const contact = fresh.get(match.contact_id);
+            return contact ? [{ ...contact, aiReason: match.reason }] : [];
+          }),
+          fallback: false,
+        };
+      },
+      12_000,
+      signal,
+    );
+  } catch (error) {
+    signal?.throwIfAborted();
+    log.warn(
+      "SemanticSearch",
+      `[${rid}] AI refinement unavailable: ${getErrorMessage(error)}`,
+    );
+    result = { matches: searchService.searchFts(query), fallback: true };
+  }
+  signal?.throwIfAborted();
+  // A concurrent edit invalidates all evidence gathered before that edit.
+  if (searchRevision() !== revision)
+    return { matches: searchService.searchFts(query), fallback: true };
+  if (!result.fallback) setCachedSearch(cacheKey, result);
+  return result;
 }
 
 // =============================================================================
@@ -232,319 +289,40 @@ export const searchService = {
     return [...hydrateCandidates(ids, 20).values()];
   },
 
-  // ===========================================================================
-  // Ask Contrack v3 — Two-Phase Streaming Pipeline
-  // ===========================================================================
-
-  /**
-   * Execute the full search pipeline and stream results in two phases:
-   *
-   * Phase 1 (instant, <15ms):
-   *   Hybrid retrieval + hydration → send immediately (top 30 candidates)
-   *
-   * Phase 2 (async, ~500ms, optional):
-   *   LLM reranks top candidates → stream enriched results
-   *
-   * Uses NDJSON (newline-delimited JSON) for streaming.
-   */
+  /** Stream local candidates, then one terminal result. Never write after disconnect. */
   async semanticSearchStream(
     query: string,
     rid: string,
     res: Response,
     signal?: AbortSignal,
   ) {
-    const startTime = Date.now();
-    const revision = (
-      sqlite
-        .prepare("SELECT revision FROM search_revision WHERE id = 1")
-        .get() as { revision: number }
-    ).revision;
-    const cacheKey = `${revision}:${Math.floor(startTime / 300_000)}:${query.trim().toLowerCase()}`;
-
-    // ── 1. Cache check ─────────────────────────────────────────────────
-    const cached = getCachedSearch(cacheKey);
-    if (cached) {
-      log.info(
-        "SemanticSearch",
-        `[${rid}] Cache HIT for "${query.trim().slice(0, 60)}" (${Date.now() - startTime}ms)`,
-      );
-      recordInvocation({
-        operation: "rerank",
-        latencyMs: Date.now() - startTime,
-        cached: true,
-        description: `Rerank cache hit: "${query.slice(0, 40)}"`,
-      });
-      res.write(
-        JSON.stringify({
-          phase: "complete",
-          matches: cached.matches,
-          fallback: cached.fallback,
-          cached: true,
-          latencyMs: Date.now() - startTime,
-        }) + "\n",
-      );
-      res.end();
-      return;
-    }
-
-    // ── 2. Hybrid retrieval (Stage 1) ──────────────────────────────────
-    let retrieval: RetrievalResult;
+    const send = (chunk: SearchChunk) => {
+      if (!signal?.aborted && !res.destroyed && !res.writableEnded)
+        res.write(JSON.stringify(chunk) + "\n");
+    };
     try {
-      retrieval = await hybridRetrieval(query, rid);
-    } catch (err: unknown) {
-      log.error(
-        "SemanticSearch",
-        `[${rid}] Hybrid retrieval failed: ${getErrorMessage(err)}`,
-      );
-      res.write(
-        JSON.stringify({
-          phase: "complete",
-          matches: [],
-          fallback: true,
-          cached: false,
-          latencyMs: Date.now() - startTime,
-        }) + "\n",
-      );
-      res.end();
-      return;
-    }
-
-    if (retrieval.candidates.length === 0) {
-      const elapsed = Date.now() - startTime;
-      log.info(
-        "SemanticSearch",
-        `[${rid}] "${query}" → 0 candidates in ${elapsed}ms`,
-      );
-      res.write(
-        JSON.stringify({
-          phase: "complete",
-          matches: [],
-          fallback: false,
-          cached: false,
-          latencyMs: elapsed,
-        }) + "\n",
-      );
-      res.end();
-      return;
-    }
-
-    // ── 3. Hydrate top candidates ──────────────────────────────────────
-    const candidateIds = retrieval.candidates.map((c) => c.contactId);
-    const hydratedMap = hydrateCandidates(candidateIds, PHASE1_LIMIT);
-
-    // ── 4. Phase 1 (instant) — Send hydrated results immediately ──────
-    const phase1Matches = candidateIds
-      .slice(0, PHASE1_LIMIT)
-      .filter((id) => hydratedMap.has(id))
-      .map((id) => hydratedMap.get(id));
-
-    const phase1Elapsed = Date.now() - startTime;
-
-    res.write(
-      JSON.stringify({
-        phase: "instant",
-        matches: phase1Matches,
-        fallback: false,
-        cached: false,
-        candidateCount: retrieval.candidates.length,
-        highConfidence: retrieval.highConfidence,
-        latencyMs: phase1Elapsed,
-      }) + "\n",
-    );
-
-    log.info(
-      "SemanticSearch",
-      `[${rid}] Phase 1: "${query.slice(0, 50)}" → ${phase1Matches.length} results in ${phase1Elapsed}ms` +
-        (retrieval.highConfidence ? " [HIGH CONFIDENCE — skipping LLM]" : ""),
-    );
-
-    // ── 5. Short-circuit: high-confidence → skip LLM ──────────────────
-    if (retrieval.highConfidence) {
-      // Cache the high-confidence result (no need for LLM enrichment)
-      setCachedSearch(cacheKey, { matches: phase1Matches, fallback: false });
-      recordInvocation({
-        operation: "rerank",
-        latencyMs: Date.now() - startTime,
-        cached: false,
-        description: `Search: High-confidence short-circuit (skipped LLM) for "${query.slice(0, 40)}"`,
-      });
-      res.write(
-        JSON.stringify({
-          phase: "complete",
-          matches: phase1Matches,
-          fallback: false,
-          cached: false,
-          skippedLlm: true,
-          latencyMs: Date.now() - startTime,
-        }) + "\n",
-      );
-      res.end();
-      return;
-    }
-
-    // ── 6. Phase 2 (async) — LLM verification + rerank ─────────────────
-    const compressedCandidates = buildCompressedCandidates(
-      candidateIds,
-      RERANKER_LIMIT,
-    );
-
-    try {
-      const aiMatches = await rerankCandidates(
-        query.trim(),
-        compressedCandidates,
-        retrieval.plan,
-        signal,
-      );
-
-      if (aiMatches.length > 0) {
-        const enrichedMatches = hydrateAiMatches(aiMatches);
-
-        const totalElapsed = Date.now() - startTime;
-        log.info(
-          "SemanticSearch",
-          `[${rid}] Phase 2: "${query.slice(0, 50)}" → ${enrichedMatches.length} AI-enriched results in ${totalElapsed}ms`,
-        );
-
-        const result = { matches: enrichedMatches, fallback: false };
-        setCachedSearch(cacheKey, result);
-
+      const result = await runSearch(query, rid, send, signal);
+      send({ phase: "complete", ...result });
+    } catch (error) {
+      if (!signal?.aborted && !res.destroyed && !res.writableEnded)
         res.write(
           JSON.stringify({
-            phase: "enriched",
-            matches: enrichedMatches,
-            fallback: false,
-            cached: false,
-            latencyMs: totalElapsed,
+            phase: "error",
+            error: "Search failed. Please try again.",
+            requestId: rid,
           }) + "\n",
         );
-      } else {
-        // LLM returned 0 matches — keep Phase 1 results
-        setCachedSearch(cacheKey, { matches: phase1Matches, fallback: false });
-      }
-    } catch (aiErr: unknown) {
       log.warn(
         "SemanticSearch",
-        `[${rid}] LLM reranker failed (${getErrorMessage(aiErr)}), keeping Phase 1 results`,
+        `[${rid}] Search stopped: ${getErrorMessage(error)}`,
       );
-      // Phase 1 results are already sent — no action needed
+    } finally {
+      if (!res.destroyed && !res.writableEnded) res.end();
     }
-
-    res.end();
   },
 
-  // ===========================================================================
-  // Non-streaming fallback (for tests or simple clients)
-  // ===========================================================================
-
-  /**
-   * Ask Contrack v3 — non-streaming version.
-   * Returns a single response after full pipeline completion.
-   * Used by backward-compat clients or test harness.
-   */
-  async semanticSearch(query: string, rid: string) {
-    const startTime = Date.now();
-    const revision = (
-      sqlite
-        .prepare("SELECT revision FROM search_revision WHERE id = 1")
-        .get() as { revision: number }
-    ).revision;
-    const cacheKey = `${revision}:${Math.floor(startTime / 300_000)}:${query.trim().toLowerCase()}`;
-
-    // 1. Cache check
-    const cached = getCachedSearch(cacheKey);
-    if (cached) {
-      log.info(
-        "SemanticSearch",
-        `[${rid}] Cache HIT for "${query.trim().slice(0, 60)}" (${Date.now() - startTime}ms)`,
-      );
-      recordInvocation({
-        operation: "rerank",
-        latencyMs: Date.now() - startTime,
-        cached: true,
-        description: `Rerank cache hit: "${query.slice(0, 40)}"`,
-      });
-      return { ...cached, cached: true };
-    }
-
-    // 2. Hybrid retrieval
-    const retrieval = await hybridRetrieval(query, rid);
-
-    if (retrieval.candidates.length === 0) {
-      const elapsed = Date.now() - startTime;
-      log.info(
-        "SemanticSearch",
-        `[${rid}] "${query}" → 0 candidates in ${elapsed}ms`,
-      );
-      return { matches: [], fallback: false, cached: false };
-    }
-
-    // 3. Hydrate candidates
-    const candidateIds = retrieval.candidates.map((c) => c.contactId);
-    const hydratedMap = hydrateCandidates(candidateIds, PHASE1_LIMIT);
-    const hydratedPhase1 = candidateIds
-      .slice(0, PHASE1_LIMIT)
-      .map((id) => hydratedMap.get(id))
-      .filter(Boolean);
-
-    // 4. Short-circuit if high confidence
-    if (retrieval.highConfidence) {
-      const elapsed = Date.now() - startTime;
-      log.info(
-        "SemanticSearch",
-        `[${rid}] v3 "${query}" → ${hydratedPhase1.length} results (high confidence, skipped LLM) in ${elapsed}ms`,
-      );
-      setCachedSearch(cacheKey, { matches: hydratedPhase1, fallback: false });
-      recordInvocation({
-        operation: "rerank",
-        latencyMs: elapsed,
-        cached: false,
-        description: `Search: High-confidence short-circuit (skipped LLM) for "${query.slice(0, 40)}"`,
-      });
-      return { matches: hydratedPhase1, fallback: false, cached: false };
-    }
-
-    // 5. LLM verify + rerank
-    const compressedCandidates = buildCompressedCandidates(
-      candidateIds,
-      RERANKER_LIMIT,
-    );
-
-    let fallback = false;
-    try {
-      const aiMatches = await rerankCandidates(
-        query.trim(),
-        compressedCandidates,
-        retrieval.plan,
-      );
-
-      if (aiMatches.length > 0) {
-        const enriched = hydrateAiMatches(aiMatches);
-
-        const elapsed = Date.now() - startTime;
-        log.info(
-          "SemanticSearch",
-          `[${rid}] v3 "${query}" → ${enriched.length} AI matches in ${elapsed}ms — caching`,
-        );
-
-        const result = { matches: enriched, fallback: false };
-        setCachedSearch(cacheKey, result);
-        return { ...result, cached: false };
-      }
-    } catch {
-      log.warn(
-        "SemanticSearch",
-        `[${rid}] LLM reranker failed, returning Stage 1 results`,
-      );
-      fallback = true;
-    }
-
-    // Fallback: return Phase 1 results
-    if (fallback) {
-      const capped = hydratedPhase1.slice(0, 15);
-      return { matches: capped, fallback: true, cached: false };
-    }
-
-    // LLM returned 0 matches from candidates
-    return { matches: [], fallback: false, cached: false };
+  /** Return the same final result as the streaming endpoint. */
+  semanticSearch(query: string, rid: string, signal?: AbortSignal) {
+    return runSearch(query, rid, undefined, signal);
   },
 };

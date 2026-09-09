@@ -131,33 +131,37 @@ export async function withTimeout<T>(
   timeoutMs: number,
   parentSignal?: AbortSignal,
 ): Promise<T> {
+  parentSignal?.throwIfAborted();
   const controller = new AbortController();
-  let timedOut = false;
-
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-
-  const onParentAbort = () => controller.abort();
-  if (parentSignal) {
-    if (parentSignal.aborted) controller.abort();
-    else parentSignal.addEventListener("abort", onParentAbort, { once: true });
-  }
-
+  let rejectAbort!: (reason: unknown) => void;
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  const abort = (reason: unknown) => {
+    rejectAbort(reason);
+    controller.abort(reason);
+  };
+  const timer = setTimeout(
+    () =>
+      abort(
+        new UpstreamTimeoutError(`AI call exceeded ${timeoutMs}ms timeout`),
+      ),
+    timeoutMs,
+  );
+  const onParentAbort = () =>
+    abort(parentSignal?.reason ?? new DOMException("Aborted", "AbortError"));
+  parentSignal?.addEventListener("abort", onParentAbort, { once: true });
   try {
-    return await op(controller.signal);
-  } catch (err) {
-    if (timedOut) {
-      throw new UpstreamTimeoutError(
-        `AI call exceeded ${timeoutMs}ms timeout`,
-        { cause: (err as Error)?.message },
-      );
-    }
-    throw err;
+    return await Promise.race([
+      Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        return op(controller.signal);
+      }),
+      aborted,
+    ]);
   } finally {
     clearTimeout(timer);
-    if (parentSignal) parentSignal.removeEventListener("abort", onParentAbort);
+    parentSignal?.removeEventListener("abort", onParentAbort);
   }
 }
 

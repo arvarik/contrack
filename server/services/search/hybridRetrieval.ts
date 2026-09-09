@@ -1,44 +1,6 @@
-// =============================================================================
-// Hybrid Retrieval Engine v5 — "Plan → Filter → Rank → Verify"
-// =============================================================================
-// The retrieval backbone of "Ask Contrack" and the command palette AI mode.
-// Designed for sub-1s latency on a ~960 contact local-first CRM.
-//
-// v5 changes (Plan/Verify architecture):
-// - The LLM query planner emits a QueryPlan with `must` (hard) and `should`
-//   (soft) buckets. `must.*Matchers` arrays are applied as HARD pre-filters
-//   via word-boundary substring matching against the relevant contact field
-//   BEFORE FTS5/vector run. This is the architectural fix for false
-//   positives like "Sydney" surfacing on "Who lives in America?".
-// - The QueryPlan is returned in RetrievalResult so the reranker can
-//   verify per-filter and the synthesizer can ground its claims.
-// - `should.traits` remains a soft RRF boost channel (descriptive intent).
-// - When AI is unavailable OR the planner reports low confidence, we run
-//   pure hybrid search (FTS + HyDE-vector) without hard filters — the
-//   pipeline still produces results.
-// - Removed the legacy regex `extractPreFilters` soft boost — the planner
-//   subsumes it. Regex is no longer in the hot path.
-//
-// Carried over:
-// - Local embeddings via Transformers.js (zero embed-side API dependency)
-// - HyDE-expanded query for vector channel
-// - RRF k=15 for sharper discrimination on small datasets
-// - Weighted BM25 for column-priority FTS5 scoring
-// - High-confidence FTS short-circuit (skip LLM rerank for exact matches)
-//
-// Pipeline:
-//   1. Parallel LLM augmentation (parseSearchQuery → QueryPlan,
-//      expandQueryForEmbedding → HyDE doc)
-//   2. Build the candidate corpus:
-//        - if plan has hard filters AND confidence != low:
-//            JS-side word-boundary filter on relevant columns → Set<id>
-//        - else: null (= no pre-filter, full corpus)
-//   3. FTS5 weighted search (within filtered corpus, raw query)
-//   4. Vector KNN of HyDE-expanded query (within filtered corpus)
-//   5. should.traits soft boost channels (only over the filtered corpus)
-//   6. RRF fusion (k=15) over all channels
-//   7. Confidence signal → decides if LLM reranker is needed downstream
-// =============================================================================
+// Hybrid retrieval applies a bounded AI query plan, then combines local
+// keyword and vector rankings. SearchService sends local results before this
+// stage starts. Every semantic result still requires verified field evidence.
 
 import { sqlite } from "../../db.ts";
 import { lexicalSearch } from "./lexical.ts";
@@ -51,10 +13,7 @@ import {
   getSearchEmbeddingCount,
 } from "./localEmbeddings.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import {
-  parseSearchQuery,
-  expandQueryForEmbedding,
-} from "../../ai/aiService.ts";
+import { parseSearchQuery } from "../../ai/aiService.ts";
 import type { QueryPlan } from "../../ai/types.ts";
 
 // =============================================================================
@@ -71,7 +30,7 @@ export interface RetrievalCandidate {
 
 export interface RetrievalResult {
   candidates: RetrievalCandidate[];
-  /** If true, FTS5 returned high-confidence exact matches — skip LLM reranker */
+  /** Semantic candidates require downstream evidence verification. */
   highConfidence: boolean;
   /** Pre-filter summary for logs and debug UI. */
   preFilterSummary: string;
@@ -106,13 +65,6 @@ const FTS_LIMIT = 100;
 
 /** Max vector neighbors */
 const VECTOR_LIMIT = 100;
-
-/**
- * High-confidence threshold: if ≥ this fraction of candidates came from
- * the FTS5 channel, the query is likely a keyword/exact match
- * and we can skip the LLM reranker.
- */
-const HIGH_CONFIDENCE_FTS_RATIO = 0.85;
 
 /** Limit per soft boost channel — keeps RRF math bounded. */
 const BOOST_LIMIT = 50;
@@ -423,35 +375,17 @@ export function reciprocalRankFusion(
 // Main Entry Point
 // =============================================================================
 
-/**
- * Run the v5 hybrid retrieval pipeline.
- *
- * 1. Parallel LLM augmentation:
- *      a. parseSearchQuery   → QueryPlan  (~150-300ms, cached 24h)
- *      b. expandQueryForEmbedding → HyDE doc (~150-300ms, cached 24h)
- *    Both gracefully degrade — pipeline still runs without them.
- *
- * 2. Hard pre-filter: QueryPlan.must.*Matchers applied JS-side via
- *    word-boundary regex. Empty result set short-circuits the search.
- *
- * 3. FTS5 weighted BM25 within the filtered corpus.
- * 4. Local vector KNN of HyDE-expanded query within the filtered corpus.
- * 5. should.traits soft boost channels within the filtered corpus.
- * 6. RRF fusion (k=15).
- * 7. High-confidence detection for downstream LLM rerank decision.
- *
- * Total: ~300-600ms with AI (cache cold), ~10-30ms cached.
- */
+/** Apply hard filters before keyword/vector limits, then fuse ranked candidates. */
 export async function hybridRetrieval(
   query: string,
   rid: string,
+  signal?: AbortSignal,
 ): Promise<RetrievalResult> {
   const t0 = Date.now();
 
-  const [plan, hypoDoc] = await Promise.all([
-    parseSearchQuery(query),
-    expandQueryForEmbedding(query),
-  ]);
+  signal?.throwIfAborted();
+  const plan = await parseSearchQuery(query, signal);
+  signal?.throwIfAborted();
 
   // ── Phase 0: hard pre-filter ──────────────────────────────────────────
   let allowedIds: Set<string> | null = null;
@@ -479,8 +413,7 @@ export async function hybridRetrieval(
     }
   }
 
-  const embedInput = hypoDoc ?? query;
-  const usingHyde = !!hypoDoc;
+  const embedInput = [query, ...(plan?.should.traits ?? [])].join(". ");
 
   // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
   const [ftsResults, vectorResults] = await Promise.all([
@@ -489,6 +422,7 @@ export async function hybridRetrieval(
   ]);
 
   // ── Phase 1c: soft boost channels (traits) ─────────────────────────────
+  signal?.throwIfAborted();
   const traitBoosts = plan ? buildTraitBoosts(plan, allowedIds) : [];
 
   // ── Phase 2: RRF fusion across FTS + vector + trait boosts ────────────
@@ -499,23 +433,15 @@ export async function hybridRetrieval(
   ]);
 
   // ── Phase 3: confidence assessment ─────────────────────────────────────
-  // Dominant FTS = exact keyword match → LLM reranker is unnecessary.
-  // We also skip the short-circuit when hard filters are active and the
-  // result set is large enough that the rerank-as-verifier is worth doing.
-  const ftsCount = fused.filter((c) => c.channels.includes("fts")).length;
-  const highConfidence =
-    fused.length > 0 &&
-    ftsCount / fused.length >= HIGH_CONFIDENCE_FTS_RATIO &&
-    ftsResults.length >= 2 &&
-    // Hard filters mean we WANT the LLM verifier to run — don't bypass.
-    allowedIds === null;
+  // A high FTS ratio does not prove a natural-language constraint.
+  // The service uses a separate local name-prefix shortcut.
+  const highConfidence = false;
 
   const elapsed = Date.now() - t0;
   log.info(
     "HybridRetrieval",
     `[${rid}] "${query.slice(0, 60)}" → ` +
       `FTS:${ftsResults.length} + Vec:${vectorResults.length}` +
-      `${usingHyde ? "(hyde)" : "(raw)"}` +
       ` + Traits:${traitBoosts.length}ch ` +
       `→ ${fused.length} fused in ${elapsed}ms ` +
       `(plan: ${plan ? `conf=${plan.confidence}` : "none"}, ` +

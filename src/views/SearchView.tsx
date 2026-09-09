@@ -145,7 +145,7 @@ export const SearchView = () => {
 
   const results = semanticSearch.data?.matches ?? [];
   const isFallback = semanticSearch.data?.fallback ?? false;
-  const isLoading = semanticSearch.isPending && semanticSearch.phase === "idle";
+  const isLoading = semanticSearch.isPending && results.length === 0;
   const isEnriching = semanticSearch.phase === "enriching";
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
@@ -271,7 +271,11 @@ export const SearchView = () => {
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                    {isFallback ? "Keyword Results" : "AI Results"}
+                    {isFallback
+                      ? isEnriching
+                        ? "Keyword candidates"
+                        : "Keyword results"
+                      : "Search results"}
                   </span>
                   <span className="text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
                     {results.length} match{results.length !== 1 ? "es" : ""}
@@ -283,7 +287,7 @@ export const SearchView = () => {
                     <span>Enriching with AI…</span>
                   </div>
                 )}
-                {isFallback && (
+                {isFallback && !isEnriching && (
                   <div className="flex items-center gap-1.5 text-xs text-warning">
                     <AlertTriangle className="w-3 h-3 shrink-0" />
                     <span>AI unavailable — showing keyword matches</span>

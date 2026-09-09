@@ -468,14 +468,19 @@ curl -X POST http://localhost:3210/api/search/semantic \
   -d '{"query":"fintech contacts"}'
 ```
 
-Phase 1 (instant retrieval <15ms): returns matches with `aiReason: null`.
-Phase 2 (~500ms later): returns matches with AI-generated reasons.
+The `instant` event returns local keyword candidates before AI refinement.
+The `complete` event returns verified matches or explicit keyword fallback results.
+A valid empty result ends the search. AI refinement has a 12-second deadline.
+Both JSON and streaming callers use the same pipeline.
 
 ---
 
 ### `POST /api/search/synthesize`
 
 Synthesize search results into an executive brief. Streams via NDJSON.
+The body contains a query and 1 to 30 contact IDs. The server reads current, active contacts.
+It rejects missing contacts with `409` and rejects malformed input with `400`.
+It checks for concurrent edits before it returns the summary.
 
 ```bash
 curl -X POST http://localhost:3210/api/search/synthesize \

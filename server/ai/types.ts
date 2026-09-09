@@ -77,6 +77,9 @@ export interface AIGenerateOptions {
    */
   timeoutMs?: number;
 
+  /** Maximum output tokens for this generation. */
+  maxOutputTokens?: number;
+
   /**
    * Caller cancellation signal. When the signal aborts (e.g. the HTTP client
    * disconnected) the active SDK call is cancelled and no further retries
@@ -274,6 +277,7 @@ export interface MentionEntity {
  */
 export interface CompressedContact {
   id: string;
+  headline?: string;
   name: string;
   role?: string;
   company?: string;

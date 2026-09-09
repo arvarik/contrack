@@ -264,7 +264,7 @@ export class AnthropicAdapter implements AIProvider {
     const requestParams: Record<string, unknown> = {
       model,
       messages,
-      max_tokens: maxTokens,
+      max_tokens: options.maxOutputTokens ?? maxTokens,
     };
     let systemPrompt = options.systemPrompt ?? "";
     // Without a schema to constrain it, the model needs the shape in words.

@@ -90,6 +90,8 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
         responseFormat: "json",
         jsonSchema: CONTACT_SCHEMA,
         model: modelFor("gemini", "gemini-3.8-flash"),
+        maxOutputTokens: 500,
+        timeoutMs: 15_000,
       });
       expectUsableExtraction(result.text);
     },

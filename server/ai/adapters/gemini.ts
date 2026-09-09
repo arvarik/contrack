@@ -443,6 +443,8 @@ export class GeminiAdapter implements AIProvider {
     startMs: number,
   ): Promise<AIGenerateResult> {
     const config: Record<string, unknown> = {};
+    if (options.maxOutputTokens)
+      config.maxOutputTokens = options.maxOutputTokens;
 
     if (options.enableSearchGrounding) {
       // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
@@ -466,18 +468,14 @@ export class GeminiAdapter implements AIProvider {
       config.systemInstruction = options.systemPrompt;
     }
 
-    // The Gemini SDK's `generateContent` does not accept an AbortSignal
-    // option, so we wrap it in `withTimeout` (Promise.race-based). When the
-    // timer fires the SDK call is left running in the background, but
-    // `withTimeout` will throw an `UpstreamTimeoutError` which the SmartMesh
-    // retry loop (or the caller) treats as a transient failure.
+    // Forward cancellation to the SDK and bound callers even if the transport stalls.
     const timeoutMs = options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs;
     const response = await withTimeout(
-      async () =>
+      async (abortSignal) =>
         this.client.models.generateContent({
           model,
           contents: options.prompt,
-          config,
+          config: { ...config, abortSignal },
         }),
       timeoutMs,
       options.signal,
