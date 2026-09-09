@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import { getErrorMessage } from "../utils/helpers.ts";
+import { requireContact } from "../services/contactGuard.ts";
 import { Router } from "express";
 import path from "path";
 import multer from "multer";
@@ -57,6 +60,7 @@ const router = Router();
 
 router.get(
   "/contacts/:id/timeline",
+  requireContact,
   asyncHandler(async (req, res) => {
     const items = interactionService.getTimeline(String(req.params.id));
     res.json(items);
@@ -65,6 +69,7 @@ router.get(
 
 router.post(
   "/contacts/:id/interactions",
+  requireContact,
   validateBody(interactionCreateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
@@ -82,6 +87,7 @@ router.post(
 
 router.post(
   "/contacts/:id/briefing",
+  requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const points = await interactionService.generateBriefing(
@@ -99,6 +105,7 @@ router.post(
 
 router.post(
   "/contacts/:id/promote",
+  requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const updated = interactionService.promoteGhost(String(req.params.id));
@@ -111,15 +118,25 @@ router.post(
 
 router.post(
   "/contacts/:id/attachments",
+  requireContact,
   upload.single("attachment"),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     if (!req.file) throw new AppError("No file", 400);
 
-    const result = await interactionService.handleAttachment(
-      String(req.params.id),
-      req.file,
-    );
+    const result = await interactionService
+      .handleAttachment(String(req.params.id), req.file)
+      .catch(async (error) => {
+        await fs.promises
+          .unlink(req.file!.path)
+          .catch((cleanupError) =>
+            log.warn(
+              "API",
+              `Upload cleanup failed: ${getErrorMessage(cleanupError)}`,
+            ),
+          );
+        throw error;
+      });
     log.info("API", `[${rid}] POST attachment → "${req.file.originalname}"`);
     res.status(201).json(result);
   }),
@@ -156,9 +173,19 @@ router.delete(
 
 router.get(
   "/contacts/:id/relationships",
+  requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const rawLimit = req.query.limit;
+    if (
+      rawLimit !== undefined &&
+      (typeof rawLimit !== "string" ||
+        !/^\d+$/.test(rawLimit) ||
+        Number(rawLimit) < 1 ||
+        Number(rawLimit) > 200)
+    )
+      throw new AppError("limit must be an integer from 1 to 200", 400);
+    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
 
     const rows = interactionService.getRelationships(
       String(req.params.id),

@@ -1,3 +1,4 @@
+import { assertContactExists } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
 import { resolveUploadPath } from "../utils/paths.ts";
@@ -40,7 +41,7 @@ const _dedupeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const DEDUPE_DEBOUNCE_MS = 5_000;
 
 /**
- * Fields that trigger search re-indexing (Doc2Query + local search embeddings)
+ * Fields that trigger local search re-indexing
  * when mutated. Defined once to prevent updateContact and patchContact diverging.
  */
 const SEARCH_TRIGGER_FIELDS = [
@@ -108,6 +109,16 @@ function buildInsertValues(body: NewContactPayload, id: string) {
     pronouns: body.pronouns || null,
     industry: body.industry || null,
     website: body.website || null,
+    lat: body.lat ?? null,
+    lng: body.lng ?? null,
+    themeColor: body.themeColor ?? "brand",
+    isGhost: body.isGhost ? 1 : 0,
+    isArchived: body.isArchived ? 1 : 0,
+    nextFollowUpAt: body.nextFollowUpAt ?? null,
+    aiSummary: body.aiSummary ?? null,
+    aiBackground: body.aiBackground ?? null,
+    aiBriefing: body.aiBriefing ?? null,
+    aiBriefingAt: body.aiBriefingAt ?? null,
     phoneticHash: body.name ? doubleMetaphone(body.name).primary : null,
   };
 }
@@ -296,6 +307,7 @@ export const contactService = {
 
   /** Soft-delete a batch of contacts (same trash semantics as deleteContact). */
   bulkDeleteContacts(ids: string[]) {
+    let count = 0;
     aiCache.enterBatchMode();
     try {
       const now = new Date().toISOString();
@@ -303,8 +315,8 @@ export const contactService = {
         "UPDATE contacts SET deletedAt = ?, isArchived = 1 WHERE id = ? AND deletedAt IS NULL",
       );
       const deleteFn = sqlite.transaction(() => {
-        for (const id of ids) {
-          trashStmt.run(now, id);
+        for (const id of new Set(ids)) {
+          count += trashStmt.run(now, id).changes;
           purgeContactSearchArtifacts(id);
         }
       });
@@ -313,13 +325,16 @@ export const contactService = {
     } finally {
       aiCache.exitBatchMode();
     }
-    return ids.length;
+    return count;
   },
 
   bulkUpdateContacts(ids: string[], data: Record<string, unknown>) {
+    const changedIds: string[] = [];
     aiCache.enterBatchMode();
     try {
       const update = buildContactUpdate(data);
+      if (typeof data.name === "string")
+        update.phoneticHash = doubleMetaphone(data.name).primary;
       // Safety: buildContactUpdate returns only keys from a hardcoded whitelist
       // (see utils/helpers.ts). Interpolating those key names into SQL is safe
       // because no user-supplied string reaches the SET clause — only column names.
@@ -329,19 +344,23 @@ export const contactService = {
           .join(", ");
         const values = Object.values(update);
         const stmt = sqlite.prepare(
-          `UPDATE contacts SET ${setClauses} WHERE id = ?`,
+          `UPDATE contacts SET ${setClauses} WHERE id = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
-        for (const id of ids) stmt.run(...values, id);
+        for (const id of new Set(ids)) {
+          if (stmt.run(...values, id).changes) changedIds.push(id);
+        }
       });
       updateFn();
+      for (const id of changedIds) scheduleSearchIndex(id);
       invalidateAllCaches();
     } finally {
       aiCache.exitBatchMode();
     }
-    return ids.length;
+    return changedIds.length;
   },
 
   updateContact(id: string, body: ContactPayload) {
+    assertContactExists(id);
     // Recompute phoneticHash if name changed
     const updateData = buildContactUpdate(body);
     if (body.name) {
@@ -431,6 +450,7 @@ export const contactService = {
   },
 
   patchContact(id: string, body: Record<string, unknown>) {
+    assertContactExists(id);
     const update = buildContactUpdate(body);
     db.update(schema.contacts)
       .set(update)

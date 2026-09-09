@@ -1,3 +1,6 @@
+import { NotFoundError, ValidationError } from "../utils/AppError.ts";
+import { assertContactExists } from "./contactGuard.ts";
+import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
@@ -15,9 +18,10 @@ export const listService = {
     return sqlite
       .prepare(
         `
-      SELECT l.*, COUNT(lm.contactId) as memberCount
+      SELECT l.*, COUNT(c.id) as memberCount
       FROM lists l
       LEFT JOIN list_members lm ON l.id = lm.listId
+      LEFT JOIN contacts c ON c.id = lm.contactId AND ${ACTIVE_CONTACT_SQL}
       GROUP BY l.id
       ORDER BY l.sortOrder ASC, l.createdAt ASC
     `,
@@ -69,9 +73,10 @@ export const listService = {
     return sqlite
       .prepare(
         `
-      SELECT l.*, COUNT(lm.contactId) as memberCount
+      SELECT l.*, COUNT(c.id) as memberCount
       FROM lists l
       LEFT JOIN list_members lm ON l.id = lm.listId
+      LEFT JOIN contacts c ON c.id = lm.contactId AND ${ACTIVE_CONTACT_SQL}
       WHERE l.id = ?
       GROUP BY l.id
     `,
@@ -80,6 +85,16 @@ export const listService = {
   },
 
   reorderLists(orderedIds: string[]) {
+    const allIds = (
+      sqlite.prepare("SELECT id FROM lists").all() as { id: string }[]
+    ).map((row) => row.id);
+    if (
+      orderedIds.length !== allIds.length ||
+      new Set(orderedIds).size !== allIds.length ||
+      allIds.some((id) => !orderedIds.includes(id))
+    ) {
+      throw new ValidationError("Include each existing list exactly once");
+    }
     const updateStmt = sqlite.prepare(
       "UPDATE lists SET sortOrder = ? WHERE id = ?",
     );
@@ -93,12 +108,14 @@ export const listService = {
   },
 
   getListContacts(id: string) {
+    if (!sqlite.prepare("SELECT 1 FROM lists WHERE id = ?").get(id))
+      throw new NotFoundError("List", id);
     const rows = sqlite
       .prepare(
         `
       SELECT c.* FROM contacts c
       JOIN list_members lm ON c.id = lm.contactId
-      WHERE lm.listId = ?
+      WHERE lm.listId = ? AND ${ACTIVE_CONTACT_SQL}
       ORDER BY c.addedAt DESC
     `,
       )
@@ -120,12 +137,14 @@ export const listService = {
     const list = sqlite
       .prepare("SELECT id FROM lists WHERE id = ?")
       .get(listId);
-    if (!list) throw new Error("List not found");
+    if (!list) throw new NotFoundError("List", listId);
 
     const contact = sqlite
-      .prepare("SELECT id FROM contacts WHERE id = ?")
+      .prepare(
+        "SELECT id FROM contacts WHERE id = ? AND deletedAt IS NULL AND canonicalId IS NULL",
+      )
       .get(contactId);
-    if (!contact) throw new Error("Contact not found");
+    if (!contact) throw new NotFoundError("Contact", contactId);
 
     sqlite
       .prepare(
@@ -146,15 +165,19 @@ export const listService = {
     const list = sqlite
       .prepare("SELECT id FROM lists WHERE id = ?")
       .get(listId);
-    if (!list) throw new Error("List not found");
+    if (!list) throw new NotFoundError("List", listId);
 
+    let count = 0;
     const insertFn = sqlite.transaction(() => {
+      for (const contactId of new Set(contactIds))
+        assertContactExists(contactId);
       const stmt = sqlite.prepare(
         "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
       );
-      for (const contactId of contactIds) stmt.run(listId, contactId);
+      for (const contactId of new Set(contactIds))
+        count += stmt.run(listId, contactId).changes;
     });
     insertFn();
-    return contactIds.length;
+    return count;
   },
 };

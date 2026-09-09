@@ -1,3 +1,6 @@
+import type { FacetFilter } from "../../shared/searchFacets.ts";
+import { z } from "zod";
+import { ValidationError } from "../utils/AppError.ts";
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { searchService } from "../services/searchService.ts";
@@ -19,7 +22,37 @@ router.get(
     if (!q) return res.json([]);
     if (q.length > 500) throw new AppError("q must be ≤ 500 characters", 400);
 
-    const results = searchService.searchFts(q);
+    let filters: FacetFilter[] = [];
+    if (req.query.filters !== undefined) {
+      if (
+        typeof req.query.filters !== "string" ||
+        req.query.filters.length > 4000
+      )
+        throw new ValidationError("Invalid search filters");
+      try {
+        filters = z
+          .array(
+            z.object({
+              field: z.enum([
+                "role",
+                "company",
+                "location",
+                "industry",
+                "tag",
+                "score",
+                "updated",
+              ]),
+              value: z.string().trim().min(1).max(100),
+              operator: z.enum([">", "<"]).optional(),
+            }),
+          )
+          .max(8)
+          .parse(JSON.parse(req.query.filters));
+      } catch {
+        throw new ValidationError("Invalid search filters");
+      }
+    }
+    const results = searchService.searchFts(q, filters);
     log.debug(
       "API",
       `[${rid}] GET /api/search?q="${q.replace(/["']/g, "")}" → ${results.length}`,

@@ -1,3 +1,4 @@
+import { requireContact } from "../services/contactGuard.ts";
 /**
  * Action Items Router — REST API for follow-up task management.
  *
@@ -109,6 +110,7 @@ router.delete(
 
 router.get(
   "/contacts/:id/action-items",
+  requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const items = actionItemService.getByContactId(String(req.params.id));
@@ -122,6 +124,7 @@ router.get(
 
 router.post(
   "/contacts/:id/action-items",
+  requireContact,
   validateBody(actionItemCreateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;

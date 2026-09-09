@@ -47,7 +47,12 @@ export type ContactSourceRow = typeof schema.contactSources.$inferSelect;
  * - `isCurrent` on experience
  * - `isGhost`, `isArchived` on the contact itself
  */
-export interface HydratedContact extends ContactRow {
+export interface HydratedContact extends Omit<
+  ContactRow,
+  "isGhost" | "isArchived"
+> {
+  isGhost: boolean;
+  isArchived: boolean;
   emails: Array<{
     id: string;
     email: string;
@@ -136,6 +141,16 @@ export interface ContactScalarPayload {
   role?: string | null;
   company?: string | null;
   location?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  themeColor?: string | null;
+  isGhost?: boolean;
+  isArchived?: boolean;
+  nextFollowUpAt?: string | null;
+  aiSummary?: string | null;
+  aiBackground?: string | null;
+  aiBriefing?: string | null;
+  aiBriefingAt?: string | null;
   birthday?: string | null;
   preferences?: string | null;
   avatarUrl?: string | null;

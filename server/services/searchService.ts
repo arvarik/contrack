@@ -1,3 +1,4 @@
+import { matchesFacet, type FacetFilter } from "../../shared/searchFacets.ts";
 // =============================================================================
 // Search Service — Ask Contrack v3 "Spotlight" Pipeline Orchestrator
 // =============================================================================
@@ -198,8 +199,36 @@ export const searchService = {
    * FTS5 keyword search — used by the sidebar quick-search.
    * Simple, fast, exact-match search.
    */
-  searchFts(q: string) {
-    const ids = lexicalSearch(q).map((row) => row.contactId);
+  searchFts(q: string, filters: FacetFilter[] = []) {
+    let allowed: Set<string> | undefined;
+    if (filters.length) {
+      const rows = sqlite
+        .prepare(
+          `SELECT c.id, c.role, c.company, c.location, c.industry, c.relationshipScore, c.updatedAt,
+        (SELECT json_group_array(json_object('tag', tag)) FROM contact_tags WHERE contactId = c.id) AS tagsJson
+        FROM contacts c WHERE ${ACTIVE_CONTACT_SQL}`,
+        )
+        .all() as {
+        id: string;
+        role: string | null;
+        company: string | null;
+        location: string | null;
+        industry: string | null;
+        relationshipScore: number | null;
+        updatedAt: string;
+        tagsJson: string;
+      }[];
+      allowed = new Set(
+        rows
+          .filter((row) =>
+            filters.every((filter) =>
+              matchesFacet({ ...row, tags: JSON.parse(row.tagsJson) }, filter),
+            ),
+          )
+          .map((row) => row.id),
+      );
+    }
+    const ids = lexicalSearch(q, 20, allowed).map((row) => row.contactId);
     return [...hydrateCandidates(ids, 20).values()];
   },
 

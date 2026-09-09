@@ -1,3 +1,4 @@
+import { apiFetch } from "./client";
 /**
  * Enrichment API Hooks — React Query hooks for single-contact AI enrichment
  * and grounding capacity checks.
@@ -9,8 +10,6 @@
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
-const API = "/api";
 
 // =============================================================================
 // Query Keys
@@ -28,8 +27,8 @@ export const enrichmentKeys = {
 export const useGroundingCapacity = () =>
   useQuery({
     queryKey: enrichmentKeys.groundingCapacity,
-    queryFn: async () => {
-      const res = await fetch(`${API}/ai/grounding-capacity`);
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(`/ai/grounding-capacity`, { signal });
       if (!res.ok) return { hasCapacity: false, remaining: 0, limit: 0 };
       return res.json() as Promise<{
         hasCapacity: boolean;
@@ -61,7 +60,7 @@ export const useEnrichContact = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (contactId: string): Promise<EnrichResult> => {
-      const res = await fetch(`${API}/contacts/${contactId}/enrich`, {
+      const res = await apiFetch(`/contacts/${contactId}/enrich`, {
         method: "POST",
       });
       if (res.status === 429) {
@@ -79,11 +78,11 @@ export const useEnrichContact = () => {
     onSuccess: (data, contactId) => {
       // Invalidate contact data so the UI refreshes with new fields
       qc.invalidateQueries({ queryKey: ["contacts"] });
-      qc.invalidateQueries({ queryKey: ["contact", contactId] });
+      qc.invalidateQueries({ queryKey: ["contacts", contactId] });
       // Invalidate grounding capacity (we just used one)
       qc.invalidateQueries({ queryKey: enrichmentKeys.groundingCapacity });
       // Invalidate zero-state (stale data count may have changed)
-      qc.invalidateQueries({ queryKey: ["zero-state"] });
+      qc.invalidateQueries({ queryKey: ["zeroState"] });
 
       toast.success(
         data.fieldsUpdated > 0

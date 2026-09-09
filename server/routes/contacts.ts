@@ -1,3 +1,5 @@
+import { requireContact } from "../services/contactGuard.ts";
+import { idsSchema } from "../utils/validators.ts";
 import { Router } from "express";
 import multer from "multer";
 import { AVATARS_DIR, ensureDir } from "../utils/paths.ts";
@@ -44,7 +46,10 @@ import {
 } from "../services/dedupe/blocking.ts";
 import { storeSuggestion } from "../services/dedupe/suggestions.ts";
 import { computePrimaryScore } from "../services/dedupe/clustering.ts";
-import { contactRepo } from "../repositories/contactRepository.ts";
+import {
+  contactRepo,
+  RELATION_REGISTRY,
+} from "../repositories/contactRepository.ts";
 
 const avatarDir = AVATARS_DIR;
 ensureDir(avatarDir);
@@ -570,7 +575,7 @@ router.post(
 
 router.post(
   "/contacts/bulk-delete",
-  validateBody(z.object({ ids: z.array(z.string().min(1)).min(1) })),
+  validateBody(z.object({ ids: idsSchema })),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = contactService.bulkDeleteContacts(req.body.ids);
@@ -586,8 +591,14 @@ router.put(
   "/contacts/bulk-update",
   validateBody(
     z.object({
-      ids: z.array(z.string().min(1)).min(1),
-      data: contactUpdateSchema,
+      ids: idsSchema,
+      data: contactUpdateSchema.refine(
+        (data) => !Object.keys(RELATION_REGISTRY).some((key) => key in data),
+        {
+          message:
+            "Bulk edits support profile fields only. Edit contact details on each contact.",
+        },
+      ),
     }),
   ),
   asyncHandler(async (req, res) => {
@@ -673,6 +684,7 @@ router.delete(
 
 router.post(
   "/contacts/:id/avatar",
+  requireContact,
   uploadAvatar.single("avatar"),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
@@ -703,6 +715,7 @@ router.post(
  */
 router.post(
   "/contacts/:id/enrich",
+  requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const id = String(req.params.id);

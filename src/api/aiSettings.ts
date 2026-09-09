@@ -85,8 +85,8 @@ const KEY = ["ai-settings"] as const;
 export const useAISettings = () =>
   useQuery({
     queryKey: KEY,
-    queryFn: async (): Promise<AISettings> => {
-      const res = await apiFetch("/settings/ai");
+    queryFn: async ({ signal }): Promise<AISettings> => {
+      const res = await apiFetch("/settings/ai", { signal });
       return res.json();
     },
     staleTime: 30_000,
@@ -96,8 +96,10 @@ export const useAISettings = () =>
 export const useCapabilityModels = (capability: AICapability) =>
   useQuery({
     queryKey: ["ai-settings", "models", capability],
-    queryFn: async (): Promise<ModelGroup[]> => {
-      const res = await apiFetch(`/settings/ai/models/${capability}`);
+    queryFn: async ({ signal }): Promise<ModelGroup[]> => {
+      const res = await apiFetch(`/settings/ai/models/${capability}`, {
+        signal,
+      });
       const data = await res.json();
       return data.groups as ModelGroup[];
     },

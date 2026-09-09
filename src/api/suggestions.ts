@@ -1,3 +1,4 @@
+import { apiFetch } from "./client";
 /**
  * Suggestions API Hooks — React Query hooks for the persistent dedupe suggestions system.
  *
@@ -14,8 +15,6 @@
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PersistedDedupeSuggestion, MergeLogEntry } from "../types";
-
-const API = "/api";
 
 // =============================================================================
 // Query Keys
@@ -36,8 +35,8 @@ export const suggestionKeys = {
 export const useDedupeCount = () =>
   useQuery({
     queryKey: suggestionKeys.count,
-    queryFn: async () => {
-      const res = await fetch(`${API}/dedupe/suggestions/count`);
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(`/dedupe/suggestions/count`, { signal });
       if (!res.ok) return { count: 0 };
       return res.json() as Promise<{ count: number }>;
     },
@@ -49,8 +48,8 @@ export const useDedupeCount = () =>
 export const usePendingSuggestions = (enabled = true) =>
   useQuery({
     queryKey: suggestionKeys.pending,
-    queryFn: async () => {
-      const res = await fetch(`${API}/dedupe/suggestions?limit=200`);
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(`/dedupe/suggestions?limit=200`, { signal });
       if (!res.ok) throw new Error("Failed to fetch suggestions");
       const data = await res.json();
       return data.suggestions as PersistedDedupeSuggestion[];
@@ -63,8 +62,10 @@ export const usePendingSuggestions = (enabled = true) =>
 export const useSuggestionForContact = (contactId: string | undefined) =>
   useQuery({
     queryKey: suggestionKeys.forContact(contactId!),
-    queryFn: async () => {
-      const res = await fetch(`${API}/dedupe/suggestion-for/${contactId}`);
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(`/dedupe/suggestion-for/${contactId}`, {
+        signal,
+      });
       if (!res.ok) return null;
       const data = await res.json();
       return data.suggestion ?? null;
@@ -77,8 +78,8 @@ export const useSuggestionForContact = (contactId: string | undefined) =>
 export const useMergeLog = (enabled = true) =>
   useQuery({
     queryKey: suggestionKeys.mergeLog,
-    queryFn: async () => {
-      const res = await fetch(`${API}/dedupe/merge-log?limit=100`);
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(`/dedupe/merge-log?limit=100`, { signal });
       if (!res.ok) throw new Error("Failed to fetch merge log");
       const data = await res.json();
       return data.entries as MergeLogEntry[];
@@ -102,14 +103,11 @@ export const useMergeSuggestion = () => {
       suggestionId: string;
       primaryId: string;
     }) => {
-      const res = await fetch(
-        `${API}/dedupe/suggestions/${suggestionId}/merge`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ primaryId }),
-        },
-      );
+      const res = await apiFetch(`/dedupe/suggestions/${suggestionId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryId }),
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "Merge failed");
@@ -130,8 +128,8 @@ export const useDismissSuggestion = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (suggestionId: string) => {
-      const res = await fetch(
-        `${API}/dedupe/suggestions/${suggestionId}/dismiss`,
+      const res = await apiFetch(
+        `/dedupe/suggestions/${suggestionId}/dismiss`,
         {
           method: "POST",
         },
@@ -154,7 +152,7 @@ export const useUndoMerge = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (mergeLogId: string) => {
-      const res = await fetch(`${API}/dedupe/merge-log/${mergeLogId}/undo`, {
+      const res = await apiFetch(`/dedupe/merge-log/${mergeLogId}/undo`, {
         method: "POST",
       });
       if (!res.ok) {

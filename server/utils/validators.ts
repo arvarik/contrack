@@ -7,12 +7,26 @@ import { ValidationError } from "./AppError.ts";
 // ============================================================================
 
 const stringToBool = z
-  .union([z.boolean(), z.string()])
+  .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
   .transform((val) => {
     if (typeof val === "boolean") return val;
     return val === "true" || val === "1";
   })
   .optional();
+
+/** Accept a valid calendar date or ISO timestamp. Normalize timestamps to UTC. */
+export const dateSchema = z
+  .union([z.iso.date(), z.iso.datetime({ offset: true, local: true })])
+  .transform((value) =>
+    value.length === 10 ? value : new Date(value).toISOString(),
+  );
+
+/** Validate a bounded ID list and remove duplicate IDs before writes. */
+export const idsSchema = z
+  .array(z.string().trim().min(1).max(200))
+  .min(1)
+  .max(5000)
+  .transform((ids) => [...new Set(ids)]);
 
 // ============================================================================
 // Child Records Schemas
@@ -21,7 +35,7 @@ const stringToBool = z
 export const emailSchema = z.union([
   z.string(),
   z.object({
-    email: z.string().email().or(z.string().min(1)),
+    email: z.string().email().or(z.string().trim().min(1)),
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),
@@ -30,7 +44,7 @@ export const emailSchema = z.union([
 export const phoneSchema = z.union([
   z.string(),
   z.object({
-    phone: z.string().min(1),
+    phone: z.string().trim().min(1),
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),
@@ -39,7 +53,7 @@ export const phoneSchema = z.union([
 export const addressSchema = z.union([
   z.string(),
   z.object({
-    address: z.string().min(1),
+    address: z.string().trim().min(1),
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),
@@ -48,14 +62,14 @@ export const addressSchema = z.union([
 export const socialLinkSchema = z.union([
   z.string(),
   z.object({
-    url: z.string().url().or(z.string().min(1)),
+    url: z.string().url().or(z.string().trim().min(1)),
     platform: z.string().nullable().optional(),
     handle: z.string().nullable().optional(),
   }),
 ]);
 
 export const educationSchema = z.object({
-  school: z.string().min(1),
+  school: z.string().trim().min(1),
   degree: z.string().nullable().optional(),
   fieldOfStudy: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
@@ -64,7 +78,7 @@ export const educationSchema = z.object({
 });
 
 export const experienceSchema = z.object({
-  company: z.string().min(1),
+  company: z.string().trim().min(1),
   role: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
@@ -76,7 +90,7 @@ export const experienceSchema = z.object({
 export const sourceSchema = z.union([
   z.string(),
   z.object({
-    platform: z.string().min(1),
+    platform: z.string().trim().min(1),
     externalId: z.string().nullable().optional(),
     connectedOn: z.string().nullable().optional(),
     rawData: z.string().nullable().optional(),
@@ -85,33 +99,33 @@ export const sourceSchema = z.union([
 
 export const tagSchema = z.union([
   z.string(),
-  z.object({ tag: z.string().min(1) }),
+  z.object({ tag: z.string().trim().min(1) }),
 ]);
 
 export const interestSchema = z.union([
   z.string(),
   z.object({
-    interest: z.string().min(1),
+    interest: z.string().trim().min(1),
     isAiGenerated: stringToBool,
   }),
 ]);
 
 export const attributeSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
   value: z.string(),
 });
 
 export const childRecordsSchema = z.object({
-  emails: z.array(emailSchema).optional(),
-  phones: z.array(phoneSchema).optional(),
-  addresses: z.array(addressSchema).optional(),
-  socialLinks: z.array(socialLinkSchema).optional(),
-  education: z.array(educationSchema).optional(),
-  experience: z.array(experienceSchema).optional(),
-  sources: z.array(sourceSchema).optional(),
-  tags: z.array(tagSchema).optional(),
-  interests: z.array(interestSchema).optional(),
-  attributes: z.array(attributeSchema).optional(),
+  emails: z.array(emailSchema).max(100).optional(),
+  phones: z.array(phoneSchema).max(100).optional(),
+  addresses: z.array(addressSchema).max(100).optional(),
+  socialLinks: z.array(socialLinkSchema).max(100).optional(),
+  education: z.array(educationSchema).max(100).optional(),
+  experience: z.array(experienceSchema).max(100).optional(),
+  sources: z.array(sourceSchema).max(100).optional(),
+  tags: z.array(tagSchema).max(100).optional(),
+  interests: z.array(interestSchema).max(100).optional(),
+  attributes: z.array(attributeSchema).max(100).optional(),
 });
 
 // ============================================================================
@@ -121,15 +135,15 @@ export const childRecordsSchema = z.object({
 /** Payload for POST /contacts (Contact creation) */
 export const contactCreateSchema = z
   .object({
-    name: z.string().min(1, "Name is required"),
+    name: z.string().trim().min(1, "Name is required").max(300),
     firstName: z.string().nullable().optional(),
     lastName: z.string().nullable().optional(),
     headline: z.string().nullable().optional(),
     role: z.string().nullable().optional(),
     company: z.string().nullable().optional(),
     location: z.string().nullable().optional(),
-    lat: z.number().nullable().optional(),
-    lng: z.number().nullable().optional(),
+    lat: z.number().min(-90).max(90).nullable().optional(),
+    lng: z.number().min(-180).max(180).nullable().optional(),
     industry: z.string().nullable().optional(),
     about: z.string().nullable().optional(),
     aiSummary: z.string().nullable().optional(),
@@ -145,39 +159,42 @@ export const contactCreateSchema = z
     cadenceDays: z.number().int().positive().nullable().optional(),
     isGhost: stringToBool,
     isArchived: stringToBool,
-    nextFollowUpAt: z.string().nullable().optional(),
+    nextFollowUpAt: dateSchema.nullable().optional(),
   })
   .merge(childRecordsSchema);
 
-export const contactUpdateSchema = contactCreateSchema.partial();
+export const contactUpdateSchema = contactCreateSchema
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "No valid fields to update",
+  });
 
 // Cap bulk imports — combined with the 50 MB JSON body limit, an unbounded
 // array lets one request allocate arbitrary memory.
 export const contactBulkCreateSchema = z.array(contactCreateSchema).max(5000);
 
 /** Payload for POST /interactions. Type is open string. */
-export const interactionCreateSchema = z
-  .object({
-    type: z.string().min(1, "Type is required"),
-    title: z.string().min(1, "Title is required"),
-    content: z.string().nullable().optional(),
-    date: z.string().nullable().optional(),
-    duration: z.number().nullable().optional(),
-    isViaId: z.string().nullable().optional(),
-    isViaName: z.string().nullable().optional(),
-    actionItem: z
-      .object({
-        title: z.string().min(1, "Action item title is required"),
-        dueAt: z.string().min(1, "Action item due date is required"),
-      })
-      .optional(),
-  })
-  .passthrough();
+export const interactionCreateSchema = z.object({
+  type: z.string().trim().min(1, "Type is required"),
+  title: z.string().trim().min(1, "Title is required"),
+  content: z.string().nullable().optional(),
+  date: dateSchema.nullable().optional(),
+  duration: z.number().nonnegative().max(525600).nullable().optional(),
+  source: z.string().nullable().optional(),
+  isViaId: z.string().nullable().optional(),
+  isViaName: z.string().nullable().optional(),
+  actionItem: z
+    .object({
+      title: z.string().trim().min(1, "Action item title is required"),
+      dueAt: dateSchema,
+    })
+    .optional(),
+});
 
 /** Payload for PATCH /interactions/:id — only title and content are mutable. */
 export const interactionUpdateSchema = z
   .object({
-    title: z.string().min(1).optional(),
+    title: z.string().trim().min(1).optional(),
     content: z.string().nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
@@ -185,23 +202,27 @@ export const interactionUpdateSchema = z
   });
 
 export const actionItemCreateSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  dueAt: z.string().min(1, "Due date is required"),
+  title: z.string().trim().min(1, "Title is required"),
+  dueAt: dateSchema,
 });
 
-export const actionItemUpdateSchema = z.object({
-  title: z.string().min(1).optional(),
-  dueAt: z.string().min(1).optional(),
-});
+export const actionItemUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    dueAt: dateSchema.optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "No valid fields to update",
+  });
 
 export const listCreateSchema = z.object({
-  name: z.string().min(1, "List name is required").max(60),
+  name: z.string().trim().min(1, "List name is required").max(60),
   icon: z.string().optional(),
 });
 
 export const listUpdateSchema = z
   .object({
-    name: z.string().min(1).max(60).optional(),
+    name: z.string().trim().min(1).max(60).optional(),
     icon: z.string().optional(),
   })
   .refine((d) => d.name !== undefined || d.icon !== undefined, {

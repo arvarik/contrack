@@ -1,3 +1,4 @@
+import { apiFetch } from "./client";
 /**
  * AI Stats API hooks — React Query hooks for the AI Stats Page.
  *
@@ -6,8 +7,6 @@
  * - useAIStatsFeed()     → GET /api/ai/stats/feed
  */
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-
-const API_BASE = "/api/ai/stats";
 
 // =============================================================================
 // Types (match backend response shapes exactly)
@@ -89,8 +88,8 @@ export interface FeedQueryParams {
 export const useAIStatsSummary = () => {
   return useQuery({
     queryKey: ["aiStats", "summary"],
-    queryFn: async (): Promise<AIStatsSummary> => {
-      const res = await fetch(`${API_BASE}/summary`);
+    queryFn: async ({ signal }): Promise<AIStatsSummary> => {
+      const res = await apiFetch(`/ai/stats/summary`, { signal });
       if (!res.ok) throw new Error("Failed to fetch AI stats summary");
       return res.json();
     },
@@ -117,11 +116,11 @@ export const useAIStatsFeed = (params: FeedQueryParams = {}) => {
 
   return useQuery({
     queryKey: ["aiStats", "feed", params],
-    queryFn: async (): Promise<AIStatsFeedResponse> => {
+    queryFn: async ({ signal }): Promise<AIStatsFeedResponse> => {
       const url = queryString
-        ? `${API_BASE}/feed?${queryString}`
-        : `${API_BASE}/feed`;
-      const res = await fetch(url);
+        ? `/ai/stats/feed?${queryString}`
+        : `/ai/stats/feed`;
+      const res = await apiFetch(url, { signal });
       if (!res.ok) throw new Error("Failed to fetch AI stats feed");
       return res.json();
     },

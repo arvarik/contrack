@@ -1,3 +1,4 @@
+import { apiFetch } from "./client";
 /**
  * Deduplication API Hooks — React Query hooks for the async duplicate detection engine.
  *
@@ -29,7 +30,7 @@ export const useStartDedupeScan = () => {
       mode: DedupeScanMode;
       autoMergeThreshold?: number;
     }) => {
-      const res = await fetch(`${API_BASE}/dedupe/scan`, {
+      const res = await apiFetch(`/dedupe/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -56,7 +57,7 @@ export const useStartDedupeScan = () => {
  */
 export async function fetchActiveScan(): Promise<DedupeScanProgress | null> {
   try {
-    const res = await fetch(`${API_BASE}/dedupe/active`);
+    const res = await apiFetch(`/dedupe/active`);
     if (!res.ok) return null;
     const data = await res.json();
     if (data.active && data.scan) return data.scan as DedupeScanProgress;
@@ -149,7 +150,7 @@ export const useMergeContacts = () => {
       primaryId: string;
       duplicateId: string;
     }) => {
-      const res = await fetch(`${API_BASE}/contacts/merge`, {
+      const res = await apiFetch(`/contacts/merge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ primaryId, duplicateId }),
@@ -172,7 +173,7 @@ export const useMergeBatch = () => {
     mutationFn: async (
       merges: { primaryId: string; duplicateId: string }[],
     ) => {
-      const res = await fetch(`${API_BASE}/contacts/merge-batch`, {
+      const res = await apiFetch(`/contacts/merge-batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merges }),
@@ -216,7 +217,7 @@ export const useMergeCluster = () => {
       primaryId: string;
       duplicateIds: string[];
     }) => {
-      const res = await fetch(`${API_BASE}/contacts/merge-cluster`, {
+      const res = await apiFetch(`/contacts/merge-cluster`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ primaryId, duplicateIds }),
@@ -253,7 +254,7 @@ export const useMergeClusters = () => {
     mutationFn: async (
       clusters: { primaryId: string; duplicateIds: string[] }[],
     ) => {
-      const res = await fetch(`${API_BASE}/contacts/merge-clusters`, {
+      const res = await apiFetch(`/contacts/merge-clusters`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clusters }),
@@ -282,7 +283,7 @@ export const useSeedDuplicates = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/dev/seed-duplicates`, {
+      const res = await apiFetch(`/dev/seed-duplicates`, {
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to seed duplicates");

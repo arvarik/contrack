@@ -1,3 +1,4 @@
+import { idsSchema } from "../utils/validators.ts";
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { listService } from "../services/listService.ts";
@@ -37,7 +38,11 @@ router.post(
 
 router.put(
   "/reorder",
-  validateBody(z.object({ orderedIds: z.array(z.string()) })),
+  validateBody(
+    z.object({
+      orderedIds: z.array(z.string().trim().min(1).max(200)).max(5000),
+    }),
+  ),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = listService.reorderLists(req.body.orderedIds);
@@ -101,7 +106,7 @@ router.delete(
 
 router.post(
   "/:id/members",
-  validateBody(z.object({ contactId: z.string() })),
+  validateBody(z.object({ contactId: z.string().trim().min(1).max(200) })),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     listService.addMember(String(req.params.id), req.body.contactId);
@@ -131,7 +136,7 @@ router.delete(
 
 router.post(
   "/:id/members/bulk",
-  validateBody(z.object({ contactIds: z.array(z.string()).min(1) })),
+  validateBody(z.object({ contactIds: idsSchema })),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = listService.bulkAddMembers(
