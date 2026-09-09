@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Phase 0.** CI now runs for the `v2.0` integration branch. Pull requests
+  into `v2.0`, and pushes to it, run the `build-and-test` job. The container
+  image job and the release job still run only for `main` and for version
+  tags, so `v2.0` publishes nothing.
+- **Phase 0.** The multi-tenant plan in `docs/multi-tenant-plan/` is now
+  tracked on `v2.0`. A reviewer can follow the references that each 2.0 pull
+  request makes. Prettier and ESLint skip that folder, so the design
+  documents and their benchmark scripts stay exactly as written.
+
 ## [1.5.5] — 2026-08-09
 
 Corrections from an independent review of the v1.5.4 release, run with fresh
