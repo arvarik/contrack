@@ -33,7 +33,7 @@ export const ContactDetail = () => {
       )}
 
       {id ? (
-        <ContactProfile contactId={id} onClose={handleClose} />
+        <ContactProfile key={id} contactId={id} onClose={handleClose} />
       ) : (
         <div className="p-12 text-center text-on-surface-variant">
           No Contact Selected

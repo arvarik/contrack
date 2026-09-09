@@ -66,6 +66,7 @@ export interface TimelineTabProps {
 
   // Mutations passed from parent
   deleteInteraction: {
+    isPending: boolean;
     mutate: (
       args: { id: string; contactId: string },
       opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
@@ -261,7 +262,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
             <div
               key={item.id}
               className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active timeline-entry"
-              style={{ animationDelay: `${index * 40}ms` }}
+              style={{ animationDelay: `${Math.min(index, 6) * 25}ms` }}
             >
               {/* Icon marker */}
               <div
@@ -271,16 +272,16 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
               </div>
 
               {/* Content Box */}
-              <div
-                onKeyDown={activateOnKey(() => setSelectedInteraction(item))}
-                tabIndex={0}
-                role="button"
-                className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer"
-                onClick={() => setSelectedInteraction(item)}
-              >
+              <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer">
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="font-extrabold text-on-surface">
-                    {item.title}
+                    <button
+                      type="button"
+                      className="text-left hover:underline"
+                      onClick={() => setSelectedInteraction(item)}
+                    >
+                      {item.title}
+                    </button>
                   </h4>
                   <div className="flex items-center gap-2 shrink-0">
                     <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
@@ -291,7 +292,8 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                         e.stopPropagation();
                         handleDeleteInteraction(item.id);
                       }}
-                      className="opacity-0 group-hover/card:opacity-60 hover:!opacity-100 text-error p-1 rounded transition-opacity"
+                      className="opacity-70 hover:opacity-100 text-error min-w-9 min-h-9 flex items-center justify-center rounded transition-opacity"
+                      disabled={deleteInteraction.isPending}
                       title="Delete interaction"
                       aria-label="Delete interaction"
                     >

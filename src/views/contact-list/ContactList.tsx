@@ -47,11 +47,7 @@ import {
   useBulkUpdateContacts,
 } from "../../api";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  DENSITY_METRICS,
-  useListDensity,
-  type ListDensity,
-} from "../../hooks/useListDensity";
+import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
 import { AlphabetJumpButtons, AlphabetRail, bucketFor } from "./AlphabetRail";
 import type { Contact, ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
@@ -200,12 +196,6 @@ const ContactRowWrapper = React.memo(
           isFlashing &&
             "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,113,156,0.2)]",
         )}
-        style={{
-          contentVisibility: "auto",
-          // Must track the real row height, or `content-visibility` reserves
-          // the wrong space for off-screen rows and the scrollbar lurches.
-          containIntrinsicSize: `1px ${DENSITY_METRICS[density].rowHeight}px`,
-        }}
       >
         <ContactListItem
           contact={contact}
@@ -239,7 +229,10 @@ export const ContactList = () => {
 
   // ── UX hooks ────────────────────────────────────────────────────────
   usePageTitle("Network");
-  const scrollRef = useScrollRestoration<HTMLDivElement>("contact-list");
+  const scrollRef = useScrollRestoration<HTMLDivElement>(
+    `contact-list:${filters.filterMode}:${filters.searchQuery}`,
+    !isLoading,
+  );
   const {
     containerRef: pullRef,
     isPulling,
@@ -421,6 +414,10 @@ export const ContactList = () => {
 
   const rowVirtualizer = useVirtualizer({
     count: filteredContacts.length,
+    getItemKey: React.useCallback(
+      (index) => filteredContacts[index].id,
+      [filteredContacts],
+    ),
     getScrollElement: () => scrollRef.current,
     scrollMargin,
     // Only an estimate — rows are measured for real by `measureElement`
@@ -444,7 +441,16 @@ export const ContactList = () => {
     // Recomputed whenever the block above the list can change height: the
     // Recent row count, its preference, the density of those rows, and
     // whether a search collapses the section entirely.
-  }, [recentContacts.length, recentLimit, density, searchQuery, scrollRef]);
+  }, [
+    recentContacts.length,
+    recentLimit,
+    density,
+    searchQuery,
+    filterMode,
+    isLoading,
+    pullDistance,
+    scrollRef,
+  ]);
 
   // ── Alphabet rail ───────────────────────────────────────────────────
   // Only meaningful when the list is actually alphabetical, and only worth
@@ -472,7 +478,9 @@ export const ContactList = () => {
   const virtualItems = rowVirtualizer.getVirtualItems();
   const activeBucket = showAlphabetRail
     ? (() => {
-        const first = virtualItems[0];
+        const first = virtualItems.find(
+          (item) => item.end > (rowVirtualizer.scrollOffset ?? 0),
+        );
         const contact = first ? filteredContacts[first.index] : undefined;
         return contact ? bucketFor(contact.name) : null;
       })()
@@ -711,7 +719,7 @@ export const ContactList = () => {
       <div className="relative flex-1 min-h-0">
         <div
           ref={listScrollRef}
-          className="h-full overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 scrollbar-hide"
+          className="h-full overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 overscroll-contain"
         >
           {/* Pull-to-refresh indicator — mobile only */}
           <PullIndicator
@@ -851,6 +859,7 @@ export const ContactList = () => {
                   {recentContacts.map((contact) => (
                     <ContactListItem
                       key={`recent-${contact.id}`}
+                      idPrefix="recent-contact"
                       contact={contact}
                       density={density}
                       active={id === contact.id}
@@ -886,7 +895,7 @@ export const ContactList = () => {
                     position: "absolute",
                     top: 0,
                     left: 0,
-                    width: "100%",
+                    width: showAlphabetRail ? "calc(100% - 1.5rem)" : "100%",
                     transform: `translateY(${virtualItem.start - scrollMargin}px)`,
                     paddingBottom: "8px", // Replaces space-y-2
                   }}

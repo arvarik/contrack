@@ -422,3 +422,16 @@
   pointer-events: none;
   opacity: 0.5;
 }
+
+/* Keep dialog transitions on opacity so positioning remains stable. */
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.modal-fade[data-state="open"] {
+  animation: modal-fade-in 120ms ease-out;
+}

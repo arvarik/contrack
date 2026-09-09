@@ -18,13 +18,13 @@ export function useClickOutside(
   useEffect(() => {
     if (!enabled) return;
 
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         onOutsideClick();
       }
     };
 
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
   }, [ref, onOutsideClick, enabled]);
 }

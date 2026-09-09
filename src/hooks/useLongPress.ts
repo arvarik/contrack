@@ -30,6 +30,7 @@ export const useLongPress = (
   delay: number = DEFAULT_DELAY_MS,
 ) => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consumed = useRef(false);
   const startCoordsRef = useRef<LongPressCoords | null>(null);
 
   // Clean up on unmount
@@ -49,6 +50,9 @@ export const useLongPress = (
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
+      cancel();
+      consumed.current = false;
+      if (e.touches.length !== 1) return;
       const touch = e.touches[0];
       startCoordsRef.current = {
         clientX: touch.clientX,
@@ -60,18 +64,25 @@ export const useLongPress = (
         if (navigator.vibrate) navigator.vibrate(50);
 
         const coords = startCoordsRef.current;
-        if (coords) callback(coords);
+        if (coords) {
+          consumed.current = true;
+          callback(coords);
+        }
 
         timerRef.current = null;
         startCoordsRef.current = null;
       }, delay);
     },
-    [callback, delay],
+    [callback, delay, cancel],
   );
 
   const onTouchMove = useCallback(
     (e: React.TouchEvent) => {
       if (!startCoordsRef.current || !timerRef.current) return;
+      if (e.touches.length !== 1) {
+        cancel();
+        return;
+      }
       const touch = e.touches[0];
       const dx = Math.abs(touch.clientX - startCoordsRef.current.clientX);
       const dy = Math.abs(touch.clientY - startCoordsRef.current.clientY);
@@ -84,6 +95,13 @@ export const useLongPress = (
   );
 
   return {
+    onClickCapture: (event: React.MouseEvent) => {
+      if (consumed.current) {
+        consumed.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
     onTouchStart,
     onTouchMove,
     onTouchEnd: cancel,

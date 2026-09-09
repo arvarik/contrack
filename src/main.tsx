@@ -1,3 +1,4 @@
+import { MotionConfig } from "motion/react";
 /**
  * main.tsx — React DOM entry point.
  *
@@ -69,7 +70,9 @@ createRoot(document.getElementById("root")!).render(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthGate>
-          <App />
+          <MotionConfig reducedMotion="user">
+            <App />
+          </MotionConfig>
         </AuthGate>
       </QueryClientProvider>
     </ErrorBoundary>

@@ -7,7 +7,7 @@
  * - Prefetches the contact detail query on pointer enter (100ms debounce) so
  *   by the time the user clicks, the detail pane loads instantly from cache.
  */
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   CheckCheck,
@@ -53,7 +53,7 @@ function shortRecency(iso: string | null | undefined): string {
   return `${value}${abbrev[unit] ?? ""}`;
 }
 
-const API_BASE = "/api";
+import { apiFetch } from "../../api/client";
 
 // ---------------------------------------------------------------------------
 // ContactListItem — memoized row component
@@ -61,6 +61,7 @@ const API_BASE = "/api";
 
 interface ContactListItemProps {
   contact: Contact;
+  idPrefix?: string;
   /** Comfortable keeps the roomy default; compact roughly doubles rows/screen. */
   density: ListDensity;
   active: boolean;
@@ -72,6 +73,7 @@ interface ContactListItemProps {
 
 const ContactListItemInner = ({
   contact,
+  idPrefix = "contact-row",
   density,
   active,
   isSelectMode,
@@ -85,6 +87,13 @@ const ContactListItemInner = ({
   const queryClient = useQueryClient();
   const location = useLocation();
   const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+    },
+    [contact.id],
+  );
 
   // ── Computed values ────────────────────────────────────────────────────────
 
@@ -103,11 +112,12 @@ const ContactListItemInner = ({
 
   const handlePointerEnter = useCallback(() => {
     if (isSelectMode || active) return; // already loaded or irrelevant in select mode
+    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
     prefetchTimer.current = setTimeout(() => {
       queryClient.prefetchQuery({
         queryKey: ["contacts", contact.id],
-        queryFn: () =>
-          fetch(`${API_BASE}/contacts/${contact.id}`).then((r) => {
+        queryFn: ({ signal }) =>
+          apiFetch(`/contacts/${contact.id}`, { signal }).then((r) => {
             if (!r.ok) throw new Error("Failed to prefetch contact");
             return r.json();
           }),
@@ -139,7 +149,8 @@ const ContactListItemInner = ({
 
   return (
     <Link
-      id={`contact-row-${contact.id}`}
+      id={`${idPrefix}-${contact.id}`}
+      aria-current={active && !isSelectMode ? "page" : undefined}
       to={isSelectMode ? "#" : `/contact/${contact.id}${location.search}`}
       onClick={handleClick}
       onPointerEnter={handlePointerEnter}
@@ -268,34 +279,5 @@ const ContactListItemInner = ({
   );
 };
 
-/**
- * Custom memo comparator — only re-render when props that affect display change.
- * This prevents cascade rerenders when ContactList state (flashId, contextMenu,
- * drag state, etc.) changes without touching this contact's data.
- */
-const areEqual = (
-  prev: ContactListItemProps,
-  next: ContactListItemProps,
-): boolean => {
-  return (
-    prev.contact.id === next.contact.id &&
-    prev.contact.updatedAt === next.contact.updatedAt &&
-    prev.contact.name === next.contact.name &&
-    prev.contact.company === next.contact.company &&
-    prev.contact.avatarUrl === next.contact.avatarUrl &&
-    prev.contact.nextFollowUpAt === next.contact.nextFollowUpAt &&
-    prev.contact.relationshipScore === next.contact.relationshipScore &&
-    // Rendered by the tablet-band metadata column.
-    prev.contact.location === next.contact.location &&
-    prev.contact.lastContactedAt === next.contact.lastContactedAt &&
-    prev.contact.themeColor === next.contact.themeColor &&
-    prev.contact.role === next.contact.role &&
-    prev.contact.isGhost === next.contact.isGhost &&
-    prev.density === next.density &&
-    prev.active === next.active &&
-    prev.isSelectMode === next.isSelectMode &&
-    prev.isSelected === next.isSelected
-  );
-};
-
-export const ContactListItem = React.memo(ContactListItemInner, areEqual);
+// Query structural sharing keeps unchanged contact objects stable.
+export const ContactListItem = React.memo(ContactListItemInner);
