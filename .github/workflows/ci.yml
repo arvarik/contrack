@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "v2.0"]
     tags: ["v*"]
   pull_request:
-    branches: ["main", "arvind/harden-*"]
+    branches: ["main", "v2.0", "arvind/harden-*"]
   # Manual re-run, and an escape hatch when GitHub's hosted pool is congested
   # or degraded — pick the hppc self-hosted runner instead of waiting in queue.
   workflow_dispatch:
