@@ -12,6 +12,7 @@ import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
 import { contactService } from "../services/contactService.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 import { listBackups, runBackup } from "../services/backupService.ts";
 import {
   buildFullExport,
@@ -22,10 +23,13 @@ const router = Router();
 
 // ─── Trash ───────────────────────────────────────────────────────────────────
 
+// The trash routes are classified `scoped` and their matrix tests land with
+// the rest of this file in sub-phase 2g. The service functions they call are
+// already scoped, so they pass the caller's scope from here.
 router.get(
   "/trash",
-  asyncHandler(async (_req, res) => {
-    res.json({ items: contactService.listTrash() });
+  asyncHandler(async (req, res) => {
+    res.json({ items: contactService.listTrash(scopeOf(req)) });
   }),
 );
 
@@ -33,7 +37,10 @@ router.post(
   "/trash/:id/restore",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const restored = contactService.restoreContact(String(req.params.id));
+    const restored = contactService.restoreContact(
+      scopeOf(req),
+      String(req.params.id),
+    );
     if (!restored) {
       throw new AppError("Trashed contact not found", 404, {
         code: "NOT_FOUND",
@@ -60,7 +67,7 @@ router.post(
     for (const id of req.body.ids as string[]) {
       // Skip anything already restored or purged rather than failing the whole
       // batch: undo has to be forgiving, or it is not undo.
-      if (contactService.restoreContact(id)) count += 1;
+      if (contactService.restoreContact(scopeOf(req), id)) count += 1;
     }
     log.info(
       "API",
@@ -74,7 +81,10 @@ router.delete(
   "/trash/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const purged = contactService.purgeTrashedContact(String(req.params.id));
+    const purged = contactService.purgeTrashedContact(
+      scopeOf(req),
+      String(req.params.id),
+    );
     if (!purged) {
       throw new AppError("Trashed contact not found", 404, {
         code: "NOT_FOUND",

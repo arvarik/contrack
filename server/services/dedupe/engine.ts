@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { sqlite } from "../../db.ts";
 import { currentOwnerId } from "../../tenancy/requestContext.ts";
+import { scopeForOwnerId } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
@@ -15,7 +16,11 @@ import {
   clearEmbeddingMeta,
   reEmbedStaleContacts,
 } from "./embeddings.ts";
-import { normalizeContacts, normalizeContactById } from "./normalization.ts";
+import {
+  normalizeContacts,
+  normalizeContactById,
+  scopeOfContact,
+} from "./normalization.ts";
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
 import {
   computeMatchSignals,
@@ -73,6 +78,10 @@ export const dedupeService = {
     dedupeQueue.setProcessing(true);
     const resolved = resolveMode(mode);
     let embeddingsReady = false;
+    // TODO(2e): runScan(scope, ...) takes the scope from the route, and the
+    // job queue stores it on the scan. Until then it comes from the request
+    // that started the scan, which is the caller on every path that exists.
+    const scope = scopeForOwnerId(currentOwnerId());
 
     try {
       dedupeQueue.update(scanId, {
@@ -80,7 +89,7 @@ export const dedupeService = {
         phaseName: "Normalizing contacts…",
       });
 
-      const ctx = buildPassContext(rid);
+      const ctx = buildPassContext(scope, rid);
 
       dedupeQueue.update(scanId, {
         totalContacts: ctx.allContacts.length,
@@ -315,8 +324,12 @@ export const dedupeService = {
     const t0 = Date.now();
 
     try {
-      const target = normalizeContactById(contactId);
-      if (!target) {
+      // A background path with no request behind it, so the owner comes from
+      // the contact itself. TODO(2e): wrap the body in runWithContext so the
+      // AI rows this writes are attributed as well as scoped.
+      const scope = scopeOfContact(contactId);
+      const target = scope ? normalizeContactById(scope, contactId) : null;
+      if (!scope || !target) {
         log.debug(
           "DedupeService",
           `[${rid}] Incremental: contact ${contactId} not found or empty — skipping`,
@@ -324,7 +337,7 @@ export const dedupeService = {
         return;
       }
 
-      const distinctPairs = loadNegativeConstraints();
+      const distinctPairs = loadNegativeConstraints(scope);
       const pairs: RawPair[] = [];
       const seenPairs = new Set<string>();
 
@@ -389,7 +402,7 @@ export const dedupeService = {
       }
 
       if (target.nameNorm) {
-        const allNormalized = normalizeContacts();
+        const allNormalized = normalizeContacts(scope);
         const targetBlockKeys = new Set(target.blockKeys);
 
         for (const other of allNormalized) {
@@ -447,14 +460,14 @@ export const dedupeService = {
             const neighbors = findNearestNeighbors(queryVec, 5, contactId);
             const normalizedCache = new Map<string, NormalizedContact>();
 
-            const targetSimCtx = buildPassContext(rid);
+            const targetSimCtx = buildPassContext(scope, rid);
 
             for (const neighbor of neighbors) {
               const pk = pairKey(contactId, neighbor.contactId);
               if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
 
               if (!normalizedCache.has(neighbor.contactId)) {
-                const n = normalizeContactById(neighbor.contactId);
+                const n = normalizeContactById(scope, neighbor.contactId);
                 if (n) normalizedCache.set(neighbor.contactId, n);
               }
               const otherNorm = normalizedCache.get(neighbor.contactId);

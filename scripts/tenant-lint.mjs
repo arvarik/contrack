@@ -16,9 +16,10 @@
 //
 // Two modes:
 //   --report          print a table, exit 0. Phase 0 runs this in npm run lint.
-//   --strict <glob>   exit 1 on any flag in a matching file. Phase 2 moves
-//                     files under --strict as it converts them, and ends with
-//                     --strict "server/**".
+//   --strict <glob...>  exit 1 on any flag in a matching file. Several globs
+//                     may follow, because Phase 2 converts one domain at a
+//                     time and each sub-phase adds its files. 2i replaces the
+//                     whole list with --strict "server/**".
 // =============================================================================
 
 import fs from "node:fs";
@@ -230,31 +231,37 @@ export function globToRegExp(glob) {
 function main(argv) {
   const strictIndex = argv.indexOf("--strict");
   const strict = strictIndex !== -1;
-  const glob = strict ? argv[strictIndex + 1] : null;
+  const globs = strict
+    ? argv.slice(strictIndex + 1).filter((a) => !a.startsWith("--"))
+    : [];
   const findings = scanProject("server");
 
   const unscoped = findings.filter((f) => f.severity === "unscoped");
   const badReason = findings.filter((f) => f.severity === "unknown-reason");
 
   if (strict) {
-    if (!glob) {
+    if (globs.length === 0) {
       console.error(
         "tenant-lint: --strict needs a glob, e.g. --strict 'server/**'",
       );
       process.exit(2);
     }
-    const re = globToRegExp(glob);
-    const inScope = findings.filter((f) => re.test(f.file));
+    const patterns = globs.map(globToRegExp);
+    const inScope = findings.filter((f) =>
+      patterns.some((re) => re.test(f.file)),
+    );
     for (const f of inScope) {
       console.error(`${f.file}:${f.line}  ${f.severity}  ${f.kind}  ${f.text}`);
     }
     if (inScope.length) {
       console.error(
-        `\ntenant-lint: ${inScope.length} problem(s) in files matching ${glob}`,
+        `\ntenant-lint: ${inScope.length} problem(s) in ${globs.join(", ")}`,
       );
       process.exit(1);
     }
-    console.log(`tenant-lint: clean for ${glob}`);
+    console.log(
+      `tenant-lint: clean for ${globs.length} glob(s): ${globs.join(", ")}`,
+    );
     return;
   }
 
