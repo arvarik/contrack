@@ -234,6 +234,7 @@ export const relationshipService = {
   explainScore(contactId: string): ScoreBreakdown | null {
     const contact = sqlite
       .prepare(
+        // tenant-lint: allow owner-checked by caller
         `SELECT id, cadenceDays, lastContactedAt FROM contacts WHERE id = ?`,
       )
       .get(contactId) as ContactScoreRow | undefined;
@@ -248,6 +249,7 @@ export const relationshipService = {
     // trust the explanation exists to build. Recomputing already happened
     // above; persisting it costs one indexed write and makes the two agree.
     sqlite
+      // tenant-lint: allow owner-checked by caller
       .prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?")
       .run(breakdown.score, contactId);
 
