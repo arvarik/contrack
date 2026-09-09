@@ -3,7 +3,7 @@ import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { actionItemService } from "./actionItemService.ts";
 import { generateDailyInsight, DailyInsight } from "../ai/aiService.ts";
-import { aiCache } from "../utils/aiCache.ts";
+import { aiCache, ownerKey } from "../utils/aiCache.ts";
 import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
 import type { ActionItem } from "../../src/types.ts";
 import type { Scope } from "../tenancy/scope.ts";
@@ -236,6 +236,10 @@ export const dashboardService = {
    * paragraph for the next 24 hours. The tier also held one entry, so a second
    * owner's insight evicted the first; `maxEntries` is 100 now, which is one
    * slot per owner on an instance of that size.
+   *
+   * 2f moved the prefix into `ownerKey`, so this key and the per-owner
+   * invalidation that drops it are built by the same function and cannot
+   * disagree.
    */
   async getInsight(scope: Scope) {
     const revision = (
@@ -244,7 +248,10 @@ export const dashboardService = {
         .get() as { revision: number }
     ).revision;
     const model = resolveCapability("quick");
-    const cacheKey = `${scope.ownerId}::${revision}:${new Date().toISOString().slice(0, 10)}:${model?.providerId}:${model?.model}`;
+    const cacheKey = ownerKey(
+      scope,
+      `${revision}:${new Date().toISOString().slice(0, 10)}:${model?.providerId}:${model?.model}`,
+    );
     // Check unified cache (24h TTL managed by aiCache)
     const cached = aiCache.get<DailyInsight>("dailyInsight", cacheKey);
     if (cached) {

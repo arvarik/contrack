@@ -30,6 +30,12 @@ import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { withTimeout, sleep } from "../../ai/resilience.ts";
 import { enrichmentContact, lockEnrichment } from "./contactSnapshot.ts";
+import {
+  scopeForOwnerId,
+  type OwnerId,
+  type Scope,
+} from "../../tenancy/scope.ts";
+import { runWithContext } from "../../tenancy/requestContext.ts";
 
 // =============================================================================
 // Error Classification
@@ -100,6 +106,18 @@ function classifyError(error: unknown): AISearchErrorType {
 /** 5-minute cooldown between batch starts to prevent token abuse */
 const COOLDOWN_MS = 5 * 60 * 1000;
 
+/**
+ * A batch and the account that started it.
+ *
+ * The owner is held beside the batch rather than inside it, so the shape the
+ * SSE stream and the status endpoint send stays exactly the contract in
+ * `shared/aiSearchContract.ts`.
+ */
+interface OwnedBatch {
+  batch: AISearchBatch;
+  ownerId: OwnerId;
+}
+
 /** Completed batches older than 30 minutes are garbage collected */
 const GC_TTL_MS = 30 * 60 * 1000;
 
@@ -107,30 +125,51 @@ const GC_TTL_MS = 30 * 60 * 1000;
 const INTER_JOB_DELAY_MS = 2_500;
 
 class AISearchJobQueue extends EventEmitter {
-  private batches = new Map<string, AISearchBatch>();
+  private batches = new Map<string, OwnedBatch>();
   private processing = false;
   private controllers = new Map<string, AbortController>();
-  private lastBatchCompletedAt: Date | null = null;
+  private lastBatchCompletedAt = new Map<OwnerId, Date>();
 
   /**
-   * Check whether a new batch can be started.
-   * Enforces both the concurrency lock and the inter-batch cooldown.
+   * Check whether this account can start a new batch.
+   *
+   * The run lock stays global: provider rate limits are a property of the API
+   * key, which the whole instance shares, so two accounts researching at once
+   * would spend one quota twice as fast. The cooldown is per account, because
+   * it exists to stop one person burning tokens and had no business making
+   * everybody else wait five minutes after a stranger's batch.
+   *
+   * `yours` says which of the two refused, so the route can send an honest
+   * message and the UI can tell "your own cooldown" from "somebody else is
+   * researching right now".
    */
-  canStartBatch(): { allowed: boolean; reason?: string } {
+  canStartBatch(scope: Scope): {
+    allowed: boolean;
+    reason?: string;
+    yours: boolean;
+    retryAfterSeconds?: number;
+  } {
     if (this.processing) {
-      return { allowed: false, reason: "A batch is already in progress." };
+      return {
+        allowed: false,
+        reason: "A batch is already in progress.",
+        yours: this.hasActiveBatch(scope),
+      };
     }
-    if (this.lastBatchCompletedAt) {
-      const elapsed = Date.now() - this.lastBatchCompletedAt.getTime();
+    const last = this.lastBatchCompletedAt.get(scope.ownerId);
+    if (last) {
+      const elapsed = Date.now() - last.getTime();
       if (elapsed < COOLDOWN_MS) {
         const waitSec = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
         return {
           allowed: false,
           reason: `Please wait ${waitSec}s before starting another batch.`,
+          yours: true,
+          retryAfterSeconds: waitSec,
         };
       }
     }
-    return { allowed: true };
+    return { allowed: true, yours: true };
   }
 
   /**
@@ -138,6 +177,7 @@ class AISearchJobQueue extends EventEmitter {
    * Runs lazy GC before allocating to keep memory bounded.
    */
   createBatch(
+    scope: Scope,
     contacts: Array<{ id: string; name: string }>,
     strategyName: string,
   ): AISearchBatch {
@@ -164,7 +204,7 @@ class AISearchJobQueue extends EventEmitter {
       totalTokens: 0,
     };
 
-    this.batches.set(batchId, batch);
+    this.batches.set(batchId, { batch, ownerId: scope.ownerId });
     log.info(
       "AISearchQueue",
       `Batch ${batchId} created: ${jobs.length} job(s), strategy: ${strategyName}`,
@@ -179,8 +219,27 @@ class AISearchJobQueue extends EventEmitter {
   async processBatch(batchId: string, _adapter?: AIProvider): Promise<void> {
     if (this.processing)
       throw new Error("An AI Search batch is already in progress");
-    const batch = this.batches.get(batchId);
-    if (!batch || batch.status !== "processing") return;
+    const owned = this.batches.get(batchId);
+    if (!owned || owned.batch.status !== "processing") return;
+    // The whole run happens in the starter's context, so every AI invocation
+    // row it writes and every cache key it builds names that account. The
+    // route returned long ago, so nothing is inherited: rule 7 makes the owner
+    // an argument the job carries rather than an ambient value it hopes for.
+    return runWithContext(
+      {
+        requestId: `job-ai-search-${batchId.slice(0, 8)}`,
+        principal: null,
+        scope: scopeForOwnerId(owned.ownerId),
+      },
+      () => this.runBatch(owned),
+    );
+  }
+
+  /** The body of one batch run, inside the starter's context. */
+  private async runBatch(owned: OwnedBatch): Promise<void> {
+    const { batch } = owned;
+    const scope = scopeForOwnerId(owned.ownerId);
+    const batchId = batch.id;
     const strategy = getStrategy(batch.strategy);
     const controller = new AbortController();
     this.controllers.set(batchId, controller);
@@ -193,7 +252,7 @@ class AISearchJobQueue extends EventEmitter {
         const startMs = Date.now();
         let release: (() => void) | undefined;
         try {
-          const contact = enrichmentContact(job.contactId);
+          const contact = enrichmentContact(scope, job.contactId);
           release = lockEnrichment(job.contactId);
           job.status = "searching";
           job.startedAt = new Date().toISOString();
@@ -208,6 +267,7 @@ class AISearchJobQueue extends EventEmitter {
           job.status = "merging";
           this.emit(batchId, batch);
           job.fieldsUpdated = mergeSearchResult(
+            scope,
             job.contactId,
             contact,
             result.data as AISearchOutput,
@@ -239,7 +299,7 @@ class AISearchJobQueue extends EventEmitter {
     } finally {
       if (this.controllers.get(batchId) === controller) {
         this.processing = false;
-        this.lastBatchCompletedAt = new Date();
+        this.lastBatchCompletedAt.set(owned.ownerId, new Date());
         this.controllers.delete(batchId);
       }
       batch.status = controller.signal.aborted ? "cancelled" : "complete";
@@ -248,8 +308,8 @@ class AISearchJobQueue extends EventEmitter {
   }
 
   /** Stop active research and prevent queued contacts from starting. */
-  cancelBatch(batchId: string): AISearchBatch | null {
-    const batch = this.batches.get(batchId);
+  cancelBatch(scope: Scope, batchId: string): AISearchBatch | null {
+    const batch = this.getBatch(scope, batchId);
     if (!batch || batch.status !== "processing") return batch ?? null;
     batch.status = "cancelled";
     for (const job of batch.jobs) {
@@ -263,19 +323,34 @@ class AISearchJobQueue extends EventEmitter {
     return batch;
   }
 
-  /** Get a batch by ID, or null if not found. */
-  getBatch(batchId: string): AISearchBatch | null {
-    return this.batches.get(batchId) ?? null;
+  /**
+   * One of this account's batches, or null.
+   *
+   * A batch id another account started is null here, which the routes turn
+   * into the same 404 an id that never existed gets. Batch ids are random
+   * UUIDs, so this is not about guessing them: it is about a leaked or shared
+   * id not becoming a live view of somebody else's research.
+   */
+  getBatch(scope: Scope, batchId: string): AISearchBatch | null {
+    const owned = this.batches.get(batchId);
+    if (!owned || owned.ownerId !== scope.ownerId) return null;
+    return owned.batch;
   }
 
-  /** Get all batches that are currently processing. */
-  getActiveBatches(): AISearchBatch[] {
-    return Array.from(this.batches.values()).filter(
-      (b) => b.status === "processing",
-    );
+  /** This account's batches that are currently processing. */
+  getActiveBatches(scope: Scope): AISearchBatch[] {
+    return Array.from(this.batches.values())
+      .filter((b) => b.ownerId === scope.ownerId)
+      .filter((b) => b.batch.status === "processing")
+      .map((b) => b.batch);
   }
 
-  /** Whether a batch is currently being processed. */
+  /** Whether this account has a batch in flight. */
+  hasActiveBatch(scope: Scope): boolean {
+    return this.getActiveBatches(scope).length > 0;
+  }
+
+  /** Whether the instance is running a batch, for anybody. */
   isProcessing(): boolean {
     return this.processing;
   }
@@ -284,7 +359,7 @@ class AISearchJobQueue extends EventEmitter {
   gc(): void {
     const now = Date.now();
     let cleaned = 0;
-    for (const [id, batch] of this.batches) {
+    for (const [id, { batch }] of this.batches) {
       if (batch.status !== "processing") {
         const batchTime = new Date(batch.createdAt).getTime();
         if (now - batchTime > GC_TTL_MS) {
@@ -305,7 +380,7 @@ class AISearchJobQueue extends EventEmitter {
     this.controllers.clear();
     this.batches.clear();
     this.processing = false;
-    this.lastBatchCompletedAt = null;
+    this.lastBatchCompletedAt.clear();
   }
 }
 

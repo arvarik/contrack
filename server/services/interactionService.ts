@@ -14,7 +14,7 @@ import {
   summarizeEmlEmail,
 } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
-import { aiCache, contentHash } from "../utils/aiCache.ts";
+import { aiCache, contentHash, ownerKey } from "../utils/aiCache.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
@@ -310,11 +310,8 @@ export const interactionService = {
 
     // Invalidate cached briefing for this contact — a new interaction means
     // any cached briefing is stale (it doesn't include this interaction)
-    aiCache.invalidate("briefing", contactId);
-    // TODO(2f): narrow to this owner once invalidateForOwner exists. A whole
-    // tier flush is conservative, never wrong, and only costs other owners a
-    // regeneration.
-    aiCache.invalidate("dailyInsight");
+    aiCache.invalidate("briefing", ownerKey(scope, contactId));
+    aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
 
     // Immediately recompute relationship score for this contact
     relationshipService.computeScore(contactId);
@@ -331,7 +328,13 @@ export const interactionService = {
     const source = briefingSource(scope, contactId);
     const fingerprint = JSON.stringify(source);
     const model = resolveCapability("quick");
-    const cacheKey = `${contactId}::${contentHash(JSON.stringify([source, model?.providerId, model?.model]))}`;
+    // `<ownerId>::<contactId>::<hash>`. The contact id alone was already
+    // unique, so the owner is here for invalidation: it lets one account's
+    // edit drop that account's briefings and leave everybody else's alone.
+    const cacheKey = ownerKey(
+      scope,
+      `${contactId}::${contentHash(JSON.stringify([source, model?.providerId, model?.model]))}`,
+    );
     const cached = aiCache.get<string[]>("briefing", cacheKey);
     if (cached) return cached;
     return briefings.run(
@@ -445,9 +448,8 @@ export const interactionService = {
         .run();
       return interaction;
     })();
-    aiCache.invalidate("briefing", contactId);
-    // TODO(2f): narrow to this owner once invalidateForOwner exists.
-    aiCache.invalidate("dailyInsight");
+    aiCache.invalidate("briefing", ownerKey(scope, contactId));
+    aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     relationshipService.computeScore(contactId);
     return result;
   },
@@ -504,9 +506,8 @@ export const interactionService = {
         "UPDATE contacts SET aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?",
       )
       .run(existing.contactId, scope.ownerId);
-    aiCache.invalidate("briefing", existing.contactId);
-    // TODO(2f): narrow to this owner once invalidateForOwner exists.
-    aiCache.invalidate("dailyInsight");
+    aiCache.invalidate("briefing", ownerKey(scope, existing.contactId));
+    aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     relationshipService.computeScore(existing.contactId);
     return updated;
   },
@@ -545,9 +546,8 @@ export const interactionService = {
           scope.ownerId,
         );
     })();
-    aiCache.invalidate("briefing", existing.contactId);
-    // TODO(2f): narrow to this owner once invalidateForOwner exists.
-    aiCache.invalidate("dailyInsight");
+    aiCache.invalidate("briefing", ownerKey(scope, existing.contactId));
+    aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
     relationshipService.computeScore(existing.contactId);
     // The file goes only after the scoped delete succeeded. A delete that the
     // owner predicate refused must leave the attachment on disk.

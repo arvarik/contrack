@@ -20,6 +20,7 @@
 
 import { sqlite } from "../db.ts";
 import { currentOwnerId } from "../tenancy/requestContext.ts";
+import type { Scope } from "../tenancy/scope.ts";
 import { log } from "../utils/logger.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { isProviderConfigured } from "../ai/singleton.ts";
@@ -98,19 +99,21 @@ const summaryStmt = sqlite.prepare(`
     COALESCE(SUM(CASE WHEN cached = 1 THEN 1 ELSE 0 END), 0) AS cachedCalls,
     COALESCE(SUM(CASE WHEN cached = 0 THEN tokenCount ELSE 0 END), 0) AS totalTokens
   FROM ai_invocations
+  WHERE ownerId = ?
 `);
 
 /** Per-model token aggregation for cost estimation. */
 const costBreakdownStmt = sqlite.prepare(`
   SELECT model, SUM(tokenCount) AS tokens
   FROM ai_invocations
-  WHERE cached = 0 AND model IS NOT NULL AND tokenCount IS NOT NULL
+  WHERE ownerId = ? AND cached = 0 AND model IS NOT NULL AND tokenCount IS NOT NULL
   GROUP BY model
 `);
 
-const cleanupStmt = sqlite.prepare(`
-  DELETE FROM ai_invocations WHERE createdAt < datetime('now', '-30 days')
-`);
+const cleanupStmt = sqlite.prepare(
+  // tenant-lint: allow instance sweep
+  `DELETE FROM ai_invocations WHERE createdAt < datetime('now', '-30 days')`,
+);
 
 // =============================================================================
 // Cost Lookup — Build a model→costPerM map from all provider registries
@@ -171,12 +174,20 @@ export function recordInvocation(entry: InvocationEntry): void {
 }
 
 /**
- * Get aggregate summary KPIs, quota state, and cache tier statistics.
- * Powers the Summary Bar and KPI Row on the AI Stats page.
+ * Get one account's aggregate KPIs, the instance quota state, and, for an
+ * admin, the cache tier statistics.
+ *
+ * The counts, tokens and cost describe the caller's own AI use. They read
+ * `idx_ai_inv_owner_created`, which leads with `ownerId`.
+ *
+ * `cacheTiers` is different in kind: the tiers are one in-process LRU shared
+ * by the whole instance, and their hit and miss counters describe everybody's
+ * traffic. A member sees their own spending; only an admin sees the
+ * instance's cache behaviour, so the field is omitted rather than faked.
  */
-export function getSummary() {
+export function getSummary(scope: Scope, options: { admin: boolean }) {
   // 1. Session aggregates from ai_invocations
-  const agg = summaryStmt.get() as {
+  const agg = summaryStmt.get(scope.ownerId) as {
     totalInvocations: number;
     freshCalls: number;
     cachedCalls: number;
@@ -184,7 +195,7 @@ export function getSummary() {
   };
 
   // 2. Cost estimation: sum (tokens / 1M * costPerM) per model
-  const costRows = costBreakdownStmt.all() as {
+  const costRows = costBreakdownStmt.all(scope.ownerId) as {
     model: string;
     tokens: number;
   }[];
@@ -217,8 +228,8 @@ export function getSummary() {
     grounding: quotaSnapshot.grounding,
   };
 
-  // 6. Cache tier stats (in-memory, from aiCache)
-  const rawCacheStats = aiCache.getStats();
+  // 6. Cache tier stats (in-memory, from aiCache). Admin only.
+  const rawCacheStats = options.admin ? aiCache.getStats() : {};
   const cacheTiers: Record<
     string,
     {
@@ -265,43 +276,45 @@ export function getSummary() {
     },
     tier,
     quota,
-    cacheTiers,
+    ...(options.admin ? { cacheTiers } : {}),
     timestamp: new Date().toISOString(),
   };
 }
 
 /**
- * Get a paginated, filterable feed of AI invocations.
+ * Get a paginated, filterable feed of one account's AI invocations.
  * Supports filtering by operation type(s), cache status, and sort direction.
  */
-export function getFeed(params: FeedParams) {
+export function getFeed(scope: Scope, params: FeedParams) {
   const { offset, limit, operations, cached, sort } = params;
 
-  // Build dynamic WHERE clauses
-  const conditions: string[] = [];
-  const bindValues: unknown[] = [];
+  // The owner is written into the statement text rather than assembled with
+  // the optional filters, so every shape of this query starts `WHERE ownerId
+  // = ?` and leads with `idx_ai_inv_owner_created`. A reader, and the tenant
+  // linter, can see the predicate without evaluating a variable.
+  const filters: string[] = [];
+  const filterValues: unknown[] = [];
 
   if (operations && operations.length > 0) {
     const placeholders = operations.map(() => "?").join(", ");
-    conditions.push(`operation IN (${placeholders})`);
-    bindValues.push(...operations);
+    filters.push(`operation IN (${placeholders})`);
+    filterValues.push(...operations);
   }
 
   if (cached !== undefined) {
-    conditions.push("cached = ?");
-    bindValues.push(cached ? 1 : 0);
+    filters.push("cached = ?");
+    filterValues.push(cached ? 1 : 0);
   }
 
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
+  const filterClause = filters.map((f) => ` AND ${f}`).join("");
   const orderDirection = sort === "oldest" ? "ASC" : "DESC";
+  const bindValues: unknown[] = [scope.ownerId, ...filterValues];
 
   // Items query
   const itemsQuery = sqlite.prepare(`
     SELECT id, operation, model, tokenCount, latencyMs, cached, description, createdAt
     FROM ai_invocations
-    ${whereClause}
+    WHERE ownerId = ?${filterClause}
     ORDER BY createdAt ${orderDirection}
     LIMIT ? OFFSET ?
   `);
@@ -310,7 +323,7 @@ export function getFeed(params: FeedParams) {
   const countQuery = sqlite.prepare(`
     SELECT COUNT(*) AS cnt
     FROM ai_invocations
-    ${whereClause}
+    WHERE ownerId = ?${filterClause}
   `);
 
   const rawItems = itemsQuery.all(...bindValues, limit, offset) as Array<{

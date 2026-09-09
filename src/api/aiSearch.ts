@@ -22,15 +22,17 @@ const API_BASE = "/api";
 export const useStartAISearch = () => {
   return useMutation({
     mutationFn: async (contactIds: string[]) => {
+      // `apiFetch` throws `ApiError` for any non-2xx, with the message read
+      // out of the standard `{ error: { code, message } }` envelope, so the
+      // caller's `onError` toast shows the server's own words. The cooldown
+      // 429 used to be the one endpoint that answered with a bare
+      // `{ error: string }`; since 2f it sends the envelope like everything
+      // else, and carries `details.yours` for Phase 4 to act on.
       const res = await apiFetch(`/ai-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contactIds }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to start AI Search");
-      }
       return res.json() as Promise<{ batchId: string; jobCount: number }>;
     },
   });

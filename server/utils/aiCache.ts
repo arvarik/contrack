@@ -389,6 +389,23 @@ export const aiCache = {
   },
 
   /**
+   * Drop one owner's entries from an owner-keyed tier.
+   *
+   * The tiers that carry `ownerKey` lead every key with `<ownerId>::`, so the
+   * prefix invalidation above is exactly the right tool. Before this existed,
+   * one account editing a contact flushed the whole `rerank`, `synthesis`,
+   * `briefing` and `dailyInsight` tiers, which cost every other account on the
+   * instance a regeneration through a paid provider.
+   *
+   * Only for owner-keyed tiers. `queryParse`, `hyde` and `mentions` hold no
+   * owner in their keys and nothing about them goes stale when a contact
+   * changes.
+   */
+  invalidateForOwner(operation: string, ownerId: string): void {
+    aiCache.invalidate(operation, `${ownerId}::`);
+  },
+
+  /**
    * Nuclear option: flush ALL tiers. Used by contactService.invalidateAllCaches().
    * In batch mode, the flush is deferred until exitBatchMode().
    */

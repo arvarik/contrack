@@ -16,7 +16,8 @@ import type { AISearchBatch } from "../services/aiSearch/types.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
 import { enrichmentContact } from "../services/aiSearch/contactSnapshot.ts";
-import { AppError } from "../utils/AppError.ts";
+import { AppError, RateLimitedError } from "../utils/AppError.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 export const aiSearchRouter = Router();
 
@@ -48,26 +49,38 @@ const aiSearchBodySchema = z.object({
 aiSearchRouter.post(
   "/ai-search",
   validateBody(aiSearchBodySchema),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req, res, next) => {
+    const scope = scopeOf(req);
     const { contactIds, strategy: requestedStrategy } = req.body;
 
     const strategy = validateEnrichmentStrategy(requestedStrategy);
 
-    // Canary guard — checks both in-progress lock and cooldown
-    const check = jobQueue.canStartBatch();
+    // Canary guard — the global run lock and this account's own cooldown.
+    const check = jobQueue.canStartBatch(scope);
     if (!check.allowed) {
-      return res.status(429).json({ error: check.reason });
+      // This used to be a bare `res.status(429).json({ error: string })`,
+      // which is the one place in the API that did not send the standard
+      // envelope. `details.yours` says whether the caller's own cooldown
+      // refused, or somebody else's batch holds the shared provider lock.
+      return next(
+        new RateLimitedError(check.reason ?? "Please try again shortly.", {
+          yours: check.yours,
+          queued: false,
+          retryAfterSeconds: check.retryAfterSeconds,
+        }),
+      );
     }
 
-    // Fetch contact names for the job queue UI display
+    // Fetch contact names for the job queue UI display. A contact id this
+    // account does not own is refused here, before any token is spent.
     const contacts: Array<{ id: string; name: string }> = [];
     for (const id of contactIds) {
-      const contact = enrichmentContact(id);
+      const contact = enrichmentContact(scope, id);
       contacts.push({ id: contact.id, name: contact.name });
     }
 
     // Create batch
-    const batch = jobQueue.createBatch(contacts, strategy);
+    const batch = jobQueue.createBatch(scope, contacts, strategy);
 
     // Kick off processing async (fire-and-forget — don't await)
     jobQueue.processBatch(batch.id).catch((err) => {
@@ -90,15 +103,10 @@ aiSearchRouter.get(
   "/ai-search/status",
   asyncHandler(async (req, res) => {
     const batchId = z.string().min(1).max(100).parse(req.query.batchId);
-    if (!batchId) {
-      return res
-        .status(400)
-        .json({ error: "batchId query parameter is required." });
-    }
 
-    const batch = jobQueue.getBatch(batchId);
+    const batch = jobQueue.getBatch(scopeOf(req), batchId);
     if (!batch) {
-      return res.status(404).json({ error: "Batch not found." });
+      throw new AppError("Batch not found.", 404);
     }
 
     res.json(batch);
@@ -111,7 +119,11 @@ aiSearchRouter.get(
 
 aiSearchRouter.get("/ai-search/stream", (req, res) => {
   const batchId = z.string().min(1).max(100).parse(req.query.batchId);
-  const batch = jobQueue.getBatch(batchId);
+  // Read before subscribing. The listener below runs in the async context of
+  // whoever calls emit(), which is the job, so the owner has to be settled in
+  // this closure while the request context is still the request's.
+  const scope = scopeOf(req);
+  const batch = jobQueue.getBatch(scope, batchId);
   if (!batch)
     throw new AppError("Batch not found. The server may have restarted.", 404);
   res.setHeader("Content-Type", "text/event-stream");
@@ -144,7 +156,7 @@ aiSearchRouter.get("/ai-search/stream", (req, res) => {
 
 aiSearchRouter.post("/ai-search/:batchId/cancel", (req, res) => {
   const batchId = z.string().min(1).max(100).parse(req.params.batchId);
-  const batch = jobQueue.cancelBatch(batchId);
+  const batch = jobQueue.cancelBatch(scopeOf(req), batchId);
   if (!batch) throw new AppError("Batch not found.", 404);
   res.json(batch);
 });

@@ -4,20 +4,24 @@ import type { HydratedContact } from "../../repositories/types.ts";
 import { contentHash } from "../../utils/aiCache.ts";
 import { ACTIVE_CONTACT_SQL } from "../search/ftsIndex.ts";
 import { AppError } from "../../utils/AppError.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 
 /**
- * Read an active local contact before accepting an enrichment result.
+ * Read one of this account's active contacts before enriching it.
  *
- * Unscoped by design: both callers check the owner first, the enrich route
- * with `requireOwned` and the AI Search batch with the contacts it was given.
+ * The owner is in the same statement as the id, so a contact another account
+ * owns is not found here. It keeps the 409 a deleted or archived id has
+ * always taken rather than becoming a 404: the two answers are identical
+ * either way, which is what the rule about not distinguishing "gone" from
+ * "not yours" is for, and the endpoint's existing contract is unchanged.
  */
-export function enrichmentContact(id: string): HydratedContact {
+export function enrichmentContact(scope: Scope, id: string): HydratedContact {
   const row = sqlite
     .prepare(
-      // tenant-lint: allow owner-checked by caller
-      `SELECT c.* FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}`,
+      `SELECT c.* FROM contacts c
+        WHERE c.id = ? AND c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}`,
     )
-    .get(id);
+    .get(id, scope.ownerId);
   const contact = row ? contactRepo.hydrate(row) : null;
   if (!contact)
     throw new AppError("Contact is no longer available for enrichment.", 409);
