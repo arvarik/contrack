@@ -1,3 +1,4 @@
+import { aiCache } from "../utils/aiCache.ts";
 // =============================================================================
 // AI Settings Service — provider credentials, capability assignments, models
 // =============================================================================
@@ -61,6 +62,7 @@ export function setProviderKey(providerId: string, apiKey: string): void {
   keys[providerId] = apiKey.trim();
   setSetting(SETTING_KEYS.aiProviderKeys, keys);
   invalidateProviderCache();
+  aiCache.invalidateAll();
 }
 
 /** Remove a stored API key (env-provided keys are unaffected). */
@@ -71,6 +73,7 @@ export function deleteProviderKey(providerId: string): void {
   setSetting(SETTING_KEYS.aiProviderKeys, keys);
   releasePinsFor(providerId);
   invalidateProviderCache();
+  aiCache.invalidateAll();
 }
 
 /**
@@ -120,6 +123,7 @@ export function upsertCustomEndpoint(endpoint: CustomEndpointConfig): void {
   else endpoints.push(endpoint);
   setSetting(SETTING_KEYS.aiCustomEndpoints, endpoints);
   invalidateProviderCache();
+  aiCache.invalidateAll();
 }
 
 export function deleteCustomEndpoint(id: string): void {
@@ -129,6 +133,7 @@ export function deleteCustomEndpoint(id: string): void {
   );
   releasePinsFor(`custom:${id}`);
   invalidateProviderCache();
+  aiCache.invalidateAll();
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +163,7 @@ export function setCapabilityAssignment(
   const assignments = getCapabilityAssignments();
   assignments[capability] = assignment;
   setSetting(SETTING_KEYS.aiCapabilities, assignments);
+  aiCache.invalidateAll();
 }
 
 // ---------------------------------------------------------------------------

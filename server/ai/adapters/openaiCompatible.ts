@@ -88,6 +88,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.client = new OpenAI({
       baseURL: this.baseUrl,
+      maxRetries: 0,
       // Local servers (Ollama, LM Studio) ignore the key but the SDK requires
       // a non-empty string.
       apiKey: options.apiKey || "not-needed",
@@ -190,6 +191,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
     // is not JSON at all), so both a rejection and an unparseable body trigger
     // the downgrade.
     for (;;) {
+      signal.throwIfAborted();
       let result: AIGenerateResult;
       try {
         result = await this.attempt(options, model, mode, signal, startMs);
@@ -257,6 +259,8 @@ export class OpenAICompatibleAdapter implements AIProvider {
     messages.push({ role: "user", content: options.prompt });
 
     const requestParams: Record<string, unknown> = { model, messages };
+    if (options.maxOutputTokens)
+      requestParams.max_tokens = options.maxOutputTokens;
     if (options.responseFormat === "json") {
       if (mode === "json_schema" && options.jsonSchema) {
         requestParams.response_format = {

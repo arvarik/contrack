@@ -1,4 +1,6 @@
-import { apiFetch } from "./client";
+import { apiFetch, ApiError } from "./client";
+import { aiSearchBatchSchema } from "../../shared/aiSearchContract";
+import { invalidateContactViews } from "./contactCache";
 /**
  * AI Search — React Query hooks and SSE streaming.
  *
@@ -34,91 +36,109 @@ export const useStartAISearch = () => {
   });
 };
 
-// =============================================================================
-// SSE-based batch status hook (primary)
-// =============================================================================
+/** Poll after transient errors and stop only after a terminal result or a missing batch. */
+export const useAISearchStatusPoll = (batchId: string | null) => {
+  return useQuery({
+    queryKey: ["ai-search-status", batchId],
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(
+        `/ai-search/status?batchId=${encodeURIComponent(batchId!)}`,
+        { signal },
+      );
+      const batch = aiSearchBatchSchema.parse(await res.json());
+      if (batch.id !== batchId)
+        throw new Error("The server returned a different research batch.");
+      return batch;
+    },
+    enabled: !!batchId,
+    refetchInterval: (query) => {
+      if (
+        query.state.error instanceof ApiError &&
+        query.state.error.status === 404
+      )
+        return false;
+      const data = query.state.data;
+      if (data && data.status !== "processing") return false;
+      return data?.jobs.some(
+        (job) => job.status === "searching" || job.status === "merging",
+      )
+        ? 2000
+        : 5000;
+    },
+  });
+};
 
-/**
- * Connects to the SSE stream endpoint for real-time batch updates.
- * Calls onUpdate for every state change. Automatically closes on completion.
- * Falls back gracefully if SSE is unavailable.
- */
+/** Live events update the same cache that polling uses, so dropped streams cannot freeze progress. */
 export const useAISearchStream = (
   batchId: string | null,
   onUpdate: (batch: AISearchBatch) => void,
 ) => {
   const queryClient = useQueryClient();
+  const poll = useAISearchStatusPoll(batchId);
   const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
-
+  const refreshed = useRef(new Set<string>());
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+  useEffect(() => {
+    refreshed.current.clear();
+  }, [batchId]);
+  useEffect(() => {
+    const batch = poll.data;
+    if (!batch || batch.id !== batchId) return;
+    onUpdateRef.current(batch);
+    const completed = batch.jobs.filter(
+      (job) => job.status === "success" && !refreshed.current.has(job.id),
+    );
+    if (completed.length) {
+      completed.forEach((job) => refreshed.current.add(job.id));
+      invalidateContactViews(queryClient);
+    }
+  }, [batchId, poll.data, queryClient]);
   useEffect(() => {
     if (!batchId) return;
-
     const source = new EventSource(
-      `${API_BASE}/ai-search/stream?batchId=${batchId}`,
+      `${API_BASE}/ai-search/stream?batchId=${encodeURIComponent(batchId)}`,
     );
-
     source.onmessage = (event) => {
-      try {
-        const batch: AISearchBatch = JSON.parse(event.data);
-        onUpdateRef.current(batch);
-        if (batch.status === "complete" || batch.status === "cancelled") {
-          // Invalidate all contact queries so updated data appears everywhere
-          queryClient.invalidateQueries({ queryKey: ["contacts"] });
-          // Also invalidate each individual contact that was enriched
-          for (const job of batch.jobs) {
-            if (job.fieldsUpdated > 0) {
-              queryClient.invalidateQueries({
-                queryKey: ["contacts", job.contactId],
-              });
-            }
-          }
-          source.close();
-        }
-      } catch {
-        // Ignore parse errors on individual events
+      const parsed = aiSearchBatchSchema.safeParse(safeJson(event.data));
+      if (!parsed.success || parsed.data.id !== batchId) {
+        source.close();
+        return;
       }
+      queryClient.setQueryData(["ai-search-status", batchId], parsed.data);
+      if (parsed.data.status !== "processing") source.close();
     };
-
     source.onerror = () => {
-      // SSE failed — the component can fall back to polling
       source.close();
+      void queryClient.invalidateQueries({
+        queryKey: ["ai-search-status", batchId],
+      });
     };
-
     return () => source.close();
   }, [batchId, queryClient]);
+  return { error: poll.error };
 };
 
-// =============================================================================
-// Polling fallback hook
-// =============================================================================
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
-/** Polling fallback: only used when SSE is unavailable */
-export const useAISearchStatusPoll = (batchId: string | null) => {
-  const queryClient = useQueryClient();
-  return useQuery({
-    queryKey: ["ai-search-status", batchId],
-    queryFn: async ({ signal }) => {
-      const res = await apiFetch(`/ai-search/status?batchId=${batchId}`, {
-        signal,
-      });
-      if (!res.ok) throw new Error("Failed to fetch status");
-      return res.json() as Promise<AISearchBatch>;
+export const useCancelAISearch = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (batchId: string) => {
+      const response = await apiFetch(
+        `/ai-search/${encodeURIComponent(batchId)}/cancel`,
+        { method: "POST" },
+      );
+      return aiSearchBatchSchema.parse(await response.json());
     },
-    enabled: !!batchId,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || data.status === "complete" || data.status === "cancelled") {
-        if (data?.status === "complete") {
-          queryClient.invalidateQueries({ queryKey: ["contacts"] });
-        }
-        return false;
-      }
-      // Adaptive: fast when active, slower when idle between contacts
-      const active = data.jobs.filter(
-        (j) => j.status === "searching" || j.status === "merging",
-      ).length;
-      return active > 0 ? 1000 : 3000;
-    },
+    onSuccess: (batch) =>
+      client.setQueryData(["ai-search-status", batch.id], batch),
   });
 };

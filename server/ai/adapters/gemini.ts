@@ -30,8 +30,13 @@ import {
   type ModelClass,
 } from "../routing/registry.ts";
 import { log } from "../../utils/logger.ts";
-import { getErrorMessage } from "../../utils/helpers.ts";
-import { withTimeout, parseAIJson, AI_DEFAULTS } from "../resilience.ts";
+import {
+  withTimeout,
+  parseAIJson,
+  AI_DEFAULTS,
+  withRetry,
+  isRetryableError,
+} from "../resilience.ts";
 import { AppError } from "../../utils/AppError.ts";
 
 // ---------------------------------------------------------------------------
@@ -87,53 +92,12 @@ function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Returns true if the error looks like a transient server or quota error.
- *
- * Retryable errors from the Gemini API:
- * - 429 / "resource exhausted": Rate limit exceeded
- * - 503 / "unavailable":        Server temporarily overloaded
- * - 500 / "internal":           Transient server error
- * - 408 / "deadline exceeded":  Request timed out
- */
-function isRetryableError(error: unknown): boolean {
-  const errObj = error as Record<string, unknown> | null;
-  const msg = (
-    typeof errObj?.message === "string" ? errObj.message : ""
-  ).toLowerCase();
-  const status = (
-    typeof errObj?.status === "number" ? errObj.status : errObj?.statusCode
-  ) as number | undefined;
-  return (
-    status === 429 ||
-    status === 503 ||
-    status === 500 ||
-    status === 408 ||
-    msg.includes("429") ||
-    msg.includes("rate limit") ||
-    msg.includes("quota") ||
-    msg.includes("resource exhausted") ||
-    msg.includes("503") ||
-    msg.includes("unavailable") ||
-    msg.includes("500") ||
-    msg.includes("internal") ||
-    msg.includes("408") ||
-    msg.includes("deadline")
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 /** Duration (ms) to ban a model after a 429/503 — short enough for fast recovery */
 const CIRCUIT_BREAKER_DURATION_MS = 30_000;
-
-/** Maximum retry attempts for routed requests before giving up */
-const MAX_RETRIES = 3;
-
-/** Base delay for exponential backoff: 500ms, 1000ms, 2000ms */
-const BASE_BACKOFF_MS = 500;
 
 /**
  * Whether a discovered Gemini model can use the `googleSearch` tool.
@@ -179,7 +143,10 @@ export class GeminiAdapter implements AIProvider {
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
-    this.client = new GoogleGenAI({ apiKey });
+    this.client = new GoogleGenAI({
+      apiKey,
+      httpOptions: { retryOptions: { attempts: 1 } },
+    });
 
     // Read tier from environment once at construction time
     this.aiTier = getAITier();
@@ -303,131 +270,80 @@ export class GeminiAdapter implements AIProvider {
   // ---------------------------------------------------------------------------
 
   async generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
+    options.signal?.throwIfAborted();
     const startMs = Date.now();
     const requiresGrounding = !!options.enableSearchGrounding;
-
-    // Early bail-out for already-cancelled callers — saves a routing lookup.
-    if (options.signal?.aborted) {
-      throw new AppError("AI call cancelled by caller", 499, {
-        code: "CANCELLED",
-      });
-    }
-
-    // ── Explicit model override: bypass routing entirely ──────────────
-    // TwoPassStrategy and other callers that set `options.model` manage
-    // their own fallback chain. We execute their chosen model directly
-    // without routing, reservation, or retry logic.
-    if (options.model) {
-      return this.executeWithModel(options, options.model, startMs);
-    }
-
-    // ── Smart routing with retry loop ─────────────────────────────────
-    const isJson = options.responseFormat === "json";
     const estimatedTokens = this.tracker.estimateTokens(
       options.prompt,
       options.systemPrompt,
-      isJson,
+      options.responseFormat === "json",
     );
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      // Ask the router for the best available model.
-      // Wrapped in try-catch because the router throws if no models match
-      // (e.g., all circuit-broken + denied by policy). Without this catch,
-      // the throw would bypass lastError and surface as an unhandled exception.
-      let route;
-      try {
-        route = this.router.getNextAvailableRoute(
-          estimatedTokens,
-          options.routing,
-          this.circuitBreakers,
-          requiresGrounding,
-        );
-      } catch (routeError: unknown) {
-        lastError =
-          routeError instanceof Error
-            ? routeError
-            : new Error(getErrorMessage(routeError));
-        log.warn(
-          "GeminiAdapter",
-          `Router exhausted on attempt ${attempt}: ${getErrorMessage(routeError)}`,
-        );
-        break; // No point retrying if no models are available
-      }
-
-      // Optimistic reservation — deduct from the in-memory ledger BEFORE
-      // the network request fires. This prevents parallel requests from
-      // all targeting the same model simultaneously.
-      this.tracker.reserve(route.modelId, estimatedTokens);
-      if (requiresGrounding) {
-        this.tracker.reserveGrounding();
-      }
-
-      try {
-        const result = await this.executeWithModel(
-          options,
-          route.modelId,
-          startMs,
-        );
-
-        // Reconcile estimated vs actual tokens to keep the ledger accurate
-        const actualTokens = result.tokenCount ?? estimatedTokens;
-        this.tracker.reconcile(route.modelId, estimatedTokens, actualTokens);
-
-        log.info(
-          "GeminiAdapter",
-          `[${route.tier.toUpperCase()}] ${route.modelId} | ` +
-            `${result.latencyMs}ms | ${actualTokens} tokens | attempt ${attempt}`,
-        );
-
-        return result;
-      } catch (error: unknown) {
-        lastError =
-          error instanceof Error ? error : new Error(getErrorMessage(error));
-
-        // Rollback the optimistic reservation — this request didn't consume quota
-        this.tracker.rollback(route.modelId);
-        if (requiresGrounding) {
-          this.tracker.rollbackGrounding();
-        }
-
-        if (isRetryableError(error)) {
-          // Trip circuit breaker: ban this model for 30s so the next
-          // iteration's router call skips it automatically
-          log.warn(
-            "GeminiAdapter",
-            `${route.modelId} hit rate limit (attempt ${attempt}/${MAX_RETRIES}). ` +
-              `Circuit breaker tripped for ${CIRCUIT_BREAKER_DURATION_MS / 1000}s.`,
+    return withRetry(
+      async () => {
+        options.signal?.throwIfAborted();
+        if (requiresGrounding && !this.tracker.hasGroundingCapacity())
+          throw new AppError("Grounding quota exhausted for today.", 429, {
+            code: "AI_BUSY",
+          });
+        const model =
+          options.model ??
+          this.router.getNextAvailableRoute(
+            estimatedTokens,
+            options.routing,
+            this.circuitBreakers,
+            requiresGrounding,
+          ).modelId;
+        const config = getModelConfig(model);
+        if (
+          options.model &&
+          config &&
+          !this.tracker.hasCapacity(
+            model,
+            estimatedTokens,
+            this.aiTier === "FREE" ? config.freeLimits : config.paidLimits,
+          )
+        )
+          throw new AppError(
+            "This model has reached its local quota limit. Try again shortly.",
+            429,
+            { code: "AI_BUSY" },
           );
-          this.circuitBreakers.add(route.modelId);
-          setTimeout(
-            () => this.circuitBreakers.delete(route.modelId),
-            CIRCUIT_BREAKER_DURATION_MS,
+        const reservation = this.tracker.reserve(model, estimatedTokens);
+        const groundingDate = requiresGrounding
+          ? this.tracker.reserveGrounding()
+          : undefined;
+        try {
+          const result = await this.executeWithModel(options, model, startMs);
+          this.tracker.reconcile(
+            model,
+            estimatedTokens,
+            result.tokenCount ?? estimatedTokens,
+            reservation,
           );
-
-          // Exponential backoff before next attempt
-          if (attempt < MAX_RETRIES) {
-            const backoffMs = BASE_BACKOFF_MS * Math.pow(2, attempt - 1);
-            await new Promise((r) => setTimeout(r, backoffMs));
+          return result;
+        } catch (error) {
+          const status =
+            (error as { status?: number; statusCode?: number })?.status ??
+            (error as { statusCode?: number })?.statusCode;
+          // Only explicit rejections prove that the provider did not execute the request.
+          if (status && [400, 401, 403, 404, 422, 429].includes(status)) {
+            this.tracker.rollback(model, reservation);
+            if (requiresGrounding)
+              this.tracker.rollbackGrounding(groundingDate);
           }
-          continue;
+          options.signal?.throwIfAborted();
+          if (isRetryableError(error, false) && !options.model) {
+            this.circuitBreakers.add(model);
+            setTimeout(
+              () => this.circuitBreakers.delete(model),
+              CIRCUIT_BREAKER_DURATION_MS,
+            ).unref();
+          }
+          throw error;
         }
-
-        // Hard error (bad request, auth, schema) — do not retry
-        log.error(
-          "GeminiAdapter",
-          `${route.modelId} hard error: ${getErrorMessage(error)}`,
-        );
-        throw error;
-      }
-    }
-
-    log.error(
-      "GeminiAdapter",
-      "All retry attempts exhausted across all available models.",
+      },
+      { signal: options.signal },
     );
-    throw lastError ?? new Error("Max API retries exceeded.");
   }
 
   // ---------------------------------------------------------------------------
@@ -492,6 +408,21 @@ export class GeminiAdapter implements AIProvider {
       parseAIJson(text, `GeminiAdapter.executeWithModel(${model})`);
     }
 
-    return { text, model, tokenCount, latencyMs };
+    const citations = response.candidates
+      ?.flatMap(
+        (candidate) =>
+          candidate.groundingMetadata?.groundingChunks?.flatMap((chunk) =>
+            chunk.web?.uri && /^https?:\/\//i.test(chunk.web.uri)
+              ? [
+                  {
+                    title: chunk.web.title ?? chunk.web.uri,
+                    uri: chunk.web.uri,
+                  },
+                ]
+              : [],
+          ) ?? [],
+      )
+      .slice(0, 30);
+    return { text, model, tokenCount, latencyMs, citations };
   }
 }

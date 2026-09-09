@@ -226,95 +226,83 @@ Return null for fields you cannot verify through internet search.
 // .strict() which rejects the entire response if one unexpected field appears.
 // =============================================================================
 
+const shortText = z.string().trim().max(500);
+const optionalText = shortText
+  .nullish()
+  .transform((value) => value ?? undefined);
+const webUrl = z
+  .string()
+  .trim()
+  .max(2000)
+  .url()
+  .refine(
+    (value) => /^https?:\/\//i.test(value),
+    "Expected an HTTP or HTTPS URL",
+  );
+const optionalUrl = z.preprocess(
+  (value) => (value === "" ? null : value),
+  webUrl.nullish(),
+);
+const list = <T extends z.ZodType>(item: T) =>
+  z
+    .array(item)
+    .max(50)
+    .nullish()
+    .transform((value) => value ?? undefined);
+
 export const aiSearchOutputSchema = z.object({
-  role: z.string().nullish(),
-  company: z.string().nullish(),
-  headline: z.string().nullish(),
-  about: z.string().nullish(),
-  industry: z.string().nullish(),
-  website: z.string().nullish(),
-  location: z.string().nullish(),
-  pronouns: z.string().nullish(),
-  birthday: z.string().nullish(),
-  emails: z
-    .array(
-      z.object({
-        email: z.string(),
-        label: z.string().optional(),
-      }),
-    )
-    .optional(),
-  phones: z
-    .array(
-      z.object({
-        phone: z.string(),
-        label: z.string().optional(),
-      }),
-    )
-    .optional(),
-  socialLinks: z
-    .array(
-      z.object({
-        platform: z.string(),
-        url: z.string(),
-      }),
-    )
-    .optional(),
-  education: z
-    .array(
-      z.object({
-        school: z.string(),
-        degree: z.string().optional(),
-        fieldOfStudy: z.string().optional(),
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      }),
-    )
-    .optional(),
-  experience: z
-    .array(
-      z.object({
-        company: z.string(),
-        role: z.string().optional(),
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        isCurrent: z.boolean().optional(),
-        description: z.string().optional(),
-        location: z.string().optional(),
-      }),
-    )
-    .optional(),
-  tags: z
-    .array(
-      z.object({
-        tag: z.string(),
-      }),
-    )
-    .optional(),
-  interests: z
-    .array(
-      z.object({
-        interest: z.string(),
-        isAiGenerated: z.boolean().optional(),
-      }),
-    )
-    .optional(),
-  attributes: z
-    .array(
-      z.object({
-        name: z.string(),
-        value: z.string(),
-      }),
-    )
-    .optional(),
-  addresses: z
-    .array(
-      z.object({
-        address: z.string(),
-        label: z.string().optional(),
-      }),
-    )
-    .optional(),
+  role: optionalText,
+  company: optionalText,
+  headline: optionalText,
+  about: z.string().trim().max(4000).nullish(),
+  industry: optionalText,
+  website: optionalUrl,
+  location: optionalText,
+  pronouns: optionalText,
+  birthday: optionalText,
+  emails: list(z.object({ email: z.email().max(320), label: optionalText })),
+  phones: list(
+    z.object({ phone: z.string().trim().min(1).max(80), label: optionalText }),
+  ),
+  socialLinks: list(z.object({ platform: shortText.min(1), url: webUrl })),
+  education: list(
+    z.object({
+      school: shortText.min(1),
+      degree: optionalText,
+      fieldOfStudy: optionalText,
+      startDate: optionalText,
+      endDate: optionalText,
+    }),
+  ),
+  experience: list(
+    z.object({
+      company: shortText.min(1),
+      role: optionalText,
+      startDate: optionalText,
+      endDate: optionalText,
+      isCurrent: z
+        .boolean()
+        .nullish()
+        .transform((value) => value ?? undefined),
+      description: z
+        .string()
+        .max(4000)
+        .nullish()
+        .transform((value) => value ?? undefined),
+      location: optionalText,
+    }),
+  ),
+  tags: list(z.object({ tag: shortText.min(1) })),
+  interests: list(
+    z.object({
+      interest: shortText.min(1),
+      isAiGenerated: z.boolean().optional(),
+    }),
+  ),
+  attributes: list(
+    z.object({ name: shortText.min(1), value: shortText.min(1) }),
+  ),
+  addresses: list(z.object({ address: shortText.min(1), label: optionalText })),
 });
 
 export type AISearchOutput = z.infer<typeof aiSearchOutputSchema>;

@@ -105,7 +105,7 @@ The enrichment strategy varies by AI provider:
 
 The AI searches the internet for each contact and can update:
 
-- Role and company (if changed)
+- Role and company when the fields are empty
 - Headline / professional summary
 - Social links (LinkedIn, GitHub, Twitter)
 - Education and experience history
@@ -113,26 +113,40 @@ The AI searches the internet for each contact and can update:
 - Website
 - AI-generated summary and background
 
+Enrichment preserves existing values. It rejects the result if the contact
+changes during research. Gemini source links appear under **Dossier → Research
+notes and sources**. The section also shows research for contacts with no other
+dossier fields.
+
 ### Progress Tracking
 
 Each batch job streams real-time progress via SSE (`GET /api/ai-search/stream`):
 
-- Per-contact status: `queued` → `searching` → `merging` → `success` / `error`
+- Per-contact status: `queued` → `searching` → `merging` → `success` / `error` / `cancelled`
 - Error classification: rate_limit, validation, network, auth, ambiguous
 - Token usage tracking
 - Latency per contact
+
+The overlay supports scrolling, visible error text, and **Stop research**.
+Minimizing the overlay keeps a progress button available. Status polling
+continues if the stream disconnects. A server restart clears progress, while
+completed contact updates remain in the database.
 
 ### Rate Limiting
 
 - Maximum 100 contacts per batch
 - 5-minute cooldown between batches
-- Provider-specific RPM limits are respected via the Parallel Queue
+- Two concurrent AI generations and 16 waiting generations per server
+- One workflow per contact, with a 90-second deadline
+- At most one retry for a transient provider failure within the deadline
+- No repeated research workflow after empty or invalid model output
 
 **APIs:**
 
 - `POST /api/ai-search` — Start a batch
 - `GET /api/ai-search/status?batchId=` — Poll status
 - `GET /api/ai-search/stream?batchId=` — SSE stream
+- `POST /api/ai-search/:batchId/cancel` — Stop a batch
 
 ---
 

@@ -21,12 +21,14 @@ import { sqlite } from "../../db.ts";
 import { sanitizeAiOutputValue } from "../../ai/promptSafety.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
-import { invalidateSearchCache } from "../../utils/aiCache.ts";
+import { invalidateSearchCache, aiCache } from "../../utils/aiCache.ts";
 import type {
   HydratedContact,
   ChildRecordsPayload,
 } from "../../repositories/types.ts";
-import type { AISearchOutput } from "./promptTemplate.ts";
+import { aiSearchOutputSchema, type AISearchOutput } from "./promptTemplate.ts";
+import { contactFingerprint, enrichmentContact } from "./contactSnapshot.ts";
+import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
 
 // =============================================================================
@@ -57,8 +59,55 @@ const ALLOWED_SCALAR_FIELDS = new Set([
 export function mergeSearchResult(
   contactId: string,
   existing: HydratedContact,
-  searchResult: AISearchOutput,
+  output: unknown,
+  citations: Array<{ title: string; uri: string }> = [],
 ): number {
+  const fresh = enrichmentContact(contactId);
+  if (contactFingerprint(fresh) !== contactFingerprint(existing))
+    throw new AppError(
+      "Contact changed during research. Review the contact and try again.",
+      409,
+    );
+  existing = fresh;
+  const parsed = aiSearchOutputSchema.safeParse(output);
+  if (!parsed.success)
+    throw new AppError("AI research failed schema validation.", 502, {
+      code: "AI_SCHEMA_MISMATCH",
+    });
+  const searchResult = parsed.data;
+  // Deduplicate incoming arrays before comparing them with existing records.
+  const keys = {
+    emails: (entry: { email: string }) => entry.email.trim().toLowerCase(),
+    phones: (entry: { phone: string }) => entry.phone.replace(/\D/g, ""),
+    socialLinks: (entry: { url: string }) =>
+      entry.url.toLowerCase().replace(/\/$/, ""),
+    education: (entry: { school: string; degree?: string }) =>
+      `${entry.school}|${entry.degree ?? ""}`.toLowerCase(),
+    experience: (entry: {
+      company: string;
+      role?: string;
+      startDate?: string;
+    }) =>
+      `${entry.company}|${entry.role ?? ""}|${entry.startDate ?? ""}`.toLowerCase(),
+    tags: (entry: { tag: string }) => entry.tag.toLowerCase(),
+    interests: (entry: { interest: string }) => entry.interest.toLowerCase(),
+    attributes: (entry: { name: string }) => entry.name.toLowerCase(),
+    addresses: (entry: { address: string }) => entry.address.toLowerCase(),
+  };
+  for (const field of Object.keys(keys) as (keyof typeof keys)[]) {
+    const entries = searchResult[field];
+    if (!entries) continue;
+    const seen = new Set<string>();
+    const key = keys[field] as (entry: unknown) => string;
+    Object.assign(searchResult, {
+      [field]: entries.filter((entry) => {
+        const value = key(entry);
+        if (seen.has(value)) return false;
+        seen.add(value);
+        return true;
+      }),
+    });
+  }
   let fieldsUpdated = 0;
   const scalarUpdate: Record<string, unknown> = {};
 
@@ -93,7 +142,7 @@ export function mergeSearchResult(
 
   // 1b. aiBackground (dossier) — synthesize a clean markdown brief from extraction
   if (!existing.aiBackground) {
-    const dossier = synthesizeDossier(existing, searchResult);
+    const dossier = synthesizeDossier(existing, searchResult, citations);
     if (dossier) {
       const safeDossier = sanitizeAiOutputValue(dossier, 12_000);
       if (safeDossier !== null) {
@@ -226,10 +275,18 @@ export function mergeSearchResult(
     Array.isArray(searchResult.interests) &&
     searchResult.interests.length > 0
   ) {
-    childData.interests = searchResult.interests.map((i) => ({
-      interest: i.interest,
-      isAiGenerated: true,
-    }));
+    childData.interests = searchResult.interests
+      .filter(
+        (i) =>
+          !existing.interests.some(
+            (saved) =>
+              saved.interest.toLowerCase() === i.interest.toLowerCase(),
+          ),
+      )
+      .map((i) => ({
+        interest: i.interest,
+        isAiGenerated: true,
+      }));
     fieldsUpdated += childData.interests.length;
   }
 
@@ -238,7 +295,12 @@ export function mergeSearchResult(
     Array.isArray(searchResult.attributes) &&
     searchResult.attributes.length > 0
   ) {
-    childData.attributes = searchResult.attributes;
+    childData.attributes = searchResult.attributes.filter(
+      (attribute) =>
+        !existing.attributes.some(
+          (saved) => saved.name.toLowerCase() === attribute.name.toLowerCase(),
+        ),
+    );
     fieldsUpdated += childData.attributes.length;
   }
 
@@ -297,6 +359,8 @@ export function mergeSearchResult(
 
   // Invalidate the semantic search cache so updated data is searchable
   invalidateSearchCache();
+  aiCache.invalidate("briefing", contactId);
+  aiCache.invalidate("dailyInsight");
   scheduleSearchIndex(contactId);
 
   log.info(
@@ -320,6 +384,7 @@ export function mergeSearchResult(
 function synthesizeDossier(
   existing: HydratedContact,
   searchResult: AISearchOutput,
+  citations: Array<{ title: string; uri: string }>,
 ): string | null {
   const name = existing.name || "This contact";
   const sections: string[] = [];
@@ -394,6 +459,20 @@ function synthesizeDossier(
   // Only produce a dossier if we have at least one substantive section
   if (sections.length === 0) return null;
 
+  const urls = [...new Set(citations.map((source) => source.uri))]
+    .filter((uri) => {
+      try {
+        const url = new URL(uri);
+        return /^https?:$/.test(url.protocol) && !url.username && !url.password;
+      } catch {
+        return false;
+      }
+    })
+    .slice(0, 10);
+  if (urls.length)
+    sections.push(
+      `### Sources\n${urls.map((uri, index) => `- [Source ${index + 1}](<${uri.replace(/[<>\s]/g, (character) => encodeURIComponent(character))}>)`).join("\n")}`,
+    );
   return sections.join("\n\n");
 }
 

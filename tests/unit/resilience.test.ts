@@ -194,7 +194,7 @@ describe("withRetry", () => {
       .mockRejectedValueOnce({ status: 503, message: "Service Unavailable" })
       .mockResolvedValueOnce("third-try");
 
-    const promise = withRetry(op);
+    const promise = withRetry(op, { maxAttempts: 3 });
     // Advance past all backoff windows (500ms + 1000ms ≈ 1500ms + jitter).
     await vi.advanceTimersByTimeAsync(5_000);
 
@@ -218,7 +218,7 @@ describe("withRetry", () => {
       .mockRejectedValueOnce({ status: 503 })
       .mockResolvedValueOnce("done");
 
-    const promise = withRetry(op, { onRetry });
+    const promise = withRetry(op, { onRetry, maxAttempts: 3 });
     await vi.advanceTimersByTimeAsync(5_000);
     await promise;
 
@@ -372,7 +372,7 @@ describe("parseAIJson", () => {
 describe("AI_DEFAULTS", () => {
   it("exposes the published timeout, retry, and backoff numbers", () => {
     expect(AI_DEFAULTS.perAttemptTimeoutMs).toBe(60_000);
-    expect(AI_DEFAULTS.maxAttempts).toBe(3);
+    expect(AI_DEFAULTS.maxAttempts).toBe(2);
     expect(AI_DEFAULTS.baseBackoffMs).toBe(500);
     expect(AI_DEFAULTS.jitterMs).toBe(250);
   });

@@ -1,3 +1,4 @@
+import { resolveCapability } from "../ai/capabilities.ts";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { actionItemService } from "./actionItemService.ts";
@@ -61,7 +62,7 @@ export const dashboardService = {
              COUNT(DISTINCT im.interactionId) as mentionCount
       FROM contacts c
       JOIN interaction_mentions im ON c.id = im.contactId
-      WHERE c.isGhost = 1 AND (c.isArchived = 0 OR c.isArchived IS NULL)
+      WHERE c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 1 AND (c.isArchived = 0 OR c.isArchived IS NULL)
       GROUP BY c.id
       ORDER BY mentionCount DESC
       LIMIT 5
@@ -73,12 +74,12 @@ export const dashboardService = {
     const metrics = sqlite
       .prepare(
         `
-      SELECT 
-        (SELECT COUNT(*) FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
-        (SELECT ROUND(AVG(CAST(julianday('now') - julianday(lastContactedAt) AS REAL))) FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL) as avgDaysSinceInteraction,
-        (SELECT COUNT(*) FROM contacts WHERE relationshipScore < 40 AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
-        (SELECT COUNT(*) FROM interactions WHERE date >= date('now', '-30 days')) as totalInteractions30d,
-        (SELECT COUNT(*) FROM contacts WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
+      SELECT
+        (SELECT COUNT(*) FROM contacts WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
+        (SELECT ROUND(AVG(CAST(julianday('now') - julianday(lastContactedAt) AS REAL))) FROM contacts WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL) as avgDaysSinceInteraction,
+        (SELECT COUNT(*) FROM contacts WHERE relationshipScore < 40 AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
+        (SELECT COUNT(*) FROM interactions WHERE date >= date('now', '-30 days') AND contactId IN (SELECT id FROM contacts WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND COALESCE(isArchived, 0) = 0)) as totalInteractions30d,
+        (SELECT COUNT(*) FROM contacts WHERE addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
     `,
       )
       .get() as DashboardMetricsRow;
@@ -95,7 +96,7 @@ export const dashboardService = {
              CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
              (SELECT title FROM interactions WHERE contactId = c.id ORDER BY date DESC LIMIT 1) as lastInteractionTitle
       FROM contacts c
-      WHERE c.isGhost = 0
+      WHERE c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
         AND c.relationshipScore < 40
         AND c.lastContactedAt IS NOT NULL
@@ -115,7 +116,7 @@ export const dashboardService = {
         `
       SELECT id, name, company, avatarUrl, themeColor, addedAt
       FROM contacts
-      WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       ORDER BY addedAt DESC
       LIMIT 5
     `,
@@ -126,11 +127,11 @@ export const dashboardService = {
     const industryComposition = sqlite
       .prepare(
         `
-      SELECT industry, COUNT(*) as count 
-      FROM contacts 
-      WHERE isArchived = 0 AND isGhost = 0 AND industry IS NOT NULL AND industry != ''
-      GROUP BY industry 
-      ORDER BY count DESC 
+      SELECT industry, COUNT(*) as count
+      FROM contacts
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isArchived = 0 AND isGhost = 0 AND industry IS NOT NULL AND industry != ''
+      GROUP BY industry
+      ORDER BY count DESC
       LIMIT 8
     `,
       )
@@ -140,11 +141,11 @@ export const dashboardService = {
     const locationComposition = sqlite
       .prepare(
         `
-      SELECT location, COUNT(*) as count 
-      FROM contacts 
-      WHERE isArchived = 0 AND isGhost = 0 AND location IS NOT NULL AND location != ''
-      GROUP BY location 
-      ORDER BY count DESC 
+      SELECT location, COUNT(*) as count
+      FROM contacts
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isArchived = 0 AND isGhost = 0 AND location IS NOT NULL AND location != ''
+      GROUP BY location
+      ORDER BY count DESC
       LIMIT 8
     `,
       )
@@ -154,11 +155,11 @@ export const dashboardService = {
     const roleComposition = sqlite
       .prepare(
         `
-      SELECT role, COUNT(*) as count 
-      FROM contacts 
-      WHERE isArchived = 0 AND isGhost = 0 AND role IS NOT NULL AND role != ''
-      GROUP BY role 
-      ORDER BY count DESC 
+      SELECT role, COUNT(*) as count
+      FROM contacts
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isArchived = 0 AND isGhost = 0 AND role IS NOT NULL AND role != ''
+      GROUP BY role
+      ORDER BY count DESC
       LIMIT 8
     `,
       )
@@ -170,7 +171,7 @@ export const dashboardService = {
         `
       SELECT type, COUNT(*) as count
       FROM interactions
-      WHERE date >= date('now', '-30 days')
+      WHERE date >= date('now', '-30 days') AND contactId IN (SELECT id FROM contacts WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND COALESCE(isArchived, 0) = 0)
       GROUP BY type
       ORDER BY count DESC
     `,
@@ -183,7 +184,7 @@ export const dashboardService = {
         `
       SELECT id, name, company, avatarUrl, themeColor, addedAt
       FROM contacts
-      WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+      WHERE addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       ORDER BY addedAt DESC
       LIMIT 20
     `,
@@ -210,8 +211,15 @@ export const dashboardService = {
   },
 
   async getInsight() {
+    const revision = (
+      sqlite
+        .prepare("SELECT revision FROM search_revision WHERE id = 1")
+        .get() as { revision: number }
+    ).revision;
+    const model = resolveCapability("quick");
+    const cacheKey = `${revision}:${new Date().toISOString().slice(0, 10)}:${model?.providerId}:${model?.model}`;
     // Check unified cache (24h TTL managed by aiCache)
-    const cached = aiCache.get<DailyInsight>("dailyInsight", "singleton");
+    const cached = aiCache.get<DailyInsight>("dailyInsight", cacheKey);
     if (cached) {
       import("./aiStatsService.ts").then(({ recordInvocation }) => {
         recordInvocation({
@@ -232,7 +240,7 @@ export const dashboardService = {
     const totalActive = (
       sqlite
         .prepare(
-          `SELECT COUNT(*) as count FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
+          `SELECT COUNT(*) as count FROM contacts WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
         )
         .get() as { count: number }
     ).count;
@@ -240,9 +248,9 @@ export const dashboardService = {
     const industryRows = sqlite
       .prepare(
         `
-      SELECT industry, COUNT(*) as count 
-      FROM contacts 
-      WHERE industry IS NOT NULL AND industry != '' AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+      SELECT industry, COUNT(*) as count
+      FROM contacts
+      WHERE industry IS NOT NULL AND industry != '' AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       GROUP BY industry
     `,
       )
@@ -253,8 +261,8 @@ export const dashboardService = {
     const notReached = sqlite
       .prepare(
         `
-      SELECT name FROM contacts 
-      WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) 
+      SELECT name FROM contacts
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
         AND lastContactedAt < date('now', '-60 days')
       LIMIT 10
     `,
@@ -265,8 +273,8 @@ export const dashboardService = {
       sqlite
         .prepare(
           `
-      SELECT COUNT(*) as count FROM contacts 
-      WHERE addedAt >= date('now', '-30 days') AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+      SELECT COUNT(*) as count FROM contacts
+      WHERE addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
     `,
         )
         .get() as { count: number }
@@ -275,8 +283,8 @@ export const dashboardService = {
     const topRel = sqlite
       .prepare(
         `
-      SELECT name FROM contacts 
-      WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+      SELECT name FROM contacts
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
       ORDER BY relationshipScore DESC
       LIMIT 3
     `,
@@ -286,8 +294,8 @@ export const dashboardService = {
     const bottomRel = sqlite
       .prepare(
         `
-      SELECT name FROM contacts 
-      WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
+      SELECT name FROM contacts
+      WHERE deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
       ORDER BY relationshipScore ASC
       LIMIT 3
     `,
@@ -309,8 +317,16 @@ export const dashboardService = {
     };
 
     const insight = await generateDailyInsight(stats);
+    if (
+      (
+        sqlite
+          .prepare("SELECT revision FROM search_revision WHERE id = 1")
+          .get() as { revision: number }
+      ).revision !== revision
+    )
+      return null;
     if (insight) {
-      aiCache.set("dailyInsight", "singleton", insight);
+      aiCache.set("dailyInsight", cacheKey, insight);
     }
 
     return insight;

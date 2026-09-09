@@ -23,7 +23,6 @@ import { createAvatar } from "@dicebear/core";
 import * as avataaars from "@dicebear/avataaars";
 import * as lorelei from "@dicebear/lorelei";
 import * as bottts from "@dicebear/bottts";
-import * as initials from "@dicebear/initials";
 import { classifyName } from "../utils/smartAvatar.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
@@ -227,7 +226,7 @@ function renderStyle({ style, seed, background = false }: RenderAvatarOptions) {
     case "bottts":
       return createAvatar(bottts, base).toString();
     case "initials":
-      return createAvatar(initials, base).toString();
+      return plainMonogram(seed);
     default:
       // TypeScript proves this is unreachable for well-typed callers, but the
       // style can arrive from a persisted URL or a hand-edited database row.
@@ -276,7 +275,7 @@ function plainMonogram(seed: string): string {
       .trim()
       .split(/\s+/)
       .slice(0, 2)
-      .map((word) => word[0] ?? "")
+      .map((word) => Array.from(word)[0] ?? "")
       .join("")
       .toUpperCase() || "?";
   // Escape for XML: a contact name can legitimately contain & or <.

@@ -150,6 +150,14 @@ async function startServer() {
 
   registerShutdownHandlers(server);
 
+  if (process.env.DISABLE_BACKGROUND_JOBS === "true") {
+    log.info(
+      "Server",
+      "Background maintenance and embedding backfills are disabled.",
+    );
+    return;
+  }
+
   startRetroactiveGeocoding();
 
   // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────

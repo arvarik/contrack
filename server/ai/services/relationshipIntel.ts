@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { AppError } from "../../utils/AppError.ts";
 // =============================================================================
 // AI Services — Relationship Intelligence (briefings, email digests, insights)
 // =============================================================================
@@ -19,19 +21,11 @@ import { isMockMode, safeParseJson } from "./shared.ts";
 export async function generateCatchMeUpBriefing(
   contact: Record<string, unknown>,
   interactions: Record<string, unknown>[],
+  signal?: AbortSignal,
 ): Promise<string[]> {
-  if (isMockMode()) {
-    log.warn(
-      "AIService",
-      "Using mock AI Briefing due to unconfigured AI provider",
-    );
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    return [
-      "Met at the Design Systems Conference last year; he expressed strong interest in component-driven architecture.",
-      "Need to close the loop on the draft proposal for the new Nexus design system integration.",
-      "Icebreaker: Ask how his studio in Copenhagen is holding up with the recent sudden weather shift!",
-    ];
-  }
+  signal?.throwIfAborted();
+  if (isMockMode())
+    throw new AppError("Configure AI in settings to generate a briefing.", 503);
 
   const systemPrompt = `${UNTRUSTED_DATA_RULE}
 
@@ -60,19 +54,28 @@ You are an elite executive assistant preparing a meeting brief.
     systemPrompt,
     prompt,
     responseFormat: "json",
+    signal,
+    timeoutMs: 20_000,
+    maxOutputTokens: 1_000,
     jsonSchema: {
       type: "array",
       items: { type: "string" },
     },
   });
 
-  const parsed = safeParseJson<string[]>(
-    result.text,
-    "generateCatchMeUpBriefing",
-  );
-  if (!parsed || !Array.isArray(parsed)) {
-    throw new Error("AI returned malformed response for briefing generation");
-  }
+  signal?.throwIfAborted();
+  const validated = z
+    .array(z.string().trim().min(1).max(1500))
+    .min(1)
+    .max(5)
+    .safeParse(
+      safeParseJson<unknown>(result.text, "generateCatchMeUpBriefing"),
+    );
+  if (!validated.success)
+    throw new AppError("AI returned an invalid briefing.", 502, {
+      code: "AI_SCHEMA_MISMATCH",
+    });
+  const parsed = validated.data;
 
   log.info(
     "AIService",
@@ -94,14 +97,8 @@ You are an elite executive assistant preparing a meeting brief.
  * Designed to strip Apple Mail export jargon organically.
  */
 export async function summarizeEmlEmail(rawEml: string): Promise<string> {
-  if (isMockMode()) {
-    log.warn(
-      "AIService",
-      "Using mock EML summary due to unconfigured AI provider",
-    );
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    return "<p><strong>Re: Q3 Roadmap Planning</strong></p><p>Thread summary:</p><ul><li>Julian proposed pushing the V2 alpha back by two weeks.</li><li>Sarah agreed to coordinate with marketing.</li><li>John provided the final wireframe mocks for the reporting suite.</li></ul>";
-  }
+  if (isMockMode())
+    throw new AppError("Configure AI in settings to summarize an email.", 503);
 
   const systemPrompt = `${UNTRUSTED_DATA_RULE}
 
@@ -171,7 +168,6 @@ export async function generateDailyInsight(stats: {
       "AIService",
       "Using mock Daily Insight due to unconfigured AI provider",
     );
-    await new Promise((resolve) => setTimeout(resolve, 800));
     return null;
   }
 
@@ -210,7 +206,15 @@ export async function generateDailyInsight(stats: {
       result.text,
       "generateDailyInsight",
     );
-    if (!parsed) return null;
+    if (
+      !parsed ||
+      typeof parsed.text !== "string" ||
+      !parsed.text.trim() ||
+      parsed.text.length > 2000 ||
+      typeof parsed.category !== "string" ||
+      parsed.category.length > 100
+    )
+      return null;
 
     log.info(
       "AIService",

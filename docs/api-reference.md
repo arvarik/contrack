@@ -310,7 +310,19 @@ curl -X POST http://localhost:3210/api/contacts/abc123/enrich
 }
 ```
 
-**Error codes:** `429` (grounding quota exhausted), `503` (AI not configured).
+The server accepts one active research request per contact. It validates the
+result before it writes any fields. It fills empty fields and adds missing
+child records. It preserves existing contact data.
+
+The request has a 90-second deadline. A disconnected client cancels further
+work. The provider can still charge for a request it already accepted.
+
+**Error codes:** `409` (research already active, contact unavailable, or contact
+changed during research), `429` (queue or quota full), `502` (invalid AI output),
+`503` (research or extraction model unavailable).
+
+Two-pass research requires source links. Missing provider sources return
+`502 AI_GROUNDING_MISSING` before extraction or database changes.
 
 ---
 
@@ -403,6 +415,11 @@ curl -X POST http://localhost:3210/api/contacts/abc123/briefing
   "briefing": "**Wins:** Closed Series B at $12M valuation...\n**Projects:** Building out the platform team...\n**Open Loops:** Waiting on legal review for partnership agreement..."
 }
 ```
+
+The cache key includes the contact facts, recent interaction content, and model.
+Concurrent requests for the same input share one generation. A contact edit
+during generation returns `409` and prevents a stale briefing from entering the
+database. Missing AI configuration returns `503`.
 
 ---
 
@@ -508,6 +525,11 @@ Start a batch enrichment job for selected contacts.
 
 Strategy defaults to the provider-appropriate strategy if omitted.
 
+Use 1 to 100 unique, nonempty contact IDs. Supported strategies are `two-pass`,
+`single-pass`, and `searxng`. The server checks the selected strategy and every
+contact before it creates a batch. Invalid input returns `400`. An unavailable
+contact returns `409`. Missing provider configuration returns `503`.
+
 ```bash
 curl -X POST http://localhost:3210/api/ai-search \
   -H "Content-Type: application/json" \
@@ -529,6 +551,11 @@ curl -X POST http://localhost:3210/api/ai-search \
 
 Poll the current status of a batch enrichment job.
 
+The batch status is `processing`, `complete`, or `cancelled`. Each job reports
+`queued`, `searching`, `merging`, `success`, `error`, or `cancelled`.
+A missing batch returns `404`. Batch progress lives in server memory and does
+not survive a restart. Completed contact updates remain in the database.
+
 ```bash
 curl "http://localhost:3210/api/ai-search/status?batchId=batch-abc123"
 ```
@@ -539,6 +566,11 @@ curl "http://localhost:3210/api/ai-search/status?batchId=batch-abc123"
 
 Subscribe to real-time batch progress via Server-Sent Events (SSE).
 
+The server validates the batch before it opens the stream. A missing batch
+returns a JSON `404` response. The stream sends a heartbeat every 15 seconds
+and closes when the batch completes or stops. The frontend also polls status
+to recover from a lost stream.
+
 ```bash
 curl -N "http://localhost:3210/api/ai-search/stream?batchId=batch-abc123"
 ```
@@ -548,9 +580,24 @@ const eventSource = new EventSource(`/api/ai-search/stream?batchId=${batchId}`);
 eventSource.onmessage = (event) => {
   const batch = JSON.parse(event.data);
   console.log(`Status: ${batch.status}, Jobs: ${batch.jobs.length}`);
-  if (batch.status === "complete") eventSource.close();
+  if (batch.status !== "processing") eventSource.close();
 };
 ```
+
+---
+
+### `POST /api/ai-search/:batchId/cancel`
+
+Stop an active batch. The response contains the current batch with status
+`cancelled`. Queued jobs never start. Active jobs stop before the next step
+or database write. Completed contact updates remain available.
+
+```bash
+curl -X POST http://localhost:3210/api/ai-search/batch-abc123/cancel
+```
+
+A missing batch returns `404`. Repeating cancellation returns the current
+batch. Provider charges can still apply to requests it already accepted.
 
 ---
 

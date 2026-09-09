@@ -90,9 +90,20 @@ router.post(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const points = await interactionService.generateBriefing(
-      String(req.params.id),
-    );
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on("close", onClose);
+    let points;
+    try {
+      points = await interactionService.generateBriefing(
+        String(req.params.id),
+        controller.signal,
+      );
+    } finally {
+      res.off("close", onClose);
+    }
     if (!points) throw new AppError("Contact not found", 404);
 
     log.info(

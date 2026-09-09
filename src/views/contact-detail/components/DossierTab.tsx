@@ -5,6 +5,7 @@
  * Extracted from ContactProfile to keep each section focused and readable.
  */
 import React, { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Briefcase, ChevronDown, FileText, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
@@ -77,6 +78,7 @@ const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
   // Every section below is conditional, so "nothing to show" needs answering
   // once, here, rather than as a blank space.
   const hasContent =
+    !!contact.aiBackground ||
     !!contact.about ||
     (contact.attributes?.length ?? 0) > 0 ||
     (contact.experience?.length ?? 0) > 0 ||
@@ -91,6 +93,38 @@ const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
       className="flex flex-col gap-6"
     >
       {contact.about && <AboutSection about={contact.about} />}
+      {contact.aiBackground && (
+        <details className={cn(CARD, "min-w-0")}>
+          <summary className="cursor-pointer font-semibold text-sm text-primary">
+            Research notes and sources
+          </summary>
+          <div className="mt-3 max-h-80 overflow-y-auto prose prose-sm max-w-none break-words text-on-surface-variant">
+            <p className="text-xs not-prose mb-3">
+              Review the source dates and contact identity before you use these
+              details.
+            </p>
+            <ReactMarkdown
+              skipHtml
+              urlTransform={(url) => (/^https?:\/\//i.test(url) ? url : "")}
+              components={{
+                a: ({ children, href }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline"
+                  >
+                    {children}
+                  </a>
+                ),
+                img: () => null,
+              }}
+            >
+              {contact.aiBackground}
+            </ReactMarkdown>
+          </div>
+        </details>
+      )}
 
       {/* AI Custom Attributes */}
       {contact.attributes && contact.attributes.length > 0 && (

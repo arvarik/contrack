@@ -1,3 +1,4 @@
+import { AppError } from "../../utils/AppError.ts";
 // =============================================================================
 // AI Services — Contact Parsing (Magic Paste, bulk import)
 // =============================================================================
@@ -124,7 +125,10 @@ function normalizeParsedContact(parsed: ParsedContact): ParsedContact {
  */
 export async function parseContactRecord(text: string): Promise<ParsedContact> {
   if (isMockMode()) {
-    throw new Error("AI provider not configured. Cannot run Auto-Parser.");
+    throw new AppError(
+      "AI provider not configured. Cannot run Auto-Parser.",
+      503,
+    );
   }
 
   const systemPrompt = `You are an expert contact data extraction system.
@@ -233,7 +237,24 @@ ${UNTRUSTED_DATA_RULE}`;
   if (!parsed)
     throw new Error("AI returned malformed JSON for contact parsing");
 
+  for (const field of [
+    "emails",
+    "phones",
+    "socialLinks",
+    "education",
+    "experience",
+  ] as const) {
+    const value = parsed[field];
+    if (value != null && (!Array.isArray(value) || value.length > 100))
+      throw new AppError("AI returned an invalid contact field list.", 502, {
+        code: "AI_SCHEMA_MISMATCH",
+      });
+  }
   const clean = normalizeParsedContact(parsed);
+  if (!clean.name)
+    throw new AppError("AI did not identify a contact name.", 502, {
+      code: "AI_SCHEMA_MISMATCH",
+    });
 
   log.info(
     "AIService",
@@ -272,7 +293,10 @@ export async function bulkParseContacts(
   concurrency?: number,
 ): Promise<(ParsedContact | null)[]> {
   if (isMockMode()) {
-    throw new Error("AI provider not configured. Cannot run bulk parser.");
+    throw new AppError(
+      "AI provider not configured. Cannot run bulk parser.",
+      503,
+    );
   }
 
   if (texts.length === 0) return [];
@@ -282,8 +306,13 @@ export async function bulkParseContacts(
   // that justify the conservative FREE tier concurrency of 2.
   const tier = getAITier();
   const providerName = (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
-  const effectiveConcurrency =
-    concurrency ?? (providerName !== "gemini" ? 10 : tier === "PAID" ? 10 : 2);
+  const effectiveConcurrency = Math.max(
+    1,
+    Math.min(
+      concurrency ?? (providerName !== "gemini" ? 2 : tier === "PAID" ? 2 : 1),
+      2,
+    ),
+  );
 
   log.info(
     "AIService",
