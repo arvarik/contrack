@@ -867,10 +867,29 @@ describe("action item collections carry only the caller's rows", () => {
         )
         .all(A.user.id) as { detail: string }[],
     );
+    const urgent = plan(
+      sqlite
+        .prepare(
+          `EXPLAIN QUERY PLAN
+             SELECT COUNT(*) FROM action_items ai JOIN contacts c ON ai.contactId = c.id
+             WHERE ai.ownerId = ? AND ai.completedAt IS NULL
+               AND date(ai.dueAt) <= date('now')
+               AND (c.isArchived = 0 OR c.isArchived IS NULL)`,
+        )
+        .all(A.user.id) as { detail: string }[],
+    );
+
     expect(pending).toContain("idx_action_items_owner_due");
     expect(pending).not.toContain("SCAN action_items");
     expect(done).toContain("idx_action_items_owner_done");
     expect(done).not.toContain("SCAN action_items");
+    // The urgent count takes `_owner_done` rather than the partial
+    // `_owner_due`. `date(ai.dueAt)` wraps the column, so the second column of
+    // `_owner_due` cannot answer the range, which leaves the two indexes even
+    // on the owner alone and SQLite picks the plain one. Either is an owner
+    // seek, which is what matters here, so the assertion names both.
+    expect(urgent).toMatch(/idx_action_items_owner_(due|done)/);
+    expect(urgent).not.toContain("SCAN action_items");
   });
 });
 
