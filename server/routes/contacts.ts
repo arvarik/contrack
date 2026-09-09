@@ -21,9 +21,11 @@ import {
   contactBulkCreateSchema,
 } from "../utils/validators.ts";
 import { z } from "zod";
-import { AppError } from "../utils/AppError.ts";
+import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { sqlite } from "../db.ts";
+import { scopeOf } from "../tenancy/scope.ts";
+import { runWithContext } from "../tenancy/requestContext.ts";
 import { providerIdFor } from "../ai/gateway.ts";
 import { getStrategy } from "../services/aiSearch/strategies/index.ts";
 import {
@@ -92,13 +94,22 @@ const uploadAvatar = multer({
   },
 });
 
+/**
+ * How long the non-stream import waits before its dedupe sweep.
+ *
+ * Long enough for the inserts and the embedding pass to settle, and named so a
+ * test can shorten it. Three seconds of real waiting in the suite proves
+ * nothing that fifty milliseconds does not.
+ */
+const IMPORT_SETTLE_MS = Number(process.env.IMPORT_SETTLE_MS ?? 3000);
+
 const router = Router();
 
 router.get(
   "/contacts/map",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const results = contactService.getMapContacts();
+    const results = contactService.getMapContacts(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/contacts/map → ${results.length}`);
     res.json(results);
   }),
@@ -108,7 +119,7 @@ router.get(
   "/contacts/archived",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const results = contactService.getArchivedContacts();
+    const results = contactService.getArchivedContacts(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/contacts/archived → ${results.length}`);
     res.json(results);
   }),
@@ -118,10 +129,11 @@ router.get(
   "/contacts",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    const scope = scopeOf(req);
     const view = req.query.view as string;
 
     if (view === "slim") {
-      const results = contactService.getSlimContacts();
+      const results = contactService.getSlimContacts(scope);
       log.debug(
         "API",
         `[${rid}] GET /api/contacts?view=slim → ${results.length} (slim)`,
@@ -129,7 +141,7 @@ router.get(
       return res.json(results);
     }
 
-    const results = contactService.getAllContacts();
+    const results = contactService.getAllContacts(scope);
     log.debug("API", `[${rid}] GET /api/contacts → ${results.length}`);
     res.json(results);
   }),
@@ -139,10 +151,13 @@ router.get(
   "/contacts/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const contact = contactService.getContactById(String(req.params.id));
+    const contact = contactService.getContactById(
+      scopeOf(req),
+      String(req.params.id),
+    );
     if (!contact) {
       log.warn("API", `[${rid}] 404 ${String(req.params.id)}`);
-      throw new AppError("Not found", 404);
+      throw new NotFoundError("Contact");
     }
     res.json(contact);
   }),
@@ -158,8 +173,13 @@ router.get(
 router.get(
   "/contacts/:id/score",
   asyncHandler(async (req, res) => {
-    const breakdown = relationshipService.explainScore(String(req.params.id));
-    if (!breakdown) throw new AppError("Not found", 404);
+    const id = String(req.params.id);
+    // The owner check happens here, so explainScore keeps taking an id alone.
+    // It reads and writes `contacts` by that id, which is safe only because
+    // this line ran first.
+    contactRepo.requireOwned(scopeOf(req), id);
+    const breakdown = relationshipService.explainScore(id);
+    if (!breakdown) throw new NotFoundError("Contact");
     res.json(breakdown);
   }),
 );
@@ -171,7 +191,7 @@ router.post(
     const rid = req.requestId;
     if (!req.body.name) throw new AppError("Name is required", 400);
 
-    const contact = contactService.createContact(req.body);
+    const contact = contactService.createContact(scopeOf(req), req.body);
     log.info(
       "API",
       `[${rid}] POST /api/contacts → "${req.body.name}" (${contact?.id})`,
@@ -185,6 +205,10 @@ router.post(
   validateBody(contactBulkCreateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    // Captured once, before the SSE stream starts and before any background
+    // work is scheduled. A handler that reads the context after the response
+    // has been written is reading whatever async context it happens to be in.
+    const scope = scopeOf(req);
     const wantsStream = req.headers.accept?.includes("text/event-stream");
 
     if (wantsStream) {
@@ -207,6 +231,7 @@ router.post(
 
       // Phase 1: Import
       const { count, createdIds } = await contactService.bulkCreateContacts(
+        scope,
         req.body,
         (processed, total, phase) => {
           send({ phase: "importing", processed, total, message: phase });
@@ -246,8 +271,8 @@ router.post(
 
         try {
           const importedSet = new Set(createdIds);
-          const distinctPairs = loadNegativeConstraints();
-          const allNormalized = normalizeContacts();
+          const distinctPairs = loadNegativeConstraints(scope);
+          const allNormalized = normalizeContacts(scope);
           const seenPairs = new Set<string>();
 
           // For each imported contact, check for duplicates against ALL contacts
@@ -259,7 +284,7 @@ router.post(
               await new Promise<void>((resolve) => setImmediate(resolve));
             }
             const contactId = createdIds[i];
-            const target = normalizeContactById(contactId);
+            const target = normalizeContactById(scope, contactId);
             if (!target) continue;
 
             // Check exact name matches
@@ -288,14 +313,10 @@ router.post(
 
                   try {
                     const rawA = contactRepo.hydrate(
-                      sqlite
-                        .prepare("SELECT * FROM contacts WHERE id = ?")
-                        .get(pair.idA),
+                      contactRepo.findOwned(scope, pair.idA),
                     );
                     const rawB = contactRepo.hydrate(
-                      sqlite
-                        .prepare("SELECT * FROM contacts WHERE id = ?")
-                        .get(pair.idB),
+                      contactRepo.findOwned(scope, pair.idB),
                     );
                     const scoreA = computePrimaryScore(rawA);
                     const scoreB = computePrimaryScore(rawB);
@@ -361,10 +382,11 @@ router.post(
               JOIN contacts c ON c.id = ce.contactId
               WHERE LOWER(TRIM(ce.email)) IN (${placeholders})
                 AND ce.contactId != ?
+                AND c.ownerId = ?
                 AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
             `,
                 )
-                .all(...target.emailsNorm, contactId) as {
+                .all(...target.emailsNorm, contactId, scope.ownerId) as {
                 contactId: string;
               }[];
 
@@ -385,14 +407,10 @@ router.post(
 
                 try {
                   const rawA = contactRepo.hydrate(
-                    sqlite
-                      .prepare("SELECT * FROM contacts WHERE id = ?")
-                      .get(pair.idA),
+                    contactRepo.findOwned(scope, pair.idA),
                   );
                   const rawB = contactRepo.hydrate(
-                    sqlite
-                      .prepare("SELECT * FROM contacts WHERE id = ?")
-                      .get(pair.idB),
+                    contactRepo.findOwned(scope, pair.idB),
                   );
                   const scoreA = computePrimaryScore(rawA);
                   const scoreB = computePrimaryScore(rawB);
@@ -426,12 +444,16 @@ router.post(
               const allPhones = sqlite
                 .prepare(
                   `
-              SELECT contactId, phone FROM contact_phones cp
+              SELECT cp.contactId, cp.phone FROM contact_phones cp
               JOIN contacts c ON c.id = cp.contactId
-              WHERE cp.contactId != ? AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
+              WHERE cp.contactId != ? AND c.ownerId = ?
+                AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
             `,
                 )
-                .all(contactId) as { contactId: string; phone: string }[];
+                .all(contactId, scope.ownerId) as {
+                contactId: string;
+                phone: string;
+              }[];
 
               const targetPhoneSet = new Set(target.phonesNorm);
               for (const row of allPhones) {
@@ -453,14 +475,10 @@ router.post(
 
                   try {
                     const rawA = contactRepo.hydrate(
-                      sqlite
-                        .prepare("SELECT * FROM contacts WHERE id = ?")
-                        .get(pair.idA),
+                      contactRepo.findOwned(scope, pair.idA),
                     );
                     const rawB = contactRepo.hydrate(
-                      sqlite
-                        .prepare("SELECT * FROM contacts WHERE id = ?")
-                        .get(pair.idB),
+                      contactRepo.findOwned(scope, pair.idB),
                     );
                     const scoreA = computePrimaryScore(rawA);
                     const scoreB = computePrimaryScore(rawB);
@@ -530,38 +548,53 @@ router.post(
     } else {
       // Standard JSON mode — for small imports or non-streaming clients
       const { count, createdIds } = await contactService.bulkCreateContacts(
+        scope,
         req.body,
       );
       log.info("API", `[${rid}] POST /api/contacts/bulk → ${count} imported`);
 
-      // Generate embeddings + schedule incremental dedupe for each contact
+      // Generate embeddings + schedule incremental dedupe for each contact.
+      //
+      // Both outlive the response, and the second waits out the settle delay
+      // before it starts. AsyncLocalStorage does carry the request's scope
+      // through a timer, so this ran attributed before the wrapper as well as
+      // after it. The wrapper makes the owner an argument rather than an
+      // inheritance: the day this work moves behind a queue, the context it
+      // runs in belongs to whoever drained the queue.
       if (createdIds.length > 0) {
-        generateAndStoreBulkEmbeddings(createdIds).catch((err) =>
-          log.warn(
-            "API",
-            `Background bulk embedding failed: ${getErrorMessage(err)}`,
-          ),
-        );
-        // Process incremental dedupe sequentially in the background to prevent lock saturation and CPU spikes
-        (async () => {
-          // Wait 3 seconds to let bulk inserts and embedding tasks settle
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          await ParallelQueue.process(createdIds, 1, async (cid) => {
-            const irid = `imp-${cid.slice(0, 8)}`;
-            try {
-              await dedupeService.incrementalDedupeCheck(cid, irid);
-            } catch (err) {
+        runWithContext(
+          { requestId: `imp-${rid}`, principal: null, scope },
+          () => {
+            generateAndStoreBulkEmbeddings(createdIds).catch((err) =>
               log.warn(
                 "API",
-                `Incremental dedupe for ${cid} failed: ${getErrorMessage(err)}`,
+                `Background bulk embedding failed: ${getErrorMessage(err)}`,
+              ),
+            );
+            // Process incremental dedupe sequentially in the background to prevent lock saturation and CPU spikes
+            void (async () => {
+              // Let bulk inserts and embedding tasks settle first.
+              await new Promise((resolve) =>
+                setTimeout(resolve, IMPORT_SETTLE_MS),
               );
-            }
-          });
-        })().catch((err) =>
-          log.error(
-            "API",
-            `Bulk background dedupe queue crashed: ${getErrorMessage(err)}`,
-          ),
+              await ParallelQueue.process(createdIds, 1, async (cid) => {
+                const irid = `imp-${cid.slice(0, 8)}`;
+                try {
+                  await dedupeService.incrementalDedupeCheck(cid, irid);
+                } catch (err) {
+                  log.warn(
+                    "API",
+                    `Incremental dedupe for ${cid} failed: ${getErrorMessage(err)}`,
+                  );
+                }
+              });
+            })().catch((err) =>
+              log.error(
+                "API",
+                `Bulk background dedupe queue crashed: ${getErrorMessage(err)}`,
+              ),
+            );
+          },
         );
       }
       res.status(201).json({ success: true, count });
@@ -589,7 +622,7 @@ router.post(
   validateBody(z.object({ ids: idsSchema })),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const count = contactService.bulkDeleteContacts(req.body.ids);
+    const count = contactService.bulkDeleteContacts(scopeOf(req), req.body.ids);
     log.info(
       "API",
       `[${rid}] POST /api/contacts/bulk-delete → ${count} deleted`,
@@ -615,6 +648,7 @@ router.put(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = contactService.bulkUpdateContacts(
+      scopeOf(req),
       req.body.ids,
       req.body.data,
     );
@@ -632,10 +666,11 @@ router.put(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const updated = contactService.updateContact(
+      scopeOf(req),
       String(req.params.id),
       req.body,
     );
-    if (!updated) throw new AppError("Not found", 404);
+    if (!updated) throw new NotFoundError("Contact");
     log.info(
       "API",
       `[${rid}] PUT /api/contacts/${String(req.params.id)} → updated`,
@@ -670,10 +705,11 @@ router.patch(
     }
 
     const updated = contactService.patchContact(
+      scopeOf(req),
       String(req.params.id),
       req.body,
     );
-    if (!updated) throw new AppError("Not found", 404);
+    if (!updated) throw new NotFoundError("Contact");
     log.info(
       "API",
       `[${rid}] PATCH /api/contacts/${String(req.params.id)} → updated (scalar)`,
@@ -686,8 +722,11 @@ router.delete(
   "/contacts/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const success = contactService.deleteContact(String(req.params.id));
-    if (!success) throw new AppError("Not found", 404);
+    const success = contactService.deleteContact(
+      scopeOf(req),
+      String(req.params.id),
+    );
+    if (!success) throw new NotFoundError("Contact");
     log.info("API", `[${rid}] DELETE /api/contacts/${String(req.params.id)}`);
     res.json({ success: true });
   }),
@@ -702,10 +741,11 @@ router.post(
     if (!req.file) throw new AppError("No image file provided", 400);
 
     const updated = contactService.updateAvatar(
+      scopeOf(req),
       String(req.params.id),
       req.file.filename,
     );
-    if (!updated) throw new AppError("Contact not found", 404);
+    if (!updated) throw new NotFoundError("Contact");
 
     log.info(
       "API",
@@ -730,6 +770,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const id = String(req.params.id);
+    // requireContact above already checked the owner. This repeats it against
+    // the repository so the check is visible at the call that spends money.
+    contactRepo.requireOwned(scopeOf(req), id);
 
     const strategyName = validateEnrichmentStrategy();
     const contact = enrichmentContact(id);

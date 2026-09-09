@@ -13,7 +13,7 @@ import sharp from "sharp";
 import { log } from "./logger.ts";
 import { getErrorMessage } from "./helpers.ts";
 import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
-import { currentOwnerId } from "../tenancy/requestContext.ts";
+import type { Scope } from "../tenancy/scope.ts";
 
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
@@ -23,6 +23,7 @@ const JPEG_QUALITY = 80;
  * Returns the URL path (e.g. `/uploads/u/<ownerId>/avatars/abc123.jpg`), or null on failure.
  */
 export async function processBase64Avatar(
+  scope: Scope,
   dataUri: string,
 ): Promise<string | null> {
   try {
@@ -33,8 +34,9 @@ export async function processBase64Avatar(
     const base64Data = match[2];
     const inputBuffer = Buffer.from(base64Data, "base64");
 
-    // Runs inside a contact create or update, so the owner is the caller.
-    const avatarDir = ownerUploadDir(currentOwnerId(), "avatars");
+    // The owner comes from the caller's scope, so the file lands in the same
+    // directory the stored URL will point at.
+    const avatarDir = ownerUploadDir(scope.ownerId, "avatars");
     ensureDir(avatarDir);
 
     // Generate a unique filename
@@ -61,7 +63,7 @@ export async function processBase64Avatar(
       `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(stats.size / 1024)}KB (${filename})`,
     );
 
-    return ownerUploadUrl(currentOwnerId(), "avatars", filename);
+    return ownerUploadUrl(scope.ownerId, "avatars", filename);
   } catch (err: unknown) {
     log.warn(
       "AvatarProcessor",

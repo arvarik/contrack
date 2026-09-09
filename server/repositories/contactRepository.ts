@@ -14,6 +14,8 @@
 
 import { sqlite, db } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
+import type { Scope } from "../tenancy/scope.ts";
+import { NotFoundError } from "../utils/AppError.ts";
 
 import crypto from "crypto";
 import type { HydratedContact, ChildRecordsPayload } from "./types.ts";
@@ -120,12 +122,14 @@ const stmts = {
     "SELECT id, address, label, isPrimary, sortOrder, source FROM contact_addresses WHERE contactId = ? ORDER BY sortOrder ASC",
   ),
   lists: sqlite.prepare(
+    // tenant-lint: allow owner-checked by caller
     `SELECT l.id, l.name, l.icon FROM lists l
      JOIN list_members lm ON l.id = lm.listId
      WHERE lm.contactId = ?
      ORDER BY l.sortOrder ASC`,
   ),
   interactionCount: sqlite.prepare(
+    // tenant-lint: allow owner-checked by caller
     "SELECT COUNT(*) as cnt FROM interactions WHERE contactId = ?",
   ),
 };
@@ -143,7 +147,79 @@ const stmts = {
  */
 export type RawContactRow = Record<string, unknown> & { id: string };
 
+/**
+ * The scoped finders. Every read of a contact by a client-supplied id goes
+ * through one of these.
+ *
+ * Each puts the id and the owner in the same statement. Selecting by id and
+ * comparing the owner in JavaScript would be two index probes instead of one,
+ * and it would leave a window in which the row is read before the check runs.
+ * `idx_contacts_owner_status` and the primary key both start with a column
+ * these predicates pin, so the extra term costs nothing measurable.
+ */
+const finders = {
+  byId: sqlite.prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?"),
+  byIdActive: sqlite.prepare(
+    "SELECT * FROM contacts WHERE id = ? AND ownerId = ? AND deletedAt IS NULL",
+  ),
+};
+
+/** Same chunk as hydrateMany, and far under SQLite's bound-parameter limit. */
+const FIND_MANY_CHUNK = 500;
+
 export const contactRepo = {
+  // -------------------------------------------------------------------------
+  // Scoped Finders — the owner and the id in one statement
+  // -------------------------------------------------------------------------
+
+  /** One contact the scope owns, trashed or not, or null. */
+  findOwned(scope: Scope, id: string): RawContactRow | null {
+    return (finders.byId.get(id, scope.ownerId) as RawContactRow) ?? null;
+  },
+
+  /** One contact the scope owns that is not in the trash, or null. */
+  findOwnedActive(scope: Scope, id: string): RawContactRow | null {
+    return (finders.byIdActive.get(id, scope.ownerId) as RawContactRow) ?? null;
+  },
+
+  /**
+   * The subset of `ids` the scope owns, in no particular order.
+   *
+   * Bulk endpoints use this to drop foreign ids before they act, so the count
+   * they report is the number of rows they really changed. Duplicate ids in
+   * the request collapse, because the caller asked about a contact once.
+   */
+  findManyOwned(scope: Scope, ids: string[]): RawContactRow[] {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return [];
+    const rows: RawContactRow[] = [];
+    for (let i = 0; i < unique.length; i += FIND_MANY_CHUNK) {
+      const chunk = unique.slice(i, i + FIND_MANY_CHUNK);
+      const placeholders = chunk.map(() => "?").join(",");
+      rows.push(
+        ...(sqlite
+          .prepare(
+            `SELECT * FROM contacts WHERE ownerId = ? AND id IN (${placeholders})`,
+          )
+          .all(scope.ownerId, chunk) as RawContactRow[]),
+      );
+    }
+    return rows;
+  },
+
+  /**
+   * One contact the scope owns, or a 404.
+   *
+   * The error carries no id and names no reason. A caller must not be able to
+   * tell "there is no such contact" from "that contact is not yours", or the
+   * 404 becomes an existence oracle for every id it is handed.
+   */
+  requireOwned(scope: Scope, id: string): RawContactRow {
+    const row = contactRepo.findOwned(scope, id);
+    if (!row) throw new NotFoundError("Contact");
+    return row;
+  },
+
   // -------------------------------------------------------------------------
   // Hydration — Read Side
   // -------------------------------------------------------------------------
@@ -380,6 +456,7 @@ export const contactRepo = {
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
       const chunk = ids.slice(i, i + CHUNK_SIZE);
       const placeholders = chunk.map(() => "?").join(",");
+      // tenant-lint: allow owner-checked by caller
       const sql = `
         SELECT lm.contactId, l.id, l.name, l.icon 
         FROM lists l
@@ -395,6 +472,7 @@ export const contactRepo = {
     for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
       const chunk = ids.slice(i, i + CHUNK_SIZE);
       const placeholders = chunk.map(() => "?").join(",");
+      // tenant-lint: allow owner-checked by caller
       const sql = `
         SELECT contactId, COUNT(*) as cnt 
         FROM interactions 

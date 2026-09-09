@@ -89,8 +89,38 @@ describe("route manifest", () => {
       expect(classes.has(entry.class)).toBe(true);
       expect(entry.path.startsWith("/")).toBe(true);
     }
-    // Phase 2 flips these one domain at a time. None are converted yet.
-    expect(ROUTE_MANIFEST.every((r) => r.isolated === false)).toBe(true);
+  });
+
+  it("flips isolated only for the routes a sub-phase has proven", () => {
+    // Phase 2 converts one domain per PR. This list grows by exactly the
+    // routes whose matrix tests landed in that PR, so a flip with no test
+    // behind it fails here. Phase 2i replaces the list with the assertion
+    // that every scoped route is isolated.
+    const isolated = ROUTE_MANIFEST.filter((r) => r.isolated)
+      .map(key)
+      .sort();
+    expect(isolated).toEqual([
+      "DELETE /api/contacts/:id",
+      "GET /api/contacts",
+      "GET /api/contacts/:id",
+      "GET /api/contacts/:id/score",
+      "GET /api/contacts/archived",
+      "GET /api/contacts/map",
+      "PATCH /api/contacts/:id",
+      "POST /api/contacts",
+      "POST /api/contacts/:id/avatar",
+      "POST /api/contacts/:id/enrich",
+      "POST /api/contacts/bulk",
+      "POST /api/contacts/bulk-delete",
+      "PUT /api/contacts/:id",
+      "PUT /api/contacts/bulk-update",
+      "USE /uploads",
+    ]);
+    // Only owned data and the file layer can be isolated. A public or
+    // session-self route has no owner to isolate from.
+    for (const entry of ROUTE_MANIFEST.filter((r) => r.isolated)) {
+      expect(["scoped", "static"]).toContain(entry.class);
+    }
   });
 
   it("still classifies the route the mount-order fix made reachable", () => {

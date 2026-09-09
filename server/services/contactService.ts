@@ -1,10 +1,10 @@
-import { assertContactExists } from "./contactGuard.ts";
+import { assertOwnedContact } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   contactRepo,
   RELATION_REGISTRY,
@@ -21,7 +21,7 @@ import {
   isBase64DataUri,
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
-import { currentOwnerId } from "../tenancy/requestContext.ts";
+import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildAvatarUrl } from "./avatarService.ts";
 import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
@@ -92,13 +92,14 @@ function scheduleIncrementalDedupe(contactId: string) {
  * Centralised here so createContact + bulkCreateContacts stay DRY.
  * Any field not listed here will never reach the database.
  */
-function buildInsertValues(body: NewContactPayload, id: string) {
+function buildInsertValues(scope: Scope, body: NewContactPayload, id: string) {
   return {
     id,
-    // Stamped from the request context, so a signed-in caller's rows are
-    // owned the moment they are written. Anonymous mode writes null, which
-    // reconcileOwnership still claims at boot for a single account.
-    ownerId: currentOwnerId(),
+    // The owner comes from the caller's scope, not from the request context.
+    // A context can be lost across a library boundary; a parameter cannot.
+    // The contacts_owner_required trigger refuses the insert either way, so a
+    // lost owner is a failed write rather than a row nobody can see.
+    ownerId: scope.ownerId,
     name: body.name,
     firstName: body.firstName || null,
     lastName: body.lastName || null,
@@ -137,6 +138,10 @@ function buildInsertValues(body: NewContactPayload, id: string) {
  * cost for nothing.
  */
 function invalidateAllCaches() {
+  // TODO(2f): aiCache.invalidateForOwner(tier, scope.ownerId). The owner-keyed
+  // helper arrives with the cache work, and flushing a whole tier until then
+  // costs one recomputation for other owners rather than serving them a row
+  // they may not read.
   aiCache.invalidate("rerank");
   aiCache.invalidate("synthesis");
   aiCache.invalidate("dailyInsight");
@@ -150,12 +155,16 @@ function invalidateAllCaches() {
  */
 function purgeContactSearchArtifacts(id: string): void {
   try {
-    sqlite.prepare("DELETE FROM search_embeddings WHERE contactId = ?").run(id);
+    sqlite
+      // tenant-lint: allow owner-checked by caller
+      .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
+      .run(id);
   } catch {
     /* vec0 row may not exist */
   }
   try {
     sqlite
+      // tenant-lint: allow owner-checked by caller
       .prepare("DELETE FROM contact_embeddings WHERE contactId = ?")
       .run(id);
   } catch {
@@ -167,11 +176,16 @@ function purgeContactSearchArtifacts(id: string): void {
 }
 
 /** Permanently delete a contact row (children cascade; embeddings purged). */
-function hardDeleteContact(id: string): boolean {
+function hardDeleteContact(scope: Scope, id: string): boolean {
   purgeContactSearchArtifacts(id);
   const result = db
     .delete(schema.contacts)
-    .where(eq(schema.contacts.id, id))
+    .where(
+      and(
+        eq(schema.contacts.id, id),
+        eq(schema.contacts.ownerId, scope.ownerId),
+      ),
+    )
     .returning()
     .get();
   return !!result;
@@ -210,9 +224,13 @@ type SlimContactRow = Pick<
 >;
 
 export const contactService = {
-  createContact(body: NewContactPayload, source: string = "manual") {
+  createContact(
+    scope: Scope,
+    body: NewContactPayload,
+    source: string = "manual",
+  ) {
     const id = crypto.randomUUID();
-    const values = buildInsertValues(body, id);
+    const values = buildInsertValues(scope, body, id);
 
     // Smart avatar: if no avatar was provided, generate a gender-aware one
     if (!values.avatarUrl && body.name) {
@@ -220,7 +238,12 @@ export const contactService = {
     }
 
     const txn = sqlite.transaction(() => {
-      db.insert(schema.contacts).values(values).run();
+      // The owner is spelled out at the write, not only inside the value
+      // builder. It is the one column a reviewer and the tenant lint both have
+      // to be able to see without following a helper.
+      db.insert(schema.contacts)
+        .values({ ...values, ownerId: scope.ownerId })
+        .run();
       contactRepo.insertChildRecords(id, body, source);
     });
     txn();
@@ -253,12 +276,11 @@ export const contactService = {
     scheduleIncrementalDedupe(id);
 
     invalidateAllCaches();
-    return contactRepo.hydrate(
-      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
-    );
+    return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
   async bulkCreateContacts(
+    scope: Scope,
     validContacts: NewContactPayload[],
     onProgress?: (processed: number, total: number, phase: string) => void,
   ): Promise<{ count: number; createdIds: string[] }> {
@@ -269,7 +291,7 @@ export const contactService = {
     for (let i = 0; i < validContacts.length; i++) {
       const c = validContacts[i];
       if (isBase64DataUri(c.avatarUrl)) {
-        const fileUrl = await processBase64Avatar(c.avatarUrl);
+        const fileUrl = await processBase64Avatar(scope, c.avatarUrl);
         c.avatarUrl = fileUrl; // null if processing failed; smart avatar fallback below
       }
       onProgress?.(i + 1, total, "Processing images");
@@ -286,14 +308,16 @@ export const contactService = {
       const txn = sqlite.transaction(() => {
         for (const c of validContacts) {
           const id = crypto.randomUUID();
-          const values = buildInsertValues(c, id);
+          const values = buildInsertValues(scope, c, id);
 
           // Smart avatar: gender-aware DiceBear URL if no avatar was provided
           if (!values.avatarUrl && c.name) {
             values.avatarUrl = buildAvatarUrl(c.name);
           }
 
-          db.insert(schema.contacts).values(values).run();
+          db.insert(schema.contacts)
+            .values({ ...values, ownerId: scope.ownerId })
+            .run();
           contactRepo.insertChildRecords(id, c, c._sourcePlatform || "manual");
           if (c.location) queueGeocode(id, c.location);
           createdIds.push(id);
@@ -310,18 +334,26 @@ export const contactService = {
     return { count, createdIds };
   },
 
-  /** Soft-delete a batch of contacts (same trash semantics as deleteContact). */
-  bulkDeleteContacts(ids: string[]) {
+  /**
+   * Soft-delete a batch of contacts (same trash semantics as deleteContact).
+   *
+   * Foreign ids are dropped by `findManyOwned` before anything runs, so the
+   * count the caller gets back is the number of their own rows that moved. A
+   * request that mixes another owner's ids in reports only its own.
+   */
+  bulkDeleteContacts(scope: Scope, ids: string[]) {
     let count = 0;
     aiCache.enterBatchMode();
     try {
       const now = new Date().toISOString();
+      const owned = contactRepo.findManyOwned(scope, ids).map((r) => r.id);
       const trashStmt = sqlite.prepare(
-        "UPDATE contacts SET deletedAt = ?, isArchived = 1 WHERE id = ? AND deletedAt IS NULL",
+        `UPDATE contacts SET deletedAt = ?, isArchived = 1
+          WHERE id = ? AND ownerId = ? AND deletedAt IS NULL`,
       );
       const deleteFn = sqlite.transaction(() => {
-        for (const id of new Set(ids)) {
-          count += trashStmt.run(now, id).changes;
+        for (const id of owned) {
+          count += trashStmt.run(now, id, scope.ownerId).changes;
           purgeContactSearchArtifacts(id);
         }
       });
@@ -333,10 +365,15 @@ export const contactService = {
     return count;
   },
 
-  bulkUpdateContacts(ids: string[], data: Record<string, unknown>) {
+  bulkUpdateContacts(
+    scope: Scope,
+    ids: string[],
+    data: Record<string, unknown>,
+  ) {
     const changedIds: string[] = [];
     aiCache.enterBatchMode();
     try {
+      const owned = contactRepo.findManyOwned(scope, ids).map((r) => r.id);
       const update = buildContactUpdate(data);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
@@ -349,10 +386,12 @@ export const contactService = {
           .join(", ");
         const values = Object.values(update);
         const stmt = sqlite.prepare(
-          `UPDATE contacts SET ${setClauses} WHERE id = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
+          `UPDATE contacts SET ${setClauses}
+            WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
-        for (const id of new Set(ids)) {
-          if (stmt.run(...values, id).changes) changedIds.push(id);
+        for (const id of owned) {
+          if (stmt.run(...values, id, scope.ownerId).changes)
+            changedIds.push(id);
         }
       });
       updateFn();
@@ -364,8 +403,8 @@ export const contactService = {
     return changedIds.length;
   },
 
-  updateContact(id: string, body: ContactPayload) {
-    assertContactExists(id);
+  updateContact(scope: Scope, id: string, body: ContactPayload) {
+    assertOwnedContact(scope, id);
     // Recompute phoneticHash if name changed
     const updateData = buildContactUpdate(body);
     if (body.name) {
@@ -375,7 +414,12 @@ export const contactService = {
     const txn = sqlite.transaction(() => {
       db.update(schema.contacts)
         .set(updateData)
-        .where(eq(schema.contacts.id, id))
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
         .run();
 
       for (const [bodyKey, config] of Object.entries(RELATION_REGISTRY)) {
@@ -392,9 +436,7 @@ export const contactService = {
     });
     txn();
 
-    const updated = contactRepo.hydrate(
-      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
-    );
+    const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
 
     if (body.location) {
@@ -454,12 +496,17 @@ export const contactService = {
     return updated;
   },
 
-  patchContact(id: string, body: Record<string, unknown>) {
-    assertContactExists(id);
+  patchContact(scope: Scope, id: string, body: Record<string, unknown>) {
+    assertOwnedContact(scope, id);
     const update = buildContactUpdate(body);
     db.update(schema.contacts)
       .set(update)
-      .where(eq(schema.contacts.id, id))
+      .where(
+        and(
+          eq(schema.contacts.id, id),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .run();
 
     if (typeof body.location === "string" && body.location) {
@@ -473,9 +520,7 @@ export const contactService = {
       scheduleSearchIndex(id);
     }
 
-    const updated = contactRepo.hydrate(
-      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
-    );
+    const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
 
     invalidateAllCaches();
@@ -488,17 +533,20 @@ export const contactService = {
    * set so every "active" surface excludes it; the trash-aware FTS triggers
    * drop it from search; embeddings are purged (regenerated on restore).
    */
-  deleteContact(id: string) {
-    const existing = sqlite
-      .prepare("SELECT id, deletedAt FROM contacts WHERE id = ?")
-      .get(id) as { id: string; deletedAt: string | null } | undefined;
+  deleteContact(scope: Scope, id: string) {
+    const existing = contactRepo.findOwned(scope, id);
     if (!existing) return false;
     if (existing.deletedAt) return true; // already in trash — idempotent
 
     const now = new Date().toISOString();
     db.update(schema.contacts)
       .set({ deletedAt: now, isArchived: 1, updatedAt: now })
-      .where(eq(schema.contacts.id, id))
+      .where(
+        and(
+          eq(schema.contacts.id, id),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .run();
     purgeContactSearchArtifacts(id);
     invalidateAllCaches();
@@ -506,11 +554,8 @@ export const contactService = {
   },
 
   /** Restore a trashed contact to the active list. */
-  restoreContact(id: string) {
-    const existing = sqlite
-      .prepare("SELECT id, deletedAt, name FROM contacts WHERE id = ?")
-      .get(id) as
-      { id: string; deletedAt: string | null; name: string } | undefined;
+  restoreContact(scope: Scope, id: string) {
+    const existing = contactRepo.findOwned(scope, id);
     if (!existing || !existing.deletedAt) return null;
 
     // Clearing deletedAt makes the contacts_au trigger reinsert the FTS row.
@@ -520,7 +565,12 @@ export const contactService = {
         isArchived: 0,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(schema.contacts.id, id))
+      .where(
+        and(
+          eq(schema.contacts.id, id),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .run();
 
     // Fire-and-forget: regenerate the purged embeddings.
@@ -528,19 +578,17 @@ export const contactService = {
     generateAndStoreEmbedding(id).catch(() => {});
 
     invalidateAllCaches();
-    return contactRepo.hydrate(
-      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
-    );
+    return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
   /** List trashed contacts, newest deletions first. */
-  listTrash() {
+  listTrash(scope: Scope) {
     return sqlite
       .prepare(
         `SELECT id, name, company, avatarUrl, deletedAt FROM contacts
-         WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC`,
+         WHERE ownerId = ? AND deletedAt IS NOT NULL ORDER BY deletedAt DESC`,
       )
-      .all() as {
+      .all(scope.ownerId) as {
       id: string;
       name: string;
       company: string | null;
@@ -550,12 +598,10 @@ export const contactService = {
   },
 
   /** Permanently delete one trashed contact ("delete forever"). */
-  purgeTrashedContact(id: string) {
-    const existing = sqlite
-      .prepare("SELECT id, deletedAt FROM contacts WHERE id = ?")
-      .get(id) as { id: string; deletedAt: string | null } | undefined;
+  purgeTrashedContact(scope: Scope, id: string) {
+    const existing = contactRepo.findOwned(scope, id);
     if (!existing?.deletedAt) return false; // only trashed rows can be purged
-    const ok = hardDeleteContact(id);
+    const ok = hardDeleteContact(scope, id);
     if (ok) invalidateAllCaches();
     return ok;
   },
@@ -573,13 +619,20 @@ export const contactService = {
     const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
     const expired = sqlite
       .prepare(
-        "SELECT id FROM contacts WHERE deletedAt IS NOT NULL AND deletedAt < ?",
+        // tenant-lint: allow instance sweep
+        `SELECT id, ownerId FROM contacts
+          WHERE deletedAt IS NOT NULL AND deletedAt < ?`,
       )
-      .all(cutoff) as { id: string }[];
+      .all(cutoff) as { id: string; ownerId: string }[];
     if (!expired.length) return 0;
 
+    // The sweep is instance-wide, so each row is deleted in its own owner's
+    // scope rather than in one caller's. Retention is a property of the row,
+    // not of whoever happens to trigger the daily job.
     const txn = sqlite.transaction(() => {
-      for (const row of expired) hardDeleteContact(row.id);
+      for (const row of expired) {
+        hardDeleteContact(scopeForOwnerId(row.ownerId), row.id);
+      }
     });
     txn();
     invalidateAllCaches();
@@ -590,56 +643,62 @@ export const contactService = {
     return expired.length;
   },
 
-  updateAvatar(id: string, fileFilename: string) {
+  updateAvatar(scope: Scope, id: string, fileFilename: string) {
     // The same owner multer used for the destination directory, so the URL
     // and the file on disk cannot disagree.
-    const avatarUrl = ownerUploadUrl(currentOwnerId(), "avatars", fileFilename);
+    const avatarUrl = ownerUploadUrl(scope.ownerId, "avatars", fileFilename);
 
-    const existing = sqlite
-      .prepare("SELECT avatarUrl FROM contacts WHERE id = ?")
-      .get(id) as { avatarUrl: string | null } | undefined;
+    const existing = contactRepo.requireOwned(scope, id);
+    const previousUrl = existing.avatarUrl as string | null;
     // Matches both layouts: `/uploads/avatars/...` from before Phase 1 and
     // `/uploads/u/<owner>/avatars/...` after it. Never `/uploads/logos/`,
     // which is shared and must not be deleted with a contact's avatar.
-    if (existing?.avatarUrl?.includes("/avatars/")) {
+    if (previousUrl?.includes("/avatars/")) {
       // avatarUrl is user-writable via the update endpoints — resolve it
       // through the containment check so `..` segments can't escape uploads/.
-      const oldPath = resolveUploadPath(existing.avatarUrl);
+      const oldPath = resolveUploadPath(previousUrl);
       if (oldPath && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
     db.update(schema.contacts)
       .set({ avatarUrl, updatedAt: new Date().toISOString() })
-      .where(eq(schema.contacts.id, id))
+      .where(
+        and(
+          eq(schema.contacts.id, id),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .run();
 
-    const updated = contactRepo.hydrate(
-      sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(id),
-    );
+    const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
 
     invalidateAllCaches();
     return updated;
   },
 
-  getMapContacts() {
+  getMapContacts(scope: Scope) {
     return sqlite
       .prepare(
-        "SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts WHERE lat IS NOT NULL AND lng IS NOT NULL AND (isArchived = 0 OR isArchived IS NULL)",
+        `SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts
+          WHERE ownerId = ? AND lat IS NOT NULL AND lng IS NOT NULL
+            AND (isArchived = 0 OR isArchived IS NULL)`,
       )
-      .all();
+      .all(scope.ownerId);
   },
 
-  getArchivedContacts() {
+  getArchivedContacts(scope: Scope) {
     const all = sqlite
       .prepare(
-        "SELECT * FROM contacts WHERE isArchived = 1 AND deletedAt IS NULL ORDER BY updatedAt DESC",
+        `SELECT * FROM contacts
+          WHERE ownerId = ? AND isArchived = 1 AND deletedAt IS NULL
+          ORDER BY updatedAt DESC`,
       )
-      .all();
+      .all(scope.ownerId);
     return contactRepo.hydrateMany(all);
   },
 
-  getSlimContacts() {
+  getSlimContacts(scope: Scope) {
     const startMs = Date.now();
 
     // Pass 1: Primary contact data (Fast indexed SELECT)
@@ -652,11 +711,11 @@ export const contactService = {
              cadenceDays, lastContactedAt, nextFollowUpAt,
              lat, lng, relationshipScore, aiHydratedAt
       FROM contacts
-      WHERE (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
+      WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
       ORDER BY addedAt DESC
     `,
       )
-      .all() as SlimContactRow[];
+      .all(scope.ownerId) as SlimContactRow[];
     const pass1Ms = Date.now() - startMs;
 
     // Pass 2: Batch fetch all relations (Separate queries are faster than GROUP_CONCAT/LEFT JOIN for large sets)
@@ -667,11 +726,11 @@ export const contactService = {
       SELECT lm.contactId, l.id, l.name, l.icon, l.sortOrder
       FROM list_members lm
       JOIN lists l ON l.id = lm.listId
-      WHERE lm.contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)
+      WHERE lm.contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL))
       ORDER BY l.sortOrder ASC
     `,
       )
-      .all() as {
+      .all(scope.ownerId) as {
       contactId: string;
       id: string;
       name: string;
@@ -679,26 +738,37 @@ export const contactService = {
       sortOrder: number;
     }[];
 
-    const unarchivedQuery = `WHERE contactId IN (SELECT id FROM contacts WHERE isArchived = 0 OR isArchived IS NULL)`;
+    // One subselect, six statements. The owner predicate lives inside it, so
+    // every child-table read below is bounded by the caller's contacts rather
+    // than by the whole instance. Each statement now takes one parameter.
+    const unarchivedQuery = `WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL))`;
     const tagRows = sqlite
       .prepare(`SELECT contactId, tag FROM contact_tags ${unarchivedQuery}`)
-      .all() as { contactId: string; tag: string }[];
+      .all(scope.ownerId) as { contactId: string; tag: string }[];
     const emailRows = sqlite
       .prepare(`SELECT contactId, email FROM contact_emails ${unarchivedQuery}`)
-      .all() as { contactId: string; email: string }[];
+      .all(scope.ownerId) as { contactId: string; email: string }[];
     const phoneRows = sqlite
       .prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`)
-      .all() as { contactId: string; phone: string }[];
+      .all(scope.ownerId) as { contactId: string; phone: string }[];
+    // `interactions` is owned, so it names the owner itself rather than
+    // borrowing the subselect's. Phase 1's mismatch trigger guarantees an
+    // interaction's owner equals its contact's, so the two agree by construction.
     const interactionCounts = sqlite
       .prepare(
-        `SELECT contactId, COUNT(*) as cnt FROM interactions ${unarchivedQuery} GROUP BY contactId`,
+        `SELECT contactId, COUNT(*) as cnt FROM interactions
+          WHERE ownerId = ? AND contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL))
+          GROUP BY contactId`,
       )
-      .all() as { contactId: string; cnt: number }[];
+      .all(scope.ownerId, scope.ownerId) as {
+      contactId: string;
+      cnt: number;
+    }[];
     const socialLinkCounts = sqlite
       .prepare(
         `SELECT contactId, COUNT(*) as cnt FROM contact_social_links ${unarchivedQuery} GROUP BY contactId`,
       )
-      .all() as { contactId: string; cnt: number }[];
+      .all(scope.ownerId) as { contactId: string; cnt: number }[];
     const pass2Ms = Date.now() - listStartMs;
 
     // Pass 3: Join in JS (Near-zero cost O(N))
@@ -769,19 +839,20 @@ export const contactService = {
     return results;
   },
 
-  getAllContacts() {
+  getAllContacts(scope: Scope) {
     const all = sqlite
       .prepare(
-        "SELECT * FROM contacts WHERE (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL ORDER BY addedAt DESC",
+        `SELECT * FROM contacts
+          WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL)
+            AND canonicalId IS NULL
+          ORDER BY addedAt DESC`,
       )
-      .all();
+      .all(scope.ownerId);
     return contactRepo.hydrateMany(all);
   },
 
-  getContactById(id: string) {
-    const contact = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ? AND deletedAt IS NULL")
-      .get(id);
+  getContactById(scope: Scope, id: string) {
+    const contact = contactRepo.findOwnedActive(scope, id);
     if (!contact) return null;
     return contactRepo.hydrate(contact);
   },

@@ -5,10 +5,16 @@ import { contentHash } from "../../utils/aiCache.ts";
 import { ACTIVE_CONTACT_SQL } from "../search/ftsIndex.ts";
 import { AppError } from "../../utils/AppError.ts";
 
-/** Read an active local contact before accepting an enrichment result. */
+/**
+ * Read an active local contact before accepting an enrichment result.
+ *
+ * Unscoped by design: both callers check the owner first, the enrich route
+ * with `requireOwned` and the AI Search batch with the contacts it was given.
+ */
 export function enrichmentContact(id: string): HydratedContact {
   const row = sqlite
     .prepare(
+      // tenant-lint: allow owner-checked by caller
       `SELECT c.* FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}`,
     )
     .get(id);

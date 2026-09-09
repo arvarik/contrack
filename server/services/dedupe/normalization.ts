@@ -13,6 +13,7 @@
 // =============================================================================
 
 import { sqlite } from "../../db.ts";
+import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import {
   normalizePhone,
   normalizeCompany,
@@ -286,22 +287,29 @@ export function normalizeContact(
  * @returns Array of NormalizedContact ready for dedupe matching.
  */
 export function normalizeContacts(
+  scope: Scope,
   contactFilter = "isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL",
 ): NormalizedContact[] {
-  // 1. Load all contacts
+  // 1. Load the owner's contacts
   const allContacts = sqlite
     .prepare(
       `SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences
-     FROM contacts WHERE ${contactFilter}`,
+     FROM contacts WHERE ownerId = ? AND (${contactFilter})`,
     )
-    .all() as RawContactRow[];
+    .all(scope.ownerId) as RawContactRow[];
 
   if (allContacts.length === 0) return [];
 
-  // 2. Batch-load all emails → Map<contactId, emails[]>
+  // 2. Batch-load the owner's emails → Map<contactId, emails[]>
+  // The child tables carry no owner of their own, so each batch load joins
+  // back to contacts. Without the join these maps would hold every owner's
+  // rows on a shared instance, which is a memory cost as well as a leak risk.
   const allEmails = sqlite
-    .prepare("SELECT contactId, email FROM contact_emails")
-    .all() as { contactId: string; email: string }[];
+    .prepare(
+      `SELECT ce.contactId, ce.email FROM contact_emails ce
+       JOIN contacts c ON c.id = ce.contactId WHERE c.ownerId = ?`,
+    )
+    .all(scope.ownerId) as { contactId: string; email: string }[];
 
   const emailsByContact = new Map<string, { email: string }[]>();
   for (const e of allEmails) {
@@ -311,8 +319,11 @@ export function normalizeContacts(
 
   // 3. Batch-load all phones → Map<contactId, phones[]>
   const allPhones = sqlite
-    .prepare("SELECT contactId, phone FROM contact_phones")
-    .all() as { contactId: string; phone: string }[];
+    .prepare(
+      `SELECT cp.contactId, cp.phone FROM contact_phones cp
+       JOIN contacts c ON c.id = cp.contactId WHERE c.ownerId = ?`,
+    )
+    .all(scope.ownerId) as { contactId: string; phone: string }[];
 
   const phonesByContact = new Map<string, { phone: string }[]>();
   for (const p of allPhones) {
@@ -322,8 +333,11 @@ export function normalizeContacts(
 
   // 4. Batch-load all sources → Map<contactId, platforms[]>
   const allSources = sqlite
-    .prepare("SELECT contactId, platform FROM contact_sources")
-    .all() as { contactId: string; platform: string }[];
+    .prepare(
+      `SELECT cs.contactId, cs.platform FROM contact_sources cs
+       JOIN contacts c ON c.id = cs.contactId WHERE c.ownerId = ?`,
+    )
+    .all(scope.ownerId) as { contactId: string; platform: string }[];
 
   const sourcesByContact = new Map<string, string[]>();
   for (const s of allSources) {
@@ -335,8 +349,11 @@ export function normalizeContacts(
 
   // 5. Batch-load all tags → Map<contactId, tag[]>
   const allTags = sqlite
-    .prepare("SELECT contactId, tag FROM contact_tags")
-    .all() as { contactId: string; tag: string }[];
+    .prepare(
+      `SELECT ct.contactId, ct.tag FROM contact_tags ct
+       JOIN contacts c ON c.id = ct.contactId WHERE c.ownerId = ?`,
+    )
+    .all(scope.ownerId) as { contactId: string; tag: string }[];
 
   const tagsByContact = new Map<string, string[]>();
   for (const t of allTags) {
@@ -346,8 +363,11 @@ export function normalizeContacts(
 
   // 6. Batch-load all interests → Map<contactId, interest[]>
   const allInterests = sqlite
-    .prepare("SELECT contactId, interest FROM contact_interests")
-    .all() as { contactId: string; interest: string }[];
+    .prepare(
+      `SELECT ci.contactId, ci.interest FROM contact_interests ci
+       JOIN contacts c ON c.id = ci.contactId WHERE c.ownerId = ?`,
+    )
+    .all(scope.ownerId) as { contactId: string; interest: string }[];
 
   const interestsByContact = new Map<string, string[]>();
   for (const i of allInterests) {
@@ -385,13 +405,15 @@ export function normalizeContacts(
  * Used for incremental dedup checks after contact create/edit.
  */
 export function normalizeContactById(
+  scope: Scope,
   contactId: string,
 ): NormalizedContact | null {
   const raw = sqlite
     .prepare(
-      "SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences FROM contacts WHERE id = ?",
+      `SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences
+       FROM contacts WHERE id = ? AND ownerId = ?`,
     )
-    .get(contactId) as RawContactRow | undefined;
+    .get(contactId, scope.ownerId) as RawContactRow | undefined;
 
   if (!raw || !raw.name) return null;
 
@@ -425,4 +447,42 @@ export function normalizeContactById(
     tags.map((t) => t.tag),
     interests.map((i) => i.interest),
   );
+}
+
+/**
+ * Every owner's active contacts, normalized.
+ *
+ * The provider-billed embedding backfill is an instance operation: it must not
+ * stop at whoever triggered it. Running the scoped query once per owner keeps
+ * that true now that `normalizeContacts` takes a scope. Sub-phase 2h replaces
+ * the single caller with a per-owner loop that also carries attribution, and
+ * this wrapper goes with it.
+ */
+export function normalizeContactsForAllOwners(
+  contactFilter?: string,
+): NormalizedContact[] {
+  // tenant-lint: allow instance sweep
+  const owners = sqlite
+    .prepare("SELECT DISTINCT ownerId FROM contacts")
+    .all() as { ownerId: string }[];
+  return owners.flatMap((o) =>
+    normalizeContacts(scopeForOwnerId(o.ownerId), contactFilter),
+  );
+}
+
+/**
+ * The scope a background path should use when all it has is a contact id.
+ *
+ * A fire-and-forget embedding or a queued dedupe check runs with no request
+ * behind it, so the owner comes from the row itself rather than from the
+ * async context, which a stream or a timer can lose. Returns null when the
+ * contact is gone, which is the "nothing to do" every caller already handles.
+ * Sub-phase 2e replaces each caller with a scope threaded from the job that
+ * scheduled the work.
+ */
+export function scopeOfContact(contactId: string): Scope | null {
+  const row = sqlite
+    .prepare("SELECT ownerId FROM contacts WHERE id = ?")
+    .get(contactId) as { ownerId: string } | undefined;
+  return row ? scopeForOwnerId(row.ownerId) : null;
 }

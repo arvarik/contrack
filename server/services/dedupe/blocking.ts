@@ -20,6 +20,7 @@
 // =============================================================================
 
 import { sqlite } from "../../db.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import type { NormalizedContact } from "./types.ts";
 import { getEmbeddingCount } from "./embeddings.ts";
@@ -219,11 +220,15 @@ export function addEmbeddingCandidates(
  *
  * @returns Set of canonical pair keys for known-distinct pairs
  */
-export function loadNegativeConstraints(): Set<string> {
+export function loadNegativeConstraints(scope: Scope): Set<string> {
   const distinctPairs = new Set<string>();
 
   // 1. Co-occurrence in interactions
   try {
+    // `interaction_mentions` has no owner of its own, so the join to
+    // `interactions` supplies one. Two people mentioned in the same note are
+    // known to be different people, and that is only meaningful within an
+    // owner's own notes.
     const coOccurrences = sqlite
       .prepare(
         `
@@ -232,9 +237,11 @@ export function loadNegativeConstraints(): Set<string> {
       JOIN interaction_mentions im2
         ON im1.interactionId = im2.interactionId
         AND im1.contactId < im2.contactId
+      JOIN interactions i ON i.id = im1.interactionId
+      WHERE i.ownerId = ?
     `,
       )
-      .all() as { id1: string; id2: string }[];
+      .all(scope.ownerId) as { id1: string; id2: string }[];
 
     for (const row of coOccurrences) {
       distinctPairs.add(pairKey(row.id1, row.id2));
@@ -255,10 +262,10 @@ export function loadNegativeConstraints(): Set<string> {
     const exclusions = sqlite
       .prepare(
         `
-      SELECT contactIdA, contactIdB FROM dedupe_exclusions
+      SELECT contactIdA, contactIdB FROM dedupe_exclusions WHERE ownerId = ?
     `,
       )
-      .all() as { contactIdA: string; contactIdB: string }[];
+      .all(scope.ownerId) as { contactIdA: string; contactIdB: string }[];
 
     for (const row of exclusions) {
       distinctPairs.add(pairKey(row.contactIdA, row.contactIdB));

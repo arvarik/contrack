@@ -7,8 +7,12 @@
 // production unclassified, which is the point.
 //
 // `isolated` starts false for every route and flips as Phase 2 converts each
-// one and its isolation test goes green. The manifest test does not assert
-// `isolated` yet. Phase 2 adds that assertion when the last route flips.
+// one and its isolation test goes green. The manifest test names the routes
+// that have flipped, so a sub-phase cannot claim one it did not prove. Phase
+// 2i replaces that list with "every scoped route".
+//
+// Flipped so far: sub-phase 2a — every route in server/routes/contacts.ts and
+// the /uploads layer.
 //
 // Seeded from docs/multi-tenant-plan/appendix-b-route-manifest.md.
 // =============================================================================
@@ -183,31 +187,31 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "scoped",
     isolated: false,
   },
-  { method: "GET", path: "/api/contacts", class: "scoped", isolated: false },
-  { method: "POST", path: "/api/contacts", class: "scoped", isolated: false },
+  { method: "GET", path: "/api/contacts", class: "scoped", isolated: true },
+  { method: "POST", path: "/api/contacts", class: "scoped", isolated: true },
   {
     method: "DELETE",
     path: "/api/contacts/:id",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",
     path: "/api/contacts/:id",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "PATCH",
     path: "/api/contacts/:id",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "PUT",
     path: "/api/contacts/:id",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",
@@ -231,7 +235,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "POST",
     path: "/api/contacts/:id/avatar",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
@@ -243,7 +247,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "POST",
     path: "/api/contacts/:id/enrich",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
@@ -267,7 +271,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "GET",
     path: "/api/contacts/:id/score",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",
@@ -285,31 +289,31 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "GET",
     path: "/api/contacts/archived",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
     path: "/api/contacts/bulk",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
     path: "/api/contacts/bulk-delete",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "PUT",
     path: "/api/contacts/bulk-update",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",
     path: "/api/contacts/map",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
@@ -607,5 +611,5 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   { method: "GET", path: "/healthz", class: "public", isolated: false },
-  { method: "USE", path: "/uploads", class: "static", isolated: false },
+  { method: "USE", path: "/uploads", class: "static", isolated: true },
 ];

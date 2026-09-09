@@ -20,7 +20,11 @@
 
 import { sqlite, vecTableDdl } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
-import { normalizeContacts, normalizeContactById } from "./normalization.ts";
+import {
+  normalizeContactById,
+  normalizeContactsForAllOwners,
+  scopeOfContact,
+} from "./normalization.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   embedBatch,
@@ -358,7 +362,8 @@ export async function reEmbedStaleContacts(): Promise<number> {
 
   const items: { id: string; text: string }[] = [];
   for (const id of staleIds) {
-    const normalized = normalizeContactById(id);
+    const scope = scopeOfContact(id);
+    const normalized = scope && normalizeContactById(scope, id);
     if (normalized) {
       items.push({ id: normalized.id, text: normalized.embeddingText });
     }
@@ -414,7 +419,10 @@ export async function backfillEmbeddings(
   try {
     // 1. Normalize all active contacts
     onProgress?.(0, 0, "Normalizing contacts...");
-    const normalized = normalizeContacts();
+    // Instance-wide on purpose: an admin backfill must not stop at the rows
+    // of whoever pressed the button. TODO(2h): a per-owner loop inside
+    // runWithContext, so the provider spend is attributed too.
+    const normalized = normalizeContactsForAllOwners();
     log.info(
       "DedupeEmbeddings",
       `Normalized ${normalized.length} contacts for embedding`,
@@ -500,7 +508,8 @@ export async function generateAndStoreEmbedding(
 
   _inFlightIds.add(contactId);
   try {
-    const normalized = normalizeContactById(contactId);
+    const scope = scopeOfContact(contactId);
+    const normalized = scope && normalizeContactById(scope, contactId);
     if (!normalized) {
       log.warn(
         "DedupeEmbeddings",
@@ -540,7 +549,8 @@ export async function generateAndStoreBulkEmbeddings(
     // Batch-normalize the specific contacts
     const items: { id: string; text: string }[] = [];
     for (const id of contactIds) {
-      const normalized = normalizeContactById(id);
+      const scope = scopeOfContact(id);
+      const normalized = scope && normalizeContactById(scope, id);
       if (normalized) {
         items.push({ id: normalized.id, text: normalized.embeddingText });
       }

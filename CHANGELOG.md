@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2a.** Contacts belong to the account that created them. Every
+  contact endpoint reads and writes the caller's rows only: the list, the map,
+  the archive, the trash, one contact by id, the score breakdown, both bulk
+  endpoints, avatar upload, and enrichment. Another account's id answers `404`
+  with the same body an id that never existed answers, so the response cannot
+  be used to find out which contacts exist. A bulk request that names another
+  account's ids reports the number of the caller's own rows it changed.
+- **Phase 2a.** Import-time duplicate matching stops at the importer's own
+  contacts. Importing a file that happens to contain a name or an email
+  another account already has no longer matches, merges, or files a
+  suggestion against that account's contact.
+- **Phase 2a.** Uploads are served to their owner only. A request for
+  `/uploads/u/<ownerId>/...` answers `404` unless the caller is that owner.
+  `/uploads/logos/` stays shared, and every other `/uploads` path answers
+  `404`. The check is a comparison against the path, with no database read.
+
 - **Phase 1, breaking.** Endpoints that manage the signed-in account refuse an
   API token with `403 SESSION_REQUIRED`. The code was `403 USER_REQUIRED`. The
   seven affected endpoints are under `/api/auth`: `GET /me`, `PATCH /me`,
@@ -110,6 +126,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and this test fails if the weight list is not extended with them.
 
 ### Fixed
+
+- **Phase 2a.** The migration test's second-boot check no longer depends on
+  the clock. It compared `updatedAt` against the fixture, which the legacy
+  follow-up backfill legitimately moves on one contact during the first boot,
+  so the test failed whenever the fixture build and that boot landed in
+  different seconds. It now compares against the state the first boot left.
 
 - **Phase 1.** Upgrading no longer re-embeds the whole contact list through a
   paid provider. Two bulk writes during the migration stamped `updatedAt` on

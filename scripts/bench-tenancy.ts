@@ -175,21 +175,25 @@ async function main(): Promise<void> {
 
     // Every insert runs inside that owner's scope, which is what task 0.5
     // reads. This is how production will write once Phase 1 lands.
+    const scope = scopeForOwnerId(user.id);
     runWithContext(
       {
         requestId: `bench-seed-${o}`,
         principal: null,
-        scope: scopeForOwnerId(user.id),
+        scope,
       },
       () => {
         for (let c = 0; c < CONTACTS_PER_OWNER; c++) {
-          const contact: { id: string } | null = contactService.createContact({
-            name: `${pick(FIRST, c)} ${pick(LAST, c + o)}`,
-            company: pick(COMPANIES, c + o),
-            role: pick(ROLES, c),
-            location: pick(CITIES, c),
-            tags: [pick(TAGS, c), pick(TAGS, c + 1)],
-          } as never);
+          const contact: { id: string } | null = contactService.createContact(
+            scope,
+            {
+              name: `${pick(FIRST, c)} ${pick(LAST, c + o)}`,
+              company: pick(COMPANIES, c + o),
+              role: pick(ROLES, c),
+              location: pick(CITIES, c),
+              tags: [pick(TAGS, c), pick(TAGS, c + 1)],
+            } as never,
+          );
           if (!contact) continue;
           for (let n = 0; n < INTERACTIONS_PER_CONTACT; n++) {
             interactionService.createInteraction(contact.id, {

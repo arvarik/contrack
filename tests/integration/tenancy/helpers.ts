@@ -208,6 +208,21 @@ export function localOwnerId(): string {
   return row.id;
 }
 
+/**
+ * One row exactly as it sits on disk, for a before-and-after comparison.
+ *
+ * The matrix asserts more than "B got a 404". It asserts that A's row did not
+ * move, because a handler can refuse a request and still have written
+ * something on the way.
+ */
+export function snapshotRow(
+  table: string,
+  id: string,
+): Record<string, unknown> | undefined {
+  return sqlite.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as
+    Record<string, unknown> | undefined;
+}
+
 /** How many rows in `table` belong to `ownerId`. */
 export function rowsOwnedBy(table: string, ownerId: string): number {
   // tenant-lint: allow derived table
