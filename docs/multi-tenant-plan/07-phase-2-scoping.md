@@ -242,6 +242,37 @@ by `contactId` and are unaffected.
 
 ### 2c. Search: FTS, vector, hybrid, embeddings
 
+> **What 2c shipped, where it differs from this document.** The table below
+> was written against `v1.5.5` and PR #18 rewrote the search layer.
+>
+> - **One FTS entry point, not two.** The table asks `searchService.searchFts`
+>   and `hybridRetrieval.ftsRetrieval` each to gain the owner wrap. Both call
+>   `lexicalSearch` in `search/lexical.ts`, which PR #18 introduced, so the
+>   wrap is written once and the three retry strategies keep working exactly
+>   as the architecture document predicted.
+> - **`hydrateAiMatches` and the per-candidate `SELECT` are gone.** PR #18
+>   left one hydration path, `hydrateCandidates`, and made
+>   `buildCompressedCandidates` a pure function of rows already hydrated. So
+>   `findManyOwned` is called once, and the visibility gate that was
+>   `ACTIVE_CONTACT_SQL` is applied to the rows it returns.
+> - **No boot-log variant of `getSearchEmbeddingCount`.** The table asks for an
+>   unscoped variant behind an allow comment. Nothing logs the count at boot,
+>   and the only caller is the vector channel, which wants one owner's count.
+>   An unused export was not added.
+> - **The two private dedupe KNN statements read the owner from their anchor.**
+>   `addEmbeddingCandidates` and `getEmbeddingSimilarity` take
+>   `AND ownerId = (SELECT ownerId FROM contacts WHERE id = ?)` rather than a
+>   scope parameter. Both are called from inside a scan that is already scoped,
+>   the anchor id is in the same statement either way, and this keeps 2e's
+>   `passes.ts` and the `PassContext` type untouched.
+> - **`dedupe/engine.ts` gains one argument.** `findNearestNeighbors` takes a
+>   scope, and the engine's only call site already had one from 2a. The file's
+>   own six unscoped statements stay for 2e, so it is not in the strict glob.
+> - **The executive brief keeps its 409.** A contact id the caller does not own
+>   takes the same "no longer available" answer a deleted id has always taken,
+>   rather than the 404 rule 4 describes. The two bodies are identical, which
+>   is what rule 4 is for.
+
 **Files:** `server/services/searchService.ts`, `server/services/search/hybridRetrieval.ts`, `server/services/search/localEmbeddings.ts`, `server/services/dedupe/embeddings.ts` (KNN only), `server/services/dedupe/blocking.ts` and `context.ts` (their private KNN statements only), `server/routes/search.ts`, `server/utils/aiCache.ts` (rerank keys).
 
 | Function (line) | Change |
@@ -461,6 +492,32 @@ or write attributable rows run per owner inside a context.
 - [x] The existing interaction, action item, list, and dashboard suites pass
       unchanged.
 - [x] CHANGELOG has Phase 2b and Phase 2d blocks.
+
+### 2c (shipped)
+
+- [x] Every FTS query wraps its strategy with `ownerTok:<token> AND (...)`.
+      `lexicalSearch` is the single entry point for both `GET /api/search` and
+      `hybridRetrieval.ftsRetrieval`, so the wrap is written once. The matrix
+      file asserts the plan is the MATCH index scan plus a rowid seek into
+      `contacts`, with no scan of `contacts`.
+- [x] Every KNN filters by owner: `findSearchNeighbors`, `_stmts.knn`,
+      `blocking.addEmbeddingCandidates` and `context.getEmbeddingSimilarity`.
+      `getSearchEmbeddingCount(scope)` counts one partition.
+- [x] Candidate hydration goes through `findManyOwned`, with the active gate
+      applied to the rows it returns.
+- [x] `rerank` and `synthesis` keys are owner-prefixed through `ownerKey`.
+      `queryParse`, `hyde` and `mentions` stay shared, and Q14's condition was
+      checked: the extraction prompt is a fixed instruction plus the note text
+      that the key already hashes.
+- [x] Both NDJSON handlers capture `scope` before the stream opens and pass it
+      explicitly.
+- [x] `tenant-lint --strict` passes for the eight converted files.
+- [x] Matrix tests are real and green for `GET /api/search`,
+      `POST /api/search/semantic` (JSON and NDJSON) and
+      `POST /api/search/synthesize`, and `isolated: true` for each.
+- [x] The existing search index, search pipeline and unit search suites pass
+      unchanged.
+- [x] CHANGELOG has a Phase 2c block.
 
 ### The whole phase
 

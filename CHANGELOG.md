@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2c.** Search returns the caller's own contacts and nobody else's, in
+  every channel. Keyword search, the semantic pipeline and its NDJSON stream,
+  the executive brief, the hard filters behind a parsed query, and the trait
+  boosts all read one account's rows. The keyword index carries an owner token
+  and intersects it inside the index, so another account's contacts are never
+  read and then dropped.
+- **Phase 2c.** Vector search asks one account's partition. The nearest
+  neighbour query fetched the instance-wide top hundred and filtered the
+  result afterwards, so an account with a few hundred contacts on a large
+  instance rarely appeared in that hundred and their vector channel returned
+  nothing. This is a correctness fix before it is a speed one. The three
+  duplicate-detection vector queries take the same predicate.
+- **Phase 2c.** Cached search results are held per account. Reranked matches
+  and the executive brief were cached under the query text alone, so the first
+  account to search a phrase had its own contacts served to every other
+  account that typed the same words for the next twelve hours.
+- **Phase 2c.** The executive brief refuses a contact id the caller does not
+  own with the same answer a deleted id has always taken.
+
 - **Phase 2b.** Interactions, action items, and lists belong to the account
   that created them. Every timeline, briefing, attachment, follow-up task, and
   list endpoint reads and writes the caller's rows only. Another account's id
