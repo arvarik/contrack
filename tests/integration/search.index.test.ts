@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
+import { localOwnerId } from "./tenancy/helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { lexicalSearch } from "../../server/services/search/lexical.ts";
 import { installSearchIndex } from "../../server/services/search/ftsIndex.ts";
@@ -14,8 +15,10 @@ import * as embeddings from "../../server/ai/embeddings.ts";
 const app = makeTestApp();
 const insert = (id: string, name = "Alice", role = "Designer") =>
   sqlite
-    .prepare("INSERT INTO contacts(id, name, role) VALUES (?, ?, ?)")
-    .run(id, name, role);
+    .prepare(
+      "INSERT INTO contacts(id, name, role, ownerId) VALUES (?, ?, ?, ?)",
+    )
+    .run(id, name, role, localOwnerId());
 const vector = (n = 0) => {
   const v = new Float32Array(384);
   v[0] = n;

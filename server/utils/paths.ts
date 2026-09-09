@@ -17,6 +17,41 @@ export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
 export const AVATARS_DIR = path.join(UPLOADS_DIR, "avatars");
 export const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
 
+/**
+ * Where one owner's uploads live: `UPLOADS_DIR/u/<ownerId>/<kind>/`.
+ *
+ * `logos/` stays shared, because a company logo is not personal data and the
+ * same employer turns up in several people's contact lists.
+ *
+ * The id is checked against a UUID shape rather than merely escaped, because
+ * it becomes a path segment. An id of `..` would otherwise walk out of the
+ * uploads root before resolveUploadPath ever sees the result.
+ */
+export function ownerUploadDir(
+  ownerId: string,
+  kind: "avatars" | "files",
+): string {
+  return path.join(UPLOADS_DIR, "u", assertOwnerId(ownerId), kind);
+}
+
+/** The public URL for a file in an owner's directory. */
+export function ownerUploadUrl(
+  ownerId: string,
+  kind: "avatars" | "files",
+  filename: string,
+): string {
+  return `/uploads/u/${assertOwnerId(ownerId)}/${kind}/${path.basename(filename)}`;
+}
+
+const OWNER_ID_PATTERN = /^[0-9a-f-]{36}$/;
+
+function assertOwnerId(ownerId: string): string {
+  if (!OWNER_ID_PATTERN.test(ownerId)) {
+    throw new Error(`Refusing to build an upload path for owner "${ownerId}"`);
+  }
+  return ownerId;
+}
+
 /** Create a directory (and parents) if it doesn't exist yet. */
 export function ensureDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });

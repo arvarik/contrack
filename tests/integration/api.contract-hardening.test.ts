@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
+import { localOwnerId } from "./tenancy/helpers.ts";
 import { sqlite } from "../../server/db.ts";
 
 const app = makeTestApp();
@@ -206,11 +207,14 @@ describe("API and UI data contracts", () => {
   });
 
   it("applies the same command-palette facets before server search limits", async () => {
+    const owner = localOwnerId();
     sqlite.transaction(() => {
       for (let i = 0; i < 30; i++)
         sqlite
-          .prepare("INSERT INTO contacts(id,name,location) VALUES (?,?,?)")
-          .run(String(i), "Alice", i === 29 ? "Paris" : "London");
+          .prepare(
+            "INSERT INTO contacts(id,name,location,ownerId) VALUES (?,?,?,?)",
+          )
+          .run(String(i), "Alice", i === 29 ? "Paris" : "London", owner);
     })();
     const res = await request(app)
       .get("/api/search")

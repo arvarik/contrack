@@ -3,7 +3,8 @@ import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 
 // The first FTS column is the unindexed contactId. It still consumes a weight.
 // bm25() reads weights by column position, so one weight per column in COLUMNS.
-export const WEIGHTS = "0, 10, 5, 3, 2, 2, 1, 1, 1, 0.5";
+// The last is ownerTok, which is a scoping filter and must not affect ranking.
+export const WEIGHTS = "0, 10, 5, 3, 2, 2, 1, 1, 1, 0.5, 0";
 
 /** Treat user text as literal Unicode tokens, never as FTS operators. */
 export function searchTokens(query: string): string[] {

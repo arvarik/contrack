@@ -412,17 +412,25 @@ afterward.
 CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
   contactId UNINDEXED,
   name, company, role, headline, location, about, industry, extras, searchExpansion,
-  ownerTok, cidTok
+  ownerTok,
+  prefix='2 3 4'
 );
 ```
 
-No `tokenize=` option, as today (default `unicode61`). `FTS_SCHEMA_VERSION`
-becomes `2`. The existing gate (`server/db.ts` §3) drops and recreates the
+> **Corrected in Phase 1.** This section was written against `v1.5.5`. Commit
+> `eb8c220` (PR #18) rewrote the search layer afterwards, and two of the things
+> below no longer describe the code. `cidTok` is not built: the triggers
+> already delete by `rowid`, which FTS5 pushes down, so the scan `cidTok` was
+> invented to remove is already gone. The `prefix='2 3 4'` option that #18
+> added is preserved. See §5.5 and the Phase 1 pull request.
+
+No `tokenize=` option, as today (default `unicode61`). The prefix index is
+kept. `FTS_SCHEMA_VERSION` becomes `3`, because #18 had already taken `2`. The existing gate (`server/db.ts` §3) drops and recreates the
 table when the stored `user_version` differs, so the first boot after upgrade
 performs a full re-index. The bulk backfill took 233 ms for 50,000 contacts
 (measured), so 10,000 contacts index in well under one second.
 
-`cidTok` is new in the review. Section 5.5 explains why it exists.
+Section 5.5 explains why `cidTok` was proposed and why it was not built.
 
 ### 5.2 Token expressions
 
@@ -440,20 +448,24 @@ compares each with SQLite's `replace()` for a fixed UUID. Verified with
 
 ### 5.3 Triggers
 
-All eleven triggers (`contacts_ai`, `contacts_au`, `contacts_ad`,
-`fts_tags_ai/ad`, `fts_interests_ai/ad`, `fts_emails_ai/ad`,
-`fts_phones_ai/ad`) and the backfill `INSERT ... SELECT` gain the `ownerTok`
-and `cidTok` columns. Three more changes to every trigger body:
+> **Corrected in Phase 1.** The eleven-trigger shape below is `v1.5.5`. After
+> PR #18 the three `contacts_*` triggers write the index and the twelve
+> `fts_<child>_*` triggers only clear `searchExpansion`, which the
+> `contacts_au` trigger then reacts to. Only the three `contacts_*` triggers
+> and the backfill build an FTS row, so only they gained `ownerTok`.
 
-1. Every `DELETE FROM contacts_fts WHERE contactId = X` becomes
-   `DELETE FROM contacts_fts WHERE contacts_fts MATCH 'cidTok:c' || replace(X, '-', '')`.
-   This is the section 5.5 fix.
-2. `contacts_ai` gains `WHERE new.deletedAt IS NULL`, which it lacks today
-   (`server/db.ts:395-406`). Every other trigger already has the guard.
-3. `contacts_au` is `AFTER UPDATE ON contacts` with no column list, so it
-   fires on every update. It stays that way. During the migration it is
-   dropped (section 4.2), so the claim does not fire it; the bulk backfill
-   indexes the claimed rows instead.
+The three `contacts_*` triggers and the backfill `INSERT ... SELECT` gain the
+`ownerTok` column. They are generated from one template in
+`server/services/search/ftsIndex.ts` and snapshot-tested. Three more changes to every trigger body:
+
+1. Every delete stays `WHERE rowid = old.rowid`. Never `WHERE contactId`,
+   which is the section 5.5 scan. A unit test asserts this.
+2. `contacts_ai` needs `deletedAt IS NULL`. PR #18 already gave it the shared
+   `ACTIVE_CONTACT_SQL` predicate, which includes that guard.
+3. `contacts_au` is `AFTER UPDATE OF <search columns> ON contacts` after #18.
+   Phase 1 adds `ownerId` to that column list, so reassigning a contact
+   reindexes it. During the migration it is dropped (section 4.2), so the
+   claim does not fire it; the bulk backfill indexes the claimed rows instead.
 
 The trigger SQL is generated from one template string in `server/db.ts`
 instead of eleven hand-copied blocks. This is a refactor of existing code
@@ -472,8 +484,11 @@ LIMIT ?;
 -- bound value: 'ownerTok:o3f2c1d0... AND ("original query")'
 ```
 
-**The weight string has twelve values, one per column, including
-`contactId UNINDEXED` at position 0.** `bm25()` assigns weights by column
+**The weight string has one value per column, including `contactId UNINDEXED`
+at position 0.** Phase 1 ships eleven, not the twelve below: there is no
+`cidTok` column. `WEIGHTS` in `server/services/search/lexical.ts` is
+`"0, 10, 5, 3, 2, 2, 1, 1, 1, 0.5, 0"`, and a unit test asserts one weight per
+column. Phase 0 had already fixed the off-by-one this paragraph describes. `bm25()` assigns weights by column
 position and does not skip `UNINDEXED` columns (verified: a weight on
 position 0 has no effect, a weight on position 1 boosts `name`). Today's
 constant `BM25_WEIGHTS` in `server/services/search/hybridRetrieval.ts:113`
@@ -493,14 +508,28 @@ names `contacts_fts`. The column-filter syntax `ownerTok : term` and the
 `AND` with parentheses are standard FTS5 query syntax; all three strategy
 shapes were verified inside the wrapper.
 
-### 5.5 Why `cidTok`, with numbers
+### 5.5 Why `cidTok` was proposed, and why it is not built
 
-Every FTS trigger today starts with `DELETE FROM contacts_fts WHERE contactId
-= old.id`. FTS5's `xBestIndex` accepts only `MATCH`, `rowid`, and `rank`
-constraints, so an `=` on the `UNINDEXED` `contactId` column is evaluated by
-the SQLite core after a full scan of the virtual table. Measured at 40,000
-rows: 4.06 ms per delete. With an indexed `cidTok` column and
-`MATCH 'cidTok:...'`: 0.011 ms.
+**The problem was real and is already fixed.** Every FTS trigger in `v1.5.5`
+started with `DELETE FROM contacts_fts WHERE contactId = old.id`. FTS5's
+`xBestIndex` accepts only `MATCH`, `rowid`, and `rank` constraints, so an `=`
+on the `UNINDEXED` `contactId` column is evaluated by the SQLite core after a
+full scan of the virtual table. Measured at 40,000 rows: 4.06 ms per delete.
+
+**But `rowid` is one of those three constraints.** Commit `eb8c220` (PR #18)
+landed after this document was written and rewrote every one of those deletes
+as `DELETE FROM contacts_fts WHERE rowid = old.rowid`, which FTS5 pushes down.
+Measured on this codebase, 1,000 single-row updates over 5,000 contacts:
+
+| Trigger delete | 1,000 updates |
+| -------------- | ------------- |
+| `WHERE rowid = old.rowid` (the code today) | 40 ms |
+| `MATCH 'cidTok:...'` (this section's proposal) | 46 ms |
+| `WHERE contactId = old.id` (v1.5.5) | 499 ms |
+
+So Phase 1 adds `ownerTok` and does not add `cidTok`. It would be a second
+indexed column on every row, and slightly slower than what is there. Phase 3's
+bulk owner purge uses `MATCH 'ownerTok:...'`, which is unaffected.
 
 Consequences, measured on 50,000 contacts with two emails each:
 
@@ -776,8 +805,7 @@ SELECT COUNT(*) <= 1 FROM users WHERE credentialState = 'none';
 
 -- 8. No FTS row with a missing owner or contact token. Expect 0 for each.
 SELECT COUNT(*) FROM contacts_fts WHERE ownerTok IS NULL OR ownerTok = 'o';
-SELECT COUNT(*) FROM contacts_fts f JOIN contacts c ON c.id = f.contactId
- WHERE f.cidTok != 'c' || replace(c.id, '-', '');
+-- The cidTok half of this query is gone: Phase 1 does not build that column.
 
 -- 9. No vector row with a NULL partition. Expect 0 for each.
 SELECT COUNT(*) FROM search_embeddings WHERE ownerId IS NULL;
@@ -789,13 +817,12 @@ SELECT COUNT(*) FROM search_embeddings e LEFT JOIN contacts c ON c.id = e.contac
 SELECT COUNT(*) FROM contact_embeddings e LEFT JOIN contacts c ON c.id = e.contactId
  WHERE c.id IS NULL OR c.ownerId != e.ownerId;
 
--- 11. The seventeen triggers exist again after the migration. Expect 17.
-SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name IN (
-  'contacts_ai','contacts_au','contacts_ad',
-  'fts_tags_ai','fts_tags_ad','fts_interests_ai','fts_interests_ad',
-  'fts_emails_ai','fts_emails_ad','fts_phones_ai','fts_phones_ad',
-  'contacts_auto_updated_at','interactions_auto_updated_at','action_items_auto_updated_at',
-  'action_items_sync_insert','action_items_sync_update','action_items_sync_delete');
+-- 11. Every trigger the migration drops is back, and the ownership invariant
+--     is armed. Expect 27. The list is in scripts/tenancy-verify.ts; it is 14
+--     dropped-and-recreated triggers plus the 13 owner triggers. The
+--     "seventeen" in earlier drafts was the v1.5.5 set, before PR #18 replaced
+--     the eight child FTS triggers with twelve searchExpansion triggers and
+--     added search_revision_* and search_vector_*.
 ```
 
 Two checks are tests rather than queries, because they need a before-image:

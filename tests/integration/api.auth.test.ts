@@ -13,10 +13,17 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { makeTestApp } from "./helpers.ts";
-import { sqlite } from "../../server/db.ts";
+import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
-import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
+import {
+  requireAdmin,
+  __resetAuthWarnings,
+} from "../../server/middleware/auth.ts";
+import type { AppError } from "../../server/utils/AppError.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
 
 const app = makeTestApp();
@@ -28,9 +35,40 @@ const ACCOUNT = {
   displayName: "The Owner",
 };
 
-/** Remove every account (and, by cascade, every session). */
+/**
+ * Remove every account and every row it owns, then put the local owner back.
+ *
+ * `DELETE FROM users` on its own stopped working in Phase 1. Owned rows
+ * reference `users` with ON DELETE RESTRICT, and the local owner owns
+ * everything written with auth off, so the delete fails on the first contact.
+ * Recreating the local owner afterwards is not tidiness: with auth off,
+ * attachPrincipal has no principal without it, and every direct INSERT in this
+ * file needs an owner to name.
+ */
 function wipeAccounts(): void {
-  sqlite.exec("DELETE FROM sessions; DELETE FROM users;");
+  sqlite.exec(`
+    DELETE FROM dedupe_merge_log;
+    DELETE FROM dedupe_exclusions;
+    DELETE FROM dedupe_suggestions;
+    DELETE FROM ai_invocations;
+    DELETE FROM action_items;
+    DELETE FROM interactions;
+    DELETE FROM lists;
+    DELETE FROM contacts;
+    DELETE FROM sessions;
+    DELETE FROM api_tokens;
+    DELETE FROM users;
+  `);
+  ensureLocalOwner();
+}
+
+/** The account every row belongs to while nobody has signed in. */
+function localOwner(): { id: string; username: string } {
+  return sqlite
+    .prepare(
+      "SELECT id, username FROM users WHERE credentialState = 'none' LIMIT 1",
+    )
+    .get() as { id: string; username: string };
 }
 
 /**
@@ -163,7 +201,7 @@ describe("first-run setup", () => {
       .send({ ...ACCOUNT, password: "short" });
     expect(res.status).toBe(400);
     expect(res.body.error.message).toMatch(/at least 8/i);
-    expect(countUsers()).toBe(0);
+    expect(countSignInAccounts()).toBe(0);
   });
 
   it("rejects an invalid username", async () => {
@@ -173,7 +211,7 @@ describe("first-run setup", () => {
         .send({ ...ACCOUNT, username });
       expect(res.status, `username ${username}`).toBe(400);
     }
-    expect(countUsers()).toBe(0);
+    expect(countSignInAccounts()).toBe(0);
   });
 
   it("rejects an invalid email", async () => {
@@ -181,7 +219,19 @@ describe("first-run setup", () => {
       .post("/api/auth/setup")
       .send({ ...ACCOUNT, email: "not-an-email" });
     expect(res.status).toBe(400);
-    expect(countUsers()).toBe(0);
+    expect(countSignInAccounts()).toBe(0);
+  });
+
+  it("refuses to register the reserved `local` username", async () => {
+    // `local` is the account every instance already has. Registering it would
+    // collide on the UNIQUE index, and reading it back would be ambiguous with
+    // the implicit principal.
+    const res = await request(app)
+      .post("/api/auth/setup")
+      .send({ ...ACCOUNT, username: "local" });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/reserved/i);
+    expect(countSignInAccounts()).toBe(0);
   });
 });
 
@@ -291,7 +341,8 @@ describe("gating", () => {
     expect(res.status).toBe(401);
   });
 
-  it("leaves everything open when AUTH_REQUIRED is off", async () => {
+  it("leaves everything open when AUTH_REQUIRED is off, as the local owner", async () => {
+    wipeAccounts();
     process.env.AUTH_REQUIRED = "";
     try {
       const res = await request(app).get("/api/contacts");
@@ -302,6 +353,12 @@ describe("gating", () => {
         authenticated: true,
         setupRequired: false,
       });
+      // The caller is no longer anonymous. It is the account that owns this
+      // device's data, which is what makes every write stampable.
+      expect(status.body.user.username).toBe("local");
+      expect(status.body.user.credentialState).toBe("none");
+      // How they authenticated is nobody's business but the server's.
+      expect(status.body.user.via).toBeUndefined();
     } finally {
       process.env.AUTH_REQUIRED = "true";
     }
@@ -334,11 +391,20 @@ describe("API token", () => {
     delete process.env.API_TOKEN;
   });
 
-  it("admits a bearer token without any account existing", async () => {
+  it("admits a bearer token, acting as the primary admin", async () => {
+    // Before Phase 1 the env token was a `service` principal with no account
+    // behind it. There is always an account now, so it resolves to the admin
+    // with the earliest createdAt, which on a fresh instance is the local
+    // owner. That is what gives its writes an owner.
     const res = await request(app)
       .get("/api/contacts")
       .set("Authorization", `Bearer ${TOKEN}`);
     expect(res.status).toBe(200);
+
+    const status = await request(app)
+      .get("/api/auth/status")
+      .set("Authorization", `Bearer ${TOKEN}`);
+    expect(status.body.user.id).toBe(localOwner().id);
   });
 
   it("rejects a wrong bearer token", async () => {
@@ -371,12 +437,22 @@ describe("API token", () => {
     }
   });
 
-  it("cannot reach account endpoints — there is no account behind a token", async () => {
+  it("cannot reach account endpoints — a token is not a session", async () => {
+    // The account exists now, so the refusal is about the credential rather
+    // than the account: a token must not be able to change the password that
+    // would revoke it. USER_REQUIRED became SESSION_REQUIRED in Phase 1.
     const res = await request(app)
       .get("/api/auth/me")
       .set("Authorization", `Bearer ${TOKEN}`);
     expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("USER_REQUIRED");
+    expect(res.body.error.code).toBe("SESSION_REQUIRED");
+  });
+
+  it("still reaches a data endpoint that a session would", async () => {
+    const res = await request(app)
+      .get("/api/contacts")
+      .set("Authorization", `Bearer ${TOKEN}`);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -571,6 +647,266 @@ describe("sessions", () => {
 
 // =============================================================================
 
+describe("requireAdmin", () => {
+  // Phase 2g and Phase 3 mount this. It is built now so the gate exists before
+  // anything needs it, and tested now so it is not written twice.
+  const run = (principal: unknown): { code?: string; status?: number } => {
+    let captured: AppError | undefined;
+    requireAdmin(
+      { principal } as never,
+      {} as never,
+      ((err?: unknown) => {
+        captured = err as AppError;
+      }) as never,
+    );
+    return { code: captured?.code, status: captured?.statusCode };
+  };
+
+  it("passes an admin", () => {
+    expect(
+      run({ kind: "user", user: { role: "admin" }, via: "session" }),
+    ).toEqual({ code: undefined, status: undefined });
+  });
+
+  it("refuses a member with ADMIN_REQUIRED", () => {
+    expect(
+      run({ kind: "user", user: { role: "member" }, via: "session" }),
+    ).toEqual({ code: "ADMIN_REQUIRED", status: 403 });
+  });
+
+  it("refuses an unauthenticated request with UNAUTHORIZED", () => {
+    expect(run(undefined)).toEqual({ code: "UNAUTHORIZED", status: 401 });
+  });
+
+  it("is mounted nowhere yet, which is deliberate until Phase 2g", () => {
+    // Mounting it early would gate an endpoint that has no admin story behind
+    // it, and would be invisible until somebody with a member account hit it.
+    const routes = fs
+      .readdirSync("server/routes", { recursive: true })
+      .filter((f) => String(f).endsWith(".ts"))
+      .map((f) =>
+        fs.readFileSync(path.join("server/routes", String(f)), "utf8"),
+      );
+    const mounted = routes.filter((src) => /\brequireAdmin\b/.test(src));
+    expect(mounted).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+
+describe("a personal API token", () => {
+  // Phase 3 adds the endpoints that mint these. The lookup exists now because
+  // the principal shape has to be final before Phase 2 scopes every read, so
+  // the row goes in by hand.
+  const SECRET = "ctk_" + "a".repeat(43);
+  let userId: string;
+
+  function issue(overrides: Partial<Record<string, string | null>> = {}): void {
+    const hash = crypto.createHash("sha256").update(SECRET).digest("hex");
+    sqlite
+      .prepare(
+        `INSERT INTO api_tokens (id, userId, name, tokenHash, tokenPrefix, expiresAt, revokedAt)
+         VALUES ('tok-1', ?, 'A script', ?, ?, ?, ?)`,
+      )
+      .run(
+        userId,
+        hash,
+        SECRET.slice(0, 12),
+        overrides.expiresAt ?? null,
+        overrides.revokedAt ?? null,
+      );
+  }
+
+  beforeEach(async () => {
+    wipeAccounts();
+    delete process.env.API_TOKEN;
+    __resetAuthRateLimits();
+    const { res } = await setupAccount();
+    userId = res.body.user.id;
+    sqlite.prepare("DELETE FROM api_tokens").run();
+  });
+
+  it("acts as its own account on a data endpoint", async () => {
+    issue();
+    const res = await request(app)
+      .get("/api/contacts")
+      .set("Authorization", `Bearer ${SECRET}`);
+    expect(res.status).toBe(200);
+
+    const status = await request(app)
+      .get("/api/auth/status")
+      .set("Authorization", `Bearer ${SECRET}`);
+    expect(status.body.user.id).toBe(userId);
+  });
+
+  it("cannot reach an endpoint that manages the account", async () => {
+    // A token must not be able to change the password that would revoke it.
+    issue();
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${SECRET}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("SESSION_REQUIRED");
+  });
+
+  it("stamps lastUsedAt so an unused token is visible as unused", async () => {
+    issue();
+    await request(app)
+      .get("/api/contacts")
+      .set("Authorization", `Bearer ${SECRET}`);
+    const row = sqlite
+      .prepare("SELECT lastUsedAt FROM api_tokens WHERE id = 'tok-1'")
+      .get() as { lastUsedAt: string | null };
+    expect(row.lastUsedAt).not.toBeNull();
+  });
+
+  it.each([
+    ["revoked", { revokedAt: "2020-01-01 00:00:00" }],
+    ["expired", { expiresAt: "2020-01-01 00:00:00" }],
+  ])("refuses a %s token", async (_label, overrides) => {
+    issue(overrides);
+    const res = await request(app)
+      .get("/api/contacts")
+      .set("Authorization", `Bearer ${SECRET}`);
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses a token whose account is disabled", async () => {
+    issue();
+    sqlite
+      .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
+      .run(userId);
+    const res = await request(app)
+      .get("/api/contacts")
+      .set("Authorization", `Bearer ${SECRET}`);
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses a token that was never issued", async () => {
+    const res = await request(app)
+      .get("/api/contacts")
+      .set("Authorization", `Bearer ctk_${"z".repeat(43)}`);
+    expect(res.status).toBe(401);
+  });
+
+  it("stores only the hash, never the token", () => {
+    issue();
+    const row = sqlite
+      .prepare(
+        "SELECT tokenHash, tokenPrefix FROM api_tokens WHERE id = 'tok-1'",
+      )
+      .get() as { tokenHash: string; tokenPrefix: string };
+    expect(row.tokenHash).not.toContain(SECRET);
+    expect(row.tokenHash).toHaveLength(64);
+    // The prefix is short enough to be an identifier rather than a credential.
+    expect(SECRET.startsWith(row.tokenPrefix)).toBe(true);
+    expect(row.tokenPrefix).toHaveLength(12);
+  });
+});
+
+// =============================================================================
+
+describe("a disabled account", () => {
+  beforeEach(() => {
+    wipeAccounts();
+    delete process.env.API_TOKEN;
+    __resetAuthRateLimits();
+  });
+
+  it("cannot sign in, and its live session stops working", async () => {
+    const { cookie } = await setupAccount();
+
+    // The session works right up until the account is disabled.
+    const before = await request(app).get("/api/auth/me").set("Cookie", cookie);
+    expect(before.status).toBe(200);
+
+    sqlite
+      .prepare(
+        "UPDATE users SET status = 'disabled', disabledAt = CURRENT_TIMESTAMP WHERE credentialState = 'password'",
+      )
+      .run();
+
+    // No sign-out needed and no session row deleted: attachPrincipal refuses
+    // to build a principal for a disabled user, so the cookie it already holds
+    // stops resolving on the very next request. That is the point of keeping
+    // sessions server-side.
+    const after = await request(app).get("/api/auth/me").set("Cookie", cookie);
+    expect(after.status).toBe(401);
+    expect(after.body.error.code).toBe("UNAUTHORIZED");
+
+    const data = await request(app).get("/api/contacts").set("Cookie", cookie);
+    expect(data.status).toBe(401);
+
+    // The right password now gets a straight answer, because whoever holds it
+    // has already proved the account is theirs. A wrong one still gets the
+    // shared "incorrect username or password", so this cannot enumerate.
+    __resetAuthRateLimits();
+    const { res } = await signIn(ACCOUNT.username, ACCOUNT.password);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("ACCOUNT_DISABLED");
+
+    __resetAuthRateLimits();
+    const wrong = await signIn(ACCOUNT.username, "not the password at all");
+    expect(wrong.res.status).toBe(401);
+    expect(wrong.res.body.error.code).toBe("INVALID_CREDENTIALS");
+  });
+});
+
+// =============================================================================
+
+describe("auth off with a real account", () => {
+  beforeEach(() => {
+    wipeAccounts();
+    delete process.env.API_TOKEN;
+    __resetAuthRateLimits();
+  });
+
+  afterAll(() => {
+    __resetAuthWarnings();
+    process.env.AUTH_REQUIRED = "true";
+  });
+
+  it("forces auth on at boot rather than guessing who the caller is", async () => {
+    await setupAccount();
+
+    process.env.AUTH_REQUIRED = "";
+    __resetAuthWarnings();
+    try {
+      // Auth-off mode means "the person at the keyboard is the local owner".
+      // With a real account that sentence has no answer, so createApp refuses
+      // the premise: it logs an error and enforces auth anyway.
+      const gated = makeTestApp();
+      const res = await request(gated).get("/api/contacts");
+      expect(res.status).toBe(401);
+
+      const status = await request(gated).get("/api/auth/status");
+      expect(status.body.authRequired).toBe(true);
+      expect(status.body.setupRequired).toBe(false);
+    } finally {
+      __resetAuthWarnings();
+      process.env.AUTH_REQUIRED = "true";
+    }
+  });
+
+  it("leaves auth off when the local owner is the only account", async () => {
+    process.env.AUTH_REQUIRED = "";
+    __resetAuthWarnings();
+    try {
+      const open = makeTestApp();
+      const res = await request(open).get("/api/contacts");
+      expect(res.status).toBe(200);
+      const status = await request(open).get("/api/auth/status");
+      expect(status.body.authRequired).toBe(false);
+      expect(status.body.user.username).toBe("local");
+    } finally {
+      __resetAuthWarnings();
+      process.env.AUTH_REQUIRED = "true";
+    }
+  });
+});
+
+// =============================================================================
+
 describe("data ownership", () => {
   beforeEach(() => {
     wipeAccounts();
@@ -578,33 +914,39 @@ describe("data ownership", () => {
     __resetAuthRateLimits();
   });
 
-  it("claims pre-existing unowned contacts for the first account", async () => {
-    // A contact written before any account existed — the state every current
-    // installation is in.
+  it("keeps this device's contacts by converting the local owner", async () => {
+    // A contact written before anyone secured the instance — the state every
+    // current installation is in. It belongs to the local owner from boot, so
+    // there is nothing to claim: setup converts that account in place and the
+    // id never changes, which is what carries the data across.
+    const before = localOwner().id;
     sqlite
       .prepare(
-        "INSERT INTO contacts (id, name, ownerId) VALUES ('own-1', 'Legacy Contact', NULL)",
+        "INSERT INTO contacts (id, name, ownerId) VALUES ('own-1', 'Legacy Contact', ?)",
       )
-      .run();
+      .run(before);
 
     const { res } = await setupAccount();
     expect(res.status).toBe(201);
-    const userId = res.body.user.id;
+    expect(res.body.user.id).toBe(before);
+    expect(res.body.user.credentialState).toBe("password");
 
     const row = sqlite
       .prepare("SELECT ownerId FROM contacts WHERE id = 'own-1'")
       .get() as { ownerId: string | null };
-    expect(row.ownerId).toBe(userId);
+    expect(row.ownerId).toBe(res.body.user.id);
+    // The account converted rather than a second one appearing beside it.
+    expect(countUsers()).toBe(1);
 
     sqlite.prepare("DELETE FROM contacts WHERE id = 'own-1'").run();
   });
 
-  it("claims unowned lists as well", async () => {
+  it("keeps lists the same way", async () => {
     sqlite
       .prepare(
-        "INSERT INTO lists (id, name, ownerId) VALUES ('own-list', 'Legacy List', NULL)",
+        "INSERT INTO lists (id, name, ownerId) VALUES ('own-list', 'Legacy List', ?)",
       )
-      .run();
+      .run(localOwner().id);
 
     const { res } = await setupAccount();
     const row = sqlite
@@ -615,12 +957,44 @@ describe("data ownership", () => {
     sqlite.prepare("DELETE FROM lists WHERE id = 'own-list'").run();
   });
 
+  it("still claims a row written with no owner at all", async () => {
+    // The invariant triggers make this state unreachable through SQL, so the
+    // claim is proven through the boot path that would meet it: a row from a
+    // 1.x database. reconcileOwnership runs on every boot for exactly this.
+    const { reconcileOwnership } =
+      await import("../../server/services/authService.ts");
+    sqlite.exec("DROP TRIGGER contacts_owner_required");
+    try {
+      sqlite
+        .prepare(
+          "INSERT INTO contacts (id, name) VALUES ('own-null', 'From 1.x')",
+        )
+        .run();
+    } finally {
+      sqlite.exec(`CREATE TRIGGER contacts_owner_required BEFORE INSERT ON contacts
+        WHEN NEW.ownerId IS NULL
+        BEGIN SELECT RAISE(ABORT, 'contacts.ownerId is required'); END;`);
+    }
+
+    reconcileOwnership();
+    const row = sqlite
+      .prepare("SELECT ownerId FROM contacts WHERE id = 'own-null'")
+      .get() as { ownerId: string | null };
+    expect(row.ownerId).toBe(localOwner().id);
+
+    sqlite.prepare("DELETE FROM contacts WHERE id = 'own-null'").run();
+  });
+
   it("carries ownership on every table that has it", () => {
     for (const table of [
       "contacts",
       "lists",
-      "ai_invocations",
+      "interactions",
+      "action_items",
+      "dedupe_suggestions",
+      "dedupe_exclusions",
       "dedupe_merge_log",
+      "ai_invocations",
     ]) {
       const columns = sqlite.pragma(`table_info(${table})`) as {
         name: string;
@@ -637,6 +1011,22 @@ describe("data ownership", () => {
 function countUsers(): number {
   return (sqlite.prepare("SELECT COUNT(*) n FROM users").get() as { n: number })
     .n;
+}
+
+/**
+ * Accounts somebody can actually sign in to.
+ *
+ * `countUsers()` is never zero since Phase 1: the local owner exists from
+ * boot. "No account yet" now means no account with a password.
+ */
+function countSignInAccounts(): number {
+  return (
+    sqlite
+      .prepare(
+        "SELECT COUNT(*) n FROM users WHERE credentialState = 'password'",
+      )
+      .get() as { n: number }
+  ).n;
 }
 
 // =============================================================================
@@ -747,31 +1137,47 @@ describe("setup reports what is waiting", () => {
     __resetAuthRateLimits();
   });
 
-  it("counts unowned contacts so the setup screen can name them", async () => {
-    sqlite.exec(`
-      INSERT INTO contacts (id, name, ownerId) VALUES ('cnt-1', 'Waiting One', NULL);
-      INSERT INTO contacts (id, name, ownerId) VALUES ('cnt-2', 'Waiting Two', NULL);
-    `);
+  it("counts this device's contacts so the setup screen can name them", async () => {
+    const owner = localOwner().id;
+    sqlite
+      .prepare(
+        "INSERT INTO contacts (id, name, ownerId) VALUES ('cnt-1', 'Waiting One', ?)",
+      )
+      .run(owner);
+    sqlite
+      .prepare(
+        "INSERT INTO contacts (id, name, ownerId) VALUES ('cnt-2', 'Waiting Two', ?)",
+      )
+      .run(owner);
     const res = await request(app).get("/api/auth/status");
     expect(res.body.setupRequired).toBe(true);
-    expect(res.body.existingContacts).toBeGreaterThanOrEqual(2);
+    expect(res.body.deviceContacts).toBeGreaterThanOrEqual(2);
+    // The pre-2.0 name is still sent so the current frontend keeps working.
+    expect(res.body.existingContacts).toBe(res.body.deviceContacts);
     sqlite.exec("DELETE FROM contacts WHERE id IN ('cnt-1','cnt-2')");
   });
 
   it("excludes trashed and ghost contacts from that count", async () => {
-    sqlite.exec(`
-      INSERT INTO contacts (id, name, deletedAt) VALUES ('cnt-del', 'Trashed', '2020-01-01');
-      INSERT INTO contacts (id, name, isGhost) VALUES ('cnt-ghost', 'Ghosty', 1);
-    `);
+    const owner = localOwner().id;
+    sqlite
+      .prepare(
+        "INSERT INTO contacts (id, name, deletedAt, ownerId) VALUES ('cnt-del', 'Trashed', '2020-01-01', ?)",
+      )
+      .run(owner);
+    sqlite
+      .prepare(
+        "INSERT INTO contacts (id, name, isGhost, ownerId) VALUES ('cnt-ghost', 'Ghosty', 1, ?)",
+      )
+      .run(owner);
     const res = await request(app).get("/api/auth/status");
-    expect(res.body.existingContacts).toBe(0);
+    expect(res.body.deviceContacts).toBe(0);
     sqlite.exec("DELETE FROM contacts WHERE id IN ('cnt-del','cnt-ghost')");
   });
 
-  it("reports zero once an account exists", async () => {
+  it("reports zero once the instance is secured", async () => {
     await setupAccount();
     const res = await request(app).get("/api/auth/status");
     expect(res.body.setupRequired).toBe(false);
-    expect(res.body.existingContacts).toBe(0);
+    expect(res.body.deviceContacts).toBe(0);
   });
 });

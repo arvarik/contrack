@@ -18,6 +18,7 @@ import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../utils/AppError.ts";
 import type { Principal } from "../middleware/auth.ts";
 import { scopeForUser, type Scope } from "./scope.ts";
+import { primaryAdminId } from "../db.ts";
 
 export interface RequestContext {
   requestId: string;
@@ -60,4 +61,20 @@ export function attachRequestContext(
   runWithContext({ requestId: req.requestId, principal: p, scope }, () =>
     next(),
   );
+}
+
+/**
+ * The owner to stamp on a row being written now.
+ *
+ * Inside a request this is the caller. Outside one — a scheduled dedupe scan,
+ * an embedding backfill, a seed script — it is the primary admin, which on an
+ * auth-off instance is the local owner.
+ *
+ * Phase 0 wrote NULL here because no account was guaranteed to exist. Phase 1
+ * creates one on every instance and forbids NULL with a trigger, so the
+ * fallback is now both possible and necessary. Phase 2 wraps every background
+ * job in runWithContext, after which a multi-user instance stops reaching it.
+ */
+export function currentOwnerId(): string {
+  return currentScopeOrNull()?.ownerId ?? primaryAdminId();
 }

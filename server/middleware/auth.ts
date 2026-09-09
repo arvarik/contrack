@@ -33,7 +33,12 @@ import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
-import { resolveSession, type User } from "../services/authService.ts";
+import {
+  getUserById,
+  resolveSession,
+  type User,
+} from "../services/authService.ts";
+import { primaryAdminId, sqlite } from "../db.ts";
 
 export const COOKIE_NAME = "contrack_session";
 
@@ -44,26 +49,41 @@ const LEGACY_COOKIE_NAME = "contrack_token";
 // Principal
 // =============================================================================
 
-/** Who is making this request. */
+/**
+ * Who is making this request.
+ *
+ * Every variant is a user. The `anonymous` and `service` kinds are gone: with
+ * the local owner account there is always an account behind a request, so no
+ * downstream code has to answer "which owner does a caller with no account
+ * write for". `via` records how the caller proved who they are, which is what
+ * requireSession gates on.
+ */
 export type Principal =
-  /** Auth is disabled — everyone is let through, nobody is identified. */
-  | { kind: "anonymous" }
-  /** A signed-in person. */
-  | { kind: "user"; user: User; sessionId: string }
-  /** A script or MCP client presenting API_TOKEN. */
-  | { kind: "service" };
+  /** Cookie `contrack_session`. The only kind that may manage the account. */
+  | { kind: "user"; user: User; via: "session"; sessionId: string }
+  /** `Authorization: Bearer ctk_...`, a personal token from `api_tokens`. */
+  | { kind: "user"; user: User; via: "token"; tokenId: string }
+  /** Auth is off. The local owner account, which nobody can sign in to. */
+  | { kind: "user"; user: User; via: "implicit" }
+  /** `Authorization: Bearer <env API_TOKEN>`, resolved to the primary admin. */
+  | { kind: "user"; user: User; via: "legacy-env-token" };
 
 // `Request.principal` is declared in server/types/express.d.ts, alongside the
 // other Request augmentations, rather than here.
 
-/** The signed-in user, or null for anonymous/service requests. */
+/**
+ * The user behind this request.
+ *
+ * Returns null only when nothing authenticated the request at all, which
+ * requireAuth has already refused for every gated route.
+ */
 export function currentUser(req: Request): User | null {
-  return req.principal?.kind === "user" ? req.principal.user : null;
+  return req.principal?.user ?? null;
 }
 
-/** The session id backing this request, or null. */
+/** The session id backing this request, or null for the other three kinds. */
 export function currentSessionId(req: Request): string | null {
-  return req.principal?.kind === "user" ? req.principal.sessionId : null;
+  return req.principal?.via === "session" ? req.principal.sessionId : null;
 }
 
 // =============================================================================
@@ -101,14 +121,31 @@ function warnLegacyTokenOnce(): void {
   );
 }
 
-/** True when the instance requires a credential. */
-export function isAuthRequired(): boolean {
-  return process.env.AUTH_REQUIRED === "true" || resolveApiToken() !== null;
+/**
+ * Set when boot finds real accounts on an instance that asked for auth to be
+ * off. Auth-off mode is only meaningful while the local owner is the only
+ * account: with a second account there is no answer to "who is the caller with
+ * no credential". See server/app.ts, which sets this.
+ */
+let forcedAuth = false;
+
+export function setForcedAuth(value: boolean): void {
+  forcedAuth = value;
 }
 
-/** Reset memoized warnings. Test seam. */
+/** True when the instance requires a credential. */
+export function isAuthRequired(): boolean {
+  return (
+    forcedAuth ||
+    process.env.AUTH_REQUIRED === "true" ||
+    resolveApiToken() !== null
+  );
+}
+
+/** Reset memoized warnings and the forced-auth latch. Test seam. */
 export function __resetAuthWarnings(): void {
   legacyWarned = false;
+  forcedAuth = false;
 }
 
 // =============================================================================
@@ -211,44 +248,127 @@ export function attachPrincipal(
   _res: Response,
   next: NextFunction,
 ): void {
-  // Bearer token → service client.
   const header = req.headers.authorization;
-  const apiToken = resolveApiToken();
-  if (header?.startsWith("Bearer ") && apiToken) {
-    const presented = header.slice(7).trim();
-    if (timingSafeEqualStrings(presented, apiToken)) {
-      req.principal = { kind: "service" };
+  const presented = header?.startsWith("Bearer ")
+    ? header.slice(7).trim()
+    : null;
+
+  // 1. A personal token. Looked up by SHA-256 of the presented value against a
+  //    unique index, so this is one probe and the plaintext is never stored.
+  //    Phase 3 adds the endpoints that create these; the lookup exists now so
+  //    the principal shape is final before Phase 2 scopes every read.
+  if (presented?.startsWith("ctk_")) {
+    const user = resolveApiTokenPrincipal(presented);
+    if (user) {
+      req.principal = {
+        kind: "user",
+        user: user.user,
+        via: "token",
+        tokenId: user.tokenId,
+      };
       return next();
     }
   }
 
-  // Session cookie → person. Resolved even when auth is off, so that someone
-  // who signed in before enforcement was disabled is still *identified*. That
-  // identity reaches the request context, which is what stamps ownership on
-  // the rows they create, and it is what makes /api/auth/me answer. Costs one
-  // indexed lookup, and only when a cookie is actually present.
+  // 2. The deprecated instance-wide env token. It has no account of its own,
+  //    so it acts as the primary admin and is warned about once at boot.
+  const apiToken = resolveApiToken();
+  if (presented && apiToken && timingSafeEqualStrings(presented, apiToken)) {
+    const admin = getUserById(primaryAdminId());
+    if (admin && admin.status !== "disabled") {
+      req.principal = { kind: "user", user: admin, via: "legacy-env-token" };
+      return next();
+    }
+  }
+
+  // 3. Session cookie. Resolved even when auth is off, so that someone who
+  //    signed in before enforcement was disabled is still identified and their
+  //    rows are stamped to them rather than to the local owner. Costs one
+  //    indexed lookup, and only when a cookie is actually present.
   const secret = presentedSessionSecret(req);
   if (secret) {
     const resolved = resolveSession(secret);
-    if (resolved) {
+    // Disabling an account ends its live sessions on the next request, which
+    // is the whole point of a server-side session row.
+    if (resolved && resolved.user.status !== "disabled") {
       req.principal = {
         kind: "user",
         user: resolved.user,
+        via: "session",
         sessionId: resolved.sessionId,
       };
       return next();
     }
   }
 
+  // 4. No credential on an ungated instance: the person at the keyboard is
+  //    the local owner. This is what replaced the anonymous principal.
   if (!isAuthRequired()) {
-    req.principal = { kind: "anonymous" };
-    return next();
+    const owner = resolveLocalOwner();
+    if (owner) {
+      req.principal = { kind: "user", user: owner, via: "implicit" };
+      return next();
+    }
   }
 
-  // Identified as nobody on a gated instance. Left unset rather than marked
-  // anonymous, because "auth is off" and "you failed to authenticate" must not
+  // Identified as nobody on a gated instance. Left unset rather than given a
+  // principal, because "auth is off" and "you failed to authenticate" must not
   // look alike to anything downstream.
   next();
+}
+
+/**
+ * Resolve a `ctk_` token to its user.
+ *
+ * Rejects a revoked token, an expired one, and one whose account is disabled.
+ * `lastUsedAt` is stamped at most once an hour, matching how sessions treat
+ * `lastSeenAt`: the write is not worth a page dirtied on every request.
+ */
+function resolveApiTokenPrincipal(
+  token: string,
+): { user: User; tokenId: string } | null {
+  const hash = crypto.createHash("sha256").update(token).digest("hex");
+  const row = sqlite
+    .prepare(
+      `SELECT id, userId, lastUsedAt FROM api_tokens
+        WHERE tokenHash = ? AND revokedAt IS NULL
+          AND (expiresAt IS NULL OR expiresAt > datetime('now'))`,
+    )
+    .get(hash) as
+    { id: string; userId: string; lastUsedAt: string | null } | undefined;
+  if (!row) return null;
+
+  const user = getUserById(row.userId);
+  if (!user || user.status === "disabled") return null;
+
+  const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+  if (!row.lastUsedAt || row.lastUsedAt < hourAgo) {
+    sqlite
+      .prepare(
+        `UPDATE api_tokens SET lastUsedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+      )
+      .run(row.id);
+  }
+  return { user, tokenId: row.id };
+}
+
+/**
+ * The local owner account, read fresh on every request.
+ *
+ * The plan called for caching this row in memory. It is not cached, on
+ * purpose. `users` holds a handful of rows on a self-hosted personal CRM, so
+ * the scan is a single page and costs less than the session lookup above it.
+ * A cache would need invalidating the moment setup converts this account into
+ * a real one, and a stale entry there would hand the implicit principal an
+ * identity the database no longer agrees with. Not worth one page read.
+ */
+const localOwnerStmt = sqlite.prepare(
+  `SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`,
+);
+
+function resolveLocalOwner(): User | null {
+  const row = localOwnerStmt.get() as { id: string } | undefined;
+  return row ? getUserById(row.id) : null;
 }
 
 /** True when this request may proceed. */
@@ -272,25 +392,56 @@ export function requireAuth(
 }
 
 /**
- * Gate for endpoints that need a person rather than any valid credential —
- * profile edits, password changes, session management. A service token is a
- * shared secret with no account behind it, so there is no "your password" for
- * it to change.
+ * Gate for endpoints that act on the account itself — profile edits, password
+ * changes, session management.
+ *
+ * Only a cookie session passes. A token proves which account it belongs to but
+ * not that a person is present, so it must not be able to change the password
+ * that would revoke it. The implicit local owner has no password to change.
+ *
+ * Renamed from requireUser in Phase 1, and its code changed from
+ * USER_REQUIRED to SESSION_REQUIRED, because every principal is now a user and
+ * the old name said the opposite of what the gate checks.
  */
-export function requireUser(
+export function requireSession(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): void {
-  if (req.principal?.kind === "user") return next();
-  if (req.principal?.kind === "service") {
+  if (req.principal?.via === "session") return next();
+  if (req.principal) {
     return next(
       new AppError(
-        "This endpoint needs a signed-in account, not an API token.",
+        "This endpoint needs a signed-in session, not a token.",
         403,
-        { code: "USER_REQUIRED" },
+        { code: "SESSION_REQUIRED" },
       ),
     );
   }
   next(new AppError("Authentication required", 401, { code: "UNAUTHORIZED" }));
+}
+
+/**
+ * Gate for instance administration: user management, instance settings,
+ * backups, the audit log.
+ *
+ * Mounted nowhere in Phase 1 by design. Phase 2g and Phase 3 mount it, and a
+ * route test asserts it is absent until then.
+ */
+export function requireAdmin(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  if (!req.principal) {
+    return next(
+      new AppError("Authentication required", 401, { code: "UNAUTHORIZED" }),
+    );
+  }
+  if (req.principal.user.role === "admin") return next();
+  next(
+    new AppError("This endpoint needs an admin account.", 403, {
+      code: "ADMIN_REQUIRED",
+    }),
+  );
 }

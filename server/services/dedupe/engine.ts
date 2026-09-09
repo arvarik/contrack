@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { sqlite } from "../../db.ts";
-import { currentScopeOrNull } from "../../tenancy/requestContext.ts";
+import { currentOwnerId } from "../../tenancy/requestContext.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
@@ -584,7 +584,7 @@ export const dedupeService = {
 
     // Dev-only seed. Stamped like every other insert so the seeded rows
     // belong to whoever asked for them.
-    const owner = currentScopeOrNull()?.ownerId ?? null;
+    const owner = currentOwnerId();
     const insertContact = sqlite.prepare(
       "INSERT INTO contacts (id, name, company, role, themeColor, ownerId) VALUES (?, ?, ?, ?, ?, ?)",
     );

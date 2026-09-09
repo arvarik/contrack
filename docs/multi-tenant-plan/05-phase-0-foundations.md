@@ -414,7 +414,8 @@ weight in position 1 boosts `a`, so the positional rule is pinned.
 This is a ranking change for users. It ships as its own PR with its own
 CHANGELOG line so it can be reverted alone. The decision and the alternative
 (preserve today's effective weights) are Q13 in the risks document. Phase 1
-extends the string to twelve values when it adds `ownerTok` and `cidTok`.
+extends the string to eleven values when it adds `ownerTok`. (`cidTok` was
+proposed and not built; see the data model document, section 5.5.)
 
 ### 0.11 Router mount order
 

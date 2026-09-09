@@ -16,7 +16,7 @@
 // =============================================================================
 
 import path from "path";
-import { sqlite } from "../../db.ts";
+import { sqlite, vecTableDdl } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
@@ -185,12 +185,10 @@ export function isSearchEmbeddingReady(): boolean {
  */
 export function rebuildSearchEmbeddingTable(dimension: number): void {
   sqlite.exec(`DROP TABLE IF EXISTS search_embeddings`);
-  sqlite.exec(`
-    CREATE VIRTUAL TABLE search_embeddings USING vec0(
-      contactId TEXT PRIMARY KEY,
-      embedding FLOAT[${dimension}]
-    );
-  `);
+  // The DDL comes from db.ts so a model change cannot silently recreate the
+  // table without its partition key, which would make every scoped KNN in
+  // Phase 2 return nothing. A unit test pins the two call sites equal.
+  sqlite.exec(vecTableDdl("search_embeddings", dimension));
   log.info(
     "LocalEmbeddings",
     `Rebuilt search_embeddings at ${dimension} dimensions (re-embed required)`,
@@ -207,15 +205,28 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
 // Pre-compiled transaction for atomic upsert (vec0 doesn't support ON CONFLICT).
 // Wrapping in a transaction prevents a concurrent KNN query from seeing a gap
 // between the DELETE and INSERT, and gives a minor perf boost (single journal entry).
+//
+// The owner is read from `contacts` inside the same transaction rather than
+// taken as an argument. sqlite-vec accepts an INSERT that omits a partition
+// key and stores NULL without complaint, so a caller passing the wrong owner,
+// or none, would produce a row that every scoped KNN in Phase 2 skips and no
+// test notices. Reading it here makes "the vector's owner is its contact's
+// owner" true by construction.
 const _upsertTxn = sqlite.transaction((contactId: string, buf: Buffer) => {
+  // tenant-lint: allow owner-checked by caller
+  const owner = sqlite
+    .prepare("SELECT ownerId FROM contacts WHERE id = ?")
+    .get(contactId) as { ownerId: string | null } | undefined;
+  // No contact means the vector would be an orphan with a NULL partition.
+  if (!owner?.ownerId) return;
   sqlite
     .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
     .run(contactId);
   sqlite
     .prepare(
-      "INSERT INTO search_embeddings (contactId, embedding) VALUES (?, ?)",
+      "INSERT INTO search_embeddings (contactId, ownerId, embedding) VALUES (?, ?, ?)",
     )
-    .run(contactId, buf);
+    .run(contactId, owner.ownerId, buf);
 });
 
 export function upsertSearchEmbedding(
@@ -358,7 +369,8 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     "DELETE FROM search_embeddings WHERE contactId = ?",
   );
   const insertStmt = sqlite.prepare(
-    "INSERT INTO search_embeddings (contactId, embedding) VALUES (?, ?)",
+    `INSERT INTO search_embeddings (contactId, ownerId, embedding)
+     SELECT ?, c.ownerId, ? FROM contacts c WHERE c.id = ?`,
   );
 
   let embedded = 0;
@@ -393,7 +405,8 @@ export async function backfillSearchEmbeddings(): Promise<number> {
         if (!vec || currentSearchText(batch[j].id) !== texts[j]) continue;
         const buf = Buffer.from(vec.buffer.slice(0));
         deleteStmt.run(batch[j].id);
-        insertStmt.run(batch[j].id, buf);
+        // The third bind is the contact the owner is read from.
+        insertStmt.run(batch[j].id, buf, batch[j].id);
         embedded++;
       }
     });

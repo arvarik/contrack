@@ -1,7 +1,7 @@
 import { assertContactExists } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
-import { resolveUploadPath } from "../utils/paths.ts";
+import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 // @ts-expect-error no types available
 import emlFormat from "eml-format";
 import { db, sqlite } from "../db.ts";
@@ -15,7 +15,7 @@ import {
 } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
 import { aiCache, contentHash } from "../utils/aiCache.ts";
-import { currentScopeOrNull } from "../tenancy/requestContext.ts";
+import { currentOwnerId } from "../tenancy/requestContext.ts";
 import { AppError } from "../utils/AppError.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
 import { SharedWork } from "../ai/workQueue.ts";
@@ -89,7 +89,7 @@ async function runMentionExtraction(
               themeColor: newTheme,
               // Mention extraction is started inside the request that created
               // the interaction, so the context still carries that caller.
-              ownerId: currentScopeOrNull()?.ownerId ?? null,
+              ownerId: currentOwnerId(),
             })
             .returning()
             .get();
@@ -356,7 +356,7 @@ export const interactionService = {
           title: `${isEmail ? "Email Import" : "Attached File"}: ${file.originalname}`,
           date: now,
           content,
-          fileUrl: `/uploads/${file.filename}`,
+          fileUrl: ownerUploadUrl(currentOwnerId(), "files", file.filename),
           fileName: file.originalname,
           fileType: isEmail ? "message/rfc822" : file.mimetype,
         })

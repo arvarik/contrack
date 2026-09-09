@@ -14,7 +14,7 @@ _Empty — start a new feature with `/step1-spec`._
 
 **Phase:** Idle
 
-**Test Suite:** 316 tests (316 passing) — unit + integration (real SQLite), 0 regressions
+**Test Suite:** 898 tests (787 passing, 111 todo) — unit + integration (real SQLite), 0 regressions. The todos are the Phase 2 isolation matrix in `tests/integration/tenancy.isolation.test.ts`.
 
 The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
 

@@ -8,7 +8,7 @@ import { requireContact } from "../services/contactGuard.ts";
 import { idsSchema } from "../utils/validators.ts";
 import { Router } from "express";
 import multer from "multer";
-import { AVATARS_DIR, ensureDir } from "../utils/paths.ts";
+import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
@@ -53,8 +53,8 @@ import {
   RELATION_REGISTRY,
 } from "../repositories/contactRepository.ts";
 
-const avatarDir = AVATARS_DIR;
-ensureDir(avatarDir);
+// Avatars go to uploads/u/<ownerId>/avatars/ now, so there is no one directory
+// to create at import time. The destination callback creates the caller's.
 
 // Raster image types only. SVG is deliberately excluded — it can carry
 // scripts and is served from the app origin. The extension is derived from
@@ -68,7 +68,16 @@ const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
 };
 
 const avatarStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, avatarDir),
+  // The owner comes off req.principal, not the async context. multer hands
+  // this callback the request, so it is the shortest path to the answer and
+  // it cannot be broken by a stream boundary the context does not cross.
+  destination: (req, _file, cb) => {
+    const owner = req.principal?.user.id;
+    if (!owner) return cb(new Error("No principal for an avatar upload"), "");
+    const dir = ownerUploadDir(owner, "avatars");
+    ensureDir(dir);
+    cb(null, dir);
+  },
   filename: (_req, file, cb) => {
     const ext = AVATAR_MIME_EXTENSIONS[file.mimetype] ?? ".jpg";
     cb(null, `avatar-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);

@@ -34,9 +34,11 @@ export function scopeForOwnerId(id: string): Scope {
 
 export function scopeOf(req: Request): Scope {
   const p = req.principal;
-  if (p?.kind === "user") return scopeForUser(p.user);
-  // Phase 0: anonymous and service principals have no owner yet. Phase 1
-  // removes both kinds. Until then, callers that need a scope get a 401.
+  if (p) return scopeForUser(p.user);
+  // Phase 1 removed the anonymous and service kinds, so every principal that
+  // exists has an owner. The only way to reach this is a request that
+  // authenticated as nobody on a gated instance, which requireAuth has already
+  // refused for every route that would call this.
   throw new AppError("Authentication required", 401, { code: "UNAUTHORIZED" });
 }
 

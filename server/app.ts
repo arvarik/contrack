@@ -10,6 +10,7 @@ import express from "express";
 import cors from "cors";
 import crypto from "crypto";
 import morgan from "morgan";
+import { log } from "./utils/logger.ts";
 import path from "path";
 
 import { linkPreviewRouter } from "./routes/linkPreview.ts";
@@ -29,12 +30,20 @@ import { dataLifecycleRouter } from "./routes/dataLifecycle.ts";
 import { aiSettingsRouter } from "./routes/aiSettings.ts";
 import { avatarRouter } from "./routes/avatar.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
-import { attachPrincipal, requireAuth } from "./middleware/auth.ts";
+import {
+  attachPrincipal,
+  isAuthRequired,
+  requireAuth,
+  setForcedAuth,
+} from "./middleware/auth.ts";
 import { attachRequestContext } from "./tenancy/requestContext.ts";
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
 import { healthRouter } from "./routes/health.ts";
-import { reconcileOwnership } from "./services/authService.ts";
+import {
+  countPasswordAccounts,
+  reconcileOwnership,
+} from "./services/authService.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
 
@@ -114,10 +123,23 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     next();
   });
 
-  // Claim rows written while nobody was signed in. Idempotent and a no-op
-  // unless exactly one account exists; lives here rather than in server.ts so
-  // that tests, which build the app directly, get the same behaviour.
+  // Claim rows written while nobody was signed in. Idempotent, and a no-op
+  // after the first boot because every row already has an owner. Lives here
+  // rather than in server.ts so that tests, which build the app directly, get
+  // the same behaviour.
   reconcileOwnership();
+
+  // Auth-off mode is valid only while the local owner is the only account.
+  // With a real account present there is no answer to "who is the caller with
+  // no credential", so the server enforces auth and says so, rather than
+  // quietly attributing that caller's writes to somebody.
+  if (!isAuthRequired() && countPasswordAccounts() > 0) {
+    setForcedAuth(true);
+    log.error(
+      "Auth",
+      "AUTH_REQUIRED is false but accounts exist. Auth is enforced. Set AUTH_REQUIRED=true to silence this.",
+    );
+  }
 
   // Express only believes X-Forwarded-* when told to. Needed for two things
   // behind a reverse proxy: rate limiting by the real client IP rather than

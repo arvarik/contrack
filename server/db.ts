@@ -25,6 +25,13 @@ import crypto from "crypto";
 // =============================================================================
 
 import path from "path";
+import {
+  AVATARS_DIR,
+  UPLOADS_DIR,
+  ownerUploadDir,
+  ownerUploadUrl,
+  resolveUploadPath,
+} from "./utils/paths.ts";
 const DB_PATH = process.env.DATA_DIR
   ? path.join(process.env.DATA_DIR, "curator.db")
   : "curator.db";
@@ -138,6 +145,12 @@ const { vec_version } = sqlite
   .get() as { vec_version: string };
 log.info("Database", `sqlite-vec loaded (version ${vec_version})`);
 
+// Before any migration runs. Partition keys arrived in 0.1.6 and every vector
+// query from Phase 2 on depends on them, so an instance that cannot have them
+// must refuse to start rather than migrate and then fail. `assertVecVersion`
+// is declared at §9k; a function declaration hoists, so it is callable here.
+assertVecVersion(vec_version);
+
 export const db = drizzle(sqlite, { schema });
 
 // =============================================================================
@@ -199,6 +212,798 @@ const sweptSessions = sqlite
   .run();
 if (sweptSessions.changes > 0) {
   log.info("Database", `Swept ${sweptSessions.changes} expired session(s)`);
+}
+
+/** Bumped when the tenancy block gains a step an older database has not run. */
+export const TENANCY_SCHEMA_VERSION = 1;
+
+// =============================================================================
+// 2z-backup. Copy the database before anything below changes it
+// =============================================================================
+// This is the file an operator restores if the upgrade goes wrong, so it has
+// to predate every schema change — including the `users` columns in §2z-1,
+// which would otherwise be baked into the "pre-tenancy" copy. Harmless to 1.x,
+// which names its columns explicitly, but a backup that is not actually the
+// state you were in is a bad thing to hand somebody at the worst moment.
+//
+// VACUUM INTO cannot run inside a transaction, which is the other reason it is
+// here rather than in §2z-4.
+// =============================================================================
+
+if (readTenancyVersion() < TENANCY_SCHEMA_VERSION) {
+  const contactCount = (
+    sqlite.prepare(`SELECT COUNT(*) AS n FROM contacts`).get() as { n: number }
+  ).n;
+  // Nothing to lose on an empty database, and this is also the fresh-install
+  // path, where a backup would just be noise in the data directory.
+  if (contactCount > 0) backupBeforeTenancyMigration();
+}
+
+// =============================================================================
+// 2z-0. Contacts columns the tenancy block indexes
+// =============================================================================
+// §3, §7, §9a and §9b add these columns further down the file. §2z-4 builds
+// composite indexes over them, so on a fresh database they have to exist by
+// then — Drizzle `0000` ships `isArchived` and `relationshipScore` but not
+// `deletedAt`, `canonicalId`, `phoneticHash` or `searchExpansion`.
+//
+// Adding them here turns the later sections into no-ops. Each of those still
+// guards itself, so no code there changed and an older database that already
+// has the columns takes the same path it always did.
+// =============================================================================
+
+for (const column of [
+  "searchExpansion TEXT",
+  "deletedAt TEXT",
+  "canonicalId TEXT",
+  "isArchived INTEGER DEFAULT 0",
+  "phoneticHash TEXT",
+  "relationshipScore INTEGER DEFAULT 50",
+]) {
+  const name = column.split(" ")[0];
+  const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
+  if (!columns.some((c) => c.name === name)) {
+    sqlite.exec(`ALTER TABLE contacts ADD COLUMN ${column}`);
+    log.info("Database", `Added ${name} column to contacts (pre-tenancy)`);
+  }
+}
+
+// =============================================================================
+// 2z-1. Identity columns on users
+// =============================================================================
+// `status` and `credentialState` are what make the local owner account work:
+// the local owner is the row with `credentialState = 'none'`, and a disabled
+// account is one with `status = 'disabled'`.
+//
+// Two SQLite rules shape this list. A NOT NULL column added to an existing
+// table needs a literal default. A column with a REFERENCES clause may only be
+// added when its default is NULL. `createdBy` is the one foreign key here, so
+// it is the one column with no default.
+// =============================================================================
+
+for (const column of [
+  "status TEXT NOT NULL DEFAULT 'active'",
+  "credentialState TEXT NOT NULL DEFAULT 'password'",
+  "mustChangePassword INTEGER NOT NULL DEFAULT 0",
+  "passwordChangedAt TEXT",
+  "disabledAt TEXT",
+  "createdBy TEXT REFERENCES users(id) ON DELETE SET NULL",
+]) {
+  const name = column.split(" ")[0];
+  const columns = sqlite.pragma("table_info(users)") as { name: string }[];
+  if (!columns.some((c) => c.name === name)) {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN ${column}`);
+    log.info("Database", `Added ${name} column to users`);
+  }
+}
+
+// =============================================================================
+// 2z-2. Identity tables
+// =============================================================================
+// `app_settings` moves up from §9g2 because §2z-4 stores the tenancy schema
+// version in it. `PRAGMA user_version` already holds FTS_SCHEMA_VERSION and is
+// a single 32-bit field, so a second migration cannot share that slot.
+//
+// `api_tokens`, `invitations`, `user_settings` and `audit_log` are created now
+// and filled by Phase 3. They are here rather than in Phase 3 so that one
+// migration touches `users` once, and so `attachPrincipal` can look up a
+// personal token from this phase on.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
+
+  CREATE TABLE IF NOT EXISTS api_tokens (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    tokenHash TEXT NOT NULL UNIQUE,
+    tokenPrefix TEXT NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    lastUsedAt TEXT,
+    expiresAt TEXT,
+    revokedAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(userId);
+
+  CREATE TABLE IF NOT EXISTS invitations (
+    id TEXT PRIMARY KEY,
+    email TEXT,
+    role TEXT NOT NULL DEFAULT 'member',
+    tokenHash TEXT NOT NULL UNIQUE,
+    invitedBy TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    expiresAt TEXT NOT NULL,
+    acceptedAt TEXT,
+    acceptedBy TEXT REFERENCES users(id) ON DELETE SET NULL,
+    revokedAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS user_settings (
+    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    PRIMARY KEY (userId, key)
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    actorUserId TEXT REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    targetType TEXT,
+    targetId TEXT,
+    details TEXT,
+    ip TEXT,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(createdAt DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actorUserId, createdAt DESC);
+`);
+
+// =============================================================================
+// 2z-3. Dedupe tables
+// =============================================================================
+// Identical DDL to §9c, §9d and §9e, moved up because §2z-4 adds `ownerId` to
+// every owned table and three of them are these. The sections below keep their
+// statements and become no-ops; leaving them in place means an operator
+// reading the dedupe section still finds the schema where they expect it.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS dedupe_suggestions (
+    id TEXT PRIMARY KEY,
+    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    matchType TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    reasoning TEXT NOT NULL,
+    matchedField TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    reviewedAt TEXT,
+    reviewedBy TEXT,
+    UNIQUE(contactIdA, contactIdB)
+  );
+  CREATE INDEX IF NOT EXISTS idx_dedupe_status ON dedupe_suggestions(status);
+  CREATE INDEX IF NOT EXISTS idx_dedupe_confidence ON dedupe_suggestions(confidence DESC);
+
+  CREATE TABLE IF NOT EXISTS dedupe_exclusions (
+    contactIdA TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    contactIdB TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    createdAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    PRIMARY KEY (contactIdA, contactIdB)
+  );
+
+  CREATE TABLE IF NOT EXISTS dedupe_merge_log (
+    id TEXT PRIMARY KEY,
+    primaryId TEXT NOT NULL,
+    duplicateId TEXT NOT NULL,
+    mergedBy TEXT NOT NULL,
+    mergeType TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    reasoning TEXT NOT NULL,
+    mergedAt TEXT DEFAULT (CURRENT_TIMESTAMP),
+    undoneAt TEXT,
+    duplicateSnapshot TEXT
+  );
+`);
+
+// =============================================================================
+// 2z-4. Tenancy — ownership columns, the local owner, and the claim
+// =============================================================================
+// This block gives every row an owner. It has to run here, before §3, for two
+// independent reasons found while reviewing the plan against the engine:
+//
+//   • The FTS backfill selects `c.ownerId`. A SELECT inside `exec` is prepared
+//     before it runs, so a missing column fails the boot even on an empty
+//     database. The column must exist first.
+//   • The claim is a bulk UPDATE over `contacts`. The `_auto_updated_at`
+//     triggers would stamp `updatedAt` on every row, and `findStaleEmbeddings`
+//     re-embeds any contact whose `updatedAt` is newer than its `embeddedAt`.
+//     A stamped corpus means the next deep dedupe scan re-embeds everything
+//     through the paid provider. So the triggers come out first and §3 to §6
+//     put them back on the same boot.
+//
+// Order inside the transaction is fixed: columns, trigger drops, local owner,
+// claim, child backfill, invariant triggers, composite indexes, version write.
+// The invariant triggers are installed last because they forbid the very NULLs
+// the claim above them is there to remove.
+// =============================================================================
+
+/** Tables that carry `ownerId`. Every row in each has an owner after boot. */
+export const OWNED_TABLES = [
+  "contacts",
+  "lists",
+  "interactions",
+  "action_items",
+  "dedupe_suggestions",
+  "dedupe_exclusions",
+  "dedupe_merge_log",
+  "ai_invocations",
+] as const;
+
+/** Owned tables with no parent contact. The caller must supply the owner. */
+const OWNER_REQUIRED_TABLES = [
+  "contacts",
+  "lists",
+  "dedupe_merge_log",
+  "ai_invocations",
+] as const;
+
+/**
+ * Owned tables whose owner is derivable from a parent contact.
+ *
+ * `key` names the primary parent column. `also` is a second contact column
+ * that must agree, which is what makes a cross-owner dedupe pair impossible.
+ * `pk` is how the fill trigger finds the row it just inserted: every table
+ * here has an `id` except `dedupe_exclusions`, whose key is the pair.
+ */
+const OWNER_CHILD_TABLES = [
+  { table: "interactions", key: "contactId", also: null, pk: "id = NEW.id" },
+  { table: "action_items", key: "contactId", also: null, pk: "id = NEW.id" },
+  {
+    table: "dedupe_suggestions",
+    key: "contactIdA",
+    also: "contactIdB",
+    pk: "id = NEW.id",
+  },
+  {
+    table: "dedupe_exclusions",
+    key: "contactIdA",
+    also: "contactIdB",
+    pk: "contactIdA = NEW.contactIdA AND contactIdB = NEW.contactIdB",
+  },
+] as const;
+
+/**
+ * Every trigger that has to be absent while the claim and the backfill run.
+ *
+ * §3 recreates the first six through installSearchIndex, and §4, §5 and §6
+ * recreate the rest. Each of those sections already begins with a
+ * DROP TRIGGER IF EXISTS, so a crash between here and there costs one process
+ * lifetime and the next boot closes it.
+ */
+const TRIGGERS_DROPPED_FOR_CLAIM = [
+  "contacts_ai",
+  "contacts_au",
+  "contacts_ad",
+  "search_revision_INSERT",
+  "search_revision_UPDATE",
+  "search_revision_DELETE",
+  "contacts_auto_updated_at",
+  "interactions_auto_updated_at",
+  "action_items_auto_updated_at",
+  "action_items_sync_insert",
+  "action_items_sync_update",
+  "action_items_sync_delete",
+  "search_vector_update",
+  "search_vector_delete",
+];
+
+function countUsers(): number {
+  const row = sqlite.prepare(`SELECT COUNT(*) AS n FROM users`).get() as {
+    n: number;
+  };
+  return row.n;
+}
+
+/**
+ * The admin that machine credentials and instance-wide work act as.
+ *
+ * Throws only if called before ensureLocalOwner has ever run, which the boot
+ * order makes impossible.
+ */
+export function primaryAdminId(): string {
+  const row = sqlite
+    .prepare(
+      `SELECT id FROM users WHERE role = 'admin' AND status = 'active'
+       ORDER BY createdAt ASC LIMIT 1`,
+    )
+    .get() as { id: string } | undefined;
+  if (!row) throw new Error("No active admin account exists");
+  return row.id;
+}
+
+/**
+ * The account that owns this device's data when nobody has signed in.
+ *
+ * `passwordHash = 'none$'` can never verify: parseHash splits on `$`, returns
+ * null unless it gets six parts, and this has two. Nobody can sign in as this
+ * account. It is an admin because in auth-off mode the person at the keyboard
+ * is the operator.
+ *
+ * On an instance that already has real accounts this creates nothing and
+ * returns the primary admin, so an upgrade never invents a second owner.
+ */
+export function ensureLocalOwner(): string {
+  const existing = sqlite
+    .prepare(`SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`)
+    .get() as { id: string } | undefined;
+  if (existing) return existing.id;
+  if (countUsers() > 0) return primaryAdminId();
+
+  const id = crypto.randomUUID();
+  sqlite
+    .prepare(
+      `INSERT INTO users (id, email, username, displayName, passwordHash, role, credentialState)
+       VALUES (?, 'local@contrack.local', 'local', 'This device', 'none$', 'admin', 'none')`,
+    )
+    .run(id);
+  log.info("Database", `Created the local owner account (${id})`);
+  return id;
+}
+
+/**
+ * Assign every unowned row to `ownerId`.
+ *
+ * Lives here rather than in authService because db.ts cannot import that
+ * module: authService imports `sqlite` from this file and prepares statements
+ * at its top level.
+ *
+ * @returns rows claimed, per table
+ */
+export function claimUnownedData(ownerId: string): Record<string, number> {
+  const claimed: Record<string, number> = {};
+  sqlite.transaction(() => {
+    for (const table of OWNED_TABLES) {
+      // tenant-lint: allow boot migration
+      const result = sqlite
+        .prepare(`UPDATE ${table} SET ownerId = ? WHERE ownerId IS NULL`)
+        .run(ownerId);
+      if (result.changes > 0) claimed[table] = result.changes;
+    }
+  })();
+  return claimed;
+}
+
+function readTenancyVersion(): number {
+  try {
+    const row = sqlite
+      .prepare(`SELECT value FROM app_settings WHERE key = 'schema.tenancy'`)
+      .get() as { value: string } | undefined;
+    if (!row) return 0;
+    const parsed = Number(JSON.parse(row.value));
+    return Number.isFinite(parsed) ? parsed : 0;
+  } catch {
+    // No app_settings table yet, which means a database from before §9g2 or a
+    // fresh one. Either way the tenancy migration has not run.
+    return 0;
+  }
+}
+
+function writeTenancyVersion(version: number): void {
+  sqlite
+    .prepare(
+      `INSERT INTO app_settings (key, value, updatedAt)
+       VALUES ('schema.tenancy', ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = CURRENT_TIMESTAMP`,
+    )
+    .run(JSON.stringify(version));
+}
+
+/** SQL for the triggers that keep every owned row's owner true. */
+function ownerInvariantTriggerSql(): string {
+  const out: string[] = [];
+
+  for (const table of OWNER_REQUIRED_TABLES) {
+    out.push(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_owner_required BEFORE INSERT ON ${table}
+       WHEN NEW.ownerId IS NULL
+       BEGIN SELECT RAISE(ABORT, '${table}.ownerId is required'); END;`,
+    );
+  }
+
+  for (const { table, key, also, pk } of OWNER_CHILD_TABLES) {
+    // The fill trigger is a safety net for callers that only know the parent
+    // id. Services still pass ownerId, which takes the check path instead.
+    out.push(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_owner_fill AFTER INSERT ON ${table}
+       WHEN NEW.ownerId IS NULL
+       BEGIN
+         UPDATE ${table} SET ownerId = (SELECT ownerId FROM contacts WHERE id = NEW.${key})
+          WHERE ${pk};
+       END;`,
+    );
+
+    const mismatch = [
+      `NEW.ownerId != (SELECT ownerId FROM contacts WHERE id = NEW.${key})`,
+    ];
+    if (also) {
+      mismatch.push(
+        `NEW.ownerId != (SELECT ownerId FROM contacts WHERE id = NEW.${also})`,
+      );
+    }
+    out.push(
+      `CREATE TRIGGER IF NOT EXISTS ${table}_owner_check BEFORE INSERT ON ${table}
+       WHEN NEW.ownerId IS NOT NULL AND (${mismatch.join(" OR ")})
+       BEGIN SELECT RAISE(ABORT, '${table}.ownerId does not match the contact owner'); END;`,
+    );
+  }
+
+  // The only owner change in 2.0 is the one-time claim above, which runs
+  // before this trigger exists. It is here for a future "reassign data"
+  // admin action. It cannot touch the vec0 tables: sqlite-vec refuses an
+  // UPDATE of a partition key, so that feature re-inserts those rows in code.
+  out.push(
+    `CREATE TRIGGER IF NOT EXISTS contacts_owner_propagate AFTER UPDATE OF ownerId ON contacts
+     WHEN NEW.ownerId IS NOT OLD.ownerId
+     BEGIN
+       UPDATE interactions       SET ownerId = NEW.ownerId WHERE contactId = NEW.id;
+       UPDATE action_items       SET ownerId = NEW.ownerId WHERE contactId = NEW.id;
+       UPDATE dedupe_suggestions SET ownerId = NEW.ownerId WHERE contactIdA = NEW.id OR contactIdB = NEW.id;
+       UPDATE dedupe_exclusions  SET ownerId = NEW.ownerId WHERE contactIdA = NEW.id OR contactIdB = NEW.id;
+     END;`,
+  );
+
+  return out.join("\n");
+}
+
+/** Composite indexes for the owner-first reads Phase 2 writes. */
+const OWNER_COMPOSITE_INDEXES = `
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_status    ON contacts(ownerId, isGhost, isArchived, canonicalId);
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_deleted   ON contacts(ownerId, deletedAt);
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_lastc     ON contacts(ownerId, lastContactedAt);
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_added     ON contacts(ownerId, addedAt);
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_score     ON contacts(ownerId, relationshipScore);
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_phonetic  ON contacts(ownerId, phoneticHash);
+  CREATE INDEX IF NOT EXISTS idx_contacts_owner_canon     ON contacts(ownerId, canonicalId);
+  CREATE INDEX IF NOT EXISTS idx_interactions_owner_date  ON interactions(ownerId, date);
+  CREATE INDEX IF NOT EXISTS idx_action_items_owner_due   ON action_items(ownerId, dueAt) WHERE completedAt IS NULL;
+  CREATE INDEX IF NOT EXISTS idx_action_items_owner_done  ON action_items(ownerId, completedAt);
+  CREATE INDEX IF NOT EXISTS idx_lists_owner_sort         ON lists(ownerId, sortOrder);
+  CREATE INDEX IF NOT EXISTS idx_dedupe_sugg_owner_status ON dedupe_suggestions(ownerId, status);
+  CREATE INDEX IF NOT EXISTS idx_dedupe_sugg_owner_conf   ON dedupe_suggestions(ownerId, confidence DESC);
+  CREATE INDEX IF NOT EXISTS idx_dedupe_excl_owner        ON dedupe_exclusions(ownerId);
+  CREATE INDEX IF NOT EXISTS idx_merge_log_owner_at       ON dedupe_merge_log(ownerId, mergedAt DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_inv_owner_created     ON ai_invocations(ownerId, createdAt DESC);
+`;
+
+/**
+ * Copy the database before the first tenancy migration.
+ *
+ * VACUUM INTO is synchronous, correct in WAL mode, and produces one consistent
+ * file — which sqlite.backup() would not, being asynchronous in a module that
+ * runs at import time. It also cannot run inside a transaction, which is why
+ * this happens before the transaction below opens.
+ *
+ * A missing backup never fails the boot. The operator still has the rotating
+ * `curator-*.db` snapshots, and refusing to start would be a worse outcome
+ * than starting without one extra copy.
+ */
+function backupBeforeTenancyMigration(): void {
+  const dataDir = path.dirname(path.resolve(DB_PATH));
+  let dbBytes = 0;
+  try {
+    dbBytes = fs.statSync(DB_PATH).size;
+  } catch {
+    return; // No file yet, so nothing to lose.
+  }
+
+  try {
+    const stat = fs.statfsSync(dataDir);
+    const freeBytes = stat.bavail * stat.bsize;
+    if (freeBytes < dbBytes * 1.5) {
+      log.error(
+        "Database",
+        `Skipping the pre-tenancy backup: ${(freeBytes / 1e6).toFixed(0)} MB free is below 1.5x the ${(dbBytes / 1e6).toFixed(0)} MB database. Restore from a curator-*.db snapshot if the upgrade goes wrong.`,
+      );
+      return;
+    }
+  } catch {
+    // statfsSync is unavailable on some platforms. Attempt the copy anyway;
+    // a genuine out-of-space error surfaces from VACUUM INTO below.
+  }
+
+  const backupDir = path.join(dataDir, "backups");
+  fs.mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  let target = path.join(backupDir, `pre-tenancy-${stamp}.db`);
+  for (let n = 2; fs.existsSync(target); n++) {
+    target = path.join(backupDir, `pre-tenancy-${stamp}-${n}.db`);
+  }
+
+  const started = performance.now();
+  try {
+    // The name deliberately does not start with `curator-`, so backupService
+    // never rotates this file away. The operator deletes it once they trust
+    // the upgrade.
+    sqlite.prepare(`VACUUM INTO ?`).run(target);
+    log.info(
+      "Database",
+      `Pre-tenancy backup written to ${target} in ${(performance.now() - started).toFixed(0)}ms`,
+    );
+  } catch (err) {
+    log.error("Database", `Pre-tenancy backup failed: ${String(err)}`);
+  }
+}
+
+const tenancyVersion = readTenancyVersion();
+if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
+  const migrationStarted = performance.now();
+  const steps: string[] = [];
+  const step = (label: string, fn: () => string | null): void => {
+    const started = performance.now();
+    const detail = fn();
+    const ms = performance.now() - started;
+    steps.push(
+      `${label} ${detail ?? ""}${detail ? " " : ""}${ms.toFixed(0)}ms`,
+    );
+  };
+
+  sqlite.transaction(() => {
+    step("columns", () => {
+      let added = 0;
+      for (const table of OWNED_TABLES) {
+        const columns = sqlite.pragma(`table_info(${table})`) as {
+          name: string;
+        }[];
+        if (columns.length === 0) {
+          throw new Error(
+            `Cannot add ownerId: table "${table}" does not exist. §2z-4 must run after every owned table is created.`,
+          );
+        }
+        if (!columns.some((c) => c.name === "ownerId")) {
+          // A REFERENCES clause is legal on ADD COLUMN only when the default
+          // is NULL, which is the semantics wanted anyway: existing rows are
+          // unowned until the claim below runs. RESTRICT rather than CASCADE
+          // on purpose — deleting an account that still owns contacts should
+          // fail loudly, not delete the contacts.
+          sqlite.exec(
+            `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
+          );
+          added++;
+        }
+        // Phase 2i replaces these with the composite indexes below, once
+        // EXPLAIN QUERY PLAN evidence says the prefixes are redundant.
+        sqlite.exec(
+          `CREATE INDEX IF NOT EXISTS idx_${table}_owner ON ${table}(ownerId)`,
+        );
+      }
+      return `${added} added,`;
+    });
+
+    step("trigger drops", () => {
+      for (const name of TRIGGERS_DROPPED_FOR_CLAIM) {
+        sqlite.exec(`DROP TRIGGER IF EXISTS ${name}`);
+      }
+      return `${TRIGGERS_DROPPED_FOR_CLAIM.length} dropped,`;
+    });
+
+    let owner = "";
+    step("local owner", () => {
+      owner = ensureLocalOwner();
+      return "";
+    });
+
+    step("claim", () => {
+      const claimed = claimUnownedData(owner);
+      const total = Object.values(claimed).reduce((a, b) => a + b, 0);
+      return total > 0
+        ? `${Object.entries(claimed)
+            .map(([t, n]) => `${n} ${t}`)
+            .join(", ")},`
+        : "nothing to claim,";
+    });
+
+    step("child backfill", () => {
+      let rows = 0;
+      for (const { table, key } of OWNER_CHILD_TABLES) {
+        // tenant-lint: allow boot migration
+        rows += sqlite
+          .prepare(
+            `UPDATE ${table} SET ownerId = (SELECT ownerId FROM contacts WHERE id = ${table}.${key})
+              WHERE ownerId IS NULL`,
+          )
+          .run().changes;
+      }
+      return `${rows} rows,`;
+    });
+
+    step("invariant triggers", () => {
+      sqlite.exec(ownerInvariantTriggerSql());
+      return "";
+    });
+
+    step("composite indexes", () => {
+      sqlite.exec(OWNER_COMPOSITE_INDEXES);
+      return "";
+    });
+
+    writeTenancyVersion(TENANCY_SCHEMA_VERSION);
+  })();
+
+  log.info(
+    "Database",
+    `Tenancy migration v${tenancyVersion} to v${TENANCY_SCHEMA_VERSION} in ${(performance.now() - migrationStarted).toFixed(0)}ms (${steps.join("; ")})`,
+  );
+}
+
+// =============================================================================
+// 2z-5. Uploads relocation
+// =============================================================================
+// Files move from the flat `uploads/avatars/` and `uploads/` directories into
+// `uploads/u/<ownerId>/avatars/` and `uploads/u/<ownerId>/files/`, and the
+// stored URL is rewritten to match. Outside every transaction, because it
+// touches the filesystem: a rolled-back transaction cannot un-move a file.
+//
+// Position matters, and this is not where the plan put it. The plan ran the
+// relocation last, calling the trigger it fires harmless. It is not. Rewriting
+// `avatarUrl` fires `contacts_auto_updated_at`, which stamps `updatedAt`, and
+// `findStaleEmbeddings` re-embeds every contact whose `updatedAt` is newer
+// than its `embeddedAt`. Running it last meant every contact with an avatar
+// was re-embedded through the paid provider on the next deep dedupe scan. The
+// migration test caught it.
+//
+// Here, on a migrating boot, §2z-4 has just dropped those triggers and §3 to
+// §6 have not yet put them back, so the rewrite stamps nothing. On any later
+// boot the WHERE clauses match no rows, so no UPDATE runs at all and the
+// question does not arise. `contacts.ownerId` exists by now, which is the
+// other thing this step needs.
+//
+// Idempotent by its WHERE clauses — a URL that already points at `/uploads/u/`
+// matches nothing. Nothing is ever deleted. A file no row references moves to
+// `uploads/orphaned/` so an operator can look at it before deciding.
+//
+// The `/uploads` ownership guard is Phase 2a. Until then the new path is
+// served to any authenticated caller, which is the exposure that exists today.
+// =============================================================================
+
+{
+  const moved: string[] = [];
+  const relocate = (
+    fromAbs: string | null,
+    ownerId: string,
+    kind: "avatars" | "files",
+    filename: string,
+  ): void => {
+    if (!fromAbs || !fs.existsSync(fromAbs)) return;
+    const dir = ownerUploadDir(ownerId, kind);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.renameSync(fromAbs, path.join(dir, filename));
+  };
+
+  const avatars = sqlite
+    .prepare(
+      `SELECT id, ownerId, avatarUrl FROM contacts WHERE avatarUrl LIKE '/uploads/avatars/%'`,
+    )
+    .all() as { id: string; ownerId: string; avatarUrl: string }[];
+
+  const attachments = sqlite
+    .prepare(
+      `SELECT id, ownerId, fileUrl FROM interactions
+        WHERE fileUrl LIKE '/uploads/%'
+          AND fileUrl NOT LIKE '/uploads/u/%'
+          AND fileUrl NOT LIKE '/uploads/logos/%'`,
+    )
+    .all() as { id: string; ownerId: string; fileUrl: string }[];
+
+  if (avatars.length > 0 || attachments.length > 0) {
+    const started = performance.now();
+    // The database rewrite is one transaction; the file moves are not, and
+    // run first. A file already at the new path with an un-rewritten URL is
+    // recoverable. The reverse — a rewritten URL pointing at a file still in
+    // the old place — is a broken image.
+    for (const row of avatars) {
+      const filename = path.basename(row.avatarUrl);
+      relocate(
+        resolveUploadPath(row.avatarUrl),
+        row.ownerId,
+        "avatars",
+        filename,
+      );
+      moved.push(filename);
+    }
+    for (const row of attachments) {
+      const filename = path.basename(row.fileUrl);
+      relocate(resolveUploadPath(row.fileUrl), row.ownerId, "files", filename);
+      moved.push(filename);
+    }
+
+    // tenant-lint: allow boot migration
+    const setAvatar = sqlite.prepare(
+      `UPDATE contacts SET avatarUrl = ? WHERE id = ?`,
+    );
+    // tenant-lint: allow boot migration
+    const setFile = sqlite.prepare(
+      `UPDATE interactions SET fileUrl = ? WHERE id = ?`,
+    );
+    sqlite.transaction(() => {
+      // A missing source file still gets its URL rewritten. Leaving the old
+      // URL would mean this block retries the same rows on every boot.
+      for (const row of avatars) {
+        setAvatar.run(
+          ownerUploadUrl(row.ownerId, "avatars", path.basename(row.avatarUrl)),
+          row.id,
+        );
+      }
+      for (const row of attachments) {
+        setFile.run(
+          ownerUploadUrl(row.ownerId, "files", path.basename(row.fileUrl)),
+          row.id,
+        );
+      }
+    })();
+
+    log.info(
+      "Database",
+      `Relocated ${avatars.length} avatar(s) and ${attachments.length} attachment(s) under uploads/u/ in ${(performance.now() - started).toFixed(0)}ms`,
+    );
+  }
+
+  // Anything left flat that no row points at. `/api/avatar/...` and external
+  // https:// avatars never had a file here, so they cannot orphan one.
+  const orphanDir = path.join(UPLOADS_DIR, "orphaned");
+  const sweep = (dir: string, referenced: Set<string>): number => {
+    if (!fs.existsSync(dir)) return 0;
+    let n = 0;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || referenced.has(entry.name)) continue;
+      fs.mkdirSync(orphanDir, { recursive: true });
+      fs.renameSync(
+        path.join(dir, entry.name),
+        path.join(orphanDir, entry.name),
+      );
+      log.warn(
+        "Database",
+        `Moved unreferenced upload ${entry.name} to uploads/orphaned/`,
+      );
+      n++;
+    }
+    return n;
+  };
+
+  const referencedAvatars = new Set(
+    (
+      sqlite
+        .prepare(
+          `SELECT avatarUrl FROM contacts WHERE avatarUrl LIKE '/uploads/%'`,
+        )
+        .all() as { avatarUrl: string }[]
+    ).map((r) => path.basename(r.avatarUrl)),
+  );
+  const referencedFiles = new Set(
+    (
+      sqlite
+        .prepare(
+          `SELECT fileUrl FROM interactions WHERE fileUrl LIKE '/uploads/%'`,
+        )
+        .all() as { fileUrl: string }[]
+    ).map((r) => path.basename(r.fileUrl)),
+  );
+
+  const orphans =
+    sweep(AVATARS_DIR, referencedAvatars) + sweep(UPLOADS_DIR, referencedFiles);
+  if (orphans > 0) {
+    log.warn(
+      "Database",
+      `${orphans} unreferenced upload(s) moved to uploads/orphaned/. Nothing was deleted.`,
+    );
+  }
 }
 
 // =============================================================================
@@ -605,6 +1410,7 @@ log.info(
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS contact_embeddings USING vec0(
     contactId TEXT PRIMARY KEY,
+    ownerId TEXT PARTITION KEY,
     embedding FLOAT[768]
   );
 `);
@@ -614,6 +1420,7 @@ sqlite.exec(`
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS search_embeddings USING vec0(
     contactId TEXT PRIMARY KEY,
+    ownerId TEXT PARTITION KEY,
     embedding FLOAT[384]
   );
 `);
@@ -645,6 +1452,111 @@ log.info(
   `search_embeddings vec0 table ready (${vecTableWidth("search_embeddings")}-dim, search)`,
 );
 
+// =============================================================================
+// 9k. vec0 partition-key rebuild
+// =============================================================================
+// A table created before 2.0 has no partition key, and sqlite-vec refuses to
+// add one: ALTER TABLE on a vec0 table returns OK, leaves the shadow tables
+// under the old name, and the next read fails with "no such table". So the
+// rows are read out, the table is dropped, a partitioned one is created at the
+// same width, and the rows go back in. All inside one transaction per table.
+//
+// No embedding is recomputed. The stored `ai.embeddingsState` signature and
+// dimension are untouched, so ensureEmbeddingStore and
+// ensureDedupeEmbeddingStore see no change on the next boot and no provider
+// API call happens.
+// =============================================================================
+
+/** vec0 tables and the DDL they must have. Pinned equal by a unit test. */
+export function vecTableDdl(table: string, dimension: number): string {
+  return `CREATE VIRTUAL TABLE ${table} USING vec0(
+    contactId TEXT PRIMARY KEY,
+    ownerId TEXT PARTITION KEY,
+    embedding FLOAT[${dimension}]
+  )`;
+}
+
+/**
+ * Refuse to start below the release that introduced partition keys.
+ *
+ * The returned string carries a leading `v` and may carry a pre-release
+ * suffix (`v0.1.10-alpha.4`), so this parses three integers rather than
+ * comparing strings — `"v0.1.10" < "v0.1.6"` is true as a string and false as
+ * a version.
+ */
+export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
+  const parts = version
+    .replace(/^v/, "")
+    .split(/[.-]/)
+    .slice(0, 3)
+    .map((n) => Number.parseInt(n, 10));
+  const found = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+  for (let i = 0; i < 3; i++) {
+    if (found[i] > minimum[i]) return;
+    if (found[i] < minimum[i]) {
+      throw new Error(
+        `sqlite-vec >= ${minimum.join(".")} is required for partitioned vector search; found ${version}`,
+      );
+    }
+  }
+}
+
+for (const table of ["search_embeddings", "contact_embeddings"]) {
+  const ddl = (
+    sqlite
+      .prepare(`SELECT sql FROM sqlite_master WHERE name = ?`)
+      .get(table) as { sql?: string } | undefined
+  )?.sql;
+  if (!ddl || /PARTITION KEY/i.test(ddl)) continue;
+
+  const width = vecTableWidth(table);
+  const dimension = Number.parseInt(width, 10);
+  if (!Number.isFinite(dimension) || dimension <= 0) {
+    throw new Error(
+      `Cannot rebuild ${table}: its DDL does not declare a vector width (read "${width}"). Refusing to guess a dimension.`,
+    );
+  }
+
+  const started = performance.now();
+  let copied = 0;
+  let dropped = 0;
+  sqlite.transaction(() => {
+    // A row whose contact is gone is already an orphan. It is left behind
+    // rather than given a NULL partition, which query 9 of the verification
+    // script would then flag forever.
+    // tenant-lint: allow boot migration
+    const rows = sqlite
+      .prepare(
+        `SELECT e.contactId AS contactId, c.ownerId AS ownerId, e.embedding AS embedding
+           FROM ${table} e JOIN contacts c ON c.id = e.contactId`,
+      )
+      .all() as { contactId: string; ownerId: string; embedding: Buffer }[];
+    const total = (
+      sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
+        n: number;
+      }
+    ).n;
+    dropped = total - rows.length;
+
+    sqlite.exec(`DROP TABLE ${table}`);
+    sqlite.exec(vecTableDdl(table, dimension));
+
+    const insert = sqlite.prepare(
+      `INSERT INTO ${table} (contactId, ownerId, embedding) VALUES (?, ?, ?)`,
+    );
+    for (const row of rows) {
+      insert.run(row.contactId, row.ownerId, row.embedding);
+      copied++;
+    }
+  })();
+
+  log.info(
+    "Database",
+    `Rebuilt ${table} with a partition key: ${copied} vectors copied at ${dimension} dim` +
+      `${dropped > 0 ? `, ${dropped} orphan(s) dropped` : ""} in ${(performance.now() - started).toFixed(0)}ms`,
+  );
+}
+
 // 9g. Embedding metadata: tracks when each contact was last embedded
 //     Used for staleness detection — if contact.updatedAt > embeddedAt, re-embed
 sqlite.exec(`
@@ -671,54 +1583,22 @@ sqlite.exec(`
 `);
 
 // =============================================================================
-// 9i. Data ownership columns
+// 9i. Ownership guard
 // =============================================================================
-// Runs here, near the end, because it has to come after every table it
-// touches has been created — `dedupe_merge_log` is built in §9e above, well
-// after the Drizzle migrations. The `users` table it references is created in
-// §2z.
-//
-// See the OWNERSHIP note in src/db/schema.ts for what NULL means and why only
-// these four tables carry the column.
+// The columns themselves are added in §2z-4, which has to run before §3
+// because the FTS backfill selects `c.ownerId`. What stays here is the check
+// that used to be implied by doing the work: if any owned table reached the
+// end of boot without the column, every scoped query in Phase 2 would return
+// the wrong rows rather than fail, so this fails now instead.
 // =============================================================================
-
-/** Tables that carry `ownerId` — every table not reachable from `contacts`. */
-export const OWNED_TABLES = [
-  "contacts",
-  "lists",
-  "ai_invocations",
-  "dedupe_merge_log",
-] as const;
 
 for (const table of OWNED_TABLES) {
-  // Tested with table_info rather than a try/catch around ALTER, so a real
-  // failure (missing table, locked database) still surfaces instead of being
-  // swallowed as "column already exists".
   const columns = sqlite.pragma(`table_info(${table})`) as { name: string }[];
-  if (columns.length === 0) {
-    throw new Error(
-      `Cannot add ownerId: table "${table}" does not exist. §9i must run after every owned table is created.`,
-    );
-  }
   if (!columns.some((c) => c.name === "ownerId")) {
-    // SQLite permits ADD COLUMN with a REFERENCES clause only when the default
-    // is NULL — which is the semantics we want anyway: existing rows are
-    // unowned until an account claims them.
-    //
-    // RESTRICT rather than CASCADE on purpose — see the OWNERSHIP note in
-    // src/db/schema.ts. Deleting an account that still owns contacts should
-    // fail loudly, not delete the contacts.
-    sqlite.exec(
-      `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
+    throw new Error(
+      `Table "${table}" has no ownerId column after the tenancy migration. Refusing to start.`,
     );
-    log.info("Database", `Added ownerId column to ${table}`);
   }
-  // Indexed now rather than when multi-tenancy lands: every owner-scoped query
-  // that project adds will filter on this, and an index nobody reads costs one
-  // page on a column that currently holds a single distinct value.
-  sqlite.exec(
-    `CREATE INDEX IF NOT EXISTS idx_${table}_owner ON ${table}(ownerId)`,
-  );
 }
 
 // =============================================================================
@@ -749,6 +1629,12 @@ sqlite.exec(`
 `);
 
 // Give the query planner statistics for the new indexes.
+//
+// ANALYZE is new in Phase 1. `PRAGMA optimize` only re-analyzes tables that
+// already have sqlite_stat1 rows, and nothing had ever run ANALYZE, so the
+// owner-first composite indexes above would have been invisible to the
+// planner. This runs once per boot and is cheap on a database this size.
+sqlite.exec("ANALYZE");
 sqlite.pragma("optimize");
 
 // =============================================================================

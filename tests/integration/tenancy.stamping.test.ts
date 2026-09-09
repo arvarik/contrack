@@ -186,17 +186,26 @@ describe("ownership stamping with auth on", () => {
 });
 
 describe("ownership stamping with no context", () => {
-  it("writes a null owner rather than throwing, which is what background jobs need", async () => {
+  // Phase 0 wrote NULL here, because with no account guaranteed to exist there
+  // was nobody to name. Phase 1 forbids NULL with a trigger and creates the
+  // local owner on every instance, so a background write now lands on the
+  // primary admin instead of aborting. Phase 2 wraps jobs in runWithContext,
+  // which is what stops a multi-user instance reaching this path at all.
+  it("falls back to the primary admin rather than aborting on the required trigger", async () => {
     const { recordInvocation } =
       await import("../../server/services/aiStatsService.ts");
-    recordInvocation({
-      operation: "rerank",
-      model: "mock",
-      tokenCount: 1,
-      latencyMs: 1,
-      cached: false,
-      description: "no context",
-    });
+    const { primaryAdminId } = await import("../../server/db.ts");
+
+    expect(() =>
+      recordInvocation({
+        operation: "rerank",
+        model: "mock",
+        tokenCount: 1,
+        latencyMs: 1,
+        cached: false,
+        description: "no context",
+      }),
+    ).not.toThrow();
 
     const row = sqlite
       .prepare(
@@ -205,8 +214,19 @@ describe("ownership stamping with no context", () => {
       .get() as { ownerId: string | null } | undefined;
 
     expect(row).toBeTruthy();
-    // Null groups as "system" in the AI stats view until Phase 2 wraps jobs.
-    expect(row?.ownerId).toBeNull();
+    expect(row?.ownerId).toBe(primaryAdminId());
+  });
+
+  it("refuses an insert into an owned table with no owner at all", () => {
+    // The invariant this phase buys. Without the trigger a forgotten stamp is
+    // a silent NULL that no test notices until Phase 2 filters on it.
+    expect(() =>
+      sqlite
+        .prepare(
+          "INSERT INTO contacts (id, name) VALUES ('no-owner', 'Nobody')",
+        )
+        .run(),
+    ).toThrow(/contacts.ownerId is required/);
   });
 });
 

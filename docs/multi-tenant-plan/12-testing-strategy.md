@@ -23,7 +23,7 @@ does not run), `createApp()` mounted with supertest,
 | `tests/integration/tenancy.context.upload.test.ts` | 0 | context intact inside multer `destination` and `filename` and in the handler after `upload.single()` with a text field in the body (multer issue #1111) |
 | `tests/unit/tenantLint.test.ts` | 0 | the lint flags a statement without `ownerId`, honors the allow comment, rejects an unknown reason, and ignores non-owned tables |
 | `tests/unit/search.test.ts` (extended) | 0 | `bm25()` weights are positional and include `UNINDEXED` columns |
-| `tests/unit/ftsTriggers.test.ts` | 1 | snapshot of the generated FTS trigger SQL; every delete uses `MATCH 'cidTok:...'`; `contacts_ai` has the `deletedAt` guard; the `vec0` DDL strings in `db.ts` and the two rebuild helpers are equal |
+| `tests/unit/ftsTriggers.test.ts` | 1 | snapshot of the generated FTS trigger SQL; every delete uses `WHERE rowid = old.rowid` and never `contactId`; every insert writes `ownerTok`; `contacts_ai` has the `deletedAt` guard; one BM25 weight per column. The `vec0` DDL equality moved to `tenancy.storage.test.ts`, which needs a real sqlite-vec |
 | `tests/integration/tenancy.triggerCost.test.ts` | 1 | updating 1,000 contacts on a 5,000-contact database finishes in under 500 ms |
 | `tests/integration/tenancy.routeManifest.test.ts` | 0, 2i, 3 | every route classified. From 2i: every `scoped` route `isolated`. From 3: every `admin` route carries `requireAdmin` |
 | `tests/integration/tenancy.stamping.test.ts` | 0 | every insert into an owned table carries the caller's id |

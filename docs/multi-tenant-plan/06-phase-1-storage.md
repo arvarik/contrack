@@ -21,6 +21,39 @@ exact DDL is repeated here. The reasoning behind each choice is in the data
 model document. Every number marked "measured" comes from
 [bench/review-2026-09-08/](bench/review-2026-09-08/README.md).
 
+> **What Phase 1 actually shipped, where it differs from this document.** This
+> plan was written against `v1.5.5`. Four commits landed on `main` afterwards,
+> and `eb8c220` (PR #18) rewrote the whole search layer, so §0.3's map of
+> `server/db.ts` and task 1.4 describe code that no longer exists. The
+> differences, all decided with measurements in the Phase 1 pull request:
+>
+> - **No `cidTok`.** Its whole purpose was to make the trigger deletes
+>   indexed. PR #18 already made them `WHERE rowid = old.rowid`, which FTS5
+>   pushes down. Measured on 1,000 updates over 5,000 contacts: `rowid` 40 ms,
+>   `cidTok` 46 ms, the `v1.5.5` `contactId` delete 499 ms. `ownerTok` is
+>   built, because Phase 2 needs it and nothing else provides it.
+> - **`FTS_SCHEMA_VERSION` is 3, not 2.** PR #18 had already taken 2.
+> - **Eleven BM25 weights, not twelve**, and the `prefix='2 3 4'` option from
+>   PR #18 is preserved.
+> - **Fourteen triggers are dropped for the claim, not seventeen**, and 27
+>   must exist afterwards. The trigger set changed shape in PR #18: the eight
+>   child FTS triggers became twelve that clear `searchExpansion`, and
+>   `search_revision_*` and `search_vector_*` were added.
+> - **The uploads relocation runs at §2z-5, not §11.** Rewriting `avatarUrl`
+>   fires `contacts_auto_updated_at`, which §7 calls harmless and is not: it
+>   stamps `updatedAt`, and the deep dedupe scan re-embeds every contact whose
+>   `updatedAt` moved. Running it inside the window where the triggers are
+>   dropped costs nothing and removes the bill.
+> - **The backup is taken before §2z-1**, not inside the tenancy block, so the
+>   restored file has no Phase 1 columns at all.
+> - **A §2z-0 step** hoists the `contacts` column guards (`deletedAt`,
+>   `canonicalId`, `phoneticHash`, `searchExpansion`) above the tenancy block,
+>   because the composite indexes in task 1.7 are built over them and on a
+>   fresh database Drizzle `0000` does not ship them.
+> - **Branch name.** `v2.0/phase-1-storage` cannot exist while a branch named
+>   `v2.0` does: git would need `refs/heads/v2.0` to be both a file and a
+>   directory. Used `v2.0-phase-1-storage`, as in Phase 0.
+
 ---
 
 ## 0. Context for the implementer
@@ -542,21 +575,24 @@ owner account, the FTS trigger fix (state the measured before and after), the
 
 ## 3. Acceptance criteria
 
-- [ ] All Phase 0 criteria still hold.
-- [ ] `tenancy.migration.test.ts` passes, including the second-boot idempotency check, the `updatedAt` check, and the no-`embedBatch` check.
-- [ ] `npm run tenancy:verify` passes on: a fresh database, a migrated 1.5.5 fixture, a copy of a real 1.5.5 database with auth off, and one with auth on.
-- [ ] FTS rebuild time is logged and is under 1 s for 10,000 contacts.
-- [ ] Updating 1,000 contacts on a 5,000-contact database takes under 500 ms (the `cidTok` trigger fix).
-- [ ] Boot fails with a clear message when `vec_version()` is below 0.1.6 (unit test with a stubbed statement).
-- [ ] The day-one `vec0` smoke test output is in the PR.
-- [ ] Uploads: after migration, old URLs are gone from both columns and files exist at the new paths. Orphans land in `uploads/orphaned/`.
-- [ ] `api.auth.test.ts` green with the new principal kinds and `SESSION_REQUIRED`.
-- [ ] `npm run seed` works on a fresh `DATA_DIR`.
-- [ ] Rollback rehearsal documented in `docs/multi-tenant-plan/bench/rollback-rehearsal.md` with the exact commands run and their output.
-- [ ] `src/db/schema.ts` compiles and `tsc --noEmit` passes with the new types.
-- [ ] Every boot step logs its duration; a fresh test database boots in under 1 s more than before this phase.
+- [x] All Phase 0 criteria still hold. `npm test`, `npm run lint`, `npm run format:check` and `npm run build` all exit 0; the tenant-lint report still runs in `lint`.
+- [x] `tenancy.migration.test.ts` passes, including the second-boot idempotency check, the `updatedAt` check, and the no-`embedBatch` check. 22 tests, over a fixture built from the `v1.5.5` schema and a second one with a real account.
+- [x] `npm run tenancy:verify` passes on a fresh database, on the migrated `v1.5.5` fixture, and on a copy of a real `v1.5.5` database with auth off. **Not run with auth on against a real database**, because the only real database available here has no accounts; the auth-on path is covered by the fixture variant in `tenancy.migration.test.ts` instead.
+- [x] FTS rebuild time is logged and is under 1 s for 10,000 contacts. Measured 39 ms, logged as `contacts_fts rebuilt at v3 with ownerTok: 10000 rows in 39ms`.
+- [x] Updating 1,000 contacts on a 5,000-contact database takes under 500 ms. Measured 228 ms. The `cidTok` change this criterion was written for is not what delivers it: PR #18's `rowid` deletes already did. See the note at the top of this document.
+- [x] Boot fails with a clear message when `vec_version()` is below 0.1.6. `assertVecVersion` is unit-tested against `0.1.5`, `0.0.9` and `0.1.0-alpha.1`, and against `0.1.10` to prove it compares numbers rather than strings.
+- [x] The day-one `vec0` smoke test output is in the PR, with the `INSERT OR REPLACE` result. It fails on 0.1.9 (`UNIQUE constraint failed`), so the dedupe upsert became `DELETE` then `INSERT`.
+- [x] Uploads: after migration, old URLs are gone from both columns and files exist at the new paths. Orphans land in `uploads/orphaned/`. Shared logos and generated or external avatar URLs are untouched.
+- [x] `api.auth.test.ts` green with the new principal kinds and `SESSION_REQUIRED`. 63 tests, covering all four `via` kinds, the disabled account, the forced-auth boot rule, and the reserved `local` username.
+- [x] `npm run seed` works on a fresh `DATA_DIR`. `npm run db:seed` too.
+- [x] Rollback rehearsal documented in [bench/rollback-rehearsal.md](bench/rollback-rehearsal.md), run on a copy of a real `v1.5.5` database.
+- [x] `src/db/schema.ts` compiles and `tsc --noEmit` passes with the new types.
+- [x] Every boot step logs its duration. A fresh test database boots in 3 ms of tenancy migration plus 1 ms of FTS build; the real 30-contact database migrated in 7 ms.
 
----
+Two criteria from the task prompt that this phase did **not** meet as written:
+
+- [~] *"Run the full suite with `AUTH_REQUIRED=true`."* Done, and reported: 141 of 787 tests fail, every one of them because the request carries no credential (95 are a bare `expected 401 to be N`, the rest are knock-ons from reading a 401 body). No integration file outside `api.auth.test.ts` signs in, so the flag makes them unauthenticated rather than exercising the session principal. Making that run green means adding a session to 141 tests, which is a testing-strategy change and not this phase. The four principal kinds are covered directly instead, in `api.auth.test.ts`.
+- [~] *"`npm run tenancy:verify` on a real database with auth on."* See above: no real multi-account database exists here.
 
 ## 4. Risks
 

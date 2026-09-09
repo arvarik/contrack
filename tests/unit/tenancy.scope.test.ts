@@ -31,19 +31,22 @@ describe("Scope", () => {
     expect(Object.isFrozen(fromId)).toBe(true);
   });
 
-  it("derives a scope from a user principal", () => {
+  // Phase 1 made every principal a user, so `via` is what separates them and
+  // all four carry an owner.
+  it.each([
+    ["session", { via: "session", sessionId: "s" }],
+    ["token", { via: "token", tokenId: "t" }],
+    ["implicit", { via: "implicit" }],
+    ["legacy-env-token", { via: "legacy-env-token" }],
+  ])("derives a scope from a %s principal", (_label, extra) => {
     const req = {
-      principal: { kind: "user", user: { id: UUID }, sessionId: "s" },
+      principal: { kind: "user", user: { id: UUID }, ...extra },
     } as unknown as Request;
     expect(scopeOf(req).ownerId).toBe(UUID);
   });
 
-  it.each([
-    ["anonymous", { kind: "anonymous" }],
-    ["service", { kind: "service" }],
-    ["absent", undefined],
-  ])("throws 401 for a %s principal", (_label, principal) => {
-    const req = { principal } as unknown as Request;
+  it("throws 401 when nothing authenticated the request", () => {
+    const req = { principal: undefined } as unknown as Request;
     expect(() => scopeOf(req)).toThrow(AppError);
     try {
       scopeOf(req);

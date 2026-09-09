@@ -4,7 +4,14 @@ import { faker } from "@faker-js/faker";
 import crypto from "crypto";
 // The server's own database module — DATA_DIR resolution and migrations
 // included. See the note in seed.ts.
-import { db, sqlite } from "../server/db.ts";
+import { db, ensureLocalOwner, sqlite } from "../server/db.ts";
+
+// Every contact needs an owner: the `contacts_owner_required` trigger from
+// Phase 1 refuses an insert without one. Importing server/db.ts above has
+// already run the migration, so the local owner exists by now. Interactions and
+// action items are filled from their contact by trigger, so only contacts and
+// lists have to name it.
+const ownerId = ensureLocalOwner();
 
 // Pre-defined set of cities to give good map distribution
 const CITIES = [
@@ -385,6 +392,7 @@ try {
       db.insert(schema.contacts)
         .values({
           id,
+          ownerId,
           name: c.name,
           firstName: c.firstName,
           lastName: c.lastName,
