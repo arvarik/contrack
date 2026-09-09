@@ -86,14 +86,20 @@ export function getEmbeddingSimilarity(
   try {
     const row = sqlite
       .prepare(
+        // Same shape as the KNN in blocking.ts: the owner is read from the
+        // anchor contact inside the statement, so the partition sqlite-vec
+        // searches is always the anchor's own. A pair that spans two accounts
+        // scores zero rather than a similarity.
         `
       SELECT distance FROM contact_embeddings
       WHERE embedding MATCH (
         SELECT embedding FROM contact_embeddings WHERE contactId = ?
-      ) AND k = 20 AND contactId = ?
+      )
+        AND ownerId = (SELECT ownerId FROM contacts WHERE id = ?)
+        AND k = 20 AND contactId = ?
     `,
       )
-      .get(idA, idB) as { distance: number } | undefined;
+      .get(idA, idA, idB) as { distance: number } | undefined;
 
     if (row) {
       similarity = distanceToSimilarity(row.distance);

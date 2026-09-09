@@ -20,6 +20,7 @@
 
 import { sqlite, vecTableDdl } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import {
   normalizeContactById,
   normalizeContactsForAllOwners,
@@ -202,18 +203,27 @@ const _stmts = {
     `INSERT INTO contact_embeddings (contactId, ownerId, embedding)
      SELECT ?, c.ownerId, ? FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
   ),
+  // tenant-lint: allow owner-checked by caller
   delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
+  // tenant-lint: allow instance sweep
   count: sqlite.prepare("SELECT COUNT(*) AS cnt FROM contact_embeddings"),
   exists: sqlite.prepare(
+    // tenant-lint: allow owner-checked by caller
     "SELECT 1 FROM contact_embeddings WHERE contactId = ?",
   ),
   get: sqlite.prepare(
+    // tenant-lint: allow owner-checked by caller
     "SELECT embedding FROM contact_embeddings WHERE contactId = ?",
   ),
+  // `ownerId` is the vec0 partition key, so sqlite-vec reads one owner's
+  // chunks rather than the whole table and the neighbours can never come from
+  // another account. `ownerId IN (...)` is not supported on a partition
+  // column, so this is one owner per statement by design.
   knn: sqlite.prepare(`
     SELECT contactId, distance
     FROM contact_embeddings
     WHERE embedding MATCH ?
+      AND ownerId = ?
       AND k = ?
     ORDER BY distance
   `),
@@ -290,12 +300,14 @@ export function getEmbedding(contactId: string): Float32Array | null {
 /**
  * Find the K nearest neighbors for a given embedding vector.
  *
+ * @param scope      - The owner whose vectors are searched
  * @param embedding  - The query vector (768-dim Float32Array)
  * @param limit      - Max results to return (default 10)
  * @param excludeId  - Optional contact ID to exclude from results (self-match)
  * @returns Array of { contactId, distance } sorted by ascending distance
  */
 export function findNearestNeighbors(
+  scope: Scope,
   embedding: Float32Array,
   limit: number = 10,
   excludeId?: string,
@@ -303,7 +315,11 @@ export function findNearestNeighbors(
   // sqlite-vec KNN: fetch extra results to account for potential self-match exclusion
   const fetchLimit = excludeId ? limit + 1 : limit;
 
-  const rows = _stmts.knn.all(Buffer.from(embedding.buffer), fetchLimit) as {
+  const rows = _stmts.knn.all(
+    Buffer.from(embedding.buffer),
+    scope.ownerId,
+    fetchLimit,
+  ) as {
     contactId: string;
     distance: number;
   }[];
@@ -326,6 +342,7 @@ export function findNearestNeighbors(
 function findStaleEmbeddings(): string[] {
   const rows = sqlite
     .prepare(
+      // tenant-lint: allow instance sweep
       `
     SELECT m.contactId
     FROM dedupe_embedding_meta m
@@ -431,6 +448,7 @@ export async function backfillEmbeddings(
     // 2. Filter to contacts missing embeddings
     const existingIds = new Set<string>();
     const allEmbedded = sqlite
+      // tenant-lint: allow instance sweep
       .prepare("SELECT contactId FROM contact_embeddings")
       .all() as { contactId: string }[];
     for (const row of allEmbedded) existingIds.add(row.contactId);

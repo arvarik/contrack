@@ -11,6 +11,7 @@ import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    const scope = scopeOf(req);
     const q = req.query.q;
     if (q !== undefined && typeof q !== "string")
       throw new AppError("q must be a string", 400);
@@ -55,7 +57,7 @@ router.get(
         throw new ValidationError("Invalid search filters");
       }
     }
-    const results = searchService.searchFts(q, filters);
+    const results = searchService.searchFts(scope, q, filters);
     log.debug(
       "API",
       `[${rid}] GET /api/search?q="${q.replace(/["']/g, "")}" → ${results.length}`,
@@ -69,6 +71,10 @@ router.post(
   "/semantic",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    // Read once, before either branch. The NDJSON branch writes from inside a
+    // stream, and rule 6 keeps the owner an argument rather than something
+    // read back out of the async context after the first await.
+    const scope = scopeOf(req);
     const { query } = req.body as { query?: string };
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
@@ -104,6 +110,7 @@ router.post(
 
       try {
         await searchService.semanticSearchStream(
+          scope,
           query,
           rid,
           res,
@@ -121,6 +128,7 @@ router.post(
       res.on("close", onClose);
       try {
         const result = await searchService.semanticSearch(
+          scope,
           query,
           rid,
           controller.signal,
@@ -149,6 +157,8 @@ router.post(
   "/synthesize",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    // Captured before the stream opens, for the same reason as /semantic.
+    const scope = scopeOf(req);
     const { query, contactIds } = z
       .object({
         query: z.string().trim().min(1).max(500),
@@ -158,15 +168,19 @@ router.post(
     const ids = [...new Set(contactIds)];
     const contacts = sqlite
       .prepare(
-        `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+        `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c
+           WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
       )
-      .all(JSON.stringify(ids)) as {
+      .all(scope.ownerId, JSON.stringify(ids)) as {
       id: string;
       name: string;
       role?: string;
       company?: string;
       location?: string;
     }[];
+    // A contact id the caller does not own is missing as far as this owner is
+    // concerned, so it takes the same 409 a deleted id has always taken. The
+    // two answers are identical, which is what rule 4 asks for.
     if (contacts.length !== ids.length)
       throw new AppError(
         "Some contacts are no longer available. Search again.",
@@ -191,15 +205,17 @@ router.post(
 
     try {
       const text = await withTimeout(
-        (signal) => synthesizeSearchResults(query, contacts, null, signal),
+        (signal) =>
+          synthesizeSearchResults(scope, query, contacts, null, signal),
         10_000,
         controller.signal,
       );
       const current = sqlite
         .prepare(
-          `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+          `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c
+             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
         )
-        .all(JSON.stringify(ids));
+        .all(scope.ownerId, JSON.stringify(ids));
       if (JSON.stringify(current) !== source)
         throw new Error("Contacts changed. Generate a new summary.");
       if (!res.destroyed)

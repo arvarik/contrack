@@ -19,11 +19,12 @@ import type {
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { recordInvocation } from "../../services/aiStatsService.ts";
-import { aiCache, contentHash } from "../../utils/aiCache.ts";
+import { aiCache, contentHash, ownerKey } from "../../utils/aiCache.ts";
 import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../promptSafety.ts";
 import { resolveCapability } from "../capabilities.ts";
 import { generateFor } from "../gateway.ts";
 import { isMockMode, safeParseJson } from "./shared.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 
 /**
  * LLM-based reranker for Ask Contrack hybrid retrieval pipeline.
@@ -387,11 +388,13 @@ You generate search expansion keywords. Given a contact profile, output a comma-
  * results. This is an opt-in feature — the user clicks "Synthesize these
  * results" after seeing their matches.
  *
+ * @param scope    - The owner the brief is cached for
  * @param query    - The original user query
  * @param contacts - Compressed contact objects from the search results
  * @returns        - A plain-text executive brief
  */
 export async function synthesizeSearchResults(
+  scope: Scope,
   query: string,
   contacts: {
     name: string;
@@ -406,14 +409,21 @@ export async function synthesizeSearchResults(
   signal?.throwIfAborted();
   if (isMockMode()) throw new AppError("AI summary is unavailable", 503);
   const capability = resolveCapability("quick");
-  const cacheKey = contentHash(
-    JSON.stringify([
-      query.trim().toLowerCase(),
-      contacts,
-      plan,
-      capability?.providerId,
-      capability?.model,
-    ]),
+  // The brief is a paragraph about the named contacts, so the key leads with
+  // the owner. The hash of the contact list would already differ between two
+  // owners, but only by accident: the owner prefix is what lets `rerank` and
+  // `synthesis` be dropped for one account and kept for the rest.
+  const cacheKey = ownerKey(
+    scope,
+    contentHash(
+      JSON.stringify([
+        query.trim().toLowerCase(),
+        contacts,
+        plan,
+        capability?.providerId,
+        capability?.model,
+      ]),
+    ),
   );
   const cached = aiCache.get<string>("synthesis", cacheKey);
   if (cached) {

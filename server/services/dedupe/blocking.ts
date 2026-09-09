@@ -166,12 +166,19 @@ export function addEmbeddingCandidates(
     return [];
   }
 
+  // The owner comes from the anchor contact in the same statement rather than
+  // from a parameter. `ownerId` is the vec0 partition key, so sqlite-vec reads
+  // only that owner's chunks and a neighbour from another account cannot be
+  // produced at all. Reading it from the anchor makes "a neighbour shares the
+  // anchor's owner" true by construction, with no caller left to get it wrong.
   const knnStmt = sqlite.prepare(`
     SELECT ce.contactId, distance
     FROM contact_embeddings ce
     WHERE ce.embedding MATCH (
       SELECT embedding FROM contact_embeddings WHERE contactId = ?
-    ) AND k = ?
+    )
+      AND ce.ownerId = (SELECT ownerId FROM contacts WHERE id = ?)
+      AND k = ?
     ORDER BY distance
   `);
 
@@ -181,7 +188,7 @@ export function addEmbeddingCandidates(
 
   for (const id of contactIds) {
     try {
-      const neighbors = knnStmt.all(id, KNN_NEIGHBORS + 1) as {
+      const neighbors = knnStmt.all(id, id, KNN_NEIGHBORS + 1) as {
         contactId: string;
         distance: number;
       }[];

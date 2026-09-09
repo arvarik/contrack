@@ -20,6 +20,7 @@ import { sqlite, vecTableDdl } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   resolveEmbeddings,
@@ -220,6 +221,7 @@ const _upsertTxn = sqlite.transaction((contactId: string, buf: Buffer) => {
   // No contact means the vector would be an orphan with a NULL partition.
   if (!owner?.ownerId) return;
   sqlite
+    // tenant-lint: allow owner-checked by caller
     .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
     .run(contactId);
   sqlite
@@ -240,38 +242,62 @@ export function upsertSearchEmbedding(
 }
 
 /**
- * Find K nearest neighbors in the search_embeddings table.
+ * Find K nearest neighbors among one owner's search vectors.
+ *
+ * `ownerId` is the vec0 partition key, so sqlite-vec reads that owner's chunks
+ * and nothing else. This is a correctness fix before it is a speed one: the
+ * global KNN fetched the instance-wide top k and filtered afterwards, so an
+ * owner with 200 contacts on an instance of 40,000 would rarely appear in the
+ * top 100 and their vector channel returned nothing. The architecture
+ * document, section 7, has the measurements.
+ *
+ * `preFilterIds` stays a separate `IN` list because it is the query plan's
+ * hard filter, not an ownership check.
  */
 export function findSearchNeighbors(
+  scope: Scope,
   queryVec: Float32Array,
   k: number,
   preFilterIds?: Set<string>,
 ): { contactId: string; distance: number }[] {
   if (preFilterIds?.size === 0 || !Number.isFinite(k) || k < 1) return [];
   const buf = Buffer.from(new Float32Array(queryVec).buffer);
-  const scope = preFilterIds
+  const hardFilter = preFilterIds
     ? "AND c.id IN (SELECT value FROM json_each(?))"
     : "";
   const params = preFilterIds
-    ? [buf, JSON.stringify([...preFilterIds]), Math.min(Math.floor(k), 500)]
-    : [buf, Math.min(Math.floor(k), 500)];
+    ? [
+        buf,
+        scope.ownerId,
+        JSON.stringify([...preFilterIds]),
+        Math.min(Math.floor(k), 500),
+      ]
+    : [buf, scope.ownerId, Math.min(Math.floor(k), 500)];
   return sqlite
     .prepare(
       `
     SELECT contactId, distance FROM search_embeddings
     WHERE embedding MATCH ?
-      AND contactId IN (SELECT c.id FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} ${scope})
+      AND ownerId = ?
+      AND contactId IN (SELECT c.id FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} ${hardFilter})
       AND k = ? ORDER BY distance
   `,
     )
     .all(...params) as { contactId: string; distance: number }[];
 }
 
-/** Count of contacts with search embeddings. */
-export function getSearchEmbeddingCount(): number {
+/**
+ * How many of one owner's contacts have a search vector.
+ *
+ * `ownerId` is the partition key, so this counts one partition rather than
+ * the table. The vector channel uses it to decide whether to run at all, and
+ * an owner who has never been indexed must see zero rather than the
+ * instance's total.
+ */
+export function getSearchEmbeddingCount(scope: Scope): number {
   const row = sqlite
-    .prepare("SELECT COUNT(*) as c FROM search_embeddings")
-    .get() as { c: number };
+    .prepare("SELECT COUNT(*) as c FROM search_embeddings WHERE ownerId = ?")
+    .get(scope.ownerId) as { c: number };
   return row.c;
 }
 
@@ -343,6 +369,7 @@ export async function backfillSearchEmbeddings(): Promise<number> {
   // Find contacts missing search embeddings
   const missing = sqlite
     .prepare(
+      // tenant-lint: allow instance sweep
       `
     SELECT c.id, c.name, c.company, c.role, c.location, c.industry,
            c.headline, c.about, c.preferences, c.searchExpansion
@@ -366,6 +393,7 @@ export async function backfillSearchEmbeddings(): Promise<number> {
     "SELECT interest FROM contact_interests WHERE contactId = ?",
   );
   const deleteStmt = sqlite.prepare(
+    // tenant-lint: allow instance sweep
     "DELETE FROM search_embeddings WHERE contactId = ?",
   );
   const insertStmt = sqlite.prepare(
@@ -429,6 +457,7 @@ export async function embedContact(contactId: string): Promise<void> {
 
   const row = sqlite
     .prepare(
+      // tenant-lint: allow owner-checked by caller
       `
     SELECT id, name, company, role, location, industry, headline, about, preferences, searchExpansion
     FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}
@@ -508,6 +537,7 @@ function contactToSearchText(
 function currentSearchText(contactId: string): string | null {
   const row = sqlite
     .prepare(
+      // tenant-lint: allow owner-checked by caller
       `SELECT c.* FROM contacts c WHERE c.id = ? AND ${ACTIVE_CONTACT_SQL}`,
     )
     .get(contactId) as SearchTextRow | undefined;

@@ -457,7 +457,12 @@ export const dedupeService = {
         try {
           const queryVec = getEmbedding(contactId);
           if (queryVec) {
-            const neighbors = findNearestNeighbors(queryVec, 5, contactId);
+            const neighbors = findNearestNeighbors(
+              scope,
+              queryVec,
+              5,
+              contactId,
+            );
             const normalizedCache = new Map<string, NormalizedContact>();
 
             const targetSimCtx = buildPassContext(scope, rid);
