@@ -25,12 +25,16 @@ _This file tracks test methods, scenarios, and results with concrete execution e
 - **Globals**: `true` (describe/it/expect available without imports)
 - **Coverage**: V8 provider with `text`, `json`, `html` reporters (see `vitest.config.ts`)
 
-### Two vitest projects (vitest.config.ts)
+### Three vitest projects (vitest.config.ts)
 
 | Project       | Include                | Database                                                                                  | Setup file                   |
 | ------------- | ---------------------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
 | `unit`        | `tests/unit/**`        | **Mocked** — `tests/setup.ts` stubs `server/db.ts`                                        | `tests/setup.ts`             |
 | `integration` | `tests/integration/**` | **Real SQLite** in a per-file temp `DATA_DIR` (migrations, FTS triggers, indexes all run) | `tests/integration-setup.ts` |
+| `contract`    | `tests/contract/**`    | Real provider APIs. NOT part of `npm test`; run with `npm run test:contract`              | none                         |
+
+`npm test` runs `unit` and `integration` only, so a clone with no credentials
+passes. Each provider block in `contract` skips itself when its key is absent.
 
 Integration tests mount the production request pipeline via `createApp()`
 (`server/app.ts`) with supertest — no port, no Vite. `tests/integration-setup.ts`
@@ -45,6 +49,24 @@ create/rename/child-table triggers, bulk create/delete, interactions +
 @mention linking (`interaction_mentions`), action items + the
 `nextFollowUpAt` triggers, lists + membership, hard-merge (409 undo
 contract) and soft-merge → audit log → undo, dashboard/zero-state/MCP.
+
+### Tenancy tests (2.0, Phase 0)
+
+| File                                               | Asserts                                                                                                                                                                                                                         |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/tenancy.scope.test.ts`                 | The FTS owner and contact tokens equal SQLite's `'o' \|\| replace(id, '-', '')`, and a token is one FTS5 term. `scopeOf` throws 401 for a non-user principal.                                                                   |
+| `tests/unit/tenancy.requestContext.test.ts`        | The context survives `await`, `setTimeout`, `setImmediate`, `Promise.all` and `for await`. An EventEmitter listener sees the **emitter's** context, not the subscriber's. `currentScope()` throws `NO_SCOPE` outside a context. |
+| `tests/unit/tenantLint.test.ts`                    | The scanner flags an unscoped statement, honors each allow reason, rejects an unknown reason, and ignores unowned tables.                                                                                                       |
+| `tests/unit/search.test.ts`                        | BM25 weights are positional and count `UNINDEXED` columns.                                                                                                                                                                      |
+| `tests/integration/tenancy.routeManifest.test.ts`  | Every registered route is classified, with no stale rows and the `/uploads` static layer present.                                                                                                                               |
+| `tests/integration/tenancy.stamping.test.ts`       | Contacts, bulk imports, lists, mention ghosts, AI invocations and merge-log rows all carry the signed-in user's id.                                                                                                             |
+| `tests/integration/tenancy.context.upload.test.ts` | The context survives multer, including a body with one text field plus one file.                                                                                                                                                |
+| `tests/integration/tenancy.routing.test.ts`        | `GET /api/contacts/action-items` is reachable, `/contacts/:id` still resolves, and a limiter 429 carries a `requestId`.                                                                                                         |
+| `tests/integration/tenancy.isolation.test.ts`      | Skeleton only. One `it.todo` per scoped route, filled in during Phase 2.                                                                                                                                                        |
+
+`tests/integration/tenancy/helpers.ts` builds two real users with real
+sessions. `tests/integration/tenancy/listRoutes.ts` records mount paths while
+`createApp()` runs, because Express 5 keeps no mount path strings.
 
 ### Test Setup Mock Pattern (`tests/setup.ts`)
 

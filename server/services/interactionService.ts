@@ -15,6 +15,7 @@ import {
 } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
 import { aiCache, contentHash } from "../utils/aiCache.ts";
+import { currentScopeOrNull } from "../tenancy/requestContext.ts";
 import { AppError } from "../utils/AppError.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
 import { SharedWork } from "../ai/workQueue.ts";
@@ -86,6 +87,9 @@ async function runMentionExtraction(
               company: m.company || null,
               isGhost: 1,
               themeColor: newTheme,
+              // Mention extraction is started inside the request that created
+              // the interaction, so the context still carries that caller.
+              ownerId: currentScopeOrNull()?.ownerId ?? null,
             })
             .returning()
             .get();

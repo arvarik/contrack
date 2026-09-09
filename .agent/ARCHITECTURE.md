@@ -354,6 +354,7 @@ _No free tier. Prepaid billing required (~$5 starter credits for new accounts). 
 - **Exception**: `server/services/dedupe/embeddings.ts` imports `@google/genai` directly for embedding generation — this is Gemini-only and does not go through the provider adapter.
 - **Local-First Mandate**: External relational database usage is forbidden. All data lives in `curator.db`.
 - **Thin Routes / Heavy Services**: Express routes parse payloads and delegate. Business logic lives in `server/services/`.
+- **MUST** take a `Scope` as the first argument in every function that reads or writes an owned table, and put the user-supplied id and the owner in the SAME SQL statement (`WHERE id = ? AND ownerId = ?`). Never select by id and compare in JavaScript. See `server/tenancy/scope.ts`. The request context in `server/tenancy/requestContext.ts` is for attribution only and is never the isolation mechanism.
 
 ## 8. Error Handling
 

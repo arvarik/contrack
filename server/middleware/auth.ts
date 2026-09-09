@@ -17,9 +17,11 @@
 // binding below). API_TOKEN also implies enforcement, because a token is only
 // meaningful on an instance that is gated.
 //
-// Every request carries a Principal describing who is asking. Today nothing
-// downstream filters by it beyond "are you allowed in at all", but it is the
-// seam multi-tenancy needs, and stamping ownership on new rows already uses it.
+// Every request carries a Principal describing who is asking. As of Phase 0 of
+// the 2.0 work, attachRequestContext turns that Principal into a Scope and
+// every insert into an owned table stamps ownership from it. Reads are still
+// unscoped: Phase 2 adds the owner predicate to each query. See
+// docs/multi-tenant-plan/ and server/tenancy/scope.ts.
 //
 // Note on defaults: auth is off out of the box, including in Docker, because
 // the common case is a container reached only from its host. The server logs a
@@ -221,10 +223,10 @@ export function attachPrincipal(
   }
 
   // Session cookie → person. Resolved even when auth is off, so that someone
-  // who signed in before enforcement was disabled is still *identified* —
-  // which is what stamps ownership on the rows they create and what makes
-  // /api/auth/me answer. Costs one indexed lookup, and only when a cookie is
-  // actually present.
+  // who signed in before enforcement was disabled is still *identified*. That
+  // identity reaches the request context, which is what stamps ownership on
+  // the rows they create, and it is what makes /api/auth/me answer. Costs one
+  // indexed lookup, and only when a cookie is actually present.
   const secret = presentedSessionSecret(req);
   if (secret) {
     const resolved = resolveSession(secret);

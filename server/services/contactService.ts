@@ -21,6 +21,7 @@ import {
   isBase64DataUri,
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
+import { currentScopeOrNull } from "../tenancy/requestContext.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildAvatarUrl } from "./avatarService.ts";
 import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
@@ -94,6 +95,10 @@ function scheduleIncrementalDedupe(contactId: string) {
 function buildInsertValues(body: NewContactPayload, id: string) {
   return {
     id,
+    // Stamped from the request context, so a signed-in caller's rows are
+    // owned the moment they are written. Anonymous mode writes null, which
+    // reconcileOwnership still claims at boot for a single account.
+    ownerId: currentScopeOrNull()?.ownerId ?? null,
     name: body.name,
     firstName: body.firstName || null,
     lastName: body.lastName || null,

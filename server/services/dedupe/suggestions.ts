@@ -126,8 +126,19 @@ const _stmts = {
   // --- Merge Log ---
   insertMergeLog: sqlite.prepare(`
     INSERT INTO dedupe_merge_log
-      (id, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, duplicateSnapshot)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (id, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, duplicateSnapshot, ownerId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  /**
+   * The owner of a merge log row is the owner of the surviving contact, not
+   * whoever is signed in. A merge can run from a background scan that carries
+   * no request context, and the audit row still belongs to the person whose
+   * data was merged.
+   */
+  // tenant-lint: allow owner-checked by caller
+  getContactOwner: sqlite.prepare(`
+    SELECT ownerId FROM contacts WHERE id = ?
   `),
 
   getMergeLog: sqlite.prepare(`
@@ -445,6 +456,10 @@ export function recordMergeUnsafe(
   snapshot?: string | null,
 ): string {
   const id = crypto.randomUUID();
+  const owner = (
+    _stmts.getContactOwner.get(primaryId) as
+      { ownerId: string | null } | undefined
+  )?.ownerId;
   _stmts.insertMergeLog.run(
     id,
     primaryId,
@@ -454,6 +469,7 @@ export function recordMergeUnsafe(
     confidence,
     reasoning,
     snapshot ?? null,
+    owner ?? null,
   );
   log.info(
     "DedupeSuggestions",

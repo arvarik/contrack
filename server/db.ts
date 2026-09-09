@@ -269,7 +269,7 @@ try {
 }
 
 // =============================================================================
-// 2a. Data Cleanup — Sanitize legacy AI Search artifacts
+// 2b. Data Cleanup — Sanitize legacy AI Search artifacts
 // =============================================================================
 // These idempotent queries fix two issues in previously-hydrated contacts:
 // 1. AI-search interests stored without isAiGenerated=1 (LLM didn't set the flag)

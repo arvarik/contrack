@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 0.** New rows carry their owner. On an instance with
+  `AUTH_REQUIRED=true`, a contact, a bulk import, a list, a ghost contact from
+  an `@mention`, an AI invocation and a merge log row are all stamped with the
+  signed-in user's id as they are written. This starts working without a
+  restart. Anonymous instances still write no owner and are unaffected.
+- **Phase 0.** A benchmark script, `scripts/bench-tenancy.ts`, and the Phase 0
+  baseline under `bench/baseline-phase-0.md`. Phase 5 re-runs it to show that
+  scoping every query did not cost performance.
 - **Phase 0.** A route manifest at `server/tenancy/routeManifest.ts` names
   every route and what guards it. A test compares it against the routes the
   app really registers, so a new route cannot ship unclassified. The route

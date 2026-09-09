@@ -451,18 +451,18 @@ line, marked as a ranking change).
 
 ## 4. Acceptance criteria
 
-- [ ] CI runs on pull requests into `v2.0` (task 0.0 merged first).
-- [ ] `npm run lint` passes. `tenant-lint --report` prints the baseline count and exits 0.
-- [ ] `npm test` passes. All 575 existing tests unchanged, plus the new files.
-- [ ] `tenancy.routeManifest.test.ts` passes: every route classified, including `/api/debug/cache-stats` and the `devOnly` rows.
-- [ ] `tenancy.isolation.test.ts` exists with one `it.todo` per scoped route.
-- [ ] Stamping test green for contacts, lists, interactions (ghost), merge log, AI invocations.
-- [ ] Context tests green, including the emitter rule and the multipart-with-text-field case (or the fallback recorded in the PR).
-- [ ] `bench-tenancy` runs and `bench/baseline-phase-0.md` is committed.
-- [ ] `GET /api/contacts/action-items` returns the MCP payload.
-- [ ] A limiter `429` carries a `requestId`.
-- [ ] A single-account instance upgraded from 1.5.5 shows no behavior change. Verified by running the full existing integration suite and by a manual smoke on a copy of a real database.
-- [ ] PR description carries the raw vitest summary line and the lint output.
+- [x] CI runs on pull requests into `v2.0` (task 0.0 merged first). PR #24, then verified on #25, #26 and #27.
+- [x] `npm run lint` passes. `tenant-lint --report` prints the baseline count and exits 0. Baseline is 240 statements across 35 files.
+- [x] `npm test` passes. All existing tests unchanged, plus the new files. **The 575 in this line was stale: the real baseline on `v2.0` was 679 tests in 53 files.** After Phase 0 it is 740 passing plus 111 todo.
+- [x] `tenancy.routeManifest.test.ts` passes: every route classified, including `/api/debug/cache-stats` and the `devOnly` rows. 112 routes.
+- [x] `tenancy.isolation.test.ts` exists with one `it.todo` per scoped route. 111 todos: 80 scoped routes plus 31 collection endpoints.
+- [x] Stamping test green for contacts, lists, interactions (ghost), merge log, AI invocations. Bulk import covered too.
+- [x] Context tests green, including the emitter rule and the multipart-with-text-field case. **T25 did not reproduce on multer 2.2.0: the context is intact in the handler, so the `req.principal` fallback is not needed.**
+- [x] `bench-tenancy` runs and `bench/baseline-phase-0.md` is committed. Both the 1 x 5000 and the 10 x 2000 runs.
+- [x] `GET /api/contacts/action-items` returns the MCP payload. Reverting the mount order makes the test fail with `expected 404 to be 200`.
+- [x] A limiter `429` carries a `requestId`. It already did: `req.requestId` was already assigned above the limiter, contrary to T19.
+- [~] A single-account instance upgraded from 1.5.5 shows no behavior change. The full existing suite passes unchanged. **The manual smoke on a copy of a real database is not done and is left for the operator.**
+- [x] PR description carries the raw vitest summary line and the lint output.
 
 ---
 

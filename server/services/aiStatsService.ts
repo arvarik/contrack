@@ -19,6 +19,7 @@
 // =============================================================================
 
 import { sqlite } from "../db.ts";
+import { currentScopeOrNull } from "../tenancy/requestContext.ts";
 import { log } from "../utils/logger.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { isProviderConfigured } from "../ai/singleton.ts";
@@ -86,8 +87,8 @@ export interface FeedParams {
 // =============================================================================
 
 const insertStmt = sqlite.prepare(`
-  INSERT INTO ai_invocations (id, operation, model, tokenCount, latencyMs, cached, description, createdAt)
-  VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+  INSERT INTO ai_invocations (id, operation, model, tokenCount, latencyMs, cached, description, ownerId, createdAt)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 `);
 
 const summaryStmt = sqlite.prepare(`
@@ -152,6 +153,9 @@ export function recordInvocation(entry: InvocationEntry): void {
       entry.latencyMs,
       entry.cached ? 1 : 0,
       entry.description ?? null,
+      // A boot-time or background job has no context, so this is null. The
+      // AI stats view groups null as "system" until Phase 2 wraps those jobs.
+      currentScopeOrNull()?.ownerId ?? null,
     );
     log.debug(
       "AIStats",
