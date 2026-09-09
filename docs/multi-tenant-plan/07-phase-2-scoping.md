@@ -358,6 +358,38 @@ after).
 
 ### 2f. AI Search batches, AI cache, AI stats
 
+> **What 2f shipped, where it differs from this document.**
+>
+> - **The batch keeps its contract shape.** The table says the batch "stores
+>   `ownerId`". It is held beside the batch instead, in an `OwnedBatch` record,
+>   so what the status endpoint and the SSE stream send is still exactly
+>   `shared/aiSearchContract.ts` and the client needs no change.
+> - **`enrichmentContact` is the ownership check, and it keeps its 409.** The
+>   table asks the route to call `findManyOwned` first. That would answer a
+>   foreign id with a 404 while a deleted id still answered 409, which is two
+>   different answers for "you cannot have this". Scoping `enrichmentContact`
+>   gives both the same 409 and leaves the endpoint's contract alone.
+> - **`canStartBatch` reports which limit refused.** It returns `yours`, so the
+>   route can send `details.yours` and Phase 4 can tell "wait for your own
+>   cooldown" from "somebody else is researching". The lock stays global and
+>   the cooldown became a `Map<OwnerId, Date>` as planned.
+> - **`recordInvocation` writes an owner, never NULL.** The table expects NULL
+>   outside a request. Phase 1's `currentOwnerId()` falls back to the primary
+>   admin, so a boot job's rows are attributed to that account until 2h gives
+>   each job its own context.
+> - **`cacheTiers` is omitted, not emptied.** A member's summary has no
+>   `cacheTiers` key at all. Every account except the local owner is a member
+>   today, so the matrix test promotes and restores a role by hand until
+>   Phase 3 brings role management.
+> - **`invalidateSearchCache()` is gone.** Its one caller now names the owner,
+>   so the helper that flushed the whole `rerank` tier was deleted rather than
+>   left for somebody to reach for.
+> - **The search cache key still carries a global revision.** `runSearch`
+>   builds its key from `search_revision`, which every contact write on the
+>   instance increments, so any account's edit still costs every account its
+>   cached searches. That is a cost, not a leak, and a per-owner revision is a
+>   change to the FTS trigger set rather than to this sub-phase.
+
 **Files:** `server/services/aiSearch/jobQueue.ts`, `server/services/aiSearch/mergeEngine.ts`, `server/routes/aiSearch.ts`, `server/utils/aiCache.ts`, `server/services/aiStatsService.ts`, `server/routes/aiStats.ts`, `server/ai/services/*.ts` (cache keys), `server/services/interactionService.ts` (briefing cache key).
 
 | Function (line) | Change |
@@ -518,6 +550,32 @@ or write attributable rows run per owner inside a context.
 - [x] The existing search index, search pipeline and unit search suites pass
       unchanged.
 - [x] CHANGELOG has a Phase 2c block.
+
+### 2f (shipped)
+
+- [x] Batches carry their owner. `getBatch`, `getActiveBatches` and
+      `cancelBatch` take a scope, and a foreign batch id is `404` on status,
+      stream and cancel, before any event is written.
+- [x] The cooldown is a `Map<OwnerId, Date>`. The run lock stays global.
+- [x] The `429` is a `RateLimitedError` with `details.yours`,
+      `details.queued` and `details.retryAfterSeconds`, so it carries a request
+      id like every other error. The frontend reads the message off the
+      standard envelope through `apiFetch`.
+- [x] `getSummary(scope, { admin })` and `getFeed(scope, params)` filter by
+      owner using `idx_ai_inv_owner_created`, asserted with
+      `EXPLAIN QUERY PLAN`. `cacheTiers` is omitted for a member.
+- [x] `ownerKey` and `invalidateForOwner` exist, `rerank`, `synthesis`,
+      `briefing` and `dailyInsight` use them, and `mergeEngine` and
+      `contactService` invalidate one owner at a time.
+- [x] `processBatch` wraps the whole run in `runWithContext` with the
+      starter's scope, so its invocation rows and cache keys name that account.
+- [x] `tenant-lint --strict` passes for the six files this sub-phase touches
+      that hold SQL.
+- [x] Matrix tests are real and green for the four AI Search routes and both
+      AI stats routes, and `isolated: true` for each.
+- [x] The existing AI Search and AI hardening suites pass with their
+      assertions unchanged.
+- [x] CHANGELOG has a Phase 2f block.
 
 ### The whole phase
 

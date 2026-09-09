@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2f.** AI research batches belong to the account that started them.
+  Polling a batch, opening its live stream, or cancelling it works for its own
+  account and answers `404` for everybody else, with the same body an id that
+  never existed answers. A batch refuses a contact the caller does not own
+  before it spends a single token.
+- **Phase 2f.** The five-minute research cooldown is per account. One person
+  finishing a batch used to make everybody else on the instance wait. The
+  single-batch run lock stays instance-wide, because the provider API key it
+  protects is shared.
+- **Phase 2f.** Starting a batch too soon now answers with the same error
+  shape as every other endpoint, including a request id, and says whether the
+  refusal is the caller's own cooldown or somebody else's batch holding the
+  shared lock. It was the one endpoint that answered with a bare message.
+- **Phase 2f.** The AI stats page counts the caller's own invocations, tokens
+  and cost. It described every account's AI use before. The shared in-process
+  cache counters stay, for an admin only, because they describe the instance
+  rather than a person.
+- **Phase 2f.** Editing a contact clears that account's cached AI work and
+  leaves everybody else's alone. Every affected cache is keyed by account now,
+  so one person adding a contact no longer costs every other account a fresh
+  search, briefing and daily insight through a paid provider.
+
 - **Phase 2c.** Search returns the caller's own contacts and nobody else's, in
   every channel. Keyword search, the semantic pipeline and its NDJSON stream,
   the executive brief, the hard filters behind a parsed query, and the trait
