@@ -1,64 +1,41 @@
-/**
- * useScrollRestoration — Persists the scroll position of a scrollable container
- * across navigations using sessionStorage.
- *
- * Usage:
- *   const scrollRef = useScrollRestoration('contact-list');
- *   <div ref={scrollRef} className="overflow-y-auto">...</div>
- *
- * The key should be unique per scroll container (e.g. the route name).
- * Position is saved on scroll (debounced) and on unmount for safety.
- * Restored after a single animation frame to allow layout to settle.
- */
-import { useRef, useEffect } from "react";
+import { useRef, useLayoutEffect } from "react";
 
-const STORAGE_PREFIX = "contrack_scroll_";
-const DEBOUNCE_MS = 150;
-
-export const useScrollRestoration = <T extends HTMLElement = HTMLDivElement>(
+/** Restore a container after its data loads. Storage failures never interrupt navigation. */
+export function useScrollRestoration<T extends HTMLElement = HTMLDivElement>(
   key: string,
-) => {
+  ready = true,
+) {
   const ref = useRef<T>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    // Restore position after layout paint
-    const saved = sessionStorage.getItem(`${STORAGE_PREFIX}${key}`);
-    if (saved !== null) {
-      const pos = parseInt(saved, 10);
-      requestAnimationFrame(() => {
-        if (ref.current) ref.current.scrollTop = pos;
-      });
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || !ready) return;
+    const storageKey = `contrack_scroll_${key}`;
+    let position = 0;
+    try {
+      const saved = Number(sessionStorage.getItem(storageKey));
+      if (Number.isFinite(saved) && saved > 0) position = saved;
+    } catch {
+      /* Storage can be disabled. */
     }
-
-    // Save on scroll (debounced)
+    element.scrollTop = position;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const save = () => {
+      try {
+        sessionStorage.setItem(storageKey, String(element.scrollTop));
+      } catch {
+        /* Scrolling also works without storage. */
+      }
+    };
     const onScroll = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        if (ref.current) {
-          sessionStorage.setItem(
-            `${STORAGE_PREFIX}${key}`,
-            String(ref.current.scrollTop),
-          );
-        }
-      }, DEBOUNCE_MS);
+      clearTimeout(timer);
+      timer = setTimeout(save, 150);
     };
-
-    el.addEventListener("scroll", onScroll, { passive: true });
-
+    element.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      el.removeEventListener("scroll", onScroll);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      // Also save on unmount (catch cases where scroll didn't fire).
-      // `el` is captured from effect setup — by cleanup time `ref.current`
-      // may already be null (React detaches refs before running cleanups),
-      // which silently skipped this save.
-      sessionStorage.setItem(`${STORAGE_PREFIX}${key}`, String(el.scrollTop));
+      element.removeEventListener("scroll", onScroll);
+      clearTimeout(timer);
+      save();
     };
-  }, [key]);
-
+  }, [key, ready]);
   return ref;
-};
+}

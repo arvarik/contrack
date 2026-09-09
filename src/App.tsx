@@ -176,12 +176,12 @@ const ResponsiveLayout = () => {
   // Full-page views (cleanup, search, pulse, dev) take the full main area
   if (isCleanup || isSearch || isPulse || isDev) {
     return (
-      <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
+      <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
         <div className="hidden md:flex shrink-0">
           <Sidebar />
         </div>
-        <main className="flex-1 h-full overflow-hidden relative flex">
-          <div className="flex-1 h-full overflow-hidden">
+        <main className="flex-1 min-w-0 h-full overflow-hidden relative flex">
+          <div className="flex-1 min-w-0 h-full overflow-hidden">
             <Routes>
               <Route
                 path="/settings/*"
@@ -238,7 +238,7 @@ const ResponsiveLayout = () => {
   }
 
   return (
-    <div className="h-screen w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
+    <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
       {/*
         The sidebar used to be suppressed (`hidden lg:flex`) whenever a contact
         was open, which meant that between 768 and 1023 px — an iPad in
@@ -296,7 +296,7 @@ const ResponsiveLayout = () => {
         <main
           className={`
           ${isContactSelected ? "flex" : "hidden lg:flex"}
-          flex-1 bg-surface z-10 h-full overflow-hidden relative flex-col
+          flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col
         `}
         >
           <Routes location={location}>

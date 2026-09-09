@@ -160,9 +160,13 @@ export const ContactProfile = ({
   });
 
   // ── Event handlers ────────────────────────────────────────────────────
-  const handleUpdate = (field: string, val: string) => {
-    if (!id) return;
-    updateContact.mutate({ id, data: { [field]: val } });
+  const handleUpdate = async (field: string, val: string) => {
+    try {
+      await updateContact.mutateAsync({ id, data: { [field]: val } });
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   // Delete confirmation — uses <Modal> instead of native confirm()

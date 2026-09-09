@@ -63,12 +63,20 @@ export function useContactListFilters(contacts: Contact[]) {
   // during the debounce window, causing the "character deletion" bug.
   const isInternalUpdateRef = useRef(false);
 
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    [],
+  );
+
   // Sync URL → local state ONLY for external navigation events
   useEffect(() => {
     if (isInternalUpdateRef.current) {
       isInternalUpdateRef.current = false;
       return;
     }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     const urlQ = searchParams.get("q") ?? "";
     setInputValue((prev) => (prev === urlQ ? prev : urlQ));
   }, [searchParams]);
@@ -125,7 +133,9 @@ export function useContactListFilters(contacts: Contact[]) {
 
   // ── Filtered + sorted contacts ────────────────────────────────────────
   const filteredContacts = useMemo(() => {
-    let result = contacts.filter((contact) => !contact.isArchived);
+    let result = contacts.filter(
+      (contact) => !contact.isArchived && !contact.isGhost,
+    );
 
     // 1. Apply List Filter
     if (filterMode !== "all") {
@@ -181,8 +191,9 @@ export function useContactListFilters(contacts: Contact[]) {
           const phoneMatch = contact.phones.some((p) => {
             const normalized = normalizePhone(p.phone);
             return (
-              normalized.includes(cleanPhoneQuery) ||
-              cleanPhoneQuery.includes(normalized)
+              normalized.length > 0 &&
+              (normalized.includes(cleanPhoneQuery) ||
+                cleanPhoneQuery.includes(normalized))
             );
           });
           if (phoneMatch) score += 10;

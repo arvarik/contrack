@@ -240,6 +240,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                       {pref}
                     </span>
                     <button
+                      aria-label={`Remove preference ${pref}`}
                       onClick={() => {
                         const newPrefs = contact
                           .preferences!.split(",")
@@ -314,6 +315,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                       {interest.interest}
                     </span>
                     <button
+                      aria-label={`Remove interest ${interest.interest}`}
                       onClick={() => handleRemoveInterest(interest.id)}
                       className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                     >
