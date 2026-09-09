@@ -32,7 +32,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "eslint . && tsc --noEmit",
+    "lint": "eslint . && tsc --noEmit && node scripts/tenant-lint.mjs --report",
     "lint:js": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

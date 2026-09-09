@@ -91,16 +91,6 @@ async function startServer() {
 
   const app = createApp({ enableRequestLogging: true });
 
-  // ── Cache diagnostics (dev only) ─────────────────────────────────────────
-  // Exposes hit/miss counters and entry counts for all aiCache tiers.
-  // Useful for debugging: curl http://localhost:3210/api/debug/cache-stats
-  if (process.env.NODE_ENV !== "production") {
-    const { aiCache } = await import("./server/utils/aiCache.ts");
-    app.get("/api/debug/cache-stats", (_req, res) => {
-      res.json(aiCache.getStats());
-    });
-  }
-
   // 404 catch-all for unknown /api/* paths — runs immediately after the
   // API routers so we don't fall through to Vite or the SPA index.html.
   // Non-/api/* paths are passed through to Vite/static below.
