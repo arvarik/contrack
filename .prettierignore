@@ -1,0 +1,5 @@
+# Multi-tenant implementation plan. These are working design documents that
+# are tracked on v2.0 so reviewers can follow the references in each PR. They
+# are not shipped source, and reformatting them would rewrite the hand-aligned
+# tables the plan depends on.
+docs/multi-tenant-plan/
