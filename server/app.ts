@@ -30,6 +30,7 @@ import { aiSettingsRouter } from "./routes/aiSettings.ts";
 import { avatarRouter } from "./routes/avatar.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import { attachPrincipal, requireAuth } from "./middleware/auth.ts";
+import { attachRequestContext } from "./tenancy/requestContext.ts";
 import { authRouter } from "./routes/auth.ts";
 import { healthRouter } from "./routes/health.ts";
 import { reconcileOwnership } from "./services/authService.ts";
@@ -169,6 +170,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // know even for callers that are nobody.
   app.use(attachPrincipal);
 
+  // Carry who is asking through the async call tree, so an insert can stamp
+  // ownerId without threading a parameter through every signature. Mounted
+  // after attachPrincipal because it reads req.principal. Attribution only:
+  // reads and writes of owned data take an explicit Scope.
+  app.use(attachRequestContext);
+
   // Auth endpoints must stay reachable pre-auth (status, setup, login);
   // everything mounted after requireAuth — uploads and all other /api routes —
   // is gated when AUTH_REQUIRED or API_TOKEN is configured.
@@ -199,9 +206,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/link-preview", linkPreviewRouter);
   app.use("/api/search", searchRouter);
   app.use("/api/lists", listsRouter);
+  // mcpRouter first: it registers the literal GET /contacts/action-items,
+  // which contactsRouter's GET /contacts/:id would otherwise capture as an
+  // id and answer with a 404. Express matches in mount order.
+  app.use("/api", mcpRouter);
   app.use("/api", contactsRouter);
   app.use("/api", interactionsRouter);
-  app.use("/api", mcpRouter);
   app.use("/api", dedupeRouter);
   app.use("/api", actionItemsRouter);
   app.use("/api", dashboardRouter);

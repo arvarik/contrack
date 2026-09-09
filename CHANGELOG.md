@@ -18,8 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request makes. Prettier and ESLint skip that folder, so the design
   documents and their benchmark scripts stay exactly as written.
 
+### Fixed
+
+- **Phase 0.** `GET /api/contacts/action-items` works again. `contactsRouter`
+  mounted before `mcpRouter`, so `GET /contacts/:id` captured `action-items`
+  as a contact id and answered `404`. The route was unreachable, so no
+  working client changes behavior. The MCP router now mounts first.
+
 ### Added
 
+- **Phase 0.** The request context, `server/tenancy/scope.ts` and
+  `server/tenancy/requestContext.ts`. A request now carries who is asking
+  through the async call tree, which later phases use to stamp ownership.
+  Nothing reads it on the data path yet, so behavior is unchanged.
 - **Phase 0.** A unit test pins the BM25 weighting rule. `bm25()` reads its
   weights by column position and counts `UNINDEXED` columns, so
   `contacts_fts` needs one weight per column and `contactId` needs a zero.
