@@ -196,7 +196,7 @@ async function main(): Promise<void> {
           );
           if (!contact) continue;
           for (let n = 0; n < INTERACTIONS_PER_CONTACT; n++) {
-            interactionService.createInteraction(contact.id, {
+            interactionService.createInteraction(scope, contact.id, {
               type: "note",
               title: `Touchpoint ${n}`,
               content: `Discussed roadmap and budget, round ${n}.`,

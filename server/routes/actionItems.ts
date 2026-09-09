@@ -21,8 +21,9 @@ import {
   actionItemCreateSchema,
   actionItemUpdateSchema,
 } from "../utils/validators.ts";
-import { AppError } from "../utils/AppError.ts";
+import { NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get(
   "/action-items",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const items = actionItemService.getAllPending();
+    const items = actionItemService.getAllPending(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/action-items → ${items.length}`);
     res.json(items);
   }),
@@ -42,7 +43,7 @@ router.get(
   "/action-items/completed",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const items = actionItemService.getRecentlyCompleted();
+    const items = actionItemService.getRecentlyCompleted(scopeOf(req));
     log.debug(
       "API",
       `[${rid}] GET /api/action-items/completed → ${items.length}`,
@@ -55,7 +56,7 @@ router.get(
   "/action-items/count",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const count = actionItemService.getUrgentCount();
+    const count = actionItemService.getUrgentCount(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/action-items/count → ${count}`);
     res.json({ count });
   }),
@@ -68,8 +69,12 @@ router.patch(
   validateBody(actionItemUpdateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const updated = actionItemService.update(String(req.params.id), req.body);
-    if (!updated) throw new AppError("Action item not found", 404);
+    const updated = actionItemService.update(
+      scopeOf(req),
+      String(req.params.id),
+      req.body,
+    );
+    if (!updated) throw new NotFoundError("Action item");
     log.info(
       "API",
       `[${rid}] PATCH /api/action-items/${String(req.params.id)}`,
@@ -82,8 +87,11 @@ router.patch(
   "/action-items/:id/complete",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const completed = actionItemService.complete(String(req.params.id));
-    if (!completed) throw new AppError("Action item not found", 404);
+    const completed = actionItemService.complete(
+      scopeOf(req),
+      String(req.params.id),
+    );
+    if (!completed) throw new NotFoundError("Action item");
     log.info(
       "API",
       `[${rid}] PATCH /api/action-items/${String(req.params.id)}/complete`,
@@ -96,8 +104,11 @@ router.delete(
   "/action-items/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const success = actionItemService.delete(String(req.params.id));
-    if (!success) throw new AppError("Action item not found", 404);
+    const success = actionItemService.delete(
+      scopeOf(req),
+      String(req.params.id),
+    );
+    if (!success) throw new NotFoundError("Action item");
     log.info(
       "API",
       `[${rid}] DELETE /api/action-items/${String(req.params.id)}`,
@@ -113,7 +124,10 @@ router.get(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const items = actionItemService.getByContactId(String(req.params.id));
+    const items = actionItemService.getByContactId(
+      scopeOf(req),
+      String(req.params.id),
+    );
     log.debug(
       "API",
       `[${rid}] GET /api/contacts/${String(req.params.id)}/action-items → ${items.length}`,
@@ -129,7 +143,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const { title, dueAt } = req.body;
-    const item = actionItemService.create(String(req.params.id), title, dueAt);
+    const item = actionItemService.create(
+      scopeOf(req),
+      String(req.params.id),
+      title,
+      dueAt,
+    );
     log.info(
       "API",
       `[${rid}] POST /api/contacts/${String(req.params.id)}/action-items → "${title}"`,

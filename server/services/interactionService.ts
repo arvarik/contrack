@@ -1,4 +1,4 @@
-import { assertContactExists } from "./contactGuard.ts";
+import { assertOwnedContact } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
@@ -6,7 +6,7 @@ import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import emlFormat from "eml-format";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { log } from "../utils/logger.ts";
 import {
   extractMentions,
@@ -15,7 +15,9 @@ import {
 } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
 import { aiCache, contentHash } from "../utils/aiCache.ts";
-import { currentOwnerId } from "../tenancy/requestContext.ts";
+import { runWithContext } from "../tenancy/requestContext.ts";
+import type { Scope } from "../tenancy/scope.ts";
+import { contactRepo } from "../repositories/contactRepository.ts";
 import { AppError } from "../utils/AppError.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
 import { SharedWork } from "../ai/workQueue.ts";
@@ -50,8 +52,15 @@ import { getErrorMessage } from "../utils/helpers.ts";
  * Background ghost-contact extraction from an interaction note.
  * Runs asynchronously via setTimeout(0) so it never blocks the HTTP response.
  * Errors are caught and logged — they must never surface to the caller.
+ *
+ * The scope arrives as an argument, not from the async context. A name the
+ * model returns is matched against the caller's own contacts only, and a name
+ * that matches nothing becomes a ghost the caller owns. Without the owner in
+ * the match, a note saying "lunch with Sarah" would link to a stranger's
+ * Sarah, and every later read of that mention would cross the boundary.
  */
 async function runMentionExtraction(
+  scope: Scope,
   interactionId: string,
   contactId: string,
   content: string,
@@ -62,9 +71,10 @@ async function runMentionExtraction(
 
     const current = sqlite
       .prepare(
-        "SELECT i.content FROM interactions i JOIN contacts c ON c.id = i.contactId WHERE i.id = ? AND i.contactId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL",
+        "SELECT i.content FROM interactions i JOIN contacts c ON c.id = i.contactId WHERE i.id = ? AND i.ownerId = ? AND i.contactId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL",
       )
-      .get(interactionId, contactId) as { content: string } | undefined;
+      .get(interactionId, scope.ownerId, contactId) as
+      { content: string } | undefined;
     if (!current || current.content !== content) return;
     sqlite.transaction(() => {
       const mappedMentions = [];
@@ -72,7 +82,12 @@ async function runMentionExtraction(
         let existing = db
           .select()
           .from(schema.contacts)
-          .where(eq(schema.contacts.name, m.name))
+          .where(
+            and(
+              eq(schema.contacts.name, m.name),
+              eq(schema.contacts.ownerId, scope.ownerId),
+            ),
+          )
           .get();
         if (!existing) {
           const ghostId = crypto.randomUUID();
@@ -87,9 +102,7 @@ async function runMentionExtraction(
               company: m.company || null,
               isGhost: 1,
               themeColor: newTheme,
-              // Mention extraction is started inside the request that created
-              // the interaction, so the context still carries that caller.
-              ownerId: currentOwnerId(),
+              ownerId: scope.ownerId,
             })
             .returning()
             .get();
@@ -104,7 +117,12 @@ async function runMentionExtraction(
       }
       db.update(schema.interactions)
         .set({ mentions: JSON.stringify(mappedMentions) })
-        .where(eq(schema.interactions.id, interactionId))
+        .where(
+          and(
+            eq(schema.interactions.id, interactionId),
+            eq(schema.interactions.ownerId, scope.ownerId),
+          ),
+        )
         .run();
     })();
   } catch (e: unknown) {
@@ -118,23 +136,27 @@ async function runMentionExtraction(
 
 const briefings = new SharedWork<string[]>();
 
-function briefingSource(contactId: string) {
+function briefingSource(scope: Scope, contactId: string) {
   const contact = sqlite
     .prepare(
-      "SELECT id, name, company, role, headline, about, location, preferences, lastContactedAt FROM contacts WHERE id = ? AND deletedAt IS NULL AND canonicalId IS NULL",
+      "SELECT id, name, company, role, headline, about, location, preferences, lastContactedAt FROM contacts WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL",
     )
-    .get(contactId) as Record<string, unknown> | undefined;
+    .get(contactId, scope.ownerId) as Record<string, unknown> | undefined;
   if (!contact) throw new AppError("Contact is no longer available.", 404);
   const interactions = sqlite
     .prepare(
-      "SELECT id, type, title, content, date FROM interactions WHERE contactId = ? ORDER BY date DESC, id DESC LIMIT 15",
+      "SELECT id, type, title, content, date FROM interactions WHERE contactId = ? AND ownerId = ? ORDER BY date DESC, id DESC LIMIT 15",
     )
-    .all(contactId) as Record<string, unknown>[];
+    .all(contactId, scope.ownerId) as Record<string, unknown>[];
   return { contact, interactions };
 }
 
 export const interactionService = {
-  getTimeline(contactId: string) {
+  getTimeline(scope: Scope, contactId: string) {
+    // Every arm carries the owner. The timeline is a union of "interactions on
+    // this contact" and "interactions that mention it", and the second arm
+    // reaches through `interaction_mentions`, which has no owner column of its
+    // own. `i.ownerId` gates both arms at the row that does have one.
     const raw = sqlite
       .prepare(
         `
@@ -143,17 +165,24 @@ export const interactionService = {
         CASE WHEN i.contactId != ? THEN i.contactId ELSE NULL END as isViaId,
         (
           SELECT json_group_array(json_object('id', a.id, 'title', a.title, 'dueAt', a.dueAt, 'completedAt', a.completedAt)) 
-          FROM action_items a WHERE a.interactionId = i.id
+          FROM action_items a WHERE a.interactionId = i.id AND a.ownerId = ?
         ) as actionItemsRaw
       FROM interactions i
-      LEFT JOIN contacts original ON i.contactId = original.id
-      WHERE i.contactId = ? OR i.id IN (SELECT interactionId FROM interaction_mentions WHERE contactId = ?)
+      LEFT JOIN contacts original ON i.contactId = original.id AND original.ownerId = ?
+      WHERE i.ownerId = ?
+        AND (i.contactId = ? OR i.id IN (SELECT interactionId FROM interaction_mentions WHERE contactId = ?))
       ORDER BY i.date DESC
     `,
       )
-      .all(contactId, contactId, contactId, contactId) as Array<
-      Record<string, unknown>
-    >;
+      .all(
+        contactId,
+        contactId,
+        scope.ownerId,
+        scope.ownerId,
+        scope.ownerId,
+        contactId,
+        contactId,
+      ) as Array<Record<string, unknown>>;
 
     return raw.map((row) => {
       let actionItems = [];
@@ -171,8 +200,12 @@ export const interactionService = {
     });
   },
 
-  createInteraction(contactId: string, body: CreateInteractionPayload) {
-    assertContactExists(contactId);
+  createInteraction(
+    scope: Scope,
+    contactId: string,
+    body: CreateInteractionPayload,
+  ) {
+    assertOwnedContact(scope, contactId);
     const { type, title, content, date, duration, source } = body;
     const id = crypto.randomUUID();
     const now = date || new Date().toISOString();
@@ -183,6 +216,7 @@ export const interactionService = {
         .values({
           id,
           contactId,
+          ownerId: scope.ownerId,
           type,
           title,
           content: content || null,
@@ -202,30 +236,36 @@ export const interactionService = {
           (m) => m[1],
         );
         if (explicitMentionIds.length > 0) {
+          // These ids come from the request body. Before this they were
+          // checked for existence alone, so any id at all linked a mention row
+          // to a contact the caller cannot see. One scoped statement returns
+          // the subset the caller owns, and the rest are dropped in silence:
+          // reporting them would tell the caller which ids exist.
+          const owned = contactRepo.findManyOwned(scope, explicitMentionIds);
           const insertStmt = sqlite.prepare(
             "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
           );
-          for (const mId of explicitMentionIds) {
-            if (
-              sqlite
-                .prepare(
-                  "SELECT 1 FROM contacts WHERE id = ? AND deletedAt IS NULL",
-                )
-                .get(mId)
-            )
-              insertStmt.run(id, mId);
+          for (const row of owned) {
+            // `deletedAt` is a state filter, not the boundary. The boundary is
+            // the owner, and that came out of SQL above.
+            if (row.deletedAt == null) insertStmt.run(id, row.id);
           }
         }
       }
 
       db.update(schema.contacts)
         .set({
-          lastContactedAt: sql`(SELECT MAX(date) FROM interactions WHERE contactId = ${contactId})`,
+          lastContactedAt: sql`(SELECT MAX(date) FROM interactions WHERE contactId = ${contactId} AND ownerId = ${scope.ownerId})`,
           updatedAt: new Date().toISOString(),
           aiBriefing: null,
           aiBriefingAt: null,
         })
-        .where(eq(schema.contacts.id, contactId))
+        .where(
+          and(
+            eq(schema.contacts.id, contactId),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
         .run();
 
       // Atomically create an action item if provided alongside the interaction
@@ -233,13 +273,14 @@ export const interactionService = {
         sqlite
           .prepare(
             `
-          INSERT INTO action_items (id, contactId, interactionId, title, dueAt)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO action_items (id, contactId, ownerId, interactionId, title, dueAt)
+          VALUES (?, ?, ?, ?, ?, ?)
         `,
           )
           .run(
             crypto.randomUUID(),
             contactId,
+            scope.ownerId,
             id,
             body.actionItem.title,
             body.actionItem.dueAt,
@@ -252,16 +293,27 @@ export const interactionService = {
 
       return res;
     })();
-    // Schedule background ghost-contact extraction — never blocks the response
+    // Schedule background ghost-contact extraction — never blocks the response.
+    // The scope is captured here and passed in. AsyncLocalStorage does survive
+    // a timer, but rule 7 wants the owner to be an argument of the job rather
+    // than a property of whatever context happens to be current when it runs.
     if (content && process.env.DISABLE_BACKGROUND_JOBS !== "true") {
       setTimeout(() => {
-        runMentionExtraction(id, contactId, content);
+        runWithContext(
+          { requestId: `mentions-${id}`, principal: null, scope },
+          () => {
+            runMentionExtraction(scope, id, contactId, content);
+          },
+        );
       }, 0);
     }
 
     // Invalidate cached briefing for this contact — a new interaction means
     // any cached briefing is stale (it doesn't include this interaction)
     aiCache.invalidate("briefing", contactId);
+    // TODO(2f): narrow to this owner once invalidateForOwner exists. A whole
+    // tier flush is conservative, never wrong, and only costs other owners a
+    // regeneration.
     aiCache.invalidate("dailyInsight");
 
     // Immediately recompute relationship score for this contact
@@ -270,9 +322,13 @@ export const interactionService = {
     return result;
   },
 
-  async generateBriefing(contactId: string, signal?: AbortSignal) {
+  async generateBriefing(
+    scope: Scope,
+    contactId: string,
+    signal?: AbortSignal,
+  ) {
     signal?.throwIfAborted();
-    const source = briefingSource(contactId);
+    const source = briefingSource(scope, contactId);
     const fingerprint = JSON.stringify(source);
     const model = resolveCapability("quick");
     const cacheKey = `${contactId}::${contentHash(JSON.stringify([source, model?.providerId, model?.model]))}`;
@@ -287,7 +343,7 @@ export const interactionService = {
           budget,
         );
         budget.throwIfAborted();
-        if (JSON.stringify(briefingSource(contactId)) !== fingerprint)
+        if (JSON.stringify(briefingSource(scope, contactId)) !== fingerprint)
           throw new AppError(
             "This contact changed during briefing generation. Try again.",
             409,
@@ -297,7 +353,12 @@ export const interactionService = {
             aiBriefing: JSON.stringify(points),
             aiBriefingAt: new Date().toISOString(),
           })
-          .where(eq(schema.contacts.id, contactId))
+          .where(
+            and(
+              eq(schema.contacts.id, contactId),
+              eq(schema.contacts.ownerId, scope.ownerId),
+            ),
+          )
           .run();
         aiCache.set("briefing", cacheKey, points);
         return points;
@@ -306,24 +367,29 @@ export const interactionService = {
     );
   },
 
-  promoteGhost(contactId: string) {
-    const contact = db
-      .select()
-      .from(schema.contacts)
-      .where(eq(schema.contacts.id, contactId))
-      .get();
+  promoteGhost(scope: Scope, contactId: string) {
+    const contact = contactRepo.findOwned(scope, contactId);
     if (!contact) return null;
 
     return db
       .update(schema.contacts)
       .set({ isGhost: 0, updatedAt: new Date().toISOString() })
-      .where(eq(schema.contacts.id, contactId))
+      .where(
+        and(
+          eq(schema.contacts.id, contactId),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .returning()
       .get();
   },
 
-  async handleAttachment(contactId: string, file: Express.Multer.File) {
-    assertContactExists(contactId);
+  async handleAttachment(
+    scope: Scope,
+    contactId: string,
+    file: Express.Multer.File,
+  ) {
+    assertOwnedContact(scope, contactId);
     const now = new Date().toISOString();
     let content: string | null = null;
     const isEmail = file.originalname.toLowerCase().endsWith(".eml");
@@ -345,18 +411,19 @@ export const interactionService = {
       );
     }
     // The contact can disappear during email summarization.
-    assertContactExists(contactId);
+    assertOwnedContact(scope, contactId);
     const result = sqlite.transaction(() => {
       const interaction = db
         .insert(schema.interactions)
         .values({
           id: crypto.randomUUID(),
           contactId,
+          ownerId: scope.ownerId,
           type: isEmail ? "email" : "note",
           title: `${isEmail ? "Email Import" : "Attached File"}: ${file.originalname}`,
           date: now,
           content,
-          fileUrl: ownerUploadUrl(currentOwnerId(), "files", file.filename),
+          fileUrl: ownerUploadUrl(scope.ownerId, "files", file.filename),
           fileName: file.originalname,
           fileType: isEmail ? "message/rfc822" : file.mimetype,
         })
@@ -369,12 +436,17 @@ export const interactionService = {
           aiBriefing: null,
           aiBriefingAt: null,
         })
-        .where(eq(schema.contacts.id, contactId))
+        .where(
+          and(
+            eq(schema.contacts.id, contactId),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
         .run();
       return interaction;
     })();
     aiCache.invalidate("briefing", contactId);
-    aiCache.invalidate("dailyInsight");
+    // TODO(2f): narrow to this owner once invalidateForOwner exists.
     aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(contactId);
     return result;
@@ -388,14 +460,19 @@ export const interactionService = {
    * to preserve audit-trail integrity. Any other keys in `body` are silently
    * ignored to prevent accidental data corruption.
    */
-  updateInteraction(id: string, body: UpdateInteractionPayload) {
+  updateInteraction(scope: Scope, id: string, body: UpdateInteractionPayload) {
     const existing = db
       .select()
       .from(schema.interactions)
-      .where(eq(schema.interactions.id, id))
+      .where(
+        and(
+          eq(schema.interactions.id, id),
+          eq(schema.interactions.ownerId, scope.ownerId),
+        ),
+      )
       .get();
     if (!existing) return null;
-    assertContactExists(existing.contactId);
+    assertOwnedContact(scope, existing.contactId);
 
     const { title, content } = body;
     const updates: {
@@ -413,43 +490,67 @@ export const interactionService = {
     const updated = db
       .update(schema.interactions)
       .set(updates)
-      .where(eq(schema.interactions.id, id))
+      .where(
+        and(
+          eq(schema.interactions.id, id),
+          eq(schema.interactions.ownerId, scope.ownerId),
+        ),
+      )
       .returning()
       .get();
 
     sqlite
       .prepare(
-        "UPDATE contacts SET aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ?",
+        "UPDATE contacts SET aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?",
       )
-      .run(existing.contactId);
+      .run(existing.contactId, scope.ownerId);
     aiCache.invalidate("briefing", existing.contactId);
+    // TODO(2f): narrow to this owner once invalidateForOwner exists.
     aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(existing.contactId);
     return updated;
   },
 
-  deleteInteraction(id: string) {
+  deleteInteraction(scope: Scope, id: string) {
     const existing = db
       .select()
       .from(schema.interactions)
-      .where(eq(schema.interactions.id, id))
+      .where(
+        and(
+          eq(schema.interactions.id, id),
+          eq(schema.interactions.ownerId, scope.ownerId),
+        ),
+      )
       .get();
     if (!existing) return false;
-    assertContactExists(existing.contactId);
+    assertOwnedContact(scope, existing.contactId);
 
     sqlite.transaction(() => {
       db.delete(schema.interactions)
-        .where(eq(schema.interactions.id, id))
+        .where(
+          and(
+            eq(schema.interactions.id, id),
+            eq(schema.interactions.ownerId, scope.ownerId),
+          ),
+        )
         .run();
       sqlite
         .prepare(
-          "UPDATE contacts SET lastContactedAt = (SELECT MAX(date) FROM interactions WHERE contactId = ?), aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ?",
+          "UPDATE contacts SET lastContactedAt = (SELECT MAX(date) FROM interactions WHERE contactId = ? AND ownerId = ?), aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?",
         )
-        .run(existing.contactId, existing.contactId);
+        .run(
+          existing.contactId,
+          scope.ownerId,
+          existing.contactId,
+          scope.ownerId,
+        );
     })();
     aiCache.invalidate("briefing", existing.contactId);
+    // TODO(2f): narrow to this owner once invalidateForOwner exists.
     aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(existing.contactId);
+    // The file goes only after the scoped delete succeeded. A delete that the
+    // owner predicate refused must leave the attachment on disk.
     if (existing.fileUrl?.startsWith("/uploads/")) {
       const filePath = resolveUploadPath(existing.fileUrl);
       try {
@@ -464,7 +565,11 @@ export const interactionService = {
     return true;
   },
 
-  getRelationships(contactId: string, limit: number) {
+  getRelationships(scope: Scope, contactId: string, limit: number) {
+    // The mention graph reaches sideways through `interaction_mentions`, which
+    // carries no owner. Two of the three arms start at `interactions`, so they
+    // gate on `i.ownerId`. The third starts at a mention row, so the outer
+    // `c.ownerId` is what stops it, and it also covers the other two.
     return sqlite
       .prepare(
         `
@@ -474,14 +579,14 @@ export const interactionService = {
         SELECT im.interactionId, im.contactId as relatedContactId
         FROM interactions i
         JOIN interaction_mentions im ON i.id = im.interactionId
-        WHERE i.contactId = ?
+        WHERE i.contactId = ? AND i.ownerId = ?
   
         UNION
   
         SELECT im2.interactionId, i2.contactId as relatedContactId
         FROM interaction_mentions im2
         JOIN interactions i2 ON im2.interactionId = i2.id
-        WHERE im2.contactId = ?
+        WHERE im2.contactId = ? AND i2.ownerId = ?
   
         UNION
   
@@ -492,12 +597,21 @@ export const interactionService = {
         )
       ) shared
       JOIN contacts c ON shared.relatedContactId = c.id
-      WHERE c.id != ?
+      WHERE c.id != ? AND c.ownerId = ?
       GROUP BY c.id
       ORDER BY sharedInteractions DESC
       LIMIT ?
     `,
       )
-      .all(contactId, contactId, contactId, contactId, limit);
+      .all(
+        contactId,
+        scope.ownerId,
+        contactId,
+        scope.ownerId,
+        contactId,
+        contactId,
+        scope.ownerId,
+        limit,
+      );
   },
 };

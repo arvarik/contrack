@@ -8,8 +8,9 @@ import {
   listUpdateSchema,
 } from "../utils/validators.ts";
 import { z } from "zod";
-import { AppError } from "../utils/AppError.ts";
+import { NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const lists = listService.getAllLists();
+    const lists = listService.getAllLists(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/lists → ${lists.length}`);
     res.json(lists);
   }),
@@ -30,7 +31,7 @@ router.post(
     const rid = req.requestId;
     const { name, icon } = req.body;
 
-    const list = listService.createList(name, icon);
+    const list = listService.createList(scopeOf(req), name, icon);
     log.info("API", `[${rid}] POST /api/lists → "${name.trim()}" (${list.id})`);
     res.status(201).json(list);
   }),
@@ -45,7 +46,7 @@ router.put(
   ),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const count = listService.reorderLists(req.body.orderedIds);
+    const count = listService.reorderLists(scopeOf(req), req.body.orderedIds);
     log.info(
       "API",
       `[${rid}] PUT /api/lists/reorder → ${count} lists reordered`,
@@ -59,8 +60,12 @@ router.patch(
   validateBody(listUpdateSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const updated = listService.updateList(String(req.params.id), req.body);
-    if (!updated) throw new AppError("List not found", 404);
+    const updated = listService.updateList(
+      scopeOf(req),
+      String(req.params.id),
+      req.body,
+    );
+    if (!updated) throw new NotFoundError("List");
     log.info("API", `[${rid}] PATCH /api/lists/${String(req.params.id)}`);
     res.json(updated);
   }),
@@ -70,7 +75,10 @@ router.get(
   "/:id/contacts",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const contacts = listService.getListContacts(String(req.params.id));
+    const contacts = listService.getListContacts(
+      scopeOf(req),
+      String(req.params.id),
+    );
     log.debug(
       "API",
       `[${rid}] GET /api/lists/${String(req.params.id)}/contacts → ${contacts.length} contacts`,
@@ -83,7 +91,7 @@ router.delete(
   "/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const deleted = listService.deleteList(String(req.params.id));
+    const deleted = listService.deleteList(scopeOf(req), String(req.params.id));
 
     if (!deleted) {
       log.warn(
@@ -109,7 +117,11 @@ router.post(
   validateBody(z.object({ contactId: z.string().trim().min(1).max(200) })),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    listService.addMember(String(req.params.id), req.body.contactId);
+    listService.addMember(
+      scopeOf(req),
+      String(req.params.id),
+      req.body.contactId,
+    );
     log.info(
       "API",
       `[${rid}] POST /api/lists/${String(req.params.id)}/members → added ${req.body.contactId}`,
@@ -123,6 +135,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     listService.removeMember(
+      scopeOf(req),
       String(req.params.id),
       String(req.params.contactId),
     );
@@ -140,6 +153,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const count = listService.bulkAddMembers(
+      scopeOf(req),
       String(req.params.id),
       req.body.contactIds,
     );
