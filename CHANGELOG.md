@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 0.** A route manifest at `server/tenancy/routeManifest.ts` names
+  every route and what guards it. A test compares it against the routes the
+  app really registers, so a new route cannot ship unclassified. The route
+  list is recorded while the app builds, because Express 5 keeps no mount
+  path strings.
+- **Phase 0.** `scripts/tenant-lint.mjs` reports SQL over owned tables that
+  carries no owner predicate. `npm run lint` runs it in report mode, so it
+  cannot fail a build yet. The Phase 0 baseline is 240 statements across 35
+  files, committed under `bench/` so later phases can watch it reach zero.
 - **Phase 0.** The request context, `server/tenancy/scope.ts` and
   `server/tenancy/requestContext.ts`. A request now carries who is asking
   through the async call tree, which later phases use to stamp ownership.

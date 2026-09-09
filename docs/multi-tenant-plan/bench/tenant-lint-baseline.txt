@@ -1,0 +1,43 @@
+tenant-lint report (Phase 0 baseline)
+
+  statements over owned tables with no owner predicate: 240
+  allow comments with an unknown reason:                0
+  files affected:                                       35
+
+| count | file |
+| ----- | ---- |
+|    31 | server/services/contactService.ts |
+|    24 | server/services/dedupe/suggestions.ts |
+|    20 | server/services/interactionService.ts |
+|    16 | server/services/dedupe/merging.ts |
+|    16 | server/services/listService.ts |
+|    15 | server/services/dashboardService.ts |
+|    14 | server/services/actionItemService.ts |
+|     9 | server/db.ts |
+|     9 | server/services/search/localEmbeddings.ts |
+|     8 | server/routes/contacts.ts |
+|     8 | server/services/dedupe/embeddings.ts |
+|     7 | server/services/dedupe/engine.ts |
+|     7 | server/services/relationshipService.ts |
+|     6 | server/services/aiStatsService.ts |
+|     6 | server/services/exportService.ts |
+|     5 | server/services/mcpService.ts |
+|     5 | server/services/search/ftsIndex.ts |
+|     5 | server/services/zeroStateService.ts |
+|     4 | server/repositories/contactRepository.ts |
+|     3 | server/services/geocoding/queue.ts |
+|     2 | server/routes/search.ts |
+|     2 | server/services/aiSearch/mergeEngine.ts |
+|     2 | server/services/dedupe/blocking.ts |
+|     2 | server/services/dedupe/context.ts |
+|     2 | server/services/dedupe/normalization.ts |
+|     2 | server/services/search/hybridRetrieval.ts |
+|     2 | server/services/searchService.ts |
+|     1 | server/routes/dedupe/embeddings.ts |
+|     1 | server/services/aiSearch/contactSnapshot.ts |
+|     1 | server/services/contactGuard.ts |
+|     1 | server/services/dedupe/clustering.ts |
+|     1 | server/services/dedupe/passes.ts |
+|     1 | server/services/geocoding/index.ts |
+|     1 | server/services/search/indexQueue.ts |
+|     1 | server/services/search/lexical.ts |

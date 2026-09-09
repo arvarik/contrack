@@ -31,6 +31,7 @@ import { avatarRouter } from "./routes/avatar.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import { attachPrincipal, requireAuth } from "./middleware/auth.ts";
 import { attachRequestContext } from "./tenancy/requestContext.ts";
+import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
 import { healthRouter } from "./routes/health.ts";
 import { reconcileOwnership } from "./services/authService.ts";
@@ -221,6 +222,19 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/ai/stats", aiStatsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/logos", logosRouter);
+
+  // ── Cache diagnostics (dev only) ─────────────────────────────────────────
+  // Exposes hit/miss counters and entry counts for all aiCache tiers.
+  // Useful for debugging: curl http://localhost:3210/api/debug/cache-stats
+  //
+  // Registered here rather than in server.ts so the route manifest test can
+  // see it. A supertest app calls createApp() and never runs server.ts, so a
+  // route registered there is invisible to the manifest. Same NODE_ENV guard.
+  if (process.env.NODE_ENV !== "production") {
+    app.get("/api/debug/cache-stats", (_req, res) => {
+      res.json(aiCache.getStats());
+    });
+  }
 
   return app;
 }
