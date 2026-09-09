@@ -5,7 +5,8 @@ export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) =
   AND c.canonicalId IS NULL AND c.deletedAt IS NULL`;
 
 const VERSION = 2;
-const COLUMNS =
+/** Every contacts_fts column, in order. Position 0 is the UNINDEXED contactId. */
+export const COLUMNS =
   "contactId, name, company, role, headline, location, about, industry, extras, searchExpansion";
 const VALUES = `c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
   COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||

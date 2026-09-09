@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request makes. Prettier and ESLint skip that folder, so the design
   documents and their benchmark scripts stay exactly as written.
 
+### Added
+
+- **Phase 0.** A unit test pins the BM25 weighting rule. `bm25()` reads its
+  weights by column position and counts `UNINDEXED` columns, so
+  `contacts_fts` needs one weight per column and `contactId` needs a zero.
+  Search ranking does not change, because the offset this guards against was
+  already corrected in 1.5.5. Phase 1 adds two more columns to that table,
+  and this test fails if the weight list is not extended with them.
+
 ## [1.5.5] — 2026-08-09
 
 Corrections from an independent review of the v1.5.4 release, run with fresh
