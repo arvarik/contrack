@@ -23,6 +23,15 @@ export interface AccountUser {
   role: string;
   createdAt: string;
   lastLoginAt: string | null;
+  /** 'active' | 'disabled'. */
+  status: string;
+  /**
+   * 'password' for a real account, 'none' for the local owner an auth-off
+   * instance runs as. Phase 4 uses this to tell "not signed in" apart from
+   * "this instance has no accounts yet".
+   */
+  credentialState: string;
+  mustChangePassword: boolean;
 }
 
 export interface AuthStatus {
@@ -30,11 +39,16 @@ export interface AuthStatus {
   authRequired: boolean;
   /** This browser currently has one. */
   authenticated: boolean;
-  /** Gated, but no account exists yet — show the setup screen. */
+  /** Gated, but no account has a password yet — show the setup screen. */
   setupRequired: boolean;
   hasAccounts: boolean;
   user: AccountUser | null;
-  /** Contacts already here awaiting an owner. Only meaningful during setup. */
+  /**
+   * Contacts this device already holds. Only meaningful during setup, where it
+   * is what securing the instance will carry over.
+   */
+  deviceContacts: number;
+  /** The pre-2.0 name for `deviceContacts`. Removed in Phase 3. */
   existingContacts: number;
 }
 
