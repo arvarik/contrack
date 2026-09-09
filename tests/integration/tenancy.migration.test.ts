@@ -343,6 +343,7 @@ describe("booting the migrated database again", () => {
   let secondSqlite: Database.Database;
   let versionBefore: string;
   let backupsBefore: number;
+  let updatedAtBefore: Record<string, string>;
 
   beforeAll(async () => {
     versionBefore = (
@@ -351,6 +352,20 @@ describe("booting the migrated database again", () => {
         .get() as { value: string }
     ).value;
     backupsBefore = fs.readdirSync(backupDir).length;
+    // The baseline for a second boot is what the first boot left behind, not
+    // the fixture. The two differ on exactly one contact: §8's legacy
+    // follow-up backfill writes nextFollowUpAt back to it, which the test
+    // above records as expected. Comparing against the fixture here made this
+    // assertion depend on whether the first boot happened to land in the same
+    // clock second as the fixture build.
+    updatedAtBefore = Object.fromEntries(
+      (
+        sqlite.prepare("SELECT id, updatedAt FROM contacts").all() as {
+          id: string;
+          updatedAt: string;
+        }[]
+      ).map((r) => [r.id, r.updatedAt]),
+    );
 
     // A fresh module registry, so server/db.ts runs its whole boot again
     // against the file the first boot left behind.
@@ -375,7 +390,7 @@ describe("booting the migrated database again", () => {
     for (const row of secondSqlite
       .prepare("SELECT id, updatedAt FROM contacts")
       .all() as { id: string; updatedAt: string }[]) {
-      expect(row.updatedAt).toBe(fixture.contactUpdatedAt[row.id]);
+      expect(row.updatedAt, `contact ${row.id}`).toBe(updatedAtBefore[row.id]);
     }
   });
 
