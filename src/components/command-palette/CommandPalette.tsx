@@ -203,19 +203,25 @@ export const CommandPalette = () => {
   // both reduces cost and dramatically improves answer quality (partial
   // queries embed/rerank poorly compared to fully-formed questions).
   useEffect(() => {
-    if (mode !== "ai" || debouncedAiQuery.length < 3) return;
+    if (
+      !open ||
+      mode !== "ai" ||
+      debouncedAiQuery.length < 3 ||
+      aiQuery !== debouncedAiQuery
+    )
+      return;
     if (debouncedAiQuery === prevAiQueryRef.current) return;
     prevAiQueryRef.current = debouncedAiQuery;
     runSemanticSearch(debouncedAiQuery);
-  }, [mode, debouncedAiQuery, runSemanticSearch]);
+  }, [open, mode, aiQuery, debouncedAiQuery, runSemanticSearch]);
 
   // Reset mutation state when mode changes away from AI
   useEffect(() => {
-    if (mode !== "ai") {
+    if (!open || mode !== "ai" || aiQuery.length < 3) {
       resetSemanticSearch();
       prevAiQueryRef.current = "";
     }
-  }, [mode, resetSemanticSearch]);
+  }, [open, mode, aiQuery, resetSemanticSearch]);
 
   // Note: normal (FTS) searches are intentionally NOT recorded on debounce.
   // Debounced recording inevitably leaks prefixes ("Ri", "Ric", "Rich"...) as
@@ -828,66 +834,67 @@ export const CommandPalette = () => {
                   )}
 
                   {/* Loading shimmer */}
-                  {aiQuery.length >= 3 && isAiLoading && (
-                    <div className="px-1 py-2 space-y-1">
-                      <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking
-                        AI…
+                  {aiQuery.length >= 3 &&
+                    isAiLoading &&
+                    aiResults.length === 0 && (
+                      <div className="px-1 py-2 space-y-1">
+                        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3 animate-pulse" /> Asking
+                          AI…
+                        </div>
+                        <AIShimmerRow delay={0} />
+                        <AIShimmerRow delay={0.08} />
+                        <AIShimmerRow delay={0.16} />
                       </div>
-                      <AIShimmerRow delay={0} />
-                      <AIShimmerRow delay={0.08} />
-                      <AIShimmerRow delay={0.16} />
-                    </div>
-                  )}
+                    )}
 
                   {/* AI results */}
-                  {aiQuery.length >= 3 &&
-                    !isAiLoading &&
-                    aiResults.length > 0 && (
-                      <Command.Group
-                        heading={
-                          aiFallback
+                  {aiQuery.length >= 3 && aiResults.length > 0 && (
+                    <Command.Group
+                      heading={
+                        isAiLoading
+                          ? "Keyword candidates · checking with AI"
+                          : aiFallback
                             ? "Keyword Results (AI Fallback)"
                             : "AI Query Results"
-                        }
-                        className={GROUP_HEADING_PRIMARY}
-                      >
-                        {aiFallback && (
-                          <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-warning">
-                            <AlertTriangle className="w-3 h-3" />
-                            <span>
-                              AI unavailable — showing keyword matches
-                            </span>
-                          </div>
-                        )}
-                        {aiResults.map((match, i) => (
-                          <AIResultCard
-                            key={match.id}
-                            match={match}
-                            index={i}
-                            isFallback={aiFallback}
-                            onSelect={() => {
-                              recordVisit(match.id);
-                              navigate(`/contact/${match.id}`);
-                              handleClose();
-                            }}
-                            hasGroundingCapacity={
-                              groundingCapacity?.hasCapacity ?? false
-                            }
-                            isEnriching={enrichContact.isPending}
-                            enrichingContactId={enrichingContactId}
-                            onRefresh={handleRefreshContact}
-                          />
-                        ))}
-                      </Command.Group>
-                    )}
+                      }
+                      className={GROUP_HEADING_PRIMARY}
+                    >
+                      {aiFallback && !isAiLoading && (
+                        <div className="flex items-center gap-1.5 px-3 pb-1 text-xs text-warning">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>AI unavailable — showing keyword matches</span>
+                        </div>
+                      )}
+                      {aiResults.map((match, i) => (
+                        <AIResultCard
+                          key={match.id}
+                          match={match}
+                          index={i}
+                          isFallback={aiFallback}
+                          onSelect={() => {
+                            recordVisit(match.id);
+                            navigate(`/contact/${match.id}`);
+                            handleClose();
+                          }}
+                          hasGroundingCapacity={
+                            groundingCapacity?.hasCapacity ?? false
+                          }
+                          isEnriching={enrichContact.isPending}
+                          enrichingContactId={enrichingContactId}
+                          onRefresh={handleRefreshContact}
+                        />
+                      ))}
+                    </Command.Group>
+                  )}
 
                   {/* Synthesis executive brief (Feature 6) */}
                   {aiQuery.length >= 3 &&
                     !isAiLoading &&
+                    !aiFallback &&
                     aiResults.length > 0 && (
                       <SynthesisBar
-                        query={aiQuery}
+                        query={debouncedAiQuery}
                         contacts={aiResults}
                         resultCount={aiResults.length}
                         compact
@@ -915,6 +922,12 @@ export const CommandPalette = () => {
                     )}
 
                   {/* No AI matches */}
+                  {semanticSearch.isError && (
+                    <div role="alert" className="px-4 py-3 text-sm text-error">
+                      {semanticSearch.error?.message ||
+                        "Search failed. Please try again."}
+                    </div>
+                  )}
                   {aiQuery.length >= 3 &&
                     !isAiLoading &&
                     aiResults.length === 0 &&

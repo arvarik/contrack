@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { AppError } from "../../utils/AppError.ts";
 // =============================================================================
 // AI Services — Search Intelligence (Ask Contrack pipeline)
 // =============================================================================
@@ -19,6 +21,7 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 import { recordInvocation } from "../../services/aiStatsService.ts";
 import { aiCache, contentHash } from "../../utils/aiCache.ts";
 import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../promptSafety.ts";
+import { resolveCapability } from "../capabilities.ts";
 import { generateFor } from "../gateway.ts";
 import { isMockMode, safeParseJson } from "./shared.ts";
 
@@ -42,22 +45,12 @@ export async function rerankCandidates(
   plan?: QueryPlan | null,
   signal?: AbortSignal,
 ): Promise<SemanticMatchResult[]> {
-  if (isMockMode()) {
-    log.warn(
-      "AIService",
-      "Using mock rerank response due to unconfigured AI provider",
+  signal?.throwIfAborted();
+  if (isMockMode())
+    throw new AppError(
+      "AI search is unavailable. Showing keyword results.",
+      503,
     );
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    if (candidates.length > 0) {
-      return [
-        {
-          contact_id: candidates[0].id,
-          reason: "Mock result: AI provider not configured.",
-        },
-      ];
-    }
-    return [];
-  }
 
   if (candidates.length === 0) return [];
 
@@ -140,6 +133,8 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     prompt,
     responseFormat: "json",
     signal,
+    timeoutMs: 8_000,
+    maxOutputTokens: 3_000,
     jsonSchema: {
       type: "array",
       items: {
@@ -155,16 +150,31 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     },
   });
 
-  interface VerifiedMatch extends SemanticMatchResult {
-    verified_field?: string;
-    verified_value?: string;
-  }
-
-  const parsed = safeParseJson<VerifiedMatch[]>(
-    result.text,
-    "rerankCandidates",
-  );
-  if (!parsed) return [];
+  signal?.throwIfAborted();
+  const parsedResult = z
+    .array(
+      z.object({
+        contact_id: z.string().min(1).max(100),
+        reason: z.string().trim().min(1).max(600),
+        verified_field: z.enum([
+          "name",
+          "role",
+          "headline",
+          "company",
+          "location",
+          "about",
+          "industry",
+          "preferences",
+          "interests",
+        ]),
+        verified_value: z.string().trim().min(1).max(600),
+      }),
+    )
+    .max(30)
+    .safeParse(safeParseJson<unknown>(result.text, "rerankCandidates"));
+  if (!parsedResult.success)
+    throw new AppError("AI returned invalid search evidence", 502);
+  const parsed = parsedResult.data;
 
   // ── Server-side evidence verification ───────────────────────────────────
   // We re-check the LLM's claimed evidence against the actual candidate
@@ -179,8 +189,8 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     if (!haystack || !needle) return false;
     const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(
-      `(?:^|[^a-zA-Z0-9])${escaped}(?=[^a-zA-Z0-9]|$)`,
-      "i",
+      `(?:^|[^\\p{L}\\p{N}])${escaped}(?=[^\\p{L}\\p{N}]|$)`,
+      "iu",
     ).test(haystack);
   };
 
@@ -245,7 +255,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       droppedHardConstraint++;
       continue;
     }
-    if (plan?.must.companyMatchers?.length && cand.company) {
+    if (plan?.must.companyMatchers?.length) {
       const ok = plan.must.companyMatchers.some((mat) =>
         wordBoundaryMatch(cand.company ?? "", mat),
       );
@@ -266,6 +276,16 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       }
     }
 
+    if (
+      plan?.must.industryMatchers?.length &&
+      !plan.must.industryMatchers.some(
+        (matcher) =>
+          wordBoundaryMatch(cand.industry ?? "", matcher) ||
+          wordBoundaryMatch(cand.interests ?? "", matcher),
+      )
+    )
+      continue;
+    if (filtered.some((item) => item.contact_id === m.contact_id)) continue;
     filtered.push({ contact_id: m.contact_id, reason: m.reason });
   }
 
@@ -381,27 +401,20 @@ export async function synthesizeSearchResults(
     aiReason?: string;
   }[],
   plan?: QueryPlan | null,
+  signal?: AbortSignal,
 ): Promise<string> {
-  if (isMockMode()) {
-    log.warn(
-      "AIService",
-      "Using mock synthesis due to unconfigured AI provider",
-    );
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    if (contacts.length === 0) {
-      return `No contacts matched "${query}". Try rephrasing or broadening the search.`;
-    }
-    return (
-      `You have ${contacts.length} connections matching "${query}". ` +
-      `Key figures include ${contacts
-        .slice(0, 3)
-        .map((c) => c.name)
-        .join(", ")}. ` +
-      `Consider reaching out to strengthen these relationships.`
-    );
-  }
-
-  const cacheKey = query.trim().toLowerCase().replace(/\s+/g, " ");
+  signal?.throwIfAborted();
+  if (isMockMode()) throw new AppError("AI summary is unavailable", 503);
+  const capability = resolveCapability("quick");
+  const cacheKey = contentHash(
+    JSON.stringify([
+      query.trim().toLowerCase(),
+      contacts,
+      plan,
+      capability?.providerId,
+      capability?.model,
+    ]),
+  );
   const cached = aiCache.get<string>("synthesis", cacheKey);
   if (cached) {
     recordInvocation({
@@ -461,7 +474,7 @@ export async function synthesizeSearchResults(
 You are a CRM intelligence analyst. You produce a 2-3 sentence grounded executive brief about a set of contacts that match a query.
 
 CRITICAL GROUNDING RULES:
-1. NEVER make a claim that does not apply to AT LEAST 80% of the contacts shown. If you say "based in America", check every contact's [location:] tag.
+1. Every factual claim must follow from the supplied fields. State counts exactly. Describe mixed groups explicitly.
 2. NEVER invent fields you can't see. No claims about industries, roles, or seniority unless they appear in the contact summaries.
 3. If contacts span multiple regions, industries, or companies, SAY SO — do not project a false homogeneity.
 4. Write in second person ("You have...", "Your strongest...").
@@ -487,8 +500,12 @@ Write a 2-3 sentence executive brief. Every claim must be true for the contacts 
       systemPrompt,
       prompt,
       responseFormat: "text",
+      maxOutputTokens: 1500,
+      signal,
+      timeoutMs: 8_000,
     });
 
+    signal?.throwIfAborted();
     const text = result.text?.trim();
     if (!text) throw new Error("Empty synthesis response");
 
@@ -548,11 +565,20 @@ Write a 2-3 sentence executive brief. Every claim must be true for the contacts 
  */
 export async function parseSearchQuery(
   query: string,
+  signal?: AbortSignal,
 ): Promise<QueryPlan | null> {
+  signal?.throwIfAborted();
   const trimmed = query.trim();
   if (trimmed.length < 2) return null;
 
-  const cacheKey = contentHash(trimmed.toLowerCase());
+  const capability = resolveCapability("quick");
+  const cacheKey = contentHash(
+    JSON.stringify([
+      trimmed.toLowerCase(),
+      capability?.providerId,
+      capability?.model,
+    ]),
+  );
   const cached = aiCache.get<QueryPlan>("queryParse", cacheKey);
   if (cached) {
     recordInvocation({
@@ -619,7 +645,9 @@ Return the structured QueryPlan JSON.`;
       systemPrompt,
       prompt,
       responseFormat: "json",
-      timeoutMs: 6_000,
+      timeoutMs: 4_000,
+      maxOutputTokens: 2_000,
+      signal,
       jsonSchema: {
         type: "object",
         properties: {
@@ -659,8 +687,29 @@ Return the structured QueryPlan JSON.`;
       },
     });
 
-    const raw = safeParseJson<QueryPlan>(result.text, "parseSearchQuery");
-    if (!raw) return null;
+    signal?.throwIfAborted();
+    const matcherList = z.array(z.string().max(200)).max(200).optional();
+    const parsed = z
+      .object({
+        must: z.object({
+          locationMatchers: matcherList,
+          companyMatchers: matcherList,
+          roleMatchers: matcherList,
+          industryMatchers: matcherList,
+          temporal: z
+            .object({
+              type: z.enum(["lastContact", "neverContacted"]),
+              daysAgo: z.number().int().min(0).max(36_500).optional(),
+            })
+            .optional(),
+        }),
+        should: z.object({ traits: matcherList }),
+        confidence: z.enum(["high", "medium", "low"]),
+        rationale: z.string().max(1000),
+      })
+      .safeParse(safeParseJson<unknown>(result.text, "parseSearchQuery"));
+    if (!parsed.success) return null;
+    const raw = parsed.data;
 
     // Defensive cleaning — strip empties so downstream can treat presence
     // as "filter is active". An empty list shouldn't gate anything.
@@ -668,7 +717,8 @@ Return the structured QueryPlan JSON.`;
       if (!Array.isArray(xs)) return undefined;
       const out = xs
         .map((s) => (typeof s === "string" ? s.trim() : ""))
-        .filter((s) => s.length > 0);
+        .filter((s) => s.length > 0 && s.length <= 100)
+        .slice(0, 100);
       return out.length > 0 ? out : undefined;
     };
 
@@ -699,7 +749,13 @@ Return the structured QueryPlan JSON.`;
       if (role) cleaned.must.roleMatchers = role;
       const ind = cleanList(raw.must.industryMatchers);
       if (ind) cleaned.must.industryMatchers = ind;
-      if (raw.must.temporal?.type) cleaned.must.temporal = raw.must.temporal;
+      const temporal = z
+        .object({
+          type: z.enum(["lastContact", "neverContacted"]),
+          daysAgo: z.number().int().min(0).max(36_500).optional(),
+        })
+        .safeParse(raw.must.temporal);
+      if (temporal.success) cleaned.must.temporal = temporal.data;
     }
 
     if (raw.should) {
@@ -729,6 +785,7 @@ Return the structured QueryPlan JSON.`;
     });
     return cleaned;
   } catch (err: unknown) {
+    signal?.throwIfAborted();
     log.warn(
       "AIService",
       `parseSearchQuery failed: ${getErrorMessage(err)} — caller should run hybrid search without hard filters`,

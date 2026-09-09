@@ -1,3 +1,6 @@
+import { sqlite } from "../db.ts";
+import { ACTIVE_CONTACT_SQL } from "../services/search/ftsIndex.ts";
+import { withTimeout } from "../ai/resilience.ts";
 import type { FacetFilter } from "../../shared/searchFacets.ts";
 import { z } from "zod";
 import { ValidationError } from "../utils/AppError.ts";
@@ -6,7 +9,7 @@ import { log } from "../utils/logger.ts";
 import { searchService } from "../services/searchService.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { parseSearchQuery, synthesizeSearchResults } from "../ai/index.ts";
+import { synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
 const router = Router();
@@ -61,17 +64,7 @@ router.get(
   }),
 );
 
-/**
- * POST /api/search/semantic — Ask Contrack v3 two-phase streaming search.
- *
- * Streams NDJSON (newline-delimited JSON):
- *   Phase 1: { phase: "instant", matches: [...] }   — sent in <15ms
- *   Phase 2: { phase: "enriched", matches: [...] }  — sent ~500ms later (optional)
- *   Final:   { phase: "complete", matches: [...] }   — for cache hits + short-circuits
- *
- * If the client sends `Accept: application/json`, falls back to the
- * non-streaming single-response mode for backward compatibility.
- */
+/** Stream local candidates before AI refinement, followed by one terminal result. */
 router.post(
   "/semantic",
   asyncHandler(async (req, res) => {
@@ -94,29 +87,48 @@ router.post(
       // Two-phase streaming response
       res.setHeader("Content-Type", "application/x-ndjson");
       res.setHeader("Transfer-Encoding", "chunked");
-      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Accel-Buffering", "no");
       res.flushHeaders();
 
       // Create an AbortController bound to request closure
       const controller = new AbortController();
-      req.on("close", () => {
+      const onClose = () => {
         log.info(
           "API",
           `[${rid}] Client disconnected mid-search stream. Aborting AI operations.`,
         );
-        controller.abort();
-      });
+        if (!res.writableEnded) controller.abort();
+      };
+      res.on("close", onClose);
 
-      await searchService.semanticSearchStream(
-        query,
-        rid,
-        res,
-        controller.signal,
-      );
+      try {
+        await searchService.semanticSearchStream(
+          query,
+          rid,
+          res,
+          controller.signal,
+        );
+      } finally {
+        res.off("close", onClose);
+      }
     } else {
       // Single-response mode (backward compatible)
-      const result = await searchService.semanticSearch(query, rid);
-      res.json(result);
+      const controller = new AbortController();
+      const onClose = () => {
+        if (!res.writableEnded) controller.abort();
+      };
+      res.on("close", onClose);
+      try {
+        const result = await searchService.semanticSearch(
+          query,
+          rid,
+          controller.signal,
+        );
+        if (!res.destroyed) res.json(result);
+      } finally {
+        res.off("close", onClose);
+      }
     }
   }),
 );
@@ -127,7 +139,7 @@ router.post(
  * Accepts a query and the already-returned search results, streams an
  * NDJSON executive summary via the AI service.
  *
- * Body: { query: string, contacts: { name, role?, company?, aiReason? }[] }
+ * Body: { query: string, contactIds: string[] }. Facts come from the database.
  *
  * Streams:
  *   { phase: "start" }
@@ -137,60 +149,74 @@ router.post(
   "/synthesize",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const { query, contacts } = req.body as {
-      query?: string;
-      contacts?: {
-        name: string;
-        role?: string;
-        company?: string;
-        location?: string;
-        aiReason?: string;
-      }[];
-    };
-
-    if (!query || typeof query !== "string" || query.trim().length === 0) {
-      throw new AppError("query is required", 400);
-    }
-    if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
+    const { query, contactIds } = z
+      .object({
+        query: z.string().trim().min(1).max(500),
+        contactIds: z.array(z.string().trim().min(1).max(100)).min(1).max(30),
+      })
+      .parse(req.body);
+    const ids = [...new Set(contactIds)];
+    const contacts = sqlite
+      .prepare(
+        `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+      )
+      .all(JSON.stringify(ids)) as {
+      id: string;
+      name: string;
+      role?: string;
+      company?: string;
+      location?: string;
+    }[];
+    if (contacts.length !== ids.length)
       throw new AppError(
-        "contacts array is required and must be non-empty",
-        400,
+        "Some contacts are no longer available. Search again.",
+        409,
       );
-    }
-    if (contacts.length > 30) {
-      throw new AppError("contacts array must have ≤ 30 entries", 400);
-    }
-
-    log.info(
-      "API",
-      `[${rid}] POST /api/search/synthesize query="${query.slice(0, 50)}" contacts=${contacts.length}`,
-    );
+    const source = JSON.stringify(contacts);
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on("close", onClose);
 
     // Stream the response
     res.setHeader("Content-Type", "application/x-ndjson");
     res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
 
     // Send start signal
     res.write(JSON.stringify({ phase: "start" }) + "\n");
 
     try {
-      // Re-derive the QueryPlan so the synthesizer can ground itself
-      // against the same hard filters that the retrieval applied. The
-      // parser is cached (24h TTL by content-hash) so this is ~free on
-      // the typical synthesize-after-search flow.
-      const plan = await parseSearchQuery(query.trim());
-      const text = await synthesizeSearchResults(query.trim(), contacts, plan);
-      res.write(JSON.stringify({ phase: "complete", text }) + "\n");
+      const text = await withTimeout(
+        (signal) => synthesizeSearchResults(query, contacts, null, signal),
+        10_000,
+        controller.signal,
+      );
+      const current = sqlite
+        .prepare(
+          `SELECT c.id,c.name,c.role,c.company,c.location FROM contacts c WHERE ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+        )
+        .all(JSON.stringify(ids));
+      if (JSON.stringify(current) !== source)
+        throw new Error("Contacts changed. Generate a new summary.");
+      if (!res.destroyed)
+        res.write(JSON.stringify({ phase: "complete", text }) + "\n");
     } catch (err: unknown) {
       log.error("API", `[${rid}] Synthesis failed: ${getErrorMessage(err)}`);
-      res.write(
-        JSON.stringify({ phase: "error", error: getErrorMessage(err) }) + "\n",
-      );
+      if (!res.destroyed)
+        res.write(
+          JSON.stringify({
+            phase: "error",
+            error: "Could not create a summary. Please try again.",
+          }) + "\n",
+        );
     }
 
-    res.end();
+    res.off("close", onClose);
+    if (!res.destroyed) res.end();
   }),
 );
 

@@ -1,3 +1,6 @@
+import { apiFetch } from "../../api/client";
+import { readNdjson } from "../../api/ndjson";
+import { z } from "zod";
 /**
  * SynthesisBar — Opt-in executive brief for AI search results (Feature 6).
  *
@@ -17,6 +20,7 @@ import { Sparkles, X, Loader2, AlertTriangle } from "lucide-react";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SynthesisContact {
+  id: string;
   name: string;
   role?: string | null;
   company?: string | null;
@@ -37,7 +41,6 @@ type SynthesisPhase = "idle" | "loading" | "complete" | "error";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MIN_RESULTS_FOR_SYNTHESIS = 3;
-const API_BASE = "/api";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -52,13 +55,29 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
+  const identity = JSON.stringify([
+    query,
+    contacts.map((c) => [
+      c.id,
+      c.name,
+      c.role,
+      c.company,
+      c.location,
+      c.aiReason,
+    ]),
+  ]);
   // Reset when query or contacts change (new search)
   useEffect(() => {
     setPhase("idle");
     setSynthesisText("");
     setErrorMessage("");
     abortRef.current?.abort();
-  }, [query, resultCount]);
+    abortRef.current = null;
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, [identity]);
 
   const handleSynthesize = useCallback(async () => {
     // Abort any in-flight request
@@ -73,16 +92,10 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
     try {
       const payload = {
         query,
-        contacts: contacts.slice(0, 30).map((c) => ({
-          name: c.name,
-          role: c.role || undefined,
-          company: c.company || undefined,
-          location: c.location || undefined,
-          aiReason: c.aiReason || undefined,
-        })),
+        contactIds: contacts.slice(0, 30).map((contact) => contact.id),
       };
 
-      const res = await fetch(`${API_BASE}/search/synthesize`, {
+      const res = await apiFetch("/search/synthesize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -94,38 +107,37 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
 
       if (!res.ok) throw new Error(`Synthesis failed (${res.status})`);
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const chunk = JSON.parse(line);
-            if (chunk.phase === "complete" && chunk.text) {
-              setSynthesisText(chunk.text);
-              setPhase("complete");
-            } else if (chunk.phase === "error") {
-              setErrorMessage(chunk.error || "Unknown error");
-              setPhase("error");
-            }
-          } catch {
-            // Ignore malformed lines
+      let complete = false;
+      await readNdjson(
+        res,
+        (value) => {
+          if (controller.signal.aborted || abortRef.current !== controller)
+            return;
+          const chunk = z
+            .discriminatedUnion("phase", [
+              z.object({ phase: z.literal("start") }),
+              z.object({
+                phase: z.literal("complete"),
+                text: z.string().trim().min(1).max(20_000),
+              }),
+              z.object({ phase: z.literal("error"), error: z.string() }),
+            ])
+            .parse(value);
+          if (chunk.phase === "error") throw new Error(chunk.error);
+          if (chunk.phase === "complete") {
+            complete = true;
+            setSynthesisText(chunk.text);
+            setPhase("complete");
           }
-        }
-      }
+        },
+        controller.signal,
+      );
+      if (!complete)
+        throw new Error(
+          "The summary connection ended early. Please try again.",
+        );
     } catch (err: unknown) {
-      if (!(err instanceof Error && err.name === "AbortError")) {
+      if (!controller.signal.aborted && abortRef.current === controller) {
         setErrorMessage(
           (err instanceof Error ? err.message : String(err)) ||
             "Synthesis failed",
@@ -137,6 +149,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
 
   const handleDismiss = useCallback(() => {
     abortRef.current?.abort();
+    abortRef.current = null;
     setPhase("idle");
     setSynthesisText("");
     setErrorMessage("");

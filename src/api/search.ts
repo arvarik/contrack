@@ -1,19 +1,14 @@
+import { z } from "zod";
+import { readNdjson } from "./ndjson";
 import type { FacetFilter } from "../../shared/searchFacets";
 import { apiFetch } from "./client";
-/**
- * Search API Hooks — React Query hooks for FTS5 keyword and Ask Contrack v3 semantic search.
- *
- * v3 uses NDJSON streaming for two-phase delivery:
- *   Phase 1 (instant): results appear in <15ms
- *   Phase 2 (enriched): AI reasons fade in ~500ms later
- *
- * @module api/search
- */
+/** Search hooks validate streamed results and cancel obsolete requests. */
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   useState,
   useCallback,
   useRef,
+  useEffect,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -67,25 +62,32 @@ export const useSemanticSearch = (externalState?: {
   const setPhase = externalState ? externalState.setPhase : setInternalPhase;
 
   const [isPending, setIsPending] = useState(false);
-  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    },
+    [],
+  );
   const mutate = useCallback(
     async (query: string) => {
-      // Abort any in-flight request
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
-
+      const current = () =>
+        abortRef.current === controller && !controller.signal.aborted;
       setIsPending(true);
-      setIsError(false);
+      setError(null);
       setIsSuccess(false);
       setPhase("idle");
       setData(null);
-
+      let complete = false;
       try {
-        const res = await apiFetch(`/search/semantic`, {
+        const response = await apiFetch("/search/semantic", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -94,70 +96,38 @@ export const useSemanticSearch = (externalState?: {
           body: JSON.stringify({ query }),
           signal: controller.signal,
         });
-
-        if (!res.ok) throw new Error("Semantic search failed");
-
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error("No response body");
-
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Process complete NDJSON lines
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete last line
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            try {
-              const chunk = JSON.parse(line);
-
-              if (chunk.phase === "instant") {
-                // Phase 1: show results immediately
-                setData({
-                  matches: chunk.matches,
-                  fallback: chunk.fallback,
-                });
-                setPhase(chunk.highConfidence ? "done" : "enriching");
-                setIsSuccess(true);
-              } else if (chunk.phase === "enriched") {
-                // Phase 2: replace with AI-enriched results
-                setData({
-                  matches: chunk.matches,
-                  fallback: chunk.fallback,
-                });
-                setPhase("done");
-                setIsSuccess(true);
-              } else if (chunk.phase === "complete") {
-                // Single-phase response (cache hit or short-circuit)
-                setData({
-                  matches: chunk.matches,
-                  fallback: chunk.fallback,
-                });
-                setPhase("done");
-                setIsSuccess(true);
-              }
-            } catch {
-              // Ignore malformed lines
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if (!(err instanceof Error && err.name === "AbortError")) {
-          setIsError(true);
-          console.error("Semantic search error:", err);
+        await readNdjson(
+          response,
+          (value) => {
+            if (!current()) return;
+            const chunk = searchChunkSchema.parse(value);
+            if (chunk.phase === "error") throw new Error(chunk.error);
+            if (complete)
+              throw new Error("The server sent data after search completed.");
+            setData({
+              matches:
+                chunk.matches as unknown as SemanticSearchResult["matches"],
+              fallback: chunk.fallback,
+            });
+            complete = chunk.phase === "complete" || chunk.phase === "enriched";
+            setPhase(complete ? "done" : "enriching");
+            setIsSuccess(complete);
+          },
+          controller.signal,
+        );
+        if (!complete)
+          throw new Error(
+            "The search connection ended early. Please try again.",
+          );
+      } catch (cause) {
+        if (current()) {
+          setError(cause instanceof Error ? cause : new Error("Search failed"));
+          setIsSuccess(false);
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (current()) {
           setIsPending(false);
-          setPhase((prev) => (prev === "idle" ? "done" : prev));
+          setPhase("done");
         }
       }
     },
@@ -166,10 +136,11 @@ export const useSemanticSearch = (externalState?: {
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
+    abortRef.current = null;
     setData(null);
     setPhase("idle");
     setIsPending(false);
-    setIsError(false);
+    setError(null);
     setIsSuccess(false);
   }, [setData, setPhase]);
 
@@ -177,10 +148,21 @@ export const useSemanticSearch = (externalState?: {
     data,
     phase,
     isPending,
-    isError,
+    isError: !!error,
     isSuccess,
-    error: isError ? new Error("Semantic search failed") : null,
+    error,
     mutate,
     reset,
   };
 };
+
+const searchChunkSchema = z.discriminatedUnion("phase", [
+  z.object({
+    phase: z.enum(["instant", "enriched", "complete"]),
+    matches: z
+      .array(z.object({ id: z.string(), name: z.string() }).passthrough())
+      .max(30),
+    fallback: z.boolean(),
+  }),
+  z.object({ phase: z.literal("error"), error: z.string() }),
+]);

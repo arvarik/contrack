@@ -254,28 +254,23 @@ Frontend caching via React Query v5 with:
 
 ## Search Pipeline
 
-Ask Contrack v3 uses a hybrid retrieval-augmented generation (RAG) pipeline:
+Ask Contrack sends local keyword candidates before it calls AI.
+A short name lookup uses only the local index.
 
-```
-User Query
-    │
-    ├──→ FTS5 Keyword Search (SQLite)     ──→ Top-N results
-    │                                          │
-    ├──→ Vector KNN Search (sqlite-vec)   ──→ Top-N results
-    │    (384-dim MiniLM local embeddings)     │
-    │                                          │
-    └──→ Reciprocal Rank Fusion (RRF)    ←────┘
-              │
-              ▼
-         Fused Results (Phase 1 — <15ms)
-              │
-              ▼
-         AI Re-ranking + Reason Generation (Phase 2 — ~500ms)
-              │
-              ▼
-         Streamed via NDJSON to client
-```
+1. The query planner produces bounded hard filters and optional traits.
+2. The retrieval engine applies those filters before keyword and vector limits.
+3. It combines local keyword rankings and local vector rankings.
+4. The reranker checks at most 30 compact profiles.
+5. The server verifies claimed field values and hard constraints.
+6. The response ends with verified matches, an empty result, or keyword fallback.
 
-### Write-Time Enrichment (Doc2Query)
+A shared 12-second deadline bounds refinement. Client disconnects cancel active work.
+Search caches include the data revision, model, and a five-minute time bucket.
+Concurrent edits prevent old evidence from entering the result cache.
 
-When contacts are created or updated, an async background job generates synthetic search terms using Gemini Lite. For example, a "Stripe Engineer" gets expansion terms like `fintech, payments, developer`. Stored in a `searchExpansion` column indexed by FTS5.
+### Index Refreshes
+
+SQLite triggers maintain the keyword index during contact and child-record changes.
+A coalesced local queue refreshes built-in embeddings after edits.
+Automatic index refreshes do not generate AI search terms.
+Explicit backfill commands remain available for configured provider embeddings.

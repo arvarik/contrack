@@ -156,16 +156,19 @@ describe("withTimeout", () => {
     await expect(promise).rejects.not.toBeInstanceOf(UpstreamTimeoutError);
   });
 
-  it("returns the op's success immediately if parentSignal is already aborted but op resolves synchronously", async () => {
-    // Edge case: parentSignal is aborted before withTimeout is called.
-    // The implementation calls controller.abort() inside but doesn't reject
-    // — the op is still invoked. We only fail if the op itself rejects.
+  it("never starts a generation after caller cancellation", async () => {
     const parentCtl = new AbortController();
     parentCtl.abort();
-    const op = async () => "still ok";
-    await expect(withTimeout(op, 1_000, parentCtl.signal)).resolves.toBe(
-      "still ok",
+    const op = vi.fn().mockResolvedValue("late");
+    await expect(withTimeout(op, 1000, parentCtl.signal)).rejects.toBeTruthy();
+    expect(op).not.toHaveBeenCalled();
+  });
+  it("enforces the deadline even when the operation ignores its signal", async () => {
+    const result = withTimeout(() => new Promise(() => {}), 100).catch(
+      (error) => error,
     );
+    await vi.advanceTimersByTimeAsync(101);
+    expect(await result).toBeInstanceOf(UpstreamTimeoutError);
   });
 });
 
