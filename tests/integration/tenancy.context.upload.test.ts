@@ -52,6 +52,7 @@ beforeAll(() => {
   app.use((req, _res, next) => {
     req.requestId = "ctx-test";
     req.principal = {
+      via: "session",
       kind: "user",
       user: { id: OWNER } as never,
       sessionId: "s",

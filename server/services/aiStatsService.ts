@@ -19,7 +19,7 @@
 // =============================================================================
 
 import { sqlite } from "../db.ts";
-import { currentScopeOrNull } from "../tenancy/requestContext.ts";
+import { currentOwnerId } from "../tenancy/requestContext.ts";
 import { log } from "../utils/logger.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { isProviderConfigured } from "../ai/singleton.ts";
@@ -155,7 +155,7 @@ export function recordInvocation(entry: InvocationEntry): void {
       entry.description ?? null,
       // A boot-time or background job has no context, so this is null. The
       // AI stats view groups null as "system" until Phase 2 wraps those jobs.
-      currentScopeOrNull()?.ownerId ?? null,
+      currentOwnerId(),
     );
     log.debug(
       "AIStats",

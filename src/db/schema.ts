@@ -5,6 +5,7 @@ import {
   real,
   primaryKey,
   unique,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
@@ -52,6 +53,119 @@ export const users = sqliteTable("users", {
     .notNull()
     .default(sql`(CURRENT_TIMESTAMP)`),
   lastLoginAt: text("lastLoginAt"),
+  /** 'active' | 'disabled'. Disabling ends the account's live sessions. */
+  status: text("status").notNull().default("active"),
+  /**
+   * 'password' for an account somebody signs in to, 'none' for the local
+   * owner. The local owner holds this device's data while auth is off; its
+   * hash is `none$`, which cannot parse, so nothing can sign in as it.
+   * Securing an instance converts this row rather than adding one, which is
+   * how the data comes along.
+   */
+  credentialState: text("credentialState").notNull().default("password"),
+  /** Set by an admin password reset. Phase 3 acts on it. */
+  mustChangePassword: integer("mustChangePassword").notNull().default(0),
+  passwordChangedAt: text("passwordChangedAt"),
+  disabledAt: text("disabledAt"),
+  /** The admin who invited or created this account. */
+  createdBy: text("createdBy").references((): AnySQLiteColumn => users.id, {
+    onDelete: "set null",
+  }),
+});
+
+/**
+ * api_tokens — per-user machine credentials.
+ *
+ * `ctk_<43 base64url chars>`, shown once at creation. Only the SHA-256 reaches
+ * the database, so a leaked backup does not hand over working tokens.
+ * `tokenPrefix` is the first 12 characters, which is what a list can show
+ * without being a credential itself.
+ *
+ * Created in Phase 1 so attachPrincipal can resolve one. The endpoints that
+ * mint them are Phase 3.
+ */
+export const apiTokens = sqliteTable("api_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** What the person called it, so two tokens can be told apart. */
+  name: text("name").notNull(),
+  tokenHash: text("tokenHash").notNull().unique(),
+  tokenPrefix: text("tokenPrefix").notNull(),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  /** Stamped at most once an hour, the same way sessions.lastSeenAt is. */
+  lastUsedAt: text("lastUsedAt"),
+  expiresAt: text("expiresAt"),
+  revokedAt: text("revokedAt"),
+});
+
+/** invitations — a signup link an admin hands out. Phase 3 uses these. */
+export const invitations = sqliteTable("invitations", {
+  id: text("id").primaryKey(),
+  /** Optional: an open invite has no address attached. */
+  email: text("email"),
+  role: text("role").notNull().default("member"),
+  tokenHash: text("tokenHash").notNull().unique(),
+  invitedBy: text("invitedBy")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  expiresAt: text("expiresAt").notNull(),
+  acceptedAt: text("acceptedAt"),
+  acceptedBy: text("acceptedBy").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  revokedAt: text("revokedAt"),
+});
+
+/**
+ * user_settings — per-account preferences.
+ *
+ * The counterpart to app_settings, which stays instance-wide: provider keys
+ * and capability assignments belong to the operator, not to each person.
+ */
+export const userSettings = sqliteTable(
+  "user_settings",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: text("updatedAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.key] }),
+  }),
+);
+
+/**
+ * audit_log — who did what to whom.
+ *
+ * `actorUserId` is SET NULL rather than CASCADE: deleting an account must not
+ * erase the record of what it did, which is the entire point of an audit log.
+ */
+export const auditLog = sqliteTable("audit_log", {
+  id: text("id").primaryKey(),
+  actorUserId: text("actorUserId").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  action: text("action").notNull(),
+  targetType: text("targetType"),
+  targetId: text("targetId"),
+  /** JSON. Never a password, a token, or a contact's contents. */
+  details: text("details"),
+  ip: text("ip"),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
 /**
@@ -138,21 +252,45 @@ export const contacts = sqliteTable("contacts", {
 // =============================================================================
 // OWNERSHIP
 // =============================================================================
-// `ownerId` appears on exactly four tables: contacts, lists, ai_invocations,
-// and dedupe_merge_log. That is not an oversight — it is every table that is
-// NOT reachable from `contacts` through a foreign key. Interactions, action
-// items, list members, the ten contact_* child tables and the dedupe
-// suggestion/exclusion tables all carry a `contactId` (or `listId`) with ON
-// DELETE CASCADE, so their owner is derivable by a join and duplicating it
-// would only create a column that can drift out of sync.
+// Since Phase 1 of the 2.0 work, `ownerId` appears on eight tables: contacts,
+// lists, interactions, action_items, dedupe_suggestions, dedupe_exclusions,
+// dedupe_merge_log and ai_invocations.
 //
-// The 2.0 multi-tenant work revisits this: see docs/multi-tenant-plan/,
-// specifically 04-data-model-and-migration.md, which denormalizes `ownerId`
-// onto four of those child tables for covering indexes.
+// THE INVARIANT: after boot, `ownerId` is never NULL. SQLite cannot add a NOT
+// NULL column to an existing table, so triggers give the same guarantee.
+// `<table>_owner_required` aborts an insert with no owner on the four tables
+// that have no parent contact. `<table>_owner_fill` fills it from the parent
+// on the four that do, and `<table>_owner_check` aborts a child row whose
+// owner disagrees with its contact — which is what makes a cross-owner dedupe
+// pair impossible rather than merely unlikely.
 //
-// dedupe_merge_log is the interesting exception: it deliberately has no
-// foreign key, because it stores snapshots of contacts that were hard-deleted
-// and must outlive them. Nothing to join through, so it owns its own column.
+// The four child tables carry a denormalized copy of their contact's owner.
+// That is redundant by design: a covering index on `(ownerId, date)` answers a
+// scoped timeline without touching `contacts`, and the triggers above are what
+// keep the copy honest. `contacts_owner_propagate` pushes an owner change down
+// to all four, for a future admin "reassign data" action. It cannot touch the
+// two vec0 tables, because sqlite-vec refuses an UPDATE of a partition key;
+// that feature will delete and re-insert those rows in code.
+//
+// THE LOCAL OWNER is what makes auth-off mode work. Every instance has one
+// account from boot: username `local`, `credentialState = 'none'`, a password
+// hash that cannot parse. Nobody signs in as it. With auth off it is the
+// implicit principal for a request with no credential, so every row written on
+// a personal instance has a real owner rather than a NULL somebody later has
+// to guess at. Securing the instance converts that row in place, keeping its
+// id, which is how the data comes along without a claim.
+//
+// Reads do not filter on this column yet. Phase 2 adds the owner predicate to
+// every query, through a repository layer that takes the owner as a required
+// first argument — the failure mode of a forgotten `WHERE ownerId = ?` is a
+// silent data leak with no error and no failing test, which is not something
+// to defend with discipline across a hundred call sites. See
+// docs/multi-tenant-plan/.
+//
+// dedupe_merge_log is the interesting one: it deliberately has no foreign key
+// to contacts, because it stores snapshots of contacts that were hard-deleted
+// and must outlive them. Nothing to join through, so its owner is copied from
+// the surviving contact at write time rather than filled by a trigger.
 //
 // THE INVARIANT: `ownerId IS NULL` means "unowned — belongs to whoever owns
 // this instance". Every row starts that way, and stays that way for as long
@@ -385,6 +523,11 @@ export const interactions = sqliteTable("interactions", {
   source: text("source"),
   mentions: text("mentions"),
   updatedAt: text("updatedAt").default(sql`(CURRENT_TIMESTAMP)`),
+  /**
+   * Owning account, denormalized from the parent contact. Triggers fill it and
+   * refuse a value that disagrees. See the OWNERSHIP note above.
+   */
+  ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
 /**
@@ -432,6 +575,13 @@ export const dedupeSuggestions = sqliteTable(
     createdAt: text("createdAt").default(sql`(CURRENT_TIMESTAMP)`),
     reviewedAt: text("reviewedAt"),
     reviewedBy: text("reviewedBy"), // 'user' | 'auto'
+    /**
+     * Owning account, denormalized from contactIdA. A trigger checks it
+     * against both contacts, so a cross-owner suggestion cannot be written.
+     */
+    ownerId: text("ownerId").references(() => users.id, {
+      onDelete: "restrict",
+    }),
   },
   (t) => ({
     unq: unique().on(t.contactIdA, t.contactIdB),
@@ -452,6 +602,10 @@ export const dedupeExclusions = sqliteTable(
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     createdAt: text("createdAt").default(sql`(CURRENT_TIMESTAMP)`),
+    /** Owning account, denormalized from contactIdA. */
+    ownerId: text("ownerId").references(() => users.id, {
+      onDelete: "restrict",
+    }),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.contactIdA, t.contactIdB] }),
@@ -504,6 +658,8 @@ export const actionItems = sqliteTable("action_items", {
   completedAt: text("completedAt"),
   createdAt: text("createdAt").default(sql`(CURRENT_TIMESTAMP)`),
   updatedAt: text("updatedAt").default(sql`(CURRENT_TIMESTAMP)`),
+  /** Owning account, denormalized from the parent contact. */
+  ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
 // =============================================================================
@@ -586,6 +742,35 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   contacts: many(contacts),
   lists: many(lists),
+  interactions: many(interactions),
+  actionItems: many(actionItems),
+  apiTokens: many(apiTokens),
+  userSettings: many(userSettings),
+}));
+
+export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
+  user: one(users, { fields: [apiTokens.userId], references: [users.id] }),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  inviter: one(users, {
+    fields: [invitations.invitedBy],
+    references: [users.id],
+    relationName: "invitationInviter",
+  }),
+  acceptor: one(users, {
+    fields: [invitations.acceptedBy],
+    references: [users.id],
+    relationName: "invitationAcceptor",
+  }),
+}));
+
+export const userSettingsRelations = relations(userSettings, ({ one }) => ({
+  user: one(users, { fields: [userSettings.userId], references: [users.id] }),
+}));
+
+export const auditLogRelations = relations(auditLog, ({ one }) => ({
+  actor: one(users, { fields: [auditLog.actorUserId], references: [users.id] }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -631,6 +816,10 @@ export const dedupeSuggestionsRelations = relations(
       fields: [dedupeSuggestions.contactIdB],
       references: [contacts.id],
     }),
+    owner: one(users, {
+      fields: [dedupeSuggestions.ownerId],
+      references: [users.id],
+    }),
   }),
 );
 
@@ -644,6 +833,10 @@ export const dedupeExclusionsRelations = relations(
     contactB: one(contacts, {
       fields: [dedupeExclusions.contactIdB],
       references: [contacts.id],
+    }),
+    owner: one(users, {
+      fields: [dedupeExclusions.ownerId],
+      references: [users.id],
     }),
   }),
 );
@@ -750,6 +943,10 @@ export const interactionsRelations = relations(
       fields: [interactions.contactId],
       references: [contacts.id],
     }),
+    owner: one(users, {
+      fields: [interactions.ownerId],
+      references: [users.id],
+    }),
     mentions: many(interactionMentions),
   }),
 );
@@ -772,6 +969,10 @@ export const actionItemsRelations = relations(actionItems, ({ one }) => ({
   contact: one(contacts, {
     fields: [actionItems.contactId],
     references: [contacts.id],
+  }),
+  owner: one(users, {
+    fields: [actionItems.ownerId],
+    references: [users.id],
   }),
 }));
 

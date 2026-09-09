@@ -274,16 +274,23 @@ Together these three make a leak a red CI run.
 
 ### 6.1 Design
 
-`contacts_fts` gains two more **indexed** columns, `ownerTok` and `cidTok`,
-placed last.
+`contacts_fts` gains one more **indexed** column, `ownerTok`, placed last.
 
 ```sql
 CREATE VIRTUAL TABLE contacts_fts USING fts5(
   contactId UNINDEXED,
   name, company, role, headline, location, about, industry, extras, searchExpansion,
-  ownerTok, cidTok
+  ownerTok,
+  prefix='2 3 4'
 );
 ```
+
+> **Corrected in Phase 1.** This section originally added a second column,
+> `cidTok`, to make the trigger deletes indexed. PR #18 landed first and made
+> them `WHERE rowid = old.rowid`, which FTS5 already pushes down, so `cidTok`
+> would be a redundant column and measurably slower (46 ms against 40 ms for
+> 1,000 updates over 5,000 contacts). It is not built. The data model
+> document, section 5.5, has the numbers.
 
 `ownerTok` is `'o' || replace(ownerId, '-', '')` and `cidTok` is
 `'c' || replace(id, '-', '')`. The default `unicode61` tokenizer splits on
@@ -298,15 +305,15 @@ Every FTS query becomes:
 ownerTok:o3f2c1d0... AND ("original query" strategy)
 ```
 
-Every trigger delete becomes:
+Every trigger delete stays as PR #18 wrote it:
 
 ```sql
-DELETE FROM contacts_fts WHERE contacts_fts MATCH 'cidTok:c' || replace(old.id, '-', '');
+DELETE FROM contacts_fts WHERE rowid = old.rowid;
 ```
 
 BM25 weights are positional and count every column, including `contactId
-UNINDEXED` at position 0. The v2 table has twelve columns, so the string has
-twelve values, the last two `0.0`. The exact string, and the decision about
+UNINDEXED` at position 0. The table has eleven columns, so the string has
+eleven values, the last `0.0`. The exact string, and the decision about
 the offset in today's nine-value string, are in the data model document,
 section 5.4, and in the risks document, Q13. Ranking is unchanged by the two
 token columns.
@@ -332,13 +339,13 @@ in 5.0 to 11.3 ms, and a `JOIN contacts` in 10.7 to 22.2 ms. Today's
 unfiltered query takes 3.3 to 8.4 ms, so the scoped query is faster than the
 current one.
 
-**Why `cidTok`.** The same `xBestIndex` rule applies to the trigger delete.
-`DELETE FROM contacts_fts WHERE contactId = ?` on an `UNINDEXED` column
-scans the whole virtual table: 4 ms per firing at 40,000 rows. Every contact
-update and every child-row insert or delete fires it once. That is a latent
-cost in 1.5.5 that made the bulk ownership claim and the owner purge take
-minutes in the benchmark. With `MATCH 'cidTok:...'` the same delete is an
-index probe at 0.011 ms.
+**The same rule applies to the trigger delete.**
+`DELETE FROM contacts_fts WHERE contactId = ?` on an `UNINDEXED` column scans
+the whole virtual table: 4 ms per firing at 40,000 rows. Every contact update
+and every child-row insert or delete fired it once, which is what made the bulk
+ownership claim and the owner purge take minutes in the benchmark. `rowid` is a
+pushed-down constraint, so the deletes PR #18 wrote are index probes and the
+cost is gone without a second token column.
 
 ### 6.3 What changes
 

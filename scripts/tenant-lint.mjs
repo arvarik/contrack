@@ -49,6 +49,9 @@ export const OWNED_SCHEMA_KEYS = [
   "lists",
   "interactions",
   "actionItems",
+  "dedupeSuggestions",
+  "dedupeExclusions",
+  "dedupeMergeLog",
 ];
 
 /** The only reasons an allow comment may give. */

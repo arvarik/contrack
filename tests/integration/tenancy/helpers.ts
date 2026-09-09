@@ -14,9 +14,10 @@
 
 import request from "supertest";
 import type http from "http";
-import { sqlite } from "../../../server/db.ts";
+import { ensureLocalOwner, sqlite } from "../../../server/db.ts";
 import * as authService from "../../../server/services/authService.ts";
 import { __resetAuthRateLimits } from "../../../server/routes/auth.ts";
+import { __resetAuthWarnings } from "../../../server/middleware/auth.ts";
 import { scopeForOwnerId, type Scope } from "../../../server/tenancy/scope.ts";
 
 export interface Actor {
@@ -191,6 +192,22 @@ export async function seedOwner(
   return out;
 }
 
+/**
+ * The local owner account id.
+ *
+ * Every instance has one from boot (server/db.ts §2z-4), and the
+ * `contacts_owner_required` trigger refuses an insert without an owner. A test
+ * that writes a contact with raw SQL has to name an owner, and with auth off
+ * this is the same account the API would have stamped.
+ */
+export function localOwnerId(): string {
+  const row = sqlite
+    .prepare(`SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`)
+    .get() as { id: string } | undefined;
+  if (!row) throw new Error("No local owner account exists");
+  return row.id;
+}
+
 /** How many rows in `table` belong to `ownerId`. */
 export function rowsOwnedBy(table: string, ownerId: string): number {
   // tenant-lint: allow derived table
@@ -208,14 +225,28 @@ export function rowsOwnedBy(table: string, ownerId: string): number {
  * recreate the permanent local owner (see 06-phase-1-storage.md, task 1.13).
  */
 export function resetAccounts(): void {
+  // The owned rows go first: `users` is referenced with ON DELETE RESTRICT, so
+  // deleting an account that still owns a contact fails. Since Phase 1 the
+  // local owner owns every row written with auth off, which is why a plain
+  // DELETE FROM users no longer works on its own.
   sqlite.exec(`
     DELETE FROM dedupe_merge_log;
+    DELETE FROM dedupe_exclusions;
+    DELETE FROM dedupe_suggestions;
     DELETE FROM ai_invocations;
+    DELETE FROM action_items;
+    DELETE FROM interactions;
     DELETE FROM lists;
     DELETE FROM contacts;
     DELETE FROM sessions;
+    DELETE FROM api_tokens;
     DELETE FROM users;
   `);
+  // Put the local owner back. Boot created it once, and every later test in
+  // the file needs it: with auth off attachPrincipal has no principal without
+  // it, and every direct INSERT needs an owner to name.
+  ensureLocalOwner();
+  __resetAuthWarnings();
   actorCount = 0;
   __resetAuthRateLimits();
 }

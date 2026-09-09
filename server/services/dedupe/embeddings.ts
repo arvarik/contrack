@@ -18,7 +18,7 @@
 // - Graceful degradation: if embedding fails, log a warning and continue
 // =============================================================================
 
-import { sqlite } from "../../db.ts";
+import { sqlite, vecTableDdl } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { normalizeContacts, normalizeContactById } from "./normalization.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -44,15 +44,16 @@ export function isEmbeddingAvailable(): boolean {
   return isSearchEmbeddingReady();
 }
 
-/** Recreate contact_embeddings at a new width. vec0 columns are fixed-size. */
-function rebuildDedupeEmbeddingTable(dimension: number): void {
+/**
+ * Recreate contact_embeddings at a new width. vec0 columns are fixed-size.
+ *
+ * Exported so a unit test can pin its DDL equal to the one db.ts uses for the
+ * partition-key rebuild. Two copies of this string drifting apart is how a
+ * table loses its partition key without anyone noticing.
+ */
+export function rebuildDedupeEmbeddingTable(dimension: number): void {
   sqlite.exec(`DROP TABLE IF EXISTS contact_embeddings`);
-  sqlite.exec(`
-    CREATE VIRTUAL TABLE contact_embeddings USING vec0(
-      contactId TEXT PRIMARY KEY,
-      embedding FLOAT[${dimension}]
-    );
-  `);
+  sqlite.exec(vecTableDdl("contact_embeddings", dimension));
   log.info(
     "DedupeEmbeddings",
     `Rebuilt contact_embeddings at ${dimension} dimensions (re-embed required)`,
@@ -184,8 +185,18 @@ export async function generateSingleEmbedding(
 
 // Pre-compiled statements for performance
 const _stmts = {
-  upsert: sqlite.prepare(
-    "INSERT OR REPLACE INTO contact_embeddings (contactId, embedding) VALUES (?, ?)",
+  // DELETE then INSERT, never INSERT OR REPLACE. On a partitioned vec0 table
+  // sqlite-vec 0.1.9 answers INSERT OR REPLACE with "UNIQUE constraint failed
+  // on contact_embeddings primary key" whether or not the partition changes,
+  // so the search store's pattern is now the only pattern. Measured on the
+  // installed 0.1.9 in the day-one smoke test for this phase.
+  //
+  // The owner comes from `contacts` in the same transaction rather than from
+  // the caller: an INSERT that omits a partition key stores NULL silently, and
+  // a NULL partition is invisible to every scoped KNN Phase 2 writes.
+  insert: sqlite.prepare(
+    `INSERT INTO contact_embeddings (contactId, ownerId, embedding)
+     SELECT ?, c.ownerId, ? FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
   ),
   delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
   count: sqlite.prepare("SELECT COUNT(*) AS cnt FROM contact_embeddings"),
@@ -212,13 +223,25 @@ const _stmts = {
   ),
 };
 
+/** Replace one contact's vector. Wrapped so a KNN never sees the gap. */
+const _upsertTxn = sqlite.transaction(
+  (contactId: string, buf: Buffer, at: string) => {
+    _stmts.delete.run(contactId);
+    _stmts.insert.run(contactId, buf, contactId);
+    _stmts.upsertMeta.run(contactId, at);
+  },
+);
+
 /** Store a single embedding in sqlite-vec and record its timestamp. */
 export function storeEmbedding(
   contactId: string,
   embedding: Float32Array,
 ): void {
-  _stmts.upsert.run(contactId, Buffer.from(embedding.buffer));
-  _stmts.upsertMeta.run(contactId, new Date().toISOString());
+  _upsertTxn(
+    contactId,
+    Buffer.from(embedding.buffer),
+    new Date().toISOString(),
+  );
 }
 
 /** Store multiple embeddings in a single transaction. */
@@ -228,7 +251,8 @@ export function storeEmbeddings(
   const now = new Date().toISOString();
   const txn = sqlite.transaction(() => {
     for (const { contactId, embedding } of entries) {
-      _stmts.upsert.run(contactId, Buffer.from(embedding.buffer));
+      _stmts.delete.run(contactId);
+      _stmts.insert.run(contactId, Buffer.from(embedding.buffer), contactId);
       _stmts.upsertMeta.run(contactId, now);
     }
   });

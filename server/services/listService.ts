@@ -3,7 +3,7 @@ import { assertContactExists } from "./contactGuard.ts";
 import { ACTIVE_CONTACT_SQL } from "./search/ftsIndex.ts";
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
-import { currentScopeOrNull } from "../tenancy/requestContext.ts";
+import { currentOwnerId } from "../tenancy/requestContext.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 
 interface ListRow {
@@ -41,13 +41,7 @@ export const listService = {
       .prepare(
         "INSERT INTO lists (id, name, icon, sortOrder, ownerId) VALUES (?, ?, ?, ?, ?)",
       )
-      .run(
-        id,
-        name.trim(),
-        icon || "star",
-        sortOrder,
-        currentScopeOrNull()?.ownerId ?? null,
-      );
+      .run(id, name.trim(), icon || "star", sortOrder, currentOwnerId());
 
     return sqlite
       .prepare("SELECT *, 0 as memberCount FROM lists WHERE id = ?")

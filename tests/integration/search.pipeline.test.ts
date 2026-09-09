@@ -10,6 +10,7 @@ import {
   rerankCandidates,
 } from "../../server/ai/aiService.ts";
 import { makeTestApp } from "./helpers.ts";
+import { localOwnerId } from "./tenancy/helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { aiCache } from "../../server/utils/aiCache.ts";
 const app = makeTestApp();
@@ -20,9 +21,9 @@ beforeEach(() => {
   vi.mocked(rerankCandidates).mockReset().mockResolvedValue([]);
   sqlite
     .prepare(
-      "INSERT INTO contacts(id,name,role,company) VALUES ('a','Alice','Engineer','Acme')",
+      "INSERT INTO contacts(id,name,role,company,ownerId) VALUES ('a','Alice','Engineer','Acme',?)",
     )
-    .run();
+    .run(localOwnerId());
 });
 const chunks = (body: string) =>
   body

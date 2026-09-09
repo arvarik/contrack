@@ -16,7 +16,7 @@ import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
 import {
-  requireUser,
+  requireSession,
   isAuthRequired,
   isAuthenticated,
   currentUser,
@@ -26,7 +26,6 @@ import {
   clearSessionCookie,
 } from "../middleware/auth.ts";
 import {
-  countUsers,
   createUser,
   verifyCredentials,
   updateUser,
@@ -36,7 +35,10 @@ import {
   listSessions,
   revokeOtherSessions,
   publicUser,
-  countUnownedContacts,
+  countDeviceContacts,
+  countPasswordAccounts,
+  convertLocalOwner,
+  hasLocalOwner,
   getSessionTtlDays,
   setSessionTtlDays,
   MIN_SESSION_TTL_DAYS,
@@ -88,27 +90,35 @@ function bodyString(req: Request, field: string): string {
 /**
  * What the client needs to decide which screen to show, in one round trip.
  *
- * `setupRequired` is only true on a gated instance with no accounts — an
+ * `setupRequired` is only true on a gated instance nobody can sign in to — an
  * un-gated instance has no reason to demand an account, so it must not push
  * anyone through a setup wizard they did not ask for.
+ *
+ * It counts accounts with a password, not accounts. Every instance now has the
+ * local owner account from boot, so `countUsers() === 0` is never true and
+ * would have hidden the setup screen from everyone.
  */
 router.get("/status", (req, res) => {
   const authRequired = isAuthRequired();
   const user = currentUser(req);
-  const accounts = countUsers();
-  const setupRequired = authRequired && accounts === 0;
+  const passwordAccounts = countPasswordAccounts();
+  const setupRequired = authRequired && passwordAccounts === 0;
+  // How much data is sitting here. Only computed for the setup screen, which
+  // is the one place it changes what someone should believe: "secure this
+  // instance" reads very differently when you know 431 contacts are already
+  // here and are about to belong to the account you are making.
+  const deviceContacts = setupRequired ? countDeviceContacts() : 0;
 
   res.json({
     authRequired,
     authenticated: isAuthenticated(req),
     setupRequired,
-    hasAccounts: accounts > 0,
+    hasAccounts: passwordAccounts > 0,
     user: user ? publicUser(user) : null,
-    // How much data is sitting here waiting to be claimed. Only computed for
-    // the setup screen, which is the one place it changes what someone should
-    // believe: "create an account" reads very differently when you know 431
-    // contacts are already here and are about to be assigned to it.
-    existingContacts: setupRequired ? countUnownedContacts() : 0,
+    deviceContacts,
+    // The pre-2.0 name. Phase 3 removes it; keeping both means the current
+    // frontend keeps working through this phase without a matching release.
+    existingContacts: deviceContacts,
   });
 });
 
@@ -120,7 +130,7 @@ router.post(
   "/setup",
   setupLimiter,
   asyncHandler(async (req, res) => {
-    if (countUsers() > 0) {
+    if (countPasswordAccounts() > 0) {
       throw new AppError(
         "This instance already has an account. Sign in instead.",
         409,
@@ -128,12 +138,19 @@ router.post(
       );
     }
 
-    const user = await createUser({
+    const input = {
       email: bodyString(req, "email"),
       username: bodyString(req, "username"),
       password: bodyString(req, "password"),
       displayName: bodyString(req, "displayName"),
-    });
+    };
+
+    // Securing an instance that has been used converts the local owner rather
+    // than creating a second account. The id does not change, so every row it
+    // already owns stays owned, and nothing has to be claimed.
+    const user = hasLocalOwner()
+      ? await convertLocalOwner(input)
+      : await createUser(input);
 
     // Sign the new account in immediately — making someone re-type the
     // password they just chose twice in a row is pure friction.
@@ -173,6 +190,19 @@ router.post(
       });
     }
 
+    // Checked after the password, not before. Saying "this account is
+    // disabled" to someone who has not proved they own it would tell an
+    // attacker which usernames are real, which is the thing the shared message
+    // above exists to prevent. Someone holding the right password has already
+    // earned a straight answer.
+    if (user.status === "disabled") {
+      throw new AppError(
+        "This account has been disabled. Ask an administrator to re-enable it.",
+        403,
+        { code: "ACCOUNT_DISABLED" },
+      );
+    }
+
     const session = createSession(user.id, req.headers["user-agent"] ?? null);
     setSessionCookie(req, res, session.secret, session.expiresAt);
     res.json({ user: publicUser(user) });
@@ -190,13 +220,13 @@ router.post("/logout", (req, res) => {
 // The signed-in account
 // =============================================================================
 
-router.get("/me", requireUser, (req, res) => {
+router.get("/me", requireSession, (req, res) => {
   res.json({ user: publicUser(currentUser(req)!) });
 });
 
 router.patch(
   "/me",
-  requireUser,
+  requireSession,
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const user = await updateUser(currentUser(req)!.id, {
@@ -214,7 +244,7 @@ router.patch(
 
 router.post(
   "/change-password",
-  requireUser,
+  requireSession,
   credentialLimiter,
   asyncHandler(async (req, res) => {
     await changePassword(
@@ -231,14 +261,14 @@ router.post(
 // Sessions
 // =============================================================================
 
-router.get("/sessions", requireUser, (req, res) => {
+router.get("/sessions", requireSession, (req, res) => {
   res.json({
     sessions: listSessions(currentUser(req)!.id, currentSessionId(req)),
   });
 });
 
 /** Sign out everywhere else, keeping the session making the request. */
-router.delete("/sessions", requireUser, (req, res) => {
+router.delete("/sessions", requireSession, (req, res) => {
   const revoked = revokeOtherSessions(
     currentUser(req)!.id,
     currentSessionId(req),
@@ -254,7 +284,7 @@ router.delete("/sessions", requireUser, (req, res) => {
  * How long new sessions last. Read is open to any authenticated caller;
  * writing needs a real account, since it is a security setting.
  */
-router.get("/session-policy", requireUser, (_req, res) => {
+router.get("/session-policy", requireSession, (_req, res) => {
   res.json({
     sessionTtlDays: getSessionTtlDays(),
     min: MIN_SESSION_TTL_DAYS,
@@ -265,7 +295,7 @@ router.get("/session-policy", requireUser, (_req, res) => {
 
 router.put(
   "/session-policy",
-  requireUser,
+  requireSession,
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionTtlDays = setSessionTtlDays(body.sessionTtlDays);

@@ -37,7 +37,7 @@ attribution in commits or PRs. `package.json` stays at `1.5.5`.
 
 - Every row in every owned table has a non-`NULL` `ownerId`. `contacts_owner_required` and the fill triggers enforce it on insert. The mismatch triggers reject a child row whose owner differs from its contact's.
 - Every request past `requireAuth` has `req.principal = { kind: "user", user, via }`. `scopeOf(req)` never throws for an authenticated request.
-- `contacts_fts` has indexed `ownerTok` and `cidTok`. `ownerToken(scope)` and `contactToken(id)` in `server/tenancy/scope.ts` match the SQL.
+- `contacts_fts` has an indexed `ownerTok`. `ownerToken(scope)` in `server/tenancy/scope.ts` matches the SQL, pinned by a unit test. There is no `cidTok`: the trigger deletes use `rowid`, which FTS5 already pushes down (data model §5.5).
 - Both `vec0` tables carry `ownerId TEXT PARTITION KEY`, and every insert supplies it.
 - Composite indexes named `idx_<table>_owner_<suffix>` exist (list in Phase 1 task 1.7). The single-column `idx_<table>_owner` indexes still exist.
 - Uploads live under `uploads/u/<ownerId>/avatars/` and `uploads/u/<ownerId>/files/`. `ownerUploadDir` and `ownerUploadUrl` exist.

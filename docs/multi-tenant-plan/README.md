@@ -66,7 +66,7 @@ idempotent boot migration that backs up first.
 | Phase | Lands on | Size | Depends on | Outcome |
 | ----- | -------- | ---- | ---------- | ------- |
 | 0 Foundations | `v2.0` (cherry-pick to `main` as `1.6.0` is optional) | M | | Branch and CI, `Scope`, request context, route manifest with a mount recorder, tenant lint (report), ownership stamped on create, two-user test harness, benchmark baseline, BM25 offset fix, MCP route mount fix |
-| 1 Storage | `v2.0` | L | 0 | New columns and tables, local owner, child `ownerId` with triggers, triggers dropped around the claim, FTS v2 (`ownerTok` and `cidTok`), `vec0` partitions, uploads relocation, composite indexes, backup-then-migrate, verify script, seed scripts |
+| 1 Storage | `v2.0` | L | 0 | New columns and tables, local owner, child `ownerId` with triggers, triggers dropped around the claim, FTS v2 (`ownerTok`; `cidTok` proposed, not built), `vec0` partitions, uploads relocation, composite indexes, backup-then-migrate, verify script, seed scripts |
 | 2 Scoping | `v2.0`, nine PRs | XL | 1 | About 240 owned-table statements scoped, caches and queues per owner, uploads guard, standard `429` envelopes, strict lint, matrix green, plan tests |
 | 3 Accounts and admin | `v2.0` | L | 2 | `requireAdmin`, admin API, invitations, temporary passwords, disable and purge, tokens, registration flag, audit log, daily maintenance interval, per-user rate limits |
 | 4 Frontend | `v2.0` | L | 3 | Admin area (lazy-loaded), tokens UI, join and register and forced-change screens, identity on desktop and mobile, one shared response handler, per-identity cache reset |

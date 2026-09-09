@@ -13,10 +13,10 @@ import {
 } from "../utils/validators.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { UPLOADS_DIR, ensureDir } from "../utils/paths.ts";
+import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 
-const uploadDir = UPLOADS_DIR;
-ensureDir(uploadDir);
+// Attachments go to uploads/u/<ownerId>/files/ now. The destination callback
+// creates the caller's directory; there is no shared one to make here.
 
 // Attachment extensions we accept. Script-capable types (.html, .svg, .xhtml,
 // .js, …) are excluded — uploads are served from the app origin, so a stored
@@ -35,7 +35,15 @@ const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
 ]);
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
+  // See the note on the avatar storage in routes/contacts.ts: the owner is
+  // read from req.principal rather than the async context.
+  destination: (req, _file, cb) => {
+    const owner = req.principal?.user.id;
+    if (!owner) return cb(new Error("No principal for a file upload"), "");
+    const dir = ownerUploadDir(owner, "files");
+    ensureDir(dir);
+    cb(null, dir);
+  },
   filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname).toLowerCase();

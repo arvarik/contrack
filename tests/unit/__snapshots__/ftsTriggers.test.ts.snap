@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FTS trigger SQL > matches its snapshot 1`] = `
+"
+      DROP TRIGGER IF EXISTS contacts_ai;
+      DROP TRIGGER IF EXISTS contacts_ad;
+      DROP TRIGGER IF EXISTS contacts_au;
+      CREATE TRIGGER contacts_ai AFTER INSERT ON contacts BEGIN
+        INSERT INTO contacts_fts(rowid, contactId, name, company, role, headline, location, about, industry, extras, searchExpansion, ownerTok) SELECT c.rowid, c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+  COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+  COALESCE(c.searchExpansion, ''), 'o' || replace(c.ownerId, '-', '')
+        FROM contacts c WHERE c.id = new.id AND c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
+  AND c.canonicalId IS NULL AND c.deletedAt IS NULL;
+      END;
+      CREATE TRIGGER contacts_ad AFTER DELETE ON contacts BEGIN
+        DELETE FROM contacts_fts WHERE rowid = old.rowid;
+      END;
+      CREATE TRIGGER contacts_au AFTER UPDATE OF id, name, company, role, headline, location, about, industry, preferences, searchExpansion, isGhost, isArchived, canonicalId, deletedAt, ownerId ON contacts BEGIN
+        DELETE FROM contacts_fts WHERE rowid = old.rowid;
+        INSERT INTO contacts_fts(rowid, contactId, name, company, role, headline, location, about, industry, extras, searchExpansion, ownerTok) SELECT c.rowid, c.id, c.name, c.company, c.role, c.headline, c.location, c.about, c.industry,
+  COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(email, ' ') FROM contact_emails WHERE contactId = c.id), '') || ' ' ||
+  COALESCE((SELECT GROUP_CONCAT(phone, ' ') FROM contact_phones WHERE contactId = c.id), ''),
+  COALESCE(c.searchExpansion, ''), 'o' || replace(c.ownerId, '-', '')
+        FROM contacts c WHERE c.id = new.id AND c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
+  AND c.canonicalId IS NULL AND c.deletedAt IS NULL;
+      END;"
+`;

@@ -42,7 +42,7 @@ and 0.2. Feature branch into `v2.0`, squash-merge, `npm run lint` and
 - `validateBody` with zod schemas lives in `server/utils/validators.ts`. `AppError` subclasses: `NotFoundError`, `ValidationError`, `ConflictError`, `RateLimitedError`, `ServiceUnavailableError`, `UpstreamTimeoutError`.
 - `passwords.ts` exports `hashPassword` and `verifyPassword` (scrypt, self-describing hash).
 - FK behavior that matters for delete: `sessions.userId`, `api_tokens.userId`, `user_settings.userId`, `invitations.invitedBy` are `ON DELETE CASCADE`; `audit_log.actorUserId`, `invitations.acceptedBy`, `users.createdBy` are `ON DELETE SET NULL`; every `ownerId` is `ON DELETE RESTRICT`; `search_embeddings`, `contact_embeddings`, `dedupe_embedding_meta`, and `dedupe_merge_log` have **no** FK to `contacts` or `users` and must be deleted explicitly.
-- FTS triggers delete by `cidTok` (Phase 1). An owner purge of 5,000 contacts with 10,000 emails measured 0.2 s; with the old triggers it took 77 s.
+- FTS triggers delete by `rowid`, which FTS5 pushes down (PR #18, kept by Phase 1; `cidTok` was proposed and not built, see data model §5.5). An owner purge of 5,000 contacts with 10,000 emails measured 0.2 s with an indexed delete; with the `v1.5.5` triggers it took 77 s.
 
 ---
 
@@ -178,7 +178,7 @@ Purge order, in one transaction, for `ownerId = target`:
 2. `DELETE FROM dedupe_suggestions`, `dedupe_exclusions`, `dedupe_merge_log`, `ai_invocations` `WHERE ownerId = ?`.
 3. `DELETE FROM action_items`, `interactions` `WHERE ownerId = ?` (cascades `interaction_mentions`).
 4. `DELETE FROM lists WHERE ownerId = ?` (cascades `list_members`).
-5. `DELETE FROM contacts WHERE ownerId = ?` (cascades the ten child tables; the FTS triggers remove index rows by `cidTok`).
+5. `DELETE FROM contacts WHERE ownerId = ?` (cascades the ten child tables; `contacts_ad` removes index rows by `rowid`). One `DELETE FROM contacts_fts WHERE contacts_fts MATCH 'ownerTok:...'` can clear the owner's index rows in a single statement, measured at 17 ms per 5,000.
 6. `DELETE FROM users WHERE id = ?` (cascades `sessions`, `api_tokens`, `user_settings`, and the user's pending `invitations`; `audit_log.actorUserId`, `invitations.acceptedBy`, and `users.createdBy` become `NULL`).
 7. After commit: `fs.rm(ownerUploadDir(target, "avatars"), { recursive: true, force: true })` and the same for `files`.
 
@@ -186,7 +186,7 @@ Guards: cannot delete self (`400 CANNOT_TARGET_SELF`). `409 LAST_ADMIN` when
 the target is the last active admin. Audit log entry with the counts.
 
 Cost: 5,000 contacts with 10,000 emails purged in 0.2 s on the synthetic
-schema with the `cidTok` triggers (measured). The acceptance criterion is
+schema with indexed trigger deletes (measured). The acceptance criterion is
 10,000 contacts in under 2 s on the real schema. If a real database exceeds
 that, chunk step 5 at 1,000 contacts per transaction; a crash between chunks
 leaves a partially deleted but consistent owner that the next purge call
@@ -317,7 +317,7 @@ acceptance list below with the two-user harness plus a third actor for the
 | Risk | Mitigation |
 | ---- | ---------- |
 | Admin deletes the wrong user | Two-step: `409` with counts first, then `purge`. Export button next to delete. Audit row. The docs recommend disabling for a week before deleting, in line with Immich's 7-day model. |
-| Purge transaction holds the write lock | Measured 0.2 s per 5,000 contacts with the `cidTok` triggers. `busy_timeout` is 5 s. The chunking fallback is described in 3.5. |
+| Purge transaction holds the write lock | Measured 0.2 s per 5,000 contacts with indexed trigger deletes. `busy_timeout` is 5 s. The chunking fallback is described in 3.5. |
 | Invitation link leaked | 7-day expiry, single use, revocable. The secret is only in the link. |
 | Temporary password visible to the admin | By design and documented. The forced change is what makes it acceptable. |
 | A route-level `requireAdmin` is forgotten on a new admin route | The manifest test checks `route.stack` for every `admin` row. |

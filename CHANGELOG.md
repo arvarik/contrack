@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 1, breaking.** Endpoints that manage the signed-in account refuse an
+  API token with `403 SESSION_REQUIRED`. The code was `403 USER_REQUIRED`. The
+  seven affected endpoints are under `/api/auth`: `GET /me`, `PATCH /me`,
+  `POST /change-password`, `GET /sessions`, `DELETE /sessions`,
+  `GET /session-policy`, `PUT /session-policy`. Nothing else changes, and a
+  token still reaches every data endpoint. The rename is because every request
+  now carries a user account, so "user required" said the opposite of what the
+  gate checks: it wants a browser session, not merely a valid credential.
+- **Phase 1.** Auth-off instances now have an account. Every instance gets a
+  `local` account at boot that nobody can sign in to, and it owns this
+  device's data. `GET /api/auth/status` reports it, so an ungated instance
+  answers `authenticated: true` with a user instead of `null`. Securing the
+  instance converts that account rather than creating a second one, so
+  everything it already owns stays owned and nothing has to be claimed.
+- **Phase 1.** Uploads live under `uploads/u/<ownerId>/avatars/` and
+  `uploads/u/<ownerId>/files/`. Existing files move on the first boot and the
+  stored URLs are rewritten to match. `uploads/logos/` stays shared. A file no
+  row references moves to `uploads/orphaned/` and is logged. Nothing is
+  deleted. The old flat URL now returns `404` for a file that moved.
+- **Phase 1.** `GET /api/auth/status` reports `deviceContacts`, which is what
+  `existingContacts` counted. Both names are sent for now so an older frontend
+  keeps working; `existingContacts` goes away in Phase 3.
+- **Phase 1.** Signing in to a disabled account returns `403 ACCOUNT_DISABLED`
+  rather than succeeding. The check runs after the password, so a wrong
+  password still gets the shared `401 INVALID_CREDENTIALS` and this cannot be
+  used to find out which accounts exist. Disabling an account also ends its
+  live sessions on their next request.
+- **Phase 1.** Auth-off mode is refused when real accounts exist. The server
+  logs an error at boot and enforces auth anyway, because with a second
+  account there is no answer to "who is the caller with no credential".
+
 - **Phase 0.** CI now runs for the `v2.0` integration branch. Pull requests
   into `v2.0`, and pushes to it, run the `build-and-test` job. The container
   image job and the release job still run only for `main` and for version
@@ -18,14 +49,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request makes. Prettier and ESLint skip that folder, so the design
   documents and their benchmark scripts stay exactly as written.
 
-### Fixed
-
-- **Phase 0.** `GET /api/contacts/action-items` works again. `contactsRouter`
-  mounted before `mcpRouter`, so `GET /contacts/:id` captured `action-items`
-  as a contact id and answered `404`. The route was unreachable, so no
-  working client changes behavior. The MCP router now mounts first.
-
 ### Added
+
+- **Phase 1.** Every row in every owned table has an owner, enforced by
+  triggers rather than by convention. Eight tables carry `ownerId` now:
+  `contacts`, `lists`, `interactions`, `action_items`, `dedupe_suggestions`,
+  `dedupe_exclusions`, `dedupe_merge_log` and `ai_invocations`. An insert with
+  no owner is refused on the four that have no parent contact, and filled from
+  the contact on the four that do. A child row whose owner disagrees with its
+  contact is refused, which is what makes a cross-owner duplicate suggestion
+  impossible rather than merely unlikely.
+- **Phase 1.** The upgrade takes a full copy of the database first, with
+  `VACUUM INTO`, into `backups/pre-tenancy-<stamp>.db`. The copy is made before
+  any schema change, so restoring it puts the instance exactly back. It is
+  skipped with an error in the log when free space is under 1.5 times the
+  database size, rather than failing the boot. `backupService` never rotates
+  it away, so delete it by hand once the upgrade is trusted.
+- **Phase 1.** `npm run tenancy:verify` checks an upgraded instance: no
+  unowned rows, every child owner matching its contact, the search index
+  complete and correctly tokenized, both vector stores partitioned with no
+  orphans, no uploads left at the old paths, and all 27 triggers present.
+- **Phase 1.** `scripts/tenancy-rollback-uploads.mjs` moves uploads back to
+  the 1.x layout, for a downgrade after restoring the backup.
+- **Phase 1.** Vector search is partitioned by owner. Both `vec0` tables gain
+  `ownerId TEXT PARTITION KEY`, and existing vectors are copied into the new
+  shape rather than recomputed, so upgrading spends nothing with an embedding
+  provider. The boot refuses to start on a sqlite-vec below 0.1.6, which is
+  where partition keys were introduced.
+- **Phase 1.** Per-user API tokens (`ctk_...`) are recognized. Only the
+  SHA-256 is stored. A revoked token, an expired one, and one belonging to a
+  disabled account are all refused. Phase 3 adds the endpoints that create
+  them.
 
 - **Phase 0.** New rows carry their owner. On an instance with
   `AUTH_REQUIRED=true`, a contact, a bulk import, a list, a ghost contact from
@@ -54,6 +108,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Search ranking does not change, because the offset this guards against was
   already corrected in 1.5.5. Phase 1 adds two more columns to that table,
   and this test fails if the weight list is not extended with them.
+
+### Fixed
+
+- **Phase 1.** Upgrading no longer re-embeds the whole contact list through a
+  paid provider. Two bulk writes during the migration stamped `updatedAt` on
+  every row they touched, and the deep dedupe scan re-embeds any contact whose
+  `updatedAt` is newer than its last embedding. The ownership claim now runs
+  with the seventeen affected triggers dropped, and the uploads relocation runs
+  in the same window. Measured on 5,000 contacts: the claim stamped all 5,000
+  before, and none after.
+
+- **Phase 0.** `GET /api/contacts/action-items` works again. `contactsRouter`
+  mounted before `mcpRouter`, so `GET /contacts/:id` captured `action-items`
+  as a contact id and answered `404`. The route was unreachable, so no
+  working client changes behavior. The MCP router now mounts first.
 
 ## [1.5.5] — 2026-08-09
 

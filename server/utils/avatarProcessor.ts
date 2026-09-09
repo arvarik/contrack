@@ -1,7 +1,7 @@
 /**
  * avatarProcessor — Decodes base64 data-URI avatars from VCF imports,
  * resizes them to a reasonable size (256px for 2x retina), converts to
- * JPEG, and saves to /uploads/avatars/. Returns the file URL path.
+ * JPEG, and saves to the caller's uploads/u/<ownerId>/avatars/. Returns the URL.
  *
  * This prevents 150KB+ raw photos from bloating the SQLite database
  * as enormous base64 strings. A typical processed avatar is ~5-10KB.
@@ -12,15 +12,15 @@ import path from "path";
 import sharp from "sharp";
 import { log } from "./logger.ts";
 import { getErrorMessage } from "./helpers.ts";
-import { AVATARS_DIR } from "./paths.ts";
+import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
+import { currentOwnerId } from "../tenancy/requestContext.ts";
 
-const AVATAR_DIR = AVATARS_DIR;
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
 
 /**
  * Process a base64 data-URI avatar: resize, compress, save to disk.
- * Returns the URL path (e.g., `/uploads/avatars/abc123.jpg`) or null on failure.
+ * Returns the URL path (e.g. `/uploads/u/<ownerId>/avatars/abc123.jpg`), or null on failure.
  */
 export async function processBase64Avatar(
   dataUri: string,
@@ -33,10 +33,9 @@ export async function processBase64Avatar(
     const base64Data = match[2];
     const inputBuffer = Buffer.from(base64Data, "base64");
 
-    // Ensure the avatars directory exists
-    if (!fs.existsSync(AVATAR_DIR)) {
-      fs.mkdirSync(AVATAR_DIR, { recursive: true });
-    }
+    // Runs inside a contact create or update, so the owner is the caller.
+    const avatarDir = ownerUploadDir(currentOwnerId(), "avatars");
+    ensureDir(avatarDir);
 
     // Generate a unique filename
     const hash = crypto
@@ -45,7 +44,7 @@ export async function processBase64Avatar(
       .digest("hex")
       .slice(0, 12);
     const filename = `import-${hash}-${Date.now()}.jpg`;
-    const outputPath = path.join(AVATAR_DIR, filename);
+    const outputPath = path.join(avatarDir, filename);
 
     // Resize + convert to JPEG
     await sharp(inputBuffer)
@@ -62,7 +61,7 @@ export async function processBase64Avatar(
       `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(stats.size / 1024)}KB (${filename})`,
     );
 
-    return `/uploads/avatars/${filename}`;
+    return ownerUploadUrl(currentOwnerId(), "avatars", filename);
   } catch (err: unknown) {
     log.warn(
       "AvatarProcessor",

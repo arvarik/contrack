@@ -15,7 +15,7 @@
 // =============================================================================
 
 import crypto from "crypto";
-import { sqlite, OWNED_TABLES } from "../db.ts";
+import { sqlite, claimUnownedData, ensureLocalOwner } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { AppError, ConflictError, ValidationError } from "../utils/AppError.ts";
 import { getSetting, setSetting } from "./settingsService.ts";
@@ -95,6 +95,15 @@ export interface User {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
+  /** 'active' | 'disabled'. A disabled account cannot sign in and its live
+   *  sessions stop working on their next request. */
+  status: string;
+  /** 'password' for a real account, 'none' for the local owner. */
+  credentialState: string;
+  mustChangePassword: number;
+  passwordChangedAt: string | null;
+  disabledAt: string | null;
+  createdBy: string | null;
 }
 
 /** A user row plus the hash — never leaves this module. */
@@ -122,6 +131,9 @@ export function publicUser(user: User) {
     role: user.role,
     createdAt: user.createdAt,
     lastLoginAt: user.lastLoginAt,
+    status: user.status,
+    credentialState: user.credentialState,
+    mustChangePassword: user.mustChangePassword === 1,
   };
 }
 
@@ -160,8 +172,15 @@ export function validateUsername(username: string): string | null {
   if (!USERNAME_PATTERN.test(username)) {
     return "Use lowercase letters, numbers, dots, dashes and underscores; start and end with a letter or number.";
   }
+  // `local` is the local owner account that exists on every instance. Letting
+  // someone register it would collide on the UNIQUE index, and reading it back
+  // would be ambiguous with the implicit principal.
+  if (RESERVED_USERNAMES.has(username)) return "That username is reserved.";
   return null;
 }
+
+/** Usernames the instance owns. */
+const RESERVED_USERNAMES = new Set(["local"]);
 
 /** @returns an error message, or null when valid */
 export function validateEmail(email: string): string | null {
@@ -176,7 +195,9 @@ export function validateEmail(email: string): string | null {
 // =============================================================================
 
 const USER_COLUMNS = `id, email, username, displayName, passwordHash, role,
-                      createdAt, updatedAt, lastLoginAt`;
+                      createdAt, updatedAt, lastLoginAt,
+                      status, credentialState, mustChangePassword,
+                      passwordChangedAt, disabledAt, createdBy`;
 
 // =============================================================================
 // Hot-path prepared statements
@@ -201,15 +222,20 @@ const stmts = {
 };
 
 /**
- * Contacts not yet assigned to any account — what the first account will
- * claim. Excludes trashed rows, so the number matches what the app will
- * actually show once you are inside.
+ * Contacts this device accumulated before anyone made an account — what
+ * securing the instance will carry over.
+ *
+ * Before Phase 1 these rows had `ownerId IS NULL`. They now belong to the
+ * local owner account from boot, and setup converts that account rather than
+ * claiming from NULL, so the number is the same but the query is not.
+ * Excludes trashed and ghost rows, so it matches what the app will show.
  */
-export function countUnownedContacts(): number {
+export function countDeviceContacts(): number {
   const row = sqlite
     .prepare(
       `SELECT COUNT(*) AS n FROM contacts
-        WHERE ownerId IS NULL AND deletedAt IS NULL AND isGhost = 0`,
+        WHERE ownerId = (SELECT id FROM users WHERE credentialState = 'none')
+          AND deletedAt IS NULL AND isGhost = 0`,
     )
     .get() as { n: number };
   return row.n;
@@ -256,6 +282,12 @@ function stripHash(row: UserRow): User {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     lastLoginAt: row.lastLoginAt,
+    status: row.status,
+    credentialState: row.credentialState,
+    mustChangePassword: row.mustChangePassword,
+    passwordChangedAt: row.passwordChangedAt,
+    disabledAt: row.disabledAt,
+    createdBy: row.createdBy,
   };
 }
 
@@ -646,51 +678,99 @@ export function revokeOtherSessions(
 // =============================================================================
 
 /**
- * Assign every unowned row to `userId`.
+ * Boot-time ownership reconcile.
  *
- * This is what makes "I have been using Contrack without an account and now I
- * made one" keep its data: rows written before any account existed have a NULL
- * `ownerId`, and this claims them. It runs on account creation and again at
- * boot, because anything written while signed out (an API token client, a
- * background job) also lands unowned.
+ * Every instance has a local owner from `server/db.ts` §2z-4, so this no
+ * longer has to guess who to claim for: it ensures that account exists and
+ * hands it anything written without an owner. Idempotent, and a no-op after
+ * the first boot because the claim's WHERE clause then matches nothing.
  *
- * Idempotent — after the first run the WHERE clause matches nothing.
- *
- * @returns rows claimed, per table
+ * The old "only when exactly one account exists" guard is gone. It was there
+ * because with several accounts there was no safe answer, and the local owner
+ * is that answer.
  */
-export function claimUnownedData(userId: string): Record<string, number> {
-  const claimed: Record<string, number> = {};
-  const claimAll = sqlite.transaction(() => {
-    for (const table of OWNED_TABLES) {
-      const result = sqlite
-        .prepare(`UPDATE ${table} SET ownerId = ? WHERE ownerId IS NULL`)
-        .run(userId);
-      if (result.changes > 0) claimed[table] = result.changes;
-    }
-  });
-  claimAll();
-
-  const total = Object.values(claimed).reduce((a, b) => a + b, 0);
-  if (total > 0) {
-    const detail = Object.entries(claimed)
-      .map(([table, n]) => `${n} ${table}`)
-      .join(", ");
-    log.info("Auth", `Claimed ${detail} for account ${userId}`);
-  }
-  return claimed;
+export function reconcileOwnership(): void {
+  claimUnownedData(ensureLocalOwner());
 }
 
 /**
- * Boot-time ownership reconcile.
+ * Convert the local owner into a real account, keeping its id.
  *
- * Only acts when there is exactly one account — with none there is nobody to
- * claim for, and with several, guessing an owner is precisely the wrong move.
- * Once multi-tenancy lands this becomes a no-op and can be deleted.
+ * This is what `POST /api/auth/setup` calls on an instance that has been used
+ * without auth. Ownership does not move, because the id does not change, so
+ * every contact written before the password existed is still owned by the
+ * account that now has one.
  */
-export function reconcileOwnership(): void {
-  if (countUsers() !== 1) return;
-  const row = sqlite.prepare(`SELECT id FROM users LIMIT 1`).get() as {
-    id: string;
-  };
-  claimUnownedData(row.id);
+export async function convertLocalOwner(input: {
+  email: unknown;
+  username: unknown;
+  password: unknown;
+  displayName?: unknown;
+}): Promise<User> {
+  const email = normalizeEmail(input.email);
+  const username = normalizeUsername(input.username);
+
+  const emailError = validateEmail(email);
+  if (emailError) throw new ValidationError(emailError);
+  const usernameError = validateUsername(username);
+  if (usernameError) throw new ValidationError(usernameError);
+  const passwordError = validatePassword(input.password);
+  if (passwordError) throw new ValidationError(passwordError);
+
+  const local = sqlite
+    .prepare(`SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`)
+    .get() as { id: string } | undefined;
+  if (!local) throw new AppError("There is no local owner to convert", 409);
+
+  assertIdentifiersFree(email, username, local.id);
+
+  const displayName =
+    typeof input.displayName === "string" && input.displayName.trim()
+      ? input.displayName.trim().slice(0, 100)
+      : null;
+  const passwordHash = await hashPassword(input.password as string);
+
+  try {
+    sqlite
+      .prepare(
+        `UPDATE users
+            SET email = ?, username = ?, displayName = ?, passwordHash = ?,
+                credentialState = 'password', passwordChangedAt = CURRENT_TIMESTAMP,
+                role = 'admin', status = 'active', updatedAt = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+      )
+      .run(email, username, displayName, passwordHash, local.id);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new ConflictError(
+        "That username or email address is already taken.",
+      );
+    }
+    throw err;
+  }
+
+  const converted = getUserById(local.id)!;
+  log.info(
+    "Auth",
+    `Secured this instance as "${converted.username}" (${converted.id}), keeping its data`,
+  );
+  return converted;
+}
+
+/** True while this instance has never had a password set on it. */
+export function hasLocalOwner(): boolean {
+  const row = sqlite
+    .prepare(`SELECT 1 AS ok FROM users WHERE credentialState = 'none' LIMIT 1`)
+    .get() as { ok: number } | undefined;
+  return row !== undefined;
+}
+
+/** How many accounts someone can actually sign in to. */
+export function countPasswordAccounts(): number {
+  const row = sqlite
+    .prepare(
+      `SELECT COUNT(*) AS n FROM users WHERE credentialState = 'password'`,
+    )
+    .get() as { n: number };
+  return row.n;
 }

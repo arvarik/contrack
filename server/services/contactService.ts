@@ -1,7 +1,7 @@
 import { assertContactExists } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
-import { resolveUploadPath } from "../utils/paths.ts";
+import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../../src/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -21,7 +21,7 @@ import {
   isBase64DataUri,
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
-import { currentScopeOrNull } from "../tenancy/requestContext.ts";
+import { currentOwnerId } from "../tenancy/requestContext.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildAvatarUrl } from "./avatarService.ts";
 import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
@@ -98,7 +98,7 @@ function buildInsertValues(body: NewContactPayload, id: string) {
     // Stamped from the request context, so a signed-in caller's rows are
     // owned the moment they are written. Anonymous mode writes null, which
     // reconcileOwnership still claims at boot for a single account.
-    ownerId: currentScopeOrNull()?.ownerId ?? null,
+    ownerId: currentOwnerId(),
     name: body.name,
     firstName: body.firstName || null,
     lastName: body.lastName || null,
@@ -591,12 +591,17 @@ export const contactService = {
   },
 
   updateAvatar(id: string, fileFilename: string) {
-    const avatarUrl = `/uploads/avatars/${fileFilename}`;
+    // The same owner multer used for the destination directory, so the URL
+    // and the file on disk cannot disagree.
+    const avatarUrl = ownerUploadUrl(currentOwnerId(), "avatars", fileFilename);
 
     const existing = sqlite
       .prepare("SELECT avatarUrl FROM contacts WHERE id = ?")
       .get(id) as { avatarUrl: string | null } | undefined;
-    if (existing?.avatarUrl?.startsWith("/uploads/avatars/")) {
+    // Matches both layouts: `/uploads/avatars/...` from before Phase 1 and
+    // `/uploads/u/<owner>/avatars/...` after it. Never `/uploads/logos/`,
+    // which is shared and must not be deleted with a contact's avatar.
+    if (existing?.avatarUrl?.includes("/avatars/")) {
       // avatarUrl is user-writable via the update endpoints — resolve it
       // through the containment check so `..` segments can't escape uploads/.
       const oldPath = resolveUploadPath(existing.avatarUrl);

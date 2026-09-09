@@ -5,7 +5,14 @@ import * as schema from "../src/db/schema.ts";
 // a brand-new data directory works instead of dying on "no such table".
 // (The old private connection hardcoded ./curator.db — on a DATA_DIR install
 // it seeded a stray database the app never reads.)
-import { db, sqlite } from "../server/db.ts";
+import { db, ensureLocalOwner, sqlite } from "../server/db.ts";
+
+// Every contact needs an owner: the `contacts_owner_required` trigger from
+// Phase 1 refuses an insert without one. Importing server/db.ts above has
+// already run the migration, so the local owner exists by now. Interactions and
+// action items are filled from their contact by trigger, so only contacts and
+// lists have to name it.
+const ownerId = ensureLocalOwner();
 
 const contactCount = sqlite
   .prepare("SELECT COUNT(*) as count FROM contacts")
@@ -18,6 +25,7 @@ if (contactCount.count === 0) {
     db.insert(schema.contacts)
       .values({
         id: julianId,
+        ownerId,
         name: "Julian Thorne",
         firstName: "Julian",
         lastName: "Thorne",

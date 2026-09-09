@@ -45,7 +45,8 @@
     "test:coverage": "vitest run --project unit --project integration --coverage",
     "prepare": "husky",
     "test:contract": "vitest run --project contract",
-    "audit:contrast": "node scripts/contrast-audit.mjs"
+    "audit:contrast": "node scripts/contrast-audit.mjs",
+    "tenancy:verify": "tsx scripts/tenancy-verify.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
