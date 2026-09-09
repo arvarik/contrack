@@ -11,9 +11,10 @@ import {
   interactionCreateSchema,
   interactionUpdateSchema,
 } from "../utils/validators.ts";
-import { AppError } from "../utils/AppError.ts";
+import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 // Attachments go to uploads/u/<ownerId>/files/ now. The destination callback
 // creates the caller's directory; there is no shared one to make here.
@@ -70,7 +71,10 @@ router.get(
   "/contacts/:id/timeline",
   requireContact,
   asyncHandler(async (req, res) => {
-    const items = interactionService.getTimeline(String(req.params.id));
+    const items = interactionService.getTimeline(
+      scopeOf(req),
+      String(req.params.id),
+    );
     res.json(items);
   }),
 );
@@ -82,6 +86,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const result = interactionService.createInteraction(
+      scopeOf(req),
       String(req.params.id),
       req.body,
     );
@@ -106,6 +111,7 @@ router.post(
     let points;
     try {
       points = await interactionService.generateBriefing(
+        scopeOf(req),
         String(req.params.id),
         controller.signal,
       );
@@ -127,7 +133,10 @@ router.post(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const updated = interactionService.promoteGhost(String(req.params.id));
+    const updated = interactionService.promoteGhost(
+      scopeOf(req),
+      String(req.params.id),
+    );
     if (!updated) throw new AppError("Contact not found", 404);
 
     log.info("API", `[${rid}] Promoted ghost contact: ${updated.name}`);
@@ -144,7 +153,7 @@ router.post(
     if (!req.file) throw new AppError("No file", 400);
 
     const result = await interactionService
-      .handleAttachment(String(req.params.id), req.file)
+      .handleAttachment(scopeOf(req), String(req.params.id), req.file)
       .catch(async (error) => {
         await fs.promises
           .unlink(req.file!.path)
@@ -168,10 +177,11 @@ router.patch(
     const rid = req.requestId;
 
     const result = interactionService.updateInteraction(
+      scopeOf(req),
       String(req.params.id),
       req.body,
     );
-    if (!result) throw new AppError("Not found", 404);
+    if (!result) throw new NotFoundError("Interaction");
 
     log.info("API", `[${rid}] PATCH interaction → ${String(req.params.id)}`);
     res.json(result);
@@ -182,8 +192,11 @@ router.delete(
   "/interactions/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const success = interactionService.deleteInteraction(String(req.params.id));
-    if (!success) throw new AppError("Not found", 404);
+    const success = interactionService.deleteInteraction(
+      scopeOf(req),
+      String(req.params.id),
+    );
+    if (!success) throw new NotFoundError("Interaction");
 
     log.info("API", `[${rid}] DELETE interaction → ${String(req.params.id)}`);
     res.json({ success: true });
@@ -207,6 +220,7 @@ router.get(
     const limit = rawLimit === undefined ? 50 : Number(rawLimit);
 
     const rows = interactionService.getRelationships(
+      scopeOf(req),
       String(req.params.id),
       limit,
     );

@@ -98,12 +98,17 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
 
   /**
    * Daily Insight: AI-generated CRM network insight.
-   * TTL 24h: Regenerated once per day. Single-slot cache (maxEntries: 1).
+   * TTL 24h: Regenerated once per day.
    * Invalidation: Full flush on any contact mutation.
+   *
+   * Since sub-phase 2d the key leads with the owner id, so the tier holds one
+   * entry per owner rather than one entry for the instance. `maxEntries` is
+   * 100 to match. A single slot would have made each owner's first dashboard
+   * of the day evict the last owner's.
    */
   dailyInsight: {
     ttlMs: 24 * 60 * 60_000,
-    maxEntries: 1,
+    maxEntries: 100,
     label: "DailyInsight",
   },
 

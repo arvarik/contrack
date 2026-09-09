@@ -27,6 +27,15 @@ import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
 import { TwoPassStrategy } from "../../server/services/aiSearch/strategies/twoPass.ts";
 import { interactionService } from "../../server/services/interactionService.ts";
 import { dashboardService } from "../../server/services/dashboardService.ts";
+import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
+import { localOwnerId } from "./tenancy/helpers.ts";
+
+/**
+ * These tests call the services directly, with auth off, so the owner is the
+ * local owner account boot created. That is the same owner the route would
+ * have supplied through `scopeOf(req)`.
+ */
+const scope = () => scopeForOwnerId(localOwnerId());
 import { aiCache } from "../../server/utils/aiCache.ts";
 import type { AIGenerateResult } from "../../server/ai/types.ts";
 
@@ -250,8 +259,8 @@ describe("AI cache freshness", () => {
       .post(`/api/contacts/${id}/interactions`)
       .send({ type: "note", title: "Topic", content: "Old context" });
     vi.mocked(generateFor).mockResolvedValue(reply('["First grounded point"]'));
-    await interactionService.generateBriefing(id);
-    await interactionService.generateBriefing(id);
+    await interactionService.generateBriefing(scope(), id);
+    await interactionService.generateBriefing(scope(), id);
     expect(generateFor).toHaveBeenCalledTimes(1);
     sqlite
       .prepare("UPDATE interactions SET content = 'New context' WHERE id = ?")
@@ -259,7 +268,7 @@ describe("AI cache freshness", () => {
     vi.mocked(generateFor).mockResolvedValue(
       reply('["Updated grounded point"]'),
     );
-    expect(await interactionService.generateBriefing(id)).toEqual([
+    expect(await interactionService.generateBriefing(scope(), id)).toEqual([
       "Updated grounded point",
     ]);
     expect(generateFor).toHaveBeenCalledTimes(2);
@@ -273,7 +282,7 @@ describe("AI cache freshness", () => {
         }),
     );
     const pending = interactionService
-      .generateBriefing(id)
+      .generateBriefing(scope(), id)
       .catch((error) => error);
     await vi.waitFor(() => expect(generateFor).toHaveBeenCalledTimes(1));
     sqlite
@@ -285,9 +294,9 @@ describe("AI cache freshness", () => {
   });
   it("returns a configuration error instead of invented briefing content", async () => {
     vi.mocked(isAnyProviderConfigured).mockReturnValue(false);
-    await expect(interactionService.generateBriefing(id)).rejects.toMatchObject(
-      { statusCode: 503 },
-    );
+    await expect(
+      interactionService.generateBriefing(scope(), id),
+    ).rejects.toMatchObject({ statusCode: 503 });
     expect(generateFor).not.toHaveBeenCalled();
   });
   it("does not create ghost contacts after the source interaction disappears", async () => {
@@ -327,7 +336,7 @@ describe("AI cache freshness", () => {
     sqlite
       .prepare("UPDATE contacts SET deletedAt = CURRENT_TIMESTAMP WHERE id = ?")
       .run(removed);
-    const dashboard = dashboardService.getDashboardPayload();
+    const dashboard = dashboardService.getDashboardPayload(scope());
     expect(dashboard.metrics.totalActive).toBe(1);
     expect(dashboard.recentlyAdded.map((contact) => contact.id)).toEqual([id]);
     expect(dashboard.industryComposition).toEqual([]);

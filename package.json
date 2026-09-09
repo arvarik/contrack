@@ -33,7 +33,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "eslint . && tsc --noEmit && npm run lint:tenant",
-    "lint:tenant": "node scripts/tenant-lint.mjs --report && node scripts/tenant-lint.mjs --strict \"server/middleware/uploads.ts\" \"server/repositories/contactRepository.ts\" \"server/routes/contacts.ts\" \"server/services/contactService.ts\" \"server/utils/avatarProcessor.ts\"",
+    "lint:tenant": "node scripts/tenant-lint.mjs --report && node scripts/tenant-lint.mjs --strict \"server/middleware/uploads.ts\" \"server/repositories/contactRepository.ts\" \"server/routes/actionItems.ts\" \"server/routes/contacts.ts\" \"server/routes/dashboard.ts\" \"server/routes/interactions.ts\" \"server/routes/lists.ts\" \"server/services/actionItemService.ts\" \"server/services/contactGuard.ts\" \"server/services/contactService.ts\" \"server/services/dashboardService.ts\" \"server/services/interactionService.ts\" \"server/services/listService.ts\" \"server/services/relationshipService.ts\" \"server/services/zeroStateService.ts\" \"server/utils/avatarProcessor.ts\"",
     "lint:js": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
