@@ -14,10 +14,16 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { makeTestApp } from "./helpers.ts";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
-import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
+import {
+  requireAdmin,
+  __resetAuthWarnings,
+} from "../../server/middleware/auth.ts";
+import type { AppError } from "../../server/utils/AppError.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
 
 const app = makeTestApp();
@@ -636,6 +642,53 @@ describe("sessions", () => {
       (sqlite.prepare("SELECT COUNT(*) n FROM sessions").get() as { n: number })
         .n,
     ).toBe(0);
+  });
+});
+
+// =============================================================================
+
+describe("requireAdmin", () => {
+  // Phase 2g and Phase 3 mount this. It is built now so the gate exists before
+  // anything needs it, and tested now so it is not written twice.
+  const run = (principal: unknown): { code?: string; status?: number } => {
+    let captured: AppError | undefined;
+    requireAdmin(
+      { principal } as never,
+      {} as never,
+      ((err?: unknown) => {
+        captured = err as AppError;
+      }) as never,
+    );
+    return { code: captured?.code, status: captured?.statusCode };
+  };
+
+  it("passes an admin", () => {
+    expect(
+      run({ kind: "user", user: { role: "admin" }, via: "session" }),
+    ).toEqual({ code: undefined, status: undefined });
+  });
+
+  it("refuses a member with ADMIN_REQUIRED", () => {
+    expect(
+      run({ kind: "user", user: { role: "member" }, via: "session" }),
+    ).toEqual({ code: "ADMIN_REQUIRED", status: 403 });
+  });
+
+  it("refuses an unauthenticated request with UNAUTHORIZED", () => {
+    expect(run(undefined)).toEqual({ code: "UNAUTHORIZED", status: 401 });
+  });
+
+  it("is mounted nowhere yet, which is deliberate until Phase 2g", () => {
+    // Mounting it early would gate an endpoint that has no admin story behind
+    // it, and would be invisible until somebody with a member account hit it.
+    const routes = fs
+      .readdirSync("server/routes", { recursive: true })
+      .filter((f) => String(f).endsWith(".ts"))
+      .map((f) =>
+        fs.readFileSync(path.join("server/routes", String(f)), "utf8"),
+      );
+    const mounted = routes.filter((src) => /\brequireAdmin\b/.test(src));
+    expect(mounted).toHaveLength(0);
   });
 });
 
