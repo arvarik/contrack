@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sqlite } from "../../db.ts";
+import { currentScopeOrNull } from "../../tenancy/requestContext.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
@@ -581,8 +582,11 @@ export const dedupeService = {
       crypto.randomUUID(),
     ];
 
+    // Dev-only seed. Stamped like every other insert so the seeded rows
+    // belong to whoever asked for them.
+    const owner = currentScopeOrNull()?.ownerId ?? null;
     const insertContact = sqlite.prepare(
-      "INSERT INTO contacts (id, name, company, role, themeColor) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO contacts (id, name, company, role, themeColor, ownerId) VALUES (?, ?, ?, ?, ?, ?)",
     );
     const insertEmail = sqlite.prepare(
       "INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, 1)",
@@ -597,6 +601,7 @@ export const dedupeService = {
       "Acme Corp",
       "VP Sales",
       "brand",
+      owner,
     );
     insertPhone.run(crypto.randomUUID(), ids[0], "(555) 867-5309");
 
@@ -606,6 +611,7 @@ export const dedupeService = {
       "Acme Corp",
       "Vice President of Sales",
       "indigo",
+      owner,
     );
     insertEmail.run(crypto.randomUUID(), ids[1], "bob.johnson@gmail.com");
 
@@ -615,10 +621,11 @@ export const dedupeService = {
       "Acme Corporation",
       "VP Sales",
       "violet",
+      owner,
     );
     insertEmail.run(crypto.randomUUID(), ids[2], "bob.johnson@gmail.com");
 
-    insertContact.run(ids[3], "R. Johnson", null, null, "teal");
+    insertContact.run(ids[3], "R. Johnson", null, null, "teal", owner);
     insertPhone.run(crypto.randomUUID(), ids[3], "555-867-5309");
   },
 };

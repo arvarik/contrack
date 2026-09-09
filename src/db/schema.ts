@@ -141,10 +141,14 @@ export const contacts = sqliteTable("contacts", {
 // `ownerId` appears on exactly four tables: contacts, lists, ai_invocations,
 // and dedupe_merge_log. That is not an oversight — it is every table that is
 // NOT reachable from `contacts` through a foreign key. Interactions, action
-// items, list members, the eleven contact_* child tables and the dedupe
+// items, list members, the ten contact_* child tables and the dedupe
 // suggestion/exclusion tables all carry a `contactId` (or `listId`) with ON
 // DELETE CASCADE, so their owner is derivable by a join and duplicating it
 // would only create a column that can drift out of sync.
+//
+// The 2.0 multi-tenant work revisits this: see docs/multi-tenant-plan/,
+// specifically 04-data-model-and-migration.md, which denormalizes `ownerId`
+// onto four of those child tables for covering indexes.
 //
 // dedupe_merge_log is the interesting exception: it deliberately has no
 // foreign key, because it stores snapshots of contacts that were hard-deleted
