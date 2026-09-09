@@ -571,7 +571,7 @@ and has a home in [07-phase-2-scoping.md](07-phase-2-scoping.md).
 |---|---|---|
 | `server/services/contactService.ts:155-163` | `hardDeleteContact`, `db.delete(schema.contacts)`. Called from `:602` and `:626`. The Drizzle count for this file is 8, not 7 | 2a |
 | `server/services/contactService.ts:704-740` | `getSlimContacts` pass 2: six statements with an inner `SELECT id FROM contacts WHERE isArchived = 0 ...` subselect | 2a |
-| `server/services/contactService.ts:239-265`, `:465-479` | Doc2Query fire-and-forget: AI call, then `UPDATE contacts SET searchExpansion = ? WHERE id = ?`, then `embedContact` | 2a |
+| ~~`server/services/contactService.ts:239-265`, `:465-479`~~ | Doc2Query fire-and-forget: AI call, then `UPDATE contacts SET searchExpansion = ? WHERE id = ?`, then `embedContact`. **Gone since PR #18**, which replaced it with `scheduleSearchIndex` in `search/indexQueue.ts`: no AI call, `searchExpansion` only ever cleared, and the owner read off the contact row | 2a, closed |
 | `server/routes/contacts.ts:521-550` | Non-stream bulk import tail: `generateAndStoreBulkEmbeddings` (`:523`) and a 3 s-delayed `ParallelQueue.process(createdIds, 1, incrementalDedupeCheck)` (`:530-549`) | 2a |
 | `server/routes/contacts.ts:233-234`, `:246` | Import-time duplicate matching calls `loadNegativeConstraints()`, `normalizeContacts()`, `normalizeContactById()` across the whole instance. The six `SELECT * FROM contacts WHERE id = ?` probes only hydrate already-matched pairs | 2a, 2e |
 | `server/services/relationshipService.ts:250-252` | `explainScore` writes `UPDATE contacts SET relationshipScore` (not read-only) | 2a, 2d |

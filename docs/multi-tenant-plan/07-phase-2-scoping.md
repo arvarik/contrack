@@ -17,6 +17,40 @@ sub-phase names every function and statement it converts with its `v1.5.5`
 line number. When a line has drifted, search for the function name. The
 complete inventory is [appendix-a-query-inventory.md](appendix-a-query-inventory.md).
 
+> **What 2a actually shipped, where it differs from this document.** Same
+> cause as the Phase 1 note: the plan was written against `v1.5.5` and PR #18
+> rewrote the search layer.
+>
+> - **There is no Doc2Query fire-and-forget block.** The 2a table and appendix
+>   A2 describe an AI call after the response that writes
+>   `contacts.searchExpansion` and then embeds. PR #18 replaced it with
+>   `scheduleSearchIndex` in `server/services/search/indexQueue.ts`, which sets
+>   `searchExpansion` to `NULL` and queues a local embedding. Nothing calls
+>   `generateSearchExpansion` any more; the column is only ever cleared.
+>   `embedContact` reads the owner off the contact row it already loads, so
+>   there is nothing to scope and nothing to attribute. The surviving tail is
+>   the non-stream bulk import, which is wrapped as the plan says.
+> - **The bulk-import tail was already attributed.** `AsyncLocalStorage`
+>   survives the `setTimeout`, so the invocation rows carried the importer
+>   before the wrapper as well as after it. The wrapper stays because it makes
+>   the scope an argument instead of an inheritance, and rule 6's real case is
+>   an `EventEmitter` listener, not a timer.
+> - **`requireContact` is scoped now, not in 2b.** It is shared with the
+>   interaction, action item, and list routes, and `POST /contacts/:id/avatar`
+>   and `POST /contacts/:id/enrich` depend on it. Leaving it unscoped would
+>   have left a hole in 2a's own routes. `assertContactExists` keeps its
+>   unscoped form for the three services 2b converts.
+> - **Three signatures needed interim call sites.** `normalizeContacts`,
+>   `normalizeContactById` and `loadNegativeConstraints` take a scope now, and
+>   the dedupe engine, its pass context, and the embedding helpers call them
+>   from paths 2e and 2h own. Each of those gets its scope from the contact
+>   row through `scopeOfContact`, not from the async context, and carries a
+>   `TODO`. The one true instance sweep, `backfillEmbeddings`, runs the scoped
+>   query once per owner through `normalizeContactsForAllOwners`, so it stays
+>   instance-wide until 2h gives it a real per-owner loop.
+> - **`tenant-lint --strict` takes several globs.** Each sub-phase adds its
+>   files. 2i still replaces the list with one `server/**/*.ts`.
+
 ---
 
 ## 0. Context for the implementer
@@ -114,8 +148,9 @@ After every mutating attempt by B, `rowsOwnedBy(table, A.id)` is unchanged.
 | `hardDeleteContact` (`:155-163`, `db.delete(schema.contacts)`; called from `:602` and `:626`) | takes `scope`; the delete gains `eq(contacts.ownerId, scope.ownerId)`. Missed by the first inventory. |
 | `bulkDeleteContacts` (`:329`), `bulkUpdateContacts` (`:350`) | `findManyOwned` first, operate on the returned ids only, return the count actually affected |
 | `purgeExpiredTrash` (`:611`) | unchanged, instance-wide sweep. `// tenant-lint: allow instance sweep` |
-| Doc2Query fire-and-forget (`:239-265` and `:465-479`) | an AI call after the response, then `UPDATE contacts SET searchExpansion = ? WHERE id = ?`, then `embedContact`. Capture `scope` in the closure, run inside `runWithContext`, and add `AND ownerId = ?` to the `UPDATE`. Missed by the first inventory. |
+| ~~Doc2Query fire-and-forget (`:239-265` and `:465-479`)~~ | **Gone since PR #18.** `scheduleSearchIndex` replaced it: it clears `searchExpansion` and queues a local embedding, with no AI call and nothing to attribute. `embedContact` reads the owner off the contact row. Nothing calls `generateSearchExpansion` any more. |
 | `invalidateAllCaches` (`:124`) | becomes owner-scoped: `aiCache.invalidateForOwner(tier, scope.ownerId)` for each owner-keyed tier (2f defines the helper; in 2a call the whole-tier flush and leave a `TODO(2f)`) |
+| `requireContact` (`services/contactGuard.ts`) | becomes `assertOwnedContact(scopeOf(req), id)`. Shared with the interaction, action item and list routes, and `POST /contacts/:id/avatar` and `/enrich` depend on it, so it cannot wait for 2b. `assertContactExists` keeps its unscoped form for the three services 2b converts. |
 | `routes/contacts.ts` import path: `normalizeContacts()` (`:234`), `loadNegativeConstraints()` (`:233`), `normalizeContactById` (`:246`) | these are the real cross-owner matching calls during import. Their signatures change in 2e. In 2a, pass `scope` through and add the predicate to these three functions only (the rest of dedupe waits for 2e), so `routes/contacts.ts` can go strict now. |
 | Duplicate probes in `routes/contacts.ts` (`:276`, `:281`, `:373`, `:378`, `:441`, `:446`) | each is `SELECT * FROM contacts WHERE id = ?` hydrating an already-matched pair → `findOwned`. The email probe (`:341-349`, `FROM contact_emails ce JOIN contacts c`) and the phone probe (`:411-416`, which loads every phone row in the database per imported contact) gain `AND c.ownerId = ?`. |
 | Non-stream bulk import tail (`:521-550`) | fires `generateAndStoreBulkEmbeddings` (`:523`) and, after 3 s, `ParallelQueue.process(createdIds, 1, incrementalDedupeCheck)` (`:530-549`). Capture `scope` and run both inside `runWithContext`. Missed by the first inventory. |
@@ -315,7 +350,7 @@ or write attributable rows run per owner inside a context.
 | `refreshStaleModelCaches` (`server.ts:181-188`) | instance, unchanged |
 | `scheduleIncrementalDedupe` (`contactService.ts:62-83`) | already resolves the owner from the contact row (2e) |
 | Mention extraction `setTimeout` (`interactionService.ts:216`) | done in 2b |
-| Doc2Query and bulk-import tails (`contactService.ts:239-265`, `:465-479`; `routes/contacts.ts:521-550`) | done in 2a |
+| Bulk-import tail (`routes/contacts.ts:521-550`) | done in 2a. The Doc2Query tail it was paired with no longer exists, see the note at the top of this document |
 | Boot backfills in `server/db.ts` (avatar URL `:219-262`, phonetic `:943-965`, legacy follow-up `:679-703`) | `// tenant-lint: allow boot migration`. The follow-up backfill's `action_items` inserts get `ownerId` from the fill trigger (Phase 1 order). |
 
 ### 2i. Strict lint, plan checks, and matrix completion
@@ -345,6 +380,34 @@ or write attributable rows run per owner inside a context.
 ---
 
 ## 2. Acceptance criteria
+
+### 2a (shipped)
+
+- [x] `findOwned`, `findOwnedActive`, `findManyOwned` and `requireOwned` exist
+      on `contactRepository` and every service read of a contact by a
+      client-supplied id goes through one of them. No service selects by id
+      and compares the owner in JavaScript.
+- [x] Every function in the 2a table takes `scope` first. Every statement over
+      an owned table in the five converted files carries `ownerId` or an allow
+      comment with a listed reason.
+- [x] `tenant-lint --strict` passes for `contactRepository.ts`,
+      `contactService.ts`, `routes/contacts.ts`, `avatarProcessor.ts` and
+      `middleware/uploads.ts`, and runs in `npm run lint`.
+- [x] Matrix tests for every route in `server/routes/contacts.ts` and for
+      `/uploads` are real and green: a foreign id answers `404` with a body
+      identical to an unknown id's, bulk endpoints affect only the caller's
+      rows and report the right count, and A's rows are byte-identical after
+      each of B's attempts.
+- [x] `guardUploads`: B fetching A's avatar `404`, A `200`,
+      `/uploads/logos/*` `200` for both, any other `/uploads` path `404`.
+- [x] The bulk-import tail runs inside `runWithContext` with the captured
+      scope, and the AI invocation rows it writes carry the importer.
+- [x] The existing contacts, lifecycle and avatar suites pass unchanged.
+- [x] `isolated: true` for the fifteen routes this sub-phase proved, and the
+      manifest test names them.
+- [x] CHANGELOG has a Phase 2a block.
+
+### The whole phase
 
 - [ ] `npm run lint` passes with `tenant-lint --strict "server/**/*.ts"`.
 - [ ] `tenancy.isolation.test.ts`: no `todo`, all green, run with `AUTH_REQUIRED=true` and two accounts.
