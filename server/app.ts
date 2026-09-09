@@ -37,6 +37,7 @@ import {
   setForcedAuth,
 } from "./middleware/auth.ts";
 import { attachRequestContext } from "./tenancy/requestContext.ts";
+import { guardUploads } from "./middleware/uploads.ts";
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
 import { healthRouter } from "./routes/health.ts";
@@ -207,6 +208,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   const uploadDir = UPLOADS_DIR;
   ensureDir(uploadDir);
+  // Between the credential gate and the file server: requireAuth decides
+  // whether there is a caller, and this decides whether the file is theirs.
+  app.use("/uploads", guardUploads);
   app.use(
     "/uploads",
     express.static(uploadDir, {
