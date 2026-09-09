@@ -25,11 +25,11 @@ import type {
 import type { AIProvider } from "../../ai/provider.ts";
 import { buildSearchPrompt, type AISearchOutput } from "./promptTemplate.ts";
 import { mergeSearchResult } from "./mergeEngine.ts";
-import { contactService } from "../contactService.ts";
 import { getStrategy } from "./strategies/index.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { aiCache } from "../../utils/aiCache.ts";
+import { withTimeout, sleep } from "../../ai/resilience.ts";
+import { enrichmentContact, lockEnrichment } from "./contactSnapshot.ts";
 
 // =============================================================================
 // Error Classification
@@ -51,6 +51,7 @@ function classifyError(error: unknown): AISearchErrorType {
   if (
     msg.includes("zod") ||
     msg.includes("validation") ||
+    msg.includes("source links") ||
     msg.includes("json.parse") ||
     msg.includes("schema") ||
     msg.includes("json parse")
@@ -73,6 +74,7 @@ function classifyError(error: unknown): AISearchErrorType {
   }
   if (
     msg.includes("api key") ||
+    msg.includes("credentials") ||
     msg.includes("unauthorized") ||
     msg.includes("403") ||
     msg.includes("permission")
@@ -104,19 +106,10 @@ const GC_TTL_MS = 30 * 60 * 1000;
 /** Delay between sequential jobs to avoid Gemini grounding API rate limits */
 const INTER_JOB_DELAY_MS = 2_500;
 
-/** Max retries for retryable errors (rate_limit, network, validation, unknown) per job */
-const MAX_RETRIES = 4;
-
-/** Initial backoff delay for retries (doubles each attempt: 3s → 6s → 12s → 24s) */
-const INITIAL_BACKOFF_MS = 3_000;
-
-/** Non-blocking sleep for inter-job delay and exponential backoff */
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 class AISearchJobQueue extends EventEmitter {
   private batches = new Map<string, AISearchBatch>();
   private processing = false;
+  private controllers = new Map<string, AbortController>();
   private lastBatchCompletedAt: Date | null = null;
 
   /**
@@ -152,7 +145,9 @@ class AISearchJobQueue extends EventEmitter {
     this.gc();
 
     const batchId = crypto.randomUUID();
-    const jobs: AISearchJob[] = contacts.map((c) => ({
+    const jobs: AISearchJob[] = [
+      ...new Map(contacts.map((c) => [c.id, c])).values(),
+    ].map((c) => ({
       id: crypto.randomUUID(),
       contactId: c.id,
       contactName: c.name,
@@ -181,143 +176,91 @@ class AISearchJobQueue extends EventEmitter {
    * Process all jobs in a batch sequentially.
    * One contact at a time. Individual failures never block the batch.
    */
-  async processBatch(batchId: string, _adapter: AIProvider): Promise<void> {
-    if (this.processing) {
+  async processBatch(batchId: string, _adapter?: AIProvider): Promise<void> {
+    if (this.processing)
       throw new Error("An AI Search batch is already in progress");
-    }
-    this.processing = true;
-
     const batch = this.batches.get(batchId);
-    if (!batch) {
-      this.processing = false;
-      throw new Error(`Batch ${batchId} not found`);
-    }
-
+    if (!batch || batch.status !== "processing") return;
     const strategy = getStrategy(batch.strategy);
-    log.info(
-      "AISearchQueue",
-      `Processing batch ${batchId} with strategy: ${strategy.name}`,
-    );
-
+    const controller = new AbortController();
+    this.controllers.set(batchId, controller);
+    this.processing = true;
     try {
-      // Batch mode: defer cache invalidations during the entire batch.
-      // Each mergeSearchResult call triggers invalidateSearchCache() —
-      // without batch mode, that's N full cache flushes. With batch mode,
-      // exactly 1 flush after all jobs complete.
-      aiCache.enterBatchMode();
-
-      for (let jobIdx = 0; jobIdx < batch.jobs.length; jobIdx++) {
-        const job = batch.jobs[jobIdx];
-        const jobStartMs = Date.now();
-
-        // Inter-job delay to prevent Gemini grounding API rate limiting.
-        // The first job runs immediately; subsequent jobs wait 1.5s.
-        if (jobIdx > 0) {
-          await sleep(INTER_JOB_DELAY_MS);
-        }
-
-        // Retry loop: retryable errors (rate_limit, network) get up to MAX_RETRIES
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          try {
-            if (attempt > 0) {
-              // Exponential backoff: 2s → 4s → 8s
-              const backoffMs = INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1);
-              log.info(
-                "AISearchQueue",
-                `Job ${job.id} (${job.contactName}): retry ${attempt}/${MAX_RETRIES} after ${backoffMs}ms backoff`,
-              );
-              job.status = "searching"; // Reset status for retry
-              this.emit(batchId, batch);
-              await sleep(backoffMs);
-            }
-
-            // 1. Set status → 'searching'
-            job.status = "searching";
-            job.startedAt = job.startedAt ?? new Date().toISOString();
-            this.emit(batchId, batch);
-
-            // 2. Fetch full HydratedContact
-            const contact = contactService.getContactById(job.contactId);
-            if (!contact) {
-              throw new Error(`Contact ${job.contactId} not found`);
-            }
-
-            // 3. Build prompt
-            const prompt = buildSearchPrompt(contact);
-
-            // 4. Execute strategy (two-pass internally)
-            const result = await strategy.execute(contact, prompt);
-
-            // 5. Set status → 'merging'
-            job.status = "merging";
-            this.emit(batchId, batch);
-
-            // 6. Run merge engine
-            const fieldsUpdated = mergeSearchResult(
-              job.contactId,
-              contact,
-              result.data as AISearchOutput,
-            );
-
-            // 7. Set status → 'success'
-            job.status = "success";
-            job.fieldsUpdated = fieldsUpdated;
-            job.completedAt = new Date().toISOString();
-            job.latencyMs = Date.now() - jobStartMs;
-
-            // Accumulate token usage
-            batch.totalTokens += result.tokenCount ?? 0;
-
-            log.info(
-              "AISearchQueue",
-              `Job ${job.id} (${job.contactName}): success — ${fieldsUpdated} field(s) merged in ${job.latencyMs}ms`,
-            );
-            this.emit(batchId, batch);
-            break; // Success — exit retry loop
-          } catch (err: unknown) {
-            const errorType = classifyError(err);
-            const isRetryable =
-              errorType === "rate_limit" ||
-              errorType === "network" ||
-              errorType === "validation" ||
-              errorType === "unknown";
-
-            if (!isRetryable || attempt === MAX_RETRIES) {
-              // Non-retryable error or exhausted retries — mark as failed
-              job.status = "error";
-              job.error = getErrorMessage(err) || "Unknown error";
-              job.errorType = errorType;
-              job.completedAt = new Date().toISOString();
-              job.latencyMs = Date.now() - jobStartMs;
-
-              log.error(
-                "AISearchQueue",
-                `Job ${job.id} (${job.contactName}): ${errorType} — ${getErrorMessage(err)}${attempt > 0 ? ` (after ${attempt} retries)` : ""}`,
-              );
-              this.emit(batchId, batch);
-              break; // Exit retry loop
-            }
-
-            // Retryable error — will loop and try again
+      for (let index = 0; index < batch.jobs.length; index++) {
+        controller.signal.throwIfAborted();
+        if (index > 0) await sleep(INTER_JOB_DELAY_MS, controller.signal);
+        const job = batch.jobs[index];
+        const startMs = Date.now();
+        let release: (() => void) | undefined;
+        try {
+          const contact = enrichmentContact(job.contactId);
+          release = lockEnrichment(job.contactId);
+          job.status = "searching";
+          job.startedAt = new Date().toISOString();
+          this.emit(batchId, batch);
+          const prompt = buildSearchPrompt(contact);
+          const result = await withTimeout(
+            (signal) => strategy.execute(contact, prompt, signal),
+            90_000,
+            controller.signal,
+          );
+          controller.signal.throwIfAborted();
+          job.status = "merging";
+          this.emit(batchId, batch);
+          job.fieldsUpdated = mergeSearchResult(
+            job.contactId,
+            contact,
+            result.data as AISearchOutput,
+            result.citations,
+          );
+          job.status = "success";
+          batch.totalTokens += result.tokenCount ?? 0;
+        } catch (error) {
+          if (controller.signal.aborted) {
+            job.status = "cancelled";
+          } else {
+            job.status = "error";
+            job.errorType = classifyError(error);
+            job.error = getErrorMessage(error);
             log.warn(
               "AISearchQueue",
-              `Job ${job.id} (${job.contactName}): ${errorType} — ${getErrorMessage(err)} (will retry)`,
+              `Job ${job.id} failed. The batch does not repeat completed research stages.`,
             );
           }
+        } finally {
+          release?.();
+          job.completedAt = new Date().toISOString();
+          job.latencyMs = Date.now() - startMs;
+          this.emit(batchId, batch);
         }
       }
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
     } finally {
-      aiCache.exitBatchMode();
-      this.processing = false;
-      this.lastBatchCompletedAt = new Date();
-      batch.status = "complete";
-      // Final emit signals SSE clients to close
+      if (this.controllers.get(batchId) === controller) {
+        this.processing = false;
+        this.lastBatchCompletedAt = new Date();
+        this.controllers.delete(batchId);
+      }
+      batch.status = controller.signal.aborted ? "cancelled" : "complete";
       this.emit(batchId, batch);
-      log.info(
-        "AISearchQueue",
-        `Batch ${batchId} complete: ${batch.jobs.filter((j) => j.status === "success").length}/${batch.jobs.length} succeeded, ${batch.totalTokens} tokens used`,
-      );
     }
+  }
+
+  /** Stop active research and prevent queued contacts from starting. */
+  cancelBatch(batchId: string): AISearchBatch | null {
+    const batch = this.batches.get(batchId);
+    if (!batch || batch.status !== "processing") return batch ?? null;
+    batch.status = "cancelled";
+    for (const job of batch.jobs) {
+      if (["queued", "searching", "merging"].includes(job.status)) {
+        job.status = "cancelled";
+        job.completedAt = new Date().toISOString();
+      }
+    }
+    this.controllers.get(batchId)?.abort();
+    this.emit(batchId, batch);
+    return batch;
   }
 
   /** Get a batch by ID, or null if not found. */
@@ -358,6 +301,8 @@ class AISearchJobQueue extends EventEmitter {
 
   /** Reset queue state for tests. */
   __resetForTests(): void {
+    for (const controller of this.controllers.values()) controller.abort();
+    this.controllers.clear();
     this.batches.clear();
     this.processing = false;
     this.lastBatchCompletedAt = null;

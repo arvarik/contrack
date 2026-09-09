@@ -16,9 +16,15 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useEffect,
 } from "react";
-import { useStartAISearch, useAISearchStream } from "../api/aiSearch";
+import {
+  useStartAISearch,
+  useAISearchStream,
+  useCancelAISearch,
+} from "../api/aiSearch";
 import { toast } from "sonner";
+import { ApiError } from "../api/client";
 import type { AISearchBatch } from "../types";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
 
@@ -49,12 +55,30 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
     setBatch(updatedBatch);
   }, []);
 
-  useAISearchStream(batchId, handleUpdate);
+  const stream = useAISearchStream(batchId, handleUpdate);
+  const cancelMutation = useCancelAISearch();
+  useEffect(() => {
+    if (stream.error instanceof ApiError && stream.error.status === 404) {
+      toast.error(
+        "Research status is no longer available. The server may have restarted. Completed contact updates remain saved.",
+      );
+      setBatchId(null);
+      setBatch(null);
+      setIsVisible(false);
+    }
+  }, [stream.error]);
+  const cancel = () => {
+    if (batchId)
+      cancelMutation.mutate(batchId, {
+        onError: (error) => toast.error(error.message),
+      });
+  };
 
   const startSearch = useCallback(
     (contactIds: string[]) => {
       startMutation.mutate(contactIds, {
         onSuccess: (result) => {
+          setBatch(null);
           setBatchId(result.batchId);
           setIsVisible(true);
           toast.success(
@@ -94,7 +118,14 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       {children}
       {/* Progress overlay rendered via portal-like positioning at root level */}
       {isVisible && batch && (
-        <AISearchProgressOverlay batch={batch} onDismiss={dismiss} />
+        <AISearchProgressOverlay
+          key={batch.id}
+          batch={batch}
+          onDismiss={dismiss}
+          onCancel={cancel}
+          isCancelling={cancelMutation.isPending}
+          connectionError={!!stream.error}
+        />
       )}
     </AISearchContext.Provider>
   );

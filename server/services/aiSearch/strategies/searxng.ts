@@ -66,6 +66,7 @@ function buildQueries(contact: HydratedContact): string[] {
 async function searxngSearch(
   baseUrl: string,
   query: string,
+  signal?: AbortSignal,
 ): Promise<SearxngResult[]> {
   const url = new URL(`${baseUrl}/search`);
   url.searchParams.set("q", query);
@@ -75,7 +76,11 @@ async function searxngSearch(
   // The SearXNG instance itself is operator-configured (often a private
   // address), so it deliberately bypasses the public-URL guard that applies
   // to the *result* pages below.
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  const response = await fetch(url, {
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
+      : AbortSignal.timeout(15_000),
+  });
   if (!response.ok) {
     throw new AppError(
       `SearXNG returned ${response.status} ${response.statusText}`,
@@ -83,20 +88,25 @@ async function searxngSearch(
       { code: "SEARXNG_ERROR" },
     );
   }
-  const body = (await response.json()) as { results?: SearxngResult[] };
+  const body = JSON.parse(await readBodyCapped(response, signal)) as {
+    results?: SearxngResult[];
+  };
   return body.results ?? [];
 }
 
 /** Fetch a result page and reduce it to readable text. */
-async function fetchPageText(pageUrl: string): Promise<string | null> {
+async function fetchPageText(
+  pageUrl: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   try {
-    const { response } = await safeFetch(pageUrl, { timeoutMs: 8_000 });
+    const { response } = await safeFetch(pageUrl, { timeoutMs: 8_000, signal });
     if (!response.ok) return null;
     const contentType = response.headers.get("content-type") ?? "";
     if (!/text\/html|text\/plain|application\/xhtml/i.test(contentType)) {
       return null;
     }
-    const html = await readBodyCapped(response);
+    const html = await readBodyCapped(response, signal);
     const $ = cheerio.load(html);
     $("script, style, nav, footer, header, noscript, svg").remove();
     const text = $("body").text().replace(/\s+/g, " ").trim();
@@ -113,7 +123,9 @@ export class SearxngStrategy implements AISearchStrategy {
   async execute(
     contact: HydratedContact,
     prompt: string,
+    signal?: AbortSignal,
   ): Promise<AISearchResult> {
+    signal?.throwIfAborted();
     const startMs = Date.now();
     const baseUrl = getSearxngUrl();
     if (!baseUrl) {
@@ -128,8 +140,9 @@ export class SearxngStrategy implements AISearchStrategy {
     for (const query of buildQueries(contact)) {
       let results: SearxngResult[] = [];
       try {
-        results = await searxngSearch(baseUrl, query);
+        results = await searxngSearch(baseUrl, query, signal);
       } catch (err) {
+        signal?.throwIfAborted();
         log.warn(
           "SearxngStrategy",
           `Search failed for "${query}": ${getErrorMessage(err)}`,
@@ -156,7 +169,7 @@ export class SearxngStrategy implements AISearchStrategy {
     const citations: Array<{ title: string; uri: string }> = [];
     const documents: string[] = [];
     for (const result of picked) {
-      const text = await fetchPageText(result.url!);
+      const text = await fetchPageText(result.url!, signal);
       // Fall back to the search snippet when the page can't be read.
       const body = text ?? result.content ?? "";
       if (!body.trim()) continue;
@@ -194,9 +207,12 @@ ${wrapUntrusted("web research text", researchText, 32_000)}`;
       prompt: extractionPrompt,
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,
-      timeoutMs: 90_000,
+      timeoutMs: 30_000,
+      signal,
+      maxOutputTokens: 4_000,
     });
 
+    signal?.throwIfAborted();
     recordInvocation({
       operation: "aiSearchExtraction",
       model: extraction.model,
@@ -228,7 +244,7 @@ ${wrapUntrusted("web research text", researchText, 32_000)}`;
       groundedText: researchText.slice(0, 20_000),
       citations,
       models: ["searxng", extraction.model],
-      tokenCount: extraction.tokenCount ?? 0,
+      tokenCount: extraction.tokenCount,
       latencyMs: Date.now() - startMs,
     };
   }

@@ -15,6 +15,10 @@ import type { AICapability } from "./capabilities.ts";
 import { resolveCapability } from "./capabilities.ts";
 import { getProviderConfigs } from "./providerRegistry.ts";
 import { AppError } from "../utils/AppError.ts";
+import { GenerationQueue } from "./workQueue.ts";
+import { withTimeout } from "./resilience.ts";
+
+const generations = new GenerationQueue();
 
 /** Options accepted by the gateway (model/routing are filled in for you). */
 export type GatewayOptions = Omit<AIGenerateOptions, "routing">;
@@ -34,6 +38,7 @@ export async function generateFor(
   capability: Exclude<AICapability, "embeddings">,
   options: GatewayOptions,
 ): Promise<AIGenerateResult> {
+  options.signal?.throwIfAborted();
   const resolved = resolveCapability(capability);
   if (!resolved) {
     throw new AppError(
@@ -43,12 +48,24 @@ export async function generateFor(
     );
   }
 
-  return resolved.provider.generate({
-    ...options,
-    // An explicit per-call model override still wins (used by strategies).
-    model: options.model ?? resolved.model,
-    routing: { prefer: resolved.modelClass },
-  });
+  const timeoutMs = Math.min(options.timeoutMs ?? 60_000, 90_000);
+  return withTimeout(
+    (signal) =>
+      generations.run(
+        () =>
+          resolved.provider.generate({
+            ...options,
+            signal,
+            timeoutMs,
+            maxOutputTokens: options.maxOutputTokens ?? 4_096,
+            model: options.model ?? resolved.model,
+            routing: { prefer: resolved.modelClass },
+          }),
+        signal,
+      ),
+    timeoutMs,
+    options.signal,
+  );
 }
 
 /** Which provider currently serves a capability (for logging/telemetry). */

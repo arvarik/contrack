@@ -20,6 +20,7 @@ import type {
   JsonSchemaNode,
 } from "../types.ts";
 import { getLatestDiscoveredModel } from "../modelFilter.ts";
+import { contentHash } from "../../utils/aiCache.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
@@ -110,7 +111,7 @@ export class AnthropicAdapter implements AIProvider {
   private schemaTooComplex = new Set<string>();
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({ apiKey, maxRetries: 0 });
   }
 
   /**
@@ -181,7 +182,7 @@ export class AnthropicAdapter implements AIProvider {
     return withRetry(
       async (attempt) => {
         const startMs = Date.now();
-        const schemaKey = `${model}:${options.systemPrompt?.slice(0, 60) ?? ""}`;
+        const schemaKey = `${model}:${contentHash(JSON.stringify(options.jsonSchema ?? {}))}`;
         let useSchema = !this.schemaTooComplex.has(schemaKey);
         let result: AIGenerateResult;
         try {
@@ -207,6 +208,7 @@ export class AnthropicAdapter implements AIProvider {
             "AnthropicAdapter",
             `${model} declined the response schema (${getErrorMessage(err).slice(0, 120)}); retrying with prompt-guided JSON`,
           );
+          if (this.schemaTooComplex.size >= 100) this.schemaTooComplex.clear();
           this.schemaTooComplex.add(schemaKey);
           useSchema = false;
           result = await withTimeout(

@@ -52,7 +52,6 @@
     "@dicebear/avataaars": "^9.4.2",
     "@dicebear/bottts": "^9.4.2",
     "@dicebear/core": "^9.4.3",
-    "@dicebear/initials": "^9.4.2",
     "@dicebear/lorelei": "^9.4.2",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -98,7 +97,7 @@
     "react-leaflet-cluster": "^4.1.3",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.15.1",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "sonner": "^2.0.7",
     "sqlite-vec": "^0.1.9",
     "tailwind-merge": "^3.5.0",
@@ -152,5 +151,11 @@
     "*.{json,css,md}": [
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "@huggingface/transformers": {
+      "sharp": "$sharp"
+    },
+    "adm-zip": "^0.6.0"
   }
 }

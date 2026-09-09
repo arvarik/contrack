@@ -1,3 +1,4 @@
+import { withTimeout } from "../ai/resilience.ts";
 // =============================================================================
 // URL safety — SSRF guards for user/AI-supplied URLs
 // =============================================================================
@@ -113,23 +114,40 @@ export async function assertPublicHttpUrl(targetUrl: string): Promise<URL> {
 /** Read at most MAX_RESPONSE_BYTES of the body as text. */
 export async function readBodyCapped(
   res: globalThis.Response,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const reader = res.body?.getReader();
-  if (!reader) return "";
-  const decoder = new TextDecoder();
-  let text = "";
-  let received = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    text += decoder.decode(value, { stream: true });
-    if (received >= MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      break;
-    }
-  }
-  return text;
+  return withTimeout(
+    async (budget) => {
+      const reader = res.body?.getReader();
+      if (!reader) return "";
+      const onAbort = () => {
+        void reader.cancel().catch(() => undefined);
+      };
+      budget.addEventListener("abort", onAbort, { once: true });
+      const decoder = new TextDecoder();
+      let text = "";
+      let received = 0;
+      try {
+        for (;;) {
+          budget.throwIfAborted();
+          const { done, value } = await reader.read();
+          budget.throwIfAborted();
+          if (done) break;
+          const bounded = value.subarray(0, MAX_RESPONSE_BYTES - received);
+          received += bounded.byteLength;
+          text += decoder.decode(bounded, { stream: true });
+          if (received >= MAX_RESPONSE_BYTES) break;
+        }
+        return text + decoder.decode();
+      } finally {
+        budget.removeEventListener("abort", onAbort);
+        void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
+    },
+    8_000,
+    signal,
+  );
 }
 
 /**
@@ -196,9 +214,14 @@ const pinnedAgent = new Agent({ connect: { lookup: guardedLookup } });
  */
 export async function safeFetch(
   targetUrl: string,
-  options: { timeoutMs?: number; maxRedirects?: number } = {},
+  options: {
+    timeoutMs?: number;
+    maxRedirects?: number;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<{ response: globalThis.Response; finalUrl: string }> {
   const { timeoutMs = 6000, maxRedirects = 3 } = options;
+  options.signal?.throwIfAborted();
   await assertPublicHttpUrl(targetUrl);
 
   const controller = new AbortController();
@@ -211,13 +234,16 @@ export async function safeFetch(
       // guard lives. The returned Response implements the same WHATWG shape
       // the callers consume, so only the nominal type needs the cast.
       const response = (await undiciFetch(currentUrl, {
-        signal: controller.signal,
+        signal: options.signal
+          ? AbortSignal.any([controller.signal, options.signal])
+          : controller.signal,
         redirect: "manual",
         dispatcher: pinnedAgent,
       })) as unknown as globalThis.Response;
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (!location) return { response, finalUrl: currentUrl };
+        void response.body?.cancel().catch(() => undefined);
         currentUrl = new URL(location, currentUrl).toString();
         await assertPublicHttpUrl(currentUrl);
         continue;

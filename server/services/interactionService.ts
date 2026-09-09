@@ -14,7 +14,10 @@ import {
   summarizeEmlEmail,
 } from "../ai/aiService.ts";
 import { relationshipService } from "./relationshipService.ts";
-import { aiCache } from "../utils/aiCache.ts";
+import { aiCache, contentHash } from "../utils/aiCache.ts";
+import { AppError } from "../utils/AppError.ts";
+import { resolveCapability } from "../ai/capabilities.ts";
+import { SharedWork } from "../ai/workQueue.ts";
 
 // =============================================================================
 // Interaction Payload Types
@@ -56,42 +59,50 @@ async function runMentionExtraction(
     const mentions = await extractMentions(content);
     if (!mentions || mentions.length === 0) return;
 
-    const mappedMentions = [];
-    for (const m of mentions) {
-      let existing = db
-        .select()
-        .from(schema.contacts)
-        .where(eq(schema.contacts.name, m.name))
-        .get();
-      if (!existing) {
-        const ghostId = crypto.randomUUID();
-        const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][
-          Math.floor(Math.random() * 5)
-        ];
-        existing = db
-          .insert(schema.contacts)
-          .values({
-            id: ghostId,
-            name: m.name,
-            company: m.company || null,
-            isGhost: 1,
-            themeColor: newTheme,
-          })
-          .returning()
+    const current = sqlite
+      .prepare(
+        "SELECT i.content FROM interactions i JOIN contacts c ON c.id = i.contactId WHERE i.id = ? AND i.contactId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL",
+      )
+      .get(interactionId, contactId) as { content: string } | undefined;
+    if (!current || current.content !== content) return;
+    sqlite.transaction(() => {
+      const mappedMentions = [];
+      for (const m of mentions) {
+        let existing = db
+          .select()
+          .from(schema.contacts)
+          .where(eq(schema.contacts.name, m.name))
           .get();
-        log.info("AI Service", `Inferred ghost contact: ${m.name}`);
+        if (!existing) {
+          const ghostId = crypto.randomUUID();
+          const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][
+            Math.floor(Math.random() * 5)
+          ];
+          existing = db
+            .insert(schema.contacts)
+            .values({
+              id: ghostId,
+              name: m.name,
+              company: m.company || null,
+              isGhost: 1,
+              themeColor: newTheme,
+            })
+            .returning()
+            .get();
+          log.info("AI Service", `Inferred ghost contact: ${m.name}`);
+        }
+        mappedMentions.push({
+          contactId: existing.id,
+          name: existing.name,
+          context: m.context,
+          isGhost: existing.isGhost === 1,
+        });
       }
-      mappedMentions.push({
-        contactId: existing.id,
-        name: existing.name,
-        context: m.context,
-        isGhost: existing.isGhost === 1,
-      });
-    }
-    db.update(schema.interactions)
-      .set({ mentions: JSON.stringify(mappedMentions) })
-      .where(eq(schema.interactions.id, interactionId))
-      .run();
+      db.update(schema.interactions)
+        .set({ mentions: JSON.stringify(mappedMentions) })
+        .where(eq(schema.interactions.id, interactionId))
+        .run();
+    })();
   } catch (e: unknown) {
     log.error(
       "AI Service",
@@ -99,6 +110,23 @@ async function runMentionExtraction(
       { error: getErrorMessage(e) },
     );
   }
+}
+
+const briefings = new SharedWork<string[]>();
+
+function briefingSource(contactId: string) {
+  const contact = sqlite
+    .prepare(
+      "SELECT id, name, company, role, headline, about, location, preferences, lastContactedAt FROM contacts WHERE id = ? AND deletedAt IS NULL AND canonicalId IS NULL",
+    )
+    .get(contactId) as Record<string, unknown> | undefined;
+  if (!contact) throw new AppError("Contact is no longer available.", 404);
+  const interactions = sqlite
+    .prepare(
+      "SELECT id, type, title, content, date FROM interactions WHERE contactId = ? ORDER BY date DESC, id DESC LIMIT 15",
+    )
+    .all(contactId) as Record<string, unknown>[];
+  return { contact, interactions };
 }
 
 export const interactionService = {
@@ -230,6 +258,7 @@ export const interactionService = {
     // Invalidate cached briefing for this contact — a new interaction means
     // any cached briefing is stale (it doesn't include this interaction)
     aiCache.invalidate("briefing", contactId);
+    aiCache.invalidate("dailyInsight");
 
     // Immediately recompute relationship score for this contact
     relationshipService.computeScore(contactId);
@@ -237,67 +266,40 @@ export const interactionService = {
     return result;
   },
 
-  async generateBriefing(contactId: string) {
-    const contact = db
-      .select()
-      .from(schema.contacts)
-      .where(eq(schema.contacts.id, contactId))
-      .get();
-    if (!contact) return null;
-
-    // ── Briefing cache: key = contactId::interactionCount
-    // If the interaction count hasn't changed since the last briefing, the
-    // cached result is still valid. Any new interaction increments the count,
-    // producing a different cache key → automatic invalidation.
-    const interactionCount = (
-      sqlite
-        .prepare("SELECT COUNT(*) as c FROM interactions WHERE contactId = ?")
-        .get(contactId) as { c: number }
-    ).c;
-    const cacheKey = `${contactId}::${interactionCount}`;
-
+  async generateBriefing(contactId: string, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    const source = briefingSource(contactId);
+    const fingerprint = JSON.stringify(source);
+    const model = resolveCapability("quick");
+    const cacheKey = `${contactId}::${contentHash(JSON.stringify([source, model?.providerId, model?.model]))}`;
     const cached = aiCache.get<string[]>("briefing", cacheKey);
-    if (cached) {
-      log.info(
-        "Briefing",
-        `Cache HIT for ${contact.name} (${interactionCount} interactions)`,
-      );
-      import("./aiStatsService.ts").then(({ recordInvocation }) => {
-        recordInvocation({
-          operation: "briefing",
-          latencyMs: 0,
-          cached: true,
-          description: `Catch-Me-Up cache hit for ${contact.name}`,
-        });
-      });
-      return cached;
-    }
-
-    const recentInteractions = db
-      .select()
-      .from(schema.interactions)
-      .where(eq(schema.interactions.contactId, contactId))
-      .orderBy(sql`${schema.interactions.date} DESC`)
-      .limit(15)
-      .all();
-
-    const points = await generateCatchMeUpBriefing(contact, recentInteractions);
-    const now = new Date().toISOString();
-
-    db.update(schema.contacts)
-      .set({
-        aiBriefing: JSON.stringify(points),
-        aiBriefingAt: now,
-        updatedAt: now,
-      })
-      .where(eq(schema.contacts.id, contactId))
-      .run();
-
-    // Cache the freshly generated briefing
-    aiCache.set("briefing", cacheKey, points);
-    log.info("Briefing", `Cached for ${contact.name} (key: ${cacheKey})`);
-
-    return points;
+    if (cached) return cached;
+    return briefings.run(
+      cacheKey,
+      async (budget) => {
+        const points = await generateCatchMeUpBriefing(
+          source.contact,
+          source.interactions,
+          budget,
+        );
+        budget.throwIfAborted();
+        if (JSON.stringify(briefingSource(contactId)) !== fingerprint)
+          throw new AppError(
+            "This contact changed during briefing generation. Try again.",
+            409,
+          );
+        db.update(schema.contacts)
+          .set({
+            aiBriefing: JSON.stringify(points),
+            aiBriefingAt: new Date().toISOString(),
+          })
+          .where(eq(schema.contacts.id, contactId))
+          .run();
+        aiCache.set("briefing", cacheKey, points);
+        return points;
+      },
+      signal,
+    );
   },
 
   promoteGhost(contactId: string) {
@@ -368,6 +370,7 @@ export const interactionService = {
       return interaction;
     })();
     aiCache.invalidate("briefing", contactId);
+    aiCache.invalidate("dailyInsight");
     aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(contactId);
     return result;

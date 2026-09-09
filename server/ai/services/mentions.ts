@@ -1,3 +1,4 @@
+import { z } from "zod";
 // =============================================================================
 // AI Services — Mention Extraction (ghost contacts from timeline notes)
 // =============================================================================
@@ -24,7 +25,6 @@ export async function extractMentions(text: string): Promise<MentionEntity[]> {
       "AIService",
       "Using mock AI Mentions due to unconfigured AI provider",
     );
-    await new Promise((resolve) => setTimeout(resolve, 1500));
     return [];
   }
 
@@ -81,11 +81,29 @@ You are a named-entity recognition system specializing in identifying people men
       },
     });
 
-    const parsed = safeParseJson<MentionEntity[]>(
-      result.text,
-      "extractMentions",
-    );
-    if (!parsed) return [];
+    const validated = z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(200),
+          company: z.string().max(200).nullish(),
+          context: z.string().max(500),
+        }),
+      )
+      .max(30)
+      .safeParse(safeParseJson<unknown>(result.text, "extractMentions"));
+    if (!validated.success) return [];
+    const parsed = [
+      ...new Map(
+        validated.data
+          .filter((mention) =>
+            text.toLowerCase().includes(mention.name.toLowerCase()),
+          )
+          .map((mention) => [
+            mention.name.toLowerCase(),
+            { ...mention, company: mention.company ?? undefined },
+          ]),
+      ).values(),
+    ];
 
     // Cache the result — immutable input means this is safe to cache long-term
     aiCache.set("mentions", cacheKey, parsed);

@@ -89,7 +89,7 @@ export class OpenAIAdapter implements AIProvider {
   private client: OpenAI;
 
   constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({ apiKey, maxRetries: 0 });
   }
 
   /**

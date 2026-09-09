@@ -1,3 +1,9 @@
+import {
+  enrichmentContact,
+  lockEnrichment,
+} from "../services/aiSearch/contactSnapshot.ts";
+import { withTimeout } from "../ai/resilience.ts";
+import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
 import { requireContact } from "../services/contactGuard.ts";
 import { idsSchema } from "../utils/validators.ts";
 import { Router } from "express";
@@ -18,12 +24,8 @@ import { z } from "zod";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { sqlite } from "../db.ts";
-import { ai } from "../ai/index.ts";
 import { providerIdFor } from "../ai/gateway.ts";
-import {
-  getStrategy,
-  getDefaultStrategyForProvider,
-} from "../services/aiSearch/strategies/index.ts";
+import { getStrategy } from "../services/aiSearch/strategies/index.ts";
 import {
   buildSearchPrompt,
   type AISearchOutput,
@@ -720,70 +722,58 @@ router.post(
     const rid = req.requestId;
     const id = String(req.params.id);
 
-    // Check AI provider is configured (F-03: provider-aware error message)
-    if (!ai.isConfigured) {
-      const KEY_MAP: Record<string, string> = {
-        gemini: "GEMINI_API_KEY",
-        openai: "OPENAI_API_KEY",
-        anthropic: "ANTHROPIC_API_KEY",
-      };
-      const keyVar = KEY_MAP[ai.providerName] ?? "GEMINI_API_KEY";
-      throw new AppError(
-        `AI provider is not configured. Set ${keyVar} in your .env file.`,
-        503,
+    const strategyName = validateEnrichmentStrategy();
+    const contact = enrichmentContact(id);
+    const release = lockEnrichment(id);
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on("close", onClose);
+    try {
+      const startMs = Date.now();
+      // F-02: Use provider-aware strategy instead of hardcoded 'two-pass'
+      // Strategy follows whichever provider serves the *research* capability,
+      // not the legacy default provider.
+      const researchProvider = providerIdFor("research");
+      const strategy = getStrategy(strategyName);
+      const prompt = buildSearchPrompt(contact);
+
+      log.info(
+        "API",
+        `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
       );
+
+      const result = await withTimeout(
+        (signal) => strategy.execute(contact, prompt, signal),
+        90_000,
+        controller.signal,
+      );
+      controller.signal.throwIfAborted();
+      const fieldsUpdated = mergeSearchResult(
+        id,
+        contact,
+        result.data as AISearchOutput,
+        result.citations,
+      );
+      const latencyMs = Date.now() - startMs;
+
+      log.info(
+        "API",
+        `[${rid}] POST /api/contacts/${id}/enrich — ${fieldsUpdated} field(s) merged in ${latencyMs}ms`,
+      );
+
+      res.json({
+        success: true,
+        fieldsUpdated,
+        latencyMs,
+        models: result.models,
+        tokenCount: result.tokenCount,
+      });
+    } finally {
+      release();
+      res.off("close", onClose);
     }
-
-    // Check grounding capacity (F-04: only for Gemini — other providers don't have grounding RPD)
-    if (ai.providerName === "gemini") {
-      const snapshot = ai.getQuotaSnapshot();
-      if (snapshot.grounding.remaining <= 0) {
-        return res.status(429).json({
-          error: "Grounding quota exhausted for today. Try again tomorrow.",
-          remaining: 0,
-          limit: snapshot.grounding.limit,
-        });
-      }
-    }
-
-    // Fetch the contact
-    const contact = contactService.getContactById(id);
-    if (!contact) throw new AppError("Contact not found", 404);
-
-    const startMs = Date.now();
-    // F-02: Use provider-aware strategy instead of hardcoded 'two-pass'
-    // Strategy follows whichever provider serves the *research* capability,
-    // not the legacy default provider.
-    const researchProvider = providerIdFor("research");
-    const strategyName = getDefaultStrategyForProvider(researchProvider);
-    const strategy = getStrategy(strategyName);
-    const prompt = buildSearchPrompt(contact);
-
-    log.info(
-      "API",
-      `[${rid}] POST /api/contacts/${id}/enrich — starting ${strategyName} for "${contact.name}" (provider: ${researchProvider ?? "none"})`,
-    );
-
-    const result = await strategy.execute(contact, prompt);
-    const fieldsUpdated = mergeSearchResult(
-      id,
-      contact,
-      result.data as AISearchOutput,
-    );
-    const latencyMs = Date.now() - startMs;
-
-    log.info(
-      "API",
-      `[${rid}] POST /api/contacts/${id}/enrich — ${fieldsUpdated} field(s) merged in ${latencyMs}ms`,
-    );
-
-    res.json({
-      success: true,
-      fieldsUpdated,
-      latencyMs,
-      models: result.models,
-      tokenCount: result.tokenCount,
-    });
   }),
 );
 

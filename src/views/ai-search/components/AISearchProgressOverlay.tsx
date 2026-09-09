@@ -23,9 +23,13 @@ import { CARD } from "../../../lib/styles";
 interface Props {
   batch: AISearchBatch;
   onDismiss: () => void;
+  onCancel: () => void;
+  isCancelling?: boolean;
+  connectionError?: boolean;
 }
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
+  cancelled: <XCircle className="w-3.5 h-3.5 text-on-surface-variant" />,
   queued: <Circle className="w-3.5 h-3.5 text-on-surface-variant" />,
   searching: <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />,
   merging: <Loader2 className="w-3.5 h-3.5 text-warning animate-spin" />,
@@ -33,13 +37,23 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   error: <XCircle className="w-3.5 h-3.5 text-error" />,
 };
 
-export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
+export function AISearchProgressOverlay({
+  batch,
+  onDismiss,
+  onCancel,
+  isCancelling,
+  connectionError,
+}: Props) {
   const [isMinimized, setIsMinimized] = useState(false);
 
   const completed = useMemo(
     () =>
-      batch.jobs.filter((j) => j.status === "success" || j.status === "error")
-        .length,
+      batch.jobs.filter(
+        (j) =>
+          j.status === "success" ||
+          j.status === "error" ||
+          j.status === "cancelled",
+      ).length,
     [batch.jobs],
   );
   const succeeded = useMemo(
@@ -80,6 +94,12 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
         >
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-on-surface">
+            {!isComplete && (
+              <span>
+                {completed}/{total} researched{" "}
+              </span>
+            )}
+            {batch.status === "cancelled" && <span>Research stopped </span>}
             {succeeded > 0 && (
               <span className="text-success">{succeeded} updated</span>
             )}
@@ -96,7 +116,7 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
       initial={{ y: 40, opacity: 0, scale: 0.95 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
       transition={{ type: "spring", damping: 24, stiffness: 300 }}
-      className="fixed bottom-6 right-6 z-50 w-80"
+      className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto"
     >
       <div
         className={cn(
@@ -114,13 +134,19 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
             {completed}/{total}
           </span>
           <button
+            aria-label="Minimize research progress"
             onClick={() => setIsMinimized(true)}
             className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
           >
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={onDismiss}
+            aria-label={
+              isComplete
+                ? "Dismiss research progress"
+                : "Minimize research progress"
+            }
+            onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
             className="p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
@@ -137,6 +163,22 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
           />
         </div>
 
+        {!isComplete && (
+          <div className="px-4 py-2 flex items-center justify-between gap-2 text-xs">
+            <span role="status">
+              {connectionError
+                ? "Reconnecting to research status…"
+                : "Completed updates save as research continues."}
+            </span>
+            <button
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="shrink-0 px-2 py-1 rounded text-error hover:bg-error/10 disabled:opacity-50"
+            >
+              {isCancelling ? "Stopping…" : "Stop research"}
+            </button>
+          </div>
+        )}
         {/* Job list */}
         <div className="max-h-64 overflow-y-auto nice-scrollbar">
           {batch.jobs.map((job) => (
@@ -159,11 +201,22 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
                   )}
                 </span>
               ) : (
-                <span className="opacity-60">No new data found</span>
+                <span className="opacity-60">
+                  {batch.status === "cancelled"
+                    ? "Research stopped"
+                    : failed
+                      ? "Research could not complete"
+                      : "No new data found"}
+                </span>
               )}
             </span>
             <button
-              onClick={onDismiss}
+              aria-label={
+                isComplete
+                  ? "Dismiss research progress"
+                  : "Minimize research progress"
+              }
+              onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
               className="text-xs font-bold text-on-surface-variant hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container-high transition-colors"
             >
               Dismiss
@@ -181,7 +234,7 @@ export function AISearchProgressOverlay({ batch, onDismiss }: Props) {
 
 function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2 text-sm">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
       <div className="shrink-0">{STATUS_ICONS[job.status]}</div>
       <span
         className={cn(
@@ -221,6 +274,14 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
           <span className="text-warning opacity-60">Merging…</span>
         )}
       </span>
+      {job.status === "cancelled" && (
+        <span className="text-xs text-on-surface-variant">Stopped</span>
+      )}
+      {job.status === "error" && (
+        <p className="w-full pl-6 text-xs text-error break-words">
+          {job.error || "Research failed. Open this contact to retry."}
+        </p>
+      )}
     </div>
   );
 }

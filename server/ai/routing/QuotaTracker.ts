@@ -16,18 +16,25 @@
 
 import type { TierLimits } from "./registry.ts";
 
+const quotaDate = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 // ---------------------------------------------------------------------------
 // Internal Types
 // ---------------------------------------------------------------------------
 
 interface UsageWindow {
   /** Timestamps of requests within the current 60s window */
-  requests: number[];
+  requests: { id: number; ts: number }[];
 
   /** Token usage entries within the current 60s window */
-  tokens: { ts: number; count: number }[];
+  tokens: { id: number; ts: number; count: number }[];
 
-  /** Current UTC date string (YYYY-MM-DD) for daily reset */
+  /** Current Pacific date for the provider's daily reset. */
   dateKey: string;
 
   /** Requests made today (resets on dateKey change) */
@@ -40,6 +47,7 @@ interface UsageWindow {
 
 export class QuotaTracker {
   private usage = new Map<string, UsageWindow>();
+  private nextReservationId = 0;
 
   // ── Grounding RPD Tracking ──────────────────────────────────────────
   // Grounding has its own daily limit, SEPARATE from generation RPD.
@@ -53,9 +61,9 @@ export class QuotaTracker {
 
   // ── Helpers ─────────────────────────────────────────────────────────
 
-  /** UTC date key for daily counter resets (avoids repeating this pattern). */
-  private getTodayKey(): string {
-    return new Date().toISOString().split("T")[0];
+  /** Gemini resets daily quotas at midnight Pacific, including daylight saving time. */
+  private getTodayKey(timestamp = Date.now()): string {
+    return quotaDate.format(timestamp);
   }
 
   // ── Token Estimation ────────────────────────────────────────────────
@@ -113,7 +121,7 @@ export class QuotaTracker {
   /** Prune entries older than 60 seconds from the sliding window. */
   private cleanup(window: UsageWindow, now: number): void {
     const cutoff = now - 60_000;
-    window.requests = window.requests.filter((ts) => ts > cutoff);
+    window.requests = window.requests.filter((entry) => entry.ts > cutoff);
     window.tokens = window.tokens.filter((t) => t.ts > cutoff);
   }
 
@@ -170,25 +178,28 @@ export class QuotaTracker {
    * synchronously from the in-memory ledger, parallel requests see
    * each other's reservations and won't all pile onto the same model.
    */
-  reserve(modelId: string, estimatedTokens: number): void {
+  reserve(modelId: string, estimatedTokens: number): number {
     const now = Date.now();
     const window = this.getOrCreateWindow(modelId);
     this.cleanup(window, now);
 
-    window.requests.push(now);
-    window.tokens.push({ ts: now, count: estimatedTokens });
+    const id = ++this.nextReservationId;
+    window.requests.push({ id, ts: now });
+    window.tokens.push({ id, ts: now, count: estimatedTokens });
     // Guard against NaN propagation — a corrupted rpd would silently
     // block all future capacity checks for this model.
     window.rpd = Math.max(0, (window.rpd || 0) + 1);
+    return id;
   }
 
   /** Reserve one unit from the shared grounding RPD pool. */
-  reserveGrounding(): void {
+  reserveGrounding(): string {
     const today = this.getTodayKey();
     if (this.groundingUsage.dateKey !== today) {
       this.groundingUsage = { dateKey: today, rpd: 0 };
     }
     this.groundingUsage.rpd += 1;
+    return today;
   }
 
   // ── Post-Response Adjustments ───────────────────────────────────────
@@ -202,33 +213,52 @@ export class QuotaTracker {
    * (causes slightly earlier model rotation); under-estimation is
    * corrected here to prevent future capacity miscalculations.
    */
-  reconcile(modelId: string, estimated: number, actual: number): void {
+  reconcile(
+    modelId: string,
+    _estimated: number,
+    actual: number,
+    reservationId?: number,
+  ): void {
     const window = this.usage.get(modelId);
     if (!window || window.tokens.length === 0) return;
 
-    const lastEntry = window.tokens[window.tokens.length - 1];
+    const lastEntry =
+      reservationId === undefined
+        ? window.tokens.at(-1)
+        : window.tokens.find((entry) => entry.id === reservationId);
+    if (!lastEntry || !Number.isFinite(actual)) return;
     // Clamp to zero — negative token counts corrupt TPM calculations.
     // This can happen if the estimate was wildly wrong or reconcile
     // is called multiple times for the same request.
-    lastEntry.count = Math.max(0, lastEntry.count + (actual - estimated));
+    lastEntry.count = Math.max(0, actual);
   }
 
   /**
    * Rollback a reservation if the API call fails.
    * Removes the most recent request + token entry and decrements RPD.
    */
-  rollback(modelId: string): void {
+  rollback(modelId: string, reservationId?: number): void {
     const window = this.usage.get(modelId);
     if (!window) return;
 
-    if (window.requests.length > 0) window.requests.pop();
-    if (window.tokens.length > 0) window.tokens.pop();
-    window.rpd = Math.max(0, window.rpd - 1);
+    const entry =
+      reservationId === undefined
+        ? window.requests.at(-1)
+        : window.requests.find((request) => request.id === reservationId);
+    if (!entry) return;
+    window.requests = window.requests.filter(
+      (request) => request.id !== entry.id,
+    );
+    window.tokens = window.tokens.filter((token) => token.id !== entry.id);
+    if (this.getTodayKey(entry.ts) === window.dateKey)
+      window.rpd = Math.max(0, window.rpd - 1);
   }
 
   /** Rollback one unit from the shared grounding RPD pool. */
-  rollbackGrounding(): void {
-    this.groundingUsage.rpd = Math.max(0, this.groundingUsage.rpd - 1);
+  rollbackGrounding(reservedDate = this.getTodayKey()): void {
+    this.hasGroundingCapacity();
+    if (reservedDate === this.groundingUsage.dateKey)
+      this.groundingUsage.rpd = Math.max(0, this.groundingUsage.rpd - 1);
   }
 
   // ── Diagnostics ─────────────────────────────────────────────────────
@@ -245,7 +275,9 @@ export class QuotaTracker {
     const models: Record<string, { rpm: number; tpm: number; rpd: number }> =
       {};
 
-    for (const [modelId, window] of this.usage) {
+    this.hasGroundingCapacity();
+    for (const modelId of this.usage.keys()) {
+      const window = this.getOrCreateWindow(modelId);
       this.cleanup(window, now);
       models[modelId] = {
         rpm: window.requests.length,

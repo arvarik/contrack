@@ -49,7 +49,7 @@ describe("POST /api/ai-search", () => {
       .send({ contactIds: [contactId] });
 
     expect(res.status).toBe(503);
-    expect(res.body.error).toContain("AI provider is not configured");
+    expect(res.body.error.message).toContain("AI provider is not configured");
   });
 
   it("dynamically resolves to 'searxng' on self-hosted setups with SearXNG configured", async () => {
@@ -61,6 +61,13 @@ describe("POST /api/ai-search", () => {
         baseUrl: "http://127.0.0.1:11434/v1",
       },
     ]);
+    setSetting(SETTING_KEYS.aiCapabilities, {
+      deep: {
+        mode: "pinned",
+        providerId: "custom:local-ollama",
+        model: "local-test",
+      },
+    });
     // Configure SearXNG for research
     setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
     invalidateProviderCache();
@@ -79,7 +86,7 @@ describe("POST /api/ai-search", () => {
     expect(batch?.strategy).toBe("searxng");
   });
 
-  it("defaults to 'two-pass' when no research provider or SearXNG is configured", async () => {
+  it("rejects a batch when research has no usable provider or SearXNG", async () => {
     // Configure custom endpoint without SearXNG
     setSetting(SETTING_KEYS.aiCustomEndpoints, [
       {
@@ -94,9 +101,8 @@ describe("POST /api/ai-search", () => {
       .post("/api/ai-search")
       .send({ contactIds: [contactId] });
 
-    expect(res.status).toBe(200);
-    const batch = jobQueue.getBatch(res.body.batchId);
-    expect(batch?.strategy).toBe("two-pass");
+    expect(res.status).toBe(503);
+    expect(jobQueue.getActiveBatches()).toEqual([]);
   });
 
   it("honors explicit valid strategy requested in payload", async () => {
@@ -108,15 +114,22 @@ describe("POST /api/ai-search", () => {
       },
     ]);
     setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
+    setSetting(SETTING_KEYS.aiCapabilities, {
+      deep: {
+        mode: "pinned",
+        providerId: "custom:local-ollama",
+        model: "local-test",
+      },
+    });
     invalidateProviderCache();
 
     const res = await request(app)
       .post("/api/ai-search")
-      .send({ contactIds: [contactId], strategy: "single-pass" });
+      .send({ contactIds: [contactId], strategy: "searxng" });
 
     expect(res.status).toBe(200);
     const batch = jobQueue.getBatch(res.body.batchId);
-    expect(batch?.strategy).toBe("single-pass");
+    expect(batch?.strategy).toBe("searxng");
   });
 
   it("rejects unknown strategy with 400 Bad Request", async () => {
@@ -134,7 +147,7 @@ describe("POST /api/ai-search", () => {
       .send({ contactIds: [contactId], strategy: "invalid-strat" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain("Unknown AI Search strategy");
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("rejects empty contactIds array with 400 Validation Error", async () => {
@@ -146,7 +159,7 @@ describe("POST /api/ai-search", () => {
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("returns 400 when none of the contacts exist", async () => {
+  it("returns 409 when selected contacts no longer exist", async () => {
     setSetting(SETTING_KEYS.aiCustomEndpoints, [
       {
         id: "local-ollama",
@@ -154,15 +167,21 @@ describe("POST /api/ai-search", () => {
         baseUrl: "http://127.0.0.1:11434/v1",
       },
     ]);
+    setSetting(SETTING_KEYS.aiCapabilities, {
+      deep: {
+        mode: "pinned",
+        providerId: "custom:local-ollama",
+        model: "local-test",
+      },
+    });
+    setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
     invalidateProviderCache();
 
     const res = await request(app)
       .post("/api/ai-search")
       .send({ contactIds: ["00000000-0000-0000-0000-000000000000"] });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain(
-      "None of the selected contacts were found",
-    );
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toContain("no longer available");
   });
 });

@@ -1,3 +1,5 @@
+import { resolveCapability } from "../../../ai/capabilities.ts";
+import { AppError } from "../../../utils/AppError.ts";
 // =============================================================================
 // AI Search — Strategy Registry
 // =============================================================================
@@ -33,8 +35,9 @@ const STRATEGIES: Record<string, () => AISearchStrategy> = {
 export function getStrategy(name: string = "two-pass"): AISearchStrategy {
   const factory = STRATEGIES[name];
   if (!factory)
-    throw new Error(
+    throw new AppError(
       `Unknown AI Search strategy: "${name}". Available: ${Object.keys(STRATEGIES).join(", ")}`,
+      400,
     );
   return factory();
 }
@@ -60,4 +63,36 @@ export function getDefaultStrategyForProvider(
     default:
       return "two-pass";
   }
+}
+
+/** Validate configuration locally before accepting an enrichment action. */
+export function validateEnrichmentStrategy(requested?: string): string {
+  const research = resolveCapability("research");
+  const name =
+    requested ?? getDefaultStrategyForProvider(research?.providerId ?? null);
+  getStrategy(name);
+  if (name === "searxng") {
+    if (!getSearxngUrl() || !resolveCapability("deep"))
+      throw new AppError(
+        "Configure SearXNG and an AI extraction model in settings.",
+        503,
+      );
+  } else {
+    if (!research)
+      throw new AppError(
+        "AI provider is not configured for contact research. Check AI settings.",
+        503,
+      );
+    if (name === "single-pass" && research.providerId === "gemini")
+      throw new AppError(
+        "Gemini research requires the two-pass strategy.",
+        400,
+      );
+    if (name === "two-pass" && !resolveCapability("quick"))
+      throw new AppError(
+        "Configure a quick AI model for research extraction.",
+        503,
+      );
+  }
+  return name;
 }

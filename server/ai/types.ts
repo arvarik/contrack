@@ -158,6 +158,8 @@ export interface RoutingPolicy {
  * Normalizes response metadata across providers.
  */
 export interface AIGenerateResult {
+  /** Source links reported by the provider grounding metadata. */
+  citations?: Array<{ title: string; uri: string }>;
   /** Raw text content of the model's response. */
   text: string;
 

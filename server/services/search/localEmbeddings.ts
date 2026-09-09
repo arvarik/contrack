@@ -80,6 +80,7 @@ export async function initLocalEmbeddings(): Promise<void> {
 
       extractor = await pipelineFactory("feature-extraction", MODEL_ID, {
         dtype: "q8", // quantized for speed + lower memory
+        session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
       });
 
       modelReady = true;

@@ -468,35 +468,12 @@ export interface SemanticSearchResult {
 // AI Search Types
 // =============================================================================
 
-/** Status lifecycle: queued → searching → merging → success | error */
-export type AISearchJobStatus =
-  "queued" | "searching" | "merging" | "success" | "error";
-
-/** Error classification for contextual UI messages. */
-export type AISearchErrorType =
-  "rate_limit" | "validation" | "network" | "auth" | "ambiguous" | "unknown";
-
-export interface AISearchJob {
-  id: string;
-  contactId: string;
-  contactName: string;
-  status: AISearchJobStatus;
-  error?: string;
-  errorType?: AISearchErrorType;
-  fieldsUpdated: number;
-  startedAt?: string;
-  completedAt?: string;
-  latencyMs?: number;
-}
-
-export interface AISearchBatch {
-  id: string;
-  strategy: string;
-  jobs: AISearchJob[];
-  createdAt: string;
-  status: "processing" | "complete" | "cancelled";
-  totalTokens: number;
-}
+export type {
+  AISearchBatch,
+  AISearchJob,
+  AISearchJobStatus,
+  AISearchErrorType,
+} from "../shared/aiSearchContract";
 
 // =============================================================================
 // Command Palette Zero-State Types

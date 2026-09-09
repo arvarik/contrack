@@ -33,7 +33,7 @@ export const AI_DEFAULTS = {
   /** Hard cap per single network attempt. Streaming / grounded calls may need to raise this. */
   perAttemptTimeoutMs: 60_000,
   /** Number of attempts including the first one. 1 = no retry, 3 = up to 2 retries. */
-  maxAttempts: 3,
+  maxAttempts: 2,
   /** Base backoff for exponential schedule: 500, 1000, 2000 ms (+ jitter). */
   baseBackoffMs: 500,
   /** Max jitter added on top of each backoff step (uniform [0, jitterMs)). */
@@ -58,6 +58,11 @@ export function isRetryableError(
   error: unknown,
   abortedByTimeout: boolean,
 ): boolean {
+  if (
+    error instanceof AppError &&
+    ["AI_INVALID_JSON", "AI_SCHEMA_MISMATCH", "AI_BUSY"].includes(error.code)
+  )
+    return false;
   if (abortedByTimeout) return true;
 
   const e = error as {
@@ -75,6 +80,8 @@ export function isRetryableError(
   ) {
     return true;
   }
+
+  if (typeof status === "number" && status >= 400 && status < 500) return false;
 
   const code = typeof e?.code === "string" ? e.code : "";
   if (
@@ -97,16 +104,6 @@ export function isRetryableError(
     msg.includes("timeout") ||
     msg.includes("timed out") ||
     msg.includes("deadline")
-  );
-}
-
-/** Distinguish "the client cancelled us" from "the timer cancelled us". */
-function isAbortError(err: unknown): boolean {
-  const e = err as { name?: string; code?: string };
-  return (
-    e?.name === "AbortError" ||
-    e?.code === "ABORT_ERR" ||
-    (e?.name === "Error" && (e as { message?: string }).message === "Aborted")
   );
 }
 
@@ -204,7 +201,7 @@ export async function withRetry<T>(
       lastErr = err;
 
       // Caller cancelled mid-flight — never retry.
-      if (opts.signal?.aborted && isAbortError(err)) {
+      if (opts.signal?.aborted) {
         throw new AppError("AI call cancelled by caller", 499, {
           code: "CANCELLED",
         });
@@ -233,6 +230,18 @@ export async function withRetry<T>(
     message?: string;
   };
   const status = typeof e?.status === "number" ? e.status : e?.statusCode;
+  if (status === 401 || status === 403)
+    throw new AppError(
+      "AI provider rejected its credentials. Check AI settings.",
+      503,
+      { code: "AI_AUTH_FAILED" },
+    );
+  if (status === 400 || status === 422)
+    throw new AppError(
+      "AI provider rejected the request. Check the model settings.",
+      502,
+      { code: "AI_REQUEST_REJECTED" },
+    );
   if (status === 429)
     throw new RateLimitedError("AI provider rate limit exceeded", {
       cause: e?.message,
@@ -247,21 +256,19 @@ export async function withRetry<T>(
   });
 }
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted)
-      return reject(new AppError("Cancelled", 499, { code: "CANCELLED" }));
-    const t = setTimeout(() => resolve(), ms);
-    if (signal) {
-      signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(t);
-          reject(new AppError("Cancelled", 499, { code: "CANCELLED" }));
-        },
-        { once: true },
-      );
-    }
+    if (signal?.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 

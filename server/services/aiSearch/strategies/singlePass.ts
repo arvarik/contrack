@@ -1,3 +1,4 @@
+import { AppError } from "../../../utils/AppError.ts";
 // =============================================================================
 // AI Search — Single-Pass Strategy
 // =============================================================================
@@ -33,7 +34,9 @@ export class SinglePassStrategy implements AISearchStrategy {
   async execute(
     _contact: HydratedContact,
     prompt: string,
+    signal?: AbortSignal,
   ): Promise<AISearchResult> {
+    signal?.throwIfAborted();
     const startMs = Date.now();
 
     // Single combined request: web search + structured JSON output
@@ -43,8 +46,12 @@ export class SinglePassStrategy implements AISearchStrategy {
       responseFormat: "json",
       jsonSchema: extractionJsonSchema,
       enableSearchGrounding: true,
+      signal,
+      timeoutMs: 60_000,
+      maxOutputTokens: 4_000,
     });
 
+    signal?.throwIfAborted();
     // Record invocation for AI Stats tracking
     recordInvocation({
       operation: "aiSearchSinglePass",
@@ -68,13 +75,15 @@ export class SinglePassStrategy implements AISearchStrategy {
     } catch (parseErr: unknown) {
       throw new Error(
         `JSON parse failed for single-pass output: ${getErrorMessage(parseErr)}. ` +
-          `Raw text: ${(result.text || "").slice(0, 200)}`,
+          "",
       );
     }
 
     const validated = aiSearchOutputSchema.safeParse(rawParsed);
     if (!validated.success) {
-      throw new Error(`Zod validation failed: ${validated.error.message}`);
+      throw new AppError("AI research failed schema validation", 502, {
+        code: "AI_SCHEMA_MISMATCH",
+      });
     }
 
     const structuredData = validated.data as Record<string, unknown>;

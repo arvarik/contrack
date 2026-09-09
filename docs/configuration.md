@@ -30,7 +30,7 @@ cp .env.example .env
 | `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                         | — (auto)     | No       |
 | `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                       | — (auto)     | No       |
 | `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                           | — (built-in) | No       |
-| `DISABLE_BACKGROUND_JOBS` | `true` turns off scheduled work: backups, trash purge, geocoding queue, model-catalog refresh, `PRAGMA optimize`. For CI and secondary instances | `false`      | No       |
+| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                          | `false`      | No       |
 | `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                | — (dev)      | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
@@ -42,6 +42,11 @@ cp .env.example .env
 > `POST /api/contacts/bulk` (50 MB) for imports. Over the limit the server
 > answers `413 PAYLOAD_TOO_LARGE`. File uploads travel as multipart and have
 > their own caps (10 MB avatars, 50 MB attachments).
+
+Local embedding inference uses two CPU threads and one inter-operation thread.
+AI generation allows two concurrent calls and 16 waiting calls per server.
+Additional calls return `429 AI_BUSY`. See [AI hardening](ai-hardening.md) for
+timeouts, retry limits, cache behavior, and testing guidance.
 
 ---
 
