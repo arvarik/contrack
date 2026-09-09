@@ -18,7 +18,11 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "node_modules/", "drizzle/"],
+    // docs/multi-tenant-plan/ holds the 2.0 design documents and the
+    // benchmark scripts behind them. The scripts are CommonJS and run under
+    // `node` by hand, not through the app build, so they read as undefined
+    // globals here. They are reference material, not source.
+    ignores: ["dist/", "node_modules/", "drizzle/", "docs/multi-tenant-plan/"],
   },
   // Standalone Node tooling (audit scripts, codegen). These run under `node`
   // directly rather than through the app's TS build, so they need Node globals

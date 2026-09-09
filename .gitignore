@@ -53,6 +53,3 @@ docs/designs/
 docs/explorations/
 docs/plans/
 docs/recommendations/
-
-# Multi-tenant implementation plan — working design docs, not shipped
-docs/multi-tenant-plan/
