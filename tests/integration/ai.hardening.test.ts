@@ -67,22 +67,22 @@ afterEach(() => {
 
 describe("enrichment integrity", () => {
   it("rejects an outdated profile instead of replacing a concurrent edit", () => {
-    const original = enrichmentContact(id);
+    const original = enrichmentContact(scope(), id);
     sqlite
       .prepare("UPDATE contacts SET role = 'User role' WHERE id = ?")
       .run(id);
-    expect(() => mergeSearchResult(id, original, { role: "AI role" })).toThrow(
-      "Contact changed",
-    );
-    expect(enrichmentContact(id).role).toBe("User role");
+    expect(() =>
+      mergeSearchResult(scope(), id, original, { role: "AI role" }),
+    ).toThrow("Contact changed");
+    expect(enrichmentContact(scope(), id).role).toBe("User role");
   });
   it.each(["isArchived = 1", "isGhost = 1", "deletedAt = CURRENT_TIMESTAMP"])(
     "rejects unavailable contacts after research: %s",
     (change) => {
-      const original = enrichmentContact(id);
+      const original = enrichmentContact(scope(), id);
       sqlite.exec(`UPDATE contacts SET ${change}`);
       expect(() =>
-        mergeSearchResult(id, original, { role: "AI role" }),
+        mergeSearchResult(scope(), id, original, { role: "AI role" }),
       ).toThrow("no longer available");
       expect(
         sqlite.prepare("SELECT role FROM contacts WHERE id = ?").get(id),
@@ -96,7 +96,7 @@ describe("enrichment integrity", () => {
         interests: [{ interest: "Cycling", isAiGenerated: false }],
         attributes: [{ name: "Preference", value: "User choice" }],
       });
-    mergeSearchResult(id, enrichmentContact(id), {
+    mergeSearchResult(scope(), id, enrichmentContact(scope(), id), {
       emails: [{ email: "test@example.com" }, { email: "TEST@example.com" }],
       interests: [
         { interest: "Cycling" },
@@ -109,7 +109,7 @@ describe("enrichment integrity", () => {
         { name: "Language", value: "French" },
       ],
     });
-    const current = enrichmentContact(id);
+    const current = enrichmentContact(scope(), id);
     expect(current.emails).toHaveLength(1);
     expect(current.interests).toHaveLength(2);
     expect(
@@ -126,12 +126,12 @@ describe("enrichment integrity", () => {
   });
   it("rejects malformed output and unsafe URL schemes before writing", () => {
     expect(() =>
-      mergeSearchResult(id, enrichmentContact(id), {
+      mergeSearchResult(scope(), id, enrichmentContact(scope(), id), {
         website: "javascript:alert(1)",
       }),
     ).toThrow("schema validation");
     expect(() =>
-      mergeSearchResult(id, enrichmentContact(id), {
+      mergeSearchResult(scope(), id, enrichmentContact(scope(), id), {
         tags: Array.from({ length: 51 }, () => ({ tag: "repeated" })),
       }),
     ).toThrow("schema validation");
@@ -162,7 +162,7 @@ describe("enrichment integrity", () => {
     expect(generateFor).toHaveBeenCalledTimes(1);
     finish(reply("Test Person is a researcher."));
     expect((await first).status).toBe(200);
-    expect(enrichmentContact(id).role).toBe("Researcher");
+    expect(enrichmentContact(scope(), id).role).toBe("Researcher");
   });
 });
 
@@ -170,7 +170,7 @@ describe("batch research lifecycle", () => {
   it("does not repeat paid research for an empty grounding result", async () => {
     vi.mocked(generateFor).mockResolvedValue(reply(""));
     await expect(
-      new TwoPassStrategy().execute(enrichmentContact(id), "test"),
+      new TwoPassStrategy().execute(enrichmentContact(scope(), id), "test"),
     ).rejects.toThrow("No public information");
     expect(generateFor).toHaveBeenCalledTimes(1);
   });
@@ -183,8 +183,8 @@ describe("batch research lifecycle", () => {
     expect(response.status).toBe(502);
     expect(response.body.error.code).toBe("AI_GROUNDING_MISSING");
     expect(generateFor).toHaveBeenCalledTimes(1);
-    expect(enrichmentContact(id).aiHydratedAt).toBeNull();
-    expect(enrichmentContact(id).role).toBeNull();
+    expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
+    expect(enrichmentContact(scope(), id).role).toBeNull();
   });
   it("persists safe provider source links with the validated research", async () => {
     vi.mocked(generateFor)
@@ -192,7 +192,7 @@ describe("batch research lifecycle", () => {
       .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
-    expect(enrichmentContact(id).aiBackground).toContain(
+    expect(enrichmentContact(scope(), id).aiBackground).toContain(
       "https://example.com/profile",
     );
     expect(generateFor).toHaveBeenCalledTimes(2);
@@ -200,6 +200,7 @@ describe("batch research lifecycle", () => {
   it("does not retry the complete workflow after a failed provider stage", async () => {
     vi.mocked(generateFor).mockRejectedValue(new Error("Network 500"));
     const batch = jobQueue.createBatch(
+      scope(),
       [{ id, name: "Test Person" }],
       "two-pass",
     );
@@ -220,6 +221,7 @@ describe("batch research lifecycle", () => {
         }),
     );
     const batch = jobQueue.createBatch(
+      scope(),
       [
         { id, name: "Test Person" },
         { id: nextId, name: "Second Person" },
@@ -237,7 +239,7 @@ describe("batch research lifecycle", () => {
     await Promise.resolve();
     expect(batch.status).toBe("cancelled");
     expect(batch.jobs.every((job) => job.status === "cancelled")).toBe(true);
-    expect(enrichmentContact(id).aiHydratedAt).toBeNull();
+    expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
     expect(generateFor).toHaveBeenCalledTimes(1);
   });
   it("rejects malformed and missing status IDs before starting SSE", async () => {
@@ -290,7 +292,7 @@ describe("AI cache freshness", () => {
       .run(id);
     finish(reply('["Old context"]'));
     expect(await pending).toMatchObject({ statusCode: 409 });
-    expect(enrichmentContact(id).aiBriefing).toBeNull();
+    expect(enrichmentContact(scope(), id).aiBriefing).toBeNull();
   });
   it("returns a configuration error instead of invented briefing content", async () => {
     vi.mocked(isAnyProviderConfigured).mockReturnValue(false);
