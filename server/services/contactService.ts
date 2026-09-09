@@ -23,8 +23,7 @@ import { aiCache } from "../utils/aiCache.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildAvatarUrl } from "./avatarService.ts";
 import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
-import { embedContact } from "./search/localEmbeddings.ts";
-import { generateSearchExpansion } from "../ai/aiService.ts";
+import { scheduleSearchIndex } from "./search/indexQueue.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { dedupeService } from "./dedupe/index.ts";
@@ -232,37 +231,7 @@ export const contactService = {
       ),
     );
 
-    // Fire-and-forget: Doc2Query search expansion → then embed with complete data
-    // NOTE: We intentionally don't embed before expansion completes — the single
-    // embedContact call after expansion captures the enriched text, avoiding a
-    // double-embed race condition.
-    generateSearchExpansion({
-      name: body.name,
-      role: body.role,
-      company: body.company,
-      industry: body.industry,
-      about: body.about,
-      preferences: body.preferences,
-      tags: body.tags?.map((t) => (typeof t === "string" ? t : t.tag)),
-      interests: body.interests?.map((i) =>
-        typeof i === "string" ? i : i.interest,
-      ),
-    })
-      .then((expansion) => {
-        if (expansion) {
-          sqlite
-            .prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?")
-            .run(expansion, id);
-        }
-        // Embed with or without expansion — this is the definitive embedding
-        return embedContact(id);
-      })
-      .catch((err) =>
-        log.debug(
-          "ContactService",
-          `Doc2Query/embed for ${id} skipped: ${err?.message}`,
-        ),
-      );
+    scheduleSearchIndex(id);
 
     // Fire-and-forget: incremental dedupe check (debounced)
     scheduleIncrementalDedupe(id);
@@ -436,50 +405,12 @@ export const contactService = {
       );
     }
 
-    // Fire-and-forget: recompute search embedding + Doc2Query
-    if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
-      // Regenerate Doc2Query expansion → then embed once with complete data
-      const row = sqlite
-        .prepare(
-          "SELECT name, role, company, industry, about, preferences FROM contacts WHERE id = ?",
-        )
-        .get(id) as
-        | Pick<
-            ContactRow,
-            "name" | "role" | "company" | "industry" | "about" | "preferences"
-          >
-        | undefined;
-      if (row) {
-        const tags = (
-          sqlite
-            .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
-            .all(id) as { tag: string }[]
-        ).map((t) => t.tag);
-        const interests = (
-          sqlite
-            .prepare(
-              "SELECT interest FROM contact_interests WHERE contactId = ?",
-            )
-            .all(id) as { interest: string }[]
-        ).map((t) => t.interest);
-        generateSearchExpansion({ ...row, tags, interests })
-          .then((expansion) => {
-            if (expansion) {
-              sqlite
-                .prepare("UPDATE contacts SET searchExpansion = ? WHERE id = ?")
-                .run(expansion, id);
-            }
-            return embedContact(id);
-          })
-          .catch((err) =>
-            log.debug(
-              "ContactService",
-              `Doc2Query/embed update for ${id} skipped: ${err?.message}`,
-            ),
-          );
-      } else {
-        embedContact(id).catch(() => {});
-      }
+    if (
+      SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined) ||
+      body.tags !== undefined ||
+      body.interests !== undefined
+    ) {
+      scheduleSearchIndex(id);
     }
 
     // Fire-and-forget: incremental dedupe if identity fields changed
@@ -514,7 +445,7 @@ export const contactService = {
     // NOTE: FTS5 is already updated by the contacts_au trigger, but the
     // vector embedding + Doc2Query expansion must be refreshed explicitly.
     if (SEARCH_TRIGGER_FIELDS.some((f) => body[f] !== undefined)) {
-      embedContact(id).catch(() => {});
+      scheduleSearchIndex(id);
     }
 
     const updated = contactRepo.hydrate(
@@ -568,7 +499,7 @@ export const contactService = {
       .run();
 
     // Fire-and-forget: regenerate the purged embeddings.
-    embedContact(id).catch(() => {});
+    scheduleSearchIndex(id);
     generateAndStoreEmbedding(id).catch(() => {});
 
     invalidateAllCaches();

@@ -20,6 +20,7 @@
 import { sqlite } from "../../db.ts";
 import { sanitizeAiOutputValue } from "../../ai/promptSafety.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
+import { scheduleSearchIndex } from "../search/indexQueue.ts";
 import { invalidateSearchCache } from "../../utils/aiCache.ts";
 import type {
   HydratedContact,
@@ -296,6 +297,7 @@ export function mergeSearchResult(
 
   // Invalidate the semantic search cache so updated data is searchable
   invalidateSearchCache();
+  scheduleSearchIndex(contactId);
 
   log.info(
     "MergeEngine",

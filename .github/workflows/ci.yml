@@ -5,7 +5,7 @@ on:
     branches: ["main"]
     tags: ["v*"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "arvind/harden-*"]
   # Manual re-run, and an escape hatch when GitHub's hosted pool is congested
   # or degraded — pick the hppc self-hosted runner instead of waiting in queue.
   workflow_dispatch:

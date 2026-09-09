@@ -41,9 +41,11 @@
 // =============================================================================
 
 import { sqlite } from "../../db.ts";
+import { lexicalSearch } from "./lexical.ts";
+import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { log } from "../../utils/logger.ts";
 import {
-  isLocalEmbeddingReady,
+  isSearchEmbeddingReady,
   embedText,
   findSearchNeighbors,
   getSearchEmbeddingCount,
@@ -106,13 +108,6 @@ const FTS_LIMIT = 100;
 const VECTOR_LIMIT = 100;
 
 /**
- * BM25 column weights for FTS5.
- * Column order: name, company, role, headline, location, about, industry, extras, searchExpansion
- * A match in "name" (10x) is far more informative than "extras" (1x).
- */
-const BM25_WEIGHTS = "10.0, 5.0, 3.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0";
-
-/**
  * High-confidence threshold: if ≥ this fraction of candidates came from
  * the FTS5 channel, the query is likely a keyword/exact match
  * and we can skip the LLM reranker.
@@ -145,11 +140,11 @@ interface HardFilterResult {
  * Active contacts only — ghosts, archived contacts, and soft-merged
  * (canonical replaced) contacts are excluded from all search results.
  */
-const ACTIVE_GATE_SQL = `isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL`;
+const ACTIVE_GATE_SQL = ACTIVE_CONTACT_SQL;
 
 /**
  * Compile a list of matchers into a single case-insensitive word-boundary
- * regex. Word boundary uses `(?:^|[^a-zA-Z0-9])` and `(?=[^a-zA-Z0-9]|$)`
+ * regex. Word boundary uses `(?:^|[^\\p{L}\\p{N}])` and `(?=[^\\p{L}\\p{N}]|$)`
  * (not \b) so that hyphenated/punctuated text matches correctly without
  * Unicode surprises.
  */
@@ -163,8 +158,8 @@ function buildMatcherRegex(matchers: string[]): RegExp | null {
   // Sort longest-first so the alternation prefers the most specific match
   parts.sort((a, b) => b.length - a.length);
   return new RegExp(
-    `(?:^|[^a-zA-Z0-9])(?:${parts.join("|")})(?=[^a-zA-Z0-9]|$)`,
-    "i",
+    `(?:^|[^\\p{L}\\p{N}])(?:${parts.join("|")})(?=[^\\p{L}\\p{N}]|$)`,
+    "iu",
   );
 }
 
@@ -216,13 +211,10 @@ function applyHardFilters(plan: QueryPlan): HardFilterResult {
         c.role,
         c.headline,
         c.industry,
-        COALESCE(GROUP_CONCAT(DISTINCT t.tag), '')      AS tagsText,
-        COALESCE(GROUP_CONCAT(DISTINCT i.interest), '') AS interestsText
+        COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
+        COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText
       FROM contacts c
-      LEFT JOIN contact_tags t      ON t.contactId = c.id
-      LEFT JOIN contact_interests i ON i.contactId = c.id
       WHERE ${ACTIVE_GATE_SQL}${temporalSql}
-      GROUP BY c.id
     `,
     )
     .all(...temporalParams) as {
@@ -277,49 +269,11 @@ function ftsRetrieval(
   query: string,
   preFilterIds: Set<string> | null,
 ): RankedItem[] {
-  const sanitized = query.replace(/['\"]/g, "").trim();
-  if (!sanitized) return [];
-
-  const tokens = sanitized.split(/\s+/).filter((t) => t.length > 0);
-  if (tokens.length === 0) return [];
-
-  const strategies = [
-    `"${sanitized}"`,
-    tokens.map((t) => `"${t}"*`).join(" "),
-    tokens.map((t) => `"${t}"*`).join(" OR "),
-  ];
-
-  for (const ftsQuery of strategies) {
-    try {
-      const rows = sqlite
-        .prepare(
-          `
-        SELECT contactId, bm25(contacts_fts, ${BM25_WEIGHTS}) as score
-        FROM contacts_fts
-        WHERE contacts_fts MATCH ?
-        ORDER BY score
-        LIMIT ?
-      `,
-        )
-        .all(ftsQuery, FTS_LIMIT) as { contactId: string; score: number }[];
-
-      const filtered = preFilterIds
-        ? rows.filter((r) => preFilterIds.has(r.contactId))
-        : rows;
-
-      if (filtered.length > 0) {
-        return filtered.map((r, i) => ({
-          contactId: r.contactId,
-          rank: i + 1,
-          channel: "fts" as const,
-        }));
-      }
-    } catch {
-      // FTS5 syntax errors — continue to next strategy
-    }
-  }
-
-  return [];
+  return lexicalSearch(query, FTS_LIMIT, preFilterIds, true).map((row, i) => ({
+    contactId: row.contactId,
+    rank: i + 1,
+    channel: "fts" as const,
+  }));
 }
 
 // =============================================================================
@@ -330,7 +284,7 @@ async function vectorRetrieval(
   embedInputText: string,
   preFilterIds: Set<string> | null,
 ): Promise<RankedItem[]> {
-  if (!isLocalEmbeddingReady() || getSearchEmbeddingCount() === 0) {
+  if (!isSearchEmbeddingReady() || getSearchEmbeddingCount() === 0) {
     return [];
   }
 
@@ -386,22 +340,24 @@ function buildTraitBoosts(
           LEFT JOIN contact_interests i ON i.contactId = c.id
           WHERE c.isGhost = 0
             AND (c.isArchived = 0 OR c.isArchived IS NULL)
-            AND c.canonicalId IS NULL
+            AND c.canonicalId IS NULL AND c.deletedAt IS NULL
+            AND (${allowedIds ? "c.id IN (SELECT value FROM json_each(?))" : "1"})
             AND (
-              c.about LIKE ? OR c.preferences LIKE ? OR c.headline LIKE ?
-              OR c.searchExpansion LIKE ?
-              OR t.tag LIKE ? OR i.interest LIKE ?
+              c.about LIKE ? ESCAPE '\\' OR c.preferences LIKE ? ESCAPE '\\' OR c.headline LIKE ? ESCAPE '\\'
+              OR c.searchExpansion LIKE ? ESCAPE '\\'
+              OR t.tag LIKE ? ESCAPE '\\' OR i.interest LIKE ? ESCAPE '\\'
             )
           LIMIT ?
         `,
         )
         .all(
-          `%${trait}%`,
-          `%${trait}%`,
-          `%${trait}%`,
-          `%${trait}%`,
-          `%${trait}%`,
-          `%${trait}%`,
+          ...(allowedIds ? [JSON.stringify([...allowedIds])] : []),
+          `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
+          `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
+          `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
+          `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
+          `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
+          `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           BOOST_LIMIT,
         ) as { id: string }[];
 

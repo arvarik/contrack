@@ -22,12 +22,14 @@ const API_BASE = "/api";
 export const useSearchContacts = (q: string) => {
   return useQuery({
     queryKey: ["contacts", "search", q],
-    queryFn: async (): Promise<Contact[]> => {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
+    queryFn: async ({ signal }): Promise<Contact[]> => {
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`, {
+        signal,
+      });
       if (!res.ok) throw new Error("Failed to search contacts");
       return res.json();
     },
-    enabled: q.length > 0,
+    enabled: q.trim().length > 0,
     // CRITICAL: keepPreviousData prevents the result list from emptying and
     // re-filling on every debounced keystroke. Without this, each new query key
     // starts with data=undefined → layout shift → results reappear. With it,
