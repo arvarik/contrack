@@ -770,12 +770,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const id = String(req.params.id);
+    const scope = scopeOf(req);
     // requireContact above already checked the owner. This repeats it against
     // the repository so the check is visible at the call that spends money.
-    contactRepo.requireOwned(scopeOf(req), id);
+    contactRepo.requireOwned(scope, id);
 
     const strategyName = validateEnrichmentStrategy();
-    const contact = enrichmentContact(id);
+    const contact = enrichmentContact(scope, id);
     const release = lockEnrichment(id);
     const controller = new AbortController();
     const onClose = () => {
@@ -803,6 +804,7 @@ router.post(
       );
       controller.signal.throwIfAborted();
       const fieldsUpdated = mergeSearchResult(
+        scope,
         id,
         contact,
         result.data as AISearchOutput,

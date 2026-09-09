@@ -21,7 +21,7 @@ import { sqlite } from "../../db.ts";
 import { sanitizeAiOutputValue } from "../../ai/promptSafety.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
-import { invalidateSearchCache, aiCache } from "../../utils/aiCache.ts";
+import { aiCache, ownerKey } from "../../utils/aiCache.ts";
 import type {
   HydratedContact,
   ChildRecordsPayload,
@@ -30,6 +30,7 @@ import { aiSearchOutputSchema, type AISearchOutput } from "./promptTemplate.ts";
 import { contactFingerprint, enrichmentContact } from "./contactSnapshot.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 
 // =============================================================================
 // Allowed Scalar Fields
@@ -57,12 +58,13 @@ const ALLOWED_SCALAR_FIELDS = new Set([
 // =============================================================================
 
 export function mergeSearchResult(
+  scope: Scope,
   contactId: string,
   existing: HydratedContact,
   output: unknown,
   citations: Array<{ title: string; uri: string }> = [],
 ): number {
-  const fresh = enrichmentContact(contactId);
+  const fresh = enrichmentContact(scope, contactId);
   if (contactFingerprint(fresh) !== contactFingerprint(existing))
     throw new AppError(
       "Contact changed during research. Review the contact and try again.",
@@ -336,9 +338,10 @@ export function mergeSearchResult(
       const values = Object.values(scalarUpdate);
       sqlite
         .prepare(
-          `UPDATE contacts SET ${setClauses}, updatedAt = ? WHERE id = ?`,
+          `UPDATE contacts SET ${setClauses}, updatedAt = ?
+             WHERE id = ? AND ownerId = ?`,
         )
-        .run(...values, new Date().toISOString(), contactId);
+        .run(...values, new Date().toISOString(), contactId, scope.ownerId);
     }
 
     // Insert new child records with source='ai-search'
@@ -352,15 +355,20 @@ export function mergeSearchResult(
     // ALWAYS stamp aiHydratedAt on successful search — even if no new
     // data was found (re-search confirms data is still current)
     sqlite
-      .prepare("UPDATE contacts SET aiHydratedAt = ? WHERE id = ?")
-      .run(new Date().toISOString(), contactId);
+      .prepare(
+        "UPDATE contacts SET aiHydratedAt = ? WHERE id = ? AND ownerId = ?",
+      )
+      .run(new Date().toISOString(), contactId, scope.ownerId);
   });
   txn();
 
-  // Invalidate the semantic search cache so updated data is searchable
-  invalidateSearchCache();
-  aiCache.invalidate("briefing", contactId);
-  aiCache.invalidate("dailyInsight");
+  // Invalidate this owner's cached search work so the new data is searchable.
+  // It used to flush the whole rerank tier, so one account's research made
+  // every other account on the instance pay for a fresh search.
+  aiCache.invalidateForOwner("rerank", scope.ownerId);
+  aiCache.invalidateForOwner("synthesis", scope.ownerId);
+  aiCache.invalidate("briefing", ownerKey(scope, contactId));
+  aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
   scheduleSearchIndex(contactId);
 
   log.info(

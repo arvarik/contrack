@@ -15,6 +15,7 @@ import {
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { parseSearchQuery } from "../../ai/aiService.ts";
 import type { QueryPlan } from "../../ai/types.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 
 // =============================================================================
 // Types
@@ -120,7 +121,7 @@ function buildMatcherRegex(matchers: string[]): RegExp | null {
  * active contact corpus. Returns the set of allowed contact IDs, or null
  * if no filters apply.
  */
-function applyHardFilters(plan: QueryPlan): HardFilterResult {
+function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
   // Low-confidence parses skip hard filters entirely — exploratory queries
   // shouldn't get gated on a possibly-wrong extraction.
   if (plan.confidence === "low") {
@@ -166,10 +167,10 @@ function applyHardFilters(plan: QueryPlan): HardFilterResult {
         COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
         COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText
       FROM contacts c
-      WHERE ${ACTIVE_GATE_SQL}${temporalSql}
+      WHERE c.ownerId = ? AND ${ACTIVE_GATE_SQL}${temporalSql}
     `,
     )
-    .all(...temporalParams) as {
+    .all(scope.ownerId, ...temporalParams) as {
     id: string;
     location: string | null;
     company: string | null;
@@ -218,14 +219,17 @@ function applyHardFilters(plan: QueryPlan): HardFilterResult {
 // =============================================================================
 
 function ftsRetrieval(
+  scope: Scope,
   query: string,
   preFilterIds: Set<string> | null,
 ): RankedItem[] {
-  return lexicalSearch(query, FTS_LIMIT, preFilterIds, true).map((row, i) => ({
-    contactId: row.contactId,
-    rank: i + 1,
-    channel: "fts" as const,
-  }));
+  return lexicalSearch(scope, query, FTS_LIMIT, preFilterIds, true).map(
+    (row, i) => ({
+      contactId: row.contactId,
+      rank: i + 1,
+      channel: "fts" as const,
+    }),
+  );
 }
 
 // =============================================================================
@@ -233,10 +237,13 @@ function ftsRetrieval(
 // =============================================================================
 
 async function vectorRetrieval(
+  scope: Scope,
   embedInputText: string,
   preFilterIds: Set<string> | null,
 ): Promise<RankedItem[]> {
-  if (!isSearchEmbeddingReady() || getSearchEmbeddingCount() === 0) {
+  // The count is per owner now. An account with no vectors of its own skips
+  // the channel instead of asking a partition that holds nothing.
+  if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0) {
     return [];
   }
 
@@ -245,6 +252,7 @@ async function vectorRetrieval(
     if (!queryVec) return [];
 
     const neighbors = findSearchNeighbors(
+      scope,
       queryVec,
       VECTOR_LIMIT,
       preFilterIds ?? undefined,
@@ -273,6 +281,7 @@ async function vectorRetrieval(
 // (if any) so boosts can't surface excluded contacts.
 
 function buildTraitBoosts(
+  scope: Scope,
   plan: QueryPlan,
   allowedIds: Set<string> | null,
 ): RankedItem[][] {
@@ -290,7 +299,8 @@ function buildTraitBoosts(
           FROM contacts c
           LEFT JOIN contact_tags t      ON t.contactId = c.id
           LEFT JOIN contact_interests i ON i.contactId = c.id
-          WHERE c.isGhost = 0
+          WHERE c.ownerId = ?
+            AND c.isGhost = 0
             AND (c.isArchived = 0 OR c.isArchived IS NULL)
             AND c.canonicalId IS NULL AND c.deletedAt IS NULL
             AND (${allowedIds ? "c.id IN (SELECT value FROM json_each(?))" : "1"})
@@ -303,6 +313,7 @@ function buildTraitBoosts(
         `,
         )
         .all(
+          scope.ownerId,
           ...(allowedIds ? [JSON.stringify([...allowedIds])] : []),
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
           `%${trait.replace(/[\\%_]/g, "\\$&")}%`,
@@ -377,6 +388,7 @@ export function reciprocalRankFusion(
 
 /** Apply hard filters before keyword/vector limits, then fuse ranked candidates. */
 export async function hybridRetrieval(
+  scope: Scope,
   query: string,
   rid: string,
   signal?: AbortSignal,
@@ -391,7 +403,7 @@ export async function hybridRetrieval(
   let allowedIds: Set<string> | null = null;
   let hardFilterSummary = "skipped (no plan)";
   if (plan) {
-    const hf = applyHardFilters(plan);
+    const hf = applyHardFilters(scope, plan);
     allowedIds = hf.allowedIds;
     hardFilterSummary = hf.summary;
 
@@ -417,13 +429,13 @@ export async function hybridRetrieval(
 
   // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
   const [ftsResults, vectorResults] = await Promise.all([
-    Promise.resolve(ftsRetrieval(query, allowedIds)),
-    vectorRetrieval(embedInput, allowedIds),
+    Promise.resolve(ftsRetrieval(scope, query, allowedIds)),
+    vectorRetrieval(scope, embedInput, allowedIds),
   ]);
 
   // ── Phase 1c: soft boost channels (traits) ─────────────────────────────
   signal?.throwIfAborted();
-  const traitBoosts = plan ? buildTraitBoosts(plan, allowedIds) : [];
+  const traitBoosts = plan ? buildTraitBoosts(scope, plan, allowedIds) : [];
 
   // ── Phase 2: RRF fusion across FTS + vector + trait boosts ────────────
   const fused = reciprocalRankFusion([

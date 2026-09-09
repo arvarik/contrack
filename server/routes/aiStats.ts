@@ -11,6 +11,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 import {
   getSummary,
   getFeed,
@@ -31,8 +32,14 @@ const VALID_OPERATIONS = new Set<string>(AI_OPERATIONS);
 
 router.get(
   "/summary",
-  asyncHandler(async (_req, res) => {
-    const summary = getSummary();
+  asyncHandler(async (req, res) => {
+    // The invocation counts are the caller's own. `cacheTiers` describes the
+    // instance's shared in-process cache, so it is admin-only and simply
+    // absent for a member. Phase 3 adds `?scope=all` for an admin who wants
+    // the instance's totals as well.
+    const summary = getSummary(scopeOf(req), {
+      admin: req.principal?.user.role === "admin",
+    });
     res.json(summary);
   }),
 );
@@ -79,7 +86,7 @@ router.get(
       }
     }
 
-    const result = getFeed({
+    const result = getFeed(scopeOf(req), {
       offset,
       limit,
       operations,

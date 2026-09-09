@@ -27,6 +27,7 @@
 
 import { log } from "./logger.ts";
 import crypto from "crypto";
+import type { Scope } from "../tenancy/scope.ts";
 
 // =============================================================================
 // Types
@@ -77,6 +78,11 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * Rerank: LLM reranking results for Ask Contrack search queries.
    * TTL 12h: Increased from 5m to 12h for longer persistence.
    * Invalidation: Full flush on any contact mutation.
+   *
+   * Since sub-phase 2c the key leads with the owner id (see `ownerKey`). The
+   * cached value is a list of that owner's contacts, so one instance-wide key
+   * per query text served the first searcher's matches to everybody who typed
+   * the same words.
    */
   rerank: { ttlMs: 12 * 60 * 60_000, maxEntries: 200, label: "Rerank" },
 
@@ -84,6 +90,9 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * Synthesis: Executive brief from Ask Contrack search results.
    * TTL 12h: Increased from 10m to 12h for longer persistence.
    * Invalidation: Full flush on any contact mutation.
+   *
+   * Owner-keyed since 2c, for the same reason as `rerank`: the cached text is
+   * a paragraph about named contacts.
    */
   synthesis: { ttlMs: 12 * 60 * 60_000, maxEntries: 100, label: "Synthesis" },
 
@@ -93,6 +102,13 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * deterministic per input text. The 24h TTL bounds memory growth (peer review
    * concern) while still providing near-permanent caching for the session.
    * Invalidation: Never (inputs are immutable).
+   *
+   * Shared across owners, and 2c confirmed the condition the risks document
+   * sets in Q14: the extraction prompt is a fixed instruction plus the note
+   * text, and the key is a content hash of that same text. Two owners share an
+   * entry only when they wrote the same words, and the answer is a pure
+   * function of those words, so sharing saves a paid call and tells neither
+   * owner anything about the other.
    */
   mentions: { ttlMs: 24 * 60 * 60_000, maxEntries: 200, label: "Mentions" },
 
@@ -186,6 +202,22 @@ function formatMs(ms: number): string {
 /** Normalise a raw query string into a cache key (same as former searchCache). */
 function normalizeKey(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * The cache key for one owner.
+ *
+ * Every tier whose value describes contacts uses this: `rerank`, `synthesis`,
+ * `briefing` and `dailyInsight`. The separator makes the owner a prefix, which
+ * the existing `startsWith` invalidation can then match, so one owner's edit
+ * can drop one owner's entries.
+ *
+ * `queryParse`, `hyde` and `mentions` do not use it. Their values are pure
+ * functions of the text the caller supplied and name no contact, so sharing
+ * them across owners saves paid calls and reveals nothing.
+ */
+export function ownerKey(scope: Scope, key: string): string {
+  return `${scope.ownerId}::${key}`;
 }
 
 /** Evict the single least-recently-accessed entry from a tier. */
@@ -357,6 +389,23 @@ export const aiCache = {
   },
 
   /**
+   * Drop one owner's entries from an owner-keyed tier.
+   *
+   * The tiers that carry `ownerKey` lead every key with `<ownerId>::`, so the
+   * prefix invalidation above is exactly the right tool. Before this existed,
+   * one account editing a contact flushed the whole `rerank`, `synthesis`,
+   * `briefing` and `dailyInsight` tiers, which cost every other account on the
+   * instance a regeneration through a paid provider.
+   *
+   * Only for owner-keyed tiers. `queryParse`, `hyde` and `mentions` hold no
+   * owner in their keys and nothing about them goes stale when a contact
+   * changes.
+   */
+  invalidateForOwner(operation: string, ownerId: string): void {
+    aiCache.invalidate(operation, `${ownerId}::`);
+  },
+
+  /**
    * Nuclear option: flush ALL tiers. Used by contactService.invalidateAllCaches().
    * In batch mode, the flush is deferred until exitBatchMode().
    */
@@ -518,23 +567,30 @@ export interface CachedSearchResult {
 }
 
 /**
- * Return a cached search result, or null on cache-miss / expiry.
- * Drop-in replacement for the former searchCache.getCachedSearch().
+ * Return a cached search result for this owner, or null on miss or expiry.
+ *
+ * The value is a list of hydrated contacts. Before 2c the key was the query
+ * text alone, so the first account to search "engineers in Berlin" published
+ * its own matches to every other account that typed the same words for the
+ * next twelve hours.
  */
-export function getCachedSearch(query: string): CachedSearchResult | null {
-  const key = normalizeKey(query);
-  return aiCache.get<CachedSearchResult>("rerank", key);
+export function getCachedSearch(
+  scope: Scope,
+  query: string,
+): CachedSearchResult | null {
+  return aiCache.get<CachedSearchResult>(
+    "rerank",
+    ownerKey(scope, normalizeKey(query)),
+  );
 }
 
-/**
- * Store a search result. Drop-in replacement for searchCache.setCachedSearch().
- */
+/** Store a search result under this owner's key. */
 export function setCachedSearch(
+  scope: Scope,
   query: string,
   value: CachedSearchResult,
 ): void {
-  const key = normalizeKey(query);
-  aiCache.set("rerank", key, value);
+  aiCache.set("rerank", ownerKey(scope, normalizeKey(query)), value);
 }
 
 /**

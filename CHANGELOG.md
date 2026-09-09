@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2f.** AI research batches belong to the account that started them.
+  Polling a batch, opening its live stream, or cancelling it works for its own
+  account and answers `404` for everybody else, with the same body an id that
+  never existed answers. A batch refuses a contact the caller does not own
+  before it spends a single token.
+- **Phase 2f.** The five-minute research cooldown is per account. One person
+  finishing a batch used to make everybody else on the instance wait. The
+  single-batch run lock stays instance-wide, because the provider API key it
+  protects is shared.
+- **Phase 2f.** Starting a batch too soon now answers with the same error
+  shape as every other endpoint, including a request id, and says whether the
+  refusal is the caller's own cooldown or somebody else's batch holding the
+  shared lock. It was the one endpoint that answered with a bare message.
+- **Phase 2f.** The AI stats page counts the caller's own invocations, tokens
+  and cost. It described every account's AI use before. The shared in-process
+  cache counters stay, for an admin only, because they describe the instance
+  rather than a person.
+- **Phase 2f.** Editing a contact clears that account's cached AI work and
+  leaves everybody else's alone. Every affected cache is keyed by account now,
+  so one person adding a contact no longer costs every other account a fresh
+  search, briefing and daily insight through a paid provider.
+
+- **Phase 2c.** Search returns the caller's own contacts and nobody else's, in
+  every channel. Keyword search, the semantic pipeline and its NDJSON stream,
+  the executive brief, the hard filters behind a parsed query, and the trait
+  boosts all read one account's rows. The keyword index carries an owner token
+  and intersects it inside the index, so another account's contacts are never
+  read and then dropped.
+- **Phase 2c.** Vector search asks one account's partition. The nearest
+  neighbour query fetched the instance-wide top hundred and filtered the
+  result afterwards, so an account with a few hundred contacts on a large
+  instance rarely appeared in that hundred and their vector channel returned
+  nothing. This is a correctness fix before it is a speed one. The three
+  duplicate-detection vector queries take the same predicate.
+- **Phase 2c.** Cached search results are held per account. Reranked matches
+  and the executive brief were cached under the query text alone, so the first
+  account to search a phrase had its own contacts served to every other
+  account that typed the same words for the next twelve hours.
+- **Phase 2c.** The executive brief refuses a contact id the caller does not
+  own with the same answer a deleted id has always taken.
+
 - **Phase 2b.** Interactions, action items, and lists belong to the account
   that created them. Every timeline, briefing, attachment, follow-up task, and
   list endpoint reads and writes the caller's rows only. Another account's id

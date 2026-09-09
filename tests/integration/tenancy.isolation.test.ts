@@ -46,6 +46,11 @@ import path from "path";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
+import {
+  WEIGHTS,
+  lexicalSearch,
+} from "../../server/services/search/lexical.ts";
+import { ownerToken } from "../../server/tenancy/scope.ts";
 import { LOGOS_DIR, UPLOADS_DIR, ensureDir } from "../../server/utils/paths.ts";
 import {
   asUser,
@@ -57,6 +62,16 @@ import {
   type Actor,
   type Seeded,
 } from "./tenancy/helpers.ts";
+import { jobQueue } from "../../server/services/aiSearch/jobQueue.ts";
+import { recordInvocation } from "../../server/services/aiStatsService.ts";
+import { runWithContext } from "../../server/tenancy/requestContext.ts";
+import {
+  setSetting,
+  clearSettingsCache,
+  SETTING_KEYS,
+} from "../../server/services/settingsService.ts";
+import { invalidateProviderCache } from "../../server/ai/providerRegistry.ts";
+import { aiCache, ownerKey } from "../../server/utils/aiCache.ts";
 
 const app = makeTestApp();
 
@@ -70,6 +85,10 @@ const COVERED = [
   "GET /api/action-items",
   "GET /api/action-items/completed",
   "GET /api/action-items/count",
+  "GET /api/ai-search/status",
+  "GET /api/ai-search/stream",
+  "GET /api/ai/stats/feed",
+  "GET /api/ai/stats/summary",
   "GET /api/command-palette/zero-state",
   "GET /api/contacts",
   "GET /api/contacts/:id",
@@ -83,11 +102,14 @@ const COVERED = [
   "GET /api/dashboard/insight",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
+  "GET /api/search",
   "PATCH /api/action-items/:id",
   "PATCH /api/action-items/:id/complete",
   "PATCH /api/contacts/:id",
   "PATCH /api/interactions/:id",
   "PATCH /api/lists/:id",
+  "POST /api/ai-search",
+  "POST /api/ai-search/:batchId/cancel",
   "POST /api/contacts",
   "POST /api/contacts/:id/action-items",
   "POST /api/contacts/:id/attachments",
@@ -101,6 +123,8 @@ const COVERED = [
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
+  "POST /api/search/semantic",
+  "POST /api/search/synthesize",
   "PUT /api/contacts/:id",
   "PUT /api/contacts/bulk-update",
   "PUT /api/lists/reorder",
@@ -121,6 +145,15 @@ let seedA: Seeded;
 let seedB: Seeded;
 /** A's avatar URL, uploaded through the route so the file really exists. */
 let avatarUrlA: string;
+/**
+ * A's contact with a name nobody else on the instance shares.
+ *
+ * Every search channel is asked for this token by an account that does not own
+ * it. "Zebulon Quarrington" appears in no other row, so a single hit anywhere
+ * in a response is proof the channel crossed an owner boundary.
+ */
+let zebulonId: string;
+const ZEBULON = "Zebulon Quarrington";
 
 const randomId = () => crypto.randomUUID();
 const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
@@ -131,6 +164,24 @@ function comparableError(body: { error?: Record<string, unknown> }) {
   void requestId;
   void stack;
   return rest;
+}
+
+/** An actor's role as the database holds it. The first account is the admin. */
+function roleOf(actor: Actor): string {
+  return (
+    sqlite
+      .prepare("SELECT role FROM users WHERE id = ?")
+      .get(actor.user.id) as {
+      role: string;
+    }
+  ).role;
+}
+
+/** Change an actor's role. The principal is read from this row per request. */
+function setRole(actor: Actor, role: "admin" | "member"): void {
+  sqlite
+    .prepare("UPDATE users SET role = ? WHERE id = ?")
+    .run(role, actor.user.id);
 }
 
 /** The contacts an owner's dashboard should count as active. */
@@ -198,6 +249,16 @@ beforeAll(async () => {
     actionItems: 5,
   });
   seedB = await seedOwner(app, B, { contacts: 5 });
+
+  const rare = await asUser(A)(
+    request(app).post("/api/contacts").send({
+      name: ZEBULON,
+      company: "Quarrington Holdings",
+      role: "Actuary",
+    }),
+  );
+  expect(rare.status).toBe(201);
+  zebulonId = rare.body.id;
 
   // A puts a real file on disk through the real upload route.
   const uploaded = await asUser(A)(
@@ -1244,6 +1305,586 @@ describe("GET /api/command-palette/zero-state", () => {
       forA.body.insights as { type: string; count?: number }[]
     ).find((i) => i.type === "action_items");
     expect(urgent?.count).toBe(1);
+  });
+});
+
+// =============================================================================
+// Search
+// =============================================================================
+// Every search channel reads from an index that holds the whole instance, so
+// each one is asked for A's rare name by an account that does not own it.
+
+describe("GET /api/search", () => {
+  it("finds A's rare contact for A and for nobody else", async () => {
+    const forA = await asUser(A)(
+      request(app).get("/api/search").query({ q: "Quarrington" }),
+    );
+    expect(forA.status).toBe(200);
+    expect(ids(forA.body)).toEqual([zebulonId]);
+
+    for (const other of [B, C]) {
+      const res = await asUser(other)(
+        request(app).get("/api/search").query({ q: "Quarrington" }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    }
+  });
+
+  it("returns only the caller's rows for a token both accounts share", async () => {
+    // Both seeds contain the word "Contact", so this asks the ranking path,
+    // not the empty-result path.
+    const forB = await asUser(B)(
+      request(app).get("/api/search").query({ q: "Contact" }),
+    );
+    expect(forB.status).toBe(200);
+    expect(forB.body.length).toBeGreaterThan(0);
+    for (const row of forB.body as { id: string }[]) {
+      expect(snapshotRow("contacts", row.id)?.ownerId).toBe(B.user.id);
+    }
+  });
+
+  it("applies a facet filter inside the caller's own rows", async () => {
+    const filters = JSON.stringify([
+      { field: "company", value: "Quarrington Holdings" },
+    ]);
+    const forA = await asUser(A)(
+      request(app).get("/api/search").query({ q: "Quarrington", filters }),
+    );
+    expect(ids(forA.body)).toEqual([zebulonId]);
+    const forB = await asUser(B)(
+      request(app).get("/api/search").query({ q: "Quarrington", filters }),
+    );
+    expect(forB.body).toEqual([]);
+  });
+
+  it("filters inside the FTS index, before any hydration guard runs", () => {
+    // The route is guarded twice: the owner token restricts the index, and
+    // hydration then loads rows through a scoped finder. This calls the index
+    // layer on its own, so removing the token fails here rather than being
+    // covered up by the second guard.
+    expect(
+      lexicalSearch(A.scope, "Quarrington").map((r) => r.contactId),
+    ).toEqual([zebulonId]);
+    expect(lexicalSearch(B.scope, "Quarrington")).toEqual([]);
+    expect(lexicalSearch(C.scope, "Quarrington")).toEqual([]);
+  });
+
+  it("answers the owner token from the FTS index, not from a post-filter", () => {
+    // The whole point of an indexed ownerTok column: FTS5 intersects the
+    // owner's posting list with the query's inside the index. A plan with a
+    // scan of `contacts` would mean the owner was applied after the fact, over
+    // rows the caller may not read. The statement mirrors lexical.ts.
+    const detail = (
+      sqlite
+        .prepare(
+          `EXPLAIN QUERY PLAN
+             SELECT c.id FROM contacts_fts f
+             JOIN contacts c ON c.rowid = f.rowid
+             WHERE contacts_fts MATCH ? AND c.ownerId = ?
+               AND c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
+               AND c.canonicalId IS NULL AND c.deletedAt IS NULL
+             ORDER BY bm25(contacts_fts, ${WEIGHTS}), c.id LIMIT ?`,
+        )
+        .all(
+          `ownerTok:${ownerToken(A.scope)} AND ("quar"*)`,
+          A.user.id,
+          20,
+        ) as {
+        detail: string;
+      }[]
+    )
+      .map((r) => r.detail)
+      .join(" | ");
+
+    // "SCAN f VIRTUAL TABLE INDEX 0:M11" is FTS5 answering the MATCH from its
+    // own index, and the contact row is then fetched by rowid. Neither side
+    // reads a row the owner token did not already choose.
+    expect(detail).toContain("VIRTUAL TABLE INDEX");
+    expect(detail).toContain("SEARCH c USING INTEGER PRIMARY KEY");
+    expect(detail).not.toContain("SCAN contacts");
+  });
+
+  it("seeks the owner composite index for the hard-filter corpus", () => {
+    // The corpus query behind the query plan's `must` filters. It reads every
+    // active contact of one owner, so it must start at that owner rather than
+    // scan the table. The statement mirrors hybridRetrieval.applyHardFilters.
+    const detail = (
+      sqlite
+        .prepare(
+          `EXPLAIN QUERY PLAN
+             SELECT c.id, c.location, c.company, c.role, c.headline, c.industry
+             FROM contacts c
+             WHERE c.ownerId = ? AND c.isGhost = 0
+               AND COALESCE(c.isArchived, 0) = 0
+               AND c.canonicalId IS NULL AND c.deletedAt IS NULL`,
+        )
+        .all(A.user.id) as { detail: string }[]
+    )
+      .map((r) => r.detail)
+      .join(" | ");
+
+    expect(detail).toContain("idx_contacts_owner_status");
+    expect(detail).not.toContain("SCAN contacts");
+  });
+});
+
+describe("POST /api/search/semantic", () => {
+  const ask = (actor: Actor, ndjson: boolean) => {
+    const req = request(app)
+      .post("/api/search/semantic")
+      .send({ query: "Quarrington" });
+    return asUser(actor)(
+      ndjson ? req.set("Accept", "application/x-ndjson") : req,
+    );
+  };
+
+  it("returns A's only match to A and nothing to B as JSON", async () => {
+    const forA = await ask(A, false);
+    expect(forA.status).toBe(200);
+    expect(ids(forA.body.matches)).toEqual([zebulonId]);
+
+    const forB = await ask(B, false);
+    expect(forB.status).toBe(200);
+    expect(forB.body.matches).toEqual([]);
+  });
+
+  it("carries A's match in no NDJSON chunk sent to B", async () => {
+    const forB = await ask(B, true);
+    expect(forB.status).toBe(200);
+    const chunks = forB.text
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { matches?: { id: string }[] });
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(ids(chunk.matches ?? [])).not.toContain(zebulonId);
+    }
+    // A's own stream still carries it, so the assertion above is not passing
+    // because the stream is empty for everybody.
+    const forA = await ask(A, true);
+    expect(forA.text).toContain(zebulonId);
+  });
+
+  it("never serves B the result A cached for the same query", async () => {
+    // The rerank tier holds a list of hydrated contacts. Before 2c the key was
+    // the query text alone, so B asking the same words was served A's rows
+    // from memory, without a database read at all. A word no earlier test has
+    // used keeps the four steps below in a known order.
+    const phrase = { query: "Zebulon" };
+    const send = (actor: Actor) =>
+      asUser(actor)(request(app).post("/api/search/semantic").send(phrase));
+
+    const firstA = await send(A);
+    expect(ids(firstA.body.matches)).toEqual([zebulonId]);
+    expect(firstA.body.cached).toBeUndefined();
+
+    const firstB = await send(B);
+    expect(firstB.body.matches).toEqual([]);
+
+    const againA = await send(A);
+    expect(againA.body.cached).toBe(true);
+    expect(ids(againA.body.matches)).toEqual([zebulonId]);
+
+    // B's second call is also a hit, on B's own empty entry. Two accounts,
+    // two entries, one query text.
+    const againB = await send(B);
+    expect(againB.body.cached).toBe(true);
+    expect(againB.body.matches).toEqual([]);
+  });
+});
+
+describe("POST /api/search/synthesize", () => {
+  const synthesize = (actor: Actor, contactIds: string[]) =>
+    asUser(actor)(
+      request(app)
+        .post("/api/search/synthesize")
+        .send({ query: "Quarrington", contactIds }),
+    );
+
+  it("refuses A's contact id with the answer a deleted id gets", async () => {
+    const foreign = await synthesize(B, [zebulonId]);
+    const missing = await synthesize(B, [randomId()]);
+    expect(foreign.status).toBe(409);
+    expect(missing.status).toBe(409);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(missing.body),
+    );
+  });
+
+  it("refuses a mixed list rather than summarising the half it owns", async () => {
+    // A contact created here, rather than one from the seed, because earlier
+    // tests in this file archive and delete B's rows. The two calls below
+    // differ by one id, so the 409 can only be about ownership.
+    const mine = await asUser(B)(
+      request(app).post("/api/contacts").send({ name: "Bob Fresh Contact" }),
+    );
+    expect(mine.status).toBe(201);
+
+    const ownOnly = await synthesize(B, [mine.body.id]);
+    expect(ownOnly.status).toBe(200);
+
+    const mixed = await synthesize(B, [mine.body.id, zebulonId]);
+    expect(mixed.status).toBe(409);
+  });
+});
+
+// =============================================================================
+// AI Search
+// =============================================================================
+// The batch queue lives in memory, not in SQLite, so nothing about it is
+// protected by a WHERE clause. Every read of it is checked here.
+
+describe("AI Search batches belong to the account that started them", () => {
+  afterAll(() => jobQueue.__resetForTests());
+
+  it("holds the cooldown against one account and the run lock against the instance", async () => {
+    // A real run, with no provider configured, so every job fails at once and
+    // the batch finishes in milliseconds. That is enough to set the cooldown,
+    // which is the thing under test.
+    jobQueue.__resetForTests();
+    const subject = await asUser(A)(
+      request(app).post("/api/contacts").send({ name: "Cooldown Subject" }),
+    );
+    expect(subject.status).toBe(201);
+    const batch = jobQueue.createBatch(
+      A.scope,
+      [{ id: subject.body.id, name: "Cooldown Subject" }],
+      "two-pass",
+    );
+    await jobQueue.processBatch(batch.id);
+    expect(batch.status).toBe("complete");
+
+    // A waits. B does not: the cooldown exists to stop one person burning
+    // tokens, and used to make everybody else wait five minutes as well.
+    const forA = jobQueue.canStartBatch(A.scope);
+    expect(forA.allowed).toBe(false);
+    expect(forA.yours).toBe(true);
+    expect(forA.retryAfterSeconds).toBeGreaterThan(0);
+    expect(jobQueue.canStartBatch(B.scope).allowed).toBe(true);
+
+    // The run lock stays global. One provider API key serves the instance, so
+    // two accounts researching at once would spend one quota twice as fast.
+    expect(jobQueue.isProcessing()).toBe(false);
+    jobQueue.__resetForTests();
+  });
+
+  it("shows a batch only to its own account", () => {
+    jobQueue.__resetForTests();
+    const batch = jobQueue.createBatch(
+      A.scope,
+      [{ id: zebulonId, name: ZEBULON }],
+      "two-pass",
+    );
+    expect(jobQueue.getBatch(A.scope, batch.id)?.id).toBe(batch.id);
+    expect(jobQueue.getBatch(B.scope, batch.id)).toBeNull();
+    expect(jobQueue.getActiveBatches(A.scope).map((b) => b.id)).toEqual([
+      batch.id,
+    ]);
+    expect(jobQueue.getActiveBatches(B.scope)).toEqual([]);
+    jobQueue.__resetForTests();
+  });
+});
+
+describe("GET /api/ai-search/status and /stream", () => {
+  let batchId: string;
+
+  beforeAll(() => {
+    jobQueue.__resetForTests();
+    batchId = jobQueue.createBatch(
+      A.scope,
+      [{ id: zebulonId, name: ZEBULON }],
+      "two-pass",
+    ).id;
+  });
+  afterAll(() => jobQueue.__resetForTests());
+
+  const status = (actor: Actor, id: string) =>
+    asUser(actor)(
+      request(app).get("/api/ai-search/status").query({ batchId: id }),
+    );
+
+  it("answers B's poll for A's batch the way it answers an id that never existed", async () => {
+    const own = await status(A, batchId);
+    const foreign = await status(B, batchId);
+    const missing = await status(B, randomId());
+
+    expect(own.status).toBe(200);
+    expect(own.body.id).toBe(batchId);
+    expect(foreign.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(missing.body),
+    );
+  });
+
+  it("closes B's stream with 404 before any event reaches it", async () => {
+    const res = await asUser(B)(
+      request(app).get("/api/ai-search/stream").query({ batchId }),
+    );
+    expect(res.status).toBe(404);
+    expect(res.text).not.toContain("data:");
+    expect(res.text).not.toContain(zebulonId);
+  });
+
+  it("refuses B's cancel and leaves A's batch running", async () => {
+    const res = await asUser(B)(
+      request(app).post(`/api/ai-search/${batchId}/cancel`),
+    );
+    expect(res.status).toBe(404);
+    expect(jobQueue.getBatch(A.scope, batchId)?.status).toBe("processing");
+
+    const own = await asUser(A)(
+      request(app).post(`/api/ai-search/${batchId}/cancel`),
+    );
+    expect(own.status).toBe(200);
+    expect(own.body.status).toBe("cancelled");
+  });
+
+  it("opens the stream for the owner and sends the batch", async () => {
+    // Runs after the cancel above, so the batch is terminal and the handler
+    // ends the response with its first write instead of holding it open.
+    const own = await asUser(A)(
+      request(app).get("/api/ai-search/stream").query({ batchId }),
+    );
+    expect(own.status).toBe(200);
+    expect(own.text).toContain(batchId);
+  });
+});
+
+describe("POST /api/ai-search", () => {
+  beforeAll(() => {
+    // A self-hosted endpoint, so the route gets past the "no AI provider"
+    // gate and reaches the checks this file is about. Nothing calls out: the
+    // batch never runs.
+    setSetting(SETTING_KEYS.aiCustomEndpoints, [
+      {
+        id: "local-test",
+        label: "Local",
+        baseUrl: "http://127.0.0.1:11434/v1",
+      },
+    ]);
+    setSetting(SETTING_KEYS.aiCapabilities, {
+      deep: { mode: "pinned", providerId: "custom:local-test", model: "m" },
+    });
+    setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
+    invalidateProviderCache();
+    jobQueue.__resetForTests();
+    vi.spyOn(jobQueue, "processBatch").mockResolvedValue();
+  });
+
+  afterAll(() => {
+    vi.restoreAllMocks();
+    sqlite.prepare("DELETE FROM app_settings").run();
+    clearSettingsCache();
+    invalidateProviderCache();
+    jobQueue.__resetForTests();
+  });
+
+  const start = (actor: Actor, contactIds: string[]) =>
+    asUser(actor)(request(app).post("/api/ai-search").send({ contactIds }));
+
+  it("refuses A's contact id with the answer an id that never existed gets", async () => {
+    const foreign = await start(B, [zebulonId]);
+    const missing = await start(B, [randomId()]);
+    expect(foreign.status).toBe(409);
+    expect(missing.status).toBe(409);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(missing.body),
+    );
+    expect(jobQueue.getActiveBatches(B.scope)).toEqual([]);
+    expect(jobQueue.getActiveBatches(A.scope)).toEqual([]);
+  });
+
+  it("starts a batch that only its own account can see", async () => {
+    const mine = await asUser(B)(
+      request(app).post("/api/contacts").send({ name: "Bob Research Subject" }),
+    );
+    const res = await start(B, [mine.body.id]);
+    expect(res.status).toBe(200);
+    expect(jobQueue.getBatch(B.scope, res.body.batchId)?.id).toBe(
+      res.body.batchId,
+    );
+    expect(jobQueue.getBatch(A.scope, res.body.batchId)).toBeNull();
+    // The response carries the contract's fields and no owner id.
+    expect(Object.keys(res.body).sort()).toEqual(["batchId", "jobCount"]);
+  });
+
+  it("refuses a cooldown with the standard error envelope", async () => {
+    // The queue's decision is stubbed so the route's translation of it is what
+    // is under test. The decision itself is proven above, against a real run.
+    vi.spyOn(jobQueue, "canStartBatch").mockReturnValue({
+      allowed: false,
+      reason: "Please wait 42s before starting another batch.",
+      yours: true,
+      retryAfterSeconds: 42,
+    });
+    const res = await start(B, [seedB.contactIds[0]]);
+    expect(res.status).toBe(429);
+    expect(res.body.error.code).toBe("RATE_LIMITED");
+    expect(res.body.error.message).toContain("Please wait 42s");
+    expect(res.body.error.details).toMatchObject({
+      yours: true,
+      queued: false,
+      retryAfterSeconds: 42,
+    });
+    expect(res.body.error.requestId).toBeTruthy();
+  });
+});
+
+// =============================================================================
+// The shared AI cache
+// =============================================================================
+
+describe("the AI cache drops one account's entries at a time", () => {
+  it("keeps another account's entry when an owner is invalidated", () => {
+    const value = { matches: [], fallback: false };
+    aiCache.set("rerank", ownerKey(A.scope, "same query"), value);
+    aiCache.set("rerank", ownerKey(B.scope, "same query"), value);
+
+    aiCache.invalidateForOwner("rerank", A.user.id);
+
+    expect(aiCache.get("rerank", ownerKey(A.scope, "same query"))).toBeNull();
+    expect(
+      aiCache.get("rerank", ownerKey(B.scope, "same query")),
+    ).not.toBeNull();
+    aiCache.invalidateForOwner("rerank", B.user.id);
+  });
+
+  it("gives two accounts two entries for one query text", () => {
+    // The keys differ only by owner, so a tier that ignored the prefix would
+    // hold one entry and hand each account the other's contacts.
+    aiCache.invalidateForOwner("briefing", A.user.id);
+    aiCache.invalidateForOwner("briefing", B.user.id);
+    aiCache.set("briefing", ownerKey(A.scope, "contact-1"), ["A's points"]);
+    aiCache.set("briefing", ownerKey(B.scope, "contact-1"), ["B's points"]);
+
+    expect(aiCache.get("briefing", ownerKey(A.scope, "contact-1"))).toEqual([
+      "A's points",
+    ]);
+    expect(aiCache.get("briefing", ownerKey(B.scope, "contact-1"))).toEqual([
+      "B's points",
+    ]);
+    aiCache.invalidateForOwner("briefing", A.user.id);
+    aiCache.invalidateForOwner("briefing", B.user.id);
+  });
+});
+
+// =============================================================================
+// AI stats
+// =============================================================================
+
+describe("AI stats count the caller's own work", () => {
+  beforeAll(() => {
+    sqlite.prepare("DELETE FROM ai_invocations").run();
+    // Written the way the server writes them: inside a request context, whose
+    // owner `recordInvocation` reads. Nothing here names ownerId directly.
+    const record = (actor: Actor, times: number) => {
+      for (let i = 0; i < times; i++)
+        runWithContext(
+          { requestId: `seed-${i}`, principal: null, scope: actor.scope },
+          () =>
+            recordInvocation({
+              operation: "rerank",
+              model: "mock-lite",
+              tokenCount: 100,
+              latencyMs: 5,
+              cached: false,
+            }),
+        );
+    };
+    record(A, 3);
+    record(B, 1);
+  });
+  afterAll(() => sqlite.prepare("DELETE FROM ai_invocations").run());
+
+  it("gives each account its own totals", async () => {
+    const forA = await asUser(A)(request(app).get("/api/ai/stats/summary"));
+    const forB = await asUser(B)(request(app).get("/api/ai/stats/summary"));
+    const forC = await asUser(C)(request(app).get("/api/ai/stats/summary"));
+
+    expect(forA.body.session.totalInvocations).toBe(3);
+    expect(forB.body.session.totalInvocations).toBe(1);
+    expect(forC.body.session.totalInvocations).toBe(0);
+    expect(forA.body.session.totalTokens).toBe(300);
+    expect(forB.body.session.totalTokens).toBe(100);
+    expect(forC.body.session.estimatedCostUsd).toBe(0);
+  });
+
+  it("shows the shared cache counters to an admin and to nobody else", async () => {
+    // The tiers are one in-process cache for the whole instance, so their hit
+    // and miss counts describe everybody's traffic. A member's own spending is
+    // theirs; the instance's cache behaviour is not.
+    //
+    // Every actor here is a member: the local owner account boot creates takes
+    // the admin role, and `createUser` gives it to the first account only.
+    // Phase 3 brings role management, so this promotes and restores by hand.
+    expect(roleOf(A)).toBe("member");
+    const asMember = await asUser(A)(request(app).get("/api/ai/stats/summary"));
+    expect(asMember.body).not.toHaveProperty("cacheTiers");
+
+    setRole(A, "admin");
+    try {
+      const asAdmin = await asUser(A)(
+        request(app).get("/api/ai/stats/summary"),
+      );
+      expect(asAdmin.body.cacheTiers).toBeDefined();
+      expect(asAdmin.body.cacheTiers.rerank).toBeDefined();
+      // The account's own numbers are the same either way. Only the shared
+      // counters appear.
+      expect(asAdmin.body.session).toEqual(asMember.body.session);
+    } finally {
+      setRole(A, "member");
+    }
+  });
+
+  it("lists only the caller's rows in the feed", async () => {
+    const forA = await asUser(A)(request(app).get("/api/ai/stats/feed"));
+    const forB = await asUser(B)(request(app).get("/api/ai/stats/feed"));
+    const forC = await asUser(C)(request(app).get("/api/ai/stats/feed"));
+
+    expect(forA.body.pagination.totalCount).toBe(3);
+    expect(forB.body.pagination.totalCount).toBe(1);
+    expect(forC.body.items).toEqual([]);
+
+    const idsA = new Set(ids(forA.body.items));
+    expect(idsA.size).toBe(3);
+    for (const item of forB.body.items as { id: string }[]) {
+      expect(idsA.has(item.id)).toBe(false);
+    }
+  });
+
+  it("keeps the owner predicate when a filter narrows the feed", async () => {
+    const filtered = await asUser(B)(
+      request(app).get("/api/ai/stats/feed").query({ operation: "rerank" }),
+    );
+    expect(filtered.body.pagination.totalCount).toBe(1);
+    const none = await asUser(B)(
+      request(app).get("/api/ai/stats/feed").query({ operation: "briefing" }),
+    );
+    expect(none.body.pagination.totalCount).toBe(0);
+  });
+
+  it("seeks the owner index rather than scanning the invocation table", () => {
+    // Mirrors getFeed. The owner is written into the statement rather than
+    // assembled with the optional filters, so every shape of the query starts
+    // at this index.
+    const detail = (
+      sqlite
+        .prepare(
+          `EXPLAIN QUERY PLAN
+             SELECT id FROM ai_invocations
+             WHERE ownerId = ? AND cached = ?
+             ORDER BY createdAt DESC LIMIT ? OFFSET ?`,
+        )
+        .all(A.user.id, 0, 50, 0) as { detail: string }[]
+    )
+      .map((r) => r.detail)
+      .join(" | ");
+
+    expect(detail).toContain("idx_ai_inv_owner_created");
+    expect(detail).not.toContain("SCAN ai_invocations");
   });
 });
 

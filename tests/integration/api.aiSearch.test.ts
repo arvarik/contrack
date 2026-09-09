@@ -13,8 +13,17 @@ import {
   SETTING_KEYS,
 } from "../../server/services/settingsService.ts";
 import { invalidateProviderCache } from "../../server/ai/providerRegistry.ts";
+import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
+import { localOwnerId } from "./tenancy/helpers.ts";
 
 const app = makeTestApp();
+
+/**
+ * The queue reads are per owner since 2f. Auth is off in this file, so every
+ * row belongs to the local owner account, which is the same owner the route
+ * supplied through `scopeOf(req)`.
+ */
+const scope = () => scopeForOwnerId(localOwnerId());
 
 describe("POST /api/ai-search", () => {
   let contactId: string;
@@ -80,7 +89,7 @@ describe("POST /api/ai-search", () => {
     expect(res.body.batchId).toBeDefined();
     expect(res.body.jobCount).toBe(1);
 
-    const batch = jobQueue.getBatch(res.body.batchId);
+    const batch = jobQueue.getBatch(scope(), res.body.batchId);
     expect(batch).not.toBeNull();
     // Must resolve dynamically to searxng instead of baking 'two-pass'
     expect(batch?.strategy).toBe("searxng");
@@ -102,7 +111,7 @@ describe("POST /api/ai-search", () => {
       .send({ contactIds: [contactId] });
 
     expect(res.status).toBe(503);
-    expect(jobQueue.getActiveBatches()).toEqual([]);
+    expect(jobQueue.getActiveBatches(scope())).toEqual([]);
   });
 
   it("honors explicit valid strategy requested in payload", async () => {
@@ -128,7 +137,7 @@ describe("POST /api/ai-search", () => {
       .send({ contactIds: [contactId], strategy: "searxng" });
 
     expect(res.status).toBe(200);
-    const batch = jobQueue.getBatch(res.body.batchId);
+    const batch = jobQueue.getBatch(scope(), res.body.batchId);
     expect(batch?.strategy).toBe("searxng");
   });
 

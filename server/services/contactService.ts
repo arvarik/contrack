@@ -130,22 +130,21 @@ function buildInsertValues(scope: Scope, body: NewContactPayload, id: string) {
 }
 
 /**
- * Invalidate the caches that depend on contact data.
+ * Invalidate the caches that depend on one owner's contact data.
  *
  * Deliberately NOT invalidateAll(): the content-addressed tiers (queryParse,
  * hyde, mentions) hash their own input text and are unaffected by contact
  * mutations — flushing them on every edit made repeat searches pay full AI
  * cost for nothing.
+ *
+ * Since 2f each of the four tiers below is owner-keyed, so one account's edit
+ * drops one account's entries. It used to flush every tier whole, which made
+ * one person adding a contact cost everybody else on the instance a fresh
+ * search, briefing and insight through a paid provider.
  */
-function invalidateAllCaches() {
-  // TODO(2f): aiCache.invalidateForOwner(tier, scope.ownerId). The owner-keyed
-  // helper arrives with the cache work, and flushing a whole tier until then
-  // costs one recomputation for other owners rather than serving them a row
-  // they may not read.
-  aiCache.invalidate("rerank");
-  aiCache.invalidate("synthesis");
-  aiCache.invalidate("dailyInsight");
-  aiCache.invalidate("briefing");
+function invalidateOwnerCaches(scope: Scope) {
+  for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"])
+    aiCache.invalidateForOwner(tier, scope.ownerId);
 }
 
 /**
@@ -275,7 +274,7 @@ export const contactService = {
     // Fire-and-forget: incremental dedupe check (debounced)
     scheduleIncrementalDedupe(id);
 
-    invalidateAllCaches();
+    invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
@@ -327,7 +326,7 @@ export const contactService = {
       txn();
       onProgress?.(total, total, "Complete");
 
-      invalidateAllCaches();
+      invalidateOwnerCaches(scope);
     } finally {
       aiCache.exitBatchMode();
     }
@@ -358,7 +357,7 @@ export const contactService = {
         }
       });
       deleteFn();
-      invalidateAllCaches();
+      invalidateOwnerCaches(scope);
     } finally {
       aiCache.exitBatchMode();
     }
@@ -396,7 +395,7 @@ export const contactService = {
       });
       updateFn();
       for (const id of changedIds) scheduleSearchIndex(id);
-      invalidateAllCaches();
+      invalidateOwnerCaches(scope);
     } finally {
       aiCache.exitBatchMode();
     }
@@ -492,7 +491,7 @@ export const contactService = {
       scheduleIncrementalDedupe(id);
     }
 
-    invalidateAllCaches();
+    invalidateOwnerCaches(scope);
     return updated;
   },
 
@@ -523,7 +522,7 @@ export const contactService = {
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
 
-    invalidateAllCaches();
+    invalidateOwnerCaches(scope);
     return updated;
   },
 
@@ -549,7 +548,7 @@ export const contactService = {
       )
       .run();
     purgeContactSearchArtifacts(id);
-    invalidateAllCaches();
+    invalidateOwnerCaches(scope);
     return true;
   },
 
@@ -577,7 +576,7 @@ export const contactService = {
     scheduleSearchIndex(id);
     generateAndStoreEmbedding(id).catch(() => {});
 
-    invalidateAllCaches();
+    invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
@@ -602,7 +601,7 @@ export const contactService = {
     const existing = contactRepo.findOwned(scope, id);
     if (!existing?.deletedAt) return false; // only trashed rows can be purged
     const ok = hardDeleteContact(scope, id);
-    if (ok) invalidateAllCaches();
+    if (ok) invalidateOwnerCaches(scope);
     return ok;
   },
 
@@ -635,7 +634,11 @@ export const contactService = {
       }
     });
     txn();
-    invalidateAllCaches();
+    // The sweep spans accounts, so each owner it touched loses its own
+    // entries. One flush in one scope would leave every other account holding
+    // a search result that still names a contact this job deleted.
+    for (const ownerId of new Set(expired.map((row) => row.ownerId)))
+      invalidateOwnerCaches(scopeForOwnerId(ownerId));
     log.info(
       "ContactService",
       `Purged ${expired.length} trashed contact(s) older than ${days} days`,
@@ -673,7 +676,7 @@ export const contactService = {
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
 
-    invalidateAllCaches();
+    invalidateOwnerCaches(scope);
     return updated;
   },
 
