@@ -8,6 +8,14 @@ All endpoints are prefixed with `/api`. Request and response bodies are `applica
 
 **Body size:** JSON bodies are capped at **1 MB**; the one exception is `POST /api/contacts/bulk` (50 MB) for imports. Over the limit the server responds `413` with code `PAYLOAD_TOO_LARGE`. Unknown `/api` paths return 404; non-GET requests to non-API paths are not swallowed by the SPA fallback and also 404.
 
+**Validation and errors:** Every response includes `X-Request-Id`. Error bodies include the same identifier in `error.requestId`. Invalid input returns `400`. Missing or trashed parents return `404` before child writes or uploads. Contact flags such as `isGhost` and `isArchived` use JSON booleans.
+
+Dates accept a valid ISO date or timestamp. Timestamps include an offset or use the server's local time. Contact names must contain text. Latitude and longitude use their geographic ranges. Empty updates return `400`.
+
+Bulk operations accept up to 5,000 unique IDs and report the number of rows they change. Bulk updates accept scalar profile fields. They reject child arrays such as tags, emails, and phones. Lists exclude archived, ghost, merged, and trashed members from their counts and contact results.
+
+`GET /api/search` accepts a literal prefix query in `q`. Its optional `filters` parameter contains a JSON array of up to eight `{field, value}` facets. Supported fields are `company`, `role`, `location`, `industry`, `tag`, `score`, and `updated`. The server applies facets before its result limit. The command palette uses the same facet predicate.
+
 ---
 
 ## Health
@@ -32,15 +40,14 @@ Fetch all active (non-archived, non-ghost, non-merged) contacts.
 
 | Param  | Description                                                                       |
 | ------ | --------------------------------------------------------------------------------- |
-| `q`    | FTS5 full-text search query                                                       |
 | `view` | Set to `slim` for lightweight response (id, name, company, avatarUrl, themeColor) |
 
 ```bash
 # All contacts
 curl http://localhost:3210/api/contacts
 
-# FTS5 search
-curl "http://localhost:3210/api/contacts?q=engineer"
+# Prefix search
+curl "http://localhost:3210/api/search?q=engineer"
 
 # Slim view (for caches, pickers)
 curl "http://localhost:3210/api/contacts?view=slim"

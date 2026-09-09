@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";
 import { logCacheEvent } from "./lib/queryConfig";
 import { fetchContactsSlim } from "./api/contacts";
+import { retryApiQuery } from "./api/client";
 import App from "./App.tsx";
 import "./index.css";
 
@@ -34,7 +35,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       gcTime: 10 * 60 * 1000,
-      retry: 1,
+      retry: retryApiQuery,
       refetchOnWindowFocus: false,
     },
   },

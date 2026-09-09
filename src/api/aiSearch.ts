@@ -1,3 +1,4 @@
+import { apiFetch } from "./client";
 /**
  * AI Search — React Query hooks and SSE streaming.
  *
@@ -19,7 +20,7 @@ const API_BASE = "/api";
 export const useStartAISearch = () => {
   return useMutation({
     mutationFn: async (contactIds: string[]) => {
-      const res = await fetch(`${API_BASE}/ai-search`, {
+      const res = await apiFetch(`/ai-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contactIds }),
@@ -97,10 +98,10 @@ export const useAISearchStatusPoll = (batchId: string | null) => {
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: ["ai-search-status", batchId],
-    queryFn: async () => {
-      const res = await fetch(
-        `${API_BASE}/ai-search/status?batchId=${batchId}`,
-      );
+    queryFn: async ({ signal }) => {
+      const res = await apiFetch(`/ai-search/status?batchId=${batchId}`, {
+        signal,
+      });
       if (!res.ok) throw new Error("Failed to fetch status");
       return res.json() as Promise<AISearchBatch>;
     },

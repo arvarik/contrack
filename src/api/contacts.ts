@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+import { invalidateContactViews, writeContactInOrder } from "./contactCache";
 /**
  * Contact API Hooks — React Query hooks for all contact CRUD operations.
  *
@@ -6,12 +8,7 @@
  *
  * @module api/contacts
  */
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  keepPreviousData,
-} from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import {
   Contact,
@@ -27,9 +24,13 @@ import { apiFetch } from "./client";
  * the cold-boot prefetch in main.tsx. All consumers share one cache slot and
  * project their own shape via `select`.
  */
-export const fetchContactsSlim = async (): Promise<Contact[]> => {
+export const fetchContactsSlim = async (context?: {
+  signal?: AbortSignal;
+}): Promise<Contact[]> => {
   const start = performance.now();
-  const res = await apiFetch("/contacts?view=slim");
+  const res = await apiFetch("/contacts?view=slim", {
+    signal: context?.signal,
+  });
   const data: Contact[] = await res.json();
   const duration = performance.now() - start;
   if (import.meta.env.DEV) {
@@ -130,25 +131,22 @@ export const useSlimContactsForSearch = () => {
 export const useContact = (id: string | undefined) => {
   return useQuery({
     queryKey: ["contacts", id],
-    queryFn: async (): Promise<Contact> => {
-      const res = await apiFetch(`/contacts/${id}`);
+    queryFn: async ({ signal }): Promise<Contact> => {
+      const res = await apiFetch(`/contacts/${id}`, { signal });
       return res.json();
     },
     enabled: !!id,
     staleTime: STALE_TIMES.contactDetail,
-    // keepPreviousData: When navigating between contacts, show the previous
-    // contact's data briefly instead of a loading skeleton. Prevents flash.
-    placeholderData: keepPreviousData,
   });
 };
 
 export const useMapContacts = () => {
   return useQuery({
     queryKey: ["contacts", "map"],
-    queryFn: async (): Promise<
-      (Partial<Contact> & { lat: number; lng: number })[]
-    > => {
-      const res = await apiFetch("/contacts/map");
+    queryFn: async ({
+      signal,
+    }): Promise<(Partial<Contact> & { lat: number; lng: number })[]> => {
+      const res = await apiFetch("/contacts/map", { signal });
       return res.json();
     },
     staleTime: STALE_TIMES.mapData,
@@ -158,8 +156,8 @@ export const useMapContacts = () => {
 export const useArchivedContacts = () => {
   return useQuery({
     queryKey: ["contacts", "archived"],
-    queryFn: async (): Promise<Contact[]> => {
-      const res = await apiFetch("/contacts/archived");
+    queryFn: async ({ signal }): Promise<Contact[]> => {
+      const res = await apiFetch("/contacts/archived", { signal });
       return res.json();
     },
     staleTime: STALE_TIMES.archived,
@@ -178,7 +176,7 @@ export const useCreateContact = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
     },
   });
 };
@@ -199,51 +197,29 @@ export const useParseContactText = () => {
 export const useUpdateContact = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       id,
       data,
     }: {
       id: string;
       data: ContactUpdateData;
-    }): Promise<Contact> => {
-      const res = await apiFetch(`/contacts/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts", id] });
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-
-      const previousContact = queryClient.getQueryData<Contact>([
-        "contacts",
-        id,
-      ]);
-
-      if (previousContact) {
-        queryClient.setQueryData<Contact>(["contacts", id], {
-          ...previousContact,
-          ...data,
-        } as Contact);
-      }
-
+    }): Promise<Contact> =>
+      writeContactInOrder(id, async () => {
+        const res = await apiFetch(`/contacts/${encodeURIComponent(id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        return res.json();
+      }),
+    onSuccess: (contact) => {
+      queryClient.setQueryData(["contacts", contact.id], contact);
       queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === id ? ({ ...c, ...data } as Contact) : c)),
+        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
       );
-
-      return { previousContact };
     },
-    onError: (_err, { id }, context) => {
-      if (context?.previousContact) {
-        queryClient.setQueryData(["contacts", id], context.previousContact);
-      }
-    },
-    onSettled: (_data, _error, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts", id] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
+    onError: (error) => toast.error(`Could not save contact: ${error.message}`),
+    onSettled: () => invalidateContactViews(queryClient),
   });
 };
 
@@ -251,8 +227,8 @@ export const useUpdateContact = () => {
 export const useTrash = () => {
   return useQuery({
     queryKey: ["trash"],
-    queryFn: async (): Promise<TrashedContact[]> => {
-      const res = await apiFetch("/trash");
+    queryFn: async ({ signal }): Promise<TrashedContact[]> => {
+      const res = await apiFetch("/trash", { signal });
       const data = await res.json();
       return data.items as TrashedContact[];
     },
@@ -283,7 +259,7 @@ export const useRestoreContact = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
@@ -302,7 +278,7 @@ export const useBulkRestoreContacts = () => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
@@ -319,27 +295,12 @@ export const useDeleteContact = () => {
       });
       return res.json();
     },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.filter((c) => c.id !== id),
-      );
-
-      return { previousContacts };
-    },
-    onError: (_err, _id, context) => {
-      if (context?.previousContacts) {
-        queryClient.setQueryData(["contacts"], context.previousContacts);
+    onSettled: (_data, error, id) => {
+      if (!error) {
+        queryClient.removeQueries({ queryKey: ["contacts", id] });
+        queryClient.removeQueries({ queryKey: ["timeline", id] });
       }
-    },
-    onSettled: (_data, _error, id) => {
-      queryClient.removeQueries({ queryKey: ["contacts", id] });
-      queryClient.removeQueries({ queryKey: ["timeline", id] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },
   });
@@ -356,40 +317,9 @@ export const useArchiveContact = () => {
       });
       return res.json();
     },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      await queryClient.cancelQueries({ queryKey: ["contacts", id] });
-
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-      const previousContact = queryClient.getQueryData<Contact>([
-        "contacts",
-        id,
-      ]);
-
-      if (previousContact) {
-        queryClient.setQueryData<Contact>(["contacts", id], {
-          ...previousContact,
-          isArchived: true,
-        });
-      }
-
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === id ? { ...c, isArchived: true } : c)),
-      );
-
-      return { previousContacts, previousContact };
-    },
-    onError: (_err, id, context) => {
-      if (context?.previousContacts)
-        queryClient.setQueryData(["contacts"], context.previousContacts);
-      if (context?.previousContact)
-        queryClient.setQueryData(["contacts", id], context.previousContact);
-    },
     onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ["contacts", id] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["contacts", "archived"] });
     },
   });
@@ -406,40 +336,9 @@ export const useUnarchiveContact = () => {
       });
       return res.json();
     },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      await queryClient.cancelQueries({ queryKey: ["contacts", id] });
-
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-      const previousContact = queryClient.getQueryData<Contact>([
-        "contacts",
-        id,
-      ]);
-
-      if (previousContact) {
-        queryClient.setQueryData<Contact>(["contacts", id], {
-          ...previousContact,
-          isArchived: false,
-        });
-      }
-
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) => (c.id === id ? { ...c, isArchived: false } : c)),
-      );
-
-      return { previousContacts, previousContact };
-    },
-    onError: (_err, id, context) => {
-      if (context?.previousContacts)
-        queryClient.setQueryData(["contacts"], context.previousContacts);
-      if (context?.previousContact)
-        queryClient.setQueryData(["contacts", id], context.previousContact);
-    },
     onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: ["contacts", id] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["contacts", "archived"] });
     },
   });
@@ -458,25 +357,8 @@ export const useBulkDeleteContacts = () => {
       });
       return res.json();
     },
-    onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-
-      const idsSet = new Set(ids);
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.filter((c) => !idsSet.has(c.id)),
-      );
-
-      return { previousContacts };
-    },
-    onError: (_err, _ids, context) => {
-      if (context?.previousContacts)
-        queryClient.setQueryData(["contacts"], context.previousContacts);
-    },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
     },
   });
 };
@@ -498,27 +380,8 @@ export const useBulkUpdateContacts = () => {
       });
       return res.json();
     },
-    onMutate: async ({ ids, data }) => {
-      await queryClient.cancelQueries({ queryKey: ["contacts"] });
-      const previousContacts = queryClient.getQueryData<Contact[]>([
-        "contacts",
-      ]);
-
-      const idsSet = new Set(ids);
-      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
-        old?.map((c) =>
-          idsSet.has(c.id) ? ({ ...c, ...data } as Contact) : c,
-        ),
-      );
-
-      return { previousContacts };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previousContacts)
-        queryClient.setQueryData(["contacts"], context.previousContacts);
-    },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      invalidateContactViews(queryClient);
     },
   });
 };
@@ -542,8 +405,7 @@ export const useUploadAvatar = () => {
       return res.json();
     },
     onSuccess: (_data, { contactId }) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["contact", contactId] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
     },
   });
@@ -567,8 +429,7 @@ export const useSetDicebearAvatar = () => {
       return res.json();
     },
     onSuccess: (_data, { contactId }) => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["contact", contactId] });
+      invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
     },
   });

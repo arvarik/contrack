@@ -94,6 +94,11 @@ const CSP_PRODUCTION = [
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
   app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    req.requestId = crypto.randomUUID().slice(0, 8);
+    res.setHeader("X-Request-Id", req.requestId);
+    next();
+  });
 
   app.use((_req, res, next) => {
     // nosniff was previously set on /uploads alone; every response deserves
@@ -141,11 +146,6 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   if (!options.disableRateLimit) {
     app.use(aiEndpointRateLimit);
   }
-
-  app.use((req, _res, next) => {
-    req.requestId = crypto.randomUUID().split("-")[0];
-    next();
-  });
 
   if (options.enableRequestLogging) {
     const morganFormat =

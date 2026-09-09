@@ -1,8 +1,7 @@
+import { apiFetch } from "./client";
 import { useQuery } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import type { ActionItem, ZeroStatePayload } from "../types";
-
-const API_BASE = "/api";
 
 export interface DashboardPayload {
   overdue: ActionItem[];
@@ -76,8 +75,8 @@ export interface DailyInsight {
 export const useDashboard = () => {
   return useQuery({
     queryKey: ["dashboard"],
-    queryFn: async (): Promise<DashboardPayload> => {
-      const res = await fetch(`${API_BASE}/dashboard`);
+    queryFn: async ({ signal }): Promise<DashboardPayload> => {
+      const res = await apiFetch(`/dashboard`, { signal });
       if (!res.ok) throw new Error("Failed to fetch dashboard payload");
       return res.json();
     },
@@ -88,8 +87,8 @@ export const useDashboard = () => {
 export const useDailyInsight = () => {
   return useQuery({
     queryKey: ["dashboard", "insight"],
-    queryFn: async (): Promise<DailyInsight | null> => {
-      const res = await fetch(`${API_BASE}/dashboard/insight`);
+    queryFn: async ({ signal }): Promise<DailyInsight | null> => {
+      const res = await apiFetch(`/dashboard/insight`, { signal });
       if (!res.ok) throw new Error("Failed to fetch daily insight");
       return res.json();
     },
@@ -107,8 +106,8 @@ export const useDailyInsight = () => {
 export const useZeroState = () => {
   return useQuery({
     queryKey: ["zeroState"],
-    queryFn: async (): Promise<ZeroStatePayload> => {
-      const res = await fetch(`${API_BASE}/command-palette/zero-state`);
+    queryFn: async ({ signal }): Promise<ZeroStatePayload> => {
+      const res = await apiFetch(`/command-palette/zero-state`, { signal });
       if (!res.ok) throw new Error("Failed to fetch zero state");
       return res.json();
     },

@@ -1,3 +1,4 @@
+import { idsSchema } from "../utils/validators.ts";
 // =============================================================================
 // Routes — Data Lifecycle: trash (undoable deletes), backups, full export
 // =============================================================================
@@ -52,7 +53,7 @@ router.post(
  */
 router.post(
   "/trash/bulk-restore",
-  validateBody(z.object({ ids: z.array(z.string().min(1)).min(1) })),
+  validateBody(z.object({ ids: idsSchema })),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     let count = 0;

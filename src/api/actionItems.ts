@@ -1,13 +1,12 @@
+import { apiFetch } from "./client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ActionItem } from "../types";
-
-const API_BASE = "/api";
 
 export const useCompletedActionItems = () => {
   return useQuery({
     queryKey: ["actionItems", "completed"],
-    queryFn: async (): Promise<ActionItem[]> => {
-      const res = await fetch(`${API_BASE}/action-items/completed`);
+    queryFn: async ({ signal }): Promise<ActionItem[]> => {
+      const res = await apiFetch(`/action-items/completed`, { signal });
       if (!res.ok) throw new Error("Failed to fetch completed action items");
       return res.json();
     },
@@ -17,8 +16,8 @@ export const useCompletedActionItems = () => {
 export const useUrgentActionItemCount = () => {
   return useQuery({
     queryKey: ["actionItems", "urgentCount"],
-    queryFn: async (): Promise<{ count: number }> => {
-      const res = await fetch(`${API_BASE}/action-items/count`);
+    queryFn: async ({ signal }): Promise<{ count: number }> => {
+      const res = await apiFetch(`/action-items/count`, { signal });
       if (!res.ok) throw new Error("Failed to fetch urgent count");
       return res.json();
     },
@@ -37,7 +36,7 @@ export const useUpdateActionItem = () => {
       id: string;
       data: { title?: string; dueAt?: string };
     }): Promise<ActionItem> => {
-      const res = await fetch(`${API_BASE}/action-items/${id}`, {
+      const res = await apiFetch(`/action-items/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -57,7 +56,7 @@ export const useCompleteActionItem = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string): Promise<ActionItem> => {
-      const res = await fetch(`${API_BASE}/action-items/${id}/complete`, {
+      const res = await apiFetch(`/action-items/${id}/complete`, {
         method: "PATCH",
       });
       if (!res.ok) throw new Error("Failed to complete action item");

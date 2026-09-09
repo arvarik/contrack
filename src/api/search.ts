@@ -1,3 +1,5 @@
+import type { FacetFilter } from "../../shared/searchFacets";
+import { apiFetch } from "./client";
 /**
  * Search API Hooks — React Query hooks for FTS5 keyword and Ask Contrack v3 semantic search.
  *
@@ -17,15 +19,16 @@ import {
 } from "react";
 import type { Contact, SemanticSearchResult } from "../types";
 
-const API_BASE = "/api";
-
-export const useSearchContacts = (q: string) => {
+export const useSearchContacts = (q: string, filters: FacetFilter[] = []) => {
   return useQuery({
-    queryKey: ["contacts", "search", q],
+    queryKey: ["contacts", "search", q, filters],
     queryFn: async ({ signal }): Promise<Contact[]> => {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`, {
-        signal,
-      });
+      const res = await apiFetch(
+        `/search?q=${encodeURIComponent(q)}&filters=${encodeURIComponent(JSON.stringify(filters))}`,
+        {
+          signal,
+        },
+      );
       if (!res.ok) throw new Error("Failed to search contacts");
       return res.json();
     },
@@ -82,7 +85,7 @@ export const useSemanticSearch = (externalState?: {
       setData(null);
 
       try {
-        const res = await fetch(`${API_BASE}/search/semantic`, {
+        const res = await apiFetch(`/search/semantic`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

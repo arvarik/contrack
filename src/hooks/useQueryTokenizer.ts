@@ -14,15 +14,8 @@ import { useMemo, useCallback, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type FacetField =
-  "role" | "company" | "location" | "industry" | "tag" | "score" | "updated";
-
-export interface FacetFilter {
-  field: FacetField;
-  value: string;
-  /** For score: and updated: operators (e.g., >80, <40) */
-  operator?: ">" | "<";
-}
+import type { FacetField, FacetFilter } from "../../shared/searchFacets";
+export type { FacetField, FacetFilter } from "../../shared/searchFacets";
 
 export interface ParsedQuery {
   /** Locked facet pills */

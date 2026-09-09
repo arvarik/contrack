@@ -69,6 +69,21 @@ function translate(err: unknown): {
 
   const e = err as SqliteLikeError;
 
+  if (e?.code === "LIMIT_FILE_SIZE")
+    return {
+      statusCode: 413,
+      code: "PAYLOAD_TOO_LARGE",
+      message: "The uploaded file exceeds the size limit",
+      isOperational: true,
+    };
+  if (e?.code?.startsWith("LIMIT_"))
+    return {
+      statusCode: 400,
+      code: "INVALID_UPLOAD",
+      message: "Invalid upload fields",
+      isOperational: true,
+    };
+
   if (e?.type === "entity.parse.failed") {
     return {
       statusCode: 400,
@@ -90,7 +105,7 @@ function translate(err: unknown): {
     };
   }
 
-  if (e?.code === "SQLITE_CONSTRAINT") {
+  if (e?.code?.startsWith("SQLITE_CONSTRAINT")) {
     return {
       statusCode: 400,
       code: "DB_CONSTRAINT",
@@ -104,7 +119,10 @@ function translate(err: unknown): {
     };
   }
 
-  if (e?.code === "SQLITE_BUSY") {
+  if (
+    e?.code?.startsWith("SQLITE_BUSY") ||
+    e?.code?.startsWith("SQLITE_LOCKED")
+  ) {
     return {
       statusCode: 503,
       code: "DB_BUSY",
@@ -195,7 +213,7 @@ export function notFoundHandler(
   res: Response,
   next: NextFunction,
 ): void {
-  if (req.path.startsWith("/api/")) {
+  if (req.path === "/api" || req.path.startsWith("/api/")) {
     return next(
       new AppError(`Unknown API endpoint: ${req.method} ${req.path}`, 404, {
         code: "ROUTE_NOT_FOUND",

@@ -1,3 +1,4 @@
+import { assertContactExists } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
 import { resolveUploadPath } from "../utils/paths.ts";
@@ -139,6 +140,7 @@ export const interactionService = {
   },
 
   createInteraction(contactId: string, body: CreateInteractionPayload) {
+    assertContactExists(contactId);
     const { type, title, content, date, duration, source } = body;
     const id = crypto.randomUUID();
     const now = date || new Date().toISOString();
@@ -172,14 +174,21 @@ export const interactionService = {
             "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
           );
           for (const mId of explicitMentionIds) {
-            insertStmt.run(id, mId);
+            if (
+              sqlite
+                .prepare(
+                  "SELECT 1 FROM contacts WHERE id = ? AND deletedAt IS NULL",
+                )
+                .get(mId)
+            )
+              insertStmt.run(id, mId);
           }
         }
       }
 
       db.update(schema.contacts)
         .set({
-          lastContactedAt: now,
+          lastContactedAt: sql`(SELECT MAX(date) FROM interactions WHERE contactId = ${contactId})`,
           updatedAt: new Date().toISOString(),
           aiBriefing: null,
           aiBriefingAt: null,
@@ -212,7 +221,7 @@ export const interactionService = {
       return res;
     })();
     // Schedule background ghost-contact extraction — never blocks the response
-    if (content) {
+    if (content && process.env.DISABLE_BACKGROUND_JOBS !== "true") {
       setTimeout(() => {
         runMentionExtraction(id, contactId, content);
       }, 0);
@@ -308,13 +317,12 @@ export const interactionService = {
   },
 
   async handleAttachment(contactId: string, file: Express.Multer.File) {
+    assertContactExists(contactId);
     const now = new Date().toISOString();
-
-    if (file.originalname.toLowerCase().endsWith(".eml")) {
-      // Async read — attachments can be up to 50 MB and a sync read would
-      // block the event loop for every other request.
+    let content: string | null = null;
+    const isEmail = file.originalname.toLowerCase().endsWith(".eml");
+    if (isEmail) {
       const rawEml = await fs.promises.readFile(file.path, "utf8");
-
       const emlData = await new Promise<Record<string, unknown>>(
         (resolve, reject) => {
           emlFormat.read(
@@ -326,26 +334,28 @@ export const interactionService = {
           );
         },
       );
-
-      const extractedThread = emlData?.text || emlData?.html || rawEml;
-      const summaryHtml = await summarizeEmlEmail(extractedThread as string);
-
-      const result = db
+      content = await summarizeEmlEmail(
+        String(emlData?.text || emlData?.html || rawEml),
+      );
+    }
+    // The contact can disappear during email summarization.
+    assertContactExists(contactId);
+    const result = sqlite.transaction(() => {
+      const interaction = db
         .insert(schema.interactions)
         .values({
           id: crypto.randomUUID(),
           contactId,
-          type: "email",
-          title: `Email Import: ${file.originalname.replace(".eml", "")}`,
+          type: isEmail ? "email" : "note",
+          title: `${isEmail ? "Email Import" : "Attached File"}: ${file.originalname}`,
           date: now,
-          content: summaryHtml,
+          content,
           fileUrl: `/uploads/${file.filename}`,
           fileName: file.originalname,
-          fileType: "message/rfc822",
+          fileType: isEmail ? "message/rfc822" : file.mimetype,
         })
         .returning()
         .get();
-
       db.update(schema.contacts)
         .set({
           lastContactedAt: now,
@@ -355,34 +365,10 @@ export const interactionService = {
         })
         .where(eq(schema.contacts.id, contactId))
         .run();
-      relationshipService.computeScore(contactId);
-      return result;
-    }
-
-    const result = db
-      .insert(schema.interactions)
-      .values({
-        id: crypto.randomUUID(),
-        contactId,
-        type: "note",
-        title: `Attached File: ${file.originalname}`,
-        date: now,
-        fileUrl: `/uploads/${file.filename}`,
-        fileName: file.originalname,
-        fileType: file.mimetype,
-      })
-      .returning()
-      .get();
-
-    db.update(schema.contacts)
-      .set({
-        lastContactedAt: now,
-        updatedAt: now,
-        aiBriefing: null,
-        aiBriefingAt: null,
-      })
-      .where(eq(schema.contacts.id, contactId))
-      .run();
+      return interaction;
+    })();
+    aiCache.invalidate("briefing", contactId);
+    aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(contactId);
     return result;
   },
@@ -402,6 +388,7 @@ export const interactionService = {
       .where(eq(schema.interactions.id, id))
       .get();
     if (!existing) return null;
+    assertContactExists(existing.contactId);
 
     const { title, content } = body;
     const updates: {
@@ -423,6 +410,13 @@ export const interactionService = {
       .returning()
       .get();
 
+    sqlite
+      .prepare(
+        "UPDATE contacts SET aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ?",
+      )
+      .run(existing.contactId);
+    aiCache.invalidate("briefing", existing.contactId);
+    aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(existing.contactId);
     return updated;
   },
@@ -434,15 +428,32 @@ export const interactionService = {
       .where(eq(schema.interactions.id, id))
       .get();
     if (!existing) return false;
+    assertContactExists(existing.contactId);
 
-    if (existing.fileUrl?.startsWith("/uploads/")) {
-      // Containment-checked resolution — never unlink outside uploads/.
-      const filePath = resolveUploadPath(existing.fileUrl);
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }
-
-    db.delete(schema.interactions).where(eq(schema.interactions.id, id)).run();
+    sqlite.transaction(() => {
+      db.delete(schema.interactions)
+        .where(eq(schema.interactions.id, id))
+        .run();
+      sqlite
+        .prepare(
+          "UPDATE contacts SET lastContactedAt = (SELECT MAX(date) FROM interactions WHERE contactId = ?), aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ?",
+        )
+        .run(existing.contactId, existing.contactId);
+    })();
+    aiCache.invalidate("briefing", existing.contactId);
+    aiCache.invalidate("dailyInsight");
     relationshipService.computeScore(existing.contactId);
+    if (existing.fileUrl?.startsWith("/uploads/")) {
+      const filePath = resolveUploadPath(existing.fileUrl);
+      try {
+        if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch (error) {
+        log.warn(
+          "Interactions",
+          `Attachment cleanup failed: ${getErrorMessage(error)}`,
+        );
+      }
+    }
     return true;
   },
 

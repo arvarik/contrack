@@ -1,3 +1,4 @@
+import { assertContactExists } from "./contactGuard.ts";
 /**
  * Action Item Service — CRUD operations for follow-up tasks.
  *
@@ -105,6 +106,7 @@ export const actionItemService = {
    * Create a new action item. The SQL trigger auto-updates contacts.nextFollowUpAt.
    */
   create(contactId: string, title: string, dueAt: string) {
+    assertContactExists(contactId);
     const id = crypto.randomUUID();
     sqlite
       .prepare(
@@ -131,6 +133,7 @@ export const actionItemService = {
       .prepare("SELECT * FROM action_items WHERE id = ?")
       .get(id) as ActionItemRow | undefined;
     if (!existing) return null;
+    assertContactExists(existing.contactId);
 
     const setClauses: string[] = [];
     const values: string[] = [];
@@ -169,6 +172,7 @@ export const actionItemService = {
       .prepare("SELECT * FROM action_items WHERE id = ?")
       .get(id) as ActionItemRow | undefined;
     if (!existing) return null;
+    assertContactExists(existing.contactId);
     if (existing.completedAt) return existing; // Already completed — idempotent
 
     sqlite
@@ -192,6 +196,7 @@ export const actionItemService = {
       .prepare("SELECT * FROM action_items WHERE id = ?")
       .get(id) as ActionItemRow | undefined;
     if (!existing) return false;
+    assertContactExists(existing.contactId);
 
     sqlite.prepare("DELETE FROM action_items WHERE id = ?").run(id);
     log.info("ActionItems", `Deleted "${existing.title}" (${id})`);
