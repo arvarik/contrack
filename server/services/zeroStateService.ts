@@ -9,6 +9,7 @@
  */
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
+import type { Scope } from "../tenancy/scope.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,13 +32,18 @@ export interface ZeroStatePayload {
 }
 
 // ─── Prepared Statements (cached on first call) ──────────────────────────────
+// Five statements, each taking the owner as its first bound parameter. The
+// dedupe count reads `dedupe_suggestions.ownerId` directly rather than joining
+// back to contacts, because a suggestion names two contacts and both share the
+// owner by the mismatch trigger.
 
 const stmts = {
   urgentCount: sqlite.prepare(`
     SELECT COUNT(*) as count
     FROM action_items ai
     JOIN contacts c ON ai.contactId = c.id
-    WHERE ai.completedAt IS NULL
+    WHERE ai.ownerId = ?
+      AND ai.completedAt IS NULL
       AND date(ai.dueAt) <= date('now')
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
   `),
@@ -46,7 +52,8 @@ const stmts = {
     SELECT c.id, c.name, c.avatarUrl, c.relationshipScore,
            CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSince
     FROM contacts c
-    WHERE c.isGhost = 0
+    WHERE c.ownerId = ?
+      AND c.isGhost = 0
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
       AND c.relationshipScore < 40
       AND c.lastContactedAt IS NOT NULL
@@ -60,7 +67,8 @@ const stmts = {
            COUNT(DISTINCT im.interactionId) as mentionCount
     FROM contacts c
     JOIN interaction_mentions im ON c.id = im.contactId
-    WHERE c.isGhost = 1
+    WHERE c.ownerId = ?
+      AND c.isGhost = 1
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
     GROUP BY c.id
     ORDER BY mentionCount DESC
@@ -70,7 +78,8 @@ const stmts = {
   staleCount: sqlite.prepare(`
     SELECT COUNT(*) as count
     FROM contacts
-    WHERE updatedAt < date('now', '-6 months')
+    WHERE ownerId = ?
+      AND updatedAt < date('now', '-6 months')
       AND isGhost = 0
       AND (isArchived = 0 OR isArchived IS NULL)
       AND canonicalId IS NULL
@@ -79,7 +88,7 @@ const stmts = {
   pendingDedupeCount: sqlite.prepare(`
     SELECT COUNT(*) as count
     FROM dedupe_suggestions
-    WHERE status = 'pending'
+    WHERE ownerId = ? AND status = 'pending'
   `),
 };
 
@@ -90,12 +99,12 @@ export const zeroStateService = {
    * Compute the zero-state intelligence payload.
    * All queries are idempotent and read-only. Safe to call on every Cmd+K open.
    */
-  getPayload(): ZeroStatePayload {
+  getPayload(scope: Scope): ZeroStatePayload {
     const startMs = Date.now();
     const insights: ZeroStateInsight[] = [];
 
     // 1. Action items (overdue + due today)
-    const urgent = stmts.urgentCount.get() as { count: number };
+    const urgent = stmts.urgentCount.get(scope.ownerId) as { count: number };
     if (urgent.count > 0) {
       insights.push({
         type: "action_items",
@@ -108,7 +117,7 @@ export const zeroStateService = {
     }
 
     // 2. At-risk contacts (low score + long silence)
-    const atRiskRows = stmts.atRisk.all() as {
+    const atRiskRows = stmts.atRisk.all(scope.ownerId) as {
       id: string;
       name: string;
       avatarUrl: string | null;
@@ -126,7 +135,7 @@ export const zeroStateService = {
     }
 
     // 3. Ghost alert (frequently mentioned but not a real contact)
-    const ghost = stmts.topGhost.get() as
+    const ghost = stmts.topGhost.get(scope.ownerId) as
       | {
           id: string;
           name: string;
@@ -144,7 +153,7 @@ export const zeroStateService = {
     }
 
     // 4. Stale data indicator (contacts with updatedAt > 6 months)
-    const stale = stmts.staleCount.get() as { count: number };
+    const stale = stmts.staleCount.get(scope.ownerId) as { count: number };
     if (stale.count > 0) {
       insights.push({
         type: "stale_data",
@@ -157,7 +166,9 @@ export const zeroStateService = {
     }
 
     // 5. Pending dedupe suggestions
-    const dedupe = stmts.pendingDedupeCount.get() as { count: number };
+    const dedupe = stmts.pendingDedupeCount.get(scope.ownerId) as {
+      count: number;
+    };
     if (dedupe.count > 0) {
       insights.push({
         type: "dedupe",

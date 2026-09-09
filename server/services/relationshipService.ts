@@ -109,6 +109,7 @@ function computeBreakdown(contact: ContactScoreRow): ScoreBreakdown {
   // ── Frequency, Depth, Reciprocity, Momentum (from interactions) ────────
   const stats = sqlite
     .prepare(
+      // tenant-lint: allow owner-checked by caller
       `
     SELECT
       COALESCE(SUM(CASE WHEN date >= date('now', '-90 days') THEN 1 ELSE 0 END), 0) as total90d,
@@ -263,6 +264,7 @@ export const relationshipService = {
   computeScore(contactId: string): number {
     const contact = sqlite
       .prepare(
+        // tenant-lint: allow owner-checked by caller
         `
       SELECT id, cadenceDays, lastContactedAt FROM contacts WHERE id = ?
     `,
@@ -273,6 +275,7 @@ export const relationshipService = {
 
     const score = computeScoreForContact(contact);
     sqlite
+      // tenant-lint: allow owner-checked by caller
       .prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?")
       .run(score, contactId);
     return score;
@@ -293,6 +296,7 @@ export const relationshipService = {
 
     const contacts = sqlite
       .prepare(
+        // tenant-lint: allow instance sweep
         `
       SELECT id, cadenceDays, lastContactedAt FROM contacts
       WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
@@ -301,6 +305,7 @@ export const relationshipService = {
       .all() as ContactScoreRow[];
 
     const updateStmt = sqlite.prepare(
+      // tenant-lint: allow instance sweep
       "UPDATE contacts SET relationshipScore = ? WHERE id = ?",
     );
 

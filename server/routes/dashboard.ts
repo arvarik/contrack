@@ -3,6 +3,7 @@ import { log } from "../utils/logger.ts";
 import { dashboardService } from "../services/dashboardService.ts";
 import { zeroStateService } from "../services/zeroStateService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
-    const payload = dashboardService.getDashboardPayload();
+    const payload = dashboardService.getDashboardPayload(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/dashboard`);
 
     res.json(payload);
@@ -23,7 +24,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
-    const insight = await dashboardService.getInsight();
+    const insight = await dashboardService.getInsight(scopeOf(req));
     log.debug("API", `[${rid}] GET /api/dashboard/insight`);
 
     res.json(insight); // returns null correctly if key missing or not enough data
@@ -41,7 +42,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
-    const payload = zeroStateService.getPayload();
+    const payload = zeroStateService.getPayload(scopeOf(req));
     log.debug(
       "API",
       `[${rid}] GET /api/command-palette/zero-state → ${payload.insights.length} insights`,
