@@ -375,3 +375,196 @@ export function cleanupOldInvocations(): number {
     return 0;
   }
 }
+
+// =============================================================================
+// Instance-wide views (admin only)
+// =============================================================================
+// Two reads that deliberately cross accounts. They exist because the provider
+// key is one key and the bill is one bill, so the operator paying it has to be
+// able to see where it went. `GET /api/ai/stats/summary?scope=all` and
+// `?scope=all` on the feed are the only routes that call them, and both refuse
+// a member with 403 ADMIN_REQUIRED before they get here.
+//
+// Neither returns the text of anything. `description` is the one field on an
+// invocation that can carry a fragment of a contact's data, so the instance
+// feed leaves it out: an admin needs to see that an account made 900 calls,
+// not what it asked about. Decision D10 says an admin does not read another
+// account's data, and this is where that rule meets the billing screen.
+
+/** One account's share of the instance's AI use. */
+export interface UserUsage {
+  userId: string;
+  username: string | null;
+  totalInvocations: number;
+  freshCalls: number;
+  cachedCalls: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
+function costOf(rows: { model: string | null; tokens: number }[]): number {
+  let total = 0;
+  for (const row of rows) {
+    const perM = costPerMMap.get(row.model ?? "") ?? 0;
+    total += (row.tokens / 1_000_000) * perM;
+  }
+  return Math.round(total * 1_000_000) / 1_000_000;
+}
+
+/** Instance totals, and the same numbers broken down by account. */
+export function getInstanceSummary(): {
+  session: {
+    totalInvocations: number;
+    freshCalls: number;
+    cachedCalls: number;
+    totalTokens: number;
+    estimatedCostUsd: number;
+    cacheHitRate: number;
+  };
+  byUser: UserUsage[];
+} {
+  const totals = sqlite
+    .prepare(
+      // tenant-lint: allow admin cross-user
+      `SELECT COUNT(*) AS totalInvocations,
+              COALESCE(SUM(CASE WHEN cached = 0 THEN 1 ELSE 0 END), 0) AS freshCalls,
+              COALESCE(SUM(CASE WHEN cached = 1 THEN 1 ELSE 0 END), 0) AS cachedCalls,
+              COALESCE(SUM(CASE WHEN cached = 0 THEN tokenCount ELSE 0 END), 0) AS totalTokens
+         FROM ai_invocations`,
+    )
+    .get() as {
+    totalInvocations: number;
+    freshCalls: number;
+    cachedCalls: number;
+    totalTokens: number;
+  };
+
+  const perModel = sqlite
+    .prepare(
+      // tenant-lint: allow admin cross-user
+      `SELECT model, SUM(tokenCount) AS tokens FROM ai_invocations
+        WHERE cached = 0 AND model IS NOT NULL AND tokenCount IS NOT NULL
+        GROUP BY model`,
+    )
+    .all() as { model: string | null; tokens: number }[];
+
+  const perOwner = sqlite
+    .prepare(
+      // tenant-lint: allow admin cross-user
+      `SELECT i.ownerId AS userId, u.username AS username,
+              COUNT(*) AS totalInvocations,
+              COALESCE(SUM(CASE WHEN i.cached = 0 THEN 1 ELSE 0 END), 0) AS freshCalls,
+              COALESCE(SUM(CASE WHEN i.cached = 1 THEN 1 ELSE 0 END), 0) AS cachedCalls,
+              COALESCE(SUM(CASE WHEN i.cached = 0 THEN i.tokenCount ELSE 0 END), 0) AS totalTokens
+         FROM ai_invocations i
+         LEFT JOIN users u ON u.id = i.ownerId
+        GROUP BY i.ownerId, u.username
+        ORDER BY totalInvocations DESC`,
+    )
+    .all() as Omit<UserUsage, "estimatedCostUsd">[];
+
+  const ownerModels = sqlite
+    .prepare(
+      // tenant-lint: allow admin cross-user
+      `SELECT ownerId, model, SUM(tokenCount) AS tokens FROM ai_invocations
+        WHERE cached = 0 AND model IS NOT NULL AND tokenCount IS NOT NULL
+        GROUP BY ownerId, model`,
+    )
+    .all() as { ownerId: string; model: string | null; tokens: number }[];
+
+  const byOwnerModels = new Map<
+    string,
+    { model: string | null; tokens: number }[]
+  >();
+  for (const row of ownerModels) {
+    const list = byOwnerModels.get(row.ownerId) ?? [];
+    list.push({ model: row.model, tokens: row.tokens });
+    byOwnerModels.set(row.ownerId, list);
+  }
+
+  return {
+    session: {
+      ...totals,
+      estimatedCostUsd: costOf(perModel),
+      cacheHitRate:
+        totals.totalInvocations > 0
+          ? Math.round((totals.cachedCalls / totals.totalInvocations) * 1000) /
+            1000
+          : 0,
+    },
+    byUser: perOwner.map((row) => ({
+      ...row,
+      estimatedCostUsd: costOf(byOwnerModels.get(row.userId) ?? []),
+    })),
+  };
+}
+
+/**
+ * The instance's invocations, newest first, with the account that made each.
+ *
+ * `description` is not selected. It is the one column that can hold a
+ * fragment of what somebody asked about, and an operator reading the billing
+ * screen has no business seeing it.
+ */
+export function getInstanceFeed(params: {
+  offset: number;
+  limit: number;
+  operations?: string[];
+  cached?: boolean;
+  sort: "newest" | "oldest";
+}) {
+  const { offset, limit, operations, cached, sort } = params;
+  const filters: string[] = [];
+  const values: unknown[] = [];
+
+  if (operations && operations.length > 0) {
+    filters.push(`i.operation IN (${operations.map(() => "?").join(", ")})`);
+    values.push(...operations);
+  }
+  if (cached !== undefined) {
+    filters.push("i.cached = ?");
+    values.push(cached ? 1 : 0);
+  }
+  const where = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+  const direction = sort === "oldest" ? "ASC" : "DESC";
+
+  const rows = sqlite
+    .prepare(
+      // tenant-lint: allow admin cross-user
+      `SELECT i.id, i.operation, i.model, i.tokenCount, i.latencyMs, i.cached,
+              i.createdAt, i.ownerId AS userId, u.username AS username
+         FROM ai_invocations i
+         LEFT JOIN users u ON u.id = i.ownerId
+         ${where}
+        ORDER BY i.createdAt ${direction}
+        LIMIT ? OFFSET ?`,
+    )
+    .all(...values, limit, offset) as {
+    id: string;
+    operation: string;
+    model: string | null;
+    tokenCount: number | null;
+    latencyMs: number;
+    cached: number;
+    createdAt: string;
+    userId: string;
+    username: string | null;
+  }[];
+
+  const { cnt: totalCount } = sqlite
+    .prepare(
+      // tenant-lint: allow admin cross-user
+      `SELECT COUNT(*) AS cnt FROM ai_invocations i ${where}`,
+    )
+    .get(...values) as { cnt: number };
+
+  return {
+    items: rows.map((row) => ({ ...row, cached: !!row.cached })),
+    pagination: {
+      offset,
+      limit,
+      totalCount,
+      hasMore: offset + limit < totalCount,
+    },
+  };
+}

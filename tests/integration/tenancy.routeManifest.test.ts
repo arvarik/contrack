@@ -147,13 +147,21 @@ describe("route manifest", () => {
 
   it("counts the routes Phase 3 added", () => {
     // A cheap tripwire: the admin surface grew from fourteen classified rows
-    // to twenty-seven guarded ones, and a route added without a decision
-    // moves this number.
+    // to twenty-nine guarded ones, and a route added without a decision moves
+    // this number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
-    expect(admin).toHaveLength(27);
+    expect(admin).toHaveLength(29);
     expect(
       ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
-    ).toHaveLength(13);
+    ).toHaveLength(15);
+
+    // The three token routes act on the caller's own account, so a token
+    // cannot reach them and neither can the implicit local owner.
+    const tokens = ROUTE_MANIFEST.filter((r) =>
+      r.path.startsWith("/api/auth/tokens"),
+    );
+    expect(tokens).toHaveLength(3);
+    for (const row of tokens) expect(row.class).toBe("session-self");
   });
 
   it("still classifies the route the mount-order fix made reachable", () => {

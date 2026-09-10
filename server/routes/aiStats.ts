@@ -8,17 +8,36 @@
 // Mounted in server.ts at /api/ai/stats.
 // =============================================================================
 
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
+import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import {
   getSummary,
   getFeed,
+  getInstanceSummary,
+  getInstanceFeed,
   AI_OPERATIONS,
 } from "../services/aiStatsService.ts";
 
 const router = Router();
+
+/**
+ * Whether this request asked for the instance rather than the caller.
+ *
+ * `?scope=all` is an admin read, and `requireAdmin` cannot sit on the route
+ * because the same route without the parameter is every member's own billing
+ * page. The manifest classes both routes `scoped` for that reason and the
+ * check happens here, on the one shape that crosses accounts.
+ */
+function wantsInstance(req: Request): boolean {
+  if (req.query.scope !== "all") return false;
+  if (req.principal?.user.role === "admin") return true;
+  throw new AppError("Instance-wide AI usage needs an admin account.", 403, {
+    code: "ADMIN_REQUIRED",
+  });
+}
 
 // =============================================================================
 // Valid operation vocabulary — derived from the canonical AI_OPERATIONS list
@@ -35,12 +54,15 @@ router.get(
   asyncHandler(async (req, res) => {
     // The invocation counts are the caller's own. `cacheTiers` describes the
     // instance's shared in-process cache, so it is admin-only and simply
-    // absent for a member. Phase 3 adds `?scope=all` for an admin who wants
-    // the instance's totals as well.
-    const summary = getSummary(scopeOf(req), {
-      admin: req.principal?.user.role === "admin",
-    });
-    res.json(summary);
+    // absent for a member. `?scope=all` replaces the caller's counts with the
+    // instance's and adds the per-account breakdown, for the operator whose
+    // provider key paid for all of it.
+    const admin = req.principal?.user.role === "admin";
+    const summary = getSummary(scopeOf(req), { admin });
+    if (!wantsInstance(req)) return res.json(summary);
+
+    const instance = getInstanceSummary();
+    res.json({ ...summary, ...instance, scope: "all" });
   }),
 );
 
@@ -86,13 +108,19 @@ router.get(
       }
     }
 
-    const result = getFeed(scopeOf(req), {
+    const params = {
       offset,
       limit,
       operations,
       cached: cached === undefined ? undefined : cached === "true",
       sort,
-    });
+    };
+    // The instance feed names the account behind each call and leaves the
+    // description out. A description can carry a fragment of what somebody
+    // asked about, and the billing view has no business showing it.
+    const result = wantsInstance(req)
+      ? { ...getInstanceFeed(params), scope: "all" }
+      : getFeed(scopeOf(req), params);
 
     res.json(result);
   }),

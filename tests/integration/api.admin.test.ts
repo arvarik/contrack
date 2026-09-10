@@ -214,7 +214,7 @@ describe("every admin route", () => {
   });
 
   it("covers the whole admin class, so the loops below miss nothing", () => {
-    expect(ADMIN_ROUTES).toHaveLength(27);
+    expect(ADMIN_ROUTES).toHaveLength(29);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
