@@ -392,6 +392,71 @@ export function requireAuth(
 }
 
 /**
+ * Gate for every data route while an account still holds a password somebody
+ * else chose.
+ *
+ * An admin who creates an account, or resets one, sets a temporary password
+ * and hands it over. Until the person replaces it, that password is known to
+ * at least two people, so it buys access to the account's own settings and
+ * nothing else. Every path outside `/api/auth/` answers
+ * `403 PASSWORD_CHANGE_REQUIRED` until `POST /api/auth/change-password`
+ * clears the flag.
+ *
+ * It applies to `session`, `token` and `legacy-env-token` principals alike,
+ * because the reason is the password rather than the way it was presented.
+ * The `implicit` local owner never carries the flag: it has no password at
+ * all, so nobody could have chosen one for it.
+ *
+ * Mounted after `requireAuth` on `/api` and `/uploads`, and also on the one
+ * route inside `/api/auth` that writes an instance setting. The auth router
+ * is mounted ahead of the middleware, so its routes never reach the mounted
+ * copy at all, which is why that route carries the guard itself.
+ *
+ * The exemption is a list of paths rather than the `/api/auth` prefix. The
+ * prefix was the first shape and it was wrong: `PUT /api/auth/session-policy`
+ * is instance administration that happens to live in the auth router, and an
+ * account holding a password somebody else chose could stretch every future
+ * session on the instance to a year before changing it.
+ *
+ * It reads `originalUrl` rather than `path`, because Express strips the mount
+ * prefix before a middleware sees `req.path`, which would make
+ * `/api/auth/me` and `/uploads/auth/me` look alike.
+ */
+
+/**
+ * What an account with a temporary password still needs: to see the
+ * instance's state, sign in, read its own account, set a password of its own,
+ * and sign out. Nothing else, under `/api/auth` or anywhere else.
+ */
+const PASSWORD_CHANGE_EXEMPT = new Set([
+  "/api/auth/status",
+  "/api/auth/setup",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/me",
+  "/api/auth/change-password",
+]);
+export function requirePasswordCurrent(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  const user = req.principal?.user;
+  if (!user || user.mustChangePassword !== 1) return next();
+
+  const pathOnly = req.originalUrl.split("?")[0];
+  if (PASSWORD_CHANGE_EXEMPT.has(pathOnly)) return next();
+
+  next(
+    new AppError(
+      "Set a new password before you use this instance. The one you were given is temporary.",
+      403,
+      { code: "PASSWORD_CHANGE_REQUIRED" },
+    ),
+  );
+}
+
+/**
  * Gate for endpoints that act on the account itself — profile edits, password
  * changes, session management.
  *
@@ -425,9 +490,11 @@ export function requireSession(
  * Gate for instance administration: user management, instance settings,
  * backups, the audit log.
  *
- * Mounted nowhere by design. Phase 2 classifies every admin route in
- * `ROUTE_MANIFEST` and stops there; Phase 3 mounts this guard and tests it.
- * A route test asserts it is absent until then.
+ * Mounted on each admin route individually rather than with `router.use`, so
+ * that the route manifest test can look inside `route.stack` and fail when a
+ * route classed `admin` does not carry it. That check only works while this
+ * is a named function declaration: an arrow assigned to a const has an empty
+ * `handle.name` and the test would see nothing.
  */
 export function requireAdmin(
   req: Request,

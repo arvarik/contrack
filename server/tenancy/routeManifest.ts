@@ -13,9 +13,10 @@
 // it was standing in for: every `scoped` route is isolated, and
 // tenancy.routeManifest.test.ts fails if one is not.
 //
-// The fourteen `admin` rows are classified and nothing more. Phase 3 mounts
-// requireAdmin in front of exactly those, and a test pins the list until it
-// does.
+// The `admin` rows are enforced from Phase 3: each of those routes mounts
+// `requireAdmin` on the route itself, and the manifest test reads every admin
+// row's handler stack and fails when the guard is missing. Adding an admin
+// route without the guard is therefore a red test rather than a review miss.
 //
 // Seeded from docs/multi-tenant-plan/appendix-b-route-manifest.md.
 // =============================================================================
@@ -82,6 +83,87 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "scoped",
     isolated: true,
   },
+  // ── Instance administration (Phase 3) ──────────────────────────────────
+  // Every row below carries `requireAdmin` on the route itself. The manifest
+  // test reads each route's stack and fails when one does not.
+  {
+    method: "GET",
+    path: "/api/admin/audit",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/admin/invitations",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/admin/invitations",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "DELETE",
+    path: "/api/admin/invitations/:id",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/admin/users",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/admin/users",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "DELETE",
+    path: "/api/admin/users/:id",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/admin/users/:id",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "PATCH",
+    path: "/api/admin/users/:id",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/admin/users/:id/disable",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/admin/users/:id/enable",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/admin/users/:id/export",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/admin/users/:id/reset-password",
+    class: "admin",
+    isolated: false,
+  },
   { method: "POST", path: "/api/ai-search", class: "scoped", isolated: true },
   {
     method: "POST",
@@ -124,6 +206,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     path: "/api/ai/stats/summary",
     class: "scoped",
     isolated: true,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/accept-invitation",
+    class: "public",
+    isolated: false,
   },
   {
     method: "POST",

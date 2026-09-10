@@ -33,13 +33,16 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import {
   attachPrincipal,
   isAuthRequired,
+  requireAdmin,
   requireAuth,
+  requirePasswordCurrent,
   setForcedAuth,
 } from "./middleware/auth.ts";
 import { attachRequestContext } from "./tenancy/requestContext.ts";
 import { guardUploads } from "./middleware/uploads.ts";
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
+import { adminRouter } from "./routes/admin.ts";
 import { healthRouter } from "./routes/health.ts";
 import {
   countPasswordAccounts,
@@ -47,6 +50,7 @@ import {
 } from "./services/authService.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
+import { redactUrlForLog } from "./utils/helpers.ts";
 
 /** File extensions browsers may render inline; everything else downloads. */
 const INLINE_UPLOAD_EXTENSIONS = new Set([
@@ -102,6 +106,15 @@ const CSP_PRODUCTION = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join("; ");
+
+// Morgan's `:url` token is `req.originalUrl`, query string included, and both
+// formats this app uses carry it. An invitation link puts its secret in that
+// query string, so the invitee opening the link would write the one value the
+// invitation system keeps out of the database into the access log instead.
+// Overriding the built-in token covers every format rather than one of them.
+morgan.token("url", (req) =>
+  redactUrlForLog((req as express.Request).originalUrl),
+);
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();
@@ -206,6 +219,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/auth", authRouter);
   app.use(["/api", "/uploads"], requireAuth);
 
+  // An account whose password an admin chose reaches its own settings and
+  // nothing else. Mounted after the credential gate, because the flag lives on
+  // the principal that gate insists on. /api/auth/* is exempt, which is what
+  // makes the password change itself reachable.
+  app.use(["/api", "/uploads"], requirePasswordCurrent);
+
   const uploadDir = UPLOADS_DIR;
   ensureDir(uploadDir);
   // Between the credential gate and the file server: requireAuth decides
@@ -228,6 +247,11 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       },
     }),
   );
+
+  // Instance administration: accounts, invitations, the audit log. Every
+  // route inside carries requireAdmin itself, so that the manifest test can
+  // see the guard in each route's stack.
+  app.use("/api/admin", adminRouter);
 
   app.use("/api", avatarRouter);
   app.use("/api/link-preview", linkPreviewRouter);
@@ -257,7 +281,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // see it. A supertest app calls createApp() and never runs server.ts, so a
   // route registered there is invisible to the manifest. Same NODE_ENV guard.
   if (process.env.NODE_ENV !== "production") {
-    app.get("/api/debug/cache-stats", (_req, res) => {
+    // The counters describe one in-process cache shared by everybody on the
+    // instance, so this is an operator's view even in development.
+    app.get("/api/debug/cache-stats", requireAdmin, (_req, res) => {
       res.json(aiCache.getStats());
     });
   }

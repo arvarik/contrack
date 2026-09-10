@@ -7,7 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Phase 3.** An administrator can manage the accounts on the instance.
+  `GET`, `POST`, `PATCH` and `DELETE /api/admin/users` list, create, change
+  and remove accounts, `POST /api/admin/users/:id/disable` and `/enable` turn
+  one off and on again, `POST /api/admin/users/:id/reset-password` issues a
+  new temporary password, and `GET /api/admin/users/:id/export` downloads one
+  account's data for the person who is leaving. Every one of them needs an
+  admin account.
+- **Phase 3.** Invitations. `POST /api/admin/invitations` returns a link once,
+  `GET` lists them with their status, and `DELETE` revokes one. The person
+  uses the link at `POST /api/auth/accept-invitation`, which creates their
+  account with the role the invitation carried and signs them in. There is no
+  mail: the database holds only the hash of the secret in the link, and the
+  admin sends the link however they already talk to the person.
+- **Phase 3.** An audit log. Every administrative action writes one row:
+  creating, inviting, disabling, enabling, deleting and exporting an account,
+  changing a role or a password, changing an instance setting, taking a
+  backup, and every sign-in and sign-out. `GET /api/admin/audit` pages through
+  it newest first. Details never carry a password, a token, an invitation
+  secret or a provider key, and the service redacts a credential-shaped field
+  rather than trusting each call site.
+- **Phase 3.** A forced password change. An account created or reset by an
+  administrator holds a password that administrator chose, so every data route
+  answers `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it. Their
+  own account settings stay reachable, which is where the change happens.
+
+### Fixed
+
+- **Phase 3.** An invitation link no longer reaches the access log. The link
+  carries its secret in a query string, and the invitee's browser sends it to
+  this server as an ordinary page request, so the one value the invitation
+  system keeps out of the database was landing in the request log instead.
+  The value of `token`, `secret` and `api_key` is replaced in every logged
+  URL.
+
 ### Changed
+
+- **Phase 3.** The fourteen routes the route manifest has classed `admin`
+  since Phase 2 are now closed to a member. Backups, every write under
+  `/api/settings/ai`, the AI diagnostics and grounding-capacity reports, the
+  instance-wide embedding backfill, the session-policy write and the
+  development cache-stats endpoint each answer `403 ADMIN_REQUIRED`. The guard
+  sits on each route rather than on its router, and the manifest test fails
+  when an admin route arrives without it.
+- **Phase 3.** Deleting an account is two steps. The first answers
+  `409 USER_HAS_DATA` with what the account owns and changes nothing, so the
+  export button next to the delete button is still useful. A request that says
+  `decision: "purge"` removes every row, both vector stores, the embedding
+  metadata, the search index rows and the upload directory, in one
+  transaction. Ten thousand contacts take 147 ms.
+- **Phase 3.** Three guards stand between an administrator and an instance
+  nobody can administer. The last active admin cannot be demoted, disabled or
+  deleted. An admin cannot disable or delete their own account. The local
+  account that owns this device's data cannot be touched while authentication
+  is off, because nobody can sign in as it.
+- **Phase 3.** The forced password change covers `PUT /api/auth/session-policy`
+  as well. That route sets how long every future session on the instance
+  lasts, and it lives in the auth router, which the gate exempts so that a
+  password change stays reachable. The exemption is now the six paths an
+  account with a temporary password actually needs.
+- **Phase 3.** Disabling an account ends its sessions at once and refuses its
+  personal tokens while it is off. Enabling gives the tokens back. The
+  sessions stay gone, because revoking one is a delete rather than a flag.
+  Resetting a password revokes both.
 
 - **Phase 2.** Every route that reads or writes owned data now filters by the
   account that asked, and the isolation matrix proves it for all eighty of

@@ -18,6 +18,7 @@ failure, `requestId` in the error envelope.
 | 409 | `LAST_ADMIN` | demote, disable, or delete the last active admin |
 | 409 | `USER_HAS_DATA` | delete without `decision: "purge"` |
 | 400 | `CANNOT_TARGET_SELF` | admin disables or deletes their own account |
+| 409 | `LOCAL_OWNER_PROTECTED` | admin disables or deletes the local owner while `isAuthRequired()` is false. Added during Phase 3: [08-phase-3-accounts-admin.md](08-phase-3-accounts-admin.md) section 3.2 requires the guard and names no code. |
 | 410 | `INVITATION_USED`, `INVITATION_EXPIRED`, `INVITATION_REVOKED` | accept flow |
 | 429 | `RATE_LIMITED` (existing) with `details.yours: false` and a `Retry-After` header | dedupe or AI Search lock held by another user, or the per-user AI limiter. **The dedupe and AI Search `429` bodies change shape**: today `POST /api/dedupe/scan` and `POST /api/ai-search` return `{ error: string }` and bypass the envelope; in 2.0 they return the standard `{ error: { message, code, details, requestId } }`. |
 | 500 | `NO_SCOPE` | programmer error, a scoped path ran without a scope |
@@ -85,13 +86,13 @@ All under `/api/admin`, class `admin`.
 | POST | `/users/:id/disable` | | `{ user }`. `409 LAST_ADMIN`. `400 CANNOT_TARGET_SELF`. |
 | POST | `/users/:id/enable` | | `{ user }` |
 | GET | `/users/:id/export` | | JSON export of that user's data as a download. Audit-logged. |
-| DELETE | `/users/:id` | `{ decision: "purge" }` | `{ deleted: true, counts }`. Without body: `409 USER_HAS_DATA { counts }`. `409 LAST_ADMIN`. `400 CANNOT_TARGET_SELF`. |
+| DELETE | `/users/:id` | `{ decision: "purge" }` | `{ deleted: true, counts }`. Without the decision: `409 USER_HAS_DATA` with `details.counts`. `409 LAST_ADMIN`. `400 CANNOT_TARGET_SELF`. |
 | GET | `/invitations` | | `{ invitations: [{ id, email, role, createdAt, expiresAt, acceptedAt, acceptedBy, revokedAt, invitedBy }] }` |
 | POST | `/invitations` | `{ email?, role, expiresInDays? }` | `201 { id, link, expiresAt }`. `link` appears only here. |
 | DELETE | `/invitations/:id` | | `{ revoked: true }` |
 | GET | `/settings` | | `{ registrationOpen, sessionTtlDays, sessionTtlRange: { min, max, default } }` |
 | PUT | `/settings` | `{ registrationOpen?, sessionTtlDays? }` | same shape |
-| GET | `/audit?limit=&before=` | | `{ entries: [{ id, actor: { id, username } \| null, action, targetType, targetId, details, ip, createdAt }], nextBefore }` |
+| GET | `/audit?limit=&before=` | | `{ entries: [{ id, actor: { id, username } \| null, action, targetType, targetId, details, ip, createdAt }], nextBefore }`. `before` is the opaque cursor a previous page returned as `nextBefore`, which is `<createdAt>\|<id>`: `createdAt` alone has one-second resolution and a bare timestamp cursor would skip every row sharing a second with the last row of the page. |
 
 `AdminUserSummary`:
 

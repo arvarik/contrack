@@ -230,6 +230,78 @@ export const listUpdateSchema = z
   });
 
 // ============================================================================
+// Administration Schemas
+// ============================================================================
+//
+// Shape only. The semantic rules — is this username reserved, is this email
+// already taken, is this password long enough — stay in authService, which is
+// the one place that knows them and the one place the self-service paths use.
+
+const roleSchema = z.enum(["admin", "member"]);
+
+/** Body for POST /api/admin/users. `temporaryPassword` is optional: the
+ *  server generates one when the admin does not supply it. */
+export const adminCreateUserSchema = z.object({
+  email: z.string().trim().min(1).max(254),
+  username: z.string().trim().min(1).max(32),
+  displayName: z.string().max(200).nullable().optional(),
+  role: roleSchema.default("member"),
+  temporaryPassword: z.string().min(1).max(1024).optional(),
+});
+
+/** Body for PATCH /api/admin/users/:id. Profile edits beyond the display name
+ *  belong to the account holder, through PATCH /api/auth/me. */
+export const adminUpdateUserSchema = z
+  .object({
+    role: roleSchema.optional(),
+    displayName: z.string().max(200).nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send a role or a display name to change",
+  });
+
+/** Body for DELETE /api/admin/users/:id. Without the decision the endpoint
+ *  answers 409 with the counts and changes nothing.
+ *
+ *  A DELETE usually carries no body at all, and Express leaves `req.body`
+ *  undefined when there is nothing to parse. Accepting that and reading it as
+ *  an empty object is what makes the no-decision case reach the handler and
+ *  answer 409 rather than 400. */
+export const adminDeleteUserSchema = z
+  .object({ decision: z.literal("purge").optional() })
+  .nullish()
+  .transform((body) => body ?? {});
+
+export const adminInvitationSchema = z.object({
+  /** A hint the admin types, not a rule the accept flow enforces. */
+  email: z.string().trim().max(254).nullable().optional(),
+  role: roleSchema.default("member"),
+  expiresInDays: z.number().int().min(1).max(90).optional(),
+});
+
+/** Body for POST /api/auth/accept-invitation.
+ *
+ *  `token` is any string, empty included, on purpose. Every string reaches
+ *  the service and comes back as one 404, so an empty token, a token of the
+ *  wrong shape and a token that simply is not in the table are three inputs
+ *  with one answer. A `min(1)` here would answer an empty token with a 400
+ *  that names the field, which is one bit more than a caller should learn. */
+export const acceptInvitationSchema = z.object({
+  token: z.string(),
+  email: z.string().trim().min(1).max(254),
+  username: z.string().trim().min(1).max(32),
+  password: z.string().min(1).max(1024),
+  displayName: z.string().max(200).nullable().optional(),
+});
+
+/** Query for GET /api/admin/audit. `before` is the opaque cursor a previous
+ *  page returned as `nextBefore`. */
+export const auditQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  before: z.string().min(1).optional(),
+});
+
+// ============================================================================
 // Middleware Factories
 // ============================================================================
 //

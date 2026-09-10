@@ -19,6 +19,71 @@ the ones needed here are repeated in section 2.
 
 ---
 
+> **Shipped in the first pull request (accounts and the admin API).** Tasks
+> 3.1 to 3.5 and the audit half of 3.8, plus the manifest rows and
+> `tests/integration/api.admin.test.ts` from 3.13. Tokens (3.6), open
+> registration (3.7), the daily maintenance interval (the rest of 3.8), the
+> per-user rate limiter (3.9), the admin AI stats views (3.10), the status
+> and profile additions (3.11) and the legacy token notes (3.12) follow in
+> the second one.
+>
+> Six notes from the implementation, each a place the code and this document
+> do not line up:
+>
+> - **Git cannot create the branch this document names.** A branch `v2.0` and
+>   a branch `v2.0/phase-3-accounts-admin` cannot both exist, because git
+>   stores refs as files. The work branches are `v2.0-phase-3-...`, as in
+>   Phase 2.
+> - **`409 LAST_ADMIN` on disable and delete is only reachable before the
+>   self guard.** An admin who is not the target cannot also be the last
+>   admin, because they are an active admin themselves. So the guards run in
+>   the order local owner, last admin, self: on an unsecured instance all
+>   three are true at once, and only the first names a fix. With two admins,
+>   aiming at your own account still answers `400 CANNOT_TARGET_SELF`.
+> - **A token does not survive a password reset.** Section 3.2 says the reset
+>   revokes every session and every token, and the code does. The acceptance
+>   line that expects a token created before the reset to answer
+>   `403 PASSWORD_CHANGE_REQUIRED` therefore cannot hold: that token is
+>   revoked and answers `401`. Both behaviours are tested. The forced-change
+>   gate is proven for a token principal with a token issued after the flag
+>   was set.
+> - **The batch FTS delete in step 5 of 3.5 is not there.** `contacts_ad`
+>   already deletes each contact's FTS row by `rowid`, which FTS5 pushes down
+>   (PR #18). Measured on 10,000 contacts, the single
+>   `MATCH 'ownerTok:...'` statement saved 4 ms of 153 ms, so a second
+>   mechanism doing the same work was not worth having. The purge test still
+>   asserts the owner's index rows are gone.
+> - **`409 LOCAL_OWNER_PROTECTED` is a code this document does not list.**
+>   Section 3.2 says the local owner cannot be disabled or deleted while
+>   `isAuthRequired()` is false and gives no code for it. This one is added
+>   to the set in [13-api-changes.md](13-api-changes.md) section 1.
+> - **The purge measured 147 ms to 160 ms for 10,000 contacts and 10,000
+>   emails**, against a budget of two seconds, so the chunking fallback is
+>   documented in `purgeOwner` and not built.
+> - **Deleting an admin removes their accepted invitations as well.** Section
+>   3.3 and step 6 of 3.5 both say an accepted invitation keeps its row with
+>   `invitedBy` gone. It cannot: the column is `NOT NULL` with
+>   `ON DELETE CASCADE`, so the row goes. Both sections are corrected above
+>   and a test pins the real behaviour.
+>
+> Two things this pull request adds that the document does not ask for:
+>
+> - **`PUT /api/auth/session-policy` carries the forced-change guard on the
+>   route.** Section 3.4 says the gate exempts `/api/auth/*`, and that is
+>   what the first version did. The exemption covered the one instance
+>   setting that lives in the auth router, so an account holding only the
+>   password an admin handed it could set every future session on the
+>   instance to a year. The exemption is now a list of the six paths a
+>   forced-change account actually needs, and that route carries the guard
+>   itself because its router is mounted ahead of the middleware.
+> - **The access log redacts the invitation secret.** The link format the
+>   document specifies puts the secret in a query string, and the invitee's
+>   browser sends it to this server as `GET /join?token=...`. Morgan's `:url`
+>   token is `req.originalUrl`, so the one value the invitation system keeps
+>   out of the database would have sat in the access log instead.
+>   `redactUrlForLog` in `server/utils/helpers.ts` replaces it, and the
+>   built-in morgan token is overridden so every format is covered.
+
 ## 0. Context for the implementer
 
 ### 0.1 Repository, commands, and workflow
@@ -150,9 +215,14 @@ reuse the module-private `credentialLimiter`. It returns `404` for an unknown
 or malformed token (same body for both, no enumeration), `410` with
 `INVITATION_USED`, `INVITATION_EXPIRED`, or `INVITATION_REVOKED` otherwise.
 
-Deleting an admin cascades their pending invitations
-(`invitations.invitedBy ON DELETE CASCADE`). Accepted invitations keep their
-row with `invitedBy` gone. Document this in the admin UI copy (Phase 4).
+Deleting an admin cascades **every** invitation they issued, accepted ones
+included (`invitations.invitedBy` is `NOT NULL ... ON DELETE CASCADE`). An
+accepted invitation cannot keep its row with `invitedBy` set to NULL the way
+an audit row does, because the column is `NOT NULL`. What survives is the
+`user.invitation.accepted` audit row, which names the account that joined, so
+how somebody joined stays on record. Document this in the admin UI copy
+(Phase 4). Making the row survive would mean a nullable `invitedBy` with
+`ON DELETE SET NULL`, which is a schema change and not part of this phase.
 
 ### 3.4 Temporary password and forced change
 
@@ -179,11 +249,14 @@ Purge order, in one transaction, for `ownerId = target`:
 3. `DELETE FROM action_items`, `interactions` `WHERE ownerId = ?` (cascades `interaction_mentions`).
 4. `DELETE FROM lists WHERE ownerId = ?` (cascades `list_members`).
 5. `DELETE FROM contacts WHERE ownerId = ?` (cascades the ten child tables; `contacts_ad` removes index rows by `rowid`). One `DELETE FROM contacts_fts WHERE contacts_fts MATCH 'ownerTok:...'` can clear the owner's index rows in a single statement, measured at 17 ms per 5,000.
-6. `DELETE FROM users WHERE id = ?` (cascades `sessions`, `api_tokens`, `user_settings`, and the user's pending `invitations`; `audit_log.actorUserId`, `invitations.acceptedBy`, and `users.createdBy` become `NULL`).
+6. `DELETE FROM users WHERE id = ?` (cascades `sessions`, `api_tokens`, `user_settings`, and **every** invitation the user issued, accepted ones included; `audit_log.actorUserId`, `invitations.acceptedBy`, and `users.createdBy` become `NULL`). This statement is also the check on the five above it: every `ownerId` column is `ON DELETE RESTRICT`, so one owned row left anywhere makes it throw and rolls the transaction back.
 7. After commit: `fs.rm(ownerUploadDir(target, "avatars"), { recursive: true, force: true })` and the same for `files`.
 
-Guards: cannot delete self (`400 CANNOT_TARGET_SELF`). `409 LAST_ADMIN` when
-the target is the last active admin. Audit log entry with the counts.
+Guards, in this order: `409 LOCAL_OWNER_PROTECTED` while the target is the
+local owner and `isAuthRequired()` is false, `409 LAST_ADMIN` when the target
+is the last active admin, and `400 CANNOT_TARGET_SELF`. The order matters
+because all three are true at once on an unsecured instance. Audit log entry
+with the counts.
 
 Cost: 5,000 contacts with 10,000 emails purged in 0.2 s on the synthetic
 schema with indexed trigger deletes (measured). The acceptance criterion is
@@ -294,21 +367,21 @@ acceptance list below with the two-user harness plus a third actor for the
 
 ## 3. Acceptance criteria
 
-- [ ] Every `admin` route returns `403 ADMIN_REQUIRED` to a member and `200` to an admin. Tested by iterating the manifest. The manifest test asserts `requireAdmin` in each route's stack.
-- [ ] Create user with temporary password: user signs in, every data route returns `403 PASSWORD_CHANGE_REQUIRED`, change succeeds, data routes work. A token created before the reset is refused with the same code until the change.
-- [ ] Invite: link accepted once. Second acceptance `410 INVITATION_USED`. Expired `410 INVITATION_EXPIRED`. Revoked `410 INVITATION_REVOKED`. Unknown and malformed token both `404` with identical bodies.
-- [ ] Disable: live session refused on next request. Token refused. Enable restores the token; the session stays revoked.
-- [ ] Delete without decision `409 USER_HAS_DATA` with counts. With `purge`: every owned row gone, upload directory gone, FTS and `vec0` rows gone, `dedupe_embedding_meta` rows gone, verified by counting. Other owners' rows untouched (counted before and after). 10,000 contacts purge in under 2 s.
-- [ ] Last admin: demote, disable, delete each return `409 LAST_ADMIN`. Two admins: allowed.
-- [ ] Self: disable and delete return `400 CANNOT_TARGET_SELF`.
+- [x] Every `admin` route returns `403 ADMIN_REQUIRED` to a member and `200` to an admin. Tested by iterating the manifest. The manifest test asserts `requireAdmin` in each route's stack.
+- [x] Create user with temporary password: user signs in, every data route returns `403 PASSWORD_CHANGE_REQUIRED`, change succeeds, data routes work. A token created before the reset is refused with the same code until the change.
+- [x] Invite: link accepted once. Second acceptance `410 INVITATION_USED`. Expired `410 INVITATION_EXPIRED`. Revoked `410 INVITATION_REVOKED`. Unknown and malformed token both `404` with identical bodies.
+- [x] Disable: live session refused on next request. Token refused. Enable restores the token; the session stays revoked.
+- [x] Delete without decision `409 USER_HAS_DATA` with counts. With `purge`: every owned row gone, upload directory gone, FTS and `vec0` rows gone, `dedupe_embedding_meta` rows gone, verified by counting. Other owners' rows untouched (counted before and after). 10,000 contacts purge in under 2 s.
+- [x] Last admin: demote, disable, delete each return `409 LAST_ADMIN`. Two admins: allowed.
+- [x] Self: disable and delete return `400 CANNOT_TARGET_SELF`.
 - [ ] Tokens: created token works on `GET /api/contacts` and on every MCP route, is refused on `GET /api/auth/me` (`403 SESSION_REQUIRED`), revoked token `401`, expired token `401`, token of a disabled user `401`. `lastUsedAt` updates at most hourly. Eleventh token in an hour `429`.
 - [ ] Registration: closed by default `403 REGISTRATION_CLOSED`. Open: creates a member, closes again when toggled off.
-- [ ] Audit: each listed action produces one row. `GET /api/admin/audit` paginates. Details never contain a password, token, invitation secret, or provider key (grep the test output for `ctk_` and for the seeded passwords).
+- [x] Audit: each listed action produces one row. `GET /api/admin/audit` paginates. Details never contain a password, token, invitation secret, or provider key (grep the test output for `ctk_` and for the seeded passwords). The two token actions arrive with the token endpoints in the second pull request.
 - [ ] Per-user AI rate limit: user A hitting 31 semantic searches in a minute gets `429` with `Retry-After`. User B on the same IP is unaffected. `GET /api/dashboard/insight` and `POST /api/dedupe/scan` are covered.
 - [ ] Daily maintenance interval: with the clock advanced, old audit rows, expired sessions, aged revoked tokens, aged dead invitations, and old invocations are gone. Gated by `DISABLE_BACKGROUND_JOBS`.
 - [ ] Legacy `API_TOKEN` still works, maps to the primary admin, and logs one warning.
-- [ ] `tenant-lint --strict` still green. Route manifest green with the new routes classified.
-- [ ] CHANGELOG Unreleased has a `Phase 3` block.
+- [x] `tenant-lint --strict` still green. Route manifest green with the new routes classified.
+- [x] CHANGELOG Unreleased has a `Phase 3` block.
 
 ---
 

@@ -14,6 +14,8 @@ import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
 import { contactService } from "../services/contactService.ts";
 import { scopeOf } from "../tenancy/scope.ts";
+import { requireAdmin } from "../middleware/auth.ts";
+import { auditService } from "../services/auditService.ts";
 import { listBackups, runBackup } from "../services/backupService.ts";
 import {
   buildFullExport,
@@ -98,8 +100,12 @@ router.delete(
 
 // ─── Backups ─────────────────────────────────────────────────────────────────
 
+// A backup is a copy of the whole database, so it holds every account's rows.
+// Both routes are administration, which is what the manifest has said since
+// Phase 2 and what `requireAdmin` enforces from Phase 3.
 router.get(
   "/backups",
+  requireAdmin,
   asyncHandler(async (_req, res) => {
     res.json({ backups: listBackups() });
   }),
@@ -107,9 +113,18 @@ router.get(
 
 router.post(
   "/backups",
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const backup = await runBackup();
+    auditService.record({
+      actorUserId: req.principal?.user.id ?? null,
+      action: "backup.created",
+      targetType: "backup",
+      targetId: backup.filename,
+      details: { filename: backup.filename },
+      ip: req.ip ?? null,
+    });
     log.info("API", `[${rid}] POST /api/backups → ${backup.filename}`);
     res.status(201).json(backup);
   }),

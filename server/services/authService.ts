@@ -297,12 +297,23 @@ function stripHash(row: UserRow): User {
  * The first account created on an instance is always an admin, and claims
  * every unowned row — which is how an existing single-user database keeps its
  * contacts when its owner finally makes an account.
+ *
+ * Phase 3 added the last three fields, which only the administrative paths
+ * supply: an admin creating an account, and somebody accepting an invitation.
+ * Both need a role the caller chose and a record of who is responsible for
+ * the account. Self-service paths omit them and get a member.
  */
 export async function createUser(input: {
   email: unknown;
   username: unknown;
   password: unknown;
   displayName?: unknown;
+  /** 'admin' or 'member'. Ignored for the first account, which is an admin. */
+  role?: string;
+  /** The admin who created or invited this account. */
+  createdBy?: string | null;
+  /** Force a password change on first use. Admin-set passwords always do. */
+  mustChangePassword?: boolean;
 }): Promise<User> {
   const email = normalizeEmail(input.email);
   const username = normalizeUsername(input.username);
@@ -330,11 +341,20 @@ export async function createUser(input: {
   // transaction keeps two concurrent setup requests from both seeing zero.
   const created = sqlite.transaction(() => {
     const isFirst = countUsers() === 0;
+    // The first account is an admin whatever the caller asked for. After
+    // that an explicit 'admin' is honoured (an admin creating an admin, or
+    // an invitation issued for one) and everything else is a member.
+    const role = isFirst
+      ? "admin"
+      : input.role === "admin"
+        ? "admin"
+        : "member";
     try {
       sqlite
         .prepare(
-          `INSERT INTO users (id, email, username, displayName, passwordHash, role)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO users (id, email, username, displayName, passwordHash, role,
+                              createdBy, mustChangePassword, passwordChangedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         )
         .run(
           id,
@@ -342,7 +362,9 @@ export async function createUser(input: {
           username,
           displayName,
           passwordHash,
-          isFirst ? "admin" : "member",
+          role,
+          input.createdBy ?? null,
+          input.mustChangePassword ? 1 : 0,
         );
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -513,9 +535,16 @@ export async function changePassword(
   if (error) throw new ValidationError(error);
 
   const hash = await hashPassword(newPassword as string);
+  // Clearing `mustChangePassword` here is what ends a forced change: the
+  // temporary password an admin handed over verified above, and the password
+  // that replaces it is one only this person knows. `passwordChangedAt` is
+  // what the admin user list shows.
   sqlite
     .prepare(
-      `UPDATE users SET passwordHash = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE users
+          SET passwordHash = ?, mustChangePassword = 0,
+              passwordChangedAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ?`,
     )
     .run(hash, id);
 

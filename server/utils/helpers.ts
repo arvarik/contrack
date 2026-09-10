@@ -118,3 +118,47 @@ export function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
 }
+
+/**
+ * Query-string keys whose value is a credential.
+ *
+ * `token` is the invitation secret. `POST /api/admin/invitations` returns a
+ * link of the form `<origin>/join?token=<secret>`, and the invitee's browser
+ * sends that secret to this server as an ordinary page request. Everything
+ * else about invitations is built to keep the secret out of storage: the
+ * database holds only its SHA-256, and `auditService` redacts a field called
+ * `link`. Without this the access log would hold the plaintext anyway, for as
+ * long as the operator keeps their logs.
+ */
+const SECRET_QUERY_KEYS = new Set(["token", "secret", "api_key", "apikey"]);
+
+/**
+ * A URL safe to write to a log: the path as it was, every credential-carrying
+ * query value replaced.
+ *
+ * Parsed against a dummy base rather than by hand, so an encoded separator or
+ * a repeated key cannot slip a value through. The parser is lenient and takes
+ * everything this app can produce, so the catch is defensive only: a URL it
+ * refuses is truncated at the `?`, because a query that cannot be read is not
+ * worth keeping and might be the interesting one.
+ */
+export function redactUrlForLog(url: string): string {
+  const cut = url.indexOf("?");
+  if (cut === -1) return url;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url, "http://log.invalid");
+  } catch {
+    return `${url.slice(0, cut)}?[unparsed]`;
+  }
+
+  let changed = false;
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (!SECRET_QUERY_KEYS.has(key.toLowerCase())) continue;
+    parsed.searchParams.set(key, "[redacted]");
+    changed = true;
+  }
+  if (!changed) return url;
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
