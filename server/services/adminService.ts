@@ -15,7 +15,10 @@
 //   • Three guards stand between an admin and an instance nobody can
 //     administer, and they run in this order: the local owner is protected
 //     while authentication is off, the last active admin cannot be removed,
-//     and no admin may aim at their own account. On an unsecured instance all
+//     and no admin may aim at their own account. The last of those covers a
+//     password reset as well as a disable and a delete: a reset ends every
+//     session of its target, so aiming it at yourself signs you out holding
+//     neither the old password nor the new one. On an unsecured instance all
 //     three are true at once, and only the first names a fix.
 //   • Deleting an account is two steps. The first answers `409 USER_HAS_DATA`
 //     with what the account owns; only a request that says `decision: "purge"`
@@ -408,6 +411,12 @@ export async function resetPassword(
   id: string,
 ): Promise<{ temporaryPassword: string }> {
   const target = loadTarget(id);
+  // Not your own. A reset deletes every session of the account, this one
+  // included, so an admin who reset themselves was signed out mid-request and
+  // the new password went out in a response their browser was already
+  // throwing away. They then held neither password. Changing your own is
+  // `POST /api/auth/change-password`, which keeps the session it is made on.
+  assertNotSelf(ctx, id);
   if (target.credentialState === "none") {
     throw new ValidationError(
       "This account has no password to reset. It is the local account that owns this device's data.",

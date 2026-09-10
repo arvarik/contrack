@@ -40,7 +40,10 @@ const argOf = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const BASE = argOf("url", "http://127.0.0.1:5199");
+// `npm run dev` serves on 3210 (server.ts runs Vite in middleware mode), and
+// this defaulted to a port nothing listens on — so a bare run connected to
+// nothing and reported zero failures for a dozen blank pages.
+const BASE = argOf("url", "http://127.0.0.1:3210");
 const chrome = spawn(
   CHROME,
   [
@@ -175,19 +178,33 @@ const AUDIT = String.raw`(() => {
 })()`;
 
 // Default sweep: every top-level route plus every Settings subpage.
+//
+// The administration pages are here from 2.0. Two things about them:
+// `/settings/ai-config` is now a redirect, so it is dropped — auditing a
+// `<Navigate>` measures whatever it lands on, twice. And every admin route is
+// behind `RequireAdmin`, so this must run against an instance with sign-in
+// switched off, where the principal is the local owner and the local owner is
+// an admin. On a gated instance Chrome arrives with no cookie, every one of
+// these renders the sign-in screen, and the run reports a cheerful zero for
+// twelve copies of the same page.
 const DEFAULT_ROUTES = [
   ["network", "/"],
   ["pulse", "/pulse"],
   ["search", "/search"],
   ["map", "/map"],
   ["settings", "/settings"],
-  ["ai-config", "/settings/ai-config"],
+  ["account", "/settings/account"],
   ["enrich", "/settings/ai-search"],
   ["usage", "/settings/ai-stats"],
   ["lists", "/settings/lists"],
   ["dedupe", "/settings/dedupe"],
   ["archived", "/settings/archived"],
   ["trash", "/settings/trash"],
+  ["admin-users", "/settings/admin/users"],
+  ["admin-invites", "/settings/admin/invitations"],
+  ["admin-instance", "/settings/admin/instance"],
+  ["admin-backups", "/settings/admin/backups"],
+  ["admin-audit", "/settings/admin/audit"],
 ];
 /**
  * The contact detail page is the most important one to check and the only one

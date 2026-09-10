@@ -16,6 +16,7 @@
  * more confusing than being told the link does not apply yet.
  */
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -24,6 +25,7 @@ import {
   LogOut,
   Monitor,
   Plus,
+  ServerCog,
   ShieldOff,
   Terminal,
   TriangleAlert,
@@ -37,14 +39,13 @@ import {
   revokeApiToken,
   revokeOtherSessions,
   updateProfile,
-  fetchSessionPolicy,
-  updateSessionPolicy,
   type ApiTokenSummary,
   type CreatedApiToken,
   type SessionSummary,
 } from "../../api/auth";
 import { useAuth } from "../../components/auth/AuthGate";
 import { Modal } from "../../components/ui/Modal";
+import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { SecretReveal } from "../../components/ui/SecretReveal";
 import { CARD, SECTION_HEADING, DANGER_BTN } from "../../lib/styles";
@@ -398,115 +399,6 @@ const SessionsCard = () => {
   );
 };
 
-/**
- * How long a sign-in lasts.
- *
- * Offered as presets rather than a free number field: the meaningful choice is
- * "this machine is mine" versus "this thing is on the internet", and asking
- * someone to pick between 44 and 46 days is a question with no right answer.
- * The server still accepts any value in range, so a custom setting made
- * elsewhere is shown rather than silently snapped to a preset.
- */
-const TTL_PRESETS = [
-  { days: 1, label: "1 day", hint: "Exposed to the internet" },
-  { days: 7, label: "1 week", hint: "Shared or portable machine" },
-  { days: 30, label: "30 days", hint: "Default" },
-  { days: 365, label: "1 year", hint: "Private machine only" },
-] as const;
-
-const SessionLengthCard = () => {
-  const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ["auth", "session-policy"],
-    queryFn: fetchSessionPolicy,
-    staleTime: 60_000,
-  });
-
-  const save = useMutation({
-    mutationFn: updateSessionPolicy,
-    onSuccess: ({ sessionTtlDays }) => {
-      queryClient.invalidateQueries({ queryKey: ["auth", "session-policy"] });
-      toast.success(
-        `New sign-ins will last ${sessionTtlDays === 1 ? "1 day" : `${sessionTtlDays} days`}`,
-      );
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const current = data?.sessionTtlDays ?? 30;
-  const isCustom = !TTL_PRESETS.some((p) => p.days === current);
-
-  return (
-    <div className={cn(CARD, "p-4 sm:p-6 space-y-4")}>
-      <p className="text-sm text-on-surface-variant text-pretty">
-        How long a sign-in lasts before Contrack asks for your password again.
-      </p>
-
-      {isLoading ? (
-        <p className="text-sm text-on-surface-variant">Loading…</p>
-      ) : (
-        <div
-          role="radiogroup"
-          aria-label="Session length"
-          className="grid grid-cols-1 sm:grid-cols-2 gap-2"
-        >
-          {TTL_PRESETS.map((preset) => {
-            const active = preset.days === current;
-            return (
-              <button
-                key={preset.days}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={save.isPending}
-                onClick={() => !active && save.mutate(preset.days)}
-                className={cn(
-                  "text-left px-4 py-3 rounded-xl transition-colors",
-                  "disabled:cursor-not-allowed",
-                  active
-                    ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                    : "bg-surface-container-highest hover:bg-surface-container-high",
-                )}
-              >
-                <span
-                  className={cn(
-                    "block text-sm font-bold",
-                    active ? "text-primary" : "text-on-surface",
-                  )}
-                >
-                  {preset.label}
-                </span>
-                <span className="block text-xs text-on-surface-variant mt-0.5">
-                  {preset.hint}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {isCustom && !isLoading && (
-        <p className="text-xs text-on-surface-variant">
-          Currently set to {current} days, which isn't one of the presets.
-          Choosing one above will replace it.
-        </p>
-      )}
-
-      {/*
-        Said plainly because the opposite assumption is the dangerous one:
-        someone shortening this to lock out a device they lost will otherwise
-        believe they have done it.
-      */}
-      <p className="text-xs text-on-surface-variant text-pretty">
-        This applies to sign-ins from now on. Sessions that already exist keep
-        the length they were created with — use{" "}
-        <strong className="text-on-surface">Sign out other devices</strong> to
-        end those now.
-      </p>
-    </div>
-  );
-};
-
 // ---------------------------------------------------------------------------
 // API tokens
 // ---------------------------------------------------------------------------
@@ -539,24 +431,15 @@ export function tokenState(
   return "active";
 }
 
-const TokenStateBadge = ({ state }: { state: TokenState }) => {
-  const tones: Record<TokenState, string> = {
-    active: "bg-emerald-500/10 text-success",
-    revoked: "bg-red-500/10 text-error",
-    expired: "bg-surface-container-high text-on-surface-variant",
-  };
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded-full px-2 py-0.5",
-        "text-[10px] font-bold uppercase tracking-widest",
-        tones[state],
-      )}
-    >
-      {state}
-    </span>
-  );
+const TOKEN_TONES: Record<TokenState, BadgeTone> = {
+  active: "success",
+  revoked: "danger",
+  expired: "neutral",
 };
+
+const TokenStateBadge = ({ state }: { state: TokenState }) => (
+  <Badge tone={TOKEN_TONES[state]}>{state}</Badge>
+);
 
 const TokenRow = ({
   token,
@@ -870,7 +753,7 @@ const ApiTokensCard = () => {
 // ---------------------------------------------------------------------------
 
 export const AccountSettings = () => {
-  const { user, authRequired, signOut } = useAuth();
+  const { user, authRequired, isAdmin, signOut } = useAuth();
 
   if (!authRequired || !user) {
     return (
@@ -913,10 +796,44 @@ export const AccountSettings = () => {
         <ApiTokensCard />
       </section>
 
-      <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
-        <GroupHeading>Session length</GroupHeading>
-        <SessionLengthCard />
-      </section>
+      {/*
+        Session length used to be a card here. It decides how long *everyone's*
+        sign-in lasts, which stopped being a personal setting the moment an
+        instance could have more than one account, so it lives with the other
+        instance settings now. An admin gets a pointer rather than a silent
+        disappearance; a member never had the ability and gets nothing.
+      */}
+      {isAdmin && (
+        <section
+          className="tile-enter"
+          style={{ animationDelay: tileDelay(4) }}
+        >
+          <GroupHeading>Session length</GroupHeading>
+          <div
+            className={cn(
+              CARD,
+              "p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
+            )}
+          >
+            <p className="text-sm text-on-surface-variant text-pretty">
+              How long a sign-in lasts applies to every account on this
+              instance, so it is set under Administration.
+            </p>
+            <Link
+              to="/settings/admin/instance"
+              className={cn(
+                "shrink-0 inline-flex items-center justify-center gap-2",
+                "px-5 min-h-[44px] sm:min-h-0 sm:py-2.5 rounded-xl font-bold text-sm",
+                "bg-surface-container-high text-on-surface",
+                "hover:bg-surface-container-highest transition-colors",
+              )}
+            >
+              <ServerCog className="w-4 h-4" />
+              Instance settings
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section className="tile-enter" style={{ animationDelay: tileDelay(5) }}>
         <GroupHeading>Session</GroupHeading>

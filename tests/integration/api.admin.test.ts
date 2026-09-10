@@ -1098,6 +1098,34 @@ describe("the guards on removing an administrator", () => {
       sqlite.prepare("SELECT id FROM users WHERE id = ?").get(sole.id),
     ).toBeDefined();
 
+    // And so is resetting your own password. A reset deletes every session of
+    // its target, so an admin who aimed it at themselves was signed out by
+    // their own request, holding neither the old password nor the new one:
+    // the response carrying it went to a browser that was already being
+    // torn down. Your own password is changed through
+    // `POST /api/auth/change-password`, which keeps the session it is made on.
+    const before = (
+      sqlite
+        .prepare("SELECT passwordHash FROM users WHERE id = ?")
+        .get(sole.id) as { passwordHash: string }
+    ).passwordHash;
+    const resetSelf = await as(sole)(
+      request(app).post(`/api/admin/users/${sole.id}/reset-password`),
+    );
+    expect(resetSelf.status).toBe(400);
+    expect(resetSelf.body.error.code).toBe("CANNOT_TARGET_SELF");
+    expect(resetSelf.body.temporaryPassword).toBeUndefined();
+    // Nothing changed: not the password, and not the session it was made on.
+    expect(
+      (
+        sqlite
+          .prepare("SELECT passwordHash FROM users WHERE id = ?")
+          .get(sole.id) as { passwordHash: string }
+      ).passwordHash,
+    ).toBe(before);
+    const stillIn = await as(sole)(request(app).get("/api/admin/users"));
+    expect(stillIn.status).toBe(200);
+
     // The second admin may disable the first, then enable them again.
     const disabled = await as(second)(
       request(app).post(`/api/admin/users/${sole.id}/disable`),
@@ -1663,6 +1691,92 @@ describe("the audit log", () => {
     ).n;
     expect(seen).toHaveLength(total);
     expect(new Set(seen).size).toBe(total);
+  });
+
+  it("filters to the actions asked for, across pages", async () => {
+    // The filter is in SQL, not in the caller. Narrowing a fetched page would
+    // show two sign-ins out of fifty rows with no way to reach the rest,
+    // which is the one thing an audit log must not do.
+    const all = await as(admin)(request(app).get("/api/admin/audit?limit=200"));
+    const signIns = (all.body.entries as { action: string }[]).filter(
+      (e) => e.action === "auth.login.success",
+    ).length;
+    expect(signIns).toBeGreaterThan(0);
+
+    const filtered = await as(admin)(
+      request(app).get("/api/admin/audit?limit=200&action=auth.login.success"),
+    );
+    expect(filtered.status).toBe(200);
+    const actions = (filtered.body.entries as { action: string }[]).map(
+      (e) => e.action,
+    );
+    expect(actions).toHaveLength(signIns);
+    expect(new Set(actions)).toEqual(new Set(["auth.login.success"]));
+
+    // Several at once, which is how the UI's groups are expressed.
+    const group = await as(admin)(
+      request(app).get(
+        "/api/admin/audit?limit=200&action=user.created,user.deleted",
+      ),
+    );
+    expect(group.status).toBe(200);
+    for (const entry of group.body.entries as { action: string }[]) {
+      expect(["user.created", "user.deleted"]).toContain(entry.action);
+    }
+  });
+
+  it("pages within the filter, not across it", async () => {
+    // The filter and the cursor share one parameter list, and the cursor's
+    // three values are bound before the filter's. A wrong order here would
+    // page through the whole log while claiming to be filtered, which the
+    // one-page test above could never see.
+    // Enough rows of one action to need several pages. Written straight
+    // through the service, because reaching five real sign-ins would spend
+    // the per-address credential budget the sign-in route shares.
+    for (let i = 0; i < 5; i++) {
+      auditService.record({
+        actorUserId: admin.id,
+        action: "auth.login.success",
+        targetType: "user",
+        targetId: admin.id,
+      });
+    }
+
+    const seen: string[] = [];
+    const actions: string[] = [];
+    let before: string | null = null;
+    for (let page = 0; page < 6; page++) {
+      const url =
+        `/api/admin/audit?limit=2&action=auth.login.success` +
+        (before ? `&before=${encodeURIComponent(before)}` : "");
+      const res: request.Response = await as(admin)(request(app).get(url));
+      expect(res.status).toBe(200);
+      for (const entry of res.body.entries as {
+        id: string;
+        action: string;
+      }[]) {
+        seen.push(entry.id);
+        actions.push(entry.action);
+      }
+      before = res.body.nextBefore as string | null;
+      if (!before) break;
+    }
+
+    expect(actions.length).toBeGreaterThan(2);
+    expect(new Set(actions)).toEqual(new Set(["auth.login.success"]));
+    // No row twice, which is what the composite cursor is for.
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
+  it("refuses an action nobody writes rather than answering nothing", async () => {
+    // An empty page in an audit log reads as "nothing happened". A typo must
+    // not be able to produce one.
+    const res = await as(admin)(
+      request(app).get("/api/admin/audit?action=user.deletd"),
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.message).toContain("user.deletd");
   });
 
   it("names the actor, and keeps a row whose actor is gone", async () => {

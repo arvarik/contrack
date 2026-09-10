@@ -19,6 +19,9 @@ import { AIStatsSkeleton } from "./components/AIStatsSkeleton";
 import { FeedFilters } from "./components/FeedFilters";
 import { FeedItem } from "./components/FeedItem";
 import { CacheTiersAccordion } from "./components/CacheTiersAccordion";
+import { InstanceUsageTable } from "./components/InstanceUsageTable";
+import { Segmented } from "../../components/ui/Segmented";
+import { useAuth } from "../../components/auth/AuthGate";
 
 // =============================================================================
 // Number formatting
@@ -37,8 +40,23 @@ function formatCompact(n: number): string {
 const FEED_PAGE_SIZE = 50;
 
 export const AIStatsView = () => {
+  const { isAdmin } = useAuth();
+  /*
+   * Whose spending is on screen.
+   *
+   * The provider key is one key and the bill is one bill, so an operator
+   * needs the instance view; everybody else's own page is the default,
+   * including an admin's, because an admin is also somebody with contacts.
+   * `scope=all` is never sent speculatively: a member asking for it gets a
+   * 403 the shared client turns into a toast on their screen.
+   */
+  const [scope, setScope] = useState<"mine" | "all">("mine");
+  const instanceScope =
+    isAdmin && scope === "all" ? ("all" as const) : undefined;
+
   // ── Summary data ──────────────────────────────────────────────────────
-  const { data: summary, isLoading: summaryLoading } = useAIStatsSummary();
+  const { data: summary, isLoading: summaryLoading } =
+    useAIStatsSummary(instanceScope);
 
   // ── Feed state ────────────────────────────────────────────────────────
   const [cacheFilter, setCacheFilter] = useState<"all" | "fresh" | "cached">(
@@ -53,6 +71,7 @@ export const AIStatsView = () => {
     sort,
     ...(cacheFilter === "fresh" ? { cached: "false" as const } : {}),
     ...(cacheFilter === "cached" ? { cached: "true" as const } : {}),
+    ...(instanceScope ? { scope: instanceScope } : {}),
   };
 
   const {
@@ -75,10 +94,42 @@ export const AIStatsView = () => {
     setOffset(0);
   }, []);
 
+  /**
+   * The scope control, and only for an admin.
+   *
+   * Rendered by both branches below, including the loading one. Switching
+   * scope is a cache miss, so it turns `summaryLoading` back on — and when
+   * the early return sat above this, pressing "All users" unmounted the
+   * control that had just been pressed. Focus went to `<body>` and there was
+   * no way back to "Mine" until the request landed.
+   */
+  const scopeControl = isAdmin ? (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs text-on-surface-variant text-pretty">
+        {scope === "all"
+          ? "Every account on this instance. One provider key pays for all of it."
+          : "Your own AI use."}
+      </p>
+      <Segmented
+        label="Whose AI usage"
+        value={scope}
+        onChange={(next) => {
+          setScope(next);
+          setOffset(0);
+        }}
+        options={[
+          { value: "mine", label: "Mine" },
+          { value: "all", label: "All users" },
+        ]}
+      />
+    </div>
+  ) : null;
+
   // ── Loading state ─────────────────────────────────────────────────────
   if (summaryLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-4xl mx-auto pb-20">
+      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
+        {scopeControl}
         <AIStatsSkeleton />
       </div>
     );
@@ -110,6 +161,8 @@ export const AIStatsView = () => {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
+      {scopeControl}
+
       {/* Zone 1: Summary Bar */}
       <SummaryBar summary={summary} isLoading={summaryLoading} />
 
@@ -140,6 +193,20 @@ export const AIStatsView = () => {
           highlight={cacheHitRate >= 0.5}
         />
       </div>
+
+      {/* Zone 1c: who spent it — instance scope only */}
+      {summary?.byUser && (
+        <div
+          style={{ animationDelay: tileDelay(3) }}
+          className={cn(CARD, "tile-enter space-y-3")}
+        >
+          <span className={cn(SECTION_HEADING, "mb-0")}>By account</span>
+          <InstanceUsageTable
+            byUser={summary.byUser}
+            showCost={isPaidProvider}
+          />
+        </div>
+      )}
 
       {/* Zone 2: Activity Feed */}
       <div
@@ -206,7 +273,13 @@ export const AIStatsView = () => {
               <p className="text-sm text-on-surface-variant">
                 No AI activity recorded yet.
               </p>
-              <p className="text-xs text-on-surface-variant/30 mt-1">
+              {/*
+                Was `text-on-surface-variant/30`, which measures 1.57:1 and
+                is the only text in the app the contrast audit fails on. It
+                predates this phase; the audit gates the phase, and an empty
+                state nobody can read is not an empty state.
+              */}
+              <p className="text-xs text-on-surface-variant mt-1">
                 Trigger a Catch-Me-Up briefing or AI Search to see invocations
                 here.
               </p>

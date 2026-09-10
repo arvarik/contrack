@@ -48,6 +48,7 @@ import { fetchAuthStatus, signOut, type AccountUser } from "../../api/auth";
 import { fetchContactsSlim } from "../../api/contacts";
 import {
   AUTH_EXPIRED_EVENT,
+  AUTH_STATUS_STALE_EVENT,
   PASSWORD_CHANGE_REQUIRED_EVENT,
   type AuthExpiredDetail,
 } from "../../lib/appEvents";
@@ -74,6 +75,15 @@ interface AuthContextValue {
   legacyTokenConfigured: boolean;
   /** This instance has never been secured. */
   localOwnerPresent: boolean;
+  /**
+   * `/api/auth/status` has answered at least once.
+   *
+   * False while the server is unreachable, where nothing is known. Anything
+   * that redirects on what it believes about the account has to wait for
+   * this, or an unreachable server bounces an admin out of the page they
+   * were on and the address is gone by the time it comes back.
+   */
+  isResolved: boolean;
   /** Re-read /status — call after anything that changes the account. */
   refresh: () => Promise<void>;
   /** End the session and show the sign-in screen. */
@@ -88,6 +98,7 @@ const AuthContext = createContext<AuthContextValue>({
   registrationOpen: false,
   legacyTokenConfigured: false,
   localOwnerPresent: false,
+  isResolved: false,
   refresh: async () => {},
   signOut: async () => {},
 });
@@ -290,6 +301,15 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       window.removeEventListener(PASSWORD_CHANGE_REQUIRED_EVENT, onForced);
   }, []);
 
+  // Something changed what this account may do, or what the instance allows.
+  // The status endpoint is read into state and cached nowhere, so nothing
+  // else would notice.
+  useEffect(() => {
+    const onStale = () => void check();
+    window.addEventListener(AUTH_STATUS_STALE_EVENT, onStale);
+    return () => window.removeEventListener(AUTH_STATUS_STALE_EVENT, onStale);
+  }, [check]);
+
   /**
    * Warm the contacts cache the moment the gate opens.
    *
@@ -327,6 +347,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     registrationOpen,
     legacyTokenConfigured,
     localOwnerPresent,
+    isResolved: state !== "checking" && state !== "unreachable",
     refresh: check,
     signOut: handleSignOut,
   };

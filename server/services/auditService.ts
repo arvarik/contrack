@@ -29,25 +29,36 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
 /** Every action name this app writes. Kept as a union so a typo fails to build. */
-export type AuditAction =
-  | "auth.login.success"
-  | "auth.login.failed"
-  | "auth.logout"
-  | "auth.password.changed"
-  | "auth.token.created"
-  | "auth.token.revoked"
-  | "user.created"
-  | "user.invited"
-  | "user.invitation.accepted"
-  | "user.invitation.revoked"
-  | "user.role.changed"
-  | "user.disabled"
-  | "user.enabled"
-  | "user.password.reset"
-  | "user.deleted"
-  | "user.exported"
-  | "settings.changed"
-  | "backup.created";
+/**
+ * Every action that writes a row, as a value.
+ *
+ * A value and not only a type because the audit endpoint filters on it and a
+ * filter has to reject an action nobody writes. A `LIKE` on a user-supplied
+ * string would answer a typo with an empty page, which reads as "nothing
+ * happened" — the one answer an audit log must never give by accident.
+ */
+export const AUDIT_ACTIONS = [
+  "auth.login.success",
+  "auth.login.failed",
+  "auth.logout",
+  "auth.password.changed",
+  "auth.token.created",
+  "auth.token.revoked",
+  "user.created",
+  "user.invited",
+  "user.invitation.accepted",
+  "user.invitation.revoked",
+  "user.role.changed",
+  "user.disabled",
+  "user.enabled",
+  "user.password.reset",
+  "user.deleted",
+  "user.exported",
+  "settings.changed",
+  "backup.created",
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export type AuditTargetType =
   "user" | "token" | "invitation" | "setting" | "backup";
@@ -166,38 +177,46 @@ export const auditService = {
    * resolution. A purge writes several rows inside one second, and a cursor
    * of `createdAt < before` would skip every row that shares a second with
    * the last row of the previous page.
+   *
+   * `actions` filters in SQL rather than in the caller. Phase 4 wanted a
+   * filter on this page and filtering a fetched page would have been a lie:
+   * fifty rows narrowed to the two sign-ins among them, with no way to reach
+   * the rest without paging through everything.
    */
-  list(params: { limit: number; before?: string }): {
+  list(params: { limit: number; before?: string; actions?: string[] }): {
     entries: AuditEntry[];
     nextBefore: string | null;
   } {
     const limit = Math.min(200, Math.max(1, params.limit));
     const cursor = parseCursor(params.before);
+    // Validated against the vocabulary by the route, so this only has to
+    // build the placeholders. An empty array means no filter, not "match
+    // nothing" — the route never sends one.
+    const actions = params.actions?.length ? params.actions : null;
 
-    const rows = (
-      cursor
-        ? sqlite.prepare(
-            `SELECT a.id, a.actorUserId, a.action, a.targetType, a.targetId,
-                    a.details, a.ip, a.createdAt, u.username AS actorUsername
-               FROM audit_log a
-               LEFT JOIN users u ON u.id = a.actorUserId
-              WHERE a.createdAt < ? OR (a.createdAt = ? AND a.id < ?)
-              ORDER BY a.createdAt DESC, a.id DESC
-              LIMIT ?`,
-          )
-        : sqlite.prepare(
-            `SELECT a.id, a.actorUserId, a.action, a.targetType, a.targetId,
-                    a.details, a.ip, a.createdAt, u.username AS actorUsername
-               FROM audit_log a
-               LEFT JOIN users u ON u.id = a.actorUserId
-              ORDER BY a.createdAt DESC, a.id DESC
-              LIMIT ?`,
-          )
-    ).all(
-      ...(cursor
-        ? [cursor.createdAt, cursor.createdAt, cursor.id, limit + 1]
-        : [limit + 1]),
-    ) as {
+    const where: string[] = [];
+    const values: unknown[] = [];
+    if (cursor) {
+      where.push("(a.createdAt < ? OR (a.createdAt = ? AND a.id < ?))");
+      values.push(cursor.createdAt, cursor.createdAt, cursor.id);
+    }
+    if (actions) {
+      where.push(`a.action IN (${actions.map(() => "?").join(", ")})`);
+      values.push(...actions);
+    }
+
+    const rows = sqlite
+      .prepare(
+        // tenant-lint: allow admin cross-user
+        `SELECT a.id, a.actorUserId, a.action, a.targetType, a.targetId,
+                a.details, a.ip, a.createdAt, u.username AS actorUsername
+           FROM audit_log a
+           LEFT JOIN users u ON u.id = a.actorUserId
+          ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+          ORDER BY a.createdAt DESC, a.id DESC
+          LIMIT ?`,
+      )
+      .all(...values, limit + 1) as {
       id: string;
       actorUserId: string | null;
       action: string;

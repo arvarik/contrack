@@ -50,6 +50,20 @@ export const AUTH_EXPIRED_EVENT = "contrack:auth-expired";
 export const PASSWORD_CHANGE_REQUIRED_EVENT =
   "contrack:password-change-required";
 
+/**
+ * Something changed what this account is allowed to do, or what the instance
+ * allows.
+ *
+ * `/api/auth/status` is read once, into `useState` inside AuthGate, and
+ * nothing caches it — so a role change, a disable, or an instance setting
+ * written from an admin page leaves every screen reading the answer from
+ * before. This asks the gate to look again.
+ *
+ * Also fired when the server answers `403 ADMIN_REQUIRED`, which is the
+ * server saying it disagrees with what this tab believes it is.
+ */
+export const AUTH_STATUS_STALE_EVENT = "contrack:auth-status-stale";
+
 /** Why the credential stopped being accepted. */
 export type AuthExpiryReason = "expired" | "disabled";
 
@@ -91,4 +105,9 @@ export const emitAuthExpired = (reason: AuthExpiryReason = "expired"): void => {
 /** Announce that the server is refusing data until the password changes. */
 export const emitPasswordChangeRequired = (): void => {
   window.dispatchEvent(new Event(PASSWORD_CHANGE_REQUIRED_EVENT));
+};
+
+/** Ask the gate to re-read `/api/auth/status`. */
+export const emitAuthStatusStale = (): void => {
+  window.dispatchEvent(new Event(AUTH_STATUS_STALE_EVENT));
 };

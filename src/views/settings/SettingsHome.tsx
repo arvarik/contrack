@@ -23,20 +23,26 @@ import React from "react";
 import { Link } from "react-router-dom";
 import {
   Archive,
-  Brain,
   ChevronRight,
   Copy,
+  DatabaseBackup,
   Gauge,
   List,
+  MailPlus,
+  ScrollText,
   Search,
+  ServerCog,
   Sparkles,
   HardDrive,
   Trash2,
   UserRound,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
 import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
+import { AiCapabilitiesCard } from "./AiCapabilitiesCard";
+import { Segmented } from "../../components/ui/Segmented";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
@@ -144,44 +150,6 @@ const PreferenceRow = ({
       <div className="shrink-0 sm:ml-4">{children}</div>
     </div>
   );
-
-/** Segmented control — the app's standard pill-in-a-trough toggle. */
-const Segmented = <T extends string>({
-  options,
-  value,
-  onChange,
-  label,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (next: T) => void;
-  label: string;
-}) => (
-  <div
-    role="radiogroup"
-    aria-label={label}
-    className="flex bg-surface-container rounded-full p-1 shadow-inner h-9 w-full sm:w-auto"
-  >
-    {options.map((option) => (
-      <button
-        key={option.value}
-        type="button"
-        role="radio"
-        aria-checked={value === option.value}
-        onClick={() => onChange(option.value)}
-        className={cn(
-          "flex-1 sm:flex-none px-3 sm:px-4 h-full rounded-full text-xs font-bold",
-          "flex items-center justify-center whitespace-nowrap transition-colors",
-          value === option.value
-            ? "bg-surface shadow-sm text-primary"
-            : "text-on-surface-variant hover:text-on-surface",
-        )}
-      >
-        {option.label}
-      </button>
-    ))}
-  </div>
-);
 
 /** Stepper for a small bounded integer. */
 const Stepper = ({
@@ -295,7 +263,7 @@ export const SettingsHome = () => {
     useRecentContactsLimit();
   const { preset, setPreset } = useDedupeSettings();
   const { density, setDensity } = useListDensity();
-  const { user, authRequired } = useAuth();
+  const { user, authRequired, isAdmin } = useAuth();
   const [query, setQuery] = React.useState("");
 
   const q = query.trim().toLowerCase();
@@ -336,7 +304,44 @@ export const SettingsHome = () => {
       "merge",
       "threshold",
     ),
-    aiConfig: hit(
+    // For a member this is the read-only capabilities card. For an admin the
+    // AI configuration lives under Administration -> Instance, so the
+    // provider words belong to that row instead: they used to light the
+    // Intelligence group up with nothing inside it, and because a group *was*
+    // shown the "nothing matches" message was suppressed too.
+    aiConfig:
+      !isAdmin &&
+      hit(
+        "ai configuration",
+        "providers",
+        "models",
+        "gemini",
+        "openai",
+        "anthropic",
+        "ollama",
+        "api key",
+        "capabilities",
+      ),
+    adminUsers: hit(
+      "accounts",
+      "users",
+      "people",
+      "roles",
+      "admin",
+      "disable",
+      "delete user",
+      "reset password",
+    ),
+    adminInvitations: hit("invitations", "invite", "join", "link", "admin"),
+    adminInstance: hit(
+      "instance",
+      "registration",
+      "session length",
+      "sign-in length",
+      "searxng",
+      "admin",
+      // The AI configuration is on this page for an admin, so the words
+      // somebody types looking for it have to land here.
       "ai configuration",
       "providers",
       "models",
@@ -347,6 +352,8 @@ export const SettingsHome = () => {
       "api key",
       "capabilities",
     ),
+    adminBackups: hit("backups", "snapshot", "database", "restore", "admin"),
+    adminAudit: hit("audit", "log", "history", "who did", "admin"),
     aiSearch: hit(
       "contact enrichment",
       "ai search",
@@ -368,6 +375,16 @@ export const SettingsHome = () => {
     intelligence: show.aiConfig || show.aiSearch || show.aiStats,
     organize: show.dedupe || show.lists,
     data: show.archived || show.trash,
+    // Administration is only a group for the people who have one. A member
+    // seeing five rows that redirect them back here would be worse than not
+    // seeing them, and the server refuses every one of those pages anyway.
+    administration:
+      isAdmin &&
+      (show.adminUsers ||
+        show.adminInvitations ||
+        show.adminInstance ||
+        show.adminBackups ||
+        show.adminAudit),
   };
   const nothingMatches = !Object.values(groupShown).some(Boolean);
 
@@ -531,13 +548,17 @@ export const SettingsHome = () => {
         >
           <GroupHeading>Intelligence</GroupHeading>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <SettingsLink
-              show={show.aiConfig}
-              to="/settings/ai-config"
-              icon={Brain}
-              title="AI Configuration"
-              description="Connect providers and choose what powers each kind of AI work."
-            />
+            {/*
+              For an admin this row moved into Administration, where the rest
+              of the instance settings are. A member cannot open it at all —
+              every write under /api/settings/ai is admin — so they get the
+              read-only answer to the question the page would have answered.
+            */}
+            {show.aiConfig && (
+              <div className="sm:col-span-2">
+                <AiCapabilitiesCard />
+              </div>
+            )}
             <SettingsLink
               show={show.aiSearch}
               to="/settings/ai-search"
@@ -612,6 +633,53 @@ export const SettingsHome = () => {
               tone="danger"
               title="Trash"
               description="Recently deleted contacts. Empties itself after 30 days."
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── Administration ──────────────────────────────────────────── */}
+      {groupShown.administration && (
+        <section
+          className="tile-enter"
+          style={{ animationDelay: tileDelay(5) }}
+        >
+          <GroupHeading>Administration</GroupHeading>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SettingsLink
+              show={show.adminUsers}
+              to="/settings/admin/users"
+              icon={Users}
+              title="Accounts"
+              description="Everyone with an account here. Create, invite, disable, and remove."
+            />
+            <SettingsLink
+              show={show.adminInvitations}
+              to="/settings/admin/invitations"
+              icon={MailPlus}
+              title="Invitations"
+              description="Links that create an account. Each one works exactly once."
+            />
+            <SettingsLink
+              show={show.adminInstance}
+              to="/settings/admin/instance"
+              icon={ServerCog}
+              title="Instance"
+              description="Who can join, how long a sign-in lasts, and the AI configuration."
+            />
+            <SettingsLink
+              show={show.adminBackups}
+              to="/settings/admin/backups"
+              icon={DatabaseBackup}
+              title="Backups"
+              description="Snapshots of the whole database, and taking one now."
+            />
+            <SettingsLink
+              show={show.adminAudit}
+              to="/settings/admin/audit"
+              icon={ScrollText}
+              title="Audit log"
+              description="Every administrative action and every sign-in, newest first."
             />
           </div>
         </section>

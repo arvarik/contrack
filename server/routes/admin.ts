@@ -42,7 +42,7 @@ import {
   listInvitations,
   revokeInvitation,
 } from "../services/invitationService.ts";
-import { auditService } from "../services/auditService.ts";
+import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
 import {
   getSessionTtlDays,
   setSessionTtlDays,
@@ -316,7 +316,29 @@ router.get(
         details: parsed.error.issues,
       });
     }
-    res.json(auditService.list(parsed.data));
+    // The filter is a list of exact actions, checked against the vocabulary
+    // the app actually writes. A free string matched with LIKE would answer a
+    // typo with an empty page, and an empty page in an audit log reads as
+    // "nothing happened" — the one answer it must never give by accident.
+    let actions: string[] | undefined;
+    if (parsed.data.action) {
+      actions = parsed.data.action
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const unknown = actions.filter(
+        (value) => !(AUDIT_ACTIONS as readonly string[]).includes(value),
+      );
+      if (unknown.length > 0) {
+        throw new AppError(
+          `Unknown audit action(s): ${unknown.join(", ")}`,
+          400,
+          { code: "VALIDATION_ERROR" },
+        );
+      }
+    }
+
+    res.json(auditService.list({ ...parsed.data, actions }));
   }),
 );
 

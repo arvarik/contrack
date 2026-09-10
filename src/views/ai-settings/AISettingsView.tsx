@@ -34,7 +34,20 @@ import { cn } from "../../lib/utils";
 // never opens this page gets sensible behavior with zero configuration.
 // ---------------------------------------------------------------------------
 
-export const AISettingsView = () => {
+export const AISettingsView = ({
+  embedded = false,
+}: {
+  /**
+   * Rendered inside another page rather than as a route of its own.
+   *
+   * From 2.0 this is an instance setting, so it appears twice: at its own
+   * route, which is where a single-operator install has always found it, and
+   * inside the administration Instance page beside the other instance-wide
+   * settings. `embedded` drops this component's own page padding and width
+   * cap, which would otherwise be applied twice.
+   */
+  embedded?: boolean;
+} = {}) => {
   const { data: settings, isLoading } = useAISettings();
   const setKey = useSetProviderKey();
   const deleteKey = useDeleteProviderKey();
@@ -114,7 +127,12 @@ export const AISettingsView = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-3xl mx-auto pb-28 md:pb-10">
+    <div
+      className={cn(
+        "space-y-4 sm:space-y-6",
+        embedded ? "" : "p-4 sm:p-6 max-w-3xl mx-auto pb-28 md:pb-10",
+      )}
+    >
       {/* ── Providers ─────────────────────────────────────────────────── */}
       <section className={cn(CARD, "space-y-4 p-4 sm:p-6")}>
         <div>
