@@ -13,7 +13,7 @@
  */
 import React from "react";
 import { toast } from "sonner";
-import { DoorOpen, Timer } from "lucide-react";
+import { DoorOpen, Timer, TriangleAlert } from "lucide-react";
 import {
   useInstanceSettings,
   useUpdateInstanceSettings,
@@ -28,6 +28,29 @@ const GroupHeading = ({ children }: { children: React.ReactNode }) => (
 );
 
 const CARD = "bg-surface-container-lowest rounded-2xl shadow-sm p-4 sm:p-6";
+
+/** Shown in place of a card whose value could not be read. */
+const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
+  <div className={cn(CARD, "space-y-3")}>
+    <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
+      <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+      This setting did not load, so its current value is unknown. Nothing has
+      changed.
+    </p>
+    <button
+      type="button"
+      onClick={onRetry}
+      className={cn(
+        "inline-flex items-center justify-center px-4 rounded-xl",
+        "min-h-[44px] sm:min-h-0 sm:py-2.5 font-bold text-sm",
+        "bg-surface-container-high text-on-surface",
+        "hover:bg-surface-container-highest transition-colors",
+      )}
+    >
+      Try again
+    </button>
+  </div>
+);
 
 /**
  * How long a sign-in lasts.
@@ -45,10 +68,15 @@ const TTL_PRESETS = [
 ] as const;
 
 const SessionLengthCard = () => {
-  const { data, isLoading } = useInstanceSettings();
+  const { data, isLoading, isError, refetch } = useInstanceSettings();
   const save = useUpdateInstanceSettings();
   const current = data?.sessionTtlDays ?? 30;
   const isCustom = !TTL_PRESETS.some((preset) => preset.days === current);
+
+  // A failed read leaves `isLoading` false and `data` undefined, so the
+  // fallback above would paint "30 days" as though it were the setting. A
+  // control showing a value nobody chose is worse than no control.
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
     <div className={cn(CARD, "space-y-4")}>
@@ -138,9 +166,14 @@ const SessionLengthCard = () => {
 };
 
 const RegistrationCard = () => {
-  const { data, isLoading } = useInstanceSettings();
+  const { data, isLoading, isError, refetch } = useInstanceSettings();
   const save = useUpdateInstanceSettings();
   const open = data?.registrationOpen === true;
+
+  // The same rule, and it matters more here: `data?.registrationOpen === true`
+  // reads a failed request as "registration is closed", which is the
+  // reassuring answer and may be the wrong one.
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
     <div className={cn(CARD, "space-y-4")}>
@@ -159,7 +192,7 @@ const RegistrationCard = () => {
           role="switch"
           aria-checked={open}
           aria-label="Anyone can create an account"
-          disabled={isLoading || save.isPending}
+          disabled={isLoading || save.isPending || !data}
           onClick={() =>
             save.mutate(
               { registrationOpen: !open },
@@ -174,20 +207,30 @@ const RegistrationCard = () => {
               },
             )
           }
+          // The visible track stays 56 x 32. The hit area is the 44 px
+          // square STYLE.md requires, which is what a thumb actually needs.
           className={cn(
-            "shrink-0 relative w-14 h-8 rounded-full transition-colors",
+            "shrink-0 inline-flex items-center justify-center",
+            "min-w-[44px] min-h-[44px] rounded-full",
             "outline-none focus-visible:ring-2 focus-visible:ring-primary",
             "disabled:opacity-50 disabled:cursor-not-allowed",
-            open ? "bg-primary" : "bg-surface-container-high",
           )}
         >
           <span
+            aria-hidden="true"
             className={cn(
-              "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
-              "transition-transform",
-              open ? "translate-x-7" : "translate-x-1",
+              "relative block w-14 h-8 rounded-full transition-colors",
+              open ? "bg-primary" : "bg-surface-container-high",
             )}
-          />
+          >
+            <span
+              className={cn(
+                "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
+                "transition-transform",
+                open ? "translate-x-7" : "translate-x-1",
+              )}
+            />
+          </span>
         </button>
       </div>
 

@@ -1098,6 +1098,34 @@ describe("the guards on removing an administrator", () => {
       sqlite.prepare("SELECT id FROM users WHERE id = ?").get(sole.id),
     ).toBeDefined();
 
+    // And so is resetting your own password. A reset deletes every session of
+    // its target, so an admin who aimed it at themselves was signed out by
+    // their own request, holding neither the old password nor the new one:
+    // the response carrying it went to a browser that was already being
+    // torn down. Your own password is changed through
+    // `POST /api/auth/change-password`, which keeps the session it is made on.
+    const before = (
+      sqlite
+        .prepare("SELECT passwordHash FROM users WHERE id = ?")
+        .get(sole.id) as { passwordHash: string }
+    ).passwordHash;
+    const resetSelf = await as(sole)(
+      request(app).post(`/api/admin/users/${sole.id}/reset-password`),
+    );
+    expect(resetSelf.status).toBe(400);
+    expect(resetSelf.body.error.code).toBe("CANNOT_TARGET_SELF");
+    expect(resetSelf.body.temporaryPassword).toBeUndefined();
+    // Nothing changed: not the password, and not the session it was made on.
+    expect(
+      (
+        sqlite
+          .prepare("SELECT passwordHash FROM users WHERE id = ?")
+          .get(sole.id) as { passwordHash: string }
+      ).passwordHash,
+    ).toBe(before);
+    const stillIn = await as(sole)(request(app).get("/api/admin/users"));
+    expect(stillIn.status).toBe(200);
+
     // The second admin may disable the first, then enable them again.
     const disabled = await as(second)(
       request(app).post(`/api/admin/users/${sole.id}/disable`),

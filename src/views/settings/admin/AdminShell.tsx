@@ -13,7 +13,7 @@
  * and a table row depending on the width.
  */
 import React, { type ReactNode } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, TriangleAlert } from "lucide-react";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
@@ -54,6 +54,8 @@ export const AdminPage = ({
 export const AdminList = ({
   header,
   isLoading,
+  isError,
+  onRetry,
   isEmpty,
   empty,
   children,
@@ -62,12 +64,25 @@ export const AdminList = ({
   /** Column labels. Rendered only from `sm`, in the row's own grid. */
   header?: ReactNode;
   isLoading?: boolean;
+  /** The read failed. Never rendered as an empty list. */
+  isError?: boolean;
+  onRetry?: () => void;
   isEmpty?: boolean;
   empty: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }) => (
-  <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
+  // No `overflow-hidden`. It rounded the corners for free and clipped the row
+  // menu: an absolutely positioned dropdown is clipped by an ancestor's
+  // overflow no matter its z-index, so on the last row of a list every item
+  // was painted outside the box and could not be clicked. The corners are
+  // rounded on the first and last child instead.
+  <div
+    className={cn(
+      "bg-surface-container-lowest rounded-2xl shadow-sm",
+      "[&>*:first-child]:rounded-t-2xl [&>*:last-child]:rounded-b-2xl",
+    )}
+  >
     {header && (
       <div
         className={cn(
@@ -83,6 +98,22 @@ export const AdminList = ({
         <Loader2 className="w-4 h-4 animate-spin" />
         Loading…
       </p>
+    ) : isError ? (
+      // "We could not load this" and "there is nothing here" must never share
+      // a rendering. A failed read leaves `isLoading` false and `data`
+      // undefined, so without this branch a 500 or a dropped connection
+      // reported an empty instance in reassuring copy.
+      <div className="px-4 sm:px-6 py-8 space-y-3">
+        <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
+          <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+          This did not load. It is not empty, and nothing here has changed.
+        </p>
+        {onRetry && (
+          <AdminButton tone="secondary" onClick={onRetry}>
+            Try again
+          </AdminButton>
+        )}
+      </div>
     ) : isEmpty ? (
       <div className="px-4 sm:px-6 py-8 text-sm text-on-surface-variant text-pretty">
         {empty}

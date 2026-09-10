@@ -94,10 +94,42 @@ export const AIStatsView = () => {
     setOffset(0);
   }, []);
 
+  /**
+   * The scope control, and only for an admin.
+   *
+   * Rendered by both branches below, including the loading one. Switching
+   * scope is a cache miss, so it turns `summaryLoading` back on — and when
+   * the early return sat above this, pressing "All users" unmounted the
+   * control that had just been pressed. Focus went to `<body>` and there was
+   * no way back to "Mine" until the request landed.
+   */
+  const scopeControl = isAdmin ? (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs text-on-surface-variant text-pretty">
+        {scope === "all"
+          ? "Every account on this instance. One provider key pays for all of it."
+          : "Your own AI use."}
+      </p>
+      <Segmented
+        label="Whose AI usage"
+        value={scope}
+        onChange={(next) => {
+          setScope(next);
+          setOffset(0);
+        }}
+        options={[
+          { value: "mine", label: "Mine" },
+          { value: "all", label: "All users" },
+        ]}
+      />
+    </div>
+  ) : null;
+
   // ── Loading state ─────────────────────────────────────────────────────
   if (summaryLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-4xl mx-auto pb-20">
+      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
+        {scopeControl}
         <AIStatsSkeleton />
       </div>
     );
@@ -129,31 +161,7 @@ export const AIStatsView = () => {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
-      {/*
-        The scope control, and only for an admin. A member has one answer and
-        a toggle with one working position is a toggle that lies.
-      */}
-      {isAdmin && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-on-surface-variant text-pretty">
-            {scope === "all"
-              ? "Every account on this instance. One provider key pays for all of it."
-              : "Your own AI use."}
-          </p>
-          <Segmented
-            label="Whose AI usage"
-            value={scope}
-            onChange={(next) => {
-              setScope(next);
-              setOffset(0);
-            }}
-            options={[
-              { value: "mine", label: "Mine" },
-              { value: "all", label: "All users" },
-            ]}
-          />
-        </div>
-      )}
+      {scopeControl}
 
       {/* Zone 1: Summary Bar */}
       <SummaryBar summary={summary} isLoading={summaryLoading} />

@@ -92,7 +92,14 @@ const RowMenu = ({
   actions: RowActions;
 }) => {
   const [open, setOpen] = useState(false);
-  const close = React.useCallback(() => setOpen(false), []);
+  const trigger = React.useRef<HTMLButtonElement>(null);
+  // Closing returns focus to the ⋮ button. Escape otherwise unmounts the
+  // focused item and the browser resets to <body>, so the next Tab restarts
+  // from the top of the document. `SidebarIdentity` does the same.
+  const close = React.useCallback(() => {
+    setOpen(false);
+    trigger.current?.focus({ preventScroll: true });
+  }, []);
   const ref = useDismissable<HTMLDivElement>(open, close);
   const run = (action: () => void) => () => {
     setOpen(false);
@@ -102,6 +109,7 @@ const RowMenu = ({
   return (
     <div ref={ref} className="relative sm:justify-self-end">
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
@@ -132,10 +140,14 @@ const RowMenu = ({
             </button>
           </li>
           {/*
-            The local owner has no password to reset. It is the account an
-            un-secured instance runs as and nobody signs in to it.
+            Not the local owner, which has no password to reset, and not your
+            own account. A reset deletes every session of its target, so an
+            admin resetting themselves is signed out by their own click, with
+            the only copy of the new password inside the dialog that unmounts
+            with them. Your own password is changed in Account settings, which
+            keeps the session it is made on. The server refuses this too.
           */}
-          {!user.isLocalOwner && (
+          {!user.isLocalOwner && !user.isSelf && (
             <li>
               <button
                 type="button"
@@ -320,17 +332,32 @@ const CreateUserModal = ({
     temporaryPassword: string;
   } | null>(null);
 
-  const close = () => {
-    onClose();
-    window.setTimeout(() => {
+  // Cleared when the dialog closes, however it closes.
+  //
+  // `createOpen` comes from the route, and a route can change without this
+  // component's own close handler ever running: a link, the back button, a
+  // redirect. Resetting from the handler left the previous account's
+  // temporary password in state, so reopening the dialog showed it again,
+  // under the next person's name.
+  React.useEffect(() => {
+    if (isOpen) return;
+    const timer = window.setTimeout(() => {
       setEmail("");
       setUsername("");
       setDisplayName("");
       setRole("member");
       setCreated(null);
       create.reset();
+      // After the closing animation, so the secret does not flash back into
+      // view on its way out.
     }, 200);
-  };
+    return () => window.clearTimeout(timer);
+    // `create` is a stable mutation object; depending on it would re-run this
+    // on every render of the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const close = () => onClose();
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -452,7 +479,9 @@ const EditUserModal = ({
   }, [user]);
 
   if (!user) return null;
-  const dirty = displayName !== (user.displayName ?? "") || role !== user.role;
+  const nameChanged = displayName !== (user.displayName ?? "");
+  const roleChanged = role !== user.role;
+  const dirty = nameChanged || roleChanged;
 
   return (
     <Modal isOpen onClose={onClose} title={`Edit ${user.username}`} size="md">
@@ -460,8 +489,18 @@ const EditUserModal = ({
         onSubmit={(event) => {
           event.preventDefault();
           if (!dirty) return;
+          // Only the fields actually touched. The `user` object is a
+          // snapshot taken when the menu opened, so sending an untouched role
+          // turns somebody else's concurrent change into a silent revert and
+          // writes a `user.role.changed` audit row nobody asked for.
           update.mutate(
-            { id: user.id, displayName: displayName.trim() || null, role },
+            {
+              id: user.id,
+              ...(nameChanged
+                ? { displayName: displayName.trim() || null }
+                : {}),
+              ...(roleChanged ? { role } : {}),
+            },
             {
               onSuccess: () => {
                 toast.success("Account updated");
@@ -480,7 +519,14 @@ const EditUserModal = ({
           onChange={(e) => setDisplayName(e.target.value)}
           maxLength={100}
         />
-        <RolePicker value={role} onChange={setRole} />
+        {/*
+          No role picker on your own row. Demoting yourself takes the
+          administration area away mid-edit and needs another admin to undo,
+          which is the same reason disable and delete refuse a self-target.
+          Somebody stepping down asks a colleague, as they would to be
+          removed.
+        */}
+        {!user.isSelf && <RolePicker value={role} onChange={setRole} />}
         {/*
           The email and the username belong to the account holder, who changes
           them in their own settings. An admin who could rewrite the identifier
@@ -621,7 +667,7 @@ const DeleteUserDialog = ({
 export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   const navigate = useNavigate();
   const { user: me } = useAuth();
-  const { data: users, isLoading } = useAdminUsers();
+  const { data: users, isLoading, isError, refetch } = useAdminUsers();
   const setEnabled = useSetUserEnabled();
   const reset = useResetPassword();
   const remove = useDeleteUser();
@@ -683,7 +729,9 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
     >
       <AdminList
         isLoading={isLoading}
-        isEmpty={!isLoading && (users?.length ?? 0) === 0}
+        isError={isError}
+        onRetry={() => void refetch()}
+        isEmpty={!isLoading && !isError && (users?.length ?? 0) === 0}
         empty="No accounts yet."
         header={
           <div className={cn("grid gap-4", COLUMNS)}>

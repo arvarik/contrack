@@ -365,6 +365,15 @@ export const SettingsView = () => {
             }
           />
 
+          {/*
+            Anything else under /settings. `/settings/admin` is now a
+            plausible URL to type or to have in a history, and it matched no
+            route: the frame rendered with an empty body, the header fell back
+            to "Settings", and the back button offered to leave Settings
+            altogether.
+          */}
+          <Route path="*" element={<Navigate to="/settings" replace />} />
+
           <Route
             path="/trash"
             element={

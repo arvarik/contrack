@@ -304,17 +304,24 @@ export const SettingsHome = () => {
       "merge",
       "threshold",
     ),
-    aiConfig: hit(
-      "ai configuration",
-      "providers",
-      "models",
-      "gemini",
-      "openai",
-      "anthropic",
-      "ollama",
-      "api key",
-      "capabilities",
-    ),
+    // For a member this is the read-only capabilities card. For an admin the
+    // AI configuration lives under Administration -> Instance, so the
+    // provider words belong to that row instead: they used to light the
+    // Intelligence group up with nothing inside it, and because a group *was*
+    // shown the "nothing matches" message was suppressed too.
+    aiConfig:
+      !isAdmin &&
+      hit(
+        "ai configuration",
+        "providers",
+        "models",
+        "gemini",
+        "openai",
+        "anthropic",
+        "ollama",
+        "api key",
+        "capabilities",
+      ),
     adminUsers: hit(
       "accounts",
       "users",
@@ -332,8 +339,18 @@ export const SettingsHome = () => {
       "session length",
       "sign-in length",
       "searxng",
-      "ai configuration",
       "admin",
+      // The AI configuration is on this page for an admin, so the words
+      // somebody types looking for it have to land here.
+      "ai configuration",
+      "providers",
+      "models",
+      "gemini",
+      "openai",
+      "anthropic",
+      "ollama",
+      "api key",
+      "capabilities",
     ),
     adminBackups: hit("backups", "snapshot", "database", "restore", "admin"),
     adminAudit: hit("audit", "log", "history", "who did", "admin"),
@@ -537,7 +554,7 @@ export const SettingsHome = () => {
               every write under /api/settings/ai is admin — so they get the
               read-only answer to the question the page would have answered.
             */}
-            {show.aiConfig && !isAdmin && (
+            {show.aiConfig && (
               <div className="sm:col-span-2">
                 <AiCapabilitiesCard />
               </div>

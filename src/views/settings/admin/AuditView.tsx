@@ -131,7 +131,15 @@ function describeDetails(details: Record<string, unknown> | null): string {
 const EntryRow = ({ entry }: { entry: AuditEntry }) => {
   const look = LOOK[entry.action] ?? FALLBACK;
   const Icon = look.icon;
-  const detail = describeDetails(entry.details);
+  // `details` is deliberately null for a settings change: the service records
+  // the key that changed and never the value, and the key is in `targetId`.
+  // Reading only `details` therefore rendered every settings row as the
+  // identical line "Setting changed by ada", whatever it was that changed.
+  const detail =
+    describeDetails(entry.details) ||
+    (entry.targetId
+      ? `${entry.targetType ?? "target"}: ${entry.targetId}`
+      : "");
 
   return (
     <div className="flex items-start gap-3 px-4 sm:px-6 py-3.5 even:bg-surface-container-low/40 hover:bg-surface-container-low transition-colors">
@@ -173,7 +181,9 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
           </p>
         )}
         {entry.ip && (
-          <p className="text-xs text-on-surface-variant/80 font-mono mt-0.5">
+          // Not `/80`. The variant colour at 80 percent measures 4.01:1 on
+          // white and 3.87:1 on the zebra row, both under AA.
+          <p className="text-xs text-on-surface-variant font-mono mt-0.5">
             {entry.ip}
           </p>
         )}
@@ -239,7 +249,9 @@ export const AuditView = () => {
 
       <AdminList
         isLoading={query.isLoading}
-        isEmpty={!query.isLoading && entries.length === 0}
+        isError={query.isError}
+        onRetry={() => void query.refetch()}
+        isEmpty={!query.isLoading && !query.isError && entries.length === 0}
         empty={
           group
             ? "Nothing of this kind has happened yet."

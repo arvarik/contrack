@@ -28,7 +28,7 @@ import {
 const COLUMNS = "sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px]";
 
 export const BackupsView = () => {
-  const { data: backups, isLoading } = useBackups();
+  const { data: backups, isLoading, isError, refetch } = useBackups();
   const create = useCreateBackup();
   const [latest, setLatest] = useState<string | null>(null);
 
@@ -58,7 +58,9 @@ export const BackupsView = () => {
     >
       <AdminList
         isLoading={isLoading}
-        isEmpty={!isLoading && (backups?.length ?? 0) === 0}
+        isError={isError}
+        onRetry={() => void refetch()}
+        isEmpty={!isLoading && !isError && (backups?.length ?? 0) === 0}
         empty={
           <span className="flex items-start gap-2">
             <Database className="w-4 h-4 shrink-0 mt-0.5" />

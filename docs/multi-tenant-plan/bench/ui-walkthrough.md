@@ -290,12 +290,67 @@ list, its default port was one nothing listens on, and it cannot carry a
 session — so it has to run against an instance with sign-in off, or it
 measures the sign-in screen twelve times and reports a cheerful zero.
 
-One genuine failure it found is fixed: the AI usage empty state was
-`text-on-surface-variant/30`, which measures 1.57:1.
+Two genuine failures it found are fixed. The AI usage empty state was
+`text-on-surface-variant/30`, which measures 1.57:1. The IP address on an
+audit row was `text-on-surface-variant/80`, which measures 4.01:1 on white and
+3.87:1 on the zebra row.
+
+The second only appeared on a second run, and that is the fourth trap in this
+script: **it measures what is on the page, so a page with nothing on it
+passes**. The first run swept an audit log that was empty, reported zero, and
+told me nothing. Point it at an instance with data in it, or it is measuring
+empty states.
 
 ---
 
-## 15. Build
+## 15. What this walkthrough missed
+
+An adversarial review of the same branch found seventeen defects, and two of
+them were in flows this document says it walked. Both are worth recording,
+because the reason they were missed is a property of the driver.
+
+**The row menu was clipped away.** `AdminList` wrapped every list in
+`overflow-hidden`, which rounded the corners for free and clipped the
+absolutely positioned row menu. On the last row of the table every item was
+painted outside the box:
+
+```
+menuBottom: 632   listBottom: 456   clipped: true
+  Edit            clickable: false
+  Reset password  clickable: false
+  Export data     clickable: false
+  Disable         clickable: false
+  Delete          clickable: false
+```
+
+The driver never noticed because it calls `el.click()`, which fires on an
+element the user cannot reach. **A driver that clicks by element proves the
+handler works, not that anybody can get to it.** The check now hit-tests with
+`document.elementFromPoint` at the centre of each item, and after the fix all
+five come back `clickable: true`.
+
+**An admin could reset their own password and be locked out.** A reset deletes
+every session of its target, so aiming it at yourself signs you out
+mid-request, and the response carrying the new password goes to a browser that
+is already being torn down. The old password no longer works either. The
+walkthrough only ever reset *somebody else's*, which is the case that works.
+
+Both are fixed. The server refuses a self-targeted reset now, alongside the
+disable and delete it already refused, and the menu no longer offers it.
+Re-checked in the browser:
+
+| Checked | Result |
+| ------- | ------ |
+| Row menu on your own row | Edit, Export data |
+| Row menu on a colleague's row | Edit, Reset password, Export data, Disable, Delete |
+| Edit dialog on your own row | no role picker |
+| Escape inside a row menu | focus returns to the ⋮ button |
+| `/settings/admin` | redirects to `/settings` |
+| Searching Settings for "gemini" | lands on Administration → Instance |
+| Registration switch hit area | 56 × 44 |
+| "All users" mid-load | the control is still on screen |
+
+## 16. Build
 
 ```
 dist/assets/BackupsView-6JeBK6D7.js       2.50 kB │ gzip: 1.17 kB

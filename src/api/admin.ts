@@ -24,6 +24,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { apiFetch, apiJson, jsonBody } from "./client";
+import { emitAuthStatusStale } from "../lib/appEvents";
 
 // ---------------------------------------------------------------------------
 // Shapes — these mirror the server exactly. See server/services/adminService.
@@ -161,6 +162,13 @@ function useAccountsChanged() {
   return () => {
     qc.invalidateQueries({ queryKey: adminKeys.users });
     qc.invalidateQueries({ queryKey: adminKeys.audit });
+    // Deleting an account takes its invitations with it:
+    // `invitations.invitedBy` is NOT NULL with ON DELETE CASCADE, so the
+    // rows go and the list would keep serving them for its stale time.
+    qc.invalidateQueries({ queryKey: adminKeys.invitations });
+    // And the caller may have changed their own standing. Nothing caches
+    // `/api/auth/status`, so nothing else would notice a demotion.
+    emitAuthStatusStale();
   };
 }
 
@@ -364,8 +372,11 @@ export const useUpdateInstanceSettings = () => {
       qc.setQueryData(adminKeys.settings, settings);
       qc.invalidateQueries({ queryKey: adminKeys.audit });
       // `/api/auth/status` reports `registrationOpen` to the sign-in screen,
-      // and the gate reads it from there. Nothing else refreshes it.
-      qc.invalidateQueries({ queryKey: ["auth"] });
+      // and the gate holds it in state rather than in the query cache — so
+      // invalidating a query key could never have refreshed it. Without this
+      // an admin who closes registration and then signs out in the same tab
+      // is still offered "Create one" on the way back in.
+      emitAuthStatusStale();
     },
   });
 };

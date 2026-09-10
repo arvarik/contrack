@@ -19,7 +19,12 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthGate";
 
 export const RequireAdmin = ({ children }: { children: ReactNode }) => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isResolved } = useAuth();
+  // Nothing is known while the server is unreachable, and `isAdmin` is false
+  // there for want of an answer rather than because of one. Redirecting on
+  // that throws away the address the admin was on, and it does not come back
+  // when the server does.
+  if (!isResolved) return null;
   // `replace`, so the browser's back button does not bounce off the redirect
   // and land here again.
   if (!isAdmin) return <Navigate to="/settings" replace />;

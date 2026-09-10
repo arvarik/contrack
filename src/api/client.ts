@@ -17,7 +17,11 @@
  * @module api/client
  */
 
-import { emitAuthExpired, emitPasswordChangeRequired } from "../lib/appEvents";
+import {
+  emitAuthExpired,
+  emitAuthStatusStale,
+  emitPasswordChangeRequired,
+} from "../lib/appEvents";
 
 export const API_BASE = "/api";
 
@@ -152,16 +156,20 @@ function announce(status: number, code: string | undefined): void {
     emitPasswordChangeRequired();
     return;
   }
-  // `ADMIN_REQUIRED` is deliberately NOT announced, and this is a departure
-  // from what task 4.11 asks for. The plan says to toast it. A toast from the
-  // transport fires for requests nobody made: `useGroundingCapacity` polls an
-  // admin-only route every two minutes from the command palette, so every
-  // member would have seen a red error on load and again every two minutes
-  // for the life of the tab. It also fires a second time from the caller's
-  // own `onError`, which already shows the server's more specific sentence.
-  //
-  // Hiding the control is `RequireAdmin`'s job and refusing the request is
-  // the server's. Neither of those needs a toast.
+  if (code === "ADMIN_REQUIRED") {
+    // No toast, which is a departure from what task 4.11 asks for. A toast
+    // from the transport fires for requests nobody made: `useGroundingCapacity`
+    // polls an admin-only route every two minutes from the command palette,
+    // so every member would have seen a red error on load and again every two
+    // minutes for the life of the tab. It also fires a second time from the
+    // caller's own `onError`, which already shows the server's own sentence.
+    //
+    // What it does instead is useful. The server has just said this account
+    // is not an admin, and the tab evidently believes otherwise, so the gate
+    // re-reads `/status` and `RequireAdmin` takes the screen away. That fixes
+    // the stale tab rather than complaining about it.
+    emitAuthStatusStale();
+  }
 }
 
 /**

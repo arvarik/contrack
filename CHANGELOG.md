@@ -135,6 +135,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The value of `token`, `secret` and `api_key` is replaced in every logged
   URL.
 
+- **Phase 4.** An administrator could reset their own password and be locked
+  out of the instance. A reset deletes every session of its target, so aiming
+  it at yourself signs you out mid-request and the response carrying the new
+  password reaches a browser that is already being torn down. The old password
+  no longer works either. `POST /api/admin/users/:id/reset-password` now
+  refuses a self-target, alongside the disable and the delete it already
+  refused.
+- **Phase 4.** The account row menu was clipped away by the list's
+  `overflow-hidden`, so on the lower rows Disable, Delete and Export were
+  painted outside the box and could not be clicked at all.
+- **Phase 4.** A failed read in the administration area rendered as "there is
+  nothing here". A query that fails leaves its loading flag false and its data
+  undefined, so a 500 or a dropped connection reported an empty instance in
+  reassuring copy, and the Instance page painted its controls from invented
+  defaults including registration "closed".
 - **Phase 4.** The Settings back button was a 36 px touch target, on the one
   control every page in that area shares. The AI usage empty state was drawn
   at 1.57:1 contrast, the only text in the app the audit fails on.

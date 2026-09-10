@@ -225,7 +225,7 @@ const NewInvitationModal = ({
 };
 
 export const InvitationsView = () => {
-  const { data: invitations, isLoading } = useInvitations();
+  const { data: invitations, isLoading, isError, refetch } = useInvitations();
   const revoke = useRevokeInvitation();
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<Invitation | null>(null);
@@ -255,7 +255,9 @@ export const InvitationsView = () => {
     >
       <AdminList
         isLoading={isLoading}
-        isEmpty={!isLoading && sorted.length === 0}
+        isError={isError}
+        onRetry={() => void refetch()}
+        isEmpty={!isLoading && !isError && sorted.length === 0}
         empty="No invitations yet. Create one to add somebody without setting their password yourself."
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
