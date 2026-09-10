@@ -17,6 +17,7 @@ import React, {
   useCallback,
   useMemo,
   useEffect,
+  useRef,
 } from "react";
 import {
   useStartAISearch,
@@ -24,7 +25,7 @@ import {
   useCancelAISearch,
 } from "../api/aiSearch";
 import { toast } from "sonner";
-import { ApiError } from "../api/client";
+import { ApiError, rateLimitFacts } from "../api/client";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
 import type { AISearchBatch } from "../types";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
@@ -63,6 +64,8 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const limitTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(limitTimer.current), []);
   const startMutation = useStartAISearch();
 
   // SSE stream hook — updates batch state in real-time
@@ -109,6 +112,17 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
           const limited = rateLimitMessage(err, "enrichment");
           if (limited) {
             setLimitMessage(limited);
+            // The message names a wait, and the provider outlives the view
+            // that shows it: the AI Search page unmounts on navigation, this
+            // does not. Without an expiry, coming back an hour later reads a
+            // countdown that ran out long ago. The stated wait, or a short
+            // window when the server named none.
+            const seconds = rateLimitFacts(err)?.retryAfterSeconds ?? 60;
+            window.clearTimeout(limitTimer.current);
+            limitTimer.current = window.setTimeout(
+              () => setLimitMessage(null),
+              seconds * 1000,
+            );
             return;
           }
           setLimitMessage(null);
@@ -119,7 +133,10 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
     [startMutation],
   );
 
-  const clearLimit = useCallback(() => setLimitMessage(null), []);
+  const clearLimit = useCallback(() => {
+    window.clearTimeout(limitTimer.current);
+    setLimitMessage(null);
+  }, []);
 
   const dismiss = useCallback(() => {
     setIsVisible(false);

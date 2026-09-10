@@ -19,7 +19,7 @@
  * @module lib/rateLimitMessage
  */
 
-import { rateLimitFacts } from "../api/client";
+import { ApiError, rateLimitFacts } from "../api/client";
 
 /** What kind of work was refused. Only changes the noun in the sentence. */
 export type LimitedWork = "scan" | "enrichment" | "request";
@@ -43,6 +43,14 @@ export function rateLimitMessage(
 ): string | null {
   const facts = rateLimitFacts(error);
   if (!facts) return null;
+
+  // Not every 429 is a rate limit in this sense. The AI layer answers
+  // `AI_BUSY` with sentences of its own — "Grounding quota exhausted for
+  // today" is one — and replacing that with "try again shortly" tells
+  // somebody to retry into a wall that stands until tomorrow. Only the
+  // limiters send `RATE_LIMITED`; anything else keeps its own words.
+  if (error instanceof ApiError && error.code && error.code !== "RATE_LIMITED")
+    return null;
 
   if (!facts.yours) {
     return facts.queued

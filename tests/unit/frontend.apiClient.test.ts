@@ -73,21 +73,51 @@ function sourceFiles(dir = SRC, prefix = ""): { file: string; text: string }[] {
 }
 
 /**
- * A bare `fetch(` — not `apiFetch(`, `prefetch`, or `refetch`.
+ * Every call to `fetch` in a file, as `{ line, argument }`.
  *
- * The leading character class is what keeps `apiFetch(` and
- * `queryClient.prefetchQuery(` out of the results: both end in something this
- * pattern rejects immediately before the word.
+ * The pattern rejects `apiFetch(` and `authFetch(` (capital F), and
+ * `prefetchQuery` and `refetch` (a letter immediately before `fetch`). It
+ * deliberately DOES match `window.fetch(` and `globalThis.fetch(`: a dot is
+ * not an identifier character, and the first version of this scanner excluded
+ * it, so the one spelling somebody reaches for to dodge a linter was the one
+ * spelling that walked straight past.
+ *
+ * The scan is over the whole file, not line by line, and `argument` is the
+ * text that follows the opening bracket. Prettier breaks a long call across
+ * lines, so a line-scoped scanner could not see the path in the exact shape
+ * the formatter produces.
  */
-const BARE_FETCH = /(^|[^A-Za-z.])fetch\s*\(/;
+const FETCH_CALL = /(?<![A-Za-z0-9_$])fetch\s*\(/g;
+
+interface FetchCall {
+  line: number;
+  argument: string;
+}
+
+function fetchCalls(text: string): FetchCall[] {
+  const calls: FetchCall[] = [];
+  for (const match of text.matchAll(FETCH_CALL)) {
+    const index = match.index ?? 0;
+    calls.push({
+      line: text.slice(0, index).split("\n").length,
+      // Enough of the call to hold its first argument in any formatting.
+      argument: text.slice(
+        index + match[0].length,
+        index + match[0].length + 200,
+      ),
+    });
+  }
+  return calls;
+}
 
 /** Lines that call `fetch` directly, as `file:line`. */
 function bareFetchLines(file: string, text: string): string[] {
-  return text
-    .split("\n")
-    .map((line, index) => ({ line, no: index + 1 }))
-    .filter(({ line }) => BARE_FETCH.test(line))
-    .map(({ no }) => `${file}:${no}`);
+  return fetchCalls(text).map((call) => `${file}:${call.line}`);
+}
+
+/** True when the call's first argument is a path on this app's own API. */
+function reachesOwnApi(call: FetchCall): boolean {
+  return /["'`]\/api|API_BASE/.test(call.argument);
 }
 
 describe("every call to this app's API goes through the shared client", () => {
@@ -100,6 +130,29 @@ describe("every call to this app's API goes through the shared client", () => {
     expect(files.length).toBeGreaterThan(50);
     const transport = files.find((f) => f.file === "api/client.ts")!;
     expect(bareFetchLines(transport.file, transport.text).length).toBe(1);
+
+    // And that it sees the shapes somebody would actually write. Each of
+    // these is a real leak and the scanner must name every one.
+    const shapes = [
+      'const res = await fetch("/api/x");',
+      "const res = await window.fetch(`/api/x`);",
+      "globalThis.fetch('/api/x')",
+      'fetch(\n  "/api/x",\n  { method: "POST" },\n)',
+    ];
+    for (const shape of shapes) {
+      const calls = fetchCalls(shape);
+      expect(calls).toHaveLength(1);
+      expect(reachesOwnApi(calls[0])).toBe(true);
+    }
+    // And that it does not cry wolf over the names that merely contain it.
+    for (const safe of [
+      'apiFetch("/x")',
+      "queryClient.prefetchQuery({})",
+      "poll.refetch()",
+      'authFetch("/status")',
+    ]) {
+      expect(fetchCalls(safe)).toHaveLength(0);
+    }
   });
 
   it("finds no bare fetch under src/api/ outside the two transports", () => {
@@ -124,14 +177,9 @@ describe("every call to this app's API goes through the shared client", () => {
     const offenders = sourceFiles()
       .filter(({ file }) => !allowed.has(file))
       .flatMap(({ file, text }) =>
-        text
-          .split("\n")
-          .map((line, index) => ({ line, no: index + 1 }))
-          .filter(
-            ({ line }) =>
-              BARE_FETCH.test(line) && /["'`]\/api|API_BASE/.test(line),
-          )
-          .map(({ no }) => `${file}:${no}`),
+        fetchCalls(text)
+          .filter(reachesOwnApi)
+          .map((call) => `${file}:${call.line}`),
       );
     expect(offenders).toEqual([]);
   });
@@ -212,6 +260,56 @@ describe("refusals that change which screen the app is", () => {
     );
     await expect(apiFetch("/contacts")).rejects.toMatchObject({ status: 403 });
     expect(forced.spy).toHaveBeenCalledOnce();
+    expect(expired.spy).not.toHaveBeenCalled();
+    forced.stop();
+    expired.stop();
+  });
+
+  it("does not treat a wrong typed password as an expired session", async () => {
+    // The one 401 that is not about the browser's own credential.
+    // `POST /api/auth/change-password` answers 401 INVALID_CREDENTIALS when
+    // the *current* password field is wrong, and the cookie is untouched.
+    // Announcing that as an expiry replaced the forced-password-change screen
+    // with "your session expired" for a typo — and signing back in returned
+    // the person to the same form, with no idea what had happened.
+    const expired = listen(AUTH_EXPIRED_EVENT);
+    respondWith(
+      {
+        error: {
+          message: "That is not your current password.",
+          code: "INVALID_CREDENTIALS",
+        },
+      },
+      { status: 401 },
+    );
+    await expect(apiFetch("/auth/change-password")).rejects.toMatchObject({
+      status: 401,
+      code: "INVALID_CREDENTIALS",
+      message: "That is not your current password.",
+    });
+    expect(expired.spy).not.toHaveBeenCalled();
+    expired.stop();
+  });
+
+  it("does not announce ADMIN_REQUIRED at all", async () => {
+    // Task 4.11 asks for a toast here and this deliberately does not raise
+    // one. `useGroundingCapacity` polls an admin-only route every two minutes
+    // from the command palette, which is mounted on every screen, so a member
+    // would have seen a red error on load and again every two minutes for the
+    // life of the tab — for a request they did not make. The caller's own
+    // onError still shows the server's sentence on an action somebody took.
+    const forced = listen(PASSWORD_CHANGE_REQUIRED_EVENT);
+    const expired = listen(AUTH_EXPIRED_EVENT);
+    respondWith(
+      { error: { message: "Admins only.", code: "ADMIN_REQUIRED" } },
+      { status: 403 },
+    );
+    await expect(apiFetch("/admin/users")).rejects.toMatchObject({
+      status: 403,
+      code: "ADMIN_REQUIRED",
+      message: "Admins only.",
+    });
+    expect(forced.spy).not.toHaveBeenCalled();
     expect(expired.spy).not.toHaveBeenCalled();
     forced.stop();
     expired.stop();
@@ -325,6 +423,19 @@ describe("the sentence shown for a 429", () => {
     expect(rateLimitMessage(limited({}))).toBe(
       "Too many requests. Try again shortly.",
     );
+  });
+
+  it("keeps the server's own words when the 429 is not a limiter's", () => {
+    // The AI layer answers `AI_BUSY` with sentences of its own — "Grounding
+    // quota exhausted for today." is one of them. Replacing that with "try
+    // again shortly" sends somebody to retry into a wall that stands until
+    // tomorrow.
+    const quota = new ApiError(
+      "Grounding quota exhausted for today.",
+      429,
+      "AI_BUSY",
+    );
+    expect(rateLimitMessage(quota, "enrichment")).toBeNull();
   });
 
   it("returns null for a failure that is not a rate limit", () => {
@@ -447,6 +558,46 @@ describe("a dead dedupe stream falls back to polling", () => {
         expect.objectContaining({ phase: "scoring" }),
       ),
     );
+
+    // It has to keep polling, not poll once. The first version of this test
+    // passed against a fallback that fired one request and stopped, which is
+    // the same frozen progress bar the fallback exists to prevent.
+    const pollsAfterFirst = () =>
+      fetchMock.mock.calls.filter(([u]) => String(u).includes("/dedupe/status"))
+        .length;
+    const before = pollsAfterFirst();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6500);
+    });
+    expect(pollsAfterFirst()).toBeGreaterThan(before + 1);
+
+    // And a failed poll must not end it. Polling started because the network
+    // looked broken, so the first tick failing is the expected case.
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const beforeFailure = pollsAfterFirst();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6500);
+    });
+    expect(pollsAfterFirst()).toBeGreaterThan(beforeFailure + 1);
+
+    // A terminal phase ends it, and invalidates the contacts the scan merged.
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        Response.json(
+          String(url).includes("/auth/status")
+            ? { authRequired: true, authenticated: true }
+            : { scanId: "s1", phase: "complete", clusters: [] },
+        ),
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3500);
+    });
+    const afterComplete = pollsAfterFirst();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+    expect(pollsAfterFirst()).toBe(afterComplete);
   });
 
   it("hands a signed-out browser to the gate instead of polling it", async () => {

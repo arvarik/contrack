@@ -17,7 +17,6 @@
  * @module api/client
  */
 
-import { toast } from "sonner";
 import { emitAuthExpired, emitPasswordChangeRequired } from "../lib/appEvents";
 
 export const API_BASE = "/api";
@@ -131,8 +130,16 @@ export function isNetworkError(error: unknown): boolean {
  */
 function announce(status: number, code: string | undefined): void {
   if (status === 401) {
-    // The credential stopped being accepted: the session expired, or another
-    // device revoked it.
+    // Two different things arrive as 401 and only one of them is an expiry.
+    //
+    // `INVALID_CREDENTIALS` is the server rejecting a password somebody just
+    // typed — a wrong current password on the change-password form. The
+    // browser's own credential is fine and the cookie is untouched. Treating
+    // it as an expiry ejected the person to a sign-in screen reading "your
+    // session expired" for a typo, and on the forced-change screen that is a
+    // loop: signing back in returns them to the same form with no idea what
+    // went wrong.
+    if (code === "INVALID_CREDENTIALS") return;
     emitAuthExpired("expired");
     return;
   }
@@ -145,14 +152,16 @@ function announce(status: number, code: string | undefined): void {
     emitPasswordChangeRequired();
     return;
   }
-  if (code === "ADMIN_REQUIRED") {
-    // Reachable from a tab that was an admin's when it was opened. The fixed
-    // id collapses the burst a page of admin widgets would otherwise produce
-    // into the one message that matters.
-    toast.error("That needs an administrator account.", {
-      id: "admin-required",
-    });
-  }
+  // `ADMIN_REQUIRED` is deliberately NOT announced, and this is a departure
+  // from what task 4.11 asks for. The plan says to toast it. A toast from the
+  // transport fires for requests nobody made: `useGroundingCapacity` polls an
+  // admin-only route every two minutes from the command palette, so every
+  // member would have seen a red error on load and again every two minutes
+  // for the life of the tab. It also fires a second time from the caller's
+  // own `onError`, which already shows the server's more specific sentence.
+  //
+  // Hiding the control is `RequireAdmin`'s job and refusing the request is
+  // the server's. Neither of those needs a toast.
 }
 
 /**

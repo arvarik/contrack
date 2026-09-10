@@ -1,4 +1,5 @@
-import { apiFetch, apiJson } from "./client";
+import { apiJson } from "./client";
+import { useAuth } from "../components/auth/AuthGate";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
 /**
  * Enrichment API Hooks — React Query hooks for single-contact AI enrichment
@@ -24,22 +25,34 @@ export const enrichmentKeys = {
 // Queries
 // =============================================================================
 
-/** Check grounding RPD capacity — used to enable/disable refresh buttons. */
-export const useGroundingCapacity = () =>
-  useQuery({
+/**
+ * Check grounding RPD capacity — used to enable/disable refresh buttons.
+ *
+ * Admins only, and not because the number is a secret. The route is class
+ * `admin` and has been since Phase 3, while this query is mounted by the
+ * command palette on every screen and refetches every two minutes. For a
+ * member that is a request per two minutes that can only be refused, for the
+ * life of the tab. `enabled` is the honest fix: do not ask a question the
+ * answer to which is always no.
+ *
+ * The `!res.ok` branch that used to sit here could not run either — the
+ * shared client throws for any non-2xx — so a member's refusal was already
+ * failing the query rather than returning the zeroed shape it pretended to.
+ */
+export const useGroundingCapacity = () => {
+  const { isAdmin } = useAuth();
+  return useQuery({
     queryKey: enrichmentKeys.groundingCapacity,
-    queryFn: async ({ signal }) => {
-      const res = await apiFetch(`/ai/grounding-capacity`, { signal });
-      if (!res.ok) return { hasCapacity: false, remaining: 0, limit: 0 };
-      return res.json() as Promise<{
-        hasCapacity: boolean;
-        remaining: number;
-        limit: number;
-      }>;
-    },
+    queryFn: ({ signal }) =>
+      apiJson<{ hasCapacity: boolean; remaining: number; limit: number }>(
+        `/ai/grounding-capacity`,
+        { signal },
+      ),
+    enabled: isAdmin,
     staleTime: 60_000, // Re-check every 60s
     refetchInterval: 120_000, // Background refresh every 2min
   });
+};
 
 // =============================================================================
 // Mutations

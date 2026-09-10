@@ -167,9 +167,13 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       // The status endpoint is unreachable, which means the server is down —
       // not that we are locked out. Rendering the app lets its own connection
       // banner explain what is happening, which is the accurate story.
-      setAuthRequired(false);
-      setUser(null);
-      setState("unreachable");
+      //
+      // Only on the first check. Once /status has answered we know who this
+      // is, and a blip during a later `refresh()` must not throw that away:
+      // forgetting the account would hide the identity row, hide the admin
+      // area and tell the account page there is no account, for a dropped
+      // packet. The effect below keeps asking until the server answers.
+      setState((current) => (current === "checking" ? "unreachable" : current));
       return;
     }
 
@@ -207,6 +211,24 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     void check();
   }, [check]);
+
+  /**
+   * Keep asking while the server is not answering.
+   *
+   * Without this, `unreachable` was a state with no way out: one failed
+   * `/status` at load and the tab rendered an un-gated app until somebody
+   * reloaded it — including on a gated instance, where the sign-in screen was
+   * what should have appeared once the server came back.
+   *
+   * Five seconds, and only in this state. It stops the moment `check`
+   * succeeds, because a successful check leaves `unreachable` and unmounts
+   * the interval with it.
+   */
+  useEffect(() => {
+    if (state !== "unreachable") return;
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => window.clearInterval(timer);
+  }, [state, check]);
 
   /**
    * Re-check after signing in, setting up, joining, or registering.
@@ -294,7 +316,12 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   const context: AuthContextValue = {
     user,
-    authRequired,
+    // While the server is unreachable nothing is known, and `authRequired`
+    // decides whether account UI exists at all. `false` is the safe answer:
+    // it hides a sign-out that cannot work and an admin area whose every
+    // request would fail, and it is what the state meant before it could be
+    // re-entered.
+    authRequired: state === "unreachable" ? false : authRequired,
     isAdmin: user?.role === "admin",
     mustChangePassword: user?.mustChangePassword === true,
     registrationOpen,

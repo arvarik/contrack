@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // =============================================================================
 // One-time credentials — the link, and the value read out loud
 // =============================================================================
@@ -8,11 +9,14 @@
 // a password they were sure they copied correctly.
 //
 // These are the pure parts of that journey. The rest is rendering.
+// @vitest-environment jsdom
 // =============================================================================
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
+  __resetInvitationToken,
   groupSecret,
   parseInvitationToken,
+  takeInvitationToken,
   urlWithoutInvitationToken,
 } from "../../src/lib/credentials";
 
@@ -57,6 +61,16 @@ describe("invitation links", () => {
   });
 
   it("survives a href it cannot parse", () => {
+    // These really do throw from `new URL`. The first version of this test
+    // used "" and "::not a url::", and neither throws — both resolve against
+    // the base and return a perfectly good URL — so the try/catch it was
+    // written to cover could have been deleted with the test still green.
+    for (const href of ["http://", "https://[", "http://a b", "//"]) {
+      expect(() => new URL(href)).toThrow();
+      expect(parseInvitationToken(href)).toBeNull();
+      expect(urlWithoutInvitationToken(href)).toBe("/");
+    }
+    // And the ones that merely look broken are handled by the path check.
     expect(parseInvitationToken("")).toBeNull();
     expect(parseInvitationToken("::not a url::")).toBeNull();
   });
@@ -81,6 +95,41 @@ describe("invitation links", () => {
     expect(
       urlWithoutInvitationToken("https://example.com/contacts?q=ann"),
     ).toBe("/contacts?q=ann");
+  });
+});
+
+describe("taking the invitation out of the address bar", () => {
+  beforeEach(() => {
+    __resetInvitationToken();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("reads the token once and removes it from the URL", () => {
+    window.history.replaceState({}, "", "/join?token=abc123");
+    expect(takeInvitationToken()).toBe("abc123");
+    // The secret is out of the address bar before anything renders. It
+    // reaches the history, the tab title and any screenshot otherwise.
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.search).toBe("");
+  });
+
+  it("gives the same answer on a second call", () => {
+    // This is the whole point of the memoisation. StrictMode mounts,
+    // unmounts and remounts every component in development, and an
+    // un-memoised second read would run after the first had already cleaned
+    // the URL: the gate would capture the token, lose it, and show an empty
+    // join form to somebody holding a valid invitation.
+    window.history.replaceState({}, "", "/join?token=abc123");
+    expect(takeInvitationToken()).toBe("abc123");
+    expect(takeInvitationToken()).toBe("abc123");
+    expect(takeInvitationToken()).toBe("abc123");
+  });
+
+  it("leaves an ordinary URL alone and answers null", () => {
+    window.history.replaceState({}, "", "/contacts?q=ann");
+    expect(takeInvitationToken()).toBeNull();
+    expect(window.location.pathname).toBe("/contacts");
+    expect(window.location.search).toBe("?q=ann");
   });
 });
 

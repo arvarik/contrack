@@ -34,6 +34,22 @@ export function Modal({
 }: ModalProps) {
   const previousFocus = useRef<HTMLElement | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+
+  // Where focus was before this opened, captured during the render that opens
+  // it rather than in `onOpenAutoFocus`.
+  //
+  // Radix only fires that event when nothing inside the dialog already holds
+  // focus, and React applies a child's `autoFocus` during commit — before
+  // Radix's effect runs. So every dialog with an autofocused field skipped
+  // the capture entirely, `previousFocus` stayed null, and closing dropped
+  // focus onto <body>: the keyboard user's place in the page was gone.
+  // Reading `document.activeElement` here happens before the commit that
+  // moves focus, which is the only moment the answer is still correct.
+  const wasOpen = useRef(false);
+  if (isOpen && !wasOpen.current) {
+    previousFocus.current = document.activeElement as HTMLElement | null;
+  }
+  wasOpen.current = isOpen;
   const position = disableMobileSheet
     ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] rounded-2xl"
     : "inset-x-0 bottom-0 rounded-t-2xl sm:rounded-2xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
@@ -51,13 +67,15 @@ export function Modal({
           className={`fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden modal-fade`}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            previousFocus.current = document.activeElement as HTMLElement;
             closeButton.current?.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={(event) => {
+            // Only take over when there is somewhere to put focus. Preventing
+            // the default and then restoring nothing leaves it on <body>,
+            // which is worse than whatever Radix would have done.
+            if (!previousFocus.current?.isConnected) return;
             event.preventDefault();
-            if (previousFocus.current?.isConnected)
-              previousFocus.current.focus({ preventScroll: true });
+            previousFocus.current.focus({ preventScroll: true });
           }}
         >
           {title ? (

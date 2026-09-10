@@ -14,7 +14,7 @@
  * the principal is a local owner nobody signs in as, so an avatar, a name and
  * a "Sign out" that cannot sign anyone out would all be fiction.
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { accountAvatarUrl } from "../../lib/avatar";
@@ -38,7 +38,8 @@ export const RoleBadge = ({
 }) => (
   <span
     className={cn(
-      "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+      "inline-flex items-center gap-1 shrink-0 whitespace-nowrap",
+      "rounded-full px-2 py-0.5",
       "text-[10px] font-bold uppercase tracking-widest",
       role === "admin"
         ? "bg-primary/10 text-primary"
@@ -128,7 +129,16 @@ const MENU_ITEM = cn(
 export const SidebarIdentity = () => {
   const { user, authRequired, isAdmin, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const ref = useDismiss(open, () => setOpen(false));
+  const trigger = useRef<HTMLButtonElement>(null);
+  // Closing puts focus back on the avatar. Without it, dismissing with Escape
+  // unmounts the focused element and the browser resets to <body>, so the
+  // next Tab restarts from the top of the document — the keyboard user's
+  // place in the page is destroyed by the act of closing a menu.
+  const close = useCallback(() => {
+    setOpen(false);
+    trigger.current?.focus({ preventScroll: true });
+  }, []);
+  const ref = useDismiss(open, close);
 
   if (!authRequired || !user) return null;
   const label = accountLabel(user);
@@ -136,9 +146,9 @@ export const SidebarIdentity = () => {
   return (
     <div ref={ref} className="relative flex justify-center w-full">
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Signed in as ${label}. Account menu.`}
         className={cn(
@@ -154,9 +164,15 @@ export const SidebarIdentity = () => {
         />
       </button>
 
+      {/*
+          A disclosure, not a menu. `role="menu"` promises arrow-key movement,
+          Home and End, and a roving tabindex, and it also forbids the
+          non-menuitem content this panel exists to show — the name, the email
+          and the role. Two ordinary controls in a labelled panel are read
+          correctly by everything and behave the way Tab already works.
+        */}
       {open && (
         <div
-          role="menu"
           aria-label="Account"
           className={cn(
             "absolute left-full bottom-0 ml-3 z-50 w-60 p-2",
@@ -175,7 +191,6 @@ export const SidebarIdentity = () => {
           <div className="h-px bg-surface-container-high my-1" />
           <Link
             to="/settings/account"
-            role="menuitem"
             onClick={() => setOpen(false)}
             className={MENU_ITEM}
           >
@@ -184,7 +199,6 @@ export const SidebarIdentity = () => {
           </Link>
           <button
             type="button"
-            role="menuitem"
             onClick={() => {
               setOpen(false);
               void signOut();

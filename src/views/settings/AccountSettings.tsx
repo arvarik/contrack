@@ -61,15 +61,27 @@ const GroupHeading = ({ children }: { children: React.ReactNode }) => (
   <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
 );
 
+/**
+ * A labelled input that can also be wrong.
+ *
+ * The `error` half matches `AuthField` on the sign-in screens deliberately.
+ * This component used to route validation messages through `hint`, so "These
+ * don't match." rendered in the same muted grey as "At least 8 characters" —
+ * indistinguishable from ordinary help, with no `aria-invalid` for anybody
+ * not reading the colour. The identical sentence on the forced-password
+ * screen was red and announced.
+ */
 const Field = ({
   id,
   label,
   hint,
+  error,
   ...props
 }: {
   id: string;
   label: string;
   hint?: string;
+  error?: string | null;
 } & React.InputHTMLAttributes<HTMLInputElement>) => (
   <div className="space-y-1.5">
     <label htmlFor={id} className="block text-xs font-bold text-on-surface">
@@ -77,19 +89,25 @@ const Field = ({
     </label>
     <input
       id={id}
-      aria-describedby={hint ? `${id}-hint` : undefined}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
       className={cn(
         "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
         "text-base sm:text-sm",
         "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        error && "ring-2 ring-error",
       )}
       {...props}
     />
-    {hint && (
+    {error ? (
+      <p id={`${id}-error`} className="text-xs text-error">
+        {error}
+      </p>
+    ) : hint ? (
       <p id={`${id}-hint`} className="text-xs text-on-surface-variant">
         {hint}
       </p>
-    )}
+    ) : null}
   </div>
 );
 
@@ -106,7 +124,10 @@ const SaveButton = ({
     type="submit"
     disabled={disabled || busy}
     className={cn(
-      "px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm",
+      "px-5 rounded-xl bg-primary text-on-primary font-bold text-sm",
+      // 44 px on a phone, 40 from sm. `py-2.5` alone computes to exactly 40,
+      // which is under the floor STYLE.md marks REQUIRED.
+      "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
       "flex items-center justify-center gap-2 transition-opacity hover:opacity-90",
       "disabled:bg-surface-container-high disabled:text-on-surface-variant",
       "disabled:cursor-not-allowed disabled:hover:opacity-100",
@@ -271,10 +292,11 @@ const PasswordCard = () => {
         type="password"
         value={next}
         onChange={(e) => setNext(e.target.value)}
-        hint={
+        hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+        error={
           tooShort
             ? `Use at least ${MIN_PASSWORD_LENGTH} characters.`
-            : `At least ${MIN_PASSWORD_LENGTH} characters.`
+            : undefined
         }
         autoComplete="new-password"
       />
@@ -284,7 +306,7 @@ const PasswordCard = () => {
         type="password"
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
-        hint={mismatch ? "These don't match." : undefined}
+        error={mismatch ? "These don't match." : undefined}
         autoComplete="new-password"
       />
       <div className="flex justify-end">
@@ -650,7 +672,11 @@ const CreateTokenModal = ({
             <button
               type="button"
               onClick={close}
-              className="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-opacity"
+              className={cn(
+                "px-5 rounded-xl bg-primary text-on-primary font-bold text-sm",
+                "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
+                "hover:opacity-90 transition-opacity",
+              )}
             >
               I've copied it
             </button>
@@ -762,7 +788,8 @@ const ApiTokensCard = () => {
             type="button"
             onClick={() => setCreating(true)}
             className={cn(
-              "shrink-0 px-4 py-2.5 rounded-xl bg-primary text-on-primary",
+              "shrink-0 px-4 rounded-xl bg-primary text-on-primary",
+              "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
               "font-bold text-sm flex items-center gap-2",
               "hover:opacity-90 transition-opacity",
             )}
@@ -906,9 +933,10 @@ export const AccountSettings = () => {
             type="button"
             onClick={() => void signOut()}
             className={cn(
-              "shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm",
+              "shrink-0 px-5 rounded-xl font-bold text-sm",
+              "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
               "bg-surface-container-high text-on-surface",
-              "flex items-center gap-2 hover:bg-surface-container-highest transition-colors",
+              "flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors",
             )}
           >
             <LogOut className="w-4 h-4" />

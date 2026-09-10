@@ -1,4 +1,4 @@
-import { apiFetch, apiJson } from "./client";
+import { ApiError, apiFetch, apiJson } from "./client";
 import { fetchAuthStatus } from "./auth";
 import { emitAuthExpired } from "../lib/appEvents";
 /**
@@ -101,6 +101,37 @@ const SSE_MAX_RETRIES = 3;
 const SSE_RETRY_DELAY_MS = 2000;
 
 /**
+ * Failed polls in a row before the fallback gives up.
+ *
+ * Ten at three seconds is half a minute of silence. Long enough to ride out a
+ * laptop lid, short enough that a tab left open on a dead server stops asking.
+ */
+const POLL_MAX_FAILURES = 10;
+
+/**
+ * One scan by id, or null when the server does not have it.
+ *
+ * Unlike `/dedupe/active` this serves a scan that has already finished, for
+ * the thirty minutes before it is garbage-collected. That is what lets a
+ * queued scan which started and completed between two polls still be shown
+ * rather than silently disappearing.
+ */
+export async function fetchScan(
+  scanId: string,
+): Promise<DedupeScanProgress | null> {
+  try {
+    return await apiJson<DedupeScanProgress>(
+      `/dedupe/status?scanId=${encodeURIComponent(scanId)}`,
+    );
+  } catch (error) {
+    // A 404 is a scan that has aged out. Anything else has already been
+    // announced by the shared client.
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
  * Follow one scan to its end, by stream if possible and by polling if not.
  *
  * The stream is an `EventSource`, and an `EventSource` cannot report why it
@@ -159,17 +190,29 @@ export const useDedupeStream = (
 
     function startPolling() {
       if (closed || pollTimer !== null) return;
+      let failures = 0;
       const tick = async () => {
         try {
           const scan = await apiJson<DedupeScanProgress>(
             `/dedupe/status?scanId=${encodeURIComponent(scanId!)}`,
           );
+          failures = 0;
           if (!closed) deliver(scan);
-        } catch {
-          // A 404 means the scan has been garbage-collected and a 401 has
-          // already reached the gate. Either way there is nothing left to
-          // follow.
-          stop();
+        } catch (error) {
+          if (closed) return;
+          // A definite answer ends the wait. A 404 means the scan has been
+          // garbage-collected, and a 401 or 403 has already reached the gate.
+          const status = error instanceof ApiError ? error.status : 0;
+          if (status === 404 || status === 401 || status === 403) {
+            stop();
+            return;
+          }
+          // Anything else is the connection, which is why polling started in
+          // the first place: `diagnose` sends us here precisely when the
+          // network looks broken. Stopping on the first failed tick would
+          // have ended every scan that outlived a dropped packet, and the
+          // comment promising recovery would never once have been true.
+          if (++failures >= POLL_MAX_FAILURES) stop();
         }
       };
       pollTimer = window.setInterval(() => void tick(), 3000);

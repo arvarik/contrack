@@ -10,10 +10,16 @@
  *
  * A secret meant to be read aloud or typed is shown in groups, because a
  * 20-character mixed-case string in one run is where transcription errors
- * come from. The groups are separate elements with a CSS gap and no space
+ * come from. The groups are separate elements with margin and no space
  * characters between them, so selecting the text by hand gives exactly the
  * same characters as the copy button. A literal space would be a different
  * password.
+ *
+ * `inline-block`, not flex. Flex items are blockified, and a browser
+ * serialising blockified elements to the clipboard inserts a line break
+ * between each — so a hand selection would have produced five lines where the
+ * copy button produces one string. Inline-block leaves them in the inline
+ * formatting context, where no break is inserted.
  *
  * A secret meant to be pasted — a token, a link — is shown whole and
  * wrapped. Grouping a URL would be nonsense, and grouping a token invites
@@ -61,7 +67,7 @@ export const SecretReveal = ({
           className={cn(
             "flex-1 min-w-0 select-all font-mono text-sm text-on-surface",
             grouped
-              ? "flex flex-wrap gap-x-3 gap-y-1"
+              ? "block leading-loose [&>span]:inline-block [&>span]:mr-3"
               : "block break-all leading-relaxed",
           )}
         >

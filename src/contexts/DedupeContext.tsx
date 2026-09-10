@@ -27,6 +27,7 @@ import {
   useStartDedupeScan,
   useDedupeStream,
   fetchActiveScan,
+  fetchScan,
 } from "../api/dedupe";
 import { toast } from "sonner";
 import { rateLimitFacts } from "../api/client";
@@ -61,6 +62,16 @@ export function useDedupe() {
   return ctx;
 }
 
+/**
+ * Failed polls in a row before the wait is abandoned.
+ *
+ * Ten at three seconds is half a minute. The server keeps the booked place
+ * either way, so giving up early is worse than waiting: the pre-scan page
+ * offers a button the server answers "a scan is already running for your
+ * account".
+ */
+const QUEUE_POLL_MAX_FAILURES = 10;
+
 export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const [scan, setScan] = useState<DedupeScanProgress | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
@@ -69,6 +80,9 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   // rest wait. `queued` is that wait, and it is deliberately not a scan: the
   // scan record exists on the server but nothing is happening in it.
   const [queued, setQueued] = useState(false);
+  // The id of the scan the server booked for us. Read only by the poll below,
+  // to recover a scan that started and finished between two of its ticks.
+  const queuedScanId = useRef<string | null>(null);
   const startMutation = useStartDedupeScan();
 
   // The mount-only recovery below must read the scanId AT RESOLVE TIME — a
@@ -93,6 +107,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         if (active.queued) {
           // A booked scan, not a running one. The poll below takes over and
           // attaches the stream once it actually starts.
+          queuedScanId.current = active.scan?.scanId ?? null;
           setQueued(true);
           return;
         }
@@ -119,29 +134,68 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
    * three silent retries — so attaching it now would end with a connection
    * that closed itself before the scan began.
    *
-   * A run of failures ends the wait rather than polling forever. Three is
-   * enough to ride out one blip and short enough that a signed-out tab stops
-   * asking.
+   * Two answers mean the wait is over and they need different handling.
+   * `active.scan` is our turn having started: adopt it and attach the stream.
+   * No active scan at all means the scan ran *and finished* between two
+   * ticks, because `getActiveScan` skips terminal scans — so the record is
+   * fetched by id, which `GET /api/dedupe/status` still serves. Without that
+   * a short scan simply vanished: the waiting card disappeared, the pre-scan
+   * page came back, and the clusters it found were never shown.
    */
   useEffect(() => {
     if (!queued) return;
     let cancelled = false;
     let failures = 0;
+    // Consecutive ticks that found nothing at all.
+    let misses = 0;
+
+    const adopt = (adopted: DedupeScanProgress) => {
+      setQueued(false);
+      setScan(adopted);
+      setScanId(adopted.scanId);
+      if (adopted.phase === "complete") setClusters(adopted.clusters ?? []);
+    };
 
     const tick = async () => {
       try {
         const active = await fetchActiveScan();
         if (cancelled) return;
         failures = 0;
-        if (active.queued) return; // still waiting
-        setQueued(false);
-        if (active.scan) {
-          setScan(active.scan);
-          setScanId(active.scan.scanId);
+        if (active.queued) {
+          // The queued record is where the scan id comes from. The 429 that
+          // started this wait does not carry one.
+          queuedScanId.current = active.scan?.scanId ?? queuedScanId.current;
+          misses = 0;
+          return; // still waiting
         }
+        if (active.scan) {
+          adopt(active.scan);
+          return;
+        }
+        // Our turn came and went inside the gap. The id was remembered from
+        // the first tick that saw the booked scan, precisely for this.
+        const finishedId = queuedScanId.current;
+        if (finishedId) {
+          const finished = await fetchScan(finishedId);
+          if (cancelled) return;
+          if (finished) {
+            adopt(finished);
+            return;
+          }
+        }
+        // Nothing queued, nothing running, nothing to recover. That is the
+        // end of the wait — but not on one answer. The first tick fires
+        // immediately after the 429, and a server that has not yet published
+        // the booking would otherwise close a wait that had just opened.
+        if (++misses >= 2) setQueued(false);
       } catch {
         if (cancelled) return;
-        if (++failures >= 3) setQueued(false);
+        // The server still holds our place in line — only the connection is
+        // failing. Dropping the wait would show the pre-scan page, and
+        // pressing Begin Scan there is answered "a scan is already running
+        // for your account", with no way back to the waiting state.
+        // Ten ticks is half a minute before giving up.
+        if (++failures >= QUEUE_POLL_MAX_FAILURES) setQueued(false);
       }
     };
 
@@ -217,6 +271,9 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
             // a stalled progress bar.
             const facts = rateLimitFacts(err);
             if (facts && !facts.yours && facts.queued) {
+              // The 429 does not name the scan the server just booked, so the
+              // id comes from the next poll of `/dedupe/active`.
+              queuedScanId.current = null;
               setQueued(true);
               toast("Another user's scan is running — yours is queued");
               return;
@@ -234,6 +291,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     setScanId(null);
     setClusters([]);
     setQueued(false);
+    queuedScanId.current = null;
   }, []);
 
   const removeCluster = useCallback((id: string) => {

@@ -21,7 +21,7 @@
  * @module api/auth
  */
 
-import { API_BASE, NetworkError, apiJson, jsonBody } from "./client";
+import { ApiError, API_BASE, NetworkError, apiJson, jsonBody } from "./client";
 
 export interface AccountUser {
   id: string;
@@ -141,8 +141,23 @@ async function authFetch<T>(
   }
 
   if (!res.ok) {
-    const envelope = (body as { error?: { message?: string } } | null)?.error;
-    throw new Error(envelope?.message || `${fallback} (HTTP ${res.status})`);
+    // An `ApiError`, not a plain `Error`, so a caller can act on the status
+    // and the code. The accept-invitation screen has to tell a link the
+    // server does not recognise (404) or one it used to (410) apart from a
+    // typed field it can fix, and it cannot do that from a message string.
+    // Nothing here announces on the window: these are the screens outside the
+    // gate, and a 401 on one of them is the expected answer, not news.
+    const envelope = (
+      body as {
+        error?: { message?: string; code?: string; requestId?: string };
+      } | null
+    )?.error;
+    throw new ApiError(
+      envelope?.message || `${fallback} (HTTP ${res.status})`,
+      res.status,
+      envelope?.code,
+      envelope?.requestId,
+    );
   }
   return body as T;
 }
