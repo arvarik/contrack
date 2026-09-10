@@ -66,6 +66,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   account behind each call and omits the description, which is the one field
   that can carry a fragment of what somebody asked about.
 
+- **Phase 4.** The sign-in flow covers every way an account starts. A new
+  instance is set up; an instance that has been running without sign-in is
+  _secured_, and the screen says so and explains that the contacts already
+  there stay with the account it creates. An invitation link opens a join
+  screen, open registration adds a "Create one" link to sign-in, and an
+  account holding a password an administrator chose is sent to a screen that
+  replaces it before anything else works.
+- **Phase 4.** The app knows who is signed in. `useAuth()` carries the account,
+  its role, whether the password must change, and what the instance allows,
+  and it is available on every screen rather than only after the gate opens.
+  The signed-in account appears at the foot of the sidebar on desktop, with a
+  menu holding the account settings and sign-out, and at the top of Settings
+  on a phone. All of it hides on an instance that asks nobody to sign in.
+- **Phase 4.** An API tokens section in Account settings. Create a token and
+  see its value once, read the list with the last time each was used, and
+  revoke one. A banner appears while the deprecated environment `API_TOKEN`
+  is still set, naming the variable to remove.
+- **Phase 4.** A dedupe scan behind another account's says so. The scan is
+  booked on the server and starts by itself, and the page says that rather
+  than showing a progress bar at zero. `GET /api/dedupe/active` gained a
+  `queued` field, which is the only way a reloaded page can tell a booked scan
+  from one that has hung.
+
 ### Fixed
 
 - **Phase 3.** An expired personal token is refused from the moment it
@@ -94,8 +117,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The value of `token`, `secret` and `api_key` is replaced in every logged
   URL.
 
+- **Phase 4.** Enrichment reported every refusal as the daily grounding quota
+  being exhausted. The branch that did it could not run at all — the shared
+  client throws for any non-2xx, so the code reading `res.status` was
+  unreachable — and since Phase 3 the likeliest refusal is the per-account AI
+  limit, not the quota. The message now comes from the code the server sent,
+  and a limit held by another account says so instead of blaming the reader.
+- **Phase 4.** A dedupe stream that failed four times used to stop silently:
+  no error, no toast, no change on screen, and a progress bar that never moved
+  again for a scan that finished normally. An `EventSource` failure carries no
+  status, so the client now asks `/api/auth/status` which kind of failure it
+  was. A signed-out browser goes to the gate; a working one falls back to
+  polling the scan until it ends.
+- **Phase 4.** The contacts prefetch ran at module load, before React
+  rendered, so the first request of every page load on a gated instance was a
+  `401` from a browser that had not yet asked whether it was signed in. It now
+  runs when the gate opens, and again for the next account after a sign-out.
+- **Phase 4.** Three components reached `/api/...` with a bare `fetch`: the
+  bulk import, the link unfurler, and the enrichment call. None of them could
+  act on a `401` or a `403`, so a session that expired during an import
+  produced a failed import and no way to sign back in.
+  `tests/unit/frontend.apiClient.test.ts` scans the source and fails on the
+  next one.
+
 ### Changed
 
+- **Phase 4.** Signing in as a different account replaces the whole component
+  tree rather than reusing it. Clearing the query cache removed what the
+  server had sent; the recently-viewed list, the last AI Search, the dedupe
+  scan and every open panel were React state and survived it.
+- **Phase 4.** `emitAuthExpired` carries a reason. A `401` and a
+  `403 ACCOUNT_DISABLED` both end at the sign-in screen and now say different
+  things there, because inviting somebody whose account an administrator
+  closed to try their password again sends them round a loop with no end.
+- **Phase 4.** `.agent/STYLE.md` states the two mobile rules the primitives
+  have carried without documenting: a 44 px minimum hit area on every touch
+  control, and modals as bottom sheets below `sm`.
 - **Phase 3.** The fourteen routes the route manifest has classed `admin`
   since Phase 2 are now closed to a member. Backups, every write under
   `/api/settings/ai`, the AI diagnostics and grounding-capacity reports, the
