@@ -144,6 +144,24 @@ class DedupeJobQueue extends EventEmitter {
   }
 
   /**
+   * Whether this account's scan is waiting for the run lock rather than
+   * running.
+   *
+   * `getActiveScan` cannot tell the two apart: a queued scan is a real record
+   * with phase `starting`, exactly like a scan that began a moment ago. The
+   * client needs the difference, because the two deserve opposite words — a
+   * progress bar for one, "another account is scanning, yours is next" for
+   * the other — and because the SSE stream of a queued scan is silent until
+   * the lock frees, which reads as a stalled scan.
+   *
+   * Added in Phase 4 for that reason. `POST /api/dedupe/scan` says `queued`
+   * in its 429, but only to the tab that asked; a reload has no 429 to read.
+   */
+  isQueued(scope: Scope): boolean {
+    return this.pending.some((p) => p.ownerId === scope.ownerId);
+  }
+
+  /**
    * One of this account's scans by id, or null.
    *
    * A scan id another account started reads as missing, which the routes turn

@@ -6,7 +6,7 @@
  * Users select contacts, then click "Start AI Search" to begin a batch.
  */
 import React, { useState, useCallback, useMemo } from "react";
-import { Sparkles, Search, User, Link, Mail } from "lucide-react";
+import { Sparkles, Search, User, Link, Mail, Hourglass } from "lucide-react";
 import { useContacts } from "../../api";
 import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
@@ -23,7 +23,8 @@ type DataFilter = "all" | "has_links" | "has_email" | "no_data";
 
 export function AISearchView() {
   const { data: contacts = [], isLoading } = useContacts();
-  const { startSearch, isStarting, batch } = useAISearch();
+  const { startSearch, isStarting, batch, limitMessage, clearLimit } =
+    useAISearch();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -223,9 +224,30 @@ export function AISearchView() {
               </div>
             </div>
 
+            {/*
+              A refusal that is about timing rather than about the request.
+              It stays on the page under the button that caused it, because
+              the reader's next move is to wait and press it again, and a
+              toast that has already faded cannot tell them how long.
+            */}
+            {limitMessage && (
+              <div
+                role="status"
+                className="flex items-start gap-2.5 rounded-2xl bg-amber-500/10 p-3"
+              >
+                <Hourglass className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                <p className="flex-1 text-xs text-on-surface text-pretty">
+                  {limitMessage}
+                </p>
+              </div>
+            )}
+
             {/* Start button */}
             <button
-              onClick={() => setShowConfirm(true)}
+              onClick={() => {
+                clearLimit();
+                setShowConfirm(true);
+              }}
               disabled={selectedIds.size === 0 || isStarting}
               className={cn(
                 "w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all",

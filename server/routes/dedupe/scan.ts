@@ -154,11 +154,19 @@ export function registerScanRoutes(router: Router) {
   router.get(
     "/dedupe/active",
     asyncHandler(async (req, res) => {
-      const activeScan = dedupeQueue.getActiveScan(scopeOf(req));
+      const scope = scopeOf(req);
+      const activeScan = dedupeQueue.getActiveScan(scope);
       if (!activeScan) {
-        return res.json({ active: false });
+        return res.json({ active: false, queued: false });
       }
-      res.json({ active: true, scan: activeScan });
+      // `queued` says the scan exists but has not started, because another
+      // account holds the run lock. Without it the client shows a progress
+      // card frozen at "Initializing scan…" for however long that takes.
+      res.json({
+        active: true,
+        queued: dedupeQueue.isQueued(scope),
+        scan: activeScan,
+      });
     }),
   );
 

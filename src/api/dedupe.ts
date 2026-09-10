@@ -1,4 +1,6 @@
-import { apiFetch } from "./client";
+import { apiFetch, apiJson } from "./client";
+import { fetchAuthStatus } from "./auth";
+import { emitAuthExpired } from "../lib/appEvents";
 /**
  * Deduplication API Hooks — React Query hooks for the async duplicate detection engine.
  *
@@ -54,20 +56,39 @@ export const useStartDedupeScan = () => {
 // Active scan discovery (for state recovery after refresh)
 // =============================================================================
 
+/** What the server says about this account's scan right now. */
+export interface ActiveScanState {
+  /** The scan record, whether it is running or only booked. */
+  scan: DedupeScanProgress | null;
+  /**
+   * True when the scan exists but has not started, because another account
+   * holds the global run lock.
+   *
+   * The distinction cannot be made from the scan record: a queued scan and a
+   * scan that began a moment ago are both phase `starting`. Attaching the SSE
+   * stream to a queued scan produces silence until the lock frees, which
+   * looks exactly like a scan that has hung.
+   */
+  queued: boolean;
+}
+
 /**
- * Check if the server has an in-progress scan.
- * Returns the scan progress if active, or null if idle.
+ * What this account's scan is doing, if anything.
+ *
+ * This used to answer every failure with `null`, which reads as "idle". A
+ * three-second poll built on that would spin forever against a 401. It now
+ * throws like every other call, and both callers decide what to do.
  */
-export async function fetchActiveScan(): Promise<DedupeScanProgress | null> {
-  try {
-    const res = await apiFetch(`/dedupe/active`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.active && data.scan) return data.scan as DedupeScanProgress;
-    return null;
-  } catch {
-    return null;
-  }
+export async function fetchActiveScan(): Promise<ActiveScanState> {
+  const data = await apiJson<{
+    active?: boolean;
+    queued?: boolean;
+    scan?: DedupeScanProgress;
+  }>(`/dedupe/active`);
+  return {
+    scan: data.active && data.scan ? data.scan : null,
+    queued: data.queued === true,
+  };
 }
 
 // =============================================================================
@@ -80,9 +101,24 @@ const SSE_MAX_RETRIES = 3;
 const SSE_RETRY_DELAY_MS = 2000;
 
 /**
- * Connects to the SSE stream endpoint for real-time dedupe scan progress.
- * Calls onUpdate for every state change. Automatically closes on completion.
- * Includes retry logic for transient disconnects during long AI batch processing.
+ * Follow one scan to its end, by stream if possible and by polling if not.
+ *
+ * The stream is an `EventSource`, and an `EventSource` cannot report why it
+ * failed: a network blip, a proxy timing out an idle connection, and a server
+ * that has stopped accepting this browser's credential all arrive as the same
+ * bare `error` event with no status and no body. So a failure is diagnosed
+ * rather than guessed at.
+ *
+ * Three retries first, because most failures really are a blip. After that
+ * `/api/auth/status` is asked the one question the stream cannot answer: is
+ * this browser still signed in? If it is not, the gate is told and takes the
+ * screen; the scan is somebody else's problem now. If it is, the scan is
+ * still running and only the transport is broken, so progress comes from
+ * `GET /api/dedupe/status` every three seconds until the scan ends.
+ *
+ * Before this, a stream that failed four times simply stopped. No error, no
+ * toast, no state change — a progress bar that never moved again, for a scan
+ * that finished normally.
  */
 export const useDedupeStream = (
   scanId: string | null,
@@ -97,45 +133,100 @@ export const useDedupeStream = (
 
     let retries = 0;
     let source: EventSource | null = null;
+    let pollTimer: number | null = null;
     let closed = false;
+
+    /** Stop everything. Called on a terminal phase and on unmount. */
+    function stop() {
+      closed = true;
+      source?.close();
+      source = null;
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    /** Hand one update up, and stop if the scan is over. */
+    function deliver(scan: DedupeScanProgress) {
+      onUpdateRef.current(scan);
+      if (scan.phase === "complete" || scan.phase === "error") {
+        // Merged data has to appear everywhere, not just on this page.
+        queryClient.invalidateQueries({ queryKey: ["contacts"] });
+        stop();
+      }
+    }
+
+    function startPolling() {
+      if (closed || pollTimer !== null) return;
+      const tick = async () => {
+        try {
+          const scan = await apiJson<DedupeScanProgress>(
+            `/dedupe/status?scanId=${encodeURIComponent(scanId!)}`,
+          );
+          if (!closed) deliver(scan);
+        } catch {
+          // A 404 means the scan has been garbage-collected and a 401 has
+          // already reached the gate. Either way there is nothing left to
+          // follow.
+          stop();
+        }
+      };
+      pollTimer = window.setInterval(() => void tick(), 3000);
+      void tick();
+    }
+
+    /** Decide what a dead stream means, then act on it. */
+    async function diagnose() {
+      try {
+        const status = await fetchAuthStatus();
+        const signedOut = status.authRequired && !status.authenticated;
+        if (signedOut || status.user?.status === "disabled") {
+          // The gate owns this. It puts up the right screen; a scan progress
+          // card behind a sign-in form is not worth keeping alive.
+          emitAuthExpired(
+            status.user?.status === "disabled" ? "disabled" : "expired",
+          );
+          stop();
+          return;
+        }
+      } catch {
+        // The status call failed too, which points at the connection rather
+        // than the credential. Poll: it is the same answer either way, and
+        // polling recovers on its own when the network comes back.
+      }
+      startPolling();
+    }
 
     function connect() {
       if (closed) return;
-
       source = new EventSource(`${API_BASE}/dedupe/stream?scanId=${scanId}`);
 
       source.onmessage = (event) => {
         try {
           const scan: DedupeScanProgress = JSON.parse(event.data);
-          retries = 0; // Reset retry count on successful message
-          onUpdateRef.current(scan);
-          if (scan.phase === "complete" || scan.phase === "error") {
-            // Invalidate contacts cache so merged data appears everywhere
-            queryClient.invalidateQueries({ queryKey: ["contacts"] });
-            source?.close();
-            closed = true;
-          }
+          retries = 0; // a message means the transport is healthy again
+          deliver(scan);
         } catch {
-          // Ignore parse errors on individual events
+          // Ignore parse errors on individual events.
         }
       };
 
       source.onerror = () => {
         source?.close();
-        // Retry on transient errors (e.g., SSE timeout during long AI batch)
-        if (!closed && retries < SSE_MAX_RETRIES) {
+        source = null;
+        if (closed) return;
+        if (retries < SSE_MAX_RETRIES) {
           retries++;
-          setTimeout(connect, SSE_RETRY_DELAY_MS);
+          window.setTimeout(connect, SSE_RETRY_DELAY_MS);
+          return;
         }
+        void diagnose();
       };
     }
 
     connect();
-
-    return () => {
-      closed = true;
-      source?.close();
-    };
+    return stop;
   }, [scanId, queryClient]);
 };
 
