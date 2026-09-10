@@ -651,6 +651,39 @@ describe("invitations", () => {
     expect(list.body.invitations[0]).toMatchObject({ status: "pending" });
   });
 
+  it("builds the link from the host the client reached, proxy included", async () => {
+    const direct = await as(admin)(
+      request(app).post("/api/admin/invitations").send({}),
+    );
+    // The test server listens on 127.0.0.1 and an ephemeral port, and the
+    // link has to carry the port or it points at the wrong instance.
+    expect(direct.body.link).toMatch(
+      /^http:\/\/127\.0\.0\.1:\d+\/join\?token=/,
+    );
+
+    // A reverse proxy that rewrites Host would otherwise put its own internal
+    // name in the link. Only the one hop `trust proxy` names can set these.
+    const proxied = await as(admin)(
+      request(app)
+        .post("/api/admin/invitations")
+        .set("X-Forwarded-Host", "contrack.example.com")
+        .set("X-Forwarded-Proto", "https")
+        .send({}),
+    );
+    expect(proxied.body.link).toMatch(
+      /^https:\/\/contrack\.example\.com\/join\?token=/,
+    );
+
+    // A header with a path in it is not a host, and does not become one.
+    const hostile = await as(admin)(
+      request(app)
+        .post("/api/admin/invitations")
+        .set("X-Forwarded-Host", "evil.example.com/steal")
+        .send({}),
+    );
+    expect(hostile.body.link).not.toContain("evil.example.com");
+  });
+
   it("creates an account with the role the invitation carries", async () => {
     const created = await invite({ role: "admin" });
     const res = await request(app)

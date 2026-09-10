@@ -589,8 +589,8 @@ export function deleteUser(
  * else is deleted parent-last so that a cascade never has to walk a table the
  * statement above it already emptied.
  *
- * Measured at 147ms for 10,000 contacts and 10,000 emails, against a budget
- * of two seconds. The fallback the plan describes, if a much larger account
+ * Measured between 147ms and 160ms for 10,000 contacts and 10,000 emails,
+ * against a budget of two seconds. The fallback the plan describes, if a much larger account
  * ever exceeds that, is to chunk the contacts delete at 1,000 rows per
  * transaction: a crash between chunks leaves a partly deleted but consistent
  * account that the next call finishes.
@@ -632,8 +632,9 @@ export function purgeOwner(ownerId: string): void {
     //    per row here and deletes the FTS row by rowid, which FTS5 pushes
     //    down (PR #18). The plan proposed one
     //    `DELETE FROM contacts_fts ... MATCH 'ownerTok:...'` instead, and
-    //    measured on 10,000 contacts it saved 4ms of 153ms, so a second
-    //    mechanism doing the same work was not worth having.
+    //    measured on 10,000 contacts it saved 4ms of 153ms, which is inside
+    //    the run-to-run spread, so a second mechanism doing the same work was
+    //    not worth having.
     sqlite.prepare(`DELETE FROM contacts WHERE ownerId = ?`).run(ownerId);
 
     // 4. The account. Cascades sessions, tokens, per-user settings and the

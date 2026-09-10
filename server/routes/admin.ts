@@ -54,13 +54,27 @@ function adminContext(req: Request): AdminContext {
 /**
  * The origin to build an invitation link from.
  *
- * `req.protocol` honours `X-Forwarded-Proto` because `trust proxy` is set in
- * app.ts, and `req.get("host")` honours `X-Forwarded-Host` for the same
- * reason. So the link is right behind a reverse proxy without the operator
- * configuring a public URL anywhere.
+ * Taken from the request so the link is right behind a reverse proxy without
+ * the operator configuring a public URL anywhere. `req.protocol` reads
+ * `X-Forwarded-Proto` because `trust proxy` is set in app.ts, and the host
+ * comes from `X-Forwarded-Host` when a proxy sent one, because a proxy that
+ * rewrites `Host` would otherwise put its own internal name in the link.
+ *
+ * `req.get("host")` is deliberately not `req.hostname`: the latter drops the
+ * port, and a link to an instance on `:3210` needs it.
+ *
+ * The value is checked against a host shape rather than used as it arrives.
+ * Only the one hop `trust proxy` names can set the header, but a value with a
+ * slash or a space in it would put a path or a second field into the link,
+ * and there is no reason to carry one.
  */
+const HOST_SHAPE = /^[A-Za-z0-9.\-_[\]]+(?::\d{1,5})?$/;
+
 function requestOrigin(req: Request): string {
-  return `${req.protocol}://${req.get("host") ?? "localhost"}`;
+  const forwarded = req.get("x-forwarded-host")?.split(",")[0].trim();
+  const candidates = [forwarded, req.get("host")];
+  const host = candidates.find((v) => v && HOST_SHAPE.test(v)) ?? "localhost";
+  return `${req.protocol}://${host}`;
 }
 
 // ─── Accounts ────────────────────────────────────────────────────────────────
