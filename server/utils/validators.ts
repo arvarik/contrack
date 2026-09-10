@@ -324,6 +324,8 @@ export const adminSettingsSchema = z
 export const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   before: z.string().min(1).optional(),
+  /** Comma-separated actions, each of which must be one the app writes. */
+  action: z.string().min(1).optional(),
 });
 
 // ============================================================================

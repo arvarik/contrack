@@ -1665,6 +1665,49 @@ describe("the audit log", () => {
     expect(new Set(seen).size).toBe(total);
   });
 
+  it("filters to the actions asked for, across pages", async () => {
+    // The filter is in SQL, not in the caller. Narrowing a fetched page would
+    // show two sign-ins out of fifty rows with no way to reach the rest,
+    // which is the one thing an audit log must not do.
+    const all = await as(admin)(request(app).get("/api/admin/audit?limit=200"));
+    const signIns = (all.body.entries as { action: string }[]).filter(
+      (e) => e.action === "auth.login.success",
+    ).length;
+    expect(signIns).toBeGreaterThan(0);
+
+    const filtered = await as(admin)(
+      request(app).get("/api/admin/audit?limit=200&action=auth.login.success"),
+    );
+    expect(filtered.status).toBe(200);
+    const actions = (filtered.body.entries as { action: string }[]).map(
+      (e) => e.action,
+    );
+    expect(actions).toHaveLength(signIns);
+    expect(new Set(actions)).toEqual(new Set(["auth.login.success"]));
+
+    // Several at once, which is how the UI's groups are expressed.
+    const group = await as(admin)(
+      request(app).get(
+        "/api/admin/audit?limit=200&action=user.created,user.deleted",
+      ),
+    );
+    expect(group.status).toBe(200);
+    for (const entry of group.body.entries as { action: string }[]) {
+      expect(["user.created", "user.deleted"]).toContain(entry.action);
+    }
+  });
+
+  it("refuses an action nobody writes rather than answering nothing", async () => {
+    // An empty page in an audit log reads as "nothing happened". A typo must
+    // not be able to produce one.
+    const res = await as(admin)(
+      request(app).get("/api/admin/audit?action=user.deletd"),
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.message).toContain("user.deletd");
+  });
+
   it("names the actor, and keeps a row whose actor is gone", async () => {
     const res = await as(admin)(request(app).get("/api/admin/audit?limit=200"));
     const created = (
