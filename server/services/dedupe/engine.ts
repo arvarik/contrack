@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { sqlite } from "../../db.ts";
-import { currentOwnerId } from "../../tenancy/requestContext.ts";
-import { scopeForOwnerId } from "../../tenancy/scope.ts";
+import { runWithContext } from "../../tenancy/requestContext.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
@@ -13,7 +13,7 @@ import {
   getEmbeddingCount,
   getEmbedding,
   findNearestNeighbors,
-  clearEmbeddingMeta,
+  clearOwnerEmbeddings,
   reEmbedStaleContacts,
 } from "./embeddings.ts";
 import {
@@ -65,11 +65,296 @@ function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
   }
 }
 
+/**
+ * The body of one incremental check, inside the contact owner's context.
+ *
+ * Every read below names that owner: a duplicate of a contact can only be
+ * another contact in the same account, so a candidate from anywhere else is
+ * not a near miss, it is a leak.
+ */
+async function runIncrementalCheck(
+  scope: Scope,
+  contactId: string,
+  rid: string,
+  autoMergeThreshold: number,
+): Promise<void> {
+  const t0 = Date.now();
+
+  try {
+    const target = normalizeContactById(scope, contactId);
+    if (!target) {
+      log.debug(
+        "DedupeService",
+        `[${rid}] Incremental: contact ${contactId} has no usable name — skipping`,
+      );
+      return;
+    }
+
+    const distinctPairs = loadNegativeConstraints(scope);
+    const pairs: RawPair[] = [];
+    const seenPairs = new Set<string>();
+
+    if (target.emailsNorm.length > 0) {
+      const placeholders = target.emailsNorm.map(() => "?").join(",");
+      const emailMatches = sqlite
+        .prepare(
+          `
+          SELECT DISTINCT ce.contactId
+          FROM contact_emails ce
+          JOIN contacts c ON c.id = ce.contactId
+          WHERE c.ownerId = ?
+            AND LOWER(TRIM(ce.email)) IN (${placeholders})
+            AND ce.contactId != ?
+            AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
+        `,
+        )
+        .all(scope.ownerId, ...target.emailsNorm, contactId) as {
+        contactId: string;
+      }[];
+
+      for (const match of emailMatches) {
+        const pk = pairKey(contactId, match.contactId);
+        if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
+          seenPairs.add(pk);
+          pairs.push({
+            idA: contactId,
+            idB: match.contactId,
+            matchType: "email",
+            confidence: 0.99,
+            reasoning: "Shared email address",
+          });
+        }
+      }
+    }
+
+    if (target.phonesNorm.length > 0) {
+      const allPhones = sqlite
+        .prepare(
+          `
+          SELECT cp.contactId, cp.phone FROM contact_phones cp
+          JOIN contacts c ON c.id = cp.contactId
+          WHERE c.ownerId = ? AND cp.contactId != ?
+            AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
+        `,
+        )
+        .all(scope.ownerId, contactId) as {
+        contactId: string;
+        phone: string;
+      }[];
+
+      const targetPhoneSet = new Set(target.phonesNorm);
+      for (const row of allPhones) {
+        const norm = normalizePhone(row.phone);
+        if (norm && targetPhoneSet.has(norm)) {
+          const pk = pairKey(contactId, row.contactId);
+          if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
+            seenPairs.add(pk);
+            pairs.push({
+              idA: contactId,
+              idB: row.contactId,
+              matchType: "phone",
+              confidence: 0.99,
+              reasoning: "Shared phone number",
+            });
+          }
+        }
+      }
+    }
+
+    if (target.nameNorm) {
+      const allNormalized = normalizeContacts(scope);
+      const targetBlockKeys = new Set(target.blockKeys);
+
+      for (const other of allNormalized) {
+        if (other.id === contactId) continue;
+        const pk = pairKey(contactId, other.id);
+        if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
+
+        const sharesBlock = other.blockKeys.some((k) => targetBlockKeys.has(k));
+        if (!sharesBlock) continue;
+
+        if (target.nameNorm === other.nameNorm) {
+          seenPairs.add(pk);
+          const isCrossSource =
+            target.sources.length > 0 &&
+            other.sources.length > 0 &&
+            !target.sources.some((s) => other.sources.includes(s));
+          pairs.push({
+            idA: contactId,
+            idB: other.id,
+            matchType: isCrossSource ? "cross_source" : "name",
+            confidence: isCrossSource ? 0.95 : 0.92,
+            reasoning: isCrossSource
+              ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
+              : "Exact name match",
+          });
+          continue;
+        }
+
+        if (
+          target.lastNameNorm &&
+          target.lastNameNorm === other.lastNameNorm &&
+          target.firstNameNorm &&
+          other.firstNameNorm
+        ) {
+          if (isNicknameMatch(target.firstNameNorm, other.firstNameNorm)) {
+            seenPairs.add(pk);
+            pairs.push({
+              idA: contactId,
+              idB: other.id,
+              matchType: "nickname",
+              confidence: 0.88,
+              reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
+            });
+          }
+        }
+      }
+    }
+
+    if (isEmbeddingAvailable()) {
+      try {
+        const queryVec = getEmbedding(contactId);
+        if (queryVec) {
+          const neighbors = findNearestNeighbors(scope, queryVec, 5, contactId);
+          const normalizedCache = new Map<string, NormalizedContact>();
+
+          const targetSimCtx = buildPassContext(scope, rid);
+
+          for (const neighbor of neighbors) {
+            const pk = pairKey(contactId, neighbor.contactId);
+            if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
+
+            if (!normalizedCache.has(neighbor.contactId)) {
+              const n = normalizeContactById(scope, neighbor.contactId);
+              if (n) normalizedCache.set(neighbor.contactId, n);
+            }
+            const otherNorm = normalizedCache.get(neighbor.contactId);
+            if (!otherNorm) continue;
+
+            const pairDistinct = distinctPairs.has(pk);
+            const signals = computeMatchSignals(
+              target,
+              otherNorm,
+              distanceToSimilarity(neighbor.distance),
+              pairDistinct,
+              targetSimCtx.socialUrlsByContact.get(target.id) ?? [],
+              targetSimCtx.socialUrlsByContact.get(otherNorm.id) ?? [],
+            );
+            const score = computeCompositeScore(signals);
+            const classification = classifyPair(score);
+
+            if (classification !== "discard") {
+              seenPairs.add(pk);
+              const rawA =
+                (contactRepo.findOwned(
+                  scope,
+                  contactId,
+                ) as ContactRow | null) ?? undefined;
+              const rawB =
+                (contactRepo.findOwned(
+                  scope,
+                  neighbor.contactId,
+                ) as ContactRow | null) ?? undefined;
+              pairs.push({
+                idA: contactId,
+                idB: neighbor.contactId,
+                matchType: "fuzzy",
+                confidence: score,
+                reasoning: buildScoringReasoning(signals, score, rawA, rawB),
+              });
+            }
+          }
+        }
+      } catch (err: unknown) {
+        log.debug(
+          "DedupeService",
+          `[${rid}] Incremental KNN failed: ${getErrorMessage(err)}`,
+        );
+      }
+    }
+
+    if (pairs.length === 0) {
+      log.debug(
+        "DedupeService",
+        `[${rid}] Incremental: no duplicates found for ${contactId} (${Date.now() - t0}ms)`,
+      );
+      return;
+    }
+
+    const qualifyingPairs = pairs.filter(
+      (p) => p.confidence >= autoMergeThreshold,
+    );
+    const pendingPairs = pairs.filter((p) => p.confidence < autoMergeThreshold);
+    for (const pair of pendingPairs) {
+      storeSuggestion(scope, pair, "pending");
+    }
+
+    if (qualifyingPairs.length > 0) {
+      const pairIds = [
+        ...new Set(qualifyingPairs.flatMap((p) => [p.idA, p.idB])),
+      ];
+      const pairHydratedMap = new Map(
+        contactRepo
+          .hydrateMany(contactRepo.findManyOwned(scope, pairIds))
+          .map((c) => [c.id, c]),
+      );
+
+      for (const pair of qualifyingPairs) {
+        try {
+          const rawA = pairHydratedMap.get(pair.idA);
+          const rawB = pairHydratedMap.get(pair.idB);
+          if (!rawA || !rawB) continue;
+
+          const scoreA = computePrimaryScore(scope, rawA);
+          const scoreB = computePrimaryScore(scope, rawB);
+          const [primaryId, duplicateId] =
+            scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
+
+          dedupeService.softMergeContacts(
+            scope,
+            primaryId,
+            duplicateId,
+            pair.confidence,
+            pair.reasoning,
+            rid,
+          );
+          storeSuggestion(scope, pair, "auto_merged");
+        } catch (err: unknown) {
+          log.warn(
+            "DedupeService",
+            `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`,
+          );
+          storeSuggestion(scope, pair, "pending");
+        }
+      }
+    }
+
+    log.info(
+      "DedupeService",
+      `[${rid}] Incremental: ${pairs.length} match(es) for ${contactId} in ${Date.now() - t0}ms`,
+    );
+  } catch (err: unknown) {
+    log.error(
+      "DedupeService",
+      `[${rid}] Incremental check failed for ${contactId}: ${getErrorMessage(err)}`,
+    );
+  }
+}
+
 export const dedupeService = {
   mergeContacts,
   softMergeContacts,
 
+  /**
+   * Find this account's duplicates and persist them.
+   *
+   * The scope is an argument, not a context read. A queued scan starts long
+   * after its request returned, from inside another account's completion
+   * callback, so an ambient owner would be the wrong one exactly when two
+   * accounts scan at once.
+   */
   async runScan(
+    scope: Scope,
     scanId: string,
     mode: DedupeScanMode,
     rid: string,
@@ -78,10 +363,6 @@ export const dedupeService = {
     dedupeQueue.setProcessing(true);
     const resolved = resolveMode(mode);
     let embeddingsReady = false;
-    // TODO(2e): runScan(scope, ...) takes the scope from the route, and the
-    // job queue stores it on the scan. Until then it comes from the request
-    // that started the scan, which is the caller on every path that exists.
-    const scope = scopeForOwnerId(currentOwnerId());
 
     try {
       dedupeQueue.update(scanId, {
@@ -102,7 +383,7 @@ export const dedupeService = {
       }
 
       if (resolved !== "quick" && isEmbeddingAvailable()) {
-        const existingCount = getEmbeddingCount();
+        const existingCount = getEmbeddingCount(scope);
         const needsBackfill = resolved === "full" || existingCount === 0;
 
         if (needsBackfill) {
@@ -116,11 +397,10 @@ export const dedupeService = {
 
           try {
             if (resolved === "full") {
-              sqlite.prepare("DELETE FROM contact_embeddings").run();
-              clearEmbeddingMeta();
+              clearOwnerEmbeddings(scope);
               log.info(
                 "DedupeService",
-                `[${rid}] Full mode: cleared all embeddings for re-generation`,
+                `[${rid}] Full mode: cleared this account's embeddings for re-generation`,
               );
             }
 
@@ -144,7 +424,7 @@ export const dedupeService = {
         } else {
           // Embeddings already exist (deep scan, not full), re-embed stale contacts
           try {
-            const reEmbedded = await reEmbedStaleContacts();
+            const reEmbedded = await reEmbedStaleContacts(scope);
             if (reEmbedded > 0) {
               log.info(
                 "DedupeService",
@@ -157,7 +437,7 @@ export const dedupeService = {
               "DedupeService",
               `[${rid}] Stale re-embedding failed: ${getErrorMessage(err)}`,
             );
-            embeddingsReady = getEmbeddingCount() > 0;
+            embeddingsReady = getEmbeddingCount(scope) > 0;
           }
         }
       } else if (resolved !== "quick") {
@@ -199,15 +479,15 @@ export const dedupeService = {
         totalPairs: allPairs.length,
       });
 
-      const clusters = buildClusters(allPairs, ctx.contactMap, rid);
+      const clusters = buildClusters(scope, allPairs, ctx.contactMap, rid);
 
       dedupeQueue.update(scanId, {
         phase: "persisting",
         phaseName: "Persisting suggestions and auto-merging…",
       });
 
-      clearStaleSuggestions();
-      clearAllPendingSuggestions();
+      clearStaleSuggestions(scope);
+      clearAllPendingSuggestions(scope);
 
       const autoMergePairs: RawPair[] = [];
       const pendingPairs: RawPair[] = [];
@@ -251,6 +531,8 @@ export const dedupeService = {
       const autoMergeIds = [
         ...new Set(autoMergePairs.flatMap((p) => [p.idA, p.idB])),
       ];
+      // Every id came from `ctx.contactMap`, which `buildPassContext` filled
+      // from one scoped query, so hydration never reaches outside the account.
       const autoMergeRawRows = autoMergeIds
         .map((id) => ctx.contactMap.get(id))
         .filter(Boolean);
@@ -264,12 +546,13 @@ export const dedupeService = {
           const hydratedB = autoMergeHydratedMap.get(pair.idB);
           if (!hydratedA || !hydratedB) continue;
 
-          const scoreA = computePrimaryScore(hydratedA);
-          const scoreB = computePrimaryScore(hydratedB);
+          const scoreA = computePrimaryScore(scope, hydratedA);
+          const scoreB = computePrimaryScore(scope, hydratedB);
           const [primaryId, duplicateId] =
             scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
 
           dedupeService.softMergeContacts(
+            scope,
             primaryId,
             duplicateId,
             pair.confidence,
@@ -288,12 +571,13 @@ export const dedupeService = {
 
       if (autoMergePairs.length > 0) {
         storeSuggestions(
+          scope,
           autoMergePairs.filter((_, i) => i < autoMergedCount),
           "auto_merged",
         );
       }
       if (pendingPairs.length > 0) {
-        storeSuggestions(pendingPairs, "pending");
+        storeSuggestions(scope, pendingPairs, "pending");
       }
 
       log.info(
@@ -316,278 +600,38 @@ export const dedupeService = {
     }
   },
 
+  /**
+   * Check one just-written contact against its own account.
+   *
+   * A debounced timer calls this, so the request that created the contact has
+   * returned and there is no context left to inherit. The owner comes off the
+   * contact row, and the whole check runs inside `runWithContext`, so the AI
+   * rows it writes name the right account as well as read from it.
+   */
   async incrementalDedupeCheck(
     contactId: string,
     rid: string,
     autoMergeThreshold = 0.93,
   ): Promise<void> {
-    const t0 = Date.now();
-
-    try {
-      // A background path with no request behind it, so the owner comes from
-      // the contact itself. TODO(2e): wrap the body in runWithContext so the
-      // AI rows this writes are attributed as well as scoped.
-      const scope = scopeOfContact(contactId);
-      const target = scope ? normalizeContactById(scope, contactId) : null;
-      if (!scope || !target) {
-        log.debug(
-          "DedupeService",
-          `[${rid}] Incremental: contact ${contactId} not found or empty — skipping`,
-        );
-        return;
-      }
-
-      const distinctPairs = loadNegativeConstraints(scope);
-      const pairs: RawPair[] = [];
-      const seenPairs = new Set<string>();
-
-      if (target.emailsNorm.length > 0) {
-        const placeholders = target.emailsNorm.map(() => "?").join(",");
-        const emailMatches = sqlite
-          .prepare(
-            `
-          SELECT DISTINCT ce.contactId
-          FROM contact_emails ce
-          JOIN contacts c ON c.id = ce.contactId
-          WHERE LOWER(TRIM(ce.email)) IN (${placeholders})
-            AND ce.contactId != ?
-            AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-        `,
-          )
-          .all(...target.emailsNorm, contactId) as { contactId: string }[];
-
-        for (const match of emailMatches) {
-          const pk = pairKey(contactId, match.contactId);
-          if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
-            seenPairs.add(pk);
-            pairs.push({
-              idA: contactId,
-              idB: match.contactId,
-              matchType: "email",
-              confidence: 0.99,
-              reasoning: "Shared email address",
-            });
-          }
-        }
-      }
-
-      if (target.phonesNorm.length > 0) {
-        const allPhones = sqlite
-          .prepare(
-            `
-          SELECT contactId, phone FROM contact_phones cp
-          JOIN contacts c ON c.id = cp.contactId
-          WHERE cp.contactId != ? AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-        `,
-          )
-          .all(contactId) as { contactId: string; phone: string }[];
-
-        const targetPhoneSet = new Set(target.phonesNorm);
-        for (const row of allPhones) {
-          const norm = normalizePhone(row.phone);
-          if (norm && targetPhoneSet.has(norm)) {
-            const pk = pairKey(contactId, row.contactId);
-            if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
-              seenPairs.add(pk);
-              pairs.push({
-                idA: contactId,
-                idB: row.contactId,
-                matchType: "phone",
-                confidence: 0.99,
-                reasoning: "Shared phone number",
-              });
-            }
-          }
-        }
-      }
-
-      if (target.nameNorm) {
-        const allNormalized = normalizeContacts(scope);
-        const targetBlockKeys = new Set(target.blockKeys);
-
-        for (const other of allNormalized) {
-          if (other.id === contactId) continue;
-          const pk = pairKey(contactId, other.id);
-          if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-
-          const sharesBlock = other.blockKeys.some((k) =>
-            targetBlockKeys.has(k),
-          );
-          if (!sharesBlock) continue;
-
-          if (target.nameNorm === other.nameNorm) {
-            seenPairs.add(pk);
-            const isCrossSource =
-              target.sources.length > 0 &&
-              other.sources.length > 0 &&
-              !target.sources.some((s) => other.sources.includes(s));
-            pairs.push({
-              idA: contactId,
-              idB: other.id,
-              matchType: isCrossSource ? "cross_source" : "name",
-              confidence: isCrossSource ? 0.95 : 0.92,
-              reasoning: isCrossSource
-                ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
-                : "Exact name match",
-            });
-            continue;
-          }
-
-          if (
-            target.lastNameNorm &&
-            target.lastNameNorm === other.lastNameNorm &&
-            target.firstNameNorm &&
-            other.firstNameNorm
-          ) {
-            if (isNicknameMatch(target.firstNameNorm, other.firstNameNorm)) {
-              seenPairs.add(pk);
-              pairs.push({
-                idA: contactId,
-                idB: other.id,
-                matchType: "nickname",
-                confidence: 0.88,
-                reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
-              });
-            }
-          }
-        }
-      }
-
-      if (isEmbeddingAvailable()) {
-        try {
-          const queryVec = getEmbedding(contactId);
-          if (queryVec) {
-            const neighbors = findNearestNeighbors(
-              scope,
-              queryVec,
-              5,
-              contactId,
-            );
-            const normalizedCache = new Map<string, NormalizedContact>();
-
-            const targetSimCtx = buildPassContext(scope, rid);
-
-            for (const neighbor of neighbors) {
-              const pk = pairKey(contactId, neighbor.contactId);
-              if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-
-              if (!normalizedCache.has(neighbor.contactId)) {
-                const n = normalizeContactById(scope, neighbor.contactId);
-                if (n) normalizedCache.set(neighbor.contactId, n);
-              }
-              const otherNorm = normalizedCache.get(neighbor.contactId);
-              if (!otherNorm) continue;
-
-              const pairDistinct = distinctPairs.has(pk);
-              const signals = computeMatchSignals(
-                target,
-                otherNorm,
-                distanceToSimilarity(neighbor.distance),
-                pairDistinct,
-                targetSimCtx.socialUrlsByContact.get(target.id) ?? [],
-                targetSimCtx.socialUrlsByContact.get(otherNorm.id) ?? [],
-              );
-              const score = computeCompositeScore(signals);
-              const classification = classifyPair(score);
-
-              if (classification !== "discard") {
-                seenPairs.add(pk);
-                const rawA = sqlite
-                  .prepare("SELECT * FROM contacts WHERE id = ?")
-                  .get(contactId) as ContactRow | undefined;
-                const rawB = sqlite
-                  .prepare("SELECT * FROM contacts WHERE id = ?")
-                  .get(neighbor.contactId) as ContactRow | undefined;
-                pairs.push({
-                  idA: contactId,
-                  idB: neighbor.contactId,
-                  matchType: "fuzzy",
-                  confidence: score,
-                  reasoning: buildScoringReasoning(signals, score, rawA, rawB),
-                });
-              }
-            }
-          }
-        } catch (err: unknown) {
-          log.debug(
-            "DedupeService",
-            `[${rid}] Incremental KNN failed: ${getErrorMessage(err)}`,
-          );
-        }
-      }
-
-      if (pairs.length === 0) {
-        log.debug(
-          "DedupeService",
-          `[${rid}] Incremental: no duplicates found for ${contactId} (${Date.now() - t0}ms)`,
-        );
-        return;
-      }
-
-      const qualifyingPairs = pairs.filter(
-        (p) => p.confidence >= autoMergeThreshold,
-      );
-      const pendingPairs = pairs.filter(
-        (p) => p.confidence < autoMergeThreshold,
-      );
-      for (const pair of pendingPairs) {
-        storeSuggestion(pair, "pending");
-      }
-
-      if (qualifyingPairs.length > 0) {
-        const pairIds = [
-          ...new Set(qualifyingPairs.flatMap((p) => [p.idA, p.idB])),
-        ];
-        const placeholders = pairIds.map(() => "?").join(",");
-        const rawContacts = sqlite
-          .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
-          .all(pairIds);
-        const pairHydratedMap = new Map(
-          contactRepo.hydrateMany(rawContacts).map((c) => [c.id, c]),
-        );
-
-        for (const pair of qualifyingPairs) {
-          try {
-            const rawA = pairHydratedMap.get(pair.idA);
-            const rawB = pairHydratedMap.get(pair.idB);
-            if (!rawA || !rawB) continue;
-
-            const scoreA = computePrimaryScore(rawA);
-            const scoreB = computePrimaryScore(rawB);
-            const [primaryId, duplicateId] =
-              scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
-
-            dedupeService.softMergeContacts(
-              primaryId,
-              duplicateId,
-              pair.confidence,
-              pair.reasoning,
-              rid,
-            );
-            storeSuggestion(pair, "auto_merged");
-          } catch (err: unknown) {
-            log.warn(
-              "DedupeService",
-              `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`,
-            );
-            storeSuggestion(pair, "pending");
-          }
-        }
-      }
-
-      log.info(
+    const scope = scopeOfContact(contactId);
+    if (!scope) {
+      log.debug(
         "DedupeService",
-        `[${rid}] Incremental: ${pairs.length} match(es) for ${contactId} in ${Date.now() - t0}ms`,
+        `[${rid}] Incremental: contact ${contactId} not found — skipping`,
       );
-    } catch (err: unknown) {
-      log.error(
-        "DedupeService",
-        `[${rid}] Incremental check failed for ${contactId}: ${getErrorMessage(err)}`,
-      );
+      return;
     }
+    return runWithContext(
+      {
+        requestId: `job-dedupe-incremental-${contactId.slice(0, 8)}`,
+        principal: null,
+        scope,
+      },
+      () => runIncrementalCheck(scope, contactId, rid, autoMergeThreshold),
+    );
   },
 
-  seedDuplicates() {
+  seedDuplicates(scope: Scope) {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         "seedDuplicates() is a dev-only utility and cannot run in production",
@@ -602,7 +646,7 @@ export const dedupeService = {
 
     // Dev-only seed. Stamped like every other insert so the seeded rows
     // belong to whoever asked for them.
-    const owner = currentOwnerId();
+    const owner = scope.ownerId;
     const insertContact = sqlite.prepare(
       "INSERT INTO contacts (id, name, company, role, themeColor, ownerId) VALUES (?, ?, ?, ?, ?, ?)",
     );

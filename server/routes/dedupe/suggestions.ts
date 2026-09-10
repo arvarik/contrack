@@ -14,24 +14,29 @@ import {
   undoSoftMerge,
   dedupeService,
 } from "../../services/dedupe/index.ts";
+import { scopeOf } from "../../tenancy/scope.ts";
 
 export function registerSuggestionRoutes(router: Router) {
   router.get(
     "/dedupe/suggestions",
     asyncHandler(async (req, res) => {
       const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
-      const suggestions = getPendingSuggestions(limit);
+      const suggestions = getPendingSuggestions(scopeOf(req), limit);
       res.json({ suggestions, total: suggestions.length });
     }),
   );
 
   router.get(
     "/dedupe/suggestions/count",
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       // `count` drives the sidebar badge, so it reports clusters: the number
       // of cards the review queue will actually show. `pairs` is the raw
       // pending row count, kept for anything that needs the finer number.
-      res.json({ count: getPendingClusterCount(), pairs: getPendingCount() });
+      const scope = scopeOf(req);
+      res.json({
+        count: getPendingClusterCount(scope),
+        pairs: getPendingCount(scope),
+      });
     }),
   );
 
@@ -39,7 +44,10 @@ export function registerSuggestionRoutes(router: Router) {
     "/dedupe/suggestion-for/:contactId",
     asyncHandler(async (req, res) => {
       const { contactId } = req.params;
-      const suggestion = getSuggestionForContact(String(contactId));
+      const suggestion = getSuggestionForContact(
+        scopeOf(req),
+        String(contactId),
+      );
       res.json({ suggestion });
     }),
   );
@@ -50,7 +58,7 @@ export function registerSuggestionRoutes(router: Router) {
       const rid = req.requestId;
       const id = String(req.params.id);
 
-      dismissSuggestion(id, rid);
+      dismissSuggestion(scopeOf(req), id, rid);
       log.info("API", `[${rid}] POST /api/dedupe/suggestions/${id}/dismiss`);
       res.json({ success: true });
     }),
@@ -59,11 +67,12 @@ export function registerSuggestionRoutes(router: Router) {
   router.post(
     "/dedupe/suggestions/:id/merge",
     asyncHandler(async (req, res) => {
+      const scope = scopeOf(req);
       const rid = req.requestId;
       const id = String(req.params.id);
       const { primaryId } = req.body;
 
-      const suggestion = getSuggestionById(id);
+      const suggestion = getSuggestionById(scope, id);
       if (!suggestion) {
         throw new AppError("Suggestion not found", 404);
       }
@@ -91,9 +100,14 @@ export function registerSuggestionRoutes(router: Router) {
           ? suggestion.contactIdB
           : suggestion.contactIdA;
 
-      const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
+      const merged = dedupeService.mergeContacts(
+        scope,
+        primaryId,
+        duplicateId,
+        rid,
+      );
 
-      markSuggestionMerged(id, "user:suggestion");
+      markSuggestionMerged(scope, id, "user:suggestion");
 
       log.info(
         "API",
@@ -107,7 +121,7 @@ export function registerSuggestionRoutes(router: Router) {
     "/dedupe/merge-log",
     asyncHandler(async (req, res) => {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-      const entries = getMergeLog(limit);
+      const entries = getMergeLog(scopeOf(req), limit);
       res.json({ entries, total: entries.length });
     }),
   );
@@ -118,7 +132,7 @@ export function registerSuggestionRoutes(router: Router) {
       const rid = req.requestId;
       const id = String(req.params.id);
 
-      undoSoftMerge(id, rid);
+      undoSoftMerge(scopeOf(req), id, rid);
       log.info("API", `[${rid}] POST /api/dedupe/merge-log/${id}/undo`);
       res.json({ success: true });
     }),

@@ -30,6 +30,13 @@ export const useStartDedupeScan = () => {
       mode: DedupeScanMode;
       autoMergeThreshold?: number;
     }) => {
+      // `apiFetch` throws `ApiError` for any non-2xx, with the message read
+      // out of the standard `{ error: { code, message } }` envelope, so the
+      // caller's `onError` toast shows the server's own words. The busy 429
+      // used to be the one endpoint here that answered with a bare
+      // `{ error: string }`, which the block that used to sit below read by
+      // hand; since 2e it sends the envelope like everything else and carries
+      // `details.yours` and `details.queued` for Phase 4 to act on.
       const res = await apiFetch(`/dedupe/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -38,10 +45,6 @@ export const useStartDedupeScan = () => {
           autoMergeThreshold: opts.autoMergeThreshold,
         }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to start scan");
-      }
       return res.json() as Promise<{ scanId: string; mode: DedupeScanMode }>;
     },
   });

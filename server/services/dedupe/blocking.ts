@@ -149,15 +149,17 @@ export interface BlockingStats {
  * This catches semantic/contextual matches that blocking keys miss
  * (e.g., career-context similarity, cross-language names).
  *
+ * @param scope          - The owner whose vectors are searched
  * @param contactIds     - All contact IDs to query KNN for
  * @param alreadyPaired  - Set of pair keys already in the candidate pool
  * @returns Additional candidate pairs from embedding similarity
  */
 export function addEmbeddingCandidates(
+  scope: Scope,
   contactIds: string[],
   alreadyPaired: Set<string>,
 ): { idA: string; idB: string }[] {
-  const embeddingCount = getEmbeddingCount();
+  const embeddingCount = getEmbeddingCount(scope);
   if (embeddingCount === 0) {
     log.debug(
       "DedupeBlocking",

@@ -473,12 +473,16 @@ export function normalizeContactsForAllOwners(
 /**
  * The scope a background path should use when all it has is a contact id.
  *
- * A fire-and-forget embedding or a queued dedupe check runs with no request
+ * A fire-and-forget embedding or a debounced dedupe check runs with no request
  * behind it, so the owner comes from the row itself rather than from the
  * async context, which a stream or a timer can lose. Returns null when the
  * contact is gone, which is the "nothing to do" every caller already handles.
- * Sub-phase 2e replaces each caller with a scope threaded from the job that
- * scheduled the work.
+ *
+ * `incrementalDedupeCheck` is the settled use: it is handed a contact id and
+ * nothing else, so this is where its scope comes from, and it opens a
+ * `runWithContext` around the rest of the check. The two embedding callers in
+ * `dedupe/embeddings.ts` are the unsettled ones, and 2h replaces them with a
+ * scope threaded from the job that scheduled the work.
  */
 export function scopeOfContact(contactId: string): Scope | null {
   const row = sqlite

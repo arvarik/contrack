@@ -7,8 +7,17 @@ import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { softMergeContacts } from "../../server/services/dedupe/merging.ts";
+import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
+import { localOwnerId } from "./tenancy/helpers.ts";
 
 const app = makeTestApp();
+
+/**
+ * Merging takes a scope since 2e. Auth is off in this file, so every row
+ * belongs to the local owner account, which is the same owner the routes read
+ * out of `scopeOf(req)`.
+ */
+const scope = () => scopeForOwnerId(localOwnerId());
 
 interface SlimContact {
   id: string;
@@ -93,7 +102,14 @@ describe("merge → audit log → undo", () => {
 
     // The soft-merge path is what the scan auto-merger and bulk import use;
     // drive the service directly against the same real database.
-    softMergeContacts(primaryId, duplicateId, 0.95, "test auto-merge", "test");
+    softMergeContacts(
+      scope(),
+      primaryId,
+      duplicateId,
+      0.95,
+      "test auto-merge",
+      "test",
+    );
 
     // Tombstoned out of the active list...
     let slim = await slimContacts();

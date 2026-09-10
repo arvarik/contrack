@@ -19,6 +19,7 @@
 
 import crypto from "crypto";
 import { sqlite } from "../../db.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { AppError } from "../../utils/AppError.ts";
@@ -68,34 +69,40 @@ export interface MergeLogEntry {
 
 const _stmts = {
   // --- Suggestions ---
+  // A suggestion, an exclusion and a merge log row all name their owner on
+  // insert. The Phase 1 fill trigger would derive it from `contactIdA`, but a
+  // derived owner is a guess that happens to be right: the pair check that
+  // makes it right lives in the service, so the service writes it.
   insertSuggestion: sqlite.prepare(`
     INSERT OR IGNORE INTO dedupe_suggestions
-      (id, contactIdA, contactIdB, matchType, confidence, reasoning, matchedField, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (id, contactIdA, contactIdB, matchType, confidence, reasoning, matchedField, status, ownerId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
   getPending: sqlite.prepare(`
     SELECT * FROM dedupe_suggestions
-    WHERE status = 'pending'
+    WHERE ownerId = ? AND status = 'pending'
     ORDER BY confidence DESC
     LIMIT ?
   `),
 
   getPendingCount: sqlite.prepare(`
-    SELECT COUNT(*) AS cnt FROM dedupe_suggestions WHERE status = 'pending'
+    SELECT COUNT(*) AS cnt FROM dedupe_suggestions
+    WHERE ownerId = ? AND status = 'pending'
   `),
 
   getPendingPairs: sqlite.prepare(`
-    SELECT contactIdA, contactIdB FROM dedupe_suggestions WHERE status = 'pending'
+    SELECT contactIdA, contactIdB FROM dedupe_suggestions
+    WHERE ownerId = ? AND status = 'pending'
   `),
 
   getById: sqlite.prepare(`
-    SELECT * FROM dedupe_suggestions WHERE id = ?
+    SELECT * FROM dedupe_suggestions WHERE id = ? AND ownerId = ?
   `),
 
   getForContact: sqlite.prepare(`
     SELECT * FROM dedupe_suggestions
-    WHERE (contactIdA = ? OR contactIdB = ?) AND status = 'pending'
+    WHERE ownerId = ? AND (contactIdA = ? OR contactIdB = ?) AND status = 'pending'
     ORDER BY confidence DESC
     LIMIT 1
   `),
@@ -103,24 +110,24 @@ const _stmts = {
   updateStatus: sqlite.prepare(`
     UPDATE dedupe_suggestions
     SET status = ?, reviewedAt = CURRENT_TIMESTAMP, reviewedBy = ?
-    WHERE id = ?
+    WHERE id = ? AND ownerId = ?
   `),
 
   clearStale: sqlite.prepare(`
     DELETE FROM dedupe_suggestions
-    WHERE status = 'pending'
-      AND (contactIdA NOT IN (SELECT id FROM contacts WHERE isGhost = 0 AND canonicalId IS NULL)
-        OR contactIdB NOT IN (SELECT id FROM contacts WHERE isGhost = 0 AND canonicalId IS NULL))
+    WHERE ownerId = ? AND status = 'pending'
+      AND (contactIdA NOT IN (SELECT id FROM contacts WHERE ownerId = ? AND isGhost = 0 AND canonicalId IS NULL)
+        OR contactIdB NOT IN (SELECT id FROM contacts WHERE ownerId = ? AND isGhost = 0 AND canonicalId IS NULL))
   `),
 
   clearAllPending: sqlite.prepare(`
-    DELETE FROM dedupe_suggestions WHERE status = 'pending'
+    DELETE FROM dedupe_suggestions WHERE ownerId = ? AND status = 'pending'
   `),
 
   // --- Exclusions ---
   insertExclusion: sqlite.prepare(`
-    INSERT OR IGNORE INTO dedupe_exclusions (contactIdA, contactIdB)
-    VALUES (?, ?)
+    INSERT OR IGNORE INTO dedupe_exclusions (contactIdA, contactIdB, ownerId)
+    VALUES (?, ?, ?)
   `),
 
   // --- Merge Log ---
@@ -130,29 +137,37 @@ const _stmts = {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
-  /**
-   * The owner of a merge log row is the owner of the surviving contact, not
-   * whoever is signed in. A merge can run from a background scan that carries
-   * no request context, and the audit row still belongs to the person whose
-   * data was merged.
-   */
-  // tenant-lint: allow owner-checked by caller
-  getContactOwner: sqlite.prepare(`
-    SELECT ownerId FROM contacts WHERE id = ?
-  `),
-
   getMergeLog: sqlite.prepare(`
     SELECT * FROM dedupe_merge_log
+    WHERE ownerId = ?
     ORDER BY mergedAt DESC
     LIMIT ?
   `),
 
   getMergeLogById: sqlite.prepare(`
-    SELECT * FROM dedupe_merge_log WHERE id = ?
+    SELECT * FROM dedupe_merge_log WHERE id = ? AND ownerId = ?
   `),
 
   undoMergeLog: sqlite.prepare(`
-    UPDATE dedupe_merge_log SET undoneAt = CURRENT_TIMESTAMP WHERE id = ?
+    UPDATE dedupe_merge_log SET undoneAt = CURRENT_TIMESTAMP
+    WHERE id = ? AND ownerId = ?
+  `),
+
+  restoreDuplicate: sqlite.prepare(`
+    UPDATE contacts SET canonicalId = NULL WHERE id = ? AND ownerId = ?
+  `),
+
+  /** One contact's display name, for the merge log. */
+  contactName: sqlite.prepare(`
+    SELECT name FROM contacts WHERE id = ? AND ownerId = ?
+  `),
+
+  reopenSuggestion: sqlite.prepare(`
+    UPDATE dedupe_suggestions
+    SET status = 'pending', reviewedAt = NULL, reviewedBy = NULL
+    WHERE ownerId = ?
+      AND ((contactIdA = ? AND contactIdB = ?) OR (contactIdA = ? AND contactIdB = ?))
+      AND status = 'auto_merged'
   `),
 };
 
@@ -165,6 +180,7 @@ const _stmts = {
  * INSERT OR IGNORE makes this idempotent — safe for re-scans.
  */
 export function storeSuggestion(
+  scope: Scope,
   pair: {
     idA: string;
     idB: string;
@@ -186,6 +202,7 @@ export function storeSuggestion(
     pair.reasoning,
     pair.matchedField ?? null,
     status,
+    scope.ownerId,
   );
 }
 
@@ -194,6 +211,7 @@ export function storeSuggestion(
  * Used at the end of a scan to persist all detected pairs.
  */
 export function storeSuggestions(
+  scope: Scope,
   pairs: {
     idA: string;
     idB: string;
@@ -219,6 +237,7 @@ export function storeSuggestions(
         pair.reasoning,
         pair.matchedField ?? null,
         status,
+        scope.ownerId,
       );
     }
   });
@@ -231,20 +250,24 @@ export function storeSuggestions(
  *
  * @param limit - Max suggestions to return (default 100)
  */
-export function getPendingSuggestions(limit: number = 100): DedupeSuggestion[] {
-  const rows = _stmts.getPending.all(limit) as DedupeSuggestion[];
+export function getPendingSuggestions(
+  scope: Scope,
+  limit: number = 100,
+): DedupeSuggestion[] {
+  const rows = _stmts.getPending.all(
+    scope.ownerId,
+    limit,
+  ) as DedupeSuggestion[];
   if (!rows.length) return rows;
 
   // Bulk-hydrate every referenced contact in one IN(...) query — per-row
   // hydrate() here previously cost ~26 queries per suggestion.
   try {
     const ids = [...new Set(rows.flatMap((r) => [r.contactIdA, r.contactIdB]))];
-    const placeholders = ids.map(() => "?").join(",");
-    const rawRows = sqlite
-      .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders})`)
-      .all(ids);
     const hydrated = new Map(
-      contactRepo.hydrateMany(rawRows).map((c) => [c.id, c]),
+      contactRepo
+        .hydrateMany(contactRepo.findManyOwned(scope, ids))
+        .map((c) => [c.id, c]),
     );
     for (const row of rows) {
       row.contactA = hydrated.get(row.contactIdA) ?? row.contactA;
@@ -259,8 +282,8 @@ export function getPendingSuggestions(limit: number = 100): DedupeSuggestion[] {
 }
 
 /** Get the count of pending suggestions (for sidebar badge). */
-export function getPendingCount(): number {
-  return (_stmts.getPendingCount.get() as { cnt: number }).cnt;
+export function getPendingCount(scope: Scope): number {
+  return (_stmts.getPendingCount.get(scope.ownerId) as { cnt: number }).cnt;
 }
 
 /**
@@ -277,8 +300,8 @@ export function getPendingCount(): number {
  *
  * @returns the count of connected groups among pending suggestions
  */
-export function getPendingClusterCount(): number {
-  const pairs = _stmts.getPendingPairs.all() as {
+export function getPendingClusterCount(scope: Scope): number {
+  const pairs = _stmts.getPendingPairs.all(scope.ownerId) as {
     contactIdA: string;
     contactIdB: string;
   }[];
@@ -289,26 +312,34 @@ export function getPendingClusterCount(): number {
   return uf.getClusters().size;
 }
 
-/** Get a suggestion by ID. */
-export function getSuggestionById(id: string): DedupeSuggestion | null {
-  const row = _stmts.getById.get(id) as DedupeSuggestion | undefined;
+/** One of this account's suggestions by id, or null. */
+export function getSuggestionById(
+  scope: Scope,
+  id: string,
+): DedupeSuggestion | null {
+  const row = _stmts.getById.get(id, scope.ownerId) as
+    DedupeSuggestion | undefined;
   if (!row) return null;
+  hydratePair(scope, row);
+  return row;
+}
 
-  // Hydrate contacts
+/**
+ * Attach both contacts to a suggestion row.
+ *
+ * The two ids come off a row this account owns, and the pair check that wrote
+ * the row proved both contacts share that owner, so a scoped read here always
+ * finds them unless one has since been merged away.
+ */
+function hydratePair(scope: Scope, row: DedupeSuggestion): void {
   try {
-    const rawA = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
-      .get(row.contactIdA);
-    const rawB = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
-      .get(row.contactIdB);
+    const rawA = contactRepo.findOwned(scope, row.contactIdA);
+    const rawB = contactRepo.findOwned(scope, row.contactIdB);
     if (rawA) row.contactA = contactRepo.hydrate(rawA);
     if (rawB) row.contactB = contactRepo.hydrate(rawB);
   } catch {
     // Contact may have been deleted
   }
-
-  return row;
 }
 
 /**
@@ -316,25 +347,13 @@ export function getSuggestionById(id: string): DedupeSuggestion | null {
  * Used for point-of-action banners on the contact detail page.
  */
 export function getSuggestionForContact(
+  scope: Scope,
   contactId: string,
 ): DedupeSuggestion | null {
-  const row = _stmts.getForContact.get(contactId, contactId) as
+  const row = _stmts.getForContact.get(scope.ownerId, contactId, contactId) as
     DedupeSuggestion | undefined;
   if (!row) return null;
-
-  try {
-    const rawA = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
-      .get(row.contactIdA);
-    const rawB = sqlite
-      .prepare("SELECT * FROM contacts WHERE id = ?")
-      .get(row.contactIdB);
-    if (rawA) row.contactA = contactRepo.hydrate(rawA);
-    if (rawB) row.contactB = contactRepo.hydrate(rawB);
-  } catch {
-    // Contact may have been deleted
-  }
-
+  hydratePair(scope, row);
   return row;
 }
 
@@ -346,8 +365,9 @@ export function getSuggestionForContact(
  * Dismiss a suggestion — marks it as 'dismissed' and adds the pair to
  * the exclusions table so it's never re-suggested on future scans.
  */
-export function dismissSuggestion(id: string, rid: string): void {
-  const suggestion = _stmts.getById.get(id) as DedupeSuggestion | undefined;
+export function dismissSuggestion(scope: Scope, id: string, rid: string): void {
+  const suggestion = _stmts.getById.get(id, scope.ownerId) as
+    DedupeSuggestion | undefined;
   if (!suggestion) {
     throw new AppError(`Suggestion ${id} not found`, 404, {
       code: "NOT_FOUND",
@@ -366,10 +386,14 @@ export function dismissSuggestion(id: string, rid: string): void {
 
   const txn = sqlite.transaction(() => {
     // 1. Mark suggestion as dismissed
-    _stmts.updateStatus.run("dismissed", "user", id);
+    _stmts.updateStatus.run("dismissed", "user", id, scope.ownerId);
 
     // 2. Add to exclusions (canonical ordering already enforced by storage)
-    _stmts.insertExclusion.run(suggestion.contactIdA, suggestion.contactIdB);
+    _stmts.insertExclusion.run(
+      suggestion.contactIdA,
+      suggestion.contactIdB,
+      scope.ownerId,
+    );
   });
   txn();
 
@@ -384,9 +408,13 @@ export function dismissSuggestion(id: string, rid: string): void {
  *
  * @param mergedBy - Who performed the merge: 'user', 'auto', or 'user:suggestion'
  */
-export function markSuggestionMerged(id: string, mergedBy: string): void {
+export function markSuggestionMerged(
+  scope: Scope,
+  id: string,
+  mergedBy: string,
+): void {
   const status = mergedBy === "auto" ? "auto_merged" : "merged";
-  _stmts.updateStatus.run(status, mergedBy, id);
+  _stmts.updateStatus.run(status, mergedBy, id, scope.ownerId);
 }
 
 // =============================================================================
@@ -411,6 +439,7 @@ export function markSuggestionMerged(id: string, mergedBy: string): void {
  * @returns The merge log entry ID
  */
 export function recordMerge(
+  scope: Scope,
   primaryId: string,
   duplicateId: string,
   confidence: number,
@@ -422,6 +451,7 @@ export function recordMerge(
   let id: string;
   const txn = sqlite.transaction(() => {
     id = recordMergeUnsafe(
+      scope,
       primaryId,
       duplicateId,
       confidence,
@@ -447,6 +477,7 @@ export function recordMerge(
  * was permanently impossible.
  */
 export function recordMergeUnsafe(
+  scope: Scope,
   primaryId: string,
   duplicateId: string,
   confidence: number,
@@ -456,10 +487,9 @@ export function recordMergeUnsafe(
   snapshot?: string | null,
 ): string {
   const id = crypto.randomUUID();
-  const owner = (
-    _stmts.getContactOwner.get(primaryId) as
-      { ownerId: string | null } | undefined
-  )?.ownerId;
+  // The owner is the caller's, not a lookup on the surviving contact. Both
+  // merged contacts belong to this account: `mergeContacts` proved that in one
+  // statement before it touched a single child row.
   _stmts.insertMergeLog.run(
     id,
     primaryId,
@@ -469,7 +499,7 @@ export function recordMergeUnsafe(
     confidence,
     reasoning,
     snapshot ?? null,
-    owner ?? null,
+    scope.ownerId,
   );
   log.info(
     "DedupeSuggestions",
@@ -483,19 +513,19 @@ export function recordMergeUnsafe(
  *
  * @param limit - Max entries to return (default 50)
  */
-export function getMergeLog(limit: number = 50): MergeLogEntry[] {
-  const rows = _stmts.getMergeLog.all(limit) as MergeLogEntry[];
+export function getMergeLog(scope: Scope, limit: number = 50): MergeLogEntry[] {
+  const rows = _stmts.getMergeLog.all(scope.ownerId, limit) as MergeLogEntry[];
 
   // Hydrate contact names for display
   for (const row of rows) {
     try {
       // Primary may still exist; duplicate may be soft-merged (canonicalId set) or hard-deleted
-      const primary = sqlite
-        .prepare("SELECT name FROM contacts WHERE id = ?")
-        .get(row.primaryId) as { name: string } | undefined;
-      const duplicate = sqlite
-        .prepare("SELECT name FROM contacts WHERE id = ?")
-        .get(row.duplicateId) as { name: string } | undefined;
+      const primary = _stmts.contactName.get(row.primaryId, scope.ownerId) as
+        { name: string } | undefined;
+      const duplicate = _stmts.contactName.get(
+        row.duplicateId,
+        scope.ownerId,
+      ) as { name: string } | undefined;
       row.primaryName = primary?.name ?? "(deleted)";
       row.duplicateName = duplicate?.name ?? "(deleted)";
     } catch {
@@ -521,8 +551,12 @@ export function getMergeLog(limit: number = 50): MergeLogEntry[] {
  *
  * @throws Error if the merge log entry is not found, already undone, or was a hard merge
  */
-export function undoSoftMerge(mergeLogId: string, rid: string): void {
-  const entry = _stmts.getMergeLogById.get(mergeLogId) as
+export function undoSoftMerge(
+  scope: Scope,
+  mergeLogId: string,
+  rid: string,
+): void {
+  const entry = _stmts.getMergeLogById.get(mergeLogId, scope.ownerId) as
     MergeLogEntry | undefined;
 
   if (!entry) {
@@ -552,10 +586,7 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
   }
 
   // Verify the duplicate contact still exists (it should — soft merge doesn't delete)
-  const duplicate = sqlite
-    .prepare("SELECT id, canonicalId FROM contacts WHERE id = ?")
-    .get(entry.duplicateId) as
-    { id: string; canonicalId: string | null } | undefined;
+  const duplicate = contactRepo.findOwned(scope, entry.duplicateId);
 
   if (!duplicate) {
     throw new AppError(
@@ -578,30 +609,20 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
 
   const txn = sqlite.transaction(() => {
     // 1. Restore the duplicate contact's visibility
-    sqlite
-      .prepare("UPDATE contacts SET canonicalId = NULL WHERE id = ?")
-      .run(entry.duplicateId);
+    _stmts.restoreDuplicate.run(entry.duplicateId, scope.ownerId);
 
     // 2. Mark the merge log entry as undone
-    _stmts.undoMergeLog.run(mergeLogId);
+    _stmts.undoMergeLog.run(mergeLogId, scope.ownerId);
 
     // 3. Remove the corresponding suggestion's "auto_merged" status
     //    so it can re-appear as "pending" if the user wants to re-evaluate
-    sqlite
-      .prepare(
-        `
-      UPDATE dedupe_suggestions
-      SET status = 'pending', reviewedAt = NULL, reviewedBy = NULL
-      WHERE ((contactIdA = ? AND contactIdB = ?) OR (contactIdA = ? AND contactIdB = ?))
-        AND status = 'auto_merged'
-    `,
-      )
-      .run(
-        entry.primaryId,
-        entry.duplicateId,
-        entry.duplicateId,
-        entry.primaryId,
-      );
+    _stmts.reopenSuggestion.run(
+      scope.ownerId,
+      entry.primaryId,
+      entry.duplicateId,
+      entry.duplicateId,
+      entry.primaryId,
+    );
   });
   txn();
 
@@ -621,8 +642,12 @@ export function undoSoftMerge(mergeLogId: string, rid: string): void {
  *
  * @returns Number of suggestions removed
  */
-export function clearStaleSuggestions(): number {
-  const result = _stmts.clearStale.run();
+export function clearStaleSuggestions(scope: Scope): number {
+  const result = _stmts.clearStale.run(
+    scope.ownerId,
+    scope.ownerId,
+    scope.ownerId,
+  );
   if (result.changes > 0) {
     log.info(
       "DedupeSuggestions",
@@ -638,7 +663,7 @@ export function clearStaleSuggestions(): number {
  *
  * @returns Number of suggestions cleared
  */
-export function clearAllPendingSuggestions(): number {
-  const result = _stmts.clearAllPending.run();
+export function clearAllPendingSuggestions(scope: Scope): number {
+  const result = _stmts.clearAllPending.run(scope.ownerId);
   return result.changes;
 }

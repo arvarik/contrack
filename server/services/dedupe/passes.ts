@@ -86,7 +86,8 @@ export function buildScoringReasoning(
 }
 
 export function runDeterministicPass(ctx: PassContext): RawPair[] {
-  const { contactMap, seenPairs, rid, normalizedMap } = ctx;
+  const { scope, contactMap, seenPairs, rid, normalizedMap } = ctx;
+  const owner = scope.ownerId;
   const pairs: RawPair[] = [];
 
   if (ctx.allContacts.length < 2) {
@@ -95,18 +96,26 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   }
 
   // D1: Exact email
+  //
+  // Both sides of the self-join reach `contacts` for their owner. Two people
+  // who share an email address are a duplicate only inside one account: the
+  // same address in two accounts is two people who each wrote it down. The
+  // `contactMap.has()` test below still runs, so a row outside this scan is
+  // dropped twice over.
   const emailDupes = sqlite
     .prepare(
       `
     SELECT e1.contactId AS id1, e2.contactId AS id2, e1.email AS matchedField
     FROM contact_emails e1
+    JOIN contacts c1 ON c1.id = e1.contactId AND c1.ownerId = ?
     JOIN contact_emails e2
       ON LOWER(TRIM(e1.email)) = LOWER(TRIM(e2.email))
+    JOIN contacts c2 ON c2.id = e2.contactId AND c2.ownerId = ?
     WHERE e1.contactId < e2.contactId
     GROUP BY e1.contactId, e2.contactId
   `,
     )
-    .all() as { id1: string; id2: string; matchedField: string }[];
+    .all(owner, owner) as { id1: string; id2: string; matchedField: string }[];
 
   for (const m of emailDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
@@ -125,8 +134,11 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
 
   // D2: Exact phone
   const allPhones = sqlite
-    .prepare("SELECT contactId, phone FROM contact_phones")
-    .all() as { contactId: string; phone: string }[];
+    .prepare(
+      `SELECT cp.contactId, cp.phone FROM contact_phones cp
+       JOIN contacts c ON c.id = cp.contactId WHERE c.ownerId = ?`,
+    )
+    .all(owner) as { contactId: string; phone: string }[];
   const phoneMap = new Map<string, string[]>();
   for (const p of allPhones) {
     if (!contactMap.has(p.contactId)) continue;
@@ -170,17 +182,26 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     JOIN contacts c2
       ON LOWER(TRIM(c1.name)) = LOWER(TRIM(c2.name))
       AND c1.id < c2.id
-    WHERE c1.isGhost = 0 AND c2.isGhost = 0
+    WHERE c1.ownerId = ? AND c2.ownerId = ?
+      AND c1.isGhost = 0 AND c2.isGhost = 0
       AND (c1.isArchived = 0 OR c1.isArchived IS NULL)
       AND (c2.isArchived = 0 OR c2.isArchived IS NULL)
       AND c1.canonicalId IS NULL AND c2.canonicalId IS NULL
   `,
     )
-    .all() as { id1: string; id2: string; name1: string; name2: string }[];
+    .all(owner, owner) as {
+    id1: string;
+    id2: string;
+    name1: string;
+    name2: string;
+  }[];
 
   const allSources = sqlite
-    .prepare("SELECT contactId, platform FROM contact_sources")
-    .all() as { contactId: string; platform: string }[];
+    .prepare(
+      `SELECT cs.contactId, cs.platform FROM contact_sources cs
+       JOIN contacts c ON c.id = cs.contactId WHERE c.ownerId = ?`,
+    )
+    .all(owner) as { contactId: string; platform: string }[];
   const sourcesByContact = new Map<string, Set<string>>();
   for (const s of allSources) {
     if (!sourcesByContact.has(s.contactId))
@@ -329,7 +350,11 @@ export async function runFunnelPass(
 
   if (useEmbeddings) {
     const contactIds = normalized.map((c) => c.id);
-    const embeddingCandidates = addEmbeddingCandidates(contactIds, seenPairs);
+    const embeddingCandidates = addEmbeddingCandidates(
+      ctx.scope,
+      contactIds,
+      seenPairs,
+    );
     for (const c of embeddingCandidates) {
       const pk = pairKey(c.idA, c.idB);
       if (!allCandidateKeys.has(pk) && !seenPairs.has(pk)) {
