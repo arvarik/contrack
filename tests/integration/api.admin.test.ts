@@ -214,7 +214,7 @@ describe("every admin route", () => {
   });
 
   it("covers the whole admin class, so the loops below miss nothing", () => {
-    expect(ADMIN_ROUTES).toHaveLength(27);
+    expect(ADMIN_ROUTES).toHaveLength(29);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -315,6 +315,36 @@ describe("managing accounts", () => {
     expect(byName.listadmin.tokenCount).toBe(0);
     // The member signed in, so they hold a live session.
     expect(byName.listmember.sessionCount).toBeGreaterThan(0);
+  });
+
+  it("counts only the sessions that are still live", async () => {
+    // `createSession` writes `new Date(...).toISOString()` while the count
+    // compares against `datetime('now')`, and SQLite compares TEXT byte by
+    // byte: a `T` sorts after a space, so a session that expired earlier
+    // today counted as live until the UTC date rolled over. The account's own
+    // list at GET /api/auth/sessions reads the same column the same way, so
+    // the two would have disagreed if only one of them were fixed.
+    const before = await as(admin)(
+      request(app).get(`/api/admin/users/${member.id}`),
+    );
+    const live = before.body.user.sessionCount;
+    expect(live).toBeGreaterThan(0);
+
+    sqlite
+      .prepare("UPDATE sessions SET expiresAt = ? WHERE userId = ?")
+      .run(new Date(Date.now() - 3600_000).toISOString(), member.id);
+
+    const after = await as(admin)(
+      request(app).get(`/api/admin/users/${member.id}`),
+    );
+    expect(after.body.user.sessionCount).toBe(0);
+
+    const inList = await as(admin)(request(app).get("/api/admin/users"));
+    expect(
+      (inList.body.users as { id: string; sessionCount: number }[]).find(
+        (u) => u.id === member.id,
+      )?.sessionCount,
+    ).toBe(0);
   });
 
   it("never returns a password hash", async () => {

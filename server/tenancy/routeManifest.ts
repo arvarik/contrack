@@ -112,6 +112,18 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   {
     method: "GET",
+    path: "/api/admin/settings",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "PUT",
+    path: "/api/admin/settings",
+    class: "admin",
+    isolated: false,
+  },
+  {
+    method: "GET",
     path: "/api/admin/users",
     class: "admin",
     isolated: false,
@@ -259,6 +271,30 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   {
     method: "GET",
     path: "/api/auth/sessions",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/register",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/auth/tokens",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/tokens",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "DELETE",
+    path: "/api/auth/tokens/:id",
     class: "session-self",
     isolated: false,
   },

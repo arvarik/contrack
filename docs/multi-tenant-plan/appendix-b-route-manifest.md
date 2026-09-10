@@ -147,18 +147,18 @@ the route files:
 
 ## Routes added in Phase 3
 
-The first Phase 3 pull request added the thirteen `/api/admin` rows and
-`POST /api/auth/accept-invitation`. The token routes, `POST /api/auth/register`
-and the two `/api/admin/settings` rows follow in the second one, and are the
-six rows marked "not yet" below.
+All twenty rows exist. The first Phase 3 pull request added the thirteen
+account and invitation rows plus `POST /api/auth/accept-invitation`, and the
+second added the three token routes, `POST /api/auth/register` and the two
+`/api/admin/settings` rows.
 
 | Method | Path | Class | Status |
 | ------ | ---- | ----- | ------ |
-| POST | `/api/auth/register` | public | not yet |
+| POST | `/api/auth/register` | public | shipped |
 | POST | `/api/auth/accept-invitation` | public | shipped |
-| GET | `/api/auth/tokens` | session-self | not yet |
-| POST | `/api/auth/tokens` | session-self | not yet |
-| DELETE | `/api/auth/tokens/:id` | session-self | not yet |
+| GET | `/api/auth/tokens` | session-self | shipped |
+| POST | `/api/auth/tokens` | session-self | shipped |
+| DELETE | `/api/auth/tokens/:id` | session-self | shipped |
 | GET | `/api/admin/users` | admin | shipped |
 | POST | `/api/admin/users` | admin | shipped |
 | GET | `/api/admin/users/:id` | admin | shipped |
@@ -171,6 +171,6 @@ six rows marked "not yet" below.
 | GET | `/api/admin/invitations` | admin | shipped |
 | POST | `/api/admin/invitations` | admin | shipped |
 | DELETE | `/api/admin/invitations/:id` | admin | shipped |
-| GET | `/api/admin/settings` | admin | not yet |
-| PUT | `/api/admin/settings` | admin | not yet |
+| GET | `/api/admin/settings` | admin | shipped |
+| PUT | `/api/admin/settings` | admin | shipped |
 | GET | `/api/admin/audit` | admin | shipped |

@@ -44,8 +44,17 @@ function mockRequest(overrides: Partial<Request> = {}): Request {
 
 function mockResponse() {
   const headersSent = { value: false };
+  // Real headers, because the handler reads one back before it sets it: a
+  // limiter that already wrote `Retry-After` must not have it overwritten.
+  const headers: Record<string, string> = {};
   const res = {
     statusCode: 200,
+    setHeader: vi.fn().mockImplementation((name: string, value: string) => {
+      headers[name] = String(value);
+    }),
+    getHeader: vi
+      .fn()
+      .mockImplementation((name: string) => headers[name] as string),
     status: vi.fn().mockImplementation(function (this: Response, code: number) {
       this.statusCode = code;
       return this;
@@ -58,7 +67,10 @@ function mockResponse() {
     setHeadersSent(v: boolean) {
       headersSent.value = v;
     },
-  } as unknown as Response & { setHeadersSent(v: boolean): void };
+  } as unknown as Response & {
+    setHeadersSent(v: boolean): void;
+    getHeader(name: string): string | undefined;
+  };
   return res;
 }
 
@@ -128,6 +140,49 @@ describe("errorHandler — AppError translation", () => {
     expect(res.status).toHaveBeenCalledWith(429);
     const body = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(body.error.code).toBe("RATE_LIMITED");
+  });
+
+  it("turns a known wait into a Retry-After header", () => {
+    // The one place in the app that writes this header. Every 429 that knows
+    // when to come back carries the number in `details.retryAfterSeconds`,
+    // whether it came from a limiter or from a queue lock deeper in.
+    const res = mockResponse();
+    errorHandler(
+      new RateLimitedError("slow down", { retryAfterSeconds: 42 }),
+      mockRequest(),
+      res,
+      vi.fn(),
+    );
+    expect(res.getHeader("Retry-After")).toBe("42");
+  });
+
+  it("sends no Retry-After when nothing knows the wait", () => {
+    // The dedupe scan lock is the real case: somebody else is holding it and
+    // there is no estimate. A guess is worse than nothing, because a client
+    // sleeps on it.
+    const res = mockResponse();
+    errorHandler(
+      new RateLimitedError("somebody else is scanning", {
+        yours: false,
+        queued: true,
+      }),
+      mockRequest(),
+      res,
+      vi.fn(),
+    );
+    expect(res.getHeader("Retry-After")).toBeUndefined();
+  });
+
+  it("leaves a Retry-After somebody else already wrote", () => {
+    const res = mockResponse();
+    res.setHeader("Retry-After", "7");
+    errorHandler(
+      new RateLimitedError("slow down", { retryAfterSeconds: 42 }),
+      mockRequest(),
+      res,
+      vi.fn(),
+    );
+    expect(res.getHeader("Retry-After")).toBe("7");
   });
 
   it("emits requestId in the body when it's attached to the request", () => {

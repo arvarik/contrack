@@ -48,7 +48,10 @@ import {
   countPasswordAccounts,
   reconcileOwnership,
 } from "./services/authService.ts";
-import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
+import {
+  aiEndpointRateLimit,
+  aiUserRateLimit,
+} from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
 import { redactUrlForLog } from "./utils/helpers.ts";
 
@@ -212,6 +215,14 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // after attachPrincipal because it reads req.principal. Attribution only:
   // reads and writes of owned data take an explicit Scope.
   app.use(attachRequestContext);
+
+  // The second AI limiter, per account rather than per address. It has to be
+  // here rather than beside the first one: it reads req.principal, which the
+  // two middlewares above are what set. One person on a shared office address
+  // can no longer spend everybody's provider budget.
+  if (!options.disableRateLimit) {
+    app.use(aiUserRateLimit);
+  }
 
   // Auth endpoints must stay reachable pre-auth (status, setup, login);
   // everything mounted after requireAuth — uploads and all other /api routes —

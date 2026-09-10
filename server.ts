@@ -19,6 +19,7 @@ import { startBackupSchedule } from "./server/services/backupService.ts";
 import { contactService } from "./server/services/contactService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
 import { relationshipService } from "./server/services/relationshipService.ts";
+import { startDailyMaintenance } from "./server/services/maintenanceService.ts";
 import {
   backfillEmbeddings,
   ensureDedupeEmbeddingStore,
@@ -164,12 +165,22 @@ async function startServer() {
     setInterval(runTrashPurge, 24 * 60 * 60 * 1000);
   }
 
-  // ── AI Stats: retention cleanup (30-day rolling window) ──────────────
-  import("./server/services/aiStatsService.ts").then(
-    ({ cleanupOldInvocations }) => {
-      cleanupOldInvocations();
-    },
-  );
+  // ── Daily maintenance ────────────────────────────────────────────────────
+  // One sweep for every table that accumulates rows no request removes: audit
+  // entries past retention, expired sessions, tokens revoked a month ago,
+  // invitations that died a month ago, and AI invocations outside the stats
+  // window. Before Phase 3 the invocation cleanup ran once at boot and the
+  // session sweep was boot-only, so an instance left running for a year swept
+  // twice. Reached only when DISABLE_BACKGROUND_JOBS is unset, because the
+  // early return above has already sent that case home.
+  // The gate and the schedule both live in the service, so a test can reach
+  // them. The early return above already covers this case, and the second
+  // gate costs nothing.
+  try {
+    startDailyMaintenance();
+  } catch (err) {
+    log.warn("Server", `Daily maintenance failed: ${getErrorMessage(err)}`);
+  }
 
   // ── AI model catalogs ───────────────────────────────────────────────────
   // Populate the per-provider model lists that Settings → AI offers, so the

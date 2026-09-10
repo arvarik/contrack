@@ -19,6 +19,7 @@ import { log } from "../utils/logger.ts";
 import {
   validateBody,
   adminCreateUserSchema,
+  adminSettingsSchema,
   adminDeleteUserSchema,
   adminInvitationSchema,
   adminUpdateUserSchema,
@@ -42,6 +43,15 @@ import {
   revokeInvitation,
 } from "../services/invitationService.ts";
 import { auditService } from "../services/auditService.ts";
+import {
+  getSessionTtlDays,
+  setSessionTtlDays,
+  isRegistrationOpen,
+  setRegistrationOpen,
+  MIN_SESSION_TTL_DAYS,
+  MAX_SESSION_TTL_DAYS,
+  DEFAULT_SESSION_TTL_DAYS,
+} from "../services/authService.ts";
 
 const router = Router();
 
@@ -227,6 +237,69 @@ router.delete(
   requireAdmin,
   asyncHandler(async (req, res) => {
     res.json(revokeInvitation(adminContext(req), String(req.params.id)));
+  }),
+);
+
+// ─── Instance settings ───────────────────────────────────────────────────────
+
+/** The one shape both routes answer with, so a write reads back as a read. */
+function settingsView() {
+  return {
+    registrationOpen: isRegistrationOpen(),
+    sessionTtlDays: getSessionTtlDays(),
+    sessionTtlRange: {
+      min: MIN_SESSION_TTL_DAYS,
+      max: MAX_SESSION_TTL_DAYS,
+      default: DEFAULT_SESSION_TTL_DAYS,
+    },
+  };
+}
+
+router.get(
+  "/settings",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(settingsView());
+  }),
+);
+
+/**
+ * Change one or both instance settings.
+ *
+ * This is where the session lifetime lives from 2.0 on.
+ * `PUT /api/auth/session-policy` still writes the same value and is removed
+ * in 3.0, which is why both exist and both are `admin`.
+ *
+ * The audit row names the keys that changed and not what they changed to for
+ * the same reason the AI settings rows do: the key is what an operator needs
+ * to see, and a value is the thing that occasionally turns out to be secret.
+ */
+router.put(
+  "/settings",
+  requireAdmin,
+  validateBody(adminSettingsSchema),
+  asyncHandler(async (req, res) => {
+    const changed: string[] = [];
+    if (req.body.registrationOpen !== undefined) {
+      setRegistrationOpen(req.body.registrationOpen);
+      changed.push("auth.registrationOpen");
+    }
+    if (req.body.sessionTtlDays !== undefined) {
+      setSessionTtlDays(req.body.sessionTtlDays);
+      changed.push("auth.sessionTtlDays");
+    }
+
+    const ctx = adminContext(req);
+    for (const key of changed) {
+      auditService.record({
+        actorUserId: ctx.actor.id,
+        action: "settings.changed",
+        targetType: "setting",
+        targetId: key,
+        ip: ctx.ip,
+      });
+    }
+    res.json(settingsView());
   }),
 );
 

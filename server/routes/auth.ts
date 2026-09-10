@@ -15,9 +15,20 @@ import { Router, type Request } from "express";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
-import { validateBody, acceptInvitationSchema } from "../utils/validators.ts";
+import {
+  validateBody,
+  acceptInvitationSchema,
+  registerSchema,
+  tokenCreateSchema,
+} from "../utils/validators.ts";
 import { auditService } from "../services/auditService.ts";
 import { acceptInvitation } from "../services/invitationService.ts";
+import {
+  createToken,
+  listTokens,
+  revokeToken,
+} from "../services/apiTokenService.ts";
+import { resolveApiToken } from "../middleware/auth.ts";
 import {
   requireAdmin,
   requirePasswordCurrent,
@@ -44,6 +55,7 @@ import {
   countPasswordAccounts,
   convertLocalOwner,
   hasLocalOwner,
+  isRegistrationOpen,
   getSessionTtlDays,
   setSessionTtlDays,
   MIN_SESSION_TTL_DAYS,
@@ -77,10 +89,26 @@ const setupLimiter = createRateLimiter({
   name: "account setup",
 });
 
-/** Clear both credential windows. Test seam — see RateLimiter.reset. */
+/**
+ * Ten personal tokens an hour, per account rather than per address.
+ *
+ * Keyed by the account because a token is a credential that account owns, and
+ * because several people behind one office address should not share a budget
+ * for minting their own. Ten an hour is far more than anybody needs and low
+ * enough that a runaway script cannot fill the table.
+ */
+const tokenLimiter = createRateLimiter({
+  windowMs: 3_600_000,
+  max: 10,
+  name: "token creation",
+  keyBy: (req) => req.principal?.user.id ?? null,
+});
+
+/** Clear every credential window in this module. Test seam. */
 export function __resetAuthRateLimits(): void {
   credentialLimiter.reset();
   setupLimiter.reset();
+  tokenLimiter.reset();
 }
 
 function bodyString(req: Request, field: string): string {
@@ -126,9 +154,17 @@ router.get("/status", (req, res) => {
     hasAccounts: passwordAccounts > 0,
     user: user ? publicUser(user) : null,
     deviceContacts,
-    // The pre-2.0 name. Phase 3 removes it; keeping both means the current
-    // frontend keeps working through this phase without a matching release.
+    // The pre-2.0 name. It is removed in 3.0; sending both means the current
+    // frontend keeps working until Phase 4 switches to the new one.
     existingContacts: deviceContacts,
+    // Whether the sign-in screen should offer to create an account.
+    registrationOpen: isRegistrationOpen(),
+    // True while this instance has never been secured, so its data belongs to
+    // an account nobody can sign in to.
+    localOwnerPresent: hasLocalOwner(),
+    // The deprecated instance-wide environment token. The admin UI shows a
+    // banner asking the operator to replace it with a personal one.
+    legacyTokenConfigured: resolveApiToken() !== null,
   });
 });
 
@@ -167,6 +203,49 @@ router.post(
     const session = createSession(user.id, req.headers["user-agent"] ?? null);
     setSessionCookie(req, res, session.secret, session.expiresAt);
 
+    res.status(201).json({ user: publicUser(user) });
+  }),
+);
+
+// =============================================================================
+// Open registration
+// =============================================================================
+
+/**
+ * Create an account without an invitation.
+ *
+ * Off by default and only an admin can turn it on. The endpoint exists at all
+ * times so that the answer to a closed instance is a clear
+ * `403 REGISTRATION_CLOSED` rather than a 404 that reads like a broken build.
+ *
+ * The account is always a member. `createUser` makes the first account on an
+ * instance an admin, and that cannot happen here: turning registration on
+ * needs an admin, so one already exists.
+ */
+router.post(
+  "/register",
+  credentialLimiter,
+  validateBody(registerSchema),
+  asyncHandler(async (req, res) => {
+    if (!isRegistrationOpen()) {
+      throw new AppError(
+        "This instance is not open for registration. Ask an administrator for an invitation.",
+        403,
+        { code: "REGISTRATION_CLOSED" },
+      );
+    }
+
+    const user = await createUser({ ...req.body, role: "member" });
+    const session = createSession(user.id, req.headers["user-agent"] ?? null);
+    setSessionCookie(req, res, session.secret, session.expiresAt);
+    auditService.record({
+      actorUserId: user.id,
+      action: "user.created",
+      targetType: "user",
+      targetId: user.id,
+      details: { username: user.username, role: user.role, self: true },
+      ip: ipOf(req),
+    });
     res.status(201).json({ user: publicUser(user) });
   }),
 );
@@ -290,7 +369,13 @@ router.post(
 // =============================================================================
 
 router.get("/me", requireSession, (req, res) => {
-  res.json({ user: publicUser(currentUser(req)!) });
+  // `via` says how this request proved who it is. Only a session reaches this
+  // route, so the value is always "session" today, and it is sent because the
+  // field is part of the documented shape and a later gate may widen it.
+  res.json({
+    user: publicUser(currentUser(req)!),
+    via: req.principal?.via ?? "session",
+  });
 });
 
 router.patch(
@@ -352,6 +437,44 @@ router.delete("/sessions", requireSession, (req, res) => {
   );
   res.json({ revoked });
 });
+
+// =============================================================================
+// Personal API tokens
+// =============================================================================
+// A token acts as its account for every scoped endpoint and can reach none of
+// these routes, so a script cannot mint a second token or revoke the one it
+// is holding. `requireSession` is what says so.
+
+router.get("/tokens", requireSession, (req, res) => {
+  res.json({ tokens: listTokens(currentUser(req)!.id) });
+});
+
+/**
+ * Mint a token. The plaintext is in this response and nowhere else.
+ *
+ * `requirePasswordCurrent` sits here and not on the two routes beside it. A
+ * new long-lived credential minted from an account whose password two people
+ * know is the risk; reading the list and revoking one are what somebody who
+ * is worried needs, so those stay open.
+ */
+router.post(
+  "/tokens",
+  requireSession,
+  requirePasswordCurrent,
+  tokenLimiter,
+  validateBody(tokenCreateSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(createToken(currentUser(req)!, req.body, ipOf(req)));
+  }),
+);
+
+router.delete(
+  "/tokens/:id",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    res.json(revokeToken(currentUser(req)!, String(req.params.id), ipOf(req)));
+  }),
+);
 
 // =============================================================================
 // Session policy

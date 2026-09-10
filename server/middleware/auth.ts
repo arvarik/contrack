@@ -38,6 +38,7 @@ import {
   resolveSession,
   type User,
 } from "../services/authService.ts";
+import { resolveToken, TOKEN_PREFIX } from "../services/apiTokenService.ts";
 import { primaryAdminId, sqlite } from "../db.ts";
 
 export const COOKIE_NAME = "contrack_session";
@@ -98,7 +99,10 @@ export function currentSessionId(req: Request): string | null {
  */
 export function resolveApiToken(): string | null {
   const token = process.env.API_TOKEN?.trim();
-  if (token) return token;
+  if (token) {
+    warnEnvTokenOnce();
+    return token;
+  }
 
   // AUTH_TOKEN was this variable's name before accounts existed, when it was
   // the only credential. Still honoured so an existing deployment does not
@@ -106,6 +110,7 @@ export function resolveApiToken(): string | null {
   const legacy = process.env.AUTH_TOKEN?.trim();
   if (legacy) {
     warnLegacyTokenOnce();
+    warnEnvTokenOnce();
     return legacy;
   }
   return null;
@@ -118,6 +123,25 @@ function warnLegacyTokenOnce(): void {
   log.warn(
     "Auth",
     "AUTH_TOKEN is deprecated — rename it to API_TOKEN. It now identifies machine clients (scripts, MCP); people sign in with an account.",
+  );
+}
+
+/**
+ * The environment token is deprecated as a whole from 2.0, not just its old
+ * name. It belongs to no account, so it acts as the primary admin and every
+ * row it writes lands there, which is the wrong answer the moment a second
+ * person has an account. A personal token belongs to the person using it.
+ *
+ * Warned once rather than per request: `resolveApiToken` is on the path of
+ * `isAuthRequired`, which runs constantly.
+ */
+let envTokenWarned = false;
+function warnEnvTokenOnce(): void {
+  if (envTokenWarned) return;
+  envTokenWarned = true;
+  log.warn(
+    "Auth",
+    "API_TOKEN is deprecated. Create a personal token in Settings → Account → API tokens and remove API_TOKEN from your environment. The environment token acts as the first admin and is removed in 3.0.",
   );
 }
 
@@ -145,6 +169,7 @@ export function isAuthRequired(): boolean {
 /** Reset memoized warnings and the forced-auth latch. Test seam. */
 export function __resetAuthWarnings(): void {
   legacyWarned = false;
+  envTokenWarned = false;
   forcedAuth = false;
 }
 
@@ -255,10 +280,9 @@ export function attachPrincipal(
 
   // 1. A personal token. Looked up by SHA-256 of the presented value against a
   //    unique index, so this is one probe and the plaintext is never stored.
-  //    Phase 3 adds the endpoints that create these; the lookup exists now so
-  //    the principal shape is final before Phase 2 scopes every read.
-  if (presented?.startsWith("ctk_")) {
-    const user = resolveApiTokenPrincipal(presented);
+  //    The lookup lives in apiTokenService, which owns that table.
+  if (presented?.startsWith(TOKEN_PREFIX)) {
+    const user = resolveToken(presented);
     if (user) {
       req.principal = {
         kind: "user",
@@ -315,41 +339,6 @@ export function attachPrincipal(
   // principal, because "auth is off" and "you failed to authenticate" must not
   // look alike to anything downstream.
   next();
-}
-
-/**
- * Resolve a `ctk_` token to its user.
- *
- * Rejects a revoked token, an expired one, and one whose account is disabled.
- * `lastUsedAt` is stamped at most once an hour, matching how sessions treat
- * `lastSeenAt`: the write is not worth a page dirtied on every request.
- */
-function resolveApiTokenPrincipal(
-  token: string,
-): { user: User; tokenId: string } | null {
-  const hash = crypto.createHash("sha256").update(token).digest("hex");
-  const row = sqlite
-    .prepare(
-      `SELECT id, userId, lastUsedAt FROM api_tokens
-        WHERE tokenHash = ? AND revokedAt IS NULL
-          AND (expiresAt IS NULL OR expiresAt > datetime('now'))`,
-    )
-    .get(hash) as
-    { id: string; userId: string; lastUsedAt: string | null } | undefined;
-  if (!row) return null;
-
-  const user = getUserById(row.userId);
-  if (!user || user.status === "disabled") return null;
-
-  const hourAgo = new Date(Date.now() - 3600_000).toISOString();
-  if (!row.lastUsedAt || row.lastUsedAt < hourAgo) {
-    sqlite
-      .prepare(
-        `UPDATE api_tokens SET lastUsedAt = CURRENT_TIMESTAMP WHERE id = ?`,
-      )
-      .run(row.id);
-  }
-  return { user, tokenId: row.id };
 }
 
 /**

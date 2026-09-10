@@ -79,6 +79,29 @@ export function setSessionTtlDays(value: unknown): number {
   return days;
 }
 
+/**
+ * Whether anybody may create an account without an invitation.
+ *
+ * Closed by default, and the default is the important part. A self-hosted app
+ * reachable from the internet with open registration is an open door, and the
+ * person who exposed it did not necessarily decide to. An admin turns it on
+ * through `PUT /api/admin/settings` when they want it.
+ */
+export const REGISTRATION_SETTING = "auth.registrationOpen";
+
+export function isRegistrationOpen(): boolean {
+  return getSetting<boolean>(REGISTRATION_SETTING) === true;
+}
+
+export function setRegistrationOpen(value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new ValidationError("Registration must be on or off.");
+  }
+  setSetting(REGISTRATION_SETTING, value);
+  log.info("Auth", `Open registration ${value ? "enabled" : "disabled"}`);
+  return value;
+}
+
 /** Cap on the stored User-Agent — enough to name a device, not a fingerprint. */
 const USER_AGENT_MAX = 200;
 
@@ -680,7 +703,7 @@ export function listSessions(
     .prepare(
       `SELECT id, createdAt, expiresAt, lastSeenAt, userAgent
          FROM sessions
-        WHERE userId = ? AND expiresAt > datetime('now')
+        WHERE userId = ? AND datetime(expiresAt) > datetime('now')
         ORDER BY lastSeenAt DESC`,
     )
     .all(userId) as Omit<SessionInfo, "current">[];

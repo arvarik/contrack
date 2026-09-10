@@ -8,30 +8,30 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable                  | Description                                                                                                                                      | Default      | Required |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | -------- |
-| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                          | `gemini`     | No       |
-| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                            | —            | No       |
-| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                   | —            | No       |
-| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                | —            | No       |
-| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                             | `FREE`       | No       |
-| `PORT`                    | Express listening port                                                                                                                           | `3210`       | No       |
-| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically) | `127.0.0.1`  | No       |
-| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                       | — (disabled) | No       |
-| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                        | project root | No       |
-| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                       | —            | No       |
-| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                      | `false`      | No       |
-| `API_TOKEN`               | Machine credential for scripts and MCP clients (`Authorization: Bearer <token>`). Setting it also gates the instance                             | — (auth off) | No       |
-| `AUTH_TOKEN`              | Deprecated alias for `API_TOKEN`, honoured with a startup warning                                                                                | —            | No       |
-| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                   | `30`         | No       |
-| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                 | `24`         | No       |
-| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                         | `7`          | No       |
-| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                          | — (auto)     | No       |
-| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                         | — (auto)     | No       |
-| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                       | — (auto)     | No       |
-| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                           | — (built-in) | No       |
-| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                          | `false`      | No       |
-| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                | — (dev)      | No       |
+| Variable                  | Description                                                                                                                                                                       | Default      | Required |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------- |
+| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                           | `gemini`     | No       |
+| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                                                             | —            | No       |
+| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                                                    | —            | No       |
+| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                                                 | —            | No       |
+| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                              | `FREE`       | No       |
+| `PORT`                    | Express listening port                                                                                                                                                            | `3210`       | No       |
+| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                  | `127.0.0.1`  | No       |
+| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                        | — (disabled) | No       |
+| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                         | project root | No       |
+| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                        | —            | No       |
+| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                       | `false`      | No       |
+| `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token | — (auth off) | No       |
+| `AUTH_TOKEN`              | Deprecated alias for `API_TOKEN`, honoured with a startup warning                                                                                                                 | —            | No       |
+| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                    | `30`         | No       |
+| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                                                  | `24`         | No       |
+| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                                          | `7`          | No       |
+| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                           | — (auto)     | No       |
+| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                                                          | — (auto)     | No       |
+| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                                                        | — (auto)     | No       |
+| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                            | — (built-in) | No       |
+| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                           | `false`      | No       |
+| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                 | — (dev)      | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -249,12 +249,25 @@ needs to know:
 Contrack is single-account. There are two kinds of credential, because people
 and scripts want different things:
 
-|                | People                                    | Scripts, cron, MCP                             |
-| -------------- | ----------------------------------------- | ---------------------------------------------- |
-| Credential     | Username or email + password              | `API_TOKEN`                                    |
-| How it travels | HttpOnly session cookie                   | `Authorization: Bearer <token>`                |
-| Turned on by   | `AUTH_REQUIRED=true`                      | setting `API_TOKEN` (which also gates the app) |
-| Revocable      | Yes — per device, from Settings → Account | No; rotate the variable                        |
+|                | People                                    | Scripts, cron, MCP                       |
+| -------------- | ----------------------------------------- | ---------------------------------------- |
+| Credential     | Username or email + password              | A personal token, `ctk_…`                |
+| How it travels | HttpOnly session cookie                   | `Authorization: Bearer <token>`          |
+| Made in        | The sign-in screen                        | Settings → Account → API tokens          |
+| Belongs to     | The person                                | The account that created it              |
+| Revocable      | Yes — per device, from Settings → Account | Yes — per token, from Settings → Account |
+
+A personal token acts as its own account. An MCP client signed in with one
+reads that account's contacts and nobody else's, and revoking it stops that
+client without touching anybody's sign-in.
+
+**The environment `API_TOKEN` is deprecated.** It belongs to no account, so it
+acts as the first admin and every row it writes lands there, which is the
+wrong answer as soon as a second person has an account. It keeps working
+through 2.0 and the server logs one warning at startup. Replace it by creating
+a personal token in Settings → Account → API tokens, pointing your script or
+MCP client at that instead, and removing `API_TOKEN` from the environment. It
+is removed in 3.0.
 
 - **Local (default):** no auth, server bound to `127.0.0.1` — nothing else on
   your machine or network can reach it.

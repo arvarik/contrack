@@ -19,13 +19,13 @@ the ones needed here are repeated in section 2.
 
 ---
 
-> **Shipped in the first pull request (accounts and the admin API).** Tasks
-> 3.1 to 3.5 and the audit half of 3.8, plus the manifest rows and
-> `tests/integration/api.admin.test.ts` from 3.13. Tokens (3.6), open
-> registration (3.7), the daily maintenance interval (the rest of 3.8), the
-> per-user rate limiter (3.9), the admin AI stats views (3.10), the status
-> and profile additions (3.11) and the legacy token notes (3.12) follow in
-> the second one.
+> **Shipped, in two pull requests.** The first covered tasks 3.1 to 3.5 and
+> the audit half of 3.8. The second covered tokens (3.6), open registration
+> and the instance settings (3.7), the daily maintenance interval (the rest
+> of 3.8), the per-account rate limiter (3.9), the admin AI stats views
+> (3.10), the status and profile additions (3.11) and the legacy token
+> deprecation (3.12). Task 3.13's manifest rows and tests, and 3.14's
+> CHANGELOG entries, landed with the half they belonged to.
 >
 > Six notes from the implementation, each a place the code and this document
 > do not line up:
@@ -83,6 +83,53 @@ the ones needed here are repeated in section 2.
 >   out of the database would have sat in the access log instead.
 >   `redactUrlForLog` in `server/utils/helpers.ts` replaces it, and the
 >   built-in morgan token is overridden so every format is covered.
+>
+> From the second pull request:
+>
+> - **The daily interval lives in `maintenanceService`, not in `server.ts`.**
+>   Task 3.8 says to add one `setInterval` in `server.ts`. The schedule and
+>   its `DISABLE_BACKGROUND_JOBS` gate are in the service instead, with
+>   `server.ts` calling `startDailyMaintenance()`, because a test can call
+>   that and cannot call `server.ts`, which boots an HTTP server and Vite.
+>   `server.ts` keeps its own early return for the same variable.
+> - **`lastUsedAt` was stamped on every request, not hourly.** The guard moved
+>   from `server/middleware/auth.ts` compared a `CURRENT_TIMESTAMP` value
+>   (`2026-09-10 05:33:50`) against `new Date(...).toISOString()`
+>   (`2026-09-10T04:33:50.000Z`). A space sorts before a `T`, so the stored
+>   value looked older than any cut-off from the same day. The comparison is
+>   now one SQL statement with both sides in SQLite's format, which also
+>   removes the race between the read and the write.
+> - **`sessions.lastSeenAt` has the same bug and is not fixed here.**
+>   `resolveSession` parses the stored value with `new Date()`, which reads a
+>   space-separated timestamp as local time while `CURRENT_TIMESTAMP` writes
+>   UTC. Measured: seven hours of drift in `America/Los_Angeles`, two in
+>   `Europe/Berlin`. East of UTC it stamps on every request, west of it the
+>   stamp stops moving until the drift is exhausted. It is Phase 1 code and
+>   outside this phase's remit, so it is reported rather than changed.
+> - **Three more timestamp comparisons had the same bug and are fixed.** An
+>   adversarial review of the second pull request found `expiresAt` on
+>   `api_tokens`, on `sessions` and on `invitations` compared as raw text
+>   against `datetime('now')`, while `createToken`, `createSession` and
+>   `createInvitation` all write ISO strings. An expired personal token kept
+>   working until the UTC date rolled over, up to nearly a full day. Every one
+>   of those comparisons now reads the column through `datetime()`, which
+>   parses both formats and yields NULL for a value it cannot read, so an
+>   unreadable expiry refuses a credential and keeps a row.
+>   `listSessions` in `server/services/authService.ts` is Phase 1 code and is
+>   fixed alongside them, because leaving it would make an account's own
+>   session list disagree with the count the admin API reports.
+> - **Both rate limiters could be escaped by capitalising a letter.** Express
+>   routes case-insensitively unless the app sets `case sensitive routing`,
+>   and this one does not, so `GET /API/Contacts` returns 200. The cost
+>   patterns matched the path as it arrived, so `GET /API/Dashboard/Insight`
+>   reached the same billable handler while both limiters skipped it: measured
+>   at forty requests with no refusal against ten refusals for the same forty
+>   in lower case. `isAiCostPath` lowercases the path first.
+> - **`?scope=all` on the AI stats feed omits `description`.** The document
+>   says the feed returns instance totals and a `byUser` breakdown, and does
+>   not say what a row holds. `description` is the one column that can carry
+>   a fragment of what somebody asked about, and decision D10 says an admin
+>   does not read another account's data, so the instance feed leaves it out.
 
 ## 0. Context for the implementer
 
@@ -374,12 +421,12 @@ acceptance list below with the two-user harness plus a third actor for the
 - [x] Delete without decision `409 USER_HAS_DATA` with counts. With `purge`: every owned row gone, upload directory gone, FTS and `vec0` rows gone, `dedupe_embedding_meta` rows gone, verified by counting. Other owners' rows untouched (counted before and after). 10,000 contacts purge in under 2 s.
 - [x] Last admin: demote, disable, delete each return `409 LAST_ADMIN`. Two admins: allowed.
 - [x] Self: disable and delete return `400 CANNOT_TARGET_SELF`.
-- [ ] Tokens: created token works on `GET /api/contacts` and on every MCP route, is refused on `GET /api/auth/me` (`403 SESSION_REQUIRED`), revoked token `401`, expired token `401`, token of a disabled user `401`. `lastUsedAt` updates at most hourly. Eleventh token in an hour `429`.
-- [ ] Registration: closed by default `403 REGISTRATION_CLOSED`. Open: creates a member, closes again when toggled off.
-- [x] Audit: each listed action produces one row. `GET /api/admin/audit` paginates. Details never contain a password, token, invitation secret, or provider key (grep the test output for `ctk_` and for the seeded passwords). The two token actions arrive with the token endpoints in the second pull request.
-- [ ] Per-user AI rate limit: user A hitting 31 semantic searches in a minute gets `429` with `Retry-After`. User B on the same IP is unaffected. `GET /api/dashboard/insight` and `POST /api/dedupe/scan` are covered.
-- [ ] Daily maintenance interval: with the clock advanced, old audit rows, expired sessions, aged revoked tokens, aged dead invitations, and old invocations are gone. Gated by `DISABLE_BACKGROUND_JOBS`.
-- [ ] Legacy `API_TOKEN` still works, maps to the primary admin, and logs one warning.
+- [x] Tokens: created token works on `GET /api/contacts` and on every MCP route, is refused on `GET /api/auth/me` (`403 SESSION_REQUIRED`), revoked token `401`, expired token `401`, token of a disabled user `401`. `lastUsedAt` updates at most hourly. Eleventh token in an hour `429`.
+- [x] Registration: closed by default `403 REGISTRATION_CLOSED`. Open: creates a member, closes again when toggled off.
+- [x] Audit: each listed action produces one row. `GET /api/admin/audit` paginates. Details never contain a password, token, invitation secret, or provider key (grep the test output for `ctk_` and for the seeded passwords).
+- [x] Per-user AI rate limit: user A hitting 31 semantic searches in a minute gets `429` with `Retry-After`. User B on the same IP is unaffected. `GET /api/dashboard/insight` and `POST /api/dedupe/scan` are covered.
+- [x] Daily maintenance interval: with the clock advanced, old audit rows, expired sessions, aged revoked tokens, aged dead invitations, and old invocations are gone. Gated by `DISABLE_BACKGROUND_JOBS`.
+- [x] Legacy `API_TOKEN` still works, maps to the primary admin, and logs one warning.
 - [x] `tenant-lint --strict` still green. Route manifest green with the new routes classified.
 - [x] CHANGELOG Unreleased has a `Phase 3` block.
 

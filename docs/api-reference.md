@@ -2,7 +2,7 @@
 
 All endpoints are prefixed with `/api`. Request and response bodies are `application/json` unless noted otherwise. The server runs on `http://localhost:3210` by default.
 
-**Authentication:** off by default. When `AUTH_REQUIRED=true` or `API_TOKEN` is configured, every `/api` and `/uploads` request needs either `Authorization: Bearer <API_TOKEN>` (scripts, MCP) or the session cookie set by `POST /api/auth/login` (the web app). Reachable without a credential even when gated: `/api/auth/*` (sign-in must work), `GET /healthz` (health checks hold no secrets), and the static frontend bundle (the SPA must load to show the sign-in screen). See [Configuration](configuration.md#authentication--remote-access).
+**Authentication:** off by default. When `AUTH_REQUIRED=true` or `API_TOKEN` is configured, every `/api` and `/uploads` request needs either `Authorization: Bearer ctk_…` (a personal token, for scripts and MCP) or the session cookie set by `POST /api/auth/login` (the web app). The environment `API_TOKEN` still works and is deprecated: it belongs to no account, acts as the first admin, and is removed in 3.0. Reachable without a credential even when gated: `/api/auth/*` (sign-in must work), `GET /healthz` (health checks hold no secrets), and the static frontend bundle (the SPA must load to show the sign-in screen). See [Configuration](configuration.md#authentication--remote-access).
 
 **Rate limits:** endpoints that trigger billable AI calls or outbound fetches are limited to 60 requests/minute per client IP (`429 RATE_LIMITED`).
 
@@ -1282,7 +1282,7 @@ curl http://localhost:3210/api/timeline
 
 ## Authentication
 
-Every endpoint under `/api/auth` is mounted **before** the auth gate, so it stays reachable to a caller with no credential. Endpoints marked _(account)_ additionally require a signed-in session — an `API_TOKEN` bearer is not enough, because there is no account behind a shared token (`403 USER_REQUIRED`).
+Every endpoint under `/api/auth` is mounted **before** the auth gate, so it stays reachable to a caller with no credential. Endpoints marked _(account)_ additionally require a signed-in session — a bearer token is not enough, because a token proves which account it belongs to but not that a person is present (`403 SESSION_REQUIRED`).
 
 ### `GET /api/auth/status`
 
@@ -1291,10 +1291,17 @@ Always reachable. One round trip for everything the client needs to pick a scree
 ```bash
 curl http://localhost:3210/api/auth/status
 # → { "authRequired": true, "authenticated": false, "setupRequired": true,
-#     "hasAccounts": false, "user": null }
+#     "hasAccounts": false, "user": null, "registrationOpen": false,
+#     "localOwnerPresent": false, "legacyTokenConfigured": false,
+#     "deviceContacts": 0, "existingContacts": 0 }
 ```
 
 `setupRequired` is true only on a gated instance with no accounts.
+`registrationOpen` says whether the sign-in screen should offer to create an
+account. `localOwnerPresent` is true while the instance has never been
+secured. `legacyTokenConfigured` is true while the deprecated environment
+`API_TOKEN` is set. `existingContacts` is the old name for `deviceContacts`
+and is removed in 3.0.
 
 ---
 
@@ -1349,6 +1356,91 @@ Ends every session except the one making the request.
 ### `GET /api/auth/sessions` _(account)_
 
 Live sessions for this account, newest first, with `current: true` on the one making the request. `DELETE /api/auth/sessions` revokes all the others and returns `{ "revoked": n }`.
+
+---
+
+### `POST /api/auth/register`
+
+Create an account without an invitation. Answers `403 REGISTRATION_CLOSED` unless an admin has turned registration on through `PUT /api/admin/settings`. The account is always a member, and is signed in immediately. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/accept-invitation`
+
+Turn an invitation link into an account. The `token` is the query parameter from the link an admin sent. The account takes the role the invitation carried and is signed in immediately.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/accept-invitation \
+  -H "Content-Type: application/json" \
+  -d '{"token":"…","email":"you@example.com","username":"you","password":"a long passphrase"}'
+```
+
+`404` for a token that is unknown, malformed or empty, with one body for all three. `410 INVITATION_USED`, `410 INVITATION_EXPIRED` or `410 INVITATION_REVOKED` for a link that is real but dead. Rate limited to 10/minute per IP.
+
+---
+
+### `GET /api/auth/tokens` _(account)_
+
+The personal tokens this account holds, newest first. Each row carries `tokenPrefix` (the first 12 characters, enough to tell two apart), `lastUsedAt`, `expiresAt` and `revokedAt`. The token itself is never returned again.
+
+---
+
+### `POST /api/auth/tokens` _(account)_
+
+Mint a personal token. The plaintext is in this response and nowhere else — the database holds only its SHA-256.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/tokens \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"name":"My laptop MCP client","expiresInDays":365}'
+# → { "id":"…", "name":"My laptop MCP client", "token":"ctk_…",
+#     "tokenPrefix":"ctk_AbCdEfG", "expiresAt":"…" }
+```
+
+Use it as `Authorization: Bearer ctk_…`. It acts as its own account for every scoped endpoint and reaches no `_(account)_` route, so a script cannot mint a second token or change the password that would revoke it. Limited to 10 per hour per account.
+
+---
+
+### `DELETE /api/auth/tokens/:id` _(account)_
+
+Revoke one of your own tokens. `404` for a token belonging to somebody else. The row stays, with `revokedAt` set, so the list still explains why a script stopped working.
+
+---
+
+## Administration
+
+Every route under `/api/admin` needs an account with the `admin` role and answers `403 ADMIN_REQUIRED` otherwise.
+
+| Method | Path                                  | What it does                                                            |
+| ------ | ------------------------------------- | ----------------------------------------------------------------------- |
+| GET    | `/api/admin/users`                    | Every account, with contact, session and token counts                   |
+| POST   | `/api/admin/users`                    | Create an account. Returns a one-time temporary password                |
+| GET    | `/api/admin/users/:id`                | One account plus what it owns                                           |
+| PATCH  | `/api/admin/users/:id`                | Change a role or a display name                                         |
+| POST   | `/api/admin/users/:id/reset-password` | New temporary password. Revokes every session and token                 |
+| POST   | `/api/admin/users/:id/disable`        | Reversible. Ends sessions, refuses tokens                               |
+| POST   | `/api/admin/users/:id/enable`         | Gives the tokens back, not the sessions                                 |
+| GET    | `/api/admin/users/:id/export`         | That account's data, for offboarding. Audit-logged                      |
+| DELETE | `/api/admin/users/:id`                | Two steps: `409 USER_HAS_DATA` with counts, then `{"decision":"purge"}` |
+| GET    | `/api/admin/invitations`              | Every invitation with its derived status                                |
+| POST   | `/api/admin/invitations`              | Returns a one-time link                                                 |
+| DELETE | `/api/admin/invitations/:id`          | Revoke a pending invitation                                             |
+| GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, and the supported range           |
+| PUT    | `/api/admin/settings`                 | Change either or both                                                   |
+| GET    | `/api/admin/audit`                    | Every administrative action, newest first                               |
+
+Three guards protect the instance, in this order: the local account that owns
+an unsecured instance's data cannot be disabled or deleted
+(`409 LOCAL_OWNER_PROTECTED`), the last active admin cannot be demoted,
+disabled or deleted (`409 LAST_ADMIN`), and no admin may disable or delete
+their own account (`400 CANNOT_TARGET_SELF`).
+
+`GET /api/admin/audit?limit=&before=` pages newest first. `before` is the
+opaque cursor a previous page returned as `nextBefore`.
+
+An account created or reset by an admin holds a password that admin chose, so
+every route outside the six the sign-in flow needs answers
+`403 PASSWORD_CHANGE_REQUIRED` until the person replaces it.
 
 ---
 

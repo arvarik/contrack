@@ -188,6 +188,23 @@ export function errorHandler(
     return;
   }
 
+  // Every 429 that knows when to come back says so, and this is the only
+  // place that writes the header. A limiter knows because it holds the
+  // window; a queue lock knows when it has an estimate and not otherwise. The
+  // value travels in `details.retryAfterSeconds`, and a 429 without one sends
+  // no header, which is better than a guess a client would sleep on.
+  if (t.statusCode === 429 && !res.getHeader("Retry-After")) {
+    const seconds = (t.details as { retryAfterSeconds?: unknown } | undefined)
+      ?.retryAfterSeconds;
+    if (
+      typeof seconds === "number" &&
+      Number.isFinite(seconds) &&
+      seconds > 0
+    ) {
+      res.setHeader("Retry-After", String(Math.ceil(seconds)));
+    }
+  }
+
   const body: ErrorResponseBody = {
     error: {
       code: t.code,

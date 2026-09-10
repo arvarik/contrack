@@ -294,6 +294,31 @@ export const acceptInvitationSchema = z.object({
   displayName: z.string().max(200).nullable().optional(),
 });
 
+/** Body for POST /api/auth/register. The role is not a field: open
+ *  registration always creates a member. */
+export const registerSchema = z.object({
+  email: z.string().trim().min(1).max(254),
+  username: z.string().trim().min(1).max(32),
+  password: z.string().min(1).max(1024),
+  displayName: z.string().max(200).nullable().optional(),
+});
+
+/** Body for POST /api/auth/tokens. */
+export const tokenCreateSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  expiresInDays: z.number().int().min(1).max(3650).nullable().optional(),
+});
+
+/** Body for PUT /api/admin/settings. Either field may be sent alone. */
+export const adminSettingsSchema = z
+  .object({
+    registrationOpen: z.boolean().optional(),
+    sessionTtlDays: z.number().int().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send a setting to change",
+  });
+
 /** Query for GET /api/admin/audit. `before` is the opaque cursor a previous
  *  page returned as `nextBefore`. */
 export const auditQuerySchema = z.object({
