@@ -26,6 +26,7 @@ import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
 import { openKeyboardShortcuts } from "../../lib/appEvents";
+import { SidebarIdentity } from "../auth/AccountIdentity";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -261,6 +262,13 @@ export const Sidebar = () => {
             <SettingsIcon className="w-6 h-6" />
           </Link>
         </SidebarTooltip>
+
+        {/*
+          Who is signed in, last, below the app's own controls. It is the one
+          item here that is about the person rather than the app, and on an
+          un-gated instance it renders nothing at all.
+        */}
+        <SidebarIdentity />
       </div>
     </aside>
   );

@@ -1,9 +1,10 @@
 /**
- * AccountSettings — the signed-in account: profile, password, devices.
+ * AccountSettings — the signed-in account: profile, password, devices, tokens.
  *
- * Three cards in the order people actually need them: who you are (changed
- * most often), your password (changed rarely but urgently), and where you are
- * signed in (read when something feels wrong).
+ * Cards in the order people actually need them: who you are (changed most
+ * often), your password (changed rarely but urgently), where you are signed
+ * in (read when something feels wrong), and the tokens your scripts carry
+ * (created once and then forgotten about, which is why they are listed).
  *
  * Each card saves independently. A single page-wide Save would mean typing a
  * new password and a new display name are the same commit, which is both
@@ -22,19 +23,30 @@ import {
   Loader2,
   LogOut,
   Monitor,
+  Plus,
   ShieldOff,
+  Terminal,
+  TriangleAlert,
   UserRound,
 } from "lucide-react";
 import {
   changePassword,
+  createApiToken,
+  fetchApiTokens,
   fetchSessions,
+  revokeApiToken,
   revokeOtherSessions,
   updateProfile,
   fetchSessionPolicy,
   updateSessionPolicy,
+  type ApiTokenSummary,
+  type CreatedApiToken,
   type SessionSummary,
 } from "../../api/auth";
 import { useAuth } from "../../components/auth/AuthGate";
+import { Modal } from "../../components/ui/Modal";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { SecretReveal } from "../../components/ui/SecretReveal";
 import { CARD, SECTION_HEADING, DANGER_BTN } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
@@ -49,15 +61,27 @@ const GroupHeading = ({ children }: { children: React.ReactNode }) => (
   <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
 );
 
+/**
+ * A labelled input that can also be wrong.
+ *
+ * The `error` half matches `AuthField` on the sign-in screens deliberately.
+ * This component used to route validation messages through `hint`, so "These
+ * don't match." rendered in the same muted grey as "At least 8 characters" —
+ * indistinguishable from ordinary help, with no `aria-invalid` for anybody
+ * not reading the colour. The identical sentence on the forced-password
+ * screen was red and announced.
+ */
 const Field = ({
   id,
   label,
   hint,
+  error,
   ...props
 }: {
   id: string;
   label: string;
   hint?: string;
+  error?: string | null;
 } & React.InputHTMLAttributes<HTMLInputElement>) => (
   <div className="space-y-1.5">
     <label htmlFor={id} className="block text-xs font-bold text-on-surface">
@@ -65,19 +89,25 @@ const Field = ({
     </label>
     <input
       id={id}
-      aria-describedby={hint ? `${id}-hint` : undefined}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
       className={cn(
         "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
         "text-base sm:text-sm",
         "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        error && "ring-2 ring-error",
       )}
       {...props}
     />
-    {hint && (
+    {error ? (
+      <p id={`${id}-error`} className="text-xs text-error">
+        {error}
+      </p>
+    ) : hint ? (
       <p id={`${id}-hint`} className="text-xs text-on-surface-variant">
         {hint}
       </p>
-    )}
+    ) : null}
   </div>
 );
 
@@ -94,7 +124,10 @@ const SaveButton = ({
     type="submit"
     disabled={disabled || busy}
     className={cn(
-      "px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm",
+      "px-5 rounded-xl bg-primary text-on-primary font-bold text-sm",
+      // 44 px on a phone, 40 from sm. `py-2.5` alone computes to exactly 40,
+      // which is under the floor STYLE.md marks REQUIRED.
+      "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
       "flex items-center justify-center gap-2 transition-opacity hover:opacity-90",
       "disabled:bg-surface-container-high disabled:text-on-surface-variant",
       "disabled:cursor-not-allowed disabled:hover:opacity-100",
@@ -259,10 +292,11 @@ const PasswordCard = () => {
         type="password"
         value={next}
         onChange={(e) => setNext(e.target.value)}
-        hint={
+        hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+        error={
           tooShort
             ? `Use at least ${MIN_PASSWORD_LENGTH} characters.`
-            : `At least ${MIN_PASSWORD_LENGTH} characters.`
+            : undefined
         }
         autoComplete="new-password"
       />
@@ -272,7 +306,7 @@ const PasswordCard = () => {
         type="password"
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
-        hint={mismatch ? "These don't match." : undefined}
+        error={mismatch ? "These don't match." : undefined}
         autoComplete="new-password"
       />
       <div className="flex justify-end">
@@ -474,6 +508,364 @@ const SessionLengthCard = () => {
 };
 
 // ---------------------------------------------------------------------------
+// API tokens
+// ---------------------------------------------------------------------------
+
+/**
+ * How long a new token should last.
+ *
+ * Presets rather than a number field, and "Never" is not the default. A token
+ * with no expiry is a credential that outlives the reason it was made, and
+ * the script it was made for is usually still running long after the person
+ * who wrote it stopped thinking about it.
+ */
+const TOKEN_EXPIRY_PRESETS = [
+  { days: 30, label: "30 days" },
+  { days: 90, label: "90 days" },
+  { days: 365, label: "1 year" },
+  { days: null, label: "Never" },
+] as const;
+
+type TokenState = "active" | "revoked" | "expired";
+
+/** What a token is doing now, from the two timestamps that can end it. */
+export function tokenState(
+  token: Pick<ApiTokenSummary, "revokedAt" | "expiresAt">,
+  now: number = Date.now(),
+): TokenState {
+  if (token.revokedAt) return "revoked";
+  if (token.expiresAt && new Date(token.expiresAt).getTime() <= now)
+    return "expired";
+  return "active";
+}
+
+const TokenStateBadge = ({ state }: { state: TokenState }) => {
+  const tones: Record<TokenState, string> = {
+    active: "bg-emerald-500/10 text-success",
+    revoked: "bg-red-500/10 text-error",
+    expired: "bg-surface-container-high text-on-surface-variant",
+  };
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-2 py-0.5",
+        "text-[10px] font-bold uppercase tracking-widest",
+        tones[state],
+      )}
+    >
+      {state}
+    </span>
+  );
+};
+
+const TokenRow = ({
+  token,
+  onRevoke,
+}: {
+  token: ApiTokenSummary;
+  onRevoke: () => void;
+}) => {
+  const state = tokenState(token);
+  return (
+    <li className="flex items-start gap-3 px-4 sm:px-6 py-3.5 hover:bg-surface-container-low transition-colors">
+      <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+        <Terminal className="w-[18px] h-[18px]" />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-bold text-on-surface truncate">
+            {token.name}
+          </span>
+          <TokenStateBadge state={state} />
+        </p>
+        <p className="text-xs text-on-surface-variant font-mono truncate">
+          {token.tokenPrefix}…
+        </p>
+        <p className="text-xs text-on-surface-variant mt-0.5">
+          {token.lastUsedAt
+            ? `Last used ${formatWhen(token.lastUsedAt)}`
+            : "Never used"}
+          {token.expiresAt && state !== "revoked" && (
+            <>
+              {" · "}
+              {state === "expired" ? "Expired" : "Expires"}{" "}
+              {formatWhen(token.expiresAt)}
+            </>
+          )}
+        </p>
+      </div>
+      {state === "active" && (
+        <button
+          type="button"
+          onClick={onRevoke}
+          className={cn(
+            "shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold",
+            "min-h-[44px] sm:min-h-0 sm:py-1.5",
+            "text-error bg-red-500/10 hover:bg-red-500/20 transition-colors",
+          )}
+        >
+          Revoke
+        </button>
+      )}
+    </li>
+  );
+};
+
+/**
+ * Create a token, and show it once.
+ *
+ * The dialog does not close on success. The plaintext is in that response and
+ * nowhere else — the server holds only its SHA-256 — so closing the dialog
+ * for the user would throw away the only copy that will ever exist.
+ */
+const CreateTokenModal = ({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) => {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [expiresInDays, setExpiresInDays] = useState<number | null>(90);
+  const [created, setCreated] = useState<CreatedApiToken | null>(null);
+
+  const create = useMutation({
+    mutationFn: () => createApiToken({ name: name.trim(), expiresInDays }),
+    onSuccess: (token) => {
+      setCreated(token);
+      queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const close = () => {
+    onClose();
+    // Reset after the dialog is gone, so the secret does not flash back into
+    // view during the closing animation.
+    window.setTimeout(() => {
+      setName("");
+      setExpiresInDays(90);
+      setCreated(null);
+      create.reset();
+    }, 200);
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={close}
+      title={created ? "Your new token" : "Create a token"}
+      size="md"
+    >
+      {created ? (
+        <div className="space-y-4">
+          <p className="text-sm text-on-surface-variant text-pretty">
+            Give this to the script or MCP client as{" "}
+            <code className="font-mono text-on-surface">
+              Authorization: Bearer …
+            </code>
+            . It acts as your account and reaches only your data.
+          </p>
+          <SecretReveal value={created.token} label="Token" />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={close}
+              className={cn(
+                "px-5 rounded-xl bg-primary text-on-primary font-bold text-sm",
+                "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
+                "hover:opacity-90 transition-opacity",
+              )}
+            >
+              I've copied it
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) create.mutate();
+          }}
+          className="space-y-4"
+        >
+          <Field
+            id="token-name"
+            label="What is it for"
+            hint="Shown in this list. Name the machine or the script, not the person."
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={60}
+            placeholder="Claude Desktop on the laptop"
+            // The dialog opens with one field to fill in.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus
+          />
+          <div className="space-y-1.5">
+            <span className="block text-xs font-bold text-on-surface">
+              Expires
+            </span>
+            <div
+              role="radiogroup"
+              aria-label="Expires"
+              className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+            >
+              {TOKEN_EXPIRY_PRESETS.map((preset) => {
+                const active = preset.days === expiresInDays;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setExpiresInDays(preset.days)}
+                    className={cn(
+                      "px-3 py-3 sm:py-2.5 rounded-xl text-sm font-bold transition-colors",
+                      active
+                        ? "bg-primary/10 text-primary ring-2 ring-inset ring-primary"
+                        : "bg-surface-container-highest text-on-surface hover:bg-surface-container-high",
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+            {expiresInDays === null && (
+              <p className="text-xs text-warning text-pretty">
+                A token that never expires outlives the reason it was made.
+                Prefer a date you will remember to renew.
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <SaveButton busy={create.isPending} disabled={!name.trim()}>
+              <Plus className="w-4 h-4" />
+              Create token
+            </SaveButton>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+};
+
+const ApiTokensCard = () => {
+  const queryClient = useQueryClient();
+  const { legacyTokenConfigured } = useAuth();
+  const [creating, setCreating] = useState(false);
+  const [revoking, setRevoking] = useState<ApiTokenSummary | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["auth", "tokens"],
+    queryFn: fetchApiTokens,
+    staleTime: 30_000,
+  });
+
+  const revoke = useMutation({
+    mutationFn: (id: string) => revokeApiToken(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
+      setRevoking(null);
+      toast.success("Token revoked");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const tokens = data?.tokens ?? [];
+
+  return (
+    <div className={cn(CARD, "p-0 overflow-hidden")}>
+      <div className="px-4 sm:px-6 py-4 bg-surface-container-low space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-sm text-on-surface-variant text-pretty max-w-prose">
+            A token lets a script or an MCP client act as you, and reach only
+            your data. Sign-in cookies cannot be used that way, which is what
+            these are for.
+          </p>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className={cn(
+              "shrink-0 px-4 rounded-xl bg-primary text-on-primary",
+              "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
+              "font-bold text-sm flex items-center gap-2",
+              "hover:opacity-90 transition-opacity",
+            )}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Create token</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </div>
+
+        {/*
+          The instance-wide environment token is a single credential that acts
+          as the first admin for anybody who has it, and it is on its way out.
+          Saying so here, next to the thing that replaces it, is the only place
+          the operator will read it.
+        */}
+        {legacyTokenConfigured && (
+          <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 p-3">
+            <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <p className="text-xs text-on-surface text-pretty">
+              This instance still uses the environment{" "}
+              <code className="font-mono">API_TOKEN</code>, which acts as the
+              first administrator for anyone who holds it. Create a personal
+              token, point your scripts at it, and remove the variable.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <p className="px-4 sm:px-6 py-6 text-sm text-on-surface-variant">
+          Loading tokens…
+        </p>
+      ) : tokens.length === 0 ? (
+        <p className="px-4 sm:px-6 py-6 text-sm text-on-surface-variant text-pretty">
+          No tokens yet. Create one when you connect an MCP client or a script.
+        </p>
+      ) : (
+        <ul>
+          {tokens.map((token) => (
+            <TokenRow
+              key={token.id}
+              token={token}
+              onRevoke={() => setRevoking(token)}
+            />
+          ))}
+        </ul>
+      )}
+
+      <CreateTokenModal isOpen={creating} onClose={() => setCreating(false)} />
+      <ConfirmDialog
+        isOpen={revoking !== null}
+        onClose={() => setRevoking(null)}
+        onConfirm={() => revoking && revoke.mutate(revoking.id)}
+        busy={revoke.isPending}
+        title="Revoke this token?"
+        confirmLabel="Revoke token"
+        description={
+          <>
+            <p>
+              <strong className="text-on-surface">{revoking?.name}</strong>{" "}
+              stops working immediately. Anything using it — a script, an MCP
+              client — starts failing on its next request.
+            </p>
+            <p>
+              The entry stays in this list, marked revoked, so you can see what
+              happened later.
+            </p>
+          </>
+        }
+      />
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -517,11 +909,16 @@ export const AccountSettings = () => {
       </section>
 
       <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
+        <GroupHeading>API tokens</GroupHeading>
+        <ApiTokensCard />
+      </section>
+
+      <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
         <GroupHeading>Session length</GroupHeading>
         <SessionLengthCard />
       </section>
 
-      <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
+      <section className="tile-enter" style={{ animationDelay: tileDelay(5) }}>
         <GroupHeading>Session</GroupHeading>
         <div
           className={cn(
@@ -536,9 +933,10 @@ export const AccountSettings = () => {
             type="button"
             onClick={() => void signOut()}
             className={cn(
-              "shrink-0 px-5 py-2.5 rounded-xl font-bold text-sm",
+              "shrink-0 px-5 rounded-xl font-bold text-sm",
+              "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
               "bg-surface-container-high text-on-surface",
-              "flex items-center gap-2 hover:bg-surface-container-highest transition-colors",
+              "flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors",
             )}
           >
             <LogOut className="w-4 h-4" />

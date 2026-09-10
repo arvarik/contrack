@@ -128,6 +128,46 @@ This acts as an intricate state machine managing layered interactions (`cmdk`).
 - Responsive text: Show "Cancel" on mobile, "ESC back" on desktop.
 - Enlarged hit-areas via padded mobile rules.
 
+#### 44 px minimum hit area (REQUIRED)
+
+Every control a finger can reach is at least 44 × 44 CSS pixels, whatever its
+visible chrome. Apple HIG says 44 and Material says 48; below that, controls are
+missable on a phone, and a missed control on a destructive row is worse than
+missable.
+
+- ✅ Use `<IconButton>` (`src/components/ui/IconButton.tsx`) for icon-only
+  buttons. It carries `min-w-[44px] min-h-[44px]` and lets `size` change only
+  the icon halo, never the hit area.
+- ✅ For a control that is not an `IconButton`, write the floor yourself:
+  `inline-flex items-center justify-center min-w-[44px] min-h-[44px]`.
+- ❌ Do not reach for `ICON_BTN` from `src/lib/styles.ts` on a new touch
+  control. It is `p-2`, which is about 32 px with a 16 px icon. It stays for
+  the existing dense toolbars it was written for.
+- The visible padding grows the icon's halo. The hit area is the full square.
+  The two are tuned independently and only one of them is negotiable.
+
+#### Modals are bottom sheets on mobile (REQUIRED)
+
+A centred dialog on a phone puts its actions in the middle of the screen, out
+of thumb reach, and its close control in the top corner, which is the furthest
+point from the thumb on the device.
+
+- ✅ Use `<Modal>` (`src/components/ui/Modal.tsx`). Below `sm` it renders as a
+  bottom sheet — `inset-x-0 bottom-0 rounded-t-2xl` — and from `sm` it becomes
+  a centred card. Its close control is a 44 px target and its scroll container
+  carries `pb-[max(1.25rem,env(safe-area-inset-bottom))]` so the last row
+  clears the home indicator.
+- ✅ Use `<ConfirmDialog>` (`src/components/ui/ConfirmDialog.tsx`) for anything
+  irreversible. It wraps `Modal`, so it inherits all of the above, and its
+  buttons stack `flex-col-reverse` under `sm` — the confirming action on top,
+  where the thumb is.
+- ❌ `disableMobileSheet` exists for dialogs that must stay centred (a preview
+  anchored to something behind it). It is the exception and needs a reason in
+  the call site.
+- ❌ Never hand-roll a fixed-position overlay. Nested focus, scroll locking,
+  Escape and focus restoration are all in the primitive, and re-deriving them
+  is how a dialog ends up trapping the page behind it.
+
 ### Animation Standards
 
 Two rendering strategies, chosen by context:

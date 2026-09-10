@@ -21,6 +21,7 @@ import {
   type ImportedContact,
 } from "../lib/importers";
 import { useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "../api/client";
 import { TAB_CONTAINER, tabItem } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -61,7 +62,11 @@ async function bulkImportWithProgress(
   contacts: ImportedContact[],
   onProgress: (p: StreamProgress) => void,
 ): Promise<{ count: number; summary?: ImportSummary }> {
-  const res = await fetch("/api/contacts/bulk", {
+  // Through `apiFetch` like everything else, even though the body is a
+  // stream rather than JSON. The import is a data route, so the server can
+  // answer it with "change your password first" or "your session expired",
+  // and only the shared client turns those into a change of screen.
+  const res = await apiFetch("/contacts/bulk", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -70,7 +75,6 @@ async function bulkImportWithProgress(
     body: JSON.stringify(contacts),
   });
 
-  if (!res.ok) throw new Error("Failed to import contacts");
   if (!res.body) throw new Error("Import stream unavailable.");
 
   const reader = res.body.getReader();

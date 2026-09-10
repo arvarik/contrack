@@ -2050,9 +2050,12 @@ describe("dedupe scans and merges stop at the account that asked", () => {
     const forA = await asUser(A)(request(app).get("/api/dedupe/active"));
     const forB = await asUser(B)(request(app).get("/api/dedupe/active"));
 
-    expect(forA.body).toMatchObject({ active: true });
+    expect(forA.body).toMatchObject({ active: true, queued: false });
     expect(forA.body.scan.scanId).toBe(mine.scanId);
-    expect(forB.body).toEqual({ active: false });
+    // Exact, not `toMatchObject`: the point of this assertion is that nothing
+    // about A's scan reaches B, and a subset match would not notice a scan
+    // record arriving alongside `active: false`.
+    expect(forB.body).toEqual({ active: false, queued: false });
     dedupeQueue.__resetForTests();
   });
 
@@ -2087,6 +2090,19 @@ describe("dedupe scans and merges stop at the account that asked", () => {
 
     const waiting = dedupeQueue.getActiveScan(B.scope);
     expect(waiting).not.toBeNull();
+
+    // B's booked scan is a real record with phase "starting", which is exactly
+    // what a scan that began a moment ago looks like. `queued` is the only
+    // thing that tells the two apart, and a page that reloads while waiting
+    // has no 429 left to read. Without it the client shows a progress bar
+    // frozen at zero for however long A takes.
+    const activeForB = await asUser(B)(request(app).get("/api/dedupe/active"));
+    expect(activeForB.body).toMatchObject({ active: true, queued: true });
+    expect(activeForB.body.scan.phase).toBe("starting");
+
+    // A is running, not waiting.
+    const activeForA = await asUser(A)(request(app).get("/api/dedupe/active"));
+    expect(activeForA.body).toMatchObject({ active: true, queued: false });
 
     // A finishing hands the lock to B, and B's scan runs for B.
     dedupeQueue.complete(running.scanId, []);

@@ -1,4 +1,6 @@
-import { apiFetch } from "./client";
+import { apiJson } from "./client";
+import { useAuth } from "../components/auth/AuthGate";
+import { rateLimitMessage } from "../lib/rateLimitMessage";
 /**
  * Enrichment API Hooks — React Query hooks for single-contact AI enrichment
  * and grounding capacity checks.
@@ -23,22 +25,34 @@ export const enrichmentKeys = {
 // Queries
 // =============================================================================
 
-/** Check grounding RPD capacity — used to enable/disable refresh buttons. */
-export const useGroundingCapacity = () =>
-  useQuery({
+/**
+ * Check grounding RPD capacity — used to enable/disable refresh buttons.
+ *
+ * Admins only, and not because the number is a secret. The route is class
+ * `admin` and has been since Phase 3, while this query is mounted by the
+ * command palette on every screen and refetches every two minutes. For a
+ * member that is a request per two minutes that can only be refused, for the
+ * life of the tab. `enabled` is the honest fix: do not ask a question the
+ * answer to which is always no.
+ *
+ * The `!res.ok` branch that used to sit here could not run either — the
+ * shared client throws for any non-2xx — so a member's refusal was already
+ * failing the query rather than returning the zeroed shape it pretended to.
+ */
+export const useGroundingCapacity = () => {
+  const { isAdmin } = useAuth();
+  return useQuery({
     queryKey: enrichmentKeys.groundingCapacity,
-    queryFn: async ({ signal }) => {
-      const res = await apiFetch(`/ai/grounding-capacity`, { signal });
-      if (!res.ok) return { hasCapacity: false, remaining: 0, limit: 0 };
-      return res.json() as Promise<{
-        hasCapacity: boolean;
-        remaining: number;
-        limit: number;
-      }>;
-    },
+    queryFn: ({ signal }) =>
+      apiJson<{ hasCapacity: boolean; remaining: number; limit: number }>(
+        `/ai/grounding-capacity`,
+        { signal },
+      ),
+    enabled: isAdmin,
     staleTime: 60_000, // Re-check every 60s
     refetchInterval: 120_000, // Background refresh every 2min
   });
+};
 
 // =============================================================================
 // Mutations
@@ -59,22 +73,17 @@ interface EnrichResult {
 export const useEnrichContact = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (contactId: string): Promise<EnrichResult> => {
-      const res = await apiFetch(`/contacts/${contactId}/enrich`, {
+    mutationFn: (contactId: string): Promise<EnrichResult> =>
+      // Three branches used to sit here reading `res.status` for 429, 503 and
+      // "not ok". None of them could run: `apiFetch` throws `ApiError` for
+      // every non-2xx, so the response this function sees is always a 2xx.
+      // The 429 branch in particular claimed every refusal was the daily
+      // grounding quota, which since Phase 3 is usually the per-account AI
+      // limiter instead. The message is now decided in `onError`, from the
+      // code the server actually sent.
+      apiJson<EnrichResult>(`/contacts/${contactId}/enrich`, {
         method: "POST",
-      });
-      if (res.status === 429) {
-        throw new Error("Grounding quota exhausted for today");
-      }
-      if (res.status === 503) {
-        throw new Error("AI provider is not configured");
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Enrichment failed");
-      }
-      return res.json();
-    },
+      }),
     onSuccess: (data, contactId) => {
       // Invalidate contact data so the UI refreshes with new fields
       qc.invalidateQueries({ queryKey: ["contacts"] });
@@ -91,7 +100,10 @@ export const useEnrichContact = () => {
       );
     },
     onError: (err: Error) => {
-      toast.error(err instanceof Error ? err.message : String(err));
+      // A rate limit gets the sentence that names whose limit it was. Anything
+      // else keeps the server's own words, which are more specific than
+      // anything this file could invent.
+      toast.error(rateLimitMessage(err, "enrichment") ?? err.message);
     },
   });
 };

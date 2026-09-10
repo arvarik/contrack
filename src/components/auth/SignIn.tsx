@@ -9,15 +9,41 @@ import React, { useState } from "react";
 import { Lock, LogIn, Loader2 } from "lucide-react";
 import { signIn } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
+import { rateLimitMessage } from "../../lib/rateLimitMessage";
 import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+
+/** Why this screen appeared, when it was not the user's own doing. */
+export type SignInReason = "expired" | "disabled" | null;
+
+const HEADINGS: Record<
+  "expired" | "disabled",
+  { title: string; subtitle: string }
+> = {
+  expired: {
+    title: "Signed out",
+    subtitle:
+      "Your session expired, so Contrack signed you out. Sign in to pick up where you left off.",
+  },
+  // Deliberately not "sign in again". This account is closed, and the one
+  // thing a sign-in form invites is the one thing that cannot work.
+  disabled: {
+    title: "This account is disabled",
+    subtitle:
+      "An administrator has closed this account. Ask them to enable it, or sign in with a different one.",
+  },
+};
 
 export const SignIn = ({
   onSignedIn,
   reason,
+  canRegister = false,
+  onRegister,
 }: {
   onSignedIn: () => void;
-  /** Why this screen appeared, when it was not the user's own doing. */
-  reason?: "expired" | null;
+  reason?: SignInReason;
+  /** True when this instance accepts new accounts from the sign-in page. */
+  canRegister?: boolean;
+  onRegister?: () => void;
 }) => {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -36,9 +62,12 @@ export const SignIn = ({
       setError(
         isNetworkError(err)
           ? "Can't reach the Contrack server. Is it running?"
-          : err instanceof Error
-            ? err.message
-            : "Sign-in failed.",
+          : // Sign-in shares one per-address budget with register, accept-
+            // invitation and change-password. A refusal for that reason is
+            // not a wrong password, and saying "incorrect" would send
+            // somebody hunting for a password that was right.
+            (rateLimitMessage(err) ??
+              (err instanceof Error ? err.message : "Sign-in failed.")),
       );
       // Clear only the password. Retyping a username you already got right is
       // busywork, and the failure is almost always the other field.
@@ -53,14 +82,30 @@ export const SignIn = ({
   return (
     <AuthShell
       icon={<Lock className="w-7 h-7" />}
-      title={reason === "expired" ? "Signed out" : "Welcome back"}
+      title={reason ? HEADINGS[reason].title : "Welcome back"}
       subtitle={
-        reason === "expired"
-          ? "Your session expired, so Contrack signed you out. Sign in to pick up where you left off."
-          : "Sign in to your Contrack account."
+        reason ? HEADINGS[reason].subtitle : "Sign in to your Contrack account."
       }
       onSubmit={handleSubmit}
-      footer="Forgot your password? A self-hosted Contrack has no way to email you a reset — see the configuration docs for the recovery steps."
+      footer={
+        <>
+          {canRegister && onRegister && (
+            <>
+              No account yet?{" "}
+              <button
+                type="button"
+                onClick={onRegister}
+                className="text-primary font-bold hover:underline"
+              >
+                Create one
+              </button>
+              <br />
+            </>
+          )}
+          Forgot your password? A self-hosted Contrack has no way to email you a
+          reset — see the configuration docs for the recovery steps.
+        </>
+      }
     >
       <div className="space-y-4">
         <AuthField

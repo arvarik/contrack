@@ -20,6 +20,7 @@ import {
   Cpu,
   GitMerge,
   History,
+  Hourglass,
   X,
 } from "lucide-react";
 import { useMergeCluster } from "../../api";
@@ -58,6 +59,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     startScan,
     reset,
     removeCluster,
+    isQueued,
   } = useDedupe();
   const mergeCluster = useMergeCluster();
   const { autoMergeThreshold } = useDedupeSettings();
@@ -80,7 +82,12 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
   const scanComplete = scan?.phase === "complete";
   const scanError = scan?.phase === "error";
   const hasResults = scanComplete && clusters.length > 0;
-  const preScan = !scan && !isStarting;
+  // The pre-scan page is what you see when nothing is happening. Three things
+  // count as something happening, and the last two hold no scan record:
+  // `isStarting` is the request in flight, and `isQueued` is a turn booked
+  // behind another account. Without them the page flashes empty between the
+  // click and the first server answer.
+  const preScan = !scan && !isStarting && !isQueued;
 
   // Clamp index when list shrinks
   useEffect(() => {
@@ -496,6 +503,40 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     )}
                     Begin Scan
                   </button>
+                </div>
+              )}
+
+              {/* ═══ Phase 1b: Queued behind another account ═══ */}
+              {/*
+                Deliberately not a progress card. The scan exists on the
+                server and has zero progress to report, and a progress bar
+                frozen at nothing reads as a hang. This says what is true:
+                somebody else is scanning, and this one starts by itself.
+              */}
+              {isQueued && !scan && (
+                <div className="flex flex-col items-center justify-center h-full">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full max-w-md"
+                  >
+                    <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-6 text-center space-y-3">
+                      <span className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                        <Hourglass className="w-6 h-6" />
+                      </span>
+                      <h3 className="font-bold text-on-surface">
+                        Waiting for another scan to finish
+                      </h3>
+                      <p className="text-sm text-on-surface-variant text-pretty">
+                        Another user's scan is running. Yours is booked and will
+                        start automatically — you can leave this page.
+                      </p>
+                      <p className="text-xs text-on-surface-variant">
+                        Only one scan runs at a time, because a scan reads every
+                        contact it owns and shares one AI budget.
+                      </p>
+                    </div>
+                  </motion.div>
                 </div>
               )}
 

@@ -8,25 +8,29 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import React, { useEffect } from "react";
 import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import { safeHref } from "../lib/utils";
+import { apiJson } from "../api/client";
 
 const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
   const { url, title, description, image, loading } = node.attrs;
 
   useEffect(() => {
     if (loading && url) {
-      fetch(`/api/link-preview/unfurl?url=${encodeURIComponent(url)}`)
-        .then((res) => res.json())
+      // `apiJson` throws for every non-2xx, so the rate-limited and refused
+      // cases land in the same `catch` as a dead server. A preview that does
+      // not arrive shows its error state; there is nothing else to say about
+      // one link inside a note.
+      apiJson<{
+        title?: string;
+        description?: string;
+        image?: string;
+      }>(`/link-preview/unfurl?url=${encodeURIComponent(url)}`)
         .then((data) => {
-          if (data.error) {
-            updateAttributes({ loading: false, error: true });
-          } else {
-            updateAttributes({
-              loading: false,
-              title: data.title,
-              description: data.description,
-              image: data.image,
-            });
-          }
+          updateAttributes({
+            loading: false,
+            title: data.title,
+            description: data.description,
+            image: data.image,
+          });
         })
         .catch(() => {
           updateAttributes({ loading: false, error: true });

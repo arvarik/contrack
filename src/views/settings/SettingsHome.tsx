@@ -36,6 +36,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
+import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
@@ -383,6 +384,14 @@ export const SettingsHome = () => {
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+      {/*
+        The sidebar names the signed-in account on desktop and is hidden below
+        `md`, so the same row appears here for every narrower screen. Above the
+        filter, because it is identity rather than a setting, and it answers
+        the question the rest of the page depends on: whose Contrack is this.
+      */}
+      <SettingsIdentityRow />
+
       <SettingsFilter value={query} onChange={setQuery} />
 
       {nothingMatches && (

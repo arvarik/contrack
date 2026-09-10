@@ -17,6 +17,7 @@ import React, {
   useCallback,
   useMemo,
   useEffect,
+  useRef,
 } from "react";
 import {
   useStartAISearch,
@@ -24,7 +25,8 @@ import {
   useCancelAISearch,
 } from "../api/aiSearch";
 import { toast } from "sonner";
-import { ApiError } from "../api/client";
+import { ApiError, rateLimitFacts } from "../api/client";
+import { rateLimitMessage } from "../lib/rateLimitMessage";
 import type { AISearchBatch } from "../types";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
 
@@ -34,6 +36,19 @@ interface AISearchContextValue {
   isVisible: boolean;
   dismiss: () => void;
   isStarting: boolean;
+  /**
+   * Why the last start was refused, when the reason was a limit rather than
+   * a failure.
+   *
+   * The view cannot read it from the mutation: `handleConfirmStart` fires and
+   * returns without awaiting, so the rejection lands here. Before 2.0 that
+   * only ever meant "you did this too fast"; now it can also mean another
+   * account holds the enrichment lock, which is not the reader's doing and
+   * deserves different words.
+   */
+  limitMessage: string | null;
+  /** Forget the message — the reader has seen it, or is trying again. */
+  clearLimit: () => void;
 }
 
 const AISearchContext = createContext<AISearchContextValue | null>(null);
@@ -48,6 +63,9 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const [batch, setBatch] = useState<AISearchBatch | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const limitTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(limitTimer.current), []);
   const startMutation = useStartAISearch();
 
   // SSE stream hook — updates batch state in real-time
@@ -81,17 +99,44 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
           setBatch(null);
           setBatchId(result.batchId);
           setIsVisible(true);
+          setLimitMessage(null);
           toast.success(
             `AI Search started for ${result.jobCount} contact${result.jobCount !== 1 ? "s" : ""}`,
           );
         },
         onError: (err) => {
+          // A cooldown or a lock held by somebody else is not a failure, and
+          // a red toast that vanishes is the wrong place for a wait the
+          // reader has to act on. It is kept on the page instead, and the
+          // toast is dropped for that case.
+          const limited = rateLimitMessage(err, "enrichment");
+          if (limited) {
+            setLimitMessage(limited);
+            // The message names a wait, and the provider outlives the view
+            // that shows it: the AI Search page unmounts on navigation, this
+            // does not. Without an expiry, coming back an hour later reads a
+            // countdown that ran out long ago. The stated wait, or a short
+            // window when the server named none.
+            const seconds = rateLimitFacts(err)?.retryAfterSeconds ?? 60;
+            window.clearTimeout(limitTimer.current);
+            limitTimer.current = window.setTimeout(
+              () => setLimitMessage(null),
+              seconds * 1000,
+            );
+            return;
+          }
+          setLimitMessage(null);
           toast.error(err instanceof Error ? err.message : String(err));
         },
       });
     },
     [startMutation],
   );
+
+  const clearLimit = useCallback(() => {
+    window.clearTimeout(limitTimer.current);
+    setLimitMessage(null);
+  }, []);
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
@@ -109,8 +154,18 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
       isVisible,
       dismiss,
       isStarting: startMutation.isPending,
+      limitMessage,
+      clearLimit,
     }),
-    [startSearch, batch, isVisible, dismiss, startMutation.isPending],
+    [
+      startSearch,
+      batch,
+      isVisible,
+      dismiss,
+      startMutation.isPending,
+      limitMessage,
+      clearLimit,
+    ],
   );
 
   return (
