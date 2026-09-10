@@ -14,7 +14,7 @@ _Empty — start a new feature with `/step1-spec`._
 
 **Phase:** Idle
 
-**Test Suite:** 943 tests (922 passing, 21 todo) — unit + integration (real SQLite), 0 regressions. The todos are the routes the Phase 2 isolation matrix has not reached yet, in `tests/integration/tenancy.isolation.test.ts`.
+**Test Suite:** 970 tests (970 passing, 0 todo) — unit + integration (real SQLite), 0 regressions. Phase 2 of the multi-tenancy plan is complete: the isolation matrix has no todo left, every `scoped` route is `isolated: true` in `ROUTE_MANIFEST`, `npm run lint` runs `tenant-lint --strict "server/**/*.ts"` over the whole server tree, and `tests/integration/tenancy.queryPlans.test.ts` proves the owner predicate is an index seek for the ten relational statements the plan names, with the eleventh, the full-text query, pinned through its `MATCH` expression.
 
 The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
 

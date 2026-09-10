@@ -139,6 +139,129 @@ complete inventory is [appendix-a-query-inventory.md](appendix-a-query-inventory
 >   block could run, so the block was unreachable. The toast still shows the
 >   server's message, now off the standard envelope.
 
+> **What 2g, 2h and 2i shipped, where they differ from this document.** These
+> three landed as one PR, the one that closes the phase.
+>
+> - **The manifest classes were already right.** The 2g table asks for eight
+>   class changes. All eight were seeded correctly in Phase 0, and a row-by-row
+>   comparison of `ROUTE_MANIFEST` against appendix B found zero class
+>   differences across all 111 shared rows. 2g verified them and pinned the
+>   fourteen `admin` rows by name in `tenancy.routeManifest.test.ts`, so the
+>   classification cannot drift before Phase 3 mounts the guard.
+> - **`requireAdmin` is still mounted nowhere, and two comments said 2g would
+>   mount it.** `server/middleware/auth.ts` and the title of the test that
+>   asserts the guard is absent both named 2g. Section 5 and the 2g table say
+>   Phase 3, and Phase 3 is right: mounting a gate whose admin story does not
+>   exist yet would be invisible until a member hit it. Both now say Phase 3.
+> - **The trash needed no service change.** 2a scoped `listTrash`,
+>   `restoreContact` and `purgeTrashedContact`, and the routes already passed
+>   `scopeOf(req)`. 2g owed them their four matrix tests and the manifest flip,
+>   which is what it added. Their by-id refusals rest on
+>   `contactRepo.findOwned`, so stripping the owner from `listTrash` alone
+>   fails one test rather than four.
+> - **`list_members` reaches its owner through its list.** It has no `ownerId`
+>   in the schema, in the database, or in `OWNED_TABLES`, so the export joins
+>   `lists`. Filtering by `contactId` instead would silently drop a membership
+>   whose list belongs to the caller but whose contact row is already gone.
+> - **`queryContacts` gained three filters, and the table names two.**
+>   `softMergeContacts` retires a duplicate by setting `canonicalId` and
+>   nothing else, so a merged-away row passes both of the filters the table
+>   asks for and comes back as a live contact. An agent acting on that id
+>   writes an interaction onto a record the app never shows again, so the third
+>   filter is part of the same fix rather than a separate one. Archived
+>   contacts stay: the app shows those on their own page.
+> - **The dedupe backfill became two functions, and the scan calls the scoped
+>   one.** `backfillEmbeddings()` still sweeps every account for the boot path
+>   and the operator's repair button. `backfillOwnerEmbeddings(scope)` is new,
+>   and `dedupeService.runScan` calls it. The scan was calling the instance-wide
+>   sweep from inside a scoped scan, so one person pressing "scan" paid a
+>   provider to embed every other account's contacts, and a full-mode scan that
+>   had just cleared its own vectors refilled everybody's. The 2h table does not
+>   name this call site; it is the same fix applied where it was found.
+> - **`backfillOwnerEmbeddings` opens its own context.** The scan that calls it
+>   already has one, but `recordInvocation` reads the context rather than the
+>   argument, so a caller that forgot would attribute the spend to the primary
+>   admin. The test that proves attribution is what found this.
+> - **`normalizeContactsForAllOwners` is gone**, as its own doc comment
+>   promised. The per-owner loop is the only caller shape left.
+> - **Nothing records an embedding invocation today.** `AI_OPERATIONS` has no
+>   embedding kind, so `ai_invocations` holds no row for either backfill.
+>   Sub-phase 2h makes the context right at the moment of the provider call,
+>   which `tests/integration/tenancy.backfills.test.ts` proves by recording a
+>   real row from inside the mocked provider. Adding a real embedding operation
+>   is a separate change with a UI behind it.
+> - **The scanner went blind after a regular expression that contained a
+>   quote.** `extractLiterals` had no case for a regex literal, so the `"` in
+>   the CSV escaper's `/[",\n\r]/` and in the mention matcher's
+>   `data-type="mention"` opened a string that ran to the next quote anywhere
+>   in the file. Every quote after it was off by one, so real statements read
+>   as code and were never scanned: a file could pass `--strict` while holding
+>   an unscoped statement further down. Measured on the two files that have
+>   such a regex, with their owner predicates stripped, the old scanner saw two
+>   of four findings in `interactionService.ts` and five of six in
+>   `exportService.ts`. It now sees all of them, and five unit tests pin the
+>   cases, including division, `return /re/` and a slash inside a character
+>   class.
+> - **Nine allow comments across the tree sat where the scanner never looked**,
+>   above the enclosing `sqlite.prepare(` rather than above the literal. Every
+>   one of them was on a statement that names `ownerId` anyway, so none was
+>   hiding anything, but an annotation that does nothing is worse than none.
+>   All of them moved inside the call.
+> - **A full-mode scan could clear its own vectors and then declare the index
+>   ready.** One process-wide flag now has two public entry points, so a scan
+>   that starts while the boot sweep is running gets `0` back from its
+>   backfill. `clearOwnerEmbeddings` has already run by then, so the account's
+>   vectors are gone and the KNN would have searched an empty partition and
+>   reported no duplicates. The scan asks the store instead of trusting the
+>   count. That path is reasoned rather than covered by a test: reproducing it
+>   needs a scan and a boot sweep racing on the same flag.
+> - **`--strict "server/**/*.ts"` did not cover `server/db.ts`.** `globToRegExp`
+>   turned `**` into `.*` and left the following `/` as a literal, so the
+>   pattern needed at least one directory under `server/`. Every strict glob the
+>   phase used therefore skipped the two files sitting directly in `server/`,
+>   and `server/db.ts` holds fourteen unannotated boot statements. `**/` now
+>   matches zero or more directories, a unit test pins it, and the fourteen
+>   statements carry `// tenant-lint: allow boot migration`.
+> - **Two of the fourteen allow comments in `db.ts` were in the wrong place
+>   already.** `allowAbove` reads the line above the *literal*, and both sat
+>   above the enclosing `sqlite.prepare(`, where the scanner never looked. They
+>   were invisible because the file was never in a strict glob.
+> - **Four plan-test rows name a different index than the 2i table guessed,
+>   and one of those four has no reader at all.** The slim list takes
+>   `idx_contacts_owner_added` (the `ORDER BY addedAt DESC` removes the sort),
+>   the dashboard at-risk list takes `idx_contacts_owner_score` (the selective
+>   predicate and the sort are both on that column), and the pending
+>   suggestions list takes `idx_dedupe_sugg_owner_conf` (it answers the sort and
+>   the `LIMIT` as well as the seek). All three lead with `ownerId`, which is
+>   what the test is checking. The phonetic block load has no statement:
+>   `idx_contacts_owner_phonetic` has zero readers anywhere in `server/`,
+>   because the blocking pass loads one account's active contacts and computes
+>   the phonetic key in JavaScript. That row tests the load it really runs,
+>   which takes `idx_contacts_owner_canon`.
+> - **Two accounts are not enough for the `lists` plan.** Its only
+>   owner-selectivity is the owner column itself, so with two accounts a seek
+>   returns half the table and SQLite scans instead, correctly. The fixture
+>   keeps the two 500-contact accounts the table asks for and adds eight small
+>   ones, which is what a real instance looks like.
+> - **Four of the eight prefix indexes are dropped, not eight.** The v1
+>   ownership loop created `idx_<table>_owner` for all eight owned tables. This
+>   document and the data model both name four. Those four are dropped and the
+>   loop no longer creates any, so an upgraded instance keeps four redundant
+>   indexes (`idx_interactions_owner`, `idx_action_items_owner`,
+>   `idx_dedupe_suggestions_owner`, `idx_dedupe_exclusions_owner`) that a fresh
+>   instance never has. Each is a prefix of a composite, and
+>   `idx_dedupe_exclusions_owner` is an exact duplicate of
+>   `idx_dedupe_excl_owner`. Dropping the other four is a one-line follow-up.
+> - **The benchmark was measuring the wrong thing for the dedupe scan.** The
+>   route answers as soon as the scan is queued, so `POST /api/dedupe/scan`
+>   timed the enqueue. The Phase 0 number was a real scan time only because the
+>   scan blocked the event loop for the whole run. The script now polls
+>   `/api/dedupe/status` to a terminal phase, which reproduces the Phase 0
+>   number at `1 × 5000` to within three percent. It also took its sample
+>   contact from the first
+>   row in `contacts`, which belongs to whichever account seeded first, so
+>   `GET /api/contacts/:id` answered `404` on a multi-account run.
+
 ---
 
 ## 0. Context for the implementer
@@ -672,19 +795,64 @@ or write attributable rows run per owner inside a context.
       routes, and `isolated: true` for each.
 - [x] CHANGELOG has a Phase 2e block, including the breaking `429` shape.
 
+### 2g, 2h and 2i (shipped)
+
+- [x] `buildFullExport(scope)` and `buildContactsCsv(scope)` filter every
+      table by the caller. `list_members` reaches its owner through
+      `lists.ownerId`, because it has no owner column of its own. The download
+      filename names the account, so two people exporting on the same day get
+      two files.
+- [x] The four trash routes are proven by the matrix. Their service functions
+      were already scoped in 2a, so 2g owed them tests and the manifest flip.
+- [x] Every `mcpService` function takes a scope. `queryContacts` excludes
+      trashed and ghost rows, which it did not before. A personal token
+      inserted by hand reads its own account's contacts and timeline through
+      those routes, which is the Phase 3 token path working today.
+- [x] The manifest classes match appendix B row for row. The fourteen `admin`
+      rows are pinned by name in `tenancy.routeManifest.test.ts` and none of
+      them is isolated. `requireAdmin` is still mounted nowhere.
+- [x] Both embedding backfills run one account at a time inside that account's
+      context, interleaving in rounds of 200. The owner named at the moment of
+      the provider call is the owner whose contact is being embedded, and a
+      test asserts it from inside the provider.
+- [x] The dedupe scan embeds its own account rather than the instance, through
+      the new `backfillOwnerEmbeddings(scope)`.
+- [x] `npm run lint` runs `tenant-lint --strict "server/**/*.ts"` and passes.
+      The glob covers files that sit directly in `server/`, which it did not
+      before, and a unit test pins that.
+- [x] `tenancy.queryPlans.test.ts` runs `EXPLAIN QUERY PLAN` over all eleven
+      statements on a seeded, analyzed database. The ten relational statements
+      must take an owner-led index and must not scan at any step. The eleventh
+      is the full-text query, whose plan is a scan of the FTS virtual table by
+      its MATCH index, and whose owner token is pinned by calling the
+      production builder. Four rows name a different index than the 2i table
+      guessed, for reasons the note at the top of this document gives.
+- [x] `tenancy.isolation.test.ts` has zero `it.todo`. The two generators that
+      produced them are now the assertion they stood in for, and the manifest
+      test asserts that every `scoped` route is isolated.
+- [x] The four single-column owner indexes are dropped by a version-2 step,
+      and the ownership loop no longer creates any of the eight it used to.
+      The migration test proves each half separately: it rolls a database back
+      to version 1 and boots it for the drop, and asserts after a fresh upgrade
+      that none of the eight was built.
+- [x] `bench/phase-2.md` is committed, with an isolation spot check beside the
+      latency table.
+- [x] CHANGELOG has a Phase 2g, 2h and 2i block, including the MCP
+      `queryContacts` trash filter fix.
+
 ### The whole phase
 
-- [ ] `npm run lint` passes with `tenant-lint --strict "server/**/*.ts"`.
-- [ ] `tenancy.isolation.test.ts`: no `todo`, all green, run with `AUTH_REQUIRED=true` and two accounts.
-- [ ] `tenancy.queryPlans.test.ts` green.
-- [ ] Manifest: every `scoped` route `isolated: true`. Every `admin` route has its class set (the middleware is mounted in Phase 3).
-- [ ] `bench-tenancy` at `10 × 2000`: every per-owner endpoint returns only that owner's rows, and p95 for the slim list is under 40 ms, FTS search under 10 ms, semantic search (mock AI) under 30 ms, dashboard under 60 ms. Numbers recorded in `bench/phase-2.md`.
-- [ ] Single-account instance (local owner or one real account): the full 1.x integration suite still passes with the scope threaded through.
-- [ ] The dedupe scan on a two-owner instance never produces a cross-owner pair. A full-mode scan by one owner leaves the other owner's embeddings intact.
-- [ ] `aiCache` test: owner A's cached rerank for query Q is a miss for owner B.
-- [ ] SSE and NDJSON handlers: `recordInvocation` rows written during a semantic search stream and during a dedupe scan carry the right `ownerId`.
-- [ ] The dedupe and AI Search `429` responses use the standard error envelope with `details.yours`.
-- [ ] CHANGELOG Unreleased has a `Phase 2` block, including the MCP `queryContacts` trash filter fix.
+- [x] `npm run lint` passes with `tenant-lint --strict "server/**/*.ts"`.
+- [x] `tenancy.isolation.test.ts`: no `todo`, all green, run with `AUTH_REQUIRED=true` and three accounts.
+- [x] `tenancy.queryPlans.test.ts` green.
+- [x] Manifest: every `scoped` route `isolated: true`. Every `admin` route has its class set (the middleware is mounted in Phase 3).
+- [x] `bench-tenancy` at `10 × 2000`: every per-owner endpoint returns only that owner's rows, and p95 for the slim list is under 40 ms, FTS search under 10 ms, semantic search (mock AI) under 30 ms, dashboard under 60 ms. Numbers recorded in `bench/phase-2.md`. Measured: 19.9, 1.3, 3.2 and 5.2 ms.
+- [x] Single-account instance (local owner or one real account): the full 1.x integration suite still passes with the scope threaded through.
+- [x] The dedupe scan on a two-owner instance never produces a cross-owner pair. A full-mode scan by one owner leaves the other owner's embeddings intact.
+- [x] `aiCache` test: owner A's cached rerank for query Q is a miss for owner B.
+- [x] SSE and NDJSON handlers: `recordInvocation` rows written during a semantic search stream and during a dedupe scan carry the right `ownerId`.
+- [x] The dedupe and AI Search `429` responses use the standard error envelope with `details.yours`.
+- [x] CHANGELOG Unreleased has a `Phase 2` block, including the MCP `queryContacts` trash filter fix.
 
 ---
 

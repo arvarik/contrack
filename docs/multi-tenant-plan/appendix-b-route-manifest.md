@@ -12,7 +12,7 @@ defined in [03-architecture.md](03-architecture.md) section 5.3 and
 | `admin` | `requireAdmin` |
 | `instance-read` | any authenticated caller, no owned data touched |
 
-`isolated` starts `false` for every `scoped` route and flips in Phase 2. A
+`isolated` starts `false` for every `scoped` route and flips in Phase 2. It is `true` for all eighty of them as of sub-phase 2i, and the manifest test fails on a `scoped` route that is not. A
 sixth class, `static`, marks the `/uploads` `express.static` layer, which is
 a middleware layer and not a route. Rows marked `devOnly` are registered only
 when `NODE_ENV !== "production"`.
@@ -24,7 +24,7 @@ the route files:
 - `GET /api/debug/cache-stats` is registered in `server.ts:97-102`, outside `createApp()`, so a supertest app never has it. Phase 0 moves it inside `createApp()` behind the same `NODE_ENV` guard and marks it `devOnly`.
 - `POST /api/dev/seed-duplicates` is registered only when `NODE_ENV !== "production"` (`routes/dedupe/scan.ts:138`). Marked `devOnly`.
 - `GET /uploads/*` is the `express.static` layer (`layer.name === "serveStatic"`, no `route`). Its manifest row is `USE /uploads`, class `static`; `guardUploads` (Phase 2a) is what scopes it.
-- `PUT /api/auth/session-policy` has `requireUser` only today (`routes/auth.ts:266-268`): every member can change the instance session lifetime. The `admin` class below is the target, enforced in Phase 3.
+- `PUT /api/auth/session-policy` has a session guard only (`requireSession`, which Phase 1 renamed from `requireUser`): every member can change the instance session lifetime. The `admin` class below is the target, set in Phase 2 and enforced in Phase 3.
 - `guardUploads` does not exist in 1.5.5. The `scoped (via guardUploads)` class is a Phase 2 target.
 - Express 5 does not keep mount path strings, so the manifest test records them with a `use` wrapper (Phase 0 task 0.3).
 
@@ -120,6 +120,7 @@ the route files:
 | POST | `/api/ai-search` | scoped | 2f |
 | GET | `/api/ai-search/status` | scoped | 2f |
 | GET | `/api/ai-search/stream` | scoped | 2f |
+| POST | `/api/ai-search/:batchId/cancel` | scoped | 2f |
 | GET | `/api/trash` | scoped | 2a |
 | POST | `/api/trash/:id/restore` | scoped | 2a |
 | POST | `/api/trash/bulk-restore` | scoped | 2a |
