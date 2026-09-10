@@ -7,12 +7,15 @@
 // production unclassified, which is the point.
 //
 // `isolated` starts false for every route and flips as Phase 2 converts each
-// one and its isolation test goes green. The manifest test names the routes
-// that have flipped, so a sub-phase cannot claim one it did not prove. Phase
-// 2i replaces that list with "every scoped route".
+// one and its isolation test goes green. The manifest test used to name the
+// routes that had flipped, so a sub-phase could not claim one it did not
+// prove. Sub-phase 2i closed the phase and replaced that list with the rule
+// it was standing in for: every `scoped` route is isolated, and
+// tenancy.routeManifest.test.ts fails if one is not.
 //
-// Flipped so far: sub-phase 2a — every route in server/routes/contacts.ts and
-// the /uploads layer.
+// The fourteen `admin` rows are classified and nothing more. Phase 3 mounts
+// requireAdmin in front of exactly those, and a test pins the list until it
+// does.
 //
 // Seeded from docs/multi-tenant-plan/appendix-b-route-manifest.md.
 // =============================================================================
@@ -283,7 +286,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "GET",
     path: "/api/contacts/action-items",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",
@@ -438,9 +441,9 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
     devOnly: true,
   },
-  { method: "GET", path: "/api/export/csv", class: "scoped", isolated: false },
-  { method: "GET", path: "/api/export/json", class: "scoped", isolated: false },
-  { method: "GET", path: "/api/industries", class: "scoped", isolated: false },
+  { method: "GET", path: "/api/export/csv", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/export/json", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/industries", class: "scoped", isolated: true },
   {
     method: "DELETE",
     path: "/api/interactions/:id",
@@ -457,7 +460,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "GET",
     path: "/api/interactions/search",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "GET",
@@ -520,7 +523,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "GET",
     path: "/api/query/contacts",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   { method: "GET", path: "/api/search", class: "scoped", isolated: true },
   {
@@ -589,26 +592,26 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "admin",
     isolated: false,
   },
-  { method: "GET", path: "/api/tags", class: "scoped", isolated: false },
-  { method: "GET", path: "/api/timeline", class: "scoped", isolated: false },
-  { method: "GET", path: "/api/trash", class: "scoped", isolated: false },
+  { method: "GET", path: "/api/tags", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/timeline", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/trash", class: "scoped", isolated: true },
   {
     method: "DELETE",
     path: "/api/trash/:id",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
     path: "/api/trash/:id/restore",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   {
     method: "POST",
     path: "/api/trash/bulk-restore",
     class: "scoped",
-    isolated: false,
+    isolated: true,
   },
   { method: "GET", path: "/healthz", class: "public", isolated: false },
   { method: "USE", path: "/uploads", class: "static", isolated: true },
