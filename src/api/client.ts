@@ -1,11 +1,24 @@
 /**
- * Shared API client — base URL and a fetch wrapper with uniform error
- * handling for the app's REST endpoints.
+ * Shared API client — the base URL, and the one place a server rejection is
+ * turned into something the app can act on.
+ *
+ * Every module under `src/api/` goes through here. That is not tidiness: the
+ * server can now answer a perfectly ordinary request with "your session
+ * expired", "your account is disabled", or "change your password first", and
+ * each of those needs the whole app to change screen rather than the calling
+ * view to show a toast. A view cannot make that decision, and eleven views
+ * making it separately would make it eleven ways. So the transport recognises
+ * the answer, announces it once on the window, and still throws, so the
+ * calling query fails exactly the way it always has.
+ *
+ * `tests/unit/frontend.apiClient.test.ts` reads every file in this directory
+ * and fails if one calls `fetch` without coming back through here.
  *
  * @module api/client
  */
 
-import { emitAuthExpired } from "../lib/appEvents";
+import { toast } from "sonner";
+import { emitAuthExpired, emitPasswordChangeRequired } from "../lib/appEvents";
 
 export const API_BASE = "/api";
 
@@ -17,10 +30,61 @@ export class ApiError extends Error {
     readonly code?: string,
     readonly requestId?: string,
     readonly retryAfterMs?: number,
+    /** The envelope's `details`, untouched. Shape depends on `code`. */
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
   }
+
+  /**
+   * How long the server asked us to wait, in whole seconds.
+   *
+   * Rounded up, because a client that sleeps 0 seconds on a fractional wait
+   * retries into the same refusal.
+   */
+  get retryAfterSeconds(): number | undefined {
+    if (this.retryAfterMs === undefined) return undefined;
+    return Math.max(1, Math.ceil(this.retryAfterMs / 1000));
+  }
+}
+
+/**
+ * What a `429` was actually about.
+ *
+ * Two very different refusals share the status. `yours === false` means
+ * somebody else on this instance holds a lock or has spent the budget, and
+ * the honest message names that rather than implying the reader did something
+ * wrong. `yours === true` (or absent) is the caller's own limit.
+ */
+export interface RateLimitFacts {
+  /** False when another account holds the lock this request wanted. */
+  yours: boolean;
+  /** True when the server will start this work on its own once free. */
+  queued: boolean;
+  /** Seconds to wait, when the server named one. */
+  retryAfterSeconds?: number;
+}
+
+/** Read the `429` facts out of an error, whatever it turns out to be. */
+export function rateLimitFacts(error: unknown): RateLimitFacts | null {
+  if (!(error instanceof ApiError) || error.status !== 429) return null;
+  const details = (error.details ?? {}) as {
+    yours?: unknown;
+    queued?: unknown;
+    retryAfterSeconds?: unknown;
+  };
+  const fromBody =
+    typeof details.retryAfterSeconds === "number"
+      ? Math.max(1, Math.ceil(details.retryAfterSeconds))
+      : undefined;
+  return {
+    // Absent means "yours": the per-account limiters and the AI cooldown do
+    // not send the flag, and only the shared locks do.
+    yours: details.yours !== false,
+    queued: details.queued === true,
+    retryAfterSeconds: fromBody ?? error.retryAfterSeconds,
+  };
 }
 
 /** Retry reads once for transient failures. Validation, authentication, and cancellation do not retry. */
@@ -59,11 +123,91 @@ export function isNetworkError(error: unknown): boolean {
 }
 
 /**
- * Fetch `${API_BASE}${path}` and throw a descriptive Error on non-2xx.
+ * Tell the app about a refusal only it can answer.
  *
- * The error message is taken from the server's error envelope when present
- * (`{ error: { message } }` or `{ error: "..." }`), falling back to
- * `HTTP <status>` when the body isn't JSON or has no usable message.
+ * Each of these changes which screen the app should be showing, and the gate
+ * is the only component that can change it. Everything else about the failure
+ * stays with the caller.
+ */
+function announce(status: number, code: string | undefined): void {
+  if (status === 401) {
+    // The credential stopped being accepted: the session expired, or another
+    // device revoked it.
+    emitAuthExpired("expired");
+    return;
+  }
+  if (status !== 403) return;
+  if (code === "ACCOUNT_DISABLED") {
+    emitAuthExpired("disabled");
+    return;
+  }
+  if (code === "PASSWORD_CHANGE_REQUIRED") {
+    emitPasswordChangeRequired();
+    return;
+  }
+  if (code === "ADMIN_REQUIRED") {
+    // Reachable from a tab that was an admin's when it was opened. The fixed
+    // id collapses the burst a page of admin widgets would otherwise produce
+    // into the one message that matters.
+    toast.error("That needs an administrator account.", {
+      id: "admin-required",
+    });
+  }
+}
+
+/**
+ * Turn a non-2xx response into an {@link ApiError}, announcing it first.
+ *
+ * Reads the body once. A body that is not JSON, or is JSON with nothing
+ * usable in it, falls back to the status code — the point is that the caller
+ * always gets an `ApiError` with a `status`, never a parse failure standing
+ * in for the server's answer.
+ */
+async function failureOf(res: Response): Promise<ApiError> {
+  let message = `HTTP ${res.status}`;
+  let code: string | undefined;
+  let requestId = res.headers.get("X-Request-Id") ?? undefined;
+  let details: unknown;
+  try {
+    const body = await res.json();
+    const envelope = body?.error;
+    if (typeof envelope === "string" && envelope) {
+      // The pre-2.0 shape. A handful of routes still answer with it.
+      message = envelope;
+    } else if (envelope && typeof envelope.message === "string") {
+      message = envelope.message;
+      code = typeof envelope.code === "string" ? envelope.code : undefined;
+      requestId =
+        typeof envelope.requestId === "string" ? envelope.requestId : requestId;
+      details = envelope.details;
+      const issue = Array.isArray(envelope.details)
+        ? envelope.details[0]
+        : undefined;
+      if (code === "VALIDATION_ERROR" && typeof issue?.message === "string")
+        message = issue.message;
+    } else if (typeof body?.message === "string" && body.message) {
+      message = body.message;
+    }
+  } catch {
+    // Body wasn't JSON — keep the HTTP status fallback.
+  }
+
+  announce(res.status, code);
+
+  const retryAfter = res.headers.get("Retry-After");
+  const delay =
+    retryAfter && /^\d+$/.test(retryAfter)
+      ? Number(retryAfter) * 1000
+      : undefined;
+  return new ApiError(message, res.status, code, requestId, delay, details);
+}
+
+/**
+ * Fetch `${API_BASE}${path}` and throw {@link ApiError} on non-2xx.
+ *
+ * Returns the `Response` rather than its body, because plenty of callers want
+ * the headers, a blob, or a stream. {@link handleResponse} is the shorthand
+ * for the common case.
  *
  * A transport failure throws {@link NetworkError} instead.
  */
@@ -83,45 +227,35 @@ export async function apiFetch(
       throw cause;
     throw new NetworkError(cause);
   }
-  if (!res.ok) {
-    // A 401 anywhere means this browser's credential stopped being accepted —
-    // the session expired, or was revoked from another device. Announced once,
-    // globally, so AuthGate can put the sign-in screen back up; the error is
-    // still thrown so the calling query fails the way it normally would.
-    if (res.status === 401) emitAuthExpired();
-
-    let message = `HTTP ${res.status}`;
-    let code: string | undefined;
-    let requestId = res.headers.get("X-Request-Id") ?? undefined;
-    try {
-      const body = await res.json();
-      const envelope = body?.error;
-      if (typeof envelope === "string" && envelope) {
-        message = envelope;
-      } else if (envelope && typeof envelope.message === "string") {
-        message = envelope.message;
-        code = typeof envelope.code === "string" ? envelope.code : undefined;
-        requestId =
-          typeof envelope.requestId === "string"
-            ? envelope.requestId
-            : requestId;
-        const issue = Array.isArray(envelope.details)
-          ? envelope.details[0]
-          : undefined;
-        if (code === "VALIDATION_ERROR" && typeof issue?.message === "string")
-          message = issue.message;
-      } else if (typeof body?.message === "string" && body.message) {
-        message = body.message;
-      }
-    } catch {
-      // Body wasn't JSON — keep the HTTP status fallback.
-    }
-    const retryAfter = res.headers.get("Retry-After");
-    const delay =
-      retryAfter && /^\d+$/.test(retryAfter)
-        ? Number(retryAfter) * 1000
-        : undefined;
-    throw new ApiError(message, res.status, code, requestId, delay);
-  }
+  if (!res.ok) throw await failureOf(res);
   return res;
+}
+
+/**
+ * The parsed body of a response, or an {@link ApiError} describing why not.
+ *
+ * Use this for anything that reads JSON, which is nearly everything:
+ * `handleResponse<Shape>(await apiFetch(path))`. A `204` and an empty body
+ * both resolve to `undefined`, so a delete endpoint that returns nothing does
+ * not have to pretend to return something.
+ */
+export async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) throw await failureOf(res);
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
+/** `apiFetch` and `handleResponse` in one call, for the ordinary JSON case. */
+export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  return handleResponse<T>(await apiFetch(path, init));
+}
+
+/** A JSON request body, with the header the server needs to parse it. */
+export function jsonBody(value: unknown): RequestInit {
+  return {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  };
 }

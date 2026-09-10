@@ -10,6 +10,7 @@
  */
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { toastUndoableDelete } from "../../../lib/undoToast";
 import {
   useBulkDeleteContacts,
@@ -210,26 +211,6 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     );
     const csv = [header, ...rows].join("\n");
 
-    const copyToClipboard = (text: string): Promise<void> => {
-      // Try modern async Clipboard API first
-      if (navigator.clipboard?.writeText) {
-        return navigator.clipboard.writeText(text);
-      }
-      // Fallback: legacy execCommand approach (works in all browsers)
-      return new Promise((resolve, reject) => {
-        const el = document.createElement("textarea");
-        el.value = text;
-        el.style.cssText =
-          "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
-        document.body.appendChild(el);
-        el.focus();
-        el.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(el);
-        ok ? resolve() : reject(new Error("execCommand copy failed"));
-      });
-    };
-
     copyToClipboard(csv)
       .then(() => {
         toast.success(
@@ -238,9 +219,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
         exitSelectMode();
       })
       .catch(() => {
-        toast.error(
-          "Clipboard access denied — please allow clipboard permissions and try again.",
-        );
+        toast.error(CLIPBOARD_DENIED);
       });
   }, [filteredContacts, selectedIds, exitSelectMode]);
 

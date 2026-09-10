@@ -1,4 +1,5 @@
-import { apiFetch } from "./client";
+import { apiFetch, apiJson } from "./client";
+import { rateLimitMessage } from "../lib/rateLimitMessage";
 /**
  * Enrichment API Hooks — React Query hooks for single-contact AI enrichment
  * and grounding capacity checks.
@@ -59,22 +60,17 @@ interface EnrichResult {
 export const useEnrichContact = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (contactId: string): Promise<EnrichResult> => {
-      const res = await apiFetch(`/contacts/${contactId}/enrich`, {
+    mutationFn: (contactId: string): Promise<EnrichResult> =>
+      // Three branches used to sit here reading `res.status` for 429, 503 and
+      // "not ok". None of them could run: `apiFetch` throws `ApiError` for
+      // every non-2xx, so the response this function sees is always a 2xx.
+      // The 429 branch in particular claimed every refusal was the daily
+      // grounding quota, which since Phase 3 is usually the per-account AI
+      // limiter instead. The message is now decided in `onError`, from the
+      // code the server actually sent.
+      apiJson<EnrichResult>(`/contacts/${contactId}/enrich`, {
         method: "POST",
-      });
-      if (res.status === 429) {
-        throw new Error("Grounding quota exhausted for today");
-      }
-      if (res.status === 503) {
-        throw new Error("AI provider is not configured");
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Enrichment failed");
-      }
-      return res.json();
-    },
+      }),
     onSuccess: (data, contactId) => {
       // Invalidate contact data so the UI refreshes with new fields
       qc.invalidateQueries({ queryKey: ["contacts"] });
@@ -91,7 +87,10 @@ export const useEnrichContact = () => {
       );
     },
     onError: (err: Error) => {
-      toast.error(err instanceof Error ? err.message : String(err));
+      // A rate limit gets the sentence that names whose limit it was. Anything
+      // else keeps the server's own words, which are more specific than
+      // anything this file could invent.
+      toast.error(rateLimitMessage(err, "enrichment") ?? err.message);
     },
   });
 };
