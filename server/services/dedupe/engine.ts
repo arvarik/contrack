@@ -8,7 +8,7 @@ import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
 import { dedupeQueue } from "./jobQueue.ts";
 import { buildPassContext } from "./context.ts";
 import {
-  backfillEmbeddings,
+  backfillOwnerEmbeddings,
   isEmbeddingAvailable,
   getEmbeddingCount,
   getEmbedding,
@@ -404,16 +404,30 @@ export const dedupeService = {
               );
             }
 
-            const embedded = await backfillEmbeddings((done, total) => {
-              dedupeQueue.update(scanId, {
-                phaseName: `Embedding contacts (${done}/${total})…`,
-              });
-            });
+            const embedded = await backfillOwnerEmbeddings(
+              scope,
+              (done, total) => {
+                dedupeQueue.update(scanId, {
+                  phaseName: `Embedding contacts (${done}/${total})…`,
+                });
+              },
+            );
             log.info(
               "DedupeService",
               `[${rid}] Embedding backfill: ${embedded} contacts embedded`,
             );
-            embeddingsReady = true;
+            // A backfill already running elsewhere makes this one a no-op that
+            // returns 0. In full mode the vectors were just cleared, so
+            // declaring the index ready would send the scan into a KNN over an
+            // empty partition and report "no duplicates" for an account that
+            // has them. Ask the store instead of trusting the count.
+            embeddingsReady = embedded > 0 || getEmbeddingCount(scope) > 0;
+            if (!embeddingsReady) {
+              log.warn(
+                "DedupeService",
+                `[${rid}] No embeddings for this account after the backfill — continuing with deterministic + name-based passes only`,
+              );
+            }
           } catch (err: unknown) {
             log.warn(
               "DedupeService",

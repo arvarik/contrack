@@ -14,8 +14,9 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 export function registerEmbeddingRoutes(router: Router) {
   // Classed `admin` in the route manifest and left instance-wide on purpose:
   // an operator repairing the dedupe index must not stop at their own rows.
-  // Phase 3 mounts the admin gate in front of it. 2h gives it a per-owner loop
-  // so the provider spend is attributed as well.
+  // Phase 3 mounts the admin gate in front of it. Sub-phase 2h made the sweep
+  // behind it run one account at a time inside that account's context, so it
+  // still covers the instance and the provider spend is attributed as well.
   router.post(
     "/dedupe/backfill-embeddings",
     asyncHandler(async (req, res) => {

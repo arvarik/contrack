@@ -6,6 +6,7 @@ export { dedupeService } from "./engine.ts";
 export { dedupeQueue } from "./jobQueue.ts";
 export {
   backfillEmbeddings,
+  backfillOwnerEmbeddings,
   clearOwnerEmbeddings,
   getEmbeddingCount,
   isEmbeddingAvailable,

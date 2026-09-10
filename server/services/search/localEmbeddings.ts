@@ -20,7 +20,8 @@ import { sqlite, vecTableDdl } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { log } from "../../utils/logger.ts";
-import type { Scope } from "../../tenancy/scope.ts";
+import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
+import { runWithContext } from "../../tenancy/requestContext.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   resolveEmbeddings,
@@ -214,9 +215,11 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
 // test notices. Reading it here makes "the vector's owner is its contact's
 // owner" true by construction.
 const _upsertTxn = sqlite.transaction((contactId: string, buf: Buffer) => {
-  // tenant-lint: allow owner-checked by caller
   const owner = sqlite
-    .prepare("SELECT ownerId FROM contacts WHERE id = ?")
+    .prepare(
+      // tenant-lint: allow owner-checked by caller
+      "SELECT ownerId FROM contacts WHERE id = ?",
+    )
     .get(contactId) as { ownerId: string | null } | undefined;
   // No contact means the vector would be an orphan with a NULL partition.
   if (!owner?.ownerId) return;
@@ -354,71 +357,90 @@ export async function ensureEmbeddingStore(): Promise<number> {
 // =============================================================================
 
 /**
- * Generate and store search embeddings for all contacts that don't have one.
- * Uses the local model — no API calls, no rate limits.
- * ~2s for 960 contacts on Apple Silicon.
+ * Owners take turns in rounds of this many contacts.
+ *
+ * A single instance-wide pass finished the first owner completely before it
+ * started the second, so on a busy instance a new account's search stayed
+ * empty until every older account was done. One round each, in turn, gives
+ * every account results in about the same time.
  */
-export async function backfillSearchEmbeddings(): Promise<number> {
-  if (!isSearchEmbeddingReady()) {
-    log.warn("LocalEmbeddings", "Cannot backfill: no embedding backend ready");
-    return 0;
-  }
+const OWNER_ROUND_SIZE = 200;
 
-  const t0 = Date.now();
-
-  // Find contacts missing search embeddings
-  const missing = sqlite
+/** Every account that owns at least one contact. */
+function ownersWithContacts(): string[] {
+  const rows = sqlite
     .prepare(
+      // Every account, on purpose: this is the boot sweep, and the loop that
+      // reads it runs each account's batch in its own context.
       // tenant-lint: allow instance sweep
+      "SELECT DISTINCT ownerId FROM contacts WHERE ownerId IS NOT NULL",
+    )
+    .all() as { ownerId: string }[];
+  return rows.map((r) => r.ownerId);
+}
+
+/** The prepared statements one backfill round needs. */
+function backfillStatements() {
+  return {
+    missing: sqlite.prepare(
       `
     SELECT c.id, c.name, c.company, c.role, c.location, c.industry,
            c.headline, c.about, c.preferences, c.searchExpansion
     FROM contacts c
-    WHERE ${ACTIVE_CONTACT_SQL}
+    WHERE c.ownerId = ?
+      AND ${ACTIVE_CONTACT_SQL}
       AND c.id NOT IN (SELECT contactId FROM search_embeddings)
   `,
-    )
-    .all() as SearchTextRow[];
-
-  if (missing.length === 0) {
-    log.debug("LocalEmbeddings", "All contacts already have search embeddings");
-    return 0;
-  }
-
-  // Get tags and interests for each contact
-  const tagsStmt = sqlite.prepare(
-    "SELECT tag FROM contact_tags WHERE contactId = ?",
-  );
-  const interestsStmt = sqlite.prepare(
-    "SELECT interest FROM contact_interests WHERE contactId = ?",
-  );
-  const deleteStmt = sqlite.prepare(
-    // tenant-lint: allow instance sweep
-    "DELETE FROM search_embeddings WHERE contactId = ?",
-  );
-  const insertStmt = sqlite.prepare(
-    `INSERT INTO search_embeddings (contactId, ownerId, embedding)
+    ),
+    tags: sqlite.prepare("SELECT tag FROM contact_tags WHERE contactId = ?"),
+    interests: sqlite.prepare(
+      "SELECT interest FROM contact_interests WHERE contactId = ?",
+    ),
+    remove: sqlite.prepare(
+      // Every id came out of the scoped query above.
+      // tenant-lint: allow owner-checked by caller
+      "DELETE FROM search_embeddings WHERE contactId = ?",
+    ),
+    insert: sqlite.prepare(
+      `INSERT INTO search_embeddings (contactId, ownerId, embedding)
      SELECT ?, c.ownerId, ? FROM contacts c WHERE c.id = ?`,
-  );
+    ),
+  };
+}
 
+/**
+ * Embed one account's round.
+ *
+ * `aborted` is true when the configured embeddings capability changed while a
+ * batch was in flight. The vector store is about to be rebuilt at the new
+ * dimension, so the whole backfill stops rather than writing rows in two
+ * shapes.
+ */
+async function embedSearchRound(
+  rows: SearchTextRow[],
+  stmts: ReturnType<typeof backfillStatements>,
+): Promise<{ embedded: number; aborted: boolean }> {
   let embedded = 0;
 
-  // Process in batches
-  for (let i = 0; i < missing.length; i += BACKFILL_BATCH_SIZE) {
-    const batch = missing.slice(i, i + BACKFILL_BATCH_SIZE);
+  for (let i = 0; i < rows.length; i += BACKFILL_BATCH_SIZE) {
+    const batch = rows.slice(i, i + BACKFILL_BATCH_SIZE);
 
     // Build text for each contact
     const texts = batch.map((c) => {
-      const tags = (tagsStmt.all(c.id) as { tag: string }[]).map((t) => t.tag);
-      const interests = (interestsStmt.all(c.id) as { interest: string }[]).map(
-        (t) => t.interest,
+      const tags = (stmts.tags.all(c.id) as { tag: string }[]).map(
+        (t) => t.tag,
       );
+      const interests = (
+        stmts.interests.all(c.id) as { interest: string }[]
+      ).map((t) => t.interest);
       return contactToSearchText(c, tags, interests);
     });
 
     const signature = resolveEmbeddings().signature;
     const vectors = await embedBatch(texts);
-    if (signature !== resolveEmbeddings().signature) return embedded;
+    if (signature !== resolveEmbeddings().signature) {
+      return { embedded, aborted: true };
+    }
 
     // Store in transaction for speed
     if (vectors.length !== batch.length) {
@@ -432,18 +454,75 @@ export async function backfillSearchEmbeddings(): Promise<number> {
         const vec = vectors[j];
         if (!vec || currentSearchText(batch[j].id) !== texts[j]) continue;
         const buf = Buffer.from(vec.buffer.slice(0));
-        deleteStmt.run(batch[j].id);
+        stmts.remove.run(batch[j].id);
         // The third bind is the contact the owner is read from.
-        insertStmt.run(batch[j].id, buf, batch[j].id);
+        stmts.insert.run(batch[j].id, buf, batch[j].id);
         embedded++;
       }
     });
     txn();
   }
 
+  return { embedded, aborted: false };
+}
+
+/**
+ * Generate and store search embeddings for every contact that has none.
+ *
+ * One account at a time, in rounds, each round inside that account's context.
+ * The embedding model is local, so there is no bill to attribute, but the
+ * context is what keeps a future provider-backed model from charging the
+ * primary admin for everybody's corpus.
+ *
+ * ~2s for 960 contacts on Apple Silicon.
+ */
+export async function backfillSearchEmbeddings(): Promise<number> {
+  if (!isSearchEmbeddingReady()) {
+    log.warn("LocalEmbeddings", "Cannot backfill: no embedding backend ready");
+    return 0;
+  }
+
+  const t0 = Date.now();
+  const stmts = backfillStatements();
+
+  // One scoped query per account, up front. The whole set is the same size the
+  // instance-wide query returned, and knowing each account's queue is what
+  // makes the round-robin below possible.
+  const queues: { ownerId: string; rows: SearchTextRow[] }[] = [];
+  for (const ownerId of ownersWithContacts()) {
+    const rows = stmts.missing.all(ownerId) as SearchTextRow[];
+    if (rows.length > 0) queues.push({ ownerId, rows });
+  }
+
+  if (queues.length === 0) {
+    log.debug("LocalEmbeddings", "All contacts already have search embeddings");
+    return 0;
+  }
+
+  let embedded = 0;
+  let remaining = true;
+  while (remaining) {
+    remaining = false;
+    for (const queue of queues) {
+      if (queue.rows.length === 0) continue;
+      const round = queue.rows.splice(0, OWNER_ROUND_SIZE);
+      const result = await runWithContext(
+        {
+          requestId: `job-search-backfill-${queue.ownerId.slice(0, 8)}`,
+          principal: null,
+          scope: scopeForOwnerId(queue.ownerId),
+        },
+        () => embedSearchRound(round, stmts),
+      );
+      embedded += result.embedded;
+      if (result.aborted) return embedded;
+      if (queue.rows.length > 0) remaining = true;
+    }
+  }
+
   log.info(
     "LocalEmbeddings",
-    `Backfilled ${embedded} search embeddings in ${Date.now() - t0}ms`,
+    `Backfilled ${embedded} search embeddings for ${queues.length} account(s) in ${Date.now() - t0}ms`,
   );
   return embedded;
 }

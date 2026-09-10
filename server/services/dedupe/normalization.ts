@@ -450,27 +450,6 @@ export function normalizeContactById(
 }
 
 /**
- * Every owner's active contacts, normalized.
- *
- * The provider-billed embedding backfill is an instance operation: it must not
- * stop at whoever triggered it. Running the scoped query once per owner keeps
- * that true now that `normalizeContacts` takes a scope. Sub-phase 2h replaces
- * the single caller with a per-owner loop that also carries attribution, and
- * this wrapper goes with it.
- */
-export function normalizeContactsForAllOwners(
-  contactFilter?: string,
-): NormalizedContact[] {
-  // tenant-lint: allow instance sweep
-  const owners = sqlite
-    .prepare("SELECT DISTINCT ownerId FROM contacts")
-    .all() as { ownerId: string }[];
-  return owners.flatMap((o) =>
-    normalizeContacts(scopeForOwnerId(o.ownerId), contactFilter),
-  );
-}
-
-/**
  * The scope a background path should use when all it has is a contact id.
  *
  * A fire-and-forget embedding or a debounced dedupe check runs with no request
@@ -480,9 +459,13 @@ export function normalizeContactsForAllOwners(
  *
  * `incrementalDedupeCheck` is the settled use: it is handed a contact id and
  * nothing else, so this is where its scope comes from, and it opens a
- * `runWithContext` around the rest of the check. The two embedding callers in
- * `dedupe/embeddings.ts` are the unsettled ones, and 2h replaces them with a
- * scope threaded from the job that scheduled the work.
+ * `runWithContext` around the rest of the check.
+ *
+ * The two embedding callers in `dedupe/embeddings.ts` kept this form in 2h.
+ * Each is a fire-and-forget promise started inside a request handler, so the
+ * caller's context is still attached when its provider call records an
+ * invocation, and the row it reads answers the owner when it is not. The two
+ * sweeps that had no context at all became per-owner loops instead.
  */
 export function scopeOfContact(contactId: string): Scope | null {
   const row = sqlite

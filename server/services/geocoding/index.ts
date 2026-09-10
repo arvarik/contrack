@@ -8,6 +8,10 @@ export function startRetroactiveGeocoding(): void {
   setTimeout(() => {
     const ungeocoded = sqlite
       .prepare(
+        // An address is not personal data and the geocode cache is shared by
+        // design, so this sweep runs across every account. It writes only
+        // lat/lng, which the row already implies.
+        // tenant-lint: allow instance sweep
         "SELECT id, location FROM contacts WHERE location IS NOT NULL AND location != '' AND (lat IS NULL OR lng IS NULL)",
       )
       .all() as { id: string; location: string }[];
