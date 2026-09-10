@@ -10,8 +10,6 @@ import { AuthGate } from "./components/auth/AuthGate";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";
-import { logCacheEvent } from "./lib/queryConfig";
-import { fetchContactsSlim } from "./api/contacts";
 import { retryApiQuery } from "./api/client";
 import App from "./App.tsx";
 import "./index.css";
@@ -43,27 +41,18 @@ const queryClient = new QueryClient({
 });
 
 // =============================================================================
-// Cold-boot Prefetch: Warm the contacts cache before the first render.
+// The contacts prefetch used to run here, at module load.
 // =============================================================================
-// The useInstantSearch hook depends on ['contacts'] being populated for 0ms
-// client-side filtering. Without this prefetch, the first Cmd+K open after
-// a page load has a ~20ms blank gap while the network round-trip completes.
+// It warms the ['contacts'] cache that useInstantSearch reads, so the first
+// Cmd+K after a page load has no blank gap. It ran before React rendered a
+// single element, which on a gated instance meant the first request of every
+// page load was a 401 — announced on the window to a listener that had not
+// mounted yet, and answered by the gate a moment later with the same question
+// asked properly.
 //
-// prefetchQuery uses the same queryKey so it shares the cache slot with
-// useContacts() — zero duplication, zero extra network requests.
+// It now lives in AuthGate and runs the moment the gate opens. Same warm
+// cache, one round trip later, and no request is made as nobody.
 // =============================================================================
-queryClient.prefetchQuery({
-  queryKey: ["contacts"],
-  queryFn: async () => {
-    const data = await fetchContactsSlim();
-    logCacheEvent({
-      type: "prefetch",
-      queryKey: "['contacts']",
-      meta: { count: data.length, source: "cold-boot" },
-    });
-    return data;
-  },
-});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
