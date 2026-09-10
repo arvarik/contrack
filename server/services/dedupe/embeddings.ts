@@ -20,10 +20,11 @@
 
 import { sqlite, vecTableDdl } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
-import type { Scope } from "../../tenancy/scope.ts";
+import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
+import { runWithContext } from "../../tenancy/requestContext.ts";
 import {
   normalizeContactById,
-  normalizeContactsForAllOwners,
+  normalizeContacts,
   scopeOfContact,
 } from "./normalization.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -431,8 +432,148 @@ export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
 
 let _backfillRunning = false;
 
+/** Owners take turns in rounds of this many contacts. */
+const OWNER_ROUND_SIZE = 200;
+
+/** Every account that owns at least one contact. */
+function ownersWithContacts(): string[] {
+  const rows = sqlite
+    .prepare(
+      // Every account, on purpose: this is the boot sweep, and the loop that
+      // reads it runs each account's batch in its own context.
+      // tenant-lint: allow instance sweep
+      "SELECT DISTINCT ownerId FROM contacts WHERE ownerId IS NOT NULL",
+    )
+    .all() as { ownerId: string }[];
+  return rows.map((r) => r.ownerId);
+}
+
+/** One contact waiting for an embedding. */
+interface PendingEmbedding {
+  id: string;
+  text: string;
+}
+
+/** The account's active contacts that have no embedding yet. */
+function pendingEmbeddings(scope: Scope): PendingEmbedding[] {
+  const normalized = normalizeContacts(scope);
+  const already = new Set(
+    (
+      sqlite
+        .prepare("SELECT contactId FROM contact_embeddings WHERE ownerId = ?")
+        .all(scope.ownerId) as { contactId: string }[]
+    ).map((r) => r.contactId),
+  );
+  return normalized
+    .filter((c) => !already.has(c.id))
+    .map((c) => ({ id: c.id, text: c.embeddingText }));
+}
+
 /**
- * Generate and store embeddings for all active contacts that don't yet have one.
+ * Embed one slice and store it.
+ *
+ * The caller runs this inside the owning account's context, so every provider
+ * call it makes writes an `ai_invocations` row naming that account.
+ */
+async function embedAndStore(items: PendingEmbedding[]): Promise<number> {
+  if (items.length === 0) return 0;
+  const embeddings = await generateBatchEmbeddings(items);
+  const entries: { contactId: string; embedding: Float32Array }[] = [];
+  for (const [id, emb] of embeddings) {
+    entries.push({ contactId: id, embedding: emb });
+  }
+  storeEmbeddings(entries);
+  return entries.length;
+}
+
+/**
+ * Embed one account's missing contacts.
+ *
+ * The duplicate scan calls this: a scan runs for one account, and paying a
+ * provider to embed every other account's contacts in the middle of it billed
+ * the wrong person and re-filled the index a full-mode scan had just cleared
+ * for its own account only.
+ *
+ * @param scope - The account to embed
+ * @param onProgress - Callback for progress reporting
+ * @returns Number of contacts embedded
+ */
+export async function backfillOwnerEmbeddings(
+  scope: Scope,
+  onProgress?: (done: number, total: number, phase: string) => void,
+): Promise<number> {
+  if (_backfillRunning) {
+    log.warn("DedupeEmbeddings", "Backfill already in progress — skipping");
+    return 0;
+  }
+  if (!isEmbeddingAvailable()) {
+    log.warn(
+      "DedupeEmbeddings",
+      "Gemini API key not configured — skipping embedding backfill",
+    );
+    return 0;
+  }
+
+  _backfillRunning = true;
+  try {
+    // The scan that calls this is already inside its own context, but a
+    // background caller is not, and `recordInvocation` reads the context
+    // rather than this argument. Establishing it here is what makes the
+    // provider spend land on `scope` from every caller.
+    return await runWithContext(
+      {
+        requestId: `job-dedupe-backfill-${scope.ownerId.slice(0, 8)}`,
+        principal: null,
+        scope,
+      },
+      () => embedOwnerBacklog(scope, onProgress),
+    );
+  } finally {
+    _backfillRunning = false;
+  }
+}
+
+/** One account's missing contacts, embedded in rounds. No lock, no context. */
+async function embedOwnerBacklog(
+  scope: Scope,
+  onProgress?: (done: number, total: number, phase: string) => void,
+): Promise<number> {
+  onProgress?.(0, 0, "Normalizing contacts...");
+  const items = pendingEmbeddings(scope);
+  if (items.length === 0) {
+    log.info(
+      "DedupeEmbeddings",
+      "All contacts already have embeddings — nothing to backfill",
+    );
+    onProgress?.(0, 0, "Complete");
+    return 0;
+  }
+
+  onProgress?.(0, items.length, "Generating embeddings...");
+  let done = 0;
+  for (let i = 0; i < items.length; i += OWNER_ROUND_SIZE) {
+    done += await embedAndStore(items.slice(i, i + OWNER_ROUND_SIZE));
+    onProgress?.(
+      done,
+      items.length,
+      `Embedding ${done}/${items.length} contacts`,
+    );
+  }
+
+  log.info("DedupeEmbeddings", `Backfill complete: embedded ${done} contacts`);
+  onProgress?.(items.length, items.length, "Complete");
+  return done;
+}
+
+/**
+ * Embed every account's missing contacts, one round at a time.
+ *
+ * Instance-wide on purpose: this is the boot sweep and the operator's repair
+ * button, and neither may stop at the rows of whoever pressed it. Each round
+ * runs inside its own account's context, so the provider spend lands on the
+ * account whose contacts it embedded rather than on the primary admin. Owners
+ * interleave so a large account does not hold up a small one's first results.
+ *
  * Idempotent — only processes contacts missing from contact_embeddings.
  * Concurrency-safe — only one backfill can run at a time.
  *
@@ -446,7 +587,6 @@ export async function backfillEmbeddings(
     log.warn("DedupeEmbeddings", "Backfill already in progress — skipping");
     return 0;
   }
-
   if (!isEmbeddingAvailable()) {
     log.warn(
       "DedupeEmbeddings",
@@ -457,67 +597,56 @@ export async function backfillEmbeddings(
 
   _backfillRunning = true;
   try {
-    // 1. Normalize all active contacts
     onProgress?.(0, 0, "Normalizing contacts...");
-    // Instance-wide on purpose: an admin backfill must not stop at the rows
-    // of whoever pressed the button. TODO(2h): a per-owner loop inside
-    // runWithContext, so the provider spend is attributed too.
-    const normalized = normalizeContactsForAllOwners();
-    log.info(
-      "DedupeEmbeddings",
-      `Normalized ${normalized.length} contacts for embedding`,
-    );
+    const queues: { scope: Scope; items: PendingEmbedding[] }[] = [];
+    for (const ownerId of ownersWithContacts()) {
+      const scope = scopeForOwnerId(ownerId);
+      const items = pendingEmbeddings(scope);
+      if (items.length > 0) queues.push({ scope, items });
+    }
 
-    // 2. Filter to contacts missing embeddings
-    const existingIds = new Set<string>();
-    const allEmbedded = sqlite
-      // tenant-lint: allow instance sweep
-      .prepare("SELECT contactId FROM contact_embeddings")
-      .all() as { contactId: string }[];
-    for (const row of allEmbedded) existingIds.add(row.contactId);
-
-    const toEmbed = normalized.filter((c) => !existingIds.has(c.id));
-    if (toEmbed.length === 0) {
+    const total = queues.reduce((n, q) => n + q.items.length, 0);
+    if (total === 0) {
       log.info(
         "DedupeEmbeddings",
         "All contacts already have embeddings — nothing to backfill",
       );
-      onProgress?.(normalized.length, normalized.length, "Complete");
+      onProgress?.(0, 0, "Complete");
       return 0;
     }
 
     log.info(
       "DedupeEmbeddings",
-      `${toEmbed.length} contacts need embeddings (${existingIds.size} already done)`,
+      `${total} contacts need embeddings across ${queues.length} account(s)`,
     );
+    onProgress?.(0, total, "Generating embeddings...");
 
-    // 3. Build embedding text inputs
-    const items = toEmbed.map((c) => ({ id: c.id, text: c.embeddingText }));
-
-    // 4. Generate embeddings in batches
-    onProgress?.(0, items.length, "Generating embeddings...");
-    const embeddings = await generateBatchEmbeddings(items, (done, total) => {
-      onProgress?.(
-        done,
-        total,
-        `Embedding batch ${Math.ceil(done / EMBED_BATCH_SIZE)}/${Math.ceil(total / EMBED_BATCH_SIZE)}`,
-      );
-    });
-
-    // 5. Store all embeddings in a single transaction
-    onProgress?.(items.length, items.length, "Storing embeddings...");
-    const entries: { contactId: string; embedding: Float32Array }[] = [];
-    for (const [id, emb] of embeddings) {
-      entries.push({ contactId: id, embedding: emb });
+    let done = 0;
+    let remaining = true;
+    while (remaining) {
+      remaining = false;
+      for (const queue of queues) {
+        if (queue.items.length === 0) continue;
+        const round = queue.items.splice(0, OWNER_ROUND_SIZE);
+        done += await runWithContext(
+          {
+            requestId: `job-dedupe-backfill-${queue.scope.ownerId.slice(0, 8)}`,
+            principal: null,
+            scope: queue.scope,
+          },
+          () => embedAndStore(round),
+        );
+        onProgress?.(done, total, `Embedding ${done}/${total} contacts`);
+        if (queue.items.length > 0) remaining = true;
+      }
     }
-    storeEmbeddings(entries);
 
     log.info(
       "DedupeEmbeddings",
-      `Backfill complete: embedded ${entries.length} contacts`,
+      `Backfill complete: embedded ${done} contacts for ${queues.length} account(s)`,
     );
-    onProgress?.(items.length, items.length, "Complete");
-    return entries.length;
+    onProgress?.(total, total, "Complete");
+    return done;
   } finally {
     _backfillRunning = false;
   }

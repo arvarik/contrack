@@ -6,6 +6,7 @@ import { idsSchema } from "../utils/validators.ts";
 // =============================================================================
 
 import { Router } from "express";
+import type { Request } from "express";
 import { z } from "zod";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
@@ -23,9 +24,9 @@ const router = Router();
 
 // ─── Trash ───────────────────────────────────────────────────────────────────
 
-// The trash routes are classified `scoped` and their matrix tests land with
-// the rest of this file in sub-phase 2g. The service functions they call are
-// already scoped, so they pass the caller's scope from here.
+// The trash routes were scoped in 2a through `contactService`. Sub-phase 2g
+// added their matrix tests and flipped `isolated`, so the four routes below
+// are proven rather than only intended.
 router.get(
   "/trash",
   asyncHandler(async (req, res) => {
@@ -116,16 +117,33 @@ router.post(
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
+/**
+ * The account name that goes in the download filename.
+ *
+ * Two accounts on one instance produce two files a day, and a filename with
+ * only a date in it makes the second one overwrite the first in the browser's
+ * downloads folder. The username answers which account the file came from.
+ *
+ * `validateUsername` already restricts what an account name may contain, and
+ * this strips anything else anyway: the value lands inside a quoted
+ * `Content-Disposition` header, where a stray quote would end the filename.
+ */
+function exportOwnerSlug(req: Request): string {
+  const raw = req.principal?.user.username ?? "";
+  const slug = raw.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
+  return slug || "account";
+}
+
 router.get(
   "/export/json",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const payload = buildFullExport();
+    const payload = buildFullExport(scopeOf(req));
     const stamp = payload.exportedAt.slice(0, 10);
     res.setHeader("Content-Type", "application/json");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-export-${stamp}.json"`,
+      `attachment; filename="contrack-export-${exportOwnerSlug(req)}-${stamp}.json"`,
     );
     log.info(
       "API",
@@ -139,12 +157,12 @@ router.get(
   "/export/csv",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const csv = buildContactsCsv();
+    const csv = buildContactsCsv(scopeOf(req));
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-contacts-${stamp}.csv"`,
+      `attachment; filename="contrack-contacts-${exportOwnerSlug(req)}-${stamp}.csv"`,
     );
     log.info("API", `[${rid}] GET /api/export/csv`);
     res.send(csv);

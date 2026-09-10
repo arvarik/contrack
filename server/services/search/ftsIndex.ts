@@ -53,6 +53,11 @@ export const SEARCH_COLUMNS =
 
 /** Insert the FTS row for one contact, or for every active contact. */
 function ftsInsert(where: string): string {
+  // contacts_fts mirrors contacts. Every row this writes takes its owner from
+  // the contact it copies: ${COLUMNS} ends in ownerTok and ${VALUES} ends in
+  // OWNER_TOKEN_SQL("c"). The scanner reads the literal, not the constants it
+  // interpolates, so it cannot see either.
+  // tenant-lint: allow derived table
   return `INSERT INTO contacts_fts(rowid, ${COLUMNS}) SELECT c.rowid, ${VALUES}
         FROM contacts c WHERE ${where}`;
 }
@@ -68,19 +73,29 @@ function ftsInsert(where: string): string {
  * Exported so a unit test can snapshot the generated SQL.
  */
 export function contactTriggerSql(): string {
+  // Each body acts on the single contact row the trigger fired for, and the
+  // insert carries that row's owner token through ftsInsert. The deletes are
+  // by rowid, which is the FTS mirror of that same row.
+  // A nested backtick would split this template into fragments that the lint
+  // scanner reads as separate statements, so the row expression is built
+  // first and the trigger body stays one literal.
+  const insertChangedContact = ftsInsert(
+    `c.id = new.id AND ${ACTIVE_CONTACT_SQL}`,
+  );
+  // tenant-lint: allow derived table
   return `
       DROP TRIGGER IF EXISTS contacts_ai;
       DROP TRIGGER IF EXISTS contacts_ad;
       DROP TRIGGER IF EXISTS contacts_au;
       CREATE TRIGGER contacts_ai AFTER INSERT ON contacts BEGIN
-        ${ftsInsert(`c.id = new.id AND ${ACTIVE_CONTACT_SQL}`)};
+        ${insertChangedContact};
       END;
       CREATE TRIGGER contacts_ad AFTER DELETE ON contacts BEGIN
         DELETE FROM contacts_fts WHERE rowid = old.rowid;
       END;
       CREATE TRIGGER contacts_au AFTER UPDATE OF ${SEARCH_COLUMNS} ON contacts BEGIN
         DELETE FROM contacts_fts WHERE rowid = old.rowid;
-        ${ftsInsert(`c.id = new.id AND ${ACTIVE_CONTACT_SQL}`)};
+        ${insertChangedContact};
       END;`;
 }
 
@@ -116,6 +131,10 @@ export function installSearchIndex(sqlite: Database.Database): void {
         ["ad", "DELETE", "old.contactId"],
         ["au", "UPDATE", "old.contactId, new.contactId"],
       ]) {
+        // searchExpansion is a derived cache column, and the trigger clears
+        // it for the contact that owns the child row that just changed. There
+        // is no second contact it could reach.
+        // tenant-lint: allow derived table
         sqlite.exec(`
           DROP TRIGGER IF EXISTS fts_${table}_${suffix};
           CREATE TRIGGER fts_${table}_${suffix} AFTER ${event} ON contact_${table} BEGIN
@@ -126,18 +145,25 @@ export function installSearchIndex(sqlite: Database.Database): void {
     }
     if (rebuilt) {
       sqlite.exec(
+        // Only when the index version changed, and only over a derived cache
+        // column, so every account's rows are meant to be cleared together.
+        // tenant-lint: allow boot migration
         "UPDATE contacts SET searchExpansion = NULL WHERE searchExpansion IS NOT NULL",
       );
     }
-    sqlite.exec(`
-      ${ftsInsert(`${ACTIVE_CONTACT_SQL}
-      AND NOT EXISTS (SELECT 1 FROM contacts_fts f WHERE f.rowid = c.rowid)`)};
-    `);
+    // Same reason as contactTriggerSql: one literal, so the scanner sees the
+    // whole statement rather than the fragments around a nested backtick.
+    // tenant-lint: allow derived table
+    const insertMissingRows = ftsInsert(`${ACTIVE_CONTACT_SQL}
+      AND NOT EXISTS (SELECT 1 FROM contacts_fts f WHERE f.rowid = c.rowid)`);
+    sqlite.exec(`${insertMissingRows};`);
     sqlite.pragma(`user_version = ${VERSION}`);
   })();
 
   if (rebuilt) {
     const rows = sqlite
+      // One number for the boot log: how many rows the rebuild wrote.
+      // tenant-lint: allow boot migration
       .prepare("SELECT COUNT(*) AS n FROM contacts_fts")
       .get() as {
       n: number;
@@ -151,6 +177,9 @@ export function installSearchIndex(sqlite: Database.Database): void {
 
 /** Remove outdated vectors in the same transaction as the contact change. */
 export function installSearchVectorTriggers(sqlite: Database.Database): void {
+  // Both bodies delete the vector of the one contact row the trigger fired
+  // for. search_embeddings is derived from contacts and holds no other key.
+  // tenant-lint: allow derived table
   sqlite.exec(`
     DROP TRIGGER IF EXISTS search_vector_update;
     CREATE TRIGGER search_vector_update AFTER UPDATE OF ${SEARCH_COLUMNS} ON contacts BEGIN

@@ -221,8 +221,13 @@ async function main(): Promise<void> {
   }
   const auth = (r: import("supertest").Test): import("supertest").Test =>
     r.set("Cookie", cookie);
+  // Owner 0's own contact. The Phase 0 version took the first row in the
+  // table, which belonged to whichever owner seeded first and answered 404
+  // once GET /api/contacts/:id started checking.
   const sampleId = (
-    sqlite.prepare("SELECT id FROM contacts LIMIT 1").get() as { id: string }
+    sqlite
+      .prepare("SELECT id FROM contacts WHERE ownerId = ? LIMIT 1")
+      .get(owners[0].id) as { id: string }
   ).id;
 
   const rows: Row[] = [];
@@ -290,10 +295,95 @@ async function main(): Promise<void> {
   rows.push(
     await measure(
       "POST /api/dedupe/scan",
-      () => auth(request(server).post("/api/dedupe/scan").send({})),
+      async () => {
+        // The route answers as soon as the scan is queued, so timing the
+        // request alone measures the enqueue. Poll the status endpoint until
+        // the scan reaches a terminal phase, which is the number the Phase 0
+        // baseline recorded when the scan still blocked the event loop.
+        const started = await auth(
+          request(server).post("/api/dedupe/scan").send({}),
+        );
+        const scanId = started.body?.scanId as string | undefined;
+        if (!scanId) return;
+        for (;;) {
+          const status = await auth(
+            request(server).get("/api/dedupe/status").query({ scanId }),
+          );
+          const phase = status.body?.phase as string | undefined;
+          if (!phase || phase === "complete" || phase === "error") return;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+      },
       3,
-      "wall time, mock AI",
+      "wall time to completion, mock AI",
     ),
+  );
+
+  // ── Isolation spot check ──────────────────────────────────────────────
+  // Phase 2's acceptance asks for latency and for proof that the latency is
+  // the latency of one account's rows. A fast endpoint that answers with
+  // everybody's data is not the thing being measured.
+  const ownerOf = sqlite.prepare("SELECT ownerId FROM contacts WHERE id = ?");
+  const checks: { label: string; rows: number; verdict: string }[] = [];
+  const spotCheck = async (
+    label: string,
+    run: () => Promise<{ body: unknown }>,
+    pick: (body: never) => { id: string }[],
+    expected: number | null,
+  ): Promise<void> => {
+    const res = await run();
+    const rows = pick(res.body as never) ?? [];
+    const foreign = rows.filter((r) => {
+      const owner = ownerOf.get(r.id) as { ownerId: string } | undefined;
+      return owner !== undefined && owner.ownerId !== owners[0].id;
+    });
+    const verdict =
+      foreign.length > 0
+        ? `LEAK: ${foreign.length} row(s) belong to another account`
+        : expected !== null && rows.length !== expected
+          ? `own rows only, but ${rows.length} of an expected ${expected}`
+          : "own rows only";
+    checks.push({ label, rows: rows.length, verdict });
+  };
+
+  await spotCheck(
+    "GET /api/contacts?view=slim",
+    () => auth(request(server).get("/api/contacts?view=slim")),
+    (b: { id: string }[]) => b,
+    CONTACTS_PER_OWNER,
+  );
+  await spotCheck(
+    "GET /api/search?q=Acme",
+    () => auth(request(server).get("/api/search?q=Acme")),
+    (b: { id: string }[]) => b,
+    null,
+  );
+  await spotCheck(
+    "POST /api/search/semantic",
+    () =>
+      auth(
+        request(server).post("/api/search/semantic").send({ query: "Acme" }),
+      ),
+    (b: { matches?: { id: string }[] }) => b.matches ?? [],
+    null,
+  );
+  await spotCheck(
+    "GET /api/timeline",
+    () => auth(request(server).get("/api/timeline?limit=200")),
+    (b: { contactId: string }[]) => (b ?? []).map((r) => ({ id: r.contactId })),
+    null,
+  );
+  await spotCheck(
+    "GET /api/query/contacts",
+    () => auth(request(server).get("/api/query/contacts?limit=200")),
+    (b: { id: string }[]) => b,
+    null,
+  );
+  await spotCheck(
+    "GET /api/export/json",
+    () => auth(request(server).get("/api/export/json")),
+    (b: { contacts?: { id: string }[] }) => b.contacts ?? [],
+    CONTACTS_PER_OWNER,
   );
 
   const vec = sqlite.prepare("SELECT vec_version() AS v").get() as {
@@ -333,6 +423,18 @@ async function main(): Promise<void> {
     out.push(
       `| \`${r.label}\` | ${r.p50.toFixed(1)} | ${r.p95.toFixed(1)} | ${r.n} | ${r.note} |`,
     );
+  }
+  out.push("");
+  out.push("## Isolation spot check");
+  out.push("");
+  out.push(
+    `Measured as owner 0 of ${OWNERS}, who owns ${CONTACTS_PER_OWNER} of the ${totalContacts} contacts.`,
+  );
+  out.push("");
+  out.push("| Endpoint | rows returned | verdict |");
+  out.push("| -------- | ------------: | ------- |");
+  for (const c of checks) {
+    out.push(`| \`${c.label}\` | ${c.rows} | ${c.verdict} |`);
   }
   out.push("");
 

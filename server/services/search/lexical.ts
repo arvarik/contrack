@@ -25,7 +25,7 @@ export function searchTokens(query: string): string[] {
  * rows the caller may not read. The architecture document, section 6.2, has
  * the measurements.
  */
-function scopedMatch(scope: Scope, strategy: string): string {
+export function scopedMatch(scope: Scope, strategy: string): string {
   return `ownerTok:${ownerToken(scope)} AND (${strategy})`;
 }
 

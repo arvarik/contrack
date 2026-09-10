@@ -214,8 +214,15 @@ if (sweptSessions.changes > 0) {
   log.info("Database", `Swept ${sweptSessions.changes} expired session(s)`);
 }
 
-/** Bumped when the tenancy block gains a step an older database has not run. */
-export const TENANCY_SCHEMA_VERSION = 1;
+/**
+ * Bumped when the tenancy block gains a step an older database has not run.
+ *
+ * v1 adds the ownership columns, claims the existing rows, installs the
+ * invariant triggers and the composite indexes. v2 drops the four
+ * single-column owner indexes v1 created, now that the Phase 2 query plans
+ * prove the composites serve every owner-first read.
+ */
+export const TENANCY_SCHEMA_VERSION = 2;
 
 // =============================================================================
 // 2z-backup. Copy the database before anything below changes it
@@ -230,9 +237,16 @@ export const TENANCY_SCHEMA_VERSION = 1;
 // here rather than in §2z-4.
 // =============================================================================
 
-if (readTenancyVersion() < TENANCY_SCHEMA_VERSION) {
+// Only the v1 step rewrites data. v2 drops four indexes, which SQLite can
+// rebuild from the table, so it is not worth copying the whole file for.
+if (readTenancyVersion() < 1) {
   const contactCount = (
-    sqlite.prepare(`SELECT COUNT(*) AS n FROM contacts`).get() as { n: number }
+    sqlite
+      .prepare(
+        // tenant-lint: allow boot migration
+        `SELECT COUNT(*) AS n FROM contacts`,
+      )
+      .get() as { n: number }
   ).n;
   // Nothing to lose on an empty database, and this is also the fresh-install
   // path, where a backup would just be noise in the data directory.
@@ -571,9 +585,11 @@ export function claimUnownedData(ownerId: string): Record<string, number> {
   const claimed: Record<string, number> = {};
   sqlite.transaction(() => {
     for (const table of OWNED_TABLES) {
-      // tenant-lint: allow boot migration
       const result = sqlite
-        .prepare(`UPDATE ${table} SET ownerId = ? WHERE ownerId IS NULL`)
+        .prepare(
+          // tenant-lint: allow boot migration
+          `UPDATE ${table} SET ownerId = ? WHERE ownerId IS NULL`,
+        )
         .run(ownerId);
       if (result.changes > 0) claimed[table] = result.changes;
     }
@@ -684,6 +700,25 @@ const OWNER_COMPOSITE_INDEXES = `
 `;
 
 /**
+ * The single-column owner indexes v1 created, which v2 drops.
+ *
+ * Each one is the leading column of a composite above, so SQLite can answer
+ * every query that used it from the composite instead. Leaving them costs a
+ * second B-tree write on each insert, and gives the planner a narrower index
+ * to prefer over the composite the Phase 2 plan tests pin.
+ *
+ * The other four owned tables also had one. Phase 2i drops the four the plan
+ * names; docs/multi-tenant-plan/07-phase-2-scoping.md section 2i records why
+ * the rest are still there.
+ */
+const OWNER_PREFIX_INDEXES = [
+  "idx_contacts_owner",
+  "idx_lists_owner",
+  "idx_ai_invocations_owner",
+  "idx_dedupe_merge_log_owner",
+] as const;
+
+/**
  * Copy the database before the first tenancy migration.
  *
  * VACUUM INTO is synchronous, correct in WAL mode, and produces one consistent
@@ -756,83 +791,104 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
   };
 
   sqlite.transaction(() => {
-    step("columns", () => {
-      let added = 0;
-      for (const table of OWNED_TABLES) {
-        const columns = sqlite.pragma(`table_info(${table})`) as {
-          name: string;
-        }[];
-        if (columns.length === 0) {
-          throw new Error(
-            `Cannot add ownerId: table "${table}" does not exist. §2z-4 must run after every owned table is created.`,
-          );
+    // v0 to v1: the columns, the claim, the triggers and the composites.
+    // A database that already reads 1 has all of them.
+    if (tenancyVersion < 1) {
+      step("columns", () => {
+        let added = 0;
+        for (const table of OWNED_TABLES) {
+          const columns = sqlite.pragma(`table_info(${table})`) as {
+            name: string;
+          }[];
+          if (columns.length === 0) {
+            throw new Error(
+              `Cannot add ownerId: table "${table}" does not exist. §2z-4 must run after every owned table is created.`,
+            );
+          }
+          if (!columns.some((c) => c.name === "ownerId")) {
+            // A REFERENCES clause is legal on ADD COLUMN only when the default
+            // is NULL, which is the semantics wanted anyway: existing rows are
+            // unowned until the claim below runs. RESTRICT rather than CASCADE
+            // on purpose — deleting an account that still owns contacts should
+            // fail loudly, not delete the contacts.
+            sqlite.exec(
+              `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
+            );
+            added++;
+          }
         }
-        if (!columns.some((c) => c.name === "ownerId")) {
-          // A REFERENCES clause is legal on ADD COLUMN only when the default
-          // is NULL, which is the semantics wanted anyway: existing rows are
-          // unowned until the claim below runs. RESTRICT rather than CASCADE
-          // on purpose — deleting an account that still owns contacts should
-          // fail loudly, not delete the contacts.
-          sqlite.exec(
-            `ALTER TABLE ${table} ADD COLUMN ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT`,
-          );
-          added++;
+        return `${added} added,`;
+      });
+
+      step("trigger drops", () => {
+        for (const name of TRIGGERS_DROPPED_FOR_CLAIM) {
+          sqlite.exec(`DROP TRIGGER IF EXISTS ${name}`);
         }
-        // Phase 2i replaces these with the composite indexes below, once
-        // EXPLAIN QUERY PLAN evidence says the prefixes are redundant.
-        sqlite.exec(
-          `CREATE INDEX IF NOT EXISTS idx_${table}_owner ON ${table}(ownerId)`,
-        );
-      }
-      return `${added} added,`;
-    });
+        return `${TRIGGERS_DROPPED_FOR_CLAIM.length} dropped,`;
+      });
 
-    step("trigger drops", () => {
-      for (const name of TRIGGERS_DROPPED_FOR_CLAIM) {
-        sqlite.exec(`DROP TRIGGER IF EXISTS ${name}`);
-      }
-      return `${TRIGGERS_DROPPED_FOR_CLAIM.length} dropped,`;
-    });
+      let owner = "";
+      step("local owner", () => {
+        owner = ensureLocalOwner();
+        return "";
+      });
 
-    let owner = "";
-    step("local owner", () => {
-      owner = ensureLocalOwner();
-      return "";
-    });
+      step("claim", () => {
+        const claimed = claimUnownedData(owner);
+        const total = Object.values(claimed).reduce((a, b) => a + b, 0);
+        return total > 0
+          ? `${Object.entries(claimed)
+              .map(([t, n]) => `${n} ${t}`)
+              .join(", ")},`
+          : "nothing to claim,";
+      });
 
-    step("claim", () => {
-      const claimed = claimUnownedData(owner);
-      const total = Object.values(claimed).reduce((a, b) => a + b, 0);
-      return total > 0
-        ? `${Object.entries(claimed)
-            .map(([t, n]) => `${n} ${t}`)
-            .join(", ")},`
-        : "nothing to claim,";
-    });
+      step("child backfill", () => {
+        let rows = 0;
+        for (const { table, key } of OWNER_CHILD_TABLES) {
+          rows += sqlite
+            .prepare(
+              // tenant-lint: allow boot migration
+              `UPDATE ${table} SET ownerId = (SELECT ownerId FROM contacts WHERE id = ${table}.${key})
+                WHERE ownerId IS NULL`,
+            )
+            .run().changes;
+        }
+        return `${rows} rows,`;
+      });
 
-    step("child backfill", () => {
-      let rows = 0;
-      for (const { table, key } of OWNER_CHILD_TABLES) {
-        // tenant-lint: allow boot migration
-        rows += sqlite
-          .prepare(
-            `UPDATE ${table} SET ownerId = (SELECT ownerId FROM contacts WHERE id = ${table}.${key})
-              WHERE ownerId IS NULL`,
-          )
-          .run().changes;
-      }
-      return `${rows} rows,`;
-    });
+      step("invariant triggers", () => {
+        sqlite.exec(ownerInvariantTriggerSql());
+        return "";
+      });
 
-    step("invariant triggers", () => {
-      sqlite.exec(ownerInvariantTriggerSql());
-      return "";
-    });
+      step("composite indexes", () => {
+        sqlite.exec(OWNER_COMPOSITE_INDEXES);
+        return "";
+      });
+    }
 
-    step("composite indexes", () => {
-      sqlite.exec(OWNER_COMPOSITE_INDEXES);
-      return "";
-    });
+    // v1 to v2: the prefix indexes go, now that the plan tests prove the
+    // composites answer every owner-first read. DROP INDEX is metadata
+    // only, so this is fast on any size of database.
+    if (tenancyVersion < 2) {
+      step("prefix index drops", () => {
+        let dropped = 0;
+        for (const name of OWNER_PREFIX_INDEXES) {
+          const before = sqlite
+            .prepare(
+              `SELECT COUNT(*) AS n FROM sqlite_master
+                WHERE type = 'index' AND name = ?`,
+            )
+            .get(name) as { n: number };
+          sqlite.exec(`DROP INDEX IF EXISTS ${name}`);
+          dropped += before.n;
+        }
+        // A fresh database never had them, so this reads 0 there rather than
+        // claiming four drops that did nothing.
+        return `${dropped} dropped,`;
+      });
+    }
 
     writeTenancyVersion(TENANCY_SCHEMA_VERSION);
   })();
@@ -924,12 +980,12 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
       moved.push(filename);
     }
 
-    // tenant-lint: allow boot migration
     const setAvatar = sqlite.prepare(
+      // tenant-lint: allow boot migration
       `UPDATE contacts SET avatarUrl = ? WHERE id = ?`,
     );
-    // tenant-lint: allow boot migration
     const setFile = sqlite.prepare(
+      // tenant-lint: allow boot migration
       `UPDATE interactions SET fileUrl = ? WHERE id = ?`,
     );
     sqlite.transaction(() => {
@@ -981,6 +1037,7 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
     (
       sqlite
         .prepare(
+          // tenant-lint: allow boot migration
           `SELECT avatarUrl FROM contacts WHERE avatarUrl LIKE '/uploads/%'`,
         )
         .all() as { avatarUrl: string }[]
@@ -990,6 +1047,7 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
     (
       sqlite
         .prepare(
+          // tenant-lint: allow boot migration
           `SELECT fileUrl FROM interactions WHERE fileUrl LIKE '/uploads/%'`,
         )
         .all() as { fileUrl: string }[]
@@ -1027,6 +1085,7 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
 try {
   const legacy = sqlite
     .prepare(
+      // tenant-lint: allow boot migration
       "SELECT id, avatarUrl FROM contacts WHERE avatarUrl LIKE 'https://api.dicebear.com/%'",
     )
     .all() as { id: string; avatarUrl: string }[];
@@ -1039,6 +1098,7 @@ try {
       "initials",
     ]);
     const update = sqlite.prepare(
+      // tenant-lint: allow boot migration
       "UPDATE contacts SET avatarUrl = ? WHERE id = ?",
     );
     const migrateAll = sqlite.transaction(
@@ -1188,6 +1248,7 @@ installSearchIndex(sqlite);
 // the original UPDATE, and the SET updatedAt is a no-op if already current.
 // =============================================================================
 
+// tenant-lint: allow boot migration
 sqlite.exec(`
   DROP TRIGGER IF EXISTS contacts_auto_updated_at;
   CREATE TRIGGER contacts_auto_updated_at AFTER UPDATE ON contacts
@@ -1205,6 +1266,7 @@ sqlite.exec(`
 // background processes (mention extraction, EML import re-parent, etc.) update rows.
 // =============================================================================
 
+// tenant-lint: allow boot migration
 sqlite.exec(`
   DROP TRIGGER IF EXISTS interactions_auto_updated_at;
   CREATE TRIGGER interactions_auto_updated_at AFTER UPDATE ON interactions
@@ -1253,6 +1315,7 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_action_items_due ON action_items(dueAt) WHERE completedAt IS NULL;
 `);
 
+// tenant-lint: allow boot migration
 sqlite.exec(`
   DROP TRIGGER IF EXISTS action_items_sync_insert;
   CREATE TRIGGER action_items_sync_insert AFTER INSERT ON action_items BEGIN
@@ -1303,6 +1366,7 @@ try {
 
 const orphanedFollowUps = sqlite
   .prepare(
+    // tenant-lint: allow boot migration
     `
   SELECT id, nextFollowUpAt FROM contacts
   WHERE nextFollowUpAt IS NOT NULL
@@ -1312,6 +1376,11 @@ const orphanedFollowUps = sqlite
   .all() as { id: string; nextFollowUpAt: string }[];
 
 if (orphanedFollowUps.length > 0) {
+  // No ownerId column here on purpose: §2z-4 runs before this section, so
+  // `action_items_owner_fill` is installed and copies the owner from the
+  // parent contact. Naming it here would duplicate the trigger, not replace
+  // it, and every row this writes belongs to whoever owns the contact.
+  // tenant-lint: allow boot migration
   const insertStmt = sqlite.prepare(`
     INSERT INTO action_items (id, contactId, title, dueAt)
     VALUES (?, ?, 'Follow up', ?)
@@ -1524,9 +1593,9 @@ for (const table of ["search_embeddings", "contact_embeddings"]) {
     // A row whose contact is gone is already an orphan. It is left behind
     // rather than given a NULL partition, which query 9 of the verification
     // script would then flag forever.
-    // tenant-lint: allow boot migration
     const rows = sqlite
       .prepare(
+        // tenant-lint: allow boot migration
         `SELECT e.contactId AS contactId, c.ownerId AS ownerId, e.embedding AS embedding
            FROM ${table} e JOIN contacts c ON c.id = e.contactId`,
       )
@@ -1648,6 +1717,7 @@ import { doubleMetaphone } from "./utils/nlp/index.ts";
 
 const contactsMissingHash = sqlite
   .prepare(
+    // tenant-lint: allow boot migration
     `
   SELECT id, name FROM contacts WHERE phoneticHash IS NULL AND name IS NOT NULL
 `,
@@ -1656,6 +1726,7 @@ const contactsMissingHash = sqlite
 
 if (contactsMissingHash.length > 0) {
   const updateStmt = sqlite.prepare(
+    // tenant-lint: allow boot migration
     `UPDATE contacts SET phoneticHash = ? WHERE id = ?`,
   );
   const backfillTxn = sqlite.transaction(() => {

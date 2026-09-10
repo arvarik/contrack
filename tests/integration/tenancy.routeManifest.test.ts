@@ -91,89 +91,56 @@ describe("route manifest", () => {
     }
   });
 
-  it("flips isolated only for the routes a sub-phase has proven", () => {
-    // Phase 2 converts one domain per PR. This list grows by exactly the
-    // routes whose matrix tests landed in that PR, so a flip with no test
-    // behind it fails here. Phase 2i replaces the list with the assertion
-    // that every scoped route is isolated.
-    const isolated = ROUTE_MANIFEST.filter((r) => r.isolated)
-      .map(key)
-      .sort();
-    expect(isolated).toEqual([
-      "DELETE /api/action-items/:id",
-      "DELETE /api/contacts/:id",
-      "DELETE /api/interactions/:id",
-      "DELETE /api/lists/:id",
-      "DELETE /api/lists/:id/members/:contactId",
-      "GET /api/action-items",
-      "GET /api/action-items/completed",
-      "GET /api/action-items/count",
-      "GET /api/ai-search/status",
-      "GET /api/ai-search/stream",
-      "GET /api/ai/stats/feed",
-      "GET /api/ai/stats/summary",
-      "GET /api/command-palette/zero-state",
-      "GET /api/contacts",
-      "GET /api/contacts/:id",
-      "GET /api/contacts/:id/action-items",
-      "GET /api/contacts/:id/relationships",
-      "GET /api/contacts/:id/score",
-      "GET /api/contacts/:id/timeline",
-      "GET /api/contacts/archived",
-      "GET /api/contacts/map",
-      "GET /api/dashboard",
-      "GET /api/dashboard/insight",
-      "GET /api/dedupe/active",
-      "GET /api/dedupe/embedding-status",
-      "GET /api/dedupe/merge-log",
-      "GET /api/dedupe/status",
-      "GET /api/dedupe/stream",
-      "GET /api/dedupe/suggestion-for/:contactId",
-      "GET /api/dedupe/suggestions",
-      "GET /api/dedupe/suggestions/count",
-      "GET /api/lists",
-      "GET /api/lists/:id/contacts",
-      "GET /api/search",
-      "PATCH /api/action-items/:id",
-      "PATCH /api/action-items/:id/complete",
-      "PATCH /api/contacts/:id",
-      "PATCH /api/interactions/:id",
-      "PATCH /api/lists/:id",
-      "POST /api/ai-search",
-      "POST /api/ai-search/:batchId/cancel",
-      "POST /api/contacts",
-      "POST /api/contacts/:id/action-items",
-      "POST /api/contacts/:id/attachments",
-      "POST /api/contacts/:id/avatar",
-      "POST /api/contacts/:id/briefing",
-      "POST /api/contacts/:id/enrich",
-      "POST /api/contacts/:id/interactions",
-      "POST /api/contacts/:id/promote",
-      "POST /api/contacts/bulk",
-      "POST /api/contacts/bulk-delete",
-      "POST /api/contacts/merge",
-      "POST /api/contacts/merge-batch",
-      "POST /api/contacts/merge-cluster",
-      "POST /api/contacts/merge-clusters",
-      "POST /api/dedupe/merge-log/:id/undo",
-      "POST /api/dedupe/scan",
-      "POST /api/dedupe/suggestions/:id/dismiss",
-      "POST /api/dedupe/suggestions/:id/merge",
-      "POST /api/dev/seed-duplicates",
-      "POST /api/lists",
-      "POST /api/lists/:id/members",
-      "POST /api/lists/:id/members/bulk",
-      "POST /api/search/semantic",
-      "POST /api/search/synthesize",
-      "PUT /api/contacts/:id",
-      "PUT /api/contacts/bulk-update",
-      "PUT /api/lists/reorder",
-      "USE /uploads",
-    ]);
+  it("isolates every scoped route", () => {
+    // Phase 2 converted one domain per PR, and this test used to hold the
+    // list each PR had proven. Sub-phase 2i closed the phase, so the list is
+    // gone and the rule is the assertion: a scoped route that is not isolated
+    // is a route with no matrix test behind it.
+    const waiting = ROUTE_MANIFEST.filter(
+      (r) => r.class === "scoped" && !r.isolated,
+    ).map(key);
+    expect(waiting, "scoped routes with no isolation test").toEqual([]);
+
     // Only owned data and the file layer can be isolated. A public or
     // session-self route has no owner to isolate from.
     for (const entry of ROUTE_MANIFEST.filter((r) => r.isolated)) {
       expect(["scoped", "static"]).toContain(entry.class);
+    }
+
+    // The uploads layer is a middleware rather than a scoped route, so the
+    // rule above cannot reach it. Name it.
+    expect(
+      ROUTE_MANIFEST.find((r) => key(r) === "USE /uploads")?.isolated,
+    ).toBe(true);
+  });
+
+  it("keeps the admin class on every route Phase 3 gates", () => {
+    // Phase 2 classifies; Phase 3 mounts requireAdmin in front of exactly
+    // this list. Between the two, the class is the only record of which
+    // routes are meant to be operator-only, so it is pinned by name.
+    const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin")
+      .map(key)
+      .sort();
+    expect(admin).toEqual([
+      "DELETE /api/settings/ai/endpoints/:id",
+      "DELETE /api/settings/ai/providers/:id/key",
+      "GET /api/ai/diagnostics",
+      "GET /api/ai/grounding-capacity",
+      "GET /api/backups",
+      "GET /api/debug/cache-stats",
+      "POST /api/backups",
+      "POST /api/dedupe/backfill-embeddings",
+      "POST /api/settings/ai/providers/:id/refresh-models",
+      "PUT /api/auth/session-policy",
+      "PUT /api/settings/ai/capabilities/:capability",
+      "PUT /api/settings/ai/endpoints",
+      "PUT /api/settings/ai/providers/:id/key",
+      "PUT /api/settings/ai/searxng",
+    ]);
+    // An admin route reads or writes the instance, so none of them is
+    // isolated by owner.
+    for (const entry of ROUTE_MANIFEST.filter((r) => r.class === "admin")) {
+      expect(entry.isolated, key(entry)).toBe(false);
     }
   });
 

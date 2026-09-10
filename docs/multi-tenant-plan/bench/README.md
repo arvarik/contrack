@@ -5,7 +5,7 @@ Evidence produced while executing the plan. Expected files, by phase:
 - `baseline-phase-0.md`: Phase 0 benchmark at `1 × 5000` and `10 × 2000`, including today's per-update FTS trigger cost.
 - `tenant-lint-baseline.txt`: Phase 0 lint report.
 - `rollback-rehearsal.md`: Phase 1.
-- `phase-2.md`: benchmark after scoping.
+- `phase-2.md`: benchmark after scoping (Phase 2i). Committed.
 - `ui-walkthrough.md` and screenshots: Phase 4.
 - `phase-5.md`, `security-review.md`, `upgrade-rehearsal.md`: Phase 5.
 

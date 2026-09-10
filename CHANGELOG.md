@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2.** Every route that reads or writes owned data now filters by the
+  account that asked, and the isolation matrix proves it for all eighty of
+  them. A route that carries no test in that file fails the manifest check, so
+  a new one cannot arrive unproven.
+- **Phase 2g.** A data export contains the account's own rows, in every table
+  it returns. Contacts, interactions, lists, list memberships, action items
+  and the merge history each stop at the caller. One request used to return
+  every account's data on the instance, which made the export the widest read
+  in the app by a wide margin.
+- **Phase 2g.** An export filename names the account it came from, as
+  `contrack-export-<username>-<date>.json` and
+  `contrack-contacts-<username>-<date>.csv`. Two people exporting on the same
+  day used to download two files with the same name, and the second one
+  replaced the first.
+- **Phase 2g.** The trash is per account. Restore and purge answer `404` for
+  a contact another account deleted, with the same body an id that never
+  existed answers. The trash list holds the caller's own deleted contacts and
+  nobody else's, and a mixed bulk restore brings back only the caller's rows
+  and counts only those, keeping the `200` it has always answered because
+  undo is forgiving by design.
+- **Phase 2g.** The MCP surface answers for the account that asked. The
+  contact query, the follow-up list, the tag and industry vocabularies, the
+  interaction search and the whole-account timeline each read one account's
+  rows. A personal API token acts as its own account here, exactly as a
+  browser session does, so an MCP client reads the contacts of whoever issued
+  its token and nobody else.
+- **Phase 2h.** Both embedding backfills run one account at a time, inside
+  that account's context, and accounts take turns in rounds of 200 contacts.
+  A large account no longer holds up a small account's first results, and a
+  provider call made from inside a backfill now names the account whose
+  contacts it embedded rather than the instance's first administrator. No
+  invocation row is written for an embedding yet, so nothing appears in the
+  AI stats feed either way, but every path that reads the caller from the
+  context gets the right answer.
+- **Phase 2i.** `npm run lint` runs `tenant-lint --strict` over the whole of
+  `server/`. Every SQL statement that reads an owned table either names the
+  owner or carries a one-line reason why it does not.
+- **Phase 2i.** The four single-column owner indexes are dropped on the next
+  boot, as tenancy schema version 2. Each was the leading column of a
+  composite index that answers the same query, so each cost a second B-tree
+  write on every insert and gave the query planner a narrower index to prefer
+  over the one the reads were built for.
+
 - **Phase 2e.** A duplicate scan reads one account's contacts and finds one
   account's duplicates. Every stage is scoped: the normalized corpus, the five
   child-table loads behind it, the exact email, phone and name passes, the
@@ -230,6 +273,22 @@ requestId, details } }` with code `RATE_LIMITED`, instead of a bare
   and this test fails if the weight list is not extended with them.
 
 ### Fixed
+
+- **Phase 2g.** The MCP contact query no longer answers with rows the app
+  hides. It had no trash filter, no ghost filter and no merged-away filter, so
+  an MCP client saw people the user had thrown away, the placeholder rows a
+  mention creates, and the losing side of every merge. An agent acting on a
+  merged id wrote an interaction onto a record the app never shows again.
+
+- **Phase 2h.** A duplicate scan embeds its own account's contacts. It called
+  the instance-wide backfill in the middle of a scan, so one person pressing
+  "scan" paid a provider to embed every other account's contacts, and a
+  full-mode scan that had just cleared its own vectors refilled everybody's.
+
+- **Phase 2i.** `tenant-lint --strict "server/**/*.ts"` covers files that sit
+  directly in `server/`. `**` matched one or more directories, so
+  `server/db.ts` fell outside every strict glob the phase used, and the
+  fourteen boot statements in it were never checked.
 
 - **Phase 2a.** The migration test's second-boot check no longer depends on
   the clock. It compared `updatedAt` against the fixture, which the legacy

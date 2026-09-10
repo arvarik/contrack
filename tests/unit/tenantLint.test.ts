@@ -112,6 +112,54 @@ describe("tenant-lint: allow comments", () => {
   });
 });
 
+describe("tenant-lint: regular expressions do not desync the scanner", () => {
+  it("keeps scanning after a regex that contains a quote", () => {
+    // The CSV escaper is /[",\n\r]/ and the mention matcher is
+    // /data-type="mention".../. A quote inside a regex body used to open a
+    // string that ran to the next quote anywhere in the file, so every
+    // statement after it read as code and was never scanned. A file could
+    // pass --strict while holding an unscoped statement further down.
+    const src = [
+      'const cell = (t) => /[",\\n]/.test(t) ? t : t;',
+      'sqlite.prepare("SELECT * FROM contacts WHERE deletedAt IS NULL");',
+    ].join("\n");
+    expect(findings(src).map((f) => f.kind)).toEqual(["sql:contacts"]);
+  });
+
+  it("treats a division as a division", () => {
+    const src = [
+      "const ratio = total / count;",
+      "const half = (a + b) / 2;",
+      'sqlite.prepare("SELECT * FROM lists");',
+    ].join("\n");
+    expect(findings(src).map((f) => f.kind)).toEqual(["sql:lists"]);
+  });
+
+  it("reads a regex after a keyword, where an identifier still ends nothing", () => {
+    const src = [
+      'function quoted(s) { return /"/.test(s); }',
+      'sqlite.prepare("SELECT * FROM interactions");',
+    ].join("\n");
+    expect(findings(src).map((f) => f.kind)).toEqual(["sql:interactions"]);
+  });
+
+  it("does not end a regex at a slash inside a character class", () => {
+    const src = [
+      'const path = /[/"]/;',
+      'sqlite.prepare("SELECT * FROM action_items");',
+    ].join("\n");
+    expect(findings(src).map((f) => f.kind)).toEqual(["sql:action_items"]);
+  });
+
+  it("still passes a scoped statement that follows a regex", () => {
+    const src = [
+      'const cell = /[",]/;',
+      'sqlite.prepare("SELECT * FROM contacts WHERE ownerId = ?");',
+    ].join("\n");
+    expect(findings(src)).toEqual([]);
+  });
+});
+
 describe("tenant-lint: glob matching for --strict", () => {
   it("matches a directory tree with **", () => {
     const re = globToRegExp("server/**");
@@ -129,5 +177,19 @@ describe("tenant-lint: glob matching for --strict", () => {
     const re = globToRegExp("server/*.ts");
     expect(re.test("server/db.ts")).toBe(true);
     expect(re.test("server/services/listService.ts")).toBe(false);
+  });
+
+  it("lets **/ match no directory at all", () => {
+    // This is what makes `npm run lint` cover server/db.ts. `**` alone reads
+    // as ".*", which needs the following slash to be a real one, so
+    // server/**/*.ts used to skip every file sitting directly in server/ —
+    // including the file with every boot migration in it.
+    const re = globToRegExp("server/**/*.ts");
+    expect(re.test("server/db.ts")).toBe(true);
+    expect(re.test("server/app.ts")).toBe(true);
+    expect(re.test("server/services/listService.ts")).toBe(true);
+    expect(re.test("server/routes/dedupe/scan.ts")).toBe(true);
+    expect(re.test("scripts/seed.ts")).toBe(false);
+    expect(re.test("server/db.js")).toBe(false);
   });
 });

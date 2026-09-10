@@ -1,15 +1,18 @@
 // =============================================================================
 // Integration Tests — the isolation matrix
 // =============================================================================
-// Two real accounts, two real sessions, rows written through the public API.
-// For every route a sub-phase has converted, user B tries to reach user A's
-// data and must fail, and A's rows must be unchanged afterwards.
+// Three real accounts, three real sessions, rows written through the public
+// API. For every `scoped` route, user B tries to reach user A's data and must
+// fail, and A's rows must be unchanged afterwards. The third account writes
+// nothing, so every total it is shown must be zero.
 //
-// The rows that are still unconverted stay as `it.todo`, generated from
-// ROUTE_MANIFEST, so a new scoped route arrives here as a todo automatically
-// and cannot be forgotten. The `COVERED` list below is checked against the
-// manifest: a route cannot be marked `isolated` without a test in this file,
-// and a test here cannot cover a route the manifest has not flipped.
+// Phase 2 generated an `it.todo` here for each route it had not reached yet.
+// Sub-phase 2i closed the phase, so a new scoped route now fails the manifest
+// test instead: write its test here, add its key to `COVERED`, and flip
+// `isolated`. The `COVERED` list below is checked against the manifest in
+// both directions, so a route cannot be marked `isolated` without a test in
+// this file, and a test here cannot cover a route the manifest has not
+// flipped.
 //
 // Auth is on for this file. Isolation between two accounts is only meaningful
 // when both had to sign in.
@@ -87,6 +90,7 @@ const COVERED = [
   "DELETE /api/interactions/:id",
   "DELETE /api/lists/:id",
   "DELETE /api/lists/:id/members/:contactId",
+  "DELETE /api/trash/:id",
   "GET /api/action-items",
   "GET /api/action-items/completed",
   "GET /api/action-items/count",
@@ -101,6 +105,7 @@ const COVERED = [
   "GET /api/contacts/:id/relationships",
   "GET /api/contacts/:id/score",
   "GET /api/contacts/:id/timeline",
+  "GET /api/contacts/action-items",
   "GET /api/contacts/archived",
   "GET /api/contacts/map",
   "GET /api/dashboard",
@@ -113,9 +118,17 @@ const COVERED = [
   "GET /api/dedupe/suggestion-for/:contactId",
   "GET /api/dedupe/suggestions",
   "GET /api/dedupe/suggestions/count",
+  "GET /api/export/csv",
+  "GET /api/export/json",
+  "GET /api/industries",
+  "GET /api/interactions/search",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
+  "GET /api/query/contacts",
   "GET /api/search",
+  "GET /api/tags",
+  "GET /api/timeline",
+  "GET /api/trash",
   "PATCH /api/action-items/:id",
   "PATCH /api/action-items/:id/complete",
   "PATCH /api/contacts/:id",
@@ -147,6 +160,8 @@ const COVERED = [
   "POST /api/lists/:id/members/bulk",
   "POST /api/search/semantic",
   "POST /api/search/synthesize",
+  "POST /api/trash/:id/restore",
+  "POST /api/trash/bulk-restore",
   "PUT /api/contacts/:id",
   "PUT /api/contacts/bulk-update",
   "PUT /api/lists/reorder",
@@ -2365,6 +2380,445 @@ describe("dedupe scans and merges stop at the account that asked", () => {
 });
 
 // =============================================================================
+// Trash, export, and the MCP surface
+// =============================================================================
+// The three groups sub-phase 2g converted. The export is the widest read in
+// the app: one request returns six tables at once, so it is the one place a
+// single missing predicate hands over somebody's whole account.
+// =============================================================================
+
+describe("the trash holds one account's deleted contacts", () => {
+  const create = async (actor: Actor, name: string) => {
+    const res = await asUser(actor)(
+      request(app).post("/api/contacts").send({ name }),
+    );
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  };
+  const discard = async (actor: Actor, name: string) => {
+    const id = await create(actor, name);
+    const res = await asUser(actor)(request(app).delete(`/api/contacts/${id}`));
+    expect(res.status).toBe(200);
+    return id;
+  };
+
+  let trashedA: string;
+  let trashedB: string[];
+
+  beforeAll(async () => {
+    trashedA = await discard(A, "Alice Discarded");
+    trashedB = [
+      await discard(B, "Bob Discarded 1"),
+      await discard(B, "Bob Discarded 2"),
+    ];
+  });
+
+  it("GET /api/trash: returns only the caller's rows", async () => {
+    const forB = await asUser(B)(request(app).get("/api/trash"));
+    const forA = await asUser(A)(request(app).get("/api/trash"));
+
+    expect(forB.status).toBe(200);
+    // Earlier tests in this file put rows of their own in each trash, so the
+    // claim is ownership rather than an exact id list.
+    for (const row of forB.body.items as { id: string }[]) {
+      expect(snapshotRow("contacts", row.id)?.ownerId).toBe(B.user.id);
+    }
+    for (const row of forA.body.items as { id: string }[]) {
+      expect(snapshotRow("contacts", row.id)?.ownerId).toBe(A.user.id);
+    }
+    for (const id of trashedB) expect(ids(forB.body.items)).toContain(id);
+    expect(ids(forA.body.items)).toContain(trashedA);
+    expect(ids(forB.body.items)).not.toContain(trashedA);
+    for (const id of trashedB) {
+      expect(ids(forA.body.items)).not.toContain(id);
+    }
+  });
+
+  it("POST /api/trash/:id/restore: refuses a foreign id and leaves it trashed", async () => {
+    const before = snapshotRow("contacts", trashedA);
+
+    const foreign = await asUser(B)(
+      request(app).post(`/api/trash/${trashedA}/restore`),
+    );
+    const unknown = await asUser(B)(
+      request(app).post(`/api/trash/${randomId()}/restore`),
+    );
+
+    expect(foreign.status).toBe(404);
+    expect(unknown.status).toBe(404);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(unknown.body),
+    );
+    expect(snapshotRow("contacts", trashedA)).toEqual(before);
+  });
+
+  it("DELETE /api/trash/:id: refuses a foreign id and the row survives", async () => {
+    const before = snapshotRow("contacts", trashedA);
+
+    const foreign = await asUser(B)(
+      request(app).delete(`/api/trash/${trashedA}`),
+    );
+    const unknown = await asUser(B)(
+      request(app).delete(`/api/trash/${randomId()}`),
+    );
+
+    expect(foreign.status).toBe(404);
+    expect(unknown.status).toBe(404);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(unknown.body),
+    );
+    // A purge is the one delete with no undo behind it.
+    expect(snapshotRow("contacts", trashedA)).toEqual(before);
+  });
+
+  it("POST /api/trash/bulk-restore: restores only the caller's ids from a mixed list", async () => {
+    const before = snapshotRow("contacts", trashedA);
+
+    const res = await asUser(B)(
+      request(app)
+        .post("/api/trash/bulk-restore")
+        .send({ ids: [trashedA, ...trashedB] }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(trashedB.length);
+    expect(snapshotRow("contacts", trashedA)).toEqual(before);
+    for (const id of trashedB) {
+      expect(snapshotRow("contacts", id)?.deletedAt).toBeNull();
+    }
+  });
+
+  it("still restores the caller's own trashed contact", async () => {
+    const res = await asUser(A)(
+      request(app).post(`/api/trash/${trashedA}/restore`),
+    );
+    expect(res.status).toBe(200);
+    expect(snapshotRow("contacts", trashedA)?.deletedAt).toBeNull();
+  });
+});
+
+describe("an export carries one account's rows and nothing else", () => {
+  /** Give an account a row in every table the export reads. */
+  const fill = async (actor: Actor, label: string) => {
+    const list = await asUser(actor)(
+      request(app)
+        .post("/api/lists")
+        .send({ name: `${label} Export List` }),
+    );
+    expect([200, 201]).toContain(list.status);
+    const anchor = await asUser(actor)(
+      request(app)
+        .post("/api/contacts")
+        .send({ name: `${label} Exported` }),
+    );
+    expect(anchor.status).toBe(201);
+    await asUser(actor)(
+      request(app)
+        .post(`/api/lists/${list.body.id}/members`)
+        .send({ contactId: anchor.body.id }),
+    );
+    await asUser(actor)(
+      request(app)
+        .post(`/api/contacts/${anchor.body.id}/interactions`)
+        .send({ type: "note", title: `${label} export note` }),
+    );
+    await asUser(actor)(
+      request(app)
+        .post(`/api/contacts/${anchor.body.id}/action-items`)
+        .send({ title: `${label} export task`, dueAt: "2027-03-03" }),
+    );
+    // A merge writes the audit row, which is the sixth table.
+    const duplicate = await asUser(actor)(
+      request(app)
+        .post("/api/contacts")
+        .send({ name: `${label} Exported` }),
+    );
+    expect(duplicate.status).toBe(201);
+    const merged = await asUser(actor)(
+      request(app)
+        .post("/api/contacts/merge")
+        .send({ primaryId: anchor.body.id, duplicateId: duplicate.body.id }),
+    );
+    expect(merged.status).toBe(200);
+    return {
+      listId: list.body.id as string,
+      contactId: anchor.body.id as string,
+    };
+  };
+
+  let filledA: { listId: string; contactId: string };
+  let filledB: { listId: string; contactId: string };
+
+  beforeAll(async () => {
+    filledA = await fill(A, "alice");
+    filledB = await fill(B, "bob");
+  });
+
+  it("GET /api/export/json: every table holds only the caller's rows", async () => {
+    const res = await asUser(B)(request(app).get("/api/export/json"));
+    expect(res.status).toBe(200);
+
+    const payload = JSON.parse(res.text) as {
+      contacts: { id: string; ownerId: string }[];
+      interactions: { ownerId: string }[];
+      lists: { id: string; ownerId: string }[];
+      listMembers: { listId: string }[];
+      actionItems: { ownerId: string }[];
+      mergeLog: { ownerId: string }[];
+    };
+
+    // Every table has to be non-empty, or "only B's rows" is a claim about
+    // six empty arrays.
+    expect(payload.contacts.length).toBeGreaterThan(0);
+    expect(payload.interactions.length).toBeGreaterThan(0);
+    expect(payload.lists.length).toBeGreaterThan(0);
+    expect(payload.listMembers.length).toBeGreaterThan(0);
+    expect(payload.actionItems.length).toBeGreaterThan(0);
+    expect(payload.mergeLog.length).toBeGreaterThan(0);
+
+    for (const row of payload.contacts) expect(row.ownerId).toBe(B.user.id);
+    for (const row of payload.interactions) expect(row.ownerId).toBe(B.user.id);
+    for (const row of payload.lists) expect(row.ownerId).toBe(B.user.id);
+    for (const row of payload.actionItems) expect(row.ownerId).toBe(B.user.id);
+    for (const row of payload.mergeLog) expect(row.ownerId).toBe(B.user.id);
+
+    // list_members carries no owner of its own, so its proof is that every
+    // membership names a list this export already returned.
+    const listIds = new Set(payload.lists.map((l) => l.id));
+    for (const row of payload.listMembers) {
+      expect(listIds.has(row.listId)).toBe(true);
+    }
+
+    // B's own rows are there, so "no id of A's" is not passing because the
+    // export is empty.
+    expect(res.text).toContain(filledB.contactId);
+    expect(res.text).toContain(filledB.listId);
+
+    // The blunt form of the same claim: not one of A's ids appears anywhere
+    // in the bytes, in any table, at any nesting depth.
+    expect(res.text).not.toContain(zebulonId);
+    expect(res.text).not.toContain(filledA.contactId);
+    expect(res.text).not.toContain(filledA.listId);
+    for (const id of seedA.contactIds) expect(res.text).not.toContain(id);
+    for (const id of seedA.listIds) expect(res.text).not.toContain(id);
+  });
+
+  it("GET /api/export/json: names the account in the download filename", async () => {
+    const res = await asUser(B)(request(app).get("/api/export/json"));
+    expect(res.headers["content-disposition"]).toContain(
+      `contrack-export-${B.user.username}-`,
+    );
+  });
+
+  it("GET /api/export/csv: lists only the caller's contacts", async () => {
+    const res = await asUser(B)(request(app).get("/api/export/csv"));
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("bob Exported");
+    expect(res.text).not.toContain(ZEBULON);
+    expect(res.text).not.toContain("alice Contact");
+    expect(res.headers["content-disposition"]).toContain(
+      `contrack-contacts-${B.user.username}-`,
+    );
+  });
+
+  it("GET /api/export/json: still gives the owner their own rows", async () => {
+    const res = await asUser(A)(request(app).get("/api/export/json"));
+    expect(res.status).toBe(200);
+    expect(res.text).toContain(zebulonId);
+    expect(res.text).toContain(filledA.contactId);
+  });
+});
+
+describe("the MCP surface answers for the caller's own account", () => {
+  const RARE_TAG = "quarrington-actuary";
+  const RARE_INDUSTRY = "Actuarial Cartography";
+  const RARE_NOTE = "Zebulonian quarterly synopsis";
+
+  let dueA: string;
+  let dueB: string;
+  let ghostB: string;
+  let trashedB: string;
+  let mergedB: string;
+
+  beforeAll(async () => {
+    const post = async (actor: Actor, body: Record<string, unknown>) => {
+      const res = await asUser(actor)(
+        request(app).post("/api/contacts").send(body),
+      );
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    dueA = await post(A, {
+      name: "Quarrington Tagholder",
+      industry: RARE_INDUSTRY,
+      tags: [RARE_TAG],
+      nextFollowUpAt: "2020-01-01",
+    });
+    dueB = await post(B, { name: "Bob Due", nextFollowUpAt: "2020-01-01" });
+
+    const note = await asUser(A)(
+      request(app)
+        .post(`/api/contacts/${dueA}/interactions`)
+        .send({ type: "note", title: RARE_NOTE }),
+    );
+    expect([200, 201]).toContain(note.status);
+
+    // Two rows the MCP query must skip, both B's own.
+    trashedB = await post(B, { name: "Bob Binned" });
+    const gone = await asUser(B)(
+      request(app).delete(`/api/contacts/${trashedB}`),
+    );
+    expect(gone.status).toBe(200);
+    ghostB = await post(B, { name: "Bob Ghost" });
+    sqlite.prepare("UPDATE contacts SET isGhost = 1 WHERE id = ?").run(ghostB);
+
+    // A soft merge is the third kind of row the app hides. It sets
+    // canonicalId and leaves deletedAt and isGhost alone, so neither of the
+    // other two filters reaches it.
+    const keeper = await post(B, { name: "Bob Twin" });
+    mergedB = await post(B, { name: "Bob Twin" });
+    softMergeContacts(B.scope, keeper, mergedB, 0.99, "same person", "test");
+    expect(snapshotRow("contacts", mergedB)?.canonicalId).toBe(keeper);
+    expect(snapshotRow("contacts", mergedB)?.deletedAt).toBeNull();
+  });
+
+  const query = (actor: Actor) =>
+    asUser(actor)(
+      request(app).get("/api/query/contacts").query({ limit: 200 }),
+    );
+
+  it("GET /api/query/contacts: returns only the caller's rows", async () => {
+    const forB = await query(B);
+    expect(forB.status).toBe(200);
+    expect(forB.body.length).toBeGreaterThan(0);
+    for (const row of forB.body as { ownerId: string }[]) {
+      expect(row.ownerId).toBe(B.user.id);
+    }
+    expect(ids(forB.body)).not.toContain(zebulonId);
+    expect(ids(forB.body)).not.toContain(dueA);
+  });
+
+  it("GET /api/query/contacts: leaves out the caller's trashed, ghost and merged rows", async () => {
+    const forB = await query(B);
+    expect(ids(forB.body)).not.toContain(trashedB);
+    expect(ids(forB.body)).not.toContain(ghostB);
+    expect(ids(forB.body)).not.toContain(mergedB);
+    // All three rows are still B's, so this is a visibility fix and not a
+    // scope one. An MCP client acting on a merged id would write an
+    // interaction onto a record the app never shows again.
+    expect(snapshotRow("contacts", trashedB)?.ownerId).toBe(B.user.id);
+    expect(snapshotRow("contacts", ghostB)?.ownerId).toBe(B.user.id);
+    expect(snapshotRow("contacts", mergedB)?.ownerId).toBe(B.user.id);
+  });
+
+  it("GET /api/contacts/action-items: returns only the caller's due contacts", async () => {
+    const forB = await asUser(B)(
+      request(app).get("/api/contacts/action-items"),
+    );
+    const forA = await asUser(A)(
+      request(app).get("/api/contacts/action-items"),
+    );
+
+    expect(forB.status).toBe(200);
+    expect(ids(forB.body)).toContain(dueB);
+    expect(ids(forB.body)).not.toContain(dueA);
+    expect(ids(forA.body)).toContain(dueA);
+    expect(ids(forA.body)).not.toContain(dueB);
+  });
+
+  it("GET /api/tags: does not carry another account's tag", async () => {
+    const forB = await asUser(B)(request(app).get("/api/tags"));
+    const forA = await asUser(A)(request(app).get("/api/tags"));
+
+    expect(forB.status).toBe(200);
+    expect(forA.body).toContain(RARE_TAG);
+    expect(forB.body).not.toContain(RARE_TAG);
+  });
+
+  it("GET /api/industries: does not carry another account's industry", async () => {
+    const forB = await asUser(B)(request(app).get("/api/industries"));
+    const forA = await asUser(A)(request(app).get("/api/industries"));
+
+    expect(forB.status).toBe(200);
+    expect(forA.body).toContain(RARE_INDUSTRY);
+    expect(forB.body).not.toContain(RARE_INDUSTRY);
+  });
+
+  it("GET /api/interactions/search: finds nothing of another account's", async () => {
+    const forB = await asUser(B)(
+      request(app).get("/api/interactions/search").query({ q: "Zebulonian" }),
+    );
+    const forA = await asUser(A)(
+      request(app).get("/api/interactions/search").query({ q: "Zebulonian" }),
+    );
+
+    expect(forB.status).toBe(200);
+    expect(forB.body).toEqual([]);
+    expect(forA.body.length).toBeGreaterThan(0);
+    expect((forA.body as { title: string }[]).map((r) => r.title)).toContain(
+      RARE_NOTE,
+    );
+  });
+
+  it("GET /api/timeline: returns only the caller's interactions", async () => {
+    const forB = await asUser(B)(
+      request(app).get("/api/timeline").query({ limit: 200 }),
+    );
+    expect(forB.status).toBe(200);
+    expect(forB.body.length).toBeGreaterThan(0);
+    for (const row of forB.body as { ownerId: string; contactId: string }[]) {
+      expect(row.ownerId).toBe(B.user.id);
+      expect(snapshotRow("contacts", row.contactId)?.ownerId).toBe(B.user.id);
+    }
+    for (const id of seedA.interactionIds) {
+      expect(ids(forB.body)).not.toContain(id);
+    }
+  });
+
+  it("answers a personal token for that token's own account", async () => {
+    // Phase 3 adds the endpoint that mints one. The lookup already works, so
+    // the row goes in by hand, the way api.auth.test.ts does it.
+    const secret = "ctk_" + "m".repeat(43);
+    const hash = crypto.createHash("sha256").update(secret).digest("hex");
+    sqlite
+      .prepare(
+        `INSERT INTO api_tokens (id, userId, name, tokenHash, tokenPrefix, expiresAt, revokedAt)
+         VALUES ('tok-mcp', ?, 'An MCP client', ?, ?, NULL, NULL)`,
+      )
+      .run(B.user.id, hash, secret.slice(0, 12));
+
+    try {
+      const res = await request(app)
+        .get("/api/query/contacts")
+        .query({ limit: 200 })
+        .set("Authorization", `Bearer ${secret}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.length).toBeGreaterThan(0);
+      for (const row of res.body as { ownerId: string }[]) {
+        expect(row.ownerId).toBe(B.user.id);
+      }
+      expect(ids(res.body)).not.toContain(zebulonId);
+
+      const timeline = await request(app)
+        .get("/api/timeline")
+        .query({ limit: 200 })
+        .set("Authorization", `Bearer ${secret}`);
+      expect(timeline.status).toBe(200);
+      // Without this the loop below runs zero times on an empty body and the
+      // assertion reports green for a route that returned nothing.
+      expect(timeline.body.length).toBeGreaterThan(0);
+      for (const row of timeline.body as { ownerId: string }[]) {
+        expect(row.ownerId).toBe(B.user.id);
+      }
+    } finally {
+      sqlite.prepare("DELETE FROM api_tokens WHERE id = 'tok-mcp'").run();
+    }
+  });
+});
+
+// =============================================================================
 // The matrix and the manifest agree
 // =============================================================================
 
@@ -2380,22 +2834,33 @@ describe("matrix coverage", () => {
   });
 });
 
-describe("routes still waiting for their sub-phase", () => {
-  for (const route of scoped.filter((r) => !r.isolated)) {
-    it.todo(`${key(route)}: user B cannot reach user A's data`);
-  }
-});
-
 /**
- * Collections need a second assertion beyond "B cannot read A's row by id":
- * the list itself must not leak A's rows into B's response, which is the
- * failure mode a per-id check cannot catch.
+ * Phase 2 generated one `it.todo` here per scoped route it had not reached,
+ * so a route added mid-phase arrived as a todo rather than as nothing at all.
+ * Sub-phase 2i closed the phase with none left, and the generator became the
+ * assertion it had been standing in for.
+ *
+ * What this can check is that every `scoped` route is `isolated`, and
+ * `isolated` flips only when a test for it is added to `COVERED` above. What
+ * it cannot check is the kind of test: a collection needs a second proof
+ * beyond "B cannot read A's row by id", because a per-id check says nothing
+ * about whether A's rows appear in B's list. Nothing in the manifest can
+ * express that difference, so it stays a review rule, and the collections are
+ * listed here to name what the rule applies to.
  */
-describe("list endpoints still waiting for their sub-phase", () => {
-  const collections = scoped.filter(
-    (r) => r.method === "GET" && !r.path.includes("/:") && !r.isolated,
-  );
-  for (const route of collections) {
-    it.todo(`${key(route)}: returns only the caller's rows`);
-  }
+describe("no scoped route is waiting for its sub-phase", () => {
+  it("has a matrix test for every scoped route", () => {
+    const waiting = scoped.filter((r) => !r.isolated).map(key);
+    expect(waiting, "scoped routes with no test in this file").toEqual([]);
+  });
+
+  it("counts the collections that owe a list test as well as a 404 test", () => {
+    const collections = scoped
+      .filter((r) => r.method === "GET" && !r.path.includes("/:"))
+      .map(key);
+    // Every one of them is covered above. The number is here so that adding a
+    // collection route shows up in the diff of this file.
+    expect(collections).toHaveLength(31);
+    for (const k of collections) expect(COVERED).toContain(k);
+  });
 });
