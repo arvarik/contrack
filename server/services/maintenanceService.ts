@@ -39,12 +39,15 @@ export interface MaintenanceCounts {
 /**
  * Remove what nobody needs any more, and say how much went.
  *
- * Every cut-off is computed by SQLite rather than by JavaScript, so the
- * comparison is between two values in the same format that the columns are
- * stored in. Mixing an ISO string from `new Date()` with a
- * `CURRENT_TIMESTAMP` column compares `2026-09-10T05:33:50.050Z` against
- * `2026-09-10 05:33:50`, and the `T` sorts after a space, which quietly makes
- * every cut-off a day out.
+ * Every cut-off is computed by SQLite rather than by JavaScript, and every
+ * column that might not be in SQLite's own format is read through
+ * `datetime()`. Two of these columns are written by `new Date().toISOString()`
+ * rather than by `CURRENT_TIMESTAMP`, and SQLite compares TEXT byte by byte:
+ * `2026-09-10T15:41:07.774Z` against `2026-09-10 16:41:07` differs first at
+ * the `T`, which sorts after a space, so a session that expired an hour ago
+ * looked as though it had not. `datetime()` reads both formats, and a value it
+ * cannot read becomes NULL, which keeps the row rather than removing one this
+ * cannot reason about.
  *
  * Never throws. A sweep that fails is a warning in the log and a retry
  * tomorrow, not a reason to take the process down.
@@ -67,7 +70,9 @@ export function runDailyMaintenance(): MaintenanceCounts {
       .run(`-${AUDIT_RETENTION_DAYS} days`).changes;
 
     counts.expiredSessions = sqlite
-      .prepare(`DELETE FROM sessions WHERE expiresAt <= datetime('now')`)
+      .prepare(
+        `DELETE FROM sessions WHERE datetime(expiresAt) <= datetime('now')`,
+      )
       .run().changes;
 
     // A revoked token ages out. An expired one stays, because the list is
@@ -87,7 +92,7 @@ export function runDailyMaintenance(): MaintenanceCounts {
       .prepare(
         `DELETE FROM invitations
           WHERE acceptedAt IS NULL
-            AND (revokedAt IS NOT NULL OR expiresAt < datetime('now'))
+            AND (revokedAt IS NOT NULL OR datetime(expiresAt) < datetime('now'))
             AND createdAt < datetime('now', ?)`,
       )
       .run(`-${DEAD_INVITATION_RETENTION_DAYS} days`).changes;

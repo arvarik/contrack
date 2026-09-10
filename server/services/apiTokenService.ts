@@ -176,12 +176,19 @@ export function resolveToken(
 ): { user: User; tokenId: string } | null {
   const row = sqlite
     .prepare(
-      `SELECT id, userId, lastUsedAt FROM api_tokens
+      // `datetime(expiresAt)` and not the bare column. `createToken` writes an
+      // ISO string and `datetime('now')` renders a space-separated one, and
+      // SQLite compares TEXT byte by byte: a `T` sorts after a space, so an
+      // expiry from earlier today looked later than now and the token kept
+      // working until the UTC date rolled over. `datetime()` reads both
+      // formats, and a value it cannot read becomes NULL, which makes the
+      // comparison false and refuses the token. That is the safe direction
+      // for a credential.
+      `SELECT id, userId FROM api_tokens
         WHERE tokenHash = ? AND revokedAt IS NULL
-          AND (expiresAt IS NULL OR expiresAt > datetime('now'))`,
+          AND (expiresAt IS NULL OR datetime(expiresAt) > datetime('now'))`,
     )
-    .get(hashToken(presented)) as
-    { id: string; userId: string; lastUsedAt: string | null } | undefined;
+    .get(hashToken(presented)) as { id: string; userId: string } | undefined;
   if (!row) return null;
 
   const user = getUserById(row.userId);

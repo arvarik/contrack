@@ -106,6 +106,25 @@ the ones needed here are repeated in section 2.
 >   `Europe/Berlin`. East of UTC it stamps on every request, west of it the
 >   stamp stops moving until the drift is exhausted. It is Phase 1 code and
 >   outside this phase's remit, so it is reported rather than changed.
+> - **Three more timestamp comparisons had the same bug and are fixed.** An
+>   adversarial review of the second pull request found `expiresAt` on
+>   `api_tokens`, on `sessions` and on `invitations` compared as raw text
+>   against `datetime('now')`, while `createToken`, `createSession` and
+>   `createInvitation` all write ISO strings. An expired personal token kept
+>   working until the UTC date rolled over, up to nearly a full day. Every one
+>   of those comparisons now reads the column through `datetime()`, which
+>   parses both formats and yields NULL for a value it cannot read, so an
+>   unreadable expiry refuses a credential and keeps a row.
+>   `listSessions` in `server/services/authService.ts` is Phase 1 code and is
+>   fixed alongside them, because leaving it would make an account's own
+>   session list disagree with the count the admin API reports.
+> - **Both rate limiters could be escaped by capitalising a letter.** Express
+>   routes case-insensitively unless the app sets `case sensitive routing`,
+>   and this one does not, so `GET /API/Contacts` returns 200. The cost
+>   patterns matched the path as it arrived, so `GET /API/Dashboard/Insight`
+>   reached the same billable handler while both limiters skipped it: measured
+>   at forty requests with no refusal against ten refusals for the same forty
+>   in lower case. `isAiCostPath` lowercases the path first.
 > - **`?scope=all` on the AI stats feed omits `description`.** The document
 >   says the feed returns instance totals and a `byUser` breakdown, and does
 >   not say what a row holds. `description` is the one column that can carry

@@ -299,6 +299,32 @@ describe("a personal token", () => {
       (await withToken(expired)(request(app).get("/api/contacts"))).status,
     ).toBe(401);
 
+    // An expiry an hour ago, written the way createToken writes one. The
+    // stamp above cannot catch a format mismatch, because its year differs
+    // and the date bytes alone settle the comparison. This one differs from
+    // `datetime('now')` first at the `T`, which sorts after a space, so
+    // without `datetime()` around the column the token was still live.
+    const today = await mintToken(other, "Expired an hour ago");
+    sqlite
+      .prepare("UPDATE api_tokens SET expiresAt = ? WHERE name = ?")
+      .run(
+        new Date(Date.now() - 3600_000).toISOString(),
+        "Expired an hour ago",
+      );
+    expect(
+      (await withToken(today)(request(app).get("/api/contacts"))).status,
+    ).toBe(401);
+
+    // And one that expires in an hour still works, so the fix did not simply
+    // refuse everything with an expiry.
+    const soon = await mintToken(other, "Expires in an hour");
+    sqlite
+      .prepare("UPDATE api_tokens SET expiresAt = ? WHERE name = ?")
+      .run(new Date(Date.now() + 3600_000).toISOString(), "Expires in an hour");
+    expect(
+      (await withToken(soon)(request(app).get("/api/contacts"))).status,
+    ).toBe(200);
+
     const live = await mintToken(other, "Live one");
     await as(owner)(request(app).post(`/api/admin/users/${other.id}/disable`));
     expect(

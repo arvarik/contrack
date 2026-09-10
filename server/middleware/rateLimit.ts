@@ -125,9 +125,20 @@ const AI_COST_PATTERNS: RegExp[] = [
   /^\/api\/link-preview/,
 ];
 
-/** True when this path is one the two limiters below cover. */
+/**
+ * True when this path is one the two limiters below cover.
+ *
+ * The path is lowercased first. Express routes case-insensitively unless the
+ * app sets `case sensitive routing`, and this one does not, so
+ * `GET /API/Dashboard/Insight` reaches the same handler and makes the same
+ * billable provider call as the lower-case spelling. Matching the patterns
+ * against the path as it arrived let one capital letter escape both limiters
+ * entirely: measured at forty requests with no refusal, against ten refusals
+ * for the same forty spelled in lower case.
+ */
 export function isAiCostPath(path: string): boolean {
-  return AI_COST_PATTERNS.some((p) => p.test(path));
+  const normalized = path.toLowerCase();
+  return AI_COST_PATTERNS.some((p) => p.test(normalized));
 }
 
 const aiLimiter = createRateLimiter({

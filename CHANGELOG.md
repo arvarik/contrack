@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Phase 3.** An expired personal token is refused from the moment it
+  expires. The expiry check compared a database timestamp against a
+  JavaScript one, and a space sorts before a `T`, so a token whose expiry fell
+  earlier on the same UTC day still worked, in the worst case for nearly a
+  full day past the time it was meant to stop.
+- **Phase 3.** A capital letter no longer escapes the AI rate limits. This
+  app routes URLs case-insensitively, so `/API/Dashboard/Insight` reaches the
+  same handler and makes the same billable call as the lower-case spelling,
+  and neither limiter was counting it.
+- **Phase 3.** The daily sweep removes a session or an invitation that expired
+  earlier the same day, rather than leaving it for the next day's run, and a
+  session that has expired no longer counts towards the session totals an
+  account or an administrator sees.
 - **Phase 3.** A personal token's `lastUsedAt` is stamped at most once an
   hour, as it was always meant to be. The hourly check compared a database
   timestamp (`2026-09-10 05:33:50`) against a JavaScript one

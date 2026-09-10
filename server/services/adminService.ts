@@ -124,8 +124,12 @@ export function listUsers(ctx: AdminContext): AdminUserSummary[] {
       WHERE deletedAt IS NULL GROUP BY ownerId`,
   );
   const sessions = countByOwner(
+    // `datetime(expiresAt)`, because `createSession` writes an ISO string
+    // while `datetime('now')` renders a space-separated one, and a `T` sorts
+    // after a space. Without it a session that expired earlier today counts
+    // as live until the UTC date rolls over.
     `SELECT userId AS k, COUNT(*) AS n FROM sessions
-      WHERE expiresAt > datetime('now') GROUP BY userId`,
+      WHERE datetime(expiresAt) > datetime('now') GROUP BY userId`,
   );
   const tokens = countByOwner(
     `SELECT userId AS k, COUNT(*) AS n FROM api_tokens
@@ -712,7 +716,8 @@ function summaryOf(id: string, ctx: AdminContext): AdminUserSummary {
       id,
     ),
     sessionCount: scalar(
-      `SELECT COUNT(*) AS n FROM sessions WHERE userId = ? AND expiresAt > datetime('now')`,
+      `SELECT COUNT(*) AS n FROM sessions
+        WHERE userId = ? AND datetime(expiresAt) > datetime('now')`,
       id,
     ),
     tokenCount: scalar(

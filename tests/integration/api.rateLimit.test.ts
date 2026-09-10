@@ -62,6 +62,8 @@ const as = (who: Handle) => (r: request.Test) => r.set("Cookie", who.cookie);
 
 let alice: Handle;
 let bob: Handle;
+/** A third account, so sixty requests fit without anybody reaching thirty. */
+let carol: Handle;
 
 beforeAll(async () => {
   process.env.AUTH_REQUIRED = "true";
@@ -99,7 +101,30 @@ beforeAll(async () => {
       newPassword: PASSWORD,
     });
   bob = { id: created.body.user.id, username: "bob", cookie };
+  carol = await addMember("carol");
 });
+
+/** Create a member through the admin API and finish its forced change. */
+async function addMember(username: string): Promise<Handle> {
+  const created = await request(app)
+    .post("/api/admin/users")
+    .set("Cookie", alice.cookie)
+    .send({ email: `${username}@example.com`, username });
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  __resetAuthRateLimits();
+  const signedIn = await request(app)
+    .post("/api/auth/login")
+    .send({ identifier: username, password: created.body.temporaryPassword });
+  const cookie = (signedIn.headers["set-cookie"] as unknown as string[]) ?? [];
+  await request(app)
+    .post("/api/auth/change-password")
+    .set("Cookie", cookie)
+    .send({
+      currentPassword: created.body.temporaryPassword,
+      newPassword: PASSWORD,
+    });
+  return { id: created.body.user.id, username, cookie };
+}
 
 afterAll(() => {
   delete process.env.AUTH_REQUIRED;
@@ -180,22 +205,57 @@ describe("the per-account AI limiter", () => {
 
 describe("the per-IP AI limiter", () => {
   it("still refuses one machine at sixty a minute, whoever is signed in", async () => {
-    // Split across two accounts so neither reaches its own thirty first. The
-    // sixty-first request from this address is refused by the older limiter,
-    // which runs before anybody is identified.
-    for (let i = 0; i < 30; i++) {
-      expect((await as(alice)(request(app).get(COUNTED_PATH))).status).not.toBe(
-        429,
-      );
-    }
-    for (let i = 0; i < 30; i++) {
-      expect((await as(bob)(request(app).get(COUNTED_PATH))).status).not.toBe(
-        429,
-      );
+    // Twenty each across three accounts, so nobody reaches their own thirty
+    // and the per-account limiter never fires. Splitting across two would
+    // have put the sixty-first request at somebody's thirty-first, and the
+    // assertion could not then tell which limiter refused it: the test passed
+    // with the per-IP limiter unmounted altogether.
+    for (const who of [alice, bob, carol]) {
+      for (let i = 0; i < 20; i++) {
+        const res = await as(who)(request(app).get(COUNTED_PATH));
+        expect(res.status, `${who.username} ${i + 1}`).not.toBe(429);
+      }
     }
 
-    const refused = await as(bob)(request(app).get(COUNTED_PATH));
+    const refused = await as(carol)(request(app).get(COUNTED_PATH));
     expect(refused.status).toBe(429);
     expect(Number(refused.headers["retry-after"])).toBeGreaterThan(0);
+    // The two limiters name themselves, and the message is the only thing
+    // that says which one answered.
+    expect(refused.body.error.message).toContain("AI endpoints");
+    expect(refused.body.error.message).not.toContain("for this account");
+  });
+
+  it("counts a request nobody has identified, unlike the per-account one", async () => {
+    // The per-IP limiter runs before attachPrincipal, which is what makes it
+    // the only protection against a caller with no credential at all.
+    for (let i = 0; i < 60; i++) {
+      const res = await request(app).get(COUNTED_PATH);
+      expect(res.status, `request ${i + 1}`).toBe(401);
+    }
+    const refused = await request(app).get(COUNTED_PATH);
+    expect(refused.status).toBe(429);
+    expect(refused.body.error.message).not.toContain("for this account");
+  });
+});
+
+describe("a path spelled with different capitals", () => {
+  it("is counted, because Express routes it to the same handler", async () => {
+    // Express routes case-insensitively unless the app sets
+    // `case sensitive routing`, and this one does not: GET /API/Contacts
+    // returns 200. So a capitalised AI path reaches the same billable handler,
+    // and matching the cost patterns against the path as it arrived let one
+    // capital letter escape both limiters entirely.
+    const reachable = await as(alice)(request(app).get("/API/Contacts"));
+    expect(reachable.status).toBe(200);
+
+    let refusals = 0;
+    for (let i = 0; i < 40; i++) {
+      const res = await as(alice)(
+        request(app).get("/API/Link-Preview/nothing"),
+      );
+      if (res.status === 429) refusals += 1;
+    }
+    expect(refusals).toBeGreaterThan(0);
   });
 });

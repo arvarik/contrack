@@ -703,7 +703,7 @@ export function listSessions(
     .prepare(
       `SELECT id, createdAt, expiresAt, lastSeenAt, userAgent
          FROM sessions
-        WHERE userId = ? AND expiresAt > datetime('now')
+        WHERE userId = ? AND datetime(expiresAt) > datetime('now')
         ORDER BY lastSeenAt DESC`,
     )
     .all(userId) as Omit<SessionInfo, "current">[];

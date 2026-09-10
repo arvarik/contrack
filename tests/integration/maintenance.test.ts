@@ -147,11 +147,16 @@ beforeEach(() => {
   resetAccounts();
   clearAll();
   owner = localOwnerId();
+  // tests/integration-setup.ts sets this for every integration file. A test
+  // that needs the sweep to run has to clear it itself: inheriting the
+  // deletion from another test's teardown made the schedule test pass only
+  // when something ran before it, and fail under any filter or reordering.
+  delete process.env.DISABLE_BACKGROUND_JOBS;
 });
 
 afterEach(() => {
   vi.useRealTimers();
-  delete process.env.DISABLE_BACKGROUND_JOBS;
+  process.env.DISABLE_BACKGROUND_JOBS = "true";
 });
 
 afterAll(() => {
@@ -177,6 +182,44 @@ describe("the daily sweep", () => {
     const counts = runDailyMaintenance();
     expect(counts.expiredSessions).toBe(1);
     expect(ids("sessions")).toEqual(["live"]);
+  });
+
+  it("removes one that expired earlier today, in the format a sign-in writes", () => {
+    // `createSession` writes `new Date(...).toISOString()`, not
+    // `CURRENT_TIMESTAMP`. SQLite compares TEXT byte by byte, and the two
+    // formats differ first at the `T`, which sorts after a space, so a
+    // session that expired an hour ago looked as though it had not. Every
+    // other fixture here is seeded in SQLite's format and cannot see that.
+    insertSession(
+      "iso-expired",
+      new Date(Date.now() - 3600_000).toISOString(),
+      owner,
+    );
+    insertSession(
+      "iso-live",
+      new Date(Date.now() + 3600_000).toISOString(),
+      owner,
+    );
+
+    const counts = runDailyMaintenance();
+    expect(counts.expiredSessions).toBe(1);
+    expect(ids("sessions")).toEqual(["iso-live"]);
+  });
+
+  it("removes an invitation that expired earlier today, in the same format", () => {
+    // `createInvitation` writes an ISO string too.
+    insertInvitation("iso-dead", owner, {
+      createdAt: daysAgo(DEAD_INVITATION_RETENTION_DAYS + 1),
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+    insertInvitation("iso-alive", owner, {
+      createdAt: daysAgo(DEAD_INVITATION_RETENTION_DAYS + 1),
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    });
+
+    const counts = runDailyMaintenance();
+    expect(counts.deadInvitations).toBe(1);
+    expect(ids("invitations")).toEqual(["iso-alive"]);
   });
 
   it("ages out a revoked token and keeps an expired one", () => {
