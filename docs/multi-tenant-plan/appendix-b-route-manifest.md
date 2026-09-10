@@ -9,7 +9,7 @@ defined in [03-architecture.md](03-architecture.md) section 5.3 and
 | `public` | reachable with no credential |
 | `session-self` | the caller's own account, needs a browser session |
 | `scoped` | owned data for the caller's scope |
-| `admin` | `requireAdmin` |
+| `admin` | `requireAdmin`, mounted on the route itself since Phase 3 |
 | `instance-read` | any authenticated caller, no owned data touched |
 
 `isolated` starts `false` for every `scoped` route and flips in Phase 2. It is `true` for all eighty of them as of sub-phase 2i, and the manifest test fails on a `scoped` route that is not. A
@@ -24,7 +24,7 @@ the route files:
 - `GET /api/debug/cache-stats` is registered in `server.ts:97-102`, outside `createApp()`, so a supertest app never has it. Phase 0 moves it inside `createApp()` behind the same `NODE_ENV` guard and marks it `devOnly`.
 - `POST /api/dev/seed-duplicates` is registered only when `NODE_ENV !== "production"` (`routes/dedupe/scan.ts:138`). Marked `devOnly`.
 - `GET /uploads/*` is the `express.static` layer (`layer.name === "serveStatic"`, no `route`). Its manifest row is `USE /uploads`, class `static`; `guardUploads` (Phase 2a) is what scopes it.
-- `PUT /api/auth/session-policy` has a session guard only (`requireSession`, which Phase 1 renamed from `requireUser`): every member can change the instance session lifetime. The `admin` class below is the target, set in Phase 2 and enforced in Phase 3.
+- `PUT /api/auth/session-policy` had a session guard only (`requireSession`, which Phase 1 renamed from `requireUser`) through 1.5.5: every member could change the instance session lifetime. Phase 2 set the `admin` class and Phase 3 mounted `requireAdmin` behind `requireSession`, so a member now gets `403 ADMIN_REQUIRED`.
 - `guardUploads` does not exist in 1.5.5. The `scoped (via guardUploads)` class is a Phase 2 target.
 - Express 5 does not keep mount path strings, so the manifest test records them with a `use` wrapper (Phase 0 task 0.3).
 
@@ -147,25 +147,30 @@ the route files:
 
 ## Routes added in Phase 3
 
-| Method | Path | Class |
-| ------ | ---- | ----- |
-| POST | `/api/auth/register` | public |
-| POST | `/api/auth/accept-invitation` | public |
-| GET | `/api/auth/tokens` | session-self |
-| POST | `/api/auth/tokens` | session-self |
-| DELETE | `/api/auth/tokens/:id` | session-self |
-| GET | `/api/admin/users` | admin |
-| POST | `/api/admin/users` | admin |
-| GET | `/api/admin/users/:id` | admin |
-| PATCH | `/api/admin/users/:id` | admin |
-| POST | `/api/admin/users/:id/reset-password` | admin |
-| POST | `/api/admin/users/:id/disable` | admin |
-| POST | `/api/admin/users/:id/enable` | admin |
-| GET | `/api/admin/users/:id/export` | admin |
-| DELETE | `/api/admin/users/:id` | admin |
-| GET | `/api/admin/invitations` | admin |
-| POST | `/api/admin/invitations` | admin |
-| DELETE | `/api/admin/invitations/:id` | admin |
-| GET | `/api/admin/settings` | admin |
-| PUT | `/api/admin/settings` | admin |
-| GET | `/api/admin/audit` | admin |
+The first Phase 3 pull request added the thirteen `/api/admin` rows and
+`POST /api/auth/accept-invitation`. The token routes, `POST /api/auth/register`
+and the two `/api/admin/settings` rows follow in the second one, and are the
+six rows marked "not yet" below.
+
+| Method | Path | Class | Status |
+| ------ | ---- | ----- | ------ |
+| POST | `/api/auth/register` | public | not yet |
+| POST | `/api/auth/accept-invitation` | public | shipped |
+| GET | `/api/auth/tokens` | session-self | not yet |
+| POST | `/api/auth/tokens` | session-self | not yet |
+| DELETE | `/api/auth/tokens/:id` | session-self | not yet |
+| GET | `/api/admin/users` | admin | shipped |
+| POST | `/api/admin/users` | admin | shipped |
+| GET | `/api/admin/users/:id` | admin | shipped |
+| PATCH | `/api/admin/users/:id` | admin | shipped |
+| POST | `/api/admin/users/:id/reset-password` | admin | shipped |
+| POST | `/api/admin/users/:id/disable` | admin | shipped |
+| POST | `/api/admin/users/:id/enable` | admin | shipped |
+| GET | `/api/admin/users/:id/export` | admin | shipped |
+| DELETE | `/api/admin/users/:id` | admin | shipped |
+| GET | `/api/admin/invitations` | admin | shipped |
+| POST | `/api/admin/invitations` | admin | shipped |
+| DELETE | `/api/admin/invitations/:id` | admin | shipped |
+| GET | `/api/admin/settings` | admin | not yet |
+| PUT | `/api/admin/settings` | admin | not yet |
+| GET | `/api/admin/audit` | admin | shipped |

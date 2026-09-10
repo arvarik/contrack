@@ -4,7 +4,7 @@
 
 ## Current Focus
 
-_No active feature — ready for next cycle._
+Phase 3 of `docs/multi-tenant-plan/`. The accounts-and-admin pull request is done; tokens, open registration, the per-user AI limiter, the daily maintenance interval and the legacy `API_TOKEN` path follow in the second one.
 
 ## Feature Lifecycle
 
@@ -12,9 +12,9 @@ _Empty — start a new feature with `/step1-spec`._
 
 ## Current State
 
-**Phase:** Idle
+**Phase:** Multi-tenancy Phase 3 (accounts, roles, and the admin API)
 
-**Test Suite:** 970 tests (970 passing, 0 todo) — unit + integration (real SQLite), 0 regressions. Phase 2 of the multi-tenancy plan is complete: the isolation matrix has no todo left, every `scoped` route is `isolated: true` in `ROUTE_MANIFEST`, `npm run lint` runs `tenant-lint --strict "server/**/*.ts"` over the whole server tree, and `tests/integration/tenancy.queryPlans.test.ts` proves the owner predicate is an index seek for the ten relational statements the plan names, with the eleventh, the full-text query, pinned through its `MATCH` expression.
+**Test Suite:** 1091 tests (1091 passing, 0 todo) — unit + integration (real SQLite), 0 regressions. Phase 3 of the multi-tenancy plan is under way. The first pull request mounts `requireAdmin` on every route the manifest classes `admin` and adds thirteen more under `/api/admin`: the account list, create, patch, reset-password, disable, enable, export and delete, plus invitations and the audit log. `tests/integration/api.admin.test.ts` calls every admin route as a member and as an admin, and covers the temporary-password gate, the invitation life cycle, disable and enable, and the purge, which removes an account of 10,000 contacts in 147 ms against a two-second budget. Phase 2 remains complete: the isolation matrix has no todo left, every `scoped` route is `isolated: true` in `ROUTE_MANIFEST`, `npm run lint` runs `tenant-lint --strict "server/**/*.ts"` over the whole server tree, and `tests/integration/tenancy.queryPlans.test.ts` proves the owner predicate is an index seek for the ten relational statements the plan names, with the eleventh, the full-text query, pinned through its `MATCH` expression.
 
 The "Stabilization & Polish" refactor sweep (Phases 2–4) is complete. The codebase now meets open-source release quality: every Express route is wrapped in `asyncHandler`, every operational error is an `AppError` subclass, every AI provider routes through `withTimeout`/`withRetry`/`parseAIJson`, every multi-step DB mutation runs inside a transaction, and every modal renders correctly as a bottom sheet on mobile.
 
