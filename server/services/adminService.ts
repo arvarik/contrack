@@ -562,14 +562,22 @@ export function deleteUser(
 
   const started = performance.now();
   purgeOwner(id);
-  removeUploads(id);
+  const uploadsRemoved = removeUploads(id);
 
   auditService.record({
     actorUserId: ctx.actor.id,
     action: "user.deleted",
     targetType: "user",
     targetId: id,
-    details: { username: target.username, ...counts },
+    // `uploadsRemoved` is only present when it is false. The audit row is the
+    // record an operator answers a deletion request from, so a purge that
+    // left files on disk has to say so rather than report the count it
+    // intended to remove.
+    details: {
+      username: target.username,
+      ...counts,
+      ...(uploadsRemoved ? {} : { uploadsRemoved: false }),
+    },
     ip: ctx.ip,
   });
   log.info(
@@ -637,9 +645,14 @@ export function purgeOwner(ownerId: string): void {
     //    not worth having.
     sqlite.prepare(`DELETE FROM contacts WHERE ownerId = ?`).run(ownerId);
 
-    // 4. The account. Cascades sessions, tokens, per-user settings and the
-    //    invitations it issued but nobody accepted. Audit rows and accepted
-    //    invitations keep their row with the actor set to NULL.
+    // 4. The account. Cascades sessions, tokens, per-user settings and every
+    //    invitation it issued, accepted ones included. `invitations.invitedBy`
+    //    is NOT NULL with ON DELETE CASCADE, so an accepted invitation cannot
+    //    keep its row with the inviter set to NULL the way an audit row does.
+    //    The plan says otherwise in two places and the schema is what decides
+    //    it. What survives is the `user.invitation.accepted` audit row, which
+    //    names the account that joined, so how somebody joined is still on
+    //    record after the person who invited them is gone.
     //
     //    This statement is also the check on everything above it. Every
     //    `ownerId` column references `users(id)` with ON DELETE RESTRICT, so
@@ -655,8 +668,12 @@ export function purgeOwner(ownerId: string): void {
  *
  * After, not inside: a filesystem removal cannot be rolled back, so doing it
  * first would delete the files of an account the database still has.
+ *
+ * @returns false when the directory is still there, so the audit row can say
+ *   so. A read-only volume, or a directory owned by another uid, is the case
+ *   this covers.
  */
-function removeUploads(ownerId: string): void {
+function removeUploads(ownerId: string): boolean {
   try {
     const avatars = ownerUploadDir(ownerId, "avatars");
     fs.rmSync(avatars, { recursive: true, force: true });
@@ -667,13 +684,17 @@ function removeUploads(ownerId: string): void {
     // Both live under uploads/u/<id>/. Removing the parent as well stops an
     // empty directory accumulating for every account ever deleted.
     fs.rmSync(path.dirname(avatars), { recursive: true, force: true });
+    return true;
   } catch (err) {
-    // The rows are already gone and the account cannot be reached. A file left
-    // behind is a disk-space problem, not a data-exposure one.
+    // The rows are already gone and no principal can ever match this owner
+    // segment again, so `guardUploads` refuses every path under it. A file
+    // left behind is a disk-space problem rather than an exposure one, which
+    // is why this does not fail the delete. It does have to be recorded.
     log.warn(
       "Admin",
       `Removed account ${ownerId} but its upload directory did not go: ${String(err)}`,
     );
+    return false;
   }
 }
 

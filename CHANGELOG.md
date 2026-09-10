@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answers `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it. Their
   own account settings stay reachable, which is where the change happens.
 
+### Fixed
+
+- **Phase 3.** An invitation link no longer reaches the access log. The link
+  carries its secret in a query string, and the invitee's browser sends it to
+  this server as an ordinary page request, so the one value the invitation
+  system keeps out of the database was landing in the request log instead.
+  The value of `token`, `secret` and `api_key` is replaced in every logged
+  URL.
+
 ### Changed
 
 - **Phase 3.** The fourteen routes the route manifest has classed `admin`
@@ -54,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted. An admin cannot disable or delete their own account. The local
   account that owns this device's data cannot be touched while authentication
   is off, because nobody can sign in as it.
+- **Phase 3.** The forced password change covers `PUT /api/auth/session-policy`
+  as well. That route sets how long every future session on the instance
+  lasts, and it lives in the auth router, which the gate exempts so that a
+  password change stays reachable. The exemption is now the six paths an
+  account with a temporary password actually needs.
 - **Phase 3.** Disabling an account ends its sessions at once and refuses its
   personal tokens while it is off. Enabling gives the tokens back. The
   sessions stay gone, because revoking one is a delete rather than a flag.

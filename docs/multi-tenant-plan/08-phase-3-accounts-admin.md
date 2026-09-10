@@ -57,9 +57,32 @@ the ones needed here are repeated in section 2.
 >   Section 3.2 says the local owner cannot be disabled or deleted while
 >   `isAuthRequired()` is false and gives no code for it. This one is added
 >   to the set in [13-api-changes.md](13-api-changes.md) section 1.
-> - **The purge measured 147 ms for 10,000 contacts and 10,000 emails**,
->   against a budget of two seconds, so the chunking fallback is documented
->   in `purgeOwner` and not built.
+> - **The purge measured 147 ms to 160 ms for 10,000 contacts and 10,000
+>   emails**, against a budget of two seconds, so the chunking fallback is
+>   documented in `purgeOwner` and not built.
+> - **Deleting an admin removes their accepted invitations as well.** Section
+>   3.3 and step 6 of 3.5 both say an accepted invitation keeps its row with
+>   `invitedBy` gone. It cannot: the column is `NOT NULL` with
+>   `ON DELETE CASCADE`, so the row goes. Both sections are corrected above
+>   and a test pins the real behaviour.
+>
+> Two things this pull request adds that the document does not ask for:
+>
+> - **`PUT /api/auth/session-policy` carries the forced-change guard on the
+>   route.** Section 3.4 says the gate exempts `/api/auth/*`, and that is
+>   what the first version did. The exemption covered the one instance
+>   setting that lives in the auth router, so an account holding only the
+>   password an admin handed it could set every future session on the
+>   instance to a year. The exemption is now a list of the six paths a
+>   forced-change account actually needs, and that route carries the guard
+>   itself because its router is mounted ahead of the middleware.
+> - **The access log redacts the invitation secret.** The link format the
+>   document specifies puts the secret in a query string, and the invitee's
+>   browser sends it to this server as `GET /join?token=...`. Morgan's `:url`
+>   token is `req.originalUrl`, so the one value the invitation system keeps
+>   out of the database would have sat in the access log instead.
+>   `redactUrlForLog` in `server/utils/helpers.ts` replaces it, and the
+>   built-in morgan token is overridden so every format is covered.
 
 ## 0. Context for the implementer
 
@@ -192,9 +215,14 @@ reuse the module-private `credentialLimiter`. It returns `404` for an unknown
 or malformed token (same body for both, no enumeration), `410` with
 `INVITATION_USED`, `INVITATION_EXPIRED`, or `INVITATION_REVOKED` otherwise.
 
-Deleting an admin cascades their pending invitations
-(`invitations.invitedBy ON DELETE CASCADE`). Accepted invitations keep their
-row with `invitedBy` gone. Document this in the admin UI copy (Phase 4).
+Deleting an admin cascades **every** invitation they issued, accepted ones
+included (`invitations.invitedBy` is `NOT NULL ... ON DELETE CASCADE`). An
+accepted invitation cannot keep its row with `invitedBy` set to NULL the way
+an audit row does, because the column is `NOT NULL`. What survives is the
+`user.invitation.accepted` audit row, which names the account that joined, so
+how somebody joined stays on record. Document this in the admin UI copy
+(Phase 4). Making the row survive would mean a nullable `invitedBy` with
+`ON DELETE SET NULL`, which is a schema change and not part of this phase.
 
 ### 3.4 Temporary password and forced change
 
@@ -221,7 +249,7 @@ Purge order, in one transaction, for `ownerId = target`:
 3. `DELETE FROM action_items`, `interactions` `WHERE ownerId = ?` (cascades `interaction_mentions`).
 4. `DELETE FROM lists WHERE ownerId = ?` (cascades `list_members`).
 5. `DELETE FROM contacts WHERE ownerId = ?` (cascades the ten child tables; `contacts_ad` removes index rows by `rowid`). One `DELETE FROM contacts_fts WHERE contacts_fts MATCH 'ownerTok:...'` can clear the owner's index rows in a single statement, measured at 17 ms per 5,000.
-6. `DELETE FROM users WHERE id = ?` (cascades `sessions`, `api_tokens`, `user_settings`, and the user's pending `invitations`; `audit_log.actorUserId`, `invitations.acceptedBy`, and `users.createdBy` become `NULL`).
+6. `DELETE FROM users WHERE id = ?` (cascades `sessions`, `api_tokens`, `user_settings`, and **every** invitation the user issued, accepted ones included; `audit_log.actorUserId`, `invitations.acceptedBy`, and `users.createdBy` become `NULL`). This statement is also the check on the five above it: every `ownerId` column is `ON DELETE RESTRICT`, so one owned row left anywhere makes it throw and rolls the transaction back.
 7. After commit: `fs.rm(ownerUploadDir(target, "avatars"), { recursive: true, force: true })` and the same for `files`.
 
 Guards, in this order: `409 LOCAL_OWNER_PROTECTED` while the target is the

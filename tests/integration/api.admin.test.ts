@@ -280,6 +280,7 @@ describe("managing accounts", () => {
         .post("/api/contacts")
         .send({ name: "Counted Contact", company: "Acme" }),
     );
+    issueToken(member.id);
   });
 
   it("names every account with its counts and marks the caller", async () => {
@@ -287,9 +288,13 @@ describe("managing accounts", () => {
     expect(res.status).toBe(200);
 
     const byName = Object.fromEntries(
-      (res.body.users as { username: string; sessionCount: number }[]).map(
-        (u) => [u.username, u],
-      ),
+      (
+        res.body.users as {
+          username: string;
+          sessionCount: number;
+          tokenCount: number;
+        }[]
+      ).map((u) => [u.username, u]),
     );
     // Securing the instance converted the local owner, so there is no `local`
     // row left to find. The describe below covers the instance that still has
@@ -305,7 +310,9 @@ describe("managing accounts", () => {
       role: "member",
       isSelf: false,
       contactCount: 1,
+      tokenCount: 1,
     });
+    expect(byName.listadmin.tokenCount).toBe(0);
     // The member signed in, so they hold a live session.
     expect(byName.listmember.sessionCount).toBeGreaterThan(0);
   });
@@ -452,6 +459,8 @@ describe("an account whose password an admin chose", () => {
   let admin: Handle;
   let created: { id: string; temporaryPassword: string };
   let cookie: string[];
+  /** A forced-change account that is also an admin. */
+  let adminCookie: string[];
 
   beforeAll(async () => {
     admin = await freshInstance("forceadmin");
@@ -465,6 +474,20 @@ describe("an account whose password an admin chose", () => {
       temporaryPassword: res.body.temporaryPassword,
     };
     cookie = await signIn("forceduser", created.temporaryPassword);
+
+    // A second account with the same forced change and the admin role, for
+    // the routes a member would be refused on for the other reason.
+    const asAdminToo = await as(admin)(
+      request(app).post("/api/admin/users").send({
+        email: "forcedadmin@example.com",
+        username: "forcedadmin",
+        role: "admin",
+      }),
+    );
+    adminCookie = await signIn(
+      "forcedadmin",
+      asAdminToo.body.temporaryPassword as string,
+    );
   });
 
   it("signs in with the temporary password", () => {
@@ -492,17 +515,14 @@ describe("an account whose password an admin chose", () => {
     expect(res.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
   });
 
-  it("names the exempt paths by the URL the client sent", async () => {
-    // The gate is mounted on /api and /uploads, and Express strips the mount
-    // prefix before a middleware sees `req.path`. Reading that instead of
-    // `originalUrl` would make /api/auth/x and /uploads/auth/x look alike.
-    // An unknown path under /api/auth is the one request that reaches the
-    // gate and must still pass through it.
+  it("exempts named paths rather than the whole auth namespace", async () => {
+    // The first shape of this gate exempted anything starting with
+    // /api/auth/, which quietly covered an unknown path under it as well.
     const res = await request(app)
       .get("/api/auth/no-such-endpoint")
       .set("Cookie", cookie);
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe("ROUTE_NOT_FOUND");
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
   });
 
   it("still reaches its own account, which is where the fix lives", async () => {
@@ -518,6 +538,26 @@ describe("an account whose password an admin chose", () => {
       .set("Authorization", `Bearer ${secret}`);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+  });
+
+  it("cannot write an instance setting from inside the auth namespace", async () => {
+    // PUT /api/auth/session-policy is instance administration that happens to
+    // live in the auth router, and that router is mounted ahead of the gate.
+    // Somebody holding only a hand-over password could otherwise set every
+    // future session on the instance to a year.
+    const before = await as(admin)(
+      request(app).get("/api/auth/session-policy"),
+    );
+
+    const res = await request(app)
+      .put("/api/auth/session-policy")
+      .set("Cookie", adminCookie)
+      .send({ sessionTtlDays: 365 });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
+
+    const after = await as(admin)(request(app).get("/api/auth/session-policy"));
+    expect(after.body.sessionTtlDays).toBe(before.body.sessionTtlDays);
   });
 
   it("still needs the temporary password to replace it", async () => {
@@ -837,6 +877,54 @@ describe("invitations", () => {
     expect(res.body.error.code).toBe("INVITATION_USED");
   });
 
+  it("takes every invitation an admin issued with them, accepted ones too", async () => {
+    // `invitations.invitedBy` is NOT NULL with ON DELETE CASCADE, so an
+    // accepted invitation cannot keep its row with the inviter set to NULL
+    // the way an audit row does. The plan says otherwise in two places, and
+    // the schema is what decides it. The `user.invitation.accepted` audit row
+    // is what survives, so how somebody joined stays on record.
+    const inviter = await createAndActivate(admin, "leavinginviter", "admin");
+    const created = await as(inviter)(
+      request(app).post("/api/admin/invitations").send({}),
+    );
+    const joined = await request(app)
+      .post("/api/auth/accept-invitation")
+      .send({
+        token: tokenFrom(created.body.link),
+        email: "stayed@example.com",
+        username: "stayedbehind",
+        password: PASSWORD,
+      });
+    expect(joined.status).toBe(201);
+
+    const gone = await as(admin)(
+      request(app)
+        .delete(`/api/admin/users/${inviter.id}`)
+        .send({ decision: "purge" }),
+    );
+    expect(gone.status, JSON.stringify(gone.body)).toBe(200);
+
+    expect(
+      sqlite
+        .prepare("SELECT id FROM invitations WHERE id = ?")
+        .get(created.body.id),
+    ).toBeUndefined();
+    // The account it produced is untouched, and the audit row still names it.
+    expect(
+      sqlite
+        .prepare("SELECT id FROM users WHERE id = ?")
+        .get(joined.body.user.id),
+    ).toBeDefined();
+    expect(
+      sqlite
+        .prepare(
+          `SELECT COUNT(*) AS n FROM audit_log
+            WHERE action = 'user.invitation.accepted' AND actorUserId = ?`,
+        )
+        .get(joined.body.user.id),
+    ).toEqual({ n: 1 });
+  });
+
   it("takes an admin's pending invitations with them when they go", async () => {
     const inviter = await createAndActivate(admin, "theinviter", "admin");
     const created = await as(inviter)(
@@ -967,6 +1055,19 @@ describe("the guards on removing an administrator", () => {
     expect(self.status).toBe(400);
     expect(self.body.error.code).toBe("CANNOT_TARGET_SELF");
 
+    // Deleting yourself is refused for the same reason as disabling
+    // yourself, and it is refused before the data decision is even read.
+    const deleteSelf = await as(sole)(
+      request(app)
+        .delete(`/api/admin/users/${sole.id}`)
+        .send({ decision: "purge" }),
+    );
+    expect(deleteSelf.status).toBe(400);
+    expect(deleteSelf.body.error.code).toBe("CANNOT_TARGET_SELF");
+    expect(
+      sqlite.prepare("SELECT id FROM users WHERE id = ?").get(sole.id),
+    ).toBeDefined();
+
     // The second admin may disable the first, then enable them again.
     const disabled = await as(second)(
       request(app).post(`/api/admin/users/${sole.id}/disable`),
@@ -1078,6 +1179,7 @@ describe("deleting an account", () => {
     bystander = await createAndActivate(admin, "stayingput");
 
     for (const owner of [victim, bystander]) {
+      const contactIds: string[] = [];
       for (let i = 0; i < 3; i++) {
         const contact = await as(owner)(
           request(app)
@@ -1085,6 +1187,7 @@ describe("deleting an account", () => {
             .send({ name: `${owner.username} Contact ${i}`, company: "Acme" }),
         );
         expect(contact.status).toBe(201);
+        contactIds.push(contact.body.id);
         await as(owner)(
           request(app)
             .post(`/api/contacts/${contact.body.id}/interactions`)
@@ -1096,6 +1199,73 @@ describe("deleting an account", () => {
           .post("/api/lists")
           .send({ name: `${owner.username} List` }),
       );
+      seedOwnedExtras(owner.id, contactIds);
+    }
+  });
+
+  /**
+   * Rows in the tables the purge names that the API does not create on its
+   * own here: a duplicate suggestion, an exclusion, a merge-log entry, an AI
+   * invocation, an action item, and a locally-stored avatar. Without them the
+   * purge assertions for those tables would read zero before and after and
+   * would prove nothing.
+   */
+  function seedOwnedExtras(ownerId: string, contactIds: string[]): void {
+    const [a, b, c] = contactIds;
+    sqlite
+      .prepare(
+        `INSERT INTO dedupe_suggestions
+           (id, contactIdA, contactIdB, matchType, confidence, reasoning, status)
+         VALUES (?, ?, ?, 'email', 0.9, 'same address', 'pending')`,
+      )
+      .run(crypto.randomUUID(), a, b);
+    sqlite
+      .prepare(
+        `INSERT INTO dedupe_exclusions (contactIdA, contactIdB) VALUES (?, ?)`,
+      )
+      .run(a, c);
+    sqlite
+      .prepare(
+        `INSERT INTO dedupe_merge_log
+           (id, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, ownerId)
+         VALUES (?, ?, ?, 'test', 'manual', 1.0, 'seeded', ?)`,
+      )
+      .run(crypto.randomUUID(), a, b, ownerId);
+    sqlite
+      .prepare(
+        `INSERT INTO ai_invocations (id, operation, model, tokenCount, latencyMs, cached, ownerId)
+         VALUES (?, 'searchExpansion', 'mock', 10, 1, 0, ?)`,
+      )
+      .run(crypto.randomUUID(), ownerId);
+    sqlite
+      .prepare(
+        `INSERT INTO action_items (id, contactId, title, dueAt) VALUES (?, ?, 'Follow up', '2027-01-01')`,
+      )
+      .run(crypto.randomUUID(), a);
+    // One avatar this instance stores itself and one interaction attachment,
+    // so the `files` count is a number rather than always zero.
+    sqlite
+      .prepare(`UPDATE contacts SET avatarUrl = ? WHERE id = ?`)
+      .run(`/uploads/u/${ownerId}/avatars/face.png`, a);
+    sqlite
+      .prepare(
+        `UPDATE interactions SET fileUrl = ? WHERE contactId = ? AND ownerId = ?`,
+      )
+      .run(`/uploads/u/${ownerId}/files/note.eml`, a, ownerId);
+  }
+
+  it("seeds every table the purge names, so the counts below mean something", () => {
+    for (const table of [
+      "contacts",
+      "interactions",
+      "action_items",
+      "lists",
+      "dedupe_suggestions",
+      "dedupe_exclusions",
+      "dedupe_merge_log",
+      "ai_invocations",
+    ]) {
+      expect(rowsOwnedBy(table, victim.id), table).toBeGreaterThan(0);
     }
   });
 
@@ -1109,7 +1279,8 @@ describe("deleting an account", () => {
       contacts: 3,
       interactions: 3,
       lists: 1,
-      files: 0,
+      // One avatar this instance stores and one interaction attachment.
+      files: 2,
     });
     // Nothing moved.
     expect(rowsOwnedBy("contacts", victim.id)).toBe(3);
@@ -1422,7 +1593,8 @@ describe("the audit log", () => {
     expect(first.body.entries).toHaveLength(5);
     expect(first.body.nextBefore).toBeTruthy();
 
-    const seen: string[] = first.body.entries.map((e: { id: string }) => e.id);
+    type Entry = { id: string; createdAt: string };
+    const walked: Entry[] = [...(first.body.entries as Entry[])];
     let cursor: string | null = first.body.nextBefore;
     while (cursor) {
       const page: request.Response = await as(admin)(
@@ -1431,9 +1603,28 @@ describe("the audit log", () => {
         ),
       );
       expect(page.status).toBe(200);
-      seen.push(...page.body.entries.map((e: { id: string }) => e.id));
+      walked.push(...(page.body.entries as Entry[]));
       cursor = page.body.nextBefore;
     }
+    const seen = walked.map((e) => e.id);
+
+    // Newest first, across pages as well as inside one. Counting rows and
+    // checking for duplicates says nothing about direction, and an audit log
+    // that pages oldest first is unreadable.
+    for (let i = 1; i < walked.length; i++) {
+      expect(
+        walked[i - 1].createdAt >= walked[i].createdAt,
+        `${walked[i - 1].createdAt} before ${walked[i].createdAt}`,
+      ).toBe(true);
+    }
+    const newest = (
+      sqlite
+        .prepare(
+          "SELECT createdAt FROM audit_log ORDER BY createdAt DESC, id DESC LIMIT 1",
+        )
+        .get() as { createdAt: string }
+    ).createdAt;
+    expect(walked[0].createdAt).toBe(newest);
 
     const total = (
       sqlite.prepare("SELECT COUNT(*) AS n FROM audit_log").get() as {

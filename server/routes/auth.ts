@@ -20,6 +20,7 @@ import { auditService } from "../services/auditService.ts";
 import { acceptInvitation } from "../services/invitationService.ts";
 import {
   requireAdmin,
+  requirePasswordCurrent,
   requireSession,
   isAuthRequired,
   isAuthenticated,
@@ -377,6 +378,11 @@ router.put(
   "/session-policy",
   requireSession,
   requireAdmin,
+  // This router is mounted ahead of the middleware copy of this guard, so
+  // the one route in it that writes an instance setting carries the guard
+  // itself. Without it an account still holding the password an admin chose
+  // could set every future session on the instance to a year.
+  requirePasswordCurrent,
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionTtlDays = setSessionTtlDays(body.sessionTtlDays);

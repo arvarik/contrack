@@ -50,6 +50,7 @@ import {
 } from "./services/authService.ts";
 import { aiEndpointRateLimit } from "./middleware/rateLimit.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
+import { redactUrlForLog } from "./utils/helpers.ts";
 
 /** File extensions browsers may render inline; everything else downloads. */
 const INLINE_UPLOAD_EXTENSIONS = new Set([
@@ -105,6 +106,15 @@ const CSP_PRODUCTION = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join("; ");
+
+// Morgan's `:url` token is `req.originalUrl`, query string included, and both
+// formats this app uses carry it. An invitation link puts its secret in that
+// query string, so the invitee opening the link would write the one value the
+// invitation system keeps out of the database into the access log instead.
+// Overriding the built-in token covers every format rather than one of them.
+morgan.token("url", (req) =>
+  redactUrlForLog((req as express.Request).originalUrl),
+);
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const app = express();

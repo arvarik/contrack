@@ -407,14 +407,35 @@ export function requireAuth(
  * The `implicit` local owner never carries the flag: it has no password at
  * all, so nobody could have chosen one for it.
  *
- * Mounted after `requireAuth` on `/api` and `/uploads`. The auth router is
- * mounted ahead of both, so in practice its routes never reach this at all;
- * the exemption is what keeps that true if the mount order ever changes.
+ * Mounted after `requireAuth` on `/api` and `/uploads`, and also on the one
+ * route inside `/api/auth` that writes an instance setting. The auth router
+ * is mounted ahead of the middleware, so its routes never reach the mounted
+ * copy at all, which is why that route carries the guard itself.
+ *
+ * The exemption is a list of paths rather than the `/api/auth` prefix. The
+ * prefix was the first shape and it was wrong: `PUT /api/auth/session-policy`
+ * is instance administration that happens to live in the auth router, and an
+ * account holding a password somebody else chose could stretch every future
+ * session on the instance to a year before changing it.
  *
  * It reads `originalUrl` rather than `path`, because Express strips the mount
  * prefix before a middleware sees `req.path`, which would make
  * `/api/auth/me` and `/uploads/auth/me` look alike.
  */
+
+/**
+ * What an account with a temporary password still needs: to see the
+ * instance's state, sign in, read its own account, set a password of its own,
+ * and sign out. Nothing else, under `/api/auth` or anywhere else.
+ */
+const PASSWORD_CHANGE_EXEMPT = new Set([
+  "/api/auth/status",
+  "/api/auth/setup",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/me",
+  "/api/auth/change-password",
+]);
 export function requirePasswordCurrent(
   req: Request,
   _res: Response,
@@ -424,9 +445,7 @@ export function requirePasswordCurrent(
   if (!user || user.mustChangePassword !== 1) return next();
 
   const pathOnly = req.originalUrl.split("?")[0];
-  if (pathOnly === "/api/auth" || pathOnly.startsWith("/api/auth/")) {
-    return next();
-  }
+  if (PASSWORD_CHANGE_EXEMPT.has(pathOnly)) return next();
 
   next(
     new AppError(
