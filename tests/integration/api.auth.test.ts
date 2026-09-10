@@ -648,8 +648,8 @@ describe("sessions", () => {
 // =============================================================================
 
 describe("requireAdmin", () => {
-  // Phase 2g and Phase 3 mount this. It is built now so the gate exists before
-  // anything needs it, and tested now so it is not written twice.
+  // Phase 1 built the gate, Phase 3 mounted it. These four cases cover the
+  // middleware itself; api.admin.test.ts covers what it protects.
   const run = (principal: unknown): { code?: string; status?: number } => {
     let captured: AppError | undefined;
     requireAdmin(
@@ -678,19 +678,26 @@ describe("requireAdmin", () => {
     expect(run(undefined)).toEqual({ code: "UNAUTHORIZED", status: 401 });
   });
 
-  it("is mounted nowhere yet, which is deliberate until Phase 3", () => {
-    // Mounting it early would gate an endpoint that has no admin story behind
-    // it, and would be invisible until somebody with a member account hit it.
-    // Phase 2 finished with fourteen routes classed `admin` in the manifest
-    // and none of them guarded, which is what this asserts.
-    const routes = fs
-      .readdirSync("server/routes", { recursive: true })
-      .filter((f) => String(f).endsWith(".ts"))
-      .map((f) =>
-        fs.readFileSync(path.join("server/routes", String(f)), "utf8"),
-      );
-    const mounted = routes.filter((src) => /\brequireAdmin\b/.test(src));
-    expect(mounted).toHaveLength(0);
+  it("is mounted in every route file Phase 3 names", () => {
+    // Task 3.1 lists the files that hold an admin route. The route manifest
+    // test proves the guard sits on each individual route; this proves no
+    // whole file was forgotten, which is the mistake that would leave a group
+    // of endpoints open at once.
+    const named = [
+      "admin.ts",
+      "auth.ts",
+      "ai.ts",
+      "aiSettings.ts",
+      "dataLifecycle.ts",
+      "dedupe/embeddings.ts",
+    ];
+    const missing = named.filter(
+      (file) =>
+        !/\brequireAdmin\b/.test(
+          fs.readFileSync(path.join("server/routes", file), "utf8"),
+        ),
+    );
+    expect(missing).toEqual([]);
   });
 });
 

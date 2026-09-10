@@ -6,11 +6,13 @@
 // preview (`••••1234`).
 // =============================================================================
 
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
+import { requireAdmin } from "../middleware/auth.ts";
+import { auditService } from "../services/auditService.ts";
 import {
   getSettingsView,
   getModelsForCapability,
@@ -31,6 +33,29 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import type { AICapability } from "../ai/capabilities.ts";
 
 const router = Router();
+
+// Reading this configuration is open to any signed-in account: the app has to
+// know which capabilities are available before it offers them. Writing it is
+// administration — provider keys, custom endpoints and capability
+// assignments are one shared configuration that everybody on the instance
+// runs on. Every write below carries `requireAdmin` and writes one
+// `settings.changed` audit row naming the setting key, never its value.
+
+/** Record a settings write. The key name only, never what was written. */
+function auditSettingChange(
+  req: Request,
+  key: string,
+  details?: Record<string, unknown>,
+): void {
+  auditService.record({
+    actorUserId: req.principal?.user.id ?? null,
+    action: "settings.changed",
+    targetType: "setting",
+    targetId: key,
+    details,
+    ip: req.ip ?? null,
+  });
+}
 
 // ─── Overview ────────────────────────────────────────────────────────────────
 
@@ -62,11 +87,13 @@ const providerKeySchema = z.object({
  */
 router.put(
   "/providers/:id/key",
+  requireAdmin,
   validateBody(providerKeySchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const id = String(req.params.id);
     setProviderKey(id, req.body.apiKey);
+    auditSettingChange(req, SETTING_KEYS.aiProviderKeys, { provider: id });
 
     try {
       const entry = await refreshModels(id);
@@ -85,16 +112,25 @@ router.put(
 
 router.delete(
   "/providers/:id/key",
+  requireAdmin,
   asyncHandler(async (req, res) => {
-    deleteProviderKey(String(req.params.id));
+    const id = String(req.params.id);
+    deleteProviderKey(id);
+    auditSettingChange(req, SETTING_KEYS.aiProviderKeys, {
+      provider: id,
+      removed: true,
+    });
     res.json({ success: true });
   }),
 );
 
 router.post(
   "/providers/:id/refresh-models",
+  requireAdmin,
   asyncHandler(async (req, res) => {
-    const entry = await refreshModels(String(req.params.id));
+    const id = String(req.params.id);
+    const entry = await refreshModels(id);
+    auditSettingChange(req, SETTING_KEYS.aiModelCache, { provider: id });
     res.json({ modelCount: entry.models.length, fetchedAt: entry.fetchedAt });
   }),
 );
@@ -113,9 +149,13 @@ const endpointSchema = z.object({
 
 router.put(
   "/endpoints",
+  requireAdmin,
   validateBody(endpointSchema),
   asyncHandler(async (req, res) => {
     upsertCustomEndpoint(req.body);
+    auditSettingChange(req, SETTING_KEYS.aiCustomEndpoints, {
+      endpoint: req.body.id,
+    });
     const providerId = `custom:${req.body.id}`;
     // Validate connectivity the same way built-in keys are validated.
     const entry = await refreshModels(providerId);
@@ -125,8 +165,14 @@ router.put(
 
 router.delete(
   "/endpoints/:id",
+  requireAdmin,
   asyncHandler(async (req, res) => {
-    deleteCustomEndpoint(String(req.params.id));
+    const id = String(req.params.id);
+    deleteCustomEndpoint(id);
+    auditSettingChange(req, SETTING_KEYS.aiCustomEndpoints, {
+      endpoint: id,
+      removed: true,
+    });
     res.json({ success: true });
   }),
 );
@@ -141,6 +187,7 @@ const assignmentSchema = z.object({
 
 router.put(
   "/capabilities/:capability",
+  requireAdmin,
   validateBody(assignmentSchema),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
@@ -167,6 +214,7 @@ router.put(
     }
 
     setCapabilityAssignment(capability, req.body);
+    auditSettingChange(req, SETTING_KEYS.aiCapabilities, { capability });
 
     // Switching embedding models changes the vector width, so BOTH stores
     // have to be rebuilt — search and dedupe share one model. Reconciling only
@@ -204,9 +252,11 @@ const searxngSchema = z.object({
 
 router.put(
   "/searxng",
+  requireAdmin,
   validateBody(searxngSchema),
   asyncHandler(async (req, res) => {
     setSetting(SETTING_KEYS.aiSearxng, { url: req.body.url });
+    auditSettingChange(req, SETTING_KEYS.aiSearxng);
     invalidateProviderCache();
     res.json({ success: true });
   }),

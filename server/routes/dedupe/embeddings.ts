@@ -8,17 +8,20 @@ import {
   isEmbeddingAvailable,
 } from "../../services/dedupe/index.ts";
 import { scopeOf } from "../../tenancy/scope.ts";
+import { requireAdmin } from "../../middleware/auth.ts";
 import { sqlite } from "../../db.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerEmbeddingRoutes(router: Router) {
-  // Classed `admin` in the route manifest and left instance-wide on purpose:
-  // an operator repairing the dedupe index must not stop at their own rows.
-  // Phase 3 mounts the admin gate in front of it. Sub-phase 2h made the sweep
-  // behind it run one account at a time inside that account's context, so it
-  // still covers the instance and the provider spend is attributed as well.
+  // Instance-wide on purpose: an operator repairing the dedupe index must not
+  // stop at their own rows. Sub-phase 2h made the sweep behind it run one
+  // account at a time inside that account's context, so it still covers the
+  // instance and the provider spend is attributed as well. Phase 3 put the
+  // admin gate in front of it, which is what the manifest class has meant
+  // since Phase 2.
   router.post(
     "/dedupe/backfill-embeddings",
+    requireAdmin,
     asyncHandler(async (req, res) => {
       const rid = req.requestId;
 

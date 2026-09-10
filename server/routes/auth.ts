@@ -15,7 +15,11 @@ import { Router, type Request } from "express";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
+import { validateBody, acceptInvitationSchema } from "../utils/validators.ts";
+import { auditService } from "../services/auditService.ts";
+import { acceptInvitation } from "../services/invitationService.ts";
 import {
+  requireAdmin,
   requireSession,
   isAuthRequired,
   isAuthenticated,
@@ -81,6 +85,11 @@ export function __resetAuthRateLimits(): void {
 function bodyString(req: Request, field: string): string {
   const value = (req.body as Record<string, unknown> | undefined)?.[field];
   return typeof value === "string" ? value : "";
+}
+
+/** The client address to stamp on an audit row. */
+function ipOf(req: Request): string | null {
+  return req.ip ?? null;
 }
 
 // =============================================================================
@@ -183,6 +192,15 @@ router.post(
 
     const user = await verifyCredentials(identifier, password);
     if (!user) {
+      // The audit row records what was typed into the identifier field and
+      // nothing else. A failed sign-in is the one event worth keeping for an
+      // account that may not exist, which is why the actor is null.
+      auditService.record({
+        actorUserId: null,
+        action: "auth.login.failed",
+        details: { identifier: identifier.slice(0, 100) },
+        ip: ipOf(req),
+      });
       // One message for both "no such account" and "wrong password" — telling
       // them apart is how an attacker learns which usernames are real.
       throw new AppError("Incorrect username or password.", 401, {
@@ -196,6 +214,14 @@ router.post(
     // above exists to prevent. Someone holding the right password has already
     // earned a straight answer.
     if (user.status === "disabled") {
+      auditService.record({
+        actorUserId: user.id,
+        action: "auth.login.failed",
+        targetType: "user",
+        targetId: user.id,
+        details: { identifier: identifier.slice(0, 100), reason: "disabled" },
+        ip: ipOf(req),
+      });
       throw new AppError(
         "This account has been disabled. Ask an administrator to re-enable it.",
         403,
@@ -205,16 +231,58 @@ router.post(
 
     const session = createSession(user.id, req.headers["user-agent"] ?? null);
     setSessionCookie(req, res, session.secret, session.expiresAt);
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.login.success",
+      targetType: "user",
+      targetId: user.id,
+      details: { username: user.username },
+      ip: ipOf(req),
+    });
     res.json({ user: publicUser(user) });
   }),
 );
 
 router.post("/logout", (req, res) => {
   const secret = presentedSessionSecret(req);
+  const actor = currentUser(req);
   if (secret) destroySession(secret);
   clearSessionCookie(req, res);
+  if (actor) {
+    auditService.record({
+      actorUserId: actor.id,
+      action: "auth.logout",
+      targetType: "user",
+      targetId: actor.id,
+      ip: ipOf(req),
+    });
+  }
   res.json({ success: true });
 });
+
+// =============================================================================
+// Joining by invitation
+// =============================================================================
+
+/**
+ * Turn an invitation link into an account, and sign it in.
+ *
+ * Lives in this file rather than in routes/admin.ts because the person using
+ * it has no account yet: it must sit in front of the credential gate, and it
+ * needs the same per-IP window the sign-in endpoints use, which is private to
+ * this module.
+ */
+router.post(
+  "/accept-invitation",
+  credentialLimiter,
+  validateBody(acceptInvitationSchema),
+  asyncHandler(async (req, res) => {
+    const user = await acceptInvitation(req.body, ipOf(req));
+    const session = createSession(user.id, req.headers["user-agent"] ?? null);
+    setSessionCookie(req, res, session.secret, session.expiresAt);
+    res.status(201).json({ user: publicUser(user) });
+  }),
+);
 
 // =============================================================================
 // The signed-in account
@@ -247,12 +315,20 @@ router.post(
   requireSession,
   credentialLimiter,
   asyncHandler(async (req, res) => {
+    const actor = currentUser(req)!;
     await changePassword(
-      currentUser(req)!.id,
+      actor.id,
       bodyString(req, "currentPassword"),
       bodyString(req, "newPassword"),
       currentSessionId(req),
     );
+    auditService.record({
+      actorUserId: actor.id,
+      action: "auth.password.changed",
+      targetType: "user",
+      targetId: actor.id,
+      ip: ipOf(req),
+    });
     res.json({ success: true });
   }),
 );
@@ -281,8 +357,12 @@ router.delete("/sessions", requireSession, (req, res) => {
 // =============================================================================
 
 /**
- * How long new sessions last. Read is open to any authenticated caller;
- * writing needs a real account, since it is a security setting.
+ * How long new sessions last.
+ *
+ * Reading is open to any signed-in account. Writing is an instance setting, so
+ * Phase 3 put `requireAdmin` in front of it, as the route manifest has said
+ * since Phase 2. The endpoint is deprecated in favour of
+ * `PUT /api/admin/settings` and stays for one release.
  */
 router.get("/session-policy", requireSession, (_req, res) => {
   res.json({
@@ -296,9 +376,18 @@ router.get("/session-policy", requireSession, (_req, res) => {
 router.put(
   "/session-policy",
   requireSession,
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const sessionTtlDays = setSessionTtlDays(body.sessionTtlDays);
+    auditService.record({
+      actorUserId: currentUser(req)!.id,
+      action: "settings.changed",
+      targetType: "setting",
+      targetId: "auth.sessionTtlDays",
+      details: { sessionTtlDays },
+      ip: ipOf(req),
+    });
     res.json({ sessionTtlDays });
   }),
 );

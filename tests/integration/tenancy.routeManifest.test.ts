@@ -114,34 +114,46 @@ describe("route manifest", () => {
     ).toBe(true);
   });
 
-  it("keeps the admin class on every route Phase 3 gates", () => {
-    // Phase 2 classifies; Phase 3 mounts requireAdmin in front of exactly
-    // this list. Between the two, the class is the only record of which
-    // routes are meant to be operator-only, so it is pinned by name.
-    const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin")
+  it("guards every admin route with requireAdmin, and nothing else", () => {
+    // Phase 2 classified these routes and left them open. Phase 3 mounts the
+    // guard on each route rather than on the router, so the check is a two-way
+    // one: an `admin` row with no guard is an open operator endpoint, and a
+    // guarded route with another class is a manifest that lies about who can
+    // reach it. Both directions fail here.
+    const guards = new Map(
+      registered.map((r) => [key(r), r.handlers.includes("requireAdmin")]),
+    );
+
+    const unguarded = expected
+      .filter((r) => r.class === "admin")
       .map(key)
+      .filter((k) => guards.get(k) === false)
       .sort();
-    expect(admin).toEqual([
-      "DELETE /api/settings/ai/endpoints/:id",
-      "DELETE /api/settings/ai/providers/:id/key",
-      "GET /api/ai/diagnostics",
-      "GET /api/ai/grounding-capacity",
-      "GET /api/backups",
-      "GET /api/debug/cache-stats",
-      "POST /api/backups",
-      "POST /api/dedupe/backfill-embeddings",
-      "POST /api/settings/ai/providers/:id/refresh-models",
-      "PUT /api/auth/session-policy",
-      "PUT /api/settings/ai/capabilities/:capability",
-      "PUT /api/settings/ai/endpoints",
-      "PUT /api/settings/ai/providers/:id/key",
-      "PUT /api/settings/ai/searxng",
-    ]);
+    expect(unguarded, "admin routes with no requireAdmin").toEqual([]);
+
+    const classOf = new Map(ROUTE_MANIFEST.map((r) => [key(r), r.class]));
+    const misclassified = [...guards.entries()]
+      .filter(([k, guarded]) => guarded && classOf.get(k) !== "admin")
+      .map(([k]) => k)
+      .sort();
+    expect(misclassified, "guarded routes not classed admin").toEqual([]);
+
     // An admin route reads or writes the instance, so none of them is
     // isolated by owner.
     for (const entry of ROUTE_MANIFEST.filter((r) => r.class === "admin")) {
       expect(entry.isolated, key(entry)).toBe(false);
     }
+  });
+
+  it("counts the routes Phase 3 added", () => {
+    // A cheap tripwire: the admin surface grew from fourteen classified rows
+    // to twenty-seven guarded ones, and a route added without a decision
+    // moves this number.
+    const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
+    expect(admin).toHaveLength(27);
+    expect(
+      ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
+    ).toHaveLength(13);
   });
 
   it("still classifies the route the mount-order fix made reachable", () => {

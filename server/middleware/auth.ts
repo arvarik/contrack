@@ -392,6 +392,52 @@ export function requireAuth(
 }
 
 /**
+ * Gate for every data route while an account still holds a password somebody
+ * else chose.
+ *
+ * An admin who creates an account, or resets one, sets a temporary password
+ * and hands it over. Until the person replaces it, that password is known to
+ * at least two people, so it buys access to the account's own settings and
+ * nothing else. Every path outside `/api/auth/` answers
+ * `403 PASSWORD_CHANGE_REQUIRED` until `POST /api/auth/change-password`
+ * clears the flag.
+ *
+ * It applies to `session`, `token` and `legacy-env-token` principals alike,
+ * because the reason is the password rather than the way it was presented.
+ * The `implicit` local owner never carries the flag: it has no password at
+ * all, so nobody could have chosen one for it.
+ *
+ * Mounted after `requireAuth` on `/api` and `/uploads`. The auth router is
+ * mounted ahead of both, so in practice its routes never reach this at all;
+ * the exemption is what keeps that true if the mount order ever changes.
+ *
+ * It reads `originalUrl` rather than `path`, because Express strips the mount
+ * prefix before a middleware sees `req.path`, which would make
+ * `/api/auth/me` and `/uploads/auth/me` look alike.
+ */
+export function requirePasswordCurrent(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  const user = req.principal?.user;
+  if (!user || user.mustChangePassword !== 1) return next();
+
+  const pathOnly = req.originalUrl.split("?")[0];
+  if (pathOnly === "/api/auth" || pathOnly.startsWith("/api/auth/")) {
+    return next();
+  }
+
+  next(
+    new AppError(
+      "Set a new password before you use this instance. The one you were given is temporary.",
+      403,
+      { code: "PASSWORD_CHANGE_REQUIRED" },
+    ),
+  );
+}
+
+/**
  * Gate for endpoints that act on the account itself — profile edits, password
  * changes, session management.
  *
@@ -425,9 +471,11 @@ export function requireSession(
  * Gate for instance administration: user management, instance settings,
  * backups, the audit log.
  *
- * Mounted nowhere by design. Phase 2 classifies every admin route in
- * `ROUTE_MANIFEST` and stops there; Phase 3 mounts this guard and tests it.
- * A route test asserts it is absent until then.
+ * Mounted on each admin route individually rather than with `router.use`, so
+ * that the route manifest test can look inside `route.stack` and fail when a
+ * route classed `admin` does not carry it. That check only works while this
+ * is a named function declaration: an arrow assigned to a const has an empty
+ * `handle.name` and the test would see nothing.
  */
 export function requireAdmin(
   req: Request,

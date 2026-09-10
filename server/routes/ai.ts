@@ -15,9 +15,15 @@ import {
   GEMINI_REGISTRY,
 } from "../ai/routing/registry.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { requireAdmin } from "../middleware/auth.ts";
 import { log } from "../utils/logger.ts";
 
 const router = Router();
+
+// Both routes report the instance's shared routing state: quota windows,
+// circuit breakers and the grounding pool that every account draws on. They
+// describe the operator's provider account, not the caller's data, which is
+// why the manifest classes them `admin` and Phase 3 guards them.
 
 /**
  * GET /api/ai/diagnostics
@@ -33,6 +39,7 @@ const router = Router();
  */
 router.get(
   "/diagnostics",
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
@@ -86,6 +93,7 @@ router.get(
  */
 router.get(
   "/grounding-capacity",
+  requireAdmin,
   asyncHandler(async (_req, res) => {
     // Non-Gemini providers don't have grounding RPD limits
     if (activeProviderName !== "gemini") {
