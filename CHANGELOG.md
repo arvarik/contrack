@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Phase 2e.** A duplicate scan reads one account's contacts and finds one
+  account's duplicates. Every stage is scoped: the normalized corpus, the five
+  child-table loads behind it, the exact email, phone and name passes, the
+  embedding neighbours, the co-occurrence and exclusion constraints, and the
+  clusters the scan reports. Two people who share a name across two accounts
+  are two people, and the scan can no longer suggest merging them into one.
+- **Phase 2e.** Every merge checks that both contacts belong to the caller,
+  in one statement, before it moves a single child row. A merge that names a
+  contact the caller does not own answers `404`, with the same body an id that
+  never existed answers, and nothing moves.
+- **Phase 2e.** Suggestions, dismissals, exclusions and the merge log are per
+  account. The review queue, the sidebar badge, the per-contact banner and the
+  merge history each showed every account's rows. Undoing a merge works on the
+  caller's own audit entries only.
+- **Phase 2e.** A scan status page and its live stream answer `404` for a scan
+  another account started. A scan record holds every cluster it found with the
+  contacts hydrated inside it, so an id that leaked used to be a complete read
+  of somebody else's duplicate list.
+- **Phase 2e.** A full-mode scan clears its own account's dedupe vectors. It
+  ran an unqualified delete before, so one person choosing "full" erased every
+  other account's dedupe index and made their next scan pay a provider to
+  rebuild it. Re-embedding changed contacts on a deep scan is scoped the same
+  way, and the embedding coverage figure now describes the caller's own
+  contacts rather than the instance.
+- **Phase 2e.** One scan still runs at a time for the whole instance, and an
+  account that arrives while the lock is held takes its turn instead of being
+  turned away. Its scan starts on its own when the running one finishes.
+- **Phase 2e.** **Breaking:** starting a scan while one is already running
+  answers with the standard error envelope, `{ error: { code, message,
+requestId, details } }` with code `RATE_LIMITED`, instead of a bare
+  `{ error: "<message>" }`. `details.yours` says whether the caller is already
+  scanning or somebody else holds the lock, and `details.queued` says whether
+  a turn was booked. Any client reading `error` as a string must read
+  `error.message` instead.
 - **Phase 2f.** AI research batches belong to the account that started them.
   Polling a batch, opening its live stream, or cancelling it works for its own
   account and answers `404` for everybody else, with the same body an id that
