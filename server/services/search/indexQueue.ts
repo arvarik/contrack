@@ -36,6 +36,11 @@ async function drain(): Promise<void> {
 export function scheduleSearchIndex(id: string): void {
   sqlite
     .prepare(
+      // Three callers, and each has already proved the caller owns this
+      // contact: contactService after a create or update, mergeEngine after a
+      // scoped batch applies, and dedupe/merging after loadMergePair. The
+      // column is a derived cache, and clearing it queues a re-index.
+      // tenant-lint: allow owner-checked by caller
       "UPDATE contacts SET searchExpansion = NULL WHERE id = ? AND searchExpansion IS NOT NULL",
     )
     .run(id);

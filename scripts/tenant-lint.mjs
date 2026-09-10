@@ -15,11 +15,13 @@
 //   sqlite.prepare("DELETE FROM ai_invocations WHERE createdAt < ?")
 //
 // Two modes:
-//   --report          print a table, exit 0. Phase 0 runs this in npm run lint.
+//   --report          print a table, exit 0.
 //   --strict <glob...>  exit 1 on any flag in a matching file. Several globs
-//                     may follow, because Phase 2 converts one domain at a
-//                     time and each sub-phase adds its files. 2i replaces the
-//                     whole list with --strict "server/**".
+//                     may follow, because Phase 2 converted one domain at a
+//                     time and each sub-phase added its files. Sub-phase 2i
+//                     replaced the whole list with one glob, and
+//                     `npm run lint` now runs
+//                     `--strict "server/**/*.ts"` over the whole tree.
 // =============================================================================
 
 import fs from "node:fs";
@@ -73,16 +75,55 @@ const DRIZZLE_RE = new RegExp(
   `\\b(?:from|insert|update|delete)\\s*\\(\\s*(?:schema\\.)?(${OWNED_SCHEMA_KEYS.join("|")})\\b`,
 );
 
+/** Characters that can end an expression, so a following `/` is a division. */
+const ENDS_EXPRESSION = /[\w$)\]"'`]/;
+
+/** Words that end an expression despite looking like identifiers. */
+const REGEX_KEYWORDS = new Set([
+  "return",
+  "typeof",
+  "instanceof",
+  "in",
+  "of",
+  "new",
+  "delete",
+  "void",
+  "throw",
+  "case",
+  "do",
+  "else",
+  "yield",
+  "await",
+]);
+
 /**
  * Pull every string and template literal out of a source file, with the line
  * it starts on. Comments are skipped so a SQL example in a comment is not
  * mistaken for a statement.
+ *
+ * Regular expressions are skipped too, and that is not cosmetic. A quote
+ * inside a regex body — `/[",\n]/` in the CSV escaper, `data-id="..."` in the
+ * mention matcher — used to open a string that ran to the next quote anywhere
+ * in the file. Every quote after it was then off by one: real statements read
+ * as code and were never scanned, so a file could pass `--strict` while
+ * holding an unscoped statement further down.
  */
 function extractLiterals(source) {
   const out = [];
   let i = 0;
   let line = 1;
   const n = source.length;
+  /** The last significant code character, for telling regex from division. */
+  let prev = "";
+  /** The identifier immediately before `prev`, for the keyword cases. */
+  let word = "";
+
+  const remember = (ch) => {
+    if (/\s/.test(ch)) return;
+    if (/[\w$]/.test(ch)) word += ch;
+    else word = "";
+    prev = ch;
+  };
 
   while (i < n) {
     const c = source[i];
@@ -108,6 +149,45 @@ function extractLiterals(source) {
       i += 2;
       continue;
     }
+    // Regular expression literal. A `/` is a division only when what precedes
+    // it can end an expression, and `return /re/` is the case where an
+    // identifier character still cannot.
+    if (
+      c === "/" &&
+      (!ENDS_EXPRESSION.test(prev) ||
+        (/[\w$]/.test(prev) && REGEX_KEYWORDS.has(word)))
+    ) {
+      const start = i;
+      let j = i + 1;
+      let inClass = false;
+      let closed = false;
+      while (j < n) {
+        const ch = source[j];
+        if (ch === "\\") {
+          j += 2;
+          continue;
+        }
+        // A regex literal cannot span a line. Anything that does was a
+        // division after all, so fall through and treat it as one.
+        if (ch === "\n") break;
+        if (ch === "[") inClass = true;
+        else if (ch === "]") inClass = false;
+        else if (ch === "/" && !inClass) {
+          closed = true;
+          j++;
+          break;
+        }
+        j++;
+      }
+      if (closed) {
+        while (j < n && /[a-z]/.test(source[j])) j++; // flags
+        i = j;
+        prev = "/";
+        word = "";
+        continue;
+      }
+      i = start; // not a regex; fall through to the operator path below
+    }
     if (c === '"' || c === "'" || c === "`") {
       const quote = c;
       const startLine = line;
@@ -130,8 +210,11 @@ function extractLiterals(source) {
         i++;
       }
       out.push({ value, line: startLine });
+      prev = quote;
+      word = "";
       continue;
     }
+    remember(c);
     i++;
   }
   return out;
@@ -220,11 +303,17 @@ export function scanProject(root = "server") {
 
 /** Turn a shell-style glob into a RegExp. Supports ** and *. */
 export function globToRegExp(glob) {
-  // ** crosses path separators, * does not. Both are handled in one pass so
-  // no placeholder character is needed.
+  // `**/` crosses path separators and may match none of them, so
+  // `server/**/*.ts` covers `server/db.ts` as well as `server/a/b.ts`. That
+  // is the whole point of the Phase 2i glob: a file sitting directly in
+  // `server/` must not fall outside strict mode. A lone `*` never crosses a
+  // separator. One pass over the three forms, longest first, so the
+  // replacement text is never rewritten by a later rule.
   const escaped = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*"));
+    .replace(/\*\*\/|\*\*|\*/g, (m) =>
+      m === "**/" ? "(?:[^/]*\\/)*" : m === "**" ? ".*" : "[^/]*",
+    );
   return new RegExp(`^${escaped}$`);
 }
 

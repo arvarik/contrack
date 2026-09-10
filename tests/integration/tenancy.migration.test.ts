@@ -223,6 +223,35 @@ describe("upgrading a 1.5.5 database", () => {
     expect(hits.n).toBe(fixture.contactIds.length);
   });
 
+  it("builds no single-column owner index for any owned table", () => {
+    // The version-1 ownership loop used to create idx_<table>_owner for all
+    // eight owned tables, and sub-phase 2i removed that line. A fresh upgrade
+    // must therefore end with none of the eight, not only without the four
+    // the version-2 step drops. Putting the CREATE back fails here.
+    // The eight the loop built, by name. A LIKE pattern would also catch
+    // idx_dedupe_excl_owner, which is a composite the phase keeps: that table
+    // has nothing to order by, so one column is the whole index.
+    const loopBuilt = [
+      "idx_contacts_owner",
+      "idx_lists_owner",
+      "idx_interactions_owner",
+      "idx_action_items_owner",
+      "idx_dedupe_suggestions_owner",
+      "idx_dedupe_exclusions_owner",
+      "idx_dedupe_merge_log_owner",
+      "idx_ai_invocations_owner",
+    ];
+    const built = (
+      sqlite
+        .prepare(
+          `SELECT name FROM sqlite_master
+            WHERE type = 'index' AND name IN (${loopBuilt.map(() => "?").join(", ")})`,
+        )
+        .all(...loopBuilt) as { name: string }[]
+    ).map((r) => r.name);
+    expect(built).toEqual([]);
+  });
+
   it("gives back every trigger it dropped", () => {
     const present = new Set(
       (
@@ -405,6 +434,140 @@ describe("booting the migrated database again", () => {
       }
     ).n;
     expect(n).toBe(1);
+  });
+});
+
+// =============================================================================
+// Upgrading a database the previous release already migrated
+// =============================================================================
+// v1 added the ownership columns and, with them, one single-column index per
+// owned table. Sub-phase 2i proved the composites answer every owner-first
+// read, so v2 drops the four the plan names and the ownership loop stops
+// creating them. A database that already reads 1 must take that step on its
+// next boot and nothing else.
+// =============================================================================
+
+describe("upgrading a database that already reads tenancy version 1", () => {
+  const PREFIX_INDEXES = [
+    "idx_contacts_owner",
+    "idx_lists_owner",
+    "idx_ai_invocations_owner",
+    "idx_dedupe_merge_log_owner",
+  ];
+  const atV1 = makeV1Database();
+  let migrated: Database.Database;
+  let updatedAtBefore: Record<string, string>;
+  let backupsBefore: number;
+
+  beforeAll(async () => {
+    process.env.DATA_DIR = atV1.dataDir;
+    vi.resetModules();
+    // First boot: v0 to v2, which is how a 1.5.5 database arrives today.
+    const first = (await import("../../server/db.ts")).sqlite;
+
+    // Put the file back the way the previous release left it: version 1, with
+    // the four prefix indexes the v1 ownership loop created. Rolling a real
+    // v1 file forward is the only way to exercise the step, and this is what
+    // one looks like.
+    for (const name of PREFIX_INDEXES) {
+      const table = name.replace(/^idx_/, "").replace(/_owner$/, "");
+      first.exec(`CREATE INDEX IF NOT EXISTS ${name} ON ${table}(ownerId)`);
+    }
+    first
+      .prepare("UPDATE app_settings SET value = ? WHERE key = 'schema.tenancy'")
+      .run(JSON.stringify(1));
+    expect(indexNames(first)).toEqual([...PREFIX_INDEXES].sort());
+    updatedAtBefore = Object.fromEntries(
+      (
+        first.prepare("SELECT id, updatedAt FROM contacts").all() as {
+          id: string;
+          updatedAt: string;
+        }[]
+      ).map((r) => [r.id, r.updatedAt]),
+    );
+    backupsBefore = fs.readdirSync(path.join(atV1.dataDir, "backups")).length;
+    first.close();
+
+    vi.resetModules();
+    migrated = (await import("../../server/db.ts")).sqlite;
+  });
+
+  afterAll(() => {
+    migrated.close();
+    fs.rmSync(atV1.dataDir, { recursive: true, force: true });
+    process.env.DATA_DIR = fixture.dataDir;
+  });
+
+  function indexNames(db: Database.Database): string[] {
+    return (
+      db
+        .prepare(
+          `SELECT name FROM sqlite_master
+            WHERE type = 'index' AND name IN (${PREFIX_INDEXES.map(() => "?").join(", ")})`,
+        )
+        .all(...PREFIX_INDEXES) as { name: string }[]
+    )
+      .map((r) => r.name)
+      .sort();
+  }
+
+  it("drops the four prefix indexes and writes version 2", () => {
+    expect(indexNames(migrated)).toEqual([]);
+    const version = (
+      migrated
+        .prepare("SELECT value FROM app_settings WHERE key = 'schema.tenancy'")
+        .get() as { value: string }
+    ).value;
+    expect(JSON.parse(version)).toBe(2);
+  });
+
+  it("keeps every composite index the reads depend on", () => {
+    const composites = (
+      migrated
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%owner%'`,
+        )
+        .all() as { name: string }[]
+    ).map((r) => r.name);
+    for (const name of [
+      "idx_contacts_owner_status",
+      "idx_contacts_owner_deleted",
+      "idx_contacts_owner_added",
+      "idx_contacts_owner_score",
+      "idx_interactions_owner_date",
+      "idx_action_items_owner_due",
+      "idx_lists_owner_sort",
+      "idx_dedupe_sugg_owner_conf",
+      "idx_merge_log_owner_at",
+      "idx_ai_inv_owner_created",
+    ]) {
+      expect(composites, name).toContain(name);
+    }
+  });
+
+  it("changes no data and writes no backup for an index drop", () => {
+    for (const row of migrated
+      .prepare("SELECT id, updatedAt FROM contacts")
+      .all() as { id: string; updatedAt: string }[]) {
+      expect(row.updatedAt, `contact ${row.id}`).toBe(updatedAtBefore[row.id]);
+    }
+    expect(fs.readdirSync(path.join(atV1.dataDir, "backups"))).toHaveLength(
+      backupsBefore,
+    );
+  });
+
+  it("still passes every tenancy-verify check", () => {
+    expect(verify(migrated).filter((c) => !c.ok)).toEqual([]);
+  });
+
+  it("does not put the indexes back on the next boot", async () => {
+    vi.resetModules();
+    const third = (await import("../../server/db.ts")).sqlite;
+    try {
+      expect(indexNames(third)).toEqual([]);
+    } finally {
+      third.close();
+    }
   });
 });
 
