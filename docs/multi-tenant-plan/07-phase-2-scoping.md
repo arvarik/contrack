@@ -82,6 +82,63 @@ complete inventory is [appendix-a-query-inventory.md](appendix-a-query-inventory
 >   array adds nobody. The contacts bulk endpoints 2a converted still filter
 >   and report a count.
 
+> **What 2e shipped, where it differs from this document.**
+>
+> - **`normalizeContacts` and `loadNegativeConstraints` were already finished.**
+>   2a scoped their bodies as well as their signatures, including all five
+>   child-table batch loads and the `interaction_mentions` self-join, because a
+>   context whose contact list and normalized map covered different sets of
+>   rows would have been worse than either alone. 2e had nothing left to do in
+>   `normalization.ts`, and the file went into the strict glob unchanged.
+> - **The pass context carries the scope.** The 2e table gives each pass its
+>   owner through `buildPassContext(scope, rid)`, and the four whole-table
+>   loads in `passes.ts` then need it. Putting `scope` on `PassContext` keeps
+>   the rows and the owner that selected them together, so a context built for
+>   one account cannot hand a pass a candidate from another.
+> - **The four whole-table loads were never a leak, and are scoped anyway.**
+>   D1, D2, D3 and the sources load each filter their rows through
+>   `ctx.contactMap` in JavaScript, and that map comes from a scoped query, so
+>   a cross-owner pair was already dropped. The owner joins stop the database
+>   reading every account's addresses and phone numbers on every scan, and stop
+>   a later cleanup of the "redundant" JavaScript filter from opening a hole.
+>   A test builds a context for one account, puts the other account's rows into
+>   its map by hand, and asserts the pass still returns one account's pairs, so
+>   the SQL is pinned on its own.
+> - **`computePrimaryScore` takes a scope, and so do `selectBestPrimary` and
+>   `buildClusters`.** The interactions count the score falls back to is a read
+>   of an owned table, and the two callers above it had no other reason to
+>   change.
+> - **The merge gate and the in-transaction re-reads are both scoped.** The
+>   plan asks for the up-front two-row check, and it is there. The re-reads
+>   inside the transaction carry the owner too, so neither is load-bearing on
+>   its own: stripping either alone leaves the matrix green, and stripping both
+>   fails it. That is deliberate, and the report says so rather than pretending
+>   one test proves one line.
+> - **A missing duplicate is still a quiet no-op, not a 404.** `mergeContacts`
+>   has always answered "the duplicate is already gone" by returning the
+>   primary, which the batch and cluster endpoints count as a success. The
+>   scoped read means a duplicate the caller does not own takes that same
+>   branch, which is rule 4 applied to a branch that already existed. Turning
+>   it into a 404 would have changed what a concurrent merge reports, and the
+>   sub-phase's own constraint is not to change merge semantics.
+> - **`clearOwnerEmbeddings` replaced `clearEmbeddingMeta`.** The full-mode
+>   reset is one exported transaction that drops one account's vectors and its
+>   metadata together, rather than two calls in the engine, so a KNN can never
+>   see vectors whose metadata has already gone.
+> - **The FIFO holds a closure, not just an owner id.** `pending: OwnerId[]`
+>   cannot start anything. Each entry holds the scan id and a `start` callback
+>   the route builds, so the queue never imports the dedupe engine and a scan
+>   that begins minutes later runs for the account that asked, inside
+>   `runWithContext`.
+> - **The 429 answers two different refusals.** The plan's message assumes the
+>   lock is somebody else's. When the caller is the one already scanning, a
+>   queued turn would just repeat the running scan, so that case says so and
+>   books nothing: `details.yours` is `true` and `details.queued` is `false`.
+> - **`src/api/dedupe.ts` lost its error branch rather than gaining one.**
+>   `apiFetch` throws `ApiError` for every non-2xx before the `if (!res.ok)`
+>   block could run, so the block was unreachable. The toast still shows the
+>   server's message, now off the standard envelope.
+
 ---
 
 ## 0. Context for the implementer
@@ -576,6 +633,44 @@ or write attributable rows run per owner inside a context.
 - [x] The existing AI Search and AI hardening suites pass with their
       assertions unchanged.
 - [x] CHANGELOG has a Phase 2f block.
+
+### 2e (shipped)
+
+- [x] A scan reads one account's contacts, child rows, exclusions, mention
+      constraints and embeddings, and the normalized maps hold only that
+      account's rows. `PassContext` carries the scope, and a test that pollutes
+      the context's contact map proves the four whole-table loads are scoped in
+      SQL and not only in JavaScript.
+- [x] Full mode clears one account's vectors and metadata through
+      `clearOwnerEmbeddings`, and deep mode's stale detection and re-embedding
+      join `contacts` on the owner. A full scan by one account leaves the
+      other's `contact_embeddings` count unchanged.
+- [x] Every suggestion, exclusion and merge-log row is inserted with the
+      scope's owner rather than derived by the fill trigger, and every read
+      filters by it, including the pending list, both counts, the per-contact
+      banner, the merge log and undo.
+- [x] `mergeContacts` and `softMergeContacts` load both contacts in one
+      statement that names the owner, before any child statement. A pair the
+      caller does not own is `404` and nothing moves. The existing merge suite
+      passes, and a second suite runs the same merges with two accounts holding
+      rows identical in every visible field.
+- [x] `dedupeQueue` state is per owner. `getScan`, `getActiveScan` and
+      `hasActiveScan` take a scope, status and stream answer `404` for a
+      foreign scan before any event, and the stream handler captures the scope
+      in its closure. A FIFO starts the next account's scan when the running
+      one completes.
+- [x] The scan `429` is a `RateLimitedError` with `details.yours` and
+      `details.queued`, so it carries a request id like every other error, and
+      the frontend shows the message through `apiFetch`.
+- [x] `incrementalDedupeCheck` reads the owner off the contact and runs the
+      whole check inside `runWithContext`. `seedDuplicates(scope)` stamps the
+      account that asked.
+- [x] `tenant-lint --strict` passes for every dedupe service and route file,
+      with allow comments only on child statements that run after the owner
+      check.
+- [x] Matrix tests are real and green for all seventeen dedupe and merge
+      routes, and `isolated: true` for each.
+- [x] CHANGELOG has a Phase 2e block, including the breaking `429` shape.
 
 ### The whole phase
 

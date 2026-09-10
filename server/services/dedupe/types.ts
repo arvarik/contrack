@@ -3,6 +3,7 @@
 // =============================================================================
 
 import type { NormalizedContact } from "./normalization.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import type { ContactRow, HydratedContact } from "../../repositories/types.ts";
 export type { NormalizedContact, ContactRow, HydratedContact };
 
@@ -26,6 +27,15 @@ export interface RawPair {
 }
 
 export interface PassContext {
+  /**
+   * The one account this scan runs for.
+   *
+   * A pass reads whole child tables to find pairs, and it reads them through
+   * the context rather than through a parameter, so the owner travels with the
+   * rows it selected. A context built for one account can never hand a pass a
+   * candidate from another.
+   */
+  scope: Scope;
   allContacts: ContactRow[];
   contactMap: Map<string, ContactRow>;
   normalized: NormalizedContact[];

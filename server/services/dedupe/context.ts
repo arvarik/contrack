@@ -58,6 +58,7 @@ export function buildPassContext(scope: Scope, rid: string): PassContext {
   );
 
   return {
+    scope,
     allContacts,
     contactMap,
     normalized,

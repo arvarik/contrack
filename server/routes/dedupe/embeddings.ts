@@ -7,10 +7,15 @@ import {
   getEmbeddingCount,
   isEmbeddingAvailable,
 } from "../../services/dedupe/index.ts";
+import { scopeOf } from "../../tenancy/scope.ts";
 import { sqlite } from "../../db.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerEmbeddingRoutes(router: Router) {
+  // Classed `admin` in the route manifest and left instance-wide on purpose:
+  // an operator repairing the dedupe index must not stop at their own rows.
+  // Phase 3 mounts the admin gate in front of it. 2h gives it a per-owner loop
+  // so the provider spend is attributed as well.
   router.post(
     "/dedupe/backfill-embeddings",
     asyncHandler(async (req, res) => {
@@ -46,14 +51,20 @@ export function registerEmbeddingRoutes(router: Router) {
 
   router.get(
     "/dedupe/embedding-status",
-    asyncHandler(async (_req, res) => {
-      const embedded = getEmbeddingCount();
+    asyncHandler(async (req, res) => {
+      // Coverage the caller can act on: their own contacts and their own
+      // vectors. An instance-wide percentage told a new account its index was
+      // 98% complete while none of its own contacts were embedded at all.
+      const scope = scopeOf(req);
+      const embedded = getEmbeddingCount(scope);
       const total = (
         sqlite
           .prepare(
-            "SELECT COUNT(*) AS cnt FROM contacts WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL",
+            `SELECT COUNT(*) AS cnt FROM contacts
+              WHERE ownerId = ? AND isGhost = 0
+                AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL`,
           )
-          .get() as { cnt: number }
+          .get(scope.ownerId) as { cnt: number }
       ).cnt;
 
       res.json({

@@ -1,18 +1,52 @@
 import { Router } from "express";
-import { AppError } from "../../utils/AppError.ts";
+import { AppError, RateLimitedError } from "../../utils/AppError.ts";
 import { asyncHandler } from "../../utils/asyncHandler.ts";
 import { log } from "../../utils/logger.ts";
 import {
   dedupeService,
   dedupeQueue,
+  type DedupeScanMode,
   type DedupeScanProgress,
 } from "../../services/dedupe/index.ts";
+import { scopeOf, type Scope } from "../../tenancy/scope.ts";
+import { runWithContext } from "../../tenancy/requestContext.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+
+/**
+ * Start one scan, now or when the run lock frees up.
+ *
+ * The scope is captured here and carried into the run rather than read from
+ * the async context inside it. A queued scan starts from the finishing scan's
+ * callback, where the context belongs to the other account, and even the
+ * immediate path outlives the response it was started from.
+ */
+function startScan(
+  scope: Scope,
+  scanId: string,
+  mode: DedupeScanMode,
+  rid: string,
+  threshold: number,
+): void {
+  runWithContext(
+    {
+      requestId: `job-dedupe-scan-${scanId.slice(0, 8)}`,
+      principal: null,
+      scope,
+    },
+    () => dedupeService.runScan(scope, scanId, mode, rid, threshold),
+  ).catch((err) => {
+    log.error(
+      "API",
+      `[${rid}] Scan ${scanId} processing error: ${getErrorMessage(err)}`,
+    );
+  });
+}
 
 export function registerScanRoutes(router: Router) {
   router.post(
     "/dedupe/scan",
-    asyncHandler(async (req, res) => {
+    asyncHandler(async (req, res, next) => {
+      const scope = scopeOf(req);
       const rid = req.requestId;
       const { mode = "deep", autoMergeThreshold } = req.body;
 
@@ -43,46 +77,58 @@ export function registerScanRoutes(router: Router) {
         }
       }
 
-      const check = dedupeQueue.canStartScan();
+      const check = dedupeQueue.canStartScan(scope);
       if (!check.allowed) {
-        return res.status(429).json({ error: check.reason });
+        // This used to be a bare `res.status(429).json({ error: string })`,
+        // the one answer in the API that skipped the error envelope, so it
+        // carried no code and no request id. `details.yours` says whether the
+        // caller is already scanning or somebody else holds the lock, and
+        // `details.queued` says whether a turn was booked.
+        let queued = false;
+        if (!check.yours) {
+          const scan = dedupeQueue.createScan(scope, mode);
+          queued = dedupeQueue.enqueue(scope, scan.scanId, () =>
+            startScan(scope, scan.scanId, mode, rid, threshold),
+          );
+        }
+        return next(
+          new RateLimitedError(check.reason ?? "Please try again shortly.", {
+            yours: check.yours,
+            queued,
+          }),
+        );
       }
 
-      const scan = dedupeQueue.createScan(mode);
+      const scan = dedupeQueue.createScan(scope, mode);
       log.info(
         "API",
         `[${rid}] POST /api/dedupe/scan → scanId=${scan.scanId}, mode=${mode}, threshold=${threshold}`,
       );
 
-      dedupeService.runScan(scan.scanId, mode, rid, threshold).catch((err) => {
-        log.error(
-          "API",
-          `[${rid}] Scan ${scan.scanId} processing error: ${getErrorMessage(err)}`,
-        );
-      });
+      startScan(scope, scan.scanId, mode, rid, threshold);
 
       res.json({ scanId: scan.scanId, mode });
     }),
   );
 
   router.get("/dedupe/stream", (req, res) => {
+    // Read the owner before a byte of the stream is written. The listener
+    // below runs in the async context of whoever calls emit(), which is the
+    // scan, so the owner has to be settled in this closure while the request
+    // context is still the request's.
+    const scope = scopeOf(req);
     const scanId = req.query.scanId as string;
     if (!scanId) {
-      return res
-        .status(400)
-        .json({ error: "scanId query parameter is required." });
+      throw new AppError("scanId query parameter is required.", 400);
     }
+
+    const scan = dedupeQueue.getScan(scope, scanId);
+    if (!scan) throw new AppError("Scan not found.", 404);
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
-
-    const scan = dedupeQueue.getScan(scanId);
-    if (!scan) {
-      res.write(`data: ${JSON.stringify({ error: "Scan not found" })}\n\n`);
-      return res.end();
-    }
 
     res.write(`data: ${JSON.stringify(scan)}\n\n`);
 
@@ -107,8 +153,8 @@ export function registerScanRoutes(router: Router) {
 
   router.get(
     "/dedupe/active",
-    asyncHandler(async (_req, res) => {
-      const activeScan = dedupeQueue.getActiveScan();
+    asyncHandler(async (req, res) => {
+      const activeScan = dedupeQueue.getActiveScan(scopeOf(req));
       if (!activeScan) {
         return res.json({ active: false });
       }
@@ -119,17 +165,14 @@ export function registerScanRoutes(router: Router) {
   router.get(
     "/dedupe/status",
     asyncHandler(async (req, res) => {
+      const scope = scopeOf(req);
       const scanId = req.query.scanId as string;
       if (!scanId) {
-        return res
-          .status(400)
-          .json({ error: "scanId query parameter is required." });
+        throw new AppError("scanId query parameter is required.", 400);
       }
 
-      const scan = dedupeQueue.getScan(scanId);
-      if (!scan) {
-        return res.status(404).json({ error: "Scan not found." });
-      }
+      const scan = dedupeQueue.getScan(scope, scanId);
+      if (!scan) throw new AppError("Scan not found.", 404);
 
       res.json(scan);
     }),
@@ -140,7 +183,7 @@ export function registerScanRoutes(router: Router) {
       "/dev/seed-duplicates",
       asyncHandler(async (req, res) => {
         const rid = req.requestId;
-        dedupeService.seedDuplicates();
+        dedupeService.seedDuplicates(scopeOf(req));
         log.info(
           "API",
           `[${rid}] POST /api/dev/seed-duplicates → Seeded duplicate pair`,

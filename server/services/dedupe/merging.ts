@@ -1,9 +1,10 @@
 import { scheduleSearchIndex } from "../search/indexQueue.ts";
 import { sqlite, db } from "../../db.ts";
 import * as schema from "../../../src/db/schema.ts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
@@ -15,20 +16,46 @@ import type {
   ContactSourceRow,
 } from "../../repositories/types.ts";
 
+/**
+ * Load both sides of a merge in one statement that names the owner.
+ *
+ * This is the gate the whole file rests on. Sixty statements below re-parent
+ * child rows by contact id alone, and they are safe to do that only because
+ * both contacts came out of this one read: one statement, both ids, the owner
+ * beside them. A row that belongs to somebody else is simply not in the
+ * result, so the caller sees exactly what it sees for a row that never
+ * existed, which is rule 4.
+ *
+ * It also makes the child re-parenting legal at the database level. Moving an
+ * interaction between two contacts keeps its `ownerId`, and the Phase 1
+ * mismatch trigger accepts that only when both contacts share the owner. That
+ * is precisely what this statement proves, so it has to run before any child
+ * statement, not alongside them.
+ */
+function loadMergePair(
+  scope: Scope,
+  primaryId: string,
+  duplicateId: string,
+): { primary: ContactRow | undefined; duplicate: ContactRow | undefined } {
+  const rows = sqlite
+    .prepare("SELECT * FROM contacts WHERE id IN (?, ?) AND ownerId = ?")
+    .all(primaryId, duplicateId, scope.ownerId) as ContactRow[];
+  return {
+    primary: rows.find((r) => r.id === primaryId),
+    duplicate: rows.find((r) => r.id === duplicateId),
+  };
+}
+
 export function mergeContacts(
+  scope: Scope,
   primaryId: string,
   duplicateId: string,
   rid: string,
 ) {
-  // Note: the TOCTOU window between these SELECTs and the BEGIN inside the
+  // Note: the TOCTOU window between this SELECT and the BEGIN inside the
   // transaction is bounded by SQLite's serialized writer. The transaction
   // itself re-reads both rows before mutating (see comment inside the txn).
-  const primary = sqlite
-    .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(primaryId) as ContactRow | undefined;
-  const duplicate = sqlite
-    .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(duplicateId) as ContactRow | undefined;
+  const { primary, duplicate } = loadMergePair(scope, primaryId, duplicateId);
 
   if (!primary) {
     throw new NotFoundError("Primary contact", primaryId);
@@ -48,14 +75,14 @@ export function mergeContacts(
     // but we still need the in-tx read to catch the case where the primary
     // was deleted between the outer SELECT and the BEGIN.
     const primaryInTx = sqlite
-      .prepare("SELECT id FROM contacts WHERE id = ?")
-      .get(primaryId);
+      .prepare("SELECT id FROM contacts WHERE id = ? AND ownerId = ?")
+      .get(primaryId, scope.ownerId);
     if (!primaryInTx) {
       throw new NotFoundError("Primary contact", primaryId);
     }
     const duplicateInTx = sqlite
-      .prepare("SELECT id FROM contacts WHERE id = ?")
-      .get(duplicateId);
+      .prepare("SELECT id FROM contacts WHERE id = ? AND ownerId = ?")
+      .get(duplicateId, scope.ownerId);
     if (!duplicateInTx) {
       log.warn(
         "DedupeService",
@@ -64,8 +91,14 @@ export function mergeContacts(
       return;
     }
 
+    // Both contacts share the owner, proven by `loadMergePair` above, so the
+    // row keeps its `ownerId` and the Phase 1 mismatch trigger accepts the
+    // move to a different contact.
     sqlite
-      .prepare("UPDATE interactions SET contactId = ? WHERE contactId = ?")
+      .prepare(
+        // tenant-lint: allow owner-checked by caller
+        "UPDATE interactions SET contactId = ? WHERE contactId = ?",
+      )
       .run(primaryId, duplicateId);
 
     sqlite
@@ -307,20 +340,35 @@ export function mergeContacts(
 
     db.update(schema.contacts)
       .set(updates as Partial<ContactRow>)
-      .where(eq(schema.contacts.id, primaryId))
+      .where(
+        and(
+          eq(schema.contacts.id, primaryId),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .run();
 
-    // vec0 tables don't support FK cascading — clean up before hard delete
+    // vec0 tables don't support FK cascading — clean up before hard delete.
+    // Both are partitioned by owner, and `contactId` is their primary key, so
+    // one id names one row inside the partition the owner check already
+    // settled. sqlite-vec refuses an UPDATE of a partition column, which is
+    // why deleting the row is the only way to retire it.
     try {
       sqlite
-        .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
+        .prepare(
+          // tenant-lint: allow owner-checked by caller
+          "DELETE FROM search_embeddings WHERE contactId = ?",
+        )
         .run(duplicateId);
     } catch {
       /* vec0 row may not exist */
     }
     try {
       sqlite
-        .prepare("DELETE FROM contact_embeddings WHERE contactId = ?")
+        .prepare(
+          // tenant-lint: allow owner-checked by caller
+          "DELETE FROM contact_embeddings WHERE contactId = ?",
+        )
         .run(duplicateId);
     } catch {
       /* vec0 row may not exist */
@@ -330,7 +378,9 @@ export function mergeContacts(
       .prepare("DELETE FROM dedupe_embedding_meta WHERE contactId = ?")
       .run(duplicateId);
 
-    sqlite.prepare("DELETE FROM contacts WHERE id = ?").run(duplicateId);
+    sqlite
+      .prepare("DELETE FROM contacts WHERE id = ? AND ownerId = ?")
+      .run(duplicateId, scope.ownerId);
 
     // Audit log is part of the SAME transaction. If recordMerge throws (e.g.
     // an unexpected FK problem in dedupe_merge_log), the entire merge rolls
@@ -338,6 +388,7 @@ export function mergeContacts(
     // crash between commit and recordMerge would orphan the merge without
     // an audit row — making `undoSoftMerge` impossible.
     recordMergeUnsafe(
+      scope,
       primaryId,
       duplicateId,
       1.0,
@@ -349,24 +400,18 @@ export function mergeContacts(
 
   mergeTxn();
   scheduleSearchIndex(primaryId);
-  return contactRepo.hydrate(
-    sqlite.prepare("SELECT * FROM contacts WHERE id = ?").get(primaryId),
-  );
+  return contactRepo.hydrate(contactRepo.findOwned(scope, primaryId));
 }
 
 export function softMergeContacts(
+  scope: Scope,
   primaryId: string,
   duplicateId: string,
   confidence: number,
   reasoning: string,
   rid: string,
 ) {
-  const primary = sqlite
-    .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(primaryId) as ContactRow | undefined;
-  const duplicate = sqlite
-    .prepare("SELECT * FROM contacts WHERE id = ?")
-    .get(duplicateId) as ContactRow | undefined;
+  const { primary, duplicate } = loadMergePair(scope, primaryId, duplicateId);
 
   if (!primary) {
     throw new NotFoundError("Primary contact", primaryId);
@@ -390,8 +435,10 @@ export function softMergeContacts(
     // Re-validate inside the transaction. If a concurrent soft-merge set
     // canonicalId between the outer SELECT and BEGIN, bail out atomically.
     const dupInTx = sqlite
-      .prepare("SELECT id, canonicalId FROM contacts WHERE id = ?")
-      .get(duplicateId) as
+      .prepare(
+        "SELECT id, canonicalId FROM contacts WHERE id = ? AND ownerId = ?",
+      )
+      .get(duplicateId, scope.ownerId) as
       { id: string; canonicalId: string | null } | undefined;
     if (!dupInTx) {
       log.warn(
@@ -409,8 +456,14 @@ export function softMergeContacts(
     }
 
     // 1:1 same as mergeContacts, minus the hard DELETE
+    // Both contacts share the owner, proven by `loadMergePair` above, so the
+    // row keeps its `ownerId` and the Phase 1 mismatch trigger accepts the
+    // move to a different contact.
     sqlite
-      .prepare("UPDATE interactions SET contactId = ? WHERE contactId = ?")
+      .prepare(
+        // tenant-lint: allow owner-checked by caller
+        "UPDATE interactions SET contactId = ? WHERE contactId = ?",
+      )
       .run(primaryId, duplicateId);
 
     sqlite
@@ -652,15 +705,23 @@ export function softMergeContacts(
 
     db.update(schema.contacts)
       .set(updates as Partial<ContactRow>)
-      .where(eq(schema.contacts.id, primaryId))
+      .where(
+        and(
+          eq(schema.contacts.id, primaryId),
+          eq(schema.contacts.ownerId, scope.ownerId),
+        ),
+      )
       .run();
 
     sqlite
-      .prepare("UPDATE contacts SET canonicalId = ? WHERE id = ?")
-      .run(primaryId, duplicateId);
+      .prepare(
+        "UPDATE contacts SET canonicalId = ? WHERE id = ? AND ownerId = ?",
+      )
+      .run(primaryId, duplicateId, scope.ownerId);
 
     // Audit log is part of the SAME transaction — see comment in mergeContacts().
     recordMergeUnsafe(
+      scope,
       primaryId,
       duplicateId,
       confidence,

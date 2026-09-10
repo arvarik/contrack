@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { sqlite } from "../../db.ts";
+import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { UnionFind } from "../../utils/unionFind.ts";
@@ -19,7 +20,10 @@ import type {
  * results directly; hydrate() only returns null for malformed input rows, which
  * callers never provide (this was an implicit assumption under `any`).
  */
-export function computePrimaryScore(candidate: HydratedContact | null): number {
+export function computePrimaryScore(
+  scope: Scope,
+  candidate: HydratedContact | null,
+): number {
   const contact = candidate!;
   let score = 0;
 
@@ -46,8 +50,11 @@ export function computePrimaryScore(candidate: HydratedContact | null): number {
     contact.interactionCount ??
     (
       sqlite
-        .prepare("SELECT COUNT(*) as c FROM interactions WHERE contactId = ?")
-        .get(contact.id) as { c: number } | undefined
+        .prepare(
+          `SELECT COUNT(*) as c FROM interactions
+            WHERE contactId = ? AND ownerId = ?`,
+        )
+        .get(contact.id, scope.ownerId) as { c: number } | undefined
     )?.c ??
     0;
   score += interactionCount * 5;
@@ -64,15 +71,16 @@ export function computePrimaryScore(candidate: HydratedContact | null): number {
 
 /** Select the contact with the highest primary score from a list. */
 export function selectBestPrimary(
+  scope: Scope,
   contacts: HydratedContact[],
 ): HydratedContact {
   if (contacts.length === 0) {
     throw new Error("Cannot select primary contact from empty array");
   }
   let best = contacts[0];
-  let bestScore = computePrimaryScore(best);
+  let bestScore = computePrimaryScore(scope, best);
   for (let i = 1; i < contacts.length; i++) {
-    const score = computePrimaryScore(contacts[i]);
+    const score = computePrimaryScore(scope, contacts[i]);
     if (score > bestScore) {
       best = contacts[i];
       bestScore = score;
@@ -155,6 +163,7 @@ const LARGE_CLUSTER_THRESHOLD = 10;
  * Group detected pairs into clusters using Union-Find transitive closure.
  */
 export function buildClusters(
+  scope: Scope,
   pairs: RawPair[],
   contactMap: Map<string, ContactRow>,
   rid: string,
@@ -197,7 +206,7 @@ export function buildClusters(
         matchedField: p.matchedField,
       }));
 
-    const primary = selectBestPrimary(contacts);
+    const primary = selectBestPrimary(scope, contacts);
     const confidences = clusterPairs.map((p) => p.confidence);
     const aggregateConfidence = Math.max(...confidences);
     const minConfidence = Math.min(...confidences);

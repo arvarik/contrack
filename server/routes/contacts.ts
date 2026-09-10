@@ -318,28 +318,29 @@ router.post(
                     const rawB = contactRepo.hydrate(
                       contactRepo.findOwned(scope, pair.idB),
                     );
-                    const scoreA = computePrimaryScore(rawA);
-                    const scoreB = computePrimaryScore(rawB);
+                    const scoreA = computePrimaryScore(scope, rawA);
+                    const scoreB = computePrimaryScore(scope, rawB);
                     const [primaryId, duplicateId] =
                       scoreA >= scoreB
                         ? [pair.idA, pair.idB]
                         : [pair.idB, pair.idA];
 
                     dedupeService.softMergeContacts(
+                      scope,
                       primaryId,
                       duplicateId,
                       pair.confidence,
                       pair.reasoning,
                       rid,
                     );
-                    storeSuggestion(pair, "auto_merged");
+                    storeSuggestion(scope, pair, "auto_merged");
                     autoMerged++;
                   } catch (err: unknown) {
                     log.warn(
                       "API",
                       `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
                     );
-                    storeSuggestion(pair, "pending");
+                    storeSuggestion(scope, pair, "pending");
                     needsReview++;
                   }
                   continue;
@@ -364,7 +365,7 @@ router.post(
                       confidence: 0.88,
                       reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
                     };
-                    storeSuggestion(pair, "pending");
+                    storeSuggestion(scope, pair, "pending");
                     needsReview++;
                   }
                 }
@@ -412,28 +413,29 @@ router.post(
                   const rawB = contactRepo.hydrate(
                     contactRepo.findOwned(scope, pair.idB),
                   );
-                  const scoreA = computePrimaryScore(rawA);
-                  const scoreB = computePrimaryScore(rawB);
+                  const scoreA = computePrimaryScore(scope, rawA);
+                  const scoreB = computePrimaryScore(scope, rawB);
                   const [primaryId, duplicateId] =
                     scoreA >= scoreB
                       ? [pair.idA, pair.idB]
                       : [pair.idB, pair.idA];
 
                   dedupeService.softMergeContacts(
+                    scope,
                     primaryId,
                     duplicateId,
                     pair.confidence,
                     pair.reasoning,
                     rid,
                   );
-                  storeSuggestion(pair, "auto_merged");
+                  storeSuggestion(scope, pair, "auto_merged");
                   autoMerged++;
                 } catch (err: unknown) {
                   log.warn(
                     "API",
                     `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
                   );
-                  storeSuggestion(pair, "pending");
+                  storeSuggestion(scope, pair, "pending");
                   needsReview++;
                 }
               }
@@ -480,28 +482,29 @@ router.post(
                     const rawB = contactRepo.hydrate(
                       contactRepo.findOwned(scope, pair.idB),
                     );
-                    const scoreA = computePrimaryScore(rawA);
-                    const scoreB = computePrimaryScore(rawB);
+                    const scoreA = computePrimaryScore(scope, rawA);
+                    const scoreB = computePrimaryScore(scope, rawB);
                     const [primaryId, duplicateId] =
                       scoreA >= scoreB
                         ? [pair.idA, pair.idB]
                         : [pair.idB, pair.idA];
 
                     dedupeService.softMergeContacts(
+                      scope,
                       primaryId,
                       duplicateId,
                       pair.confidence,
                       pair.reasoning,
                       rid,
                     );
-                    storeSuggestion(pair, "auto_merged");
+                    storeSuggestion(scope, pair, "auto_merged");
                     autoMerged++;
                   } catch (err: unknown) {
                     log.warn(
                       "API",
                       `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
                     );
-                    storeSuggestion(pair, "pending");
+                    storeSuggestion(scope, pair, "pending");
                     needsReview++;
                   }
                 }

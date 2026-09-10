@@ -6,12 +6,14 @@ import {
   dedupeService,
   clearStaleSuggestions,
 } from "../../services/dedupe/index.ts";
+import { scopeOf } from "../../tenancy/scope.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge",
     asyncHandler(async (req, res) => {
+      const scope = scopeOf(req);
       const rid = req.requestId;
       const { primaryId, duplicateId } = req.body;
 
@@ -22,7 +24,12 @@ export function registerMergeRoutes(router: Router) {
         throw new AppError("Cannot merge a contact with itself", 400);
       }
 
-      const merged = dedupeService.mergeContacts(primaryId, duplicateId, rid);
+      const merged = dedupeService.mergeContacts(
+        scope,
+        primaryId,
+        duplicateId,
+        rid,
+      );
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge → merged ${duplicateId} into ${primaryId}`,
@@ -34,6 +41,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge-batch",
     asyncHandler(async (req, res) => {
+      const scope = scopeOf(req);
       const rid = req.requestId;
       const { merges } = req.body;
 
@@ -66,7 +74,7 @@ export function registerMergeRoutes(router: Router) {
           continue;
         }
         try {
-          dedupeService.mergeContacts(primaryId, duplicateId, rid);
+          dedupeService.mergeContacts(scope, primaryId, duplicateId, rid);
           results.push({ primaryId, duplicateId, success: true });
         } catch (err: unknown) {
           results.push({
@@ -82,7 +90,7 @@ export function registerMergeRoutes(router: Router) {
       // Merging tombstones contacts, which can strand OTHER pending
       // suggestions that reference them. Clear them now, exactly as a scan
       // does, so the review queue never shows a pair that can no longer merge.
-      if (succeeded > 0) clearStaleSuggestions();
+      if (succeeded > 0) clearStaleSuggestions(scope);
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge-batch → ${succeeded}/${merges.length} merged`,
@@ -94,6 +102,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge-cluster",
     asyncHandler(async (req, res) => {
+      const scope = scopeOf(req);
       const rid = req.requestId;
       const { primaryId, duplicateIds } = req.body;
 
@@ -118,7 +127,12 @@ export function registerMergeRoutes(router: Router) {
 
       for (const dupId of duplicateIds) {
         try {
-          lastResult = dedupeService.mergeContacts(primaryId, dupId, rid);
+          lastResult = dedupeService.mergeContacts(
+            scope,
+            primaryId,
+            dupId,
+            rid,
+          );
           merged++;
         } catch (err: unknown) {
           log.warn(
@@ -132,7 +146,7 @@ export function registerMergeRoutes(router: Router) {
       // Resolve the pending suggestions this merge just satisfied (and any
       // others stranded by the tombstones) — otherwise the review queue keeps
       // offering pairs whose contacts no longer exist as separate rows.
-      if (merged > 0) clearStaleSuggestions();
+      if (merged > 0) clearStaleSuggestions(scope);
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge-cluster → merged ${merged}/${duplicateIds.length} into ${primaryId}`,
@@ -144,6 +158,7 @@ export function registerMergeRoutes(router: Router) {
   router.post(
     "/contacts/merge-clusters",
     asyncHandler(async (req, res) => {
+      const scope = scopeOf(req);
       const rid = req.requestId;
       const { clusters } = req.body;
 
@@ -188,7 +203,7 @@ export function registerMergeRoutes(router: Router) {
 
         for (const dupId of duplicateIds) {
           try {
-            dedupeService.mergeContacts(primaryId, dupId, rid);
+            dedupeService.mergeContacts(scope, primaryId, dupId, rid);
             merged++;
           } catch (err: unknown) {
             log.warn(
@@ -205,7 +220,7 @@ export function registerMergeRoutes(router: Router) {
       }
 
       // Same stale-suggestion cleanup as the single-cluster route.
-      if (totalMerged > 0) clearStaleSuggestions();
+      if (totalMerged > 0) clearStaleSuggestions(scope);
       log.info(
         "API",
         `[${rid}] POST /api/contacts/merge-clusters → ${totalMerged} merged, ${totalFailed} failed across ${clusters.length} clusters`,

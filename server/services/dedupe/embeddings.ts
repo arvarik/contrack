@@ -205,8 +205,13 @@ const _stmts = {
   ),
   // tenant-lint: allow owner-checked by caller
   delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
-  // tenant-lint: allow instance sweep
-  count: sqlite.prepare("SELECT COUNT(*) AS cnt FROM contact_embeddings"),
+  // `ownerId` is the partition key, so this counts one owner's chunks rather
+  // than reading the table. The dedupe index is per account: a scan asks how
+  // many of ITS contacts are embedded, and the answer decides whether the run
+  // pays a provider to backfill.
+  count: sqlite.prepare(
+    "SELECT COUNT(*) AS cnt FROM contact_embeddings WHERE ownerId = ?",
+  ),
   exists: sqlite.prepare(
     // tenant-lint: allow owner-checked by caller
     "SELECT 1 FROM contact_embeddings WHERE contactId = ?",
@@ -231,7 +236,13 @@ const _stmts = {
   upsertMeta: sqlite.prepare(
     "INSERT OR REPLACE INTO dedupe_embedding_meta (contactId, embeddedAt) VALUES (?, ?)",
   ),
-  clearMeta: sqlite.prepare("DELETE FROM dedupe_embedding_meta"),
+  clearOwner: sqlite.prepare(
+    "DELETE FROM contact_embeddings WHERE ownerId = ?",
+  ),
+  clearOwnerMeta: sqlite.prepare(
+    `DELETE FROM dedupe_embedding_meta
+      WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)`,
+  ),
   deleteMeta: sqlite.prepare(
     "DELETE FROM dedupe_embedding_meta WHERE contactId = ?",
   ),
@@ -273,14 +284,24 @@ export function storeEmbeddings(
   txn();
 }
 
-/** Clear all embedding metadata (used on full scan reset). */
-export function clearEmbeddingMeta(): void {
-  _stmts.clearMeta.run();
-}
+/**
+ * Drop one account's dedupe index, vectors and metadata together.
+ *
+ * A full-mode scan re-embeds from scratch, so it starts by throwing the old
+ * vectors away. Until 2e that was `DELETE FROM contact_embeddings` with no
+ * predicate plus a metadata wipe, so one person choosing "full" erased every
+ * other account's dedupe index and made their next scan pay a provider to
+ * rebuild it. The two deletes run in one transaction so a KNN never sees
+ * vectors whose metadata is already gone.
+ */
+export const clearOwnerEmbeddings = sqlite.transaction((scope: Scope) => {
+  _stmts.clearOwnerMeta.run(scope.ownerId);
+  _stmts.clearOwner.run(scope.ownerId);
+}) as (scope: Scope) => void;
 
-/** Get the total number of stored embeddings. */
-export function getEmbeddingCount(): number {
-  return (_stmts.count.get() as { cnt: number }).cnt;
+/** How many of this account's contacts have a dedupe vector. */
+export function getEmbeddingCount(scope: Scope): number {
+  return (_stmts.count.get(scope.ownerId) as { cnt: number }).cnt;
 }
 
 /**
@@ -339,21 +360,21 @@ export function findNearestNeighbors(
  * These contacts have been modified after their embedding was generated and
  * should be re-embedded to reflect current data.
  */
-function findStaleEmbeddings(): string[] {
+function findStaleEmbeddings(scope: Scope): string[] {
   const rows = sqlite
     .prepare(
-      // tenant-lint: allow instance sweep
       `
     SELECT m.contactId
     FROM dedupe_embedding_meta m
     JOIN contacts c ON c.id = m.contactId
-    WHERE c.updatedAt > m.embeddedAt
+    WHERE c.ownerId = ?
+      AND c.updatedAt > m.embeddedAt
       AND c.isGhost = 0
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
       AND c.canonicalId IS NULL
   `,
     )
-    .all() as { contactId: string }[];
+    .all(scope.ownerId) as { contactId: string }[];
   return rows.map((r) => r.contactId);
 }
 
@@ -363,10 +384,10 @@ function findStaleEmbeddings(): string[] {
  *
  * @returns Number of contacts re-embedded
  */
-export async function reEmbedStaleContacts(): Promise<number> {
+export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
   if (!isEmbeddingAvailable()) return 0;
 
-  const staleIds = findStaleEmbeddings();
+  const staleIds = findStaleEmbeddings(scope);
   if (staleIds.length === 0) {
     log.debug("DedupeEmbeddings", "No stale embeddings found");
     return 0;
@@ -379,8 +400,10 @@ export async function reEmbedStaleContacts(): Promise<number> {
 
   const items: { id: string; text: string }[] = [];
   for (const id of staleIds) {
-    const scope = scopeOfContact(id);
-    const normalized = scope && normalizeContactById(scope, id);
+    // Every id came out of the scoped query above, so the scan's own scope
+    // reads them. Re-embedding is provider-billed: it must stop at the account
+    // that asked for the scan.
+    const normalized = normalizeContactById(scope, id);
     if (normalized) {
       items.push({ id: normalized.id, text: normalized.embeddingText });
     }
