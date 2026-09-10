@@ -6,6 +6,7 @@
 
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
+import type { Scope } from "../tenancy/scope.ts";
 import type { HydratedContact } from "../repositories/types.ts";
 
 export interface FullExport {
@@ -19,22 +20,44 @@ export interface FullExport {
   mergeLog: unknown[];
 }
 
-/** Everything, hydrated — including archived and trashed rows (flagged). */
-export function buildFullExport(): FullExport {
+/**
+ * One account's data, hydrated, including its archived and trashed rows.
+ *
+ * Every table filters by the caller. `list_members` is the one that cannot:
+ * it carries no `ownerId`, so it reaches the owner through its list. Filtering
+ * it by `contactId` instead would drop a membership whose list belongs to the
+ * caller but whose contact row is already gone.
+ *
+ * Phase 3's admin offboarding export calls this with `scopeForOwnerId(id)`.
+ */
+export function buildFullExport(scope: Scope): FullExport {
+  const owner = scope.ownerId;
   const contacts = contactRepo.hydrateMany(
-    sqlite.prepare("SELECT * FROM contacts ORDER BY addedAt ASC").all(),
+    sqlite
+      .prepare("SELECT * FROM contacts WHERE ownerId = ? ORDER BY addedAt ASC")
+      .all(owner),
   );
   const interactions = sqlite
-    .prepare("SELECT * FROM interactions ORDER BY date ASC")
-    .all();
-  const lists = sqlite.prepare("SELECT * FROM lists ORDER BY sortOrder").all();
-  const listMembers = sqlite.prepare("SELECT * FROM list_members").all();
+    .prepare("SELECT * FROM interactions WHERE ownerId = ? ORDER BY date ASC")
+    .all(owner);
+  const lists = sqlite
+    .prepare("SELECT * FROM lists WHERE ownerId = ? ORDER BY sortOrder")
+    .all(owner);
+  const listMembers = sqlite
+    .prepare(
+      `SELECT lm.* FROM list_members lm
+         JOIN lists l ON l.id = lm.listId
+        WHERE l.ownerId = ?`,
+    )
+    .all(owner);
   const actionItems = sqlite
-    .prepare("SELECT * FROM action_items ORDER BY dueAt ASC")
-    .all();
+    .prepare("SELECT * FROM action_items WHERE ownerId = ? ORDER BY dueAt ASC")
+    .all(owner);
   const mergeLog = sqlite
-    .prepare("SELECT * FROM dedupe_merge_log ORDER BY mergedAt ASC")
-    .all();
+    .prepare(
+      "SELECT * FROM dedupe_merge_log WHERE ownerId = ? ORDER BY mergedAt ASC",
+    )
+    .all(owner);
 
   return {
     exportedAt: new Date().toISOString(),
@@ -55,14 +78,16 @@ function csvCell(value: unknown): string {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-/** Flat contacts CSV (active + archived; trash excluded). */
-export function buildContactsCsv(): string {
+/** One account's flat contacts CSV (active + archived; trash excluded). */
+export function buildContactsCsv(scope: Scope): string {
   const contacts = contactRepo.hydrateMany(
     sqlite
       .prepare(
-        "SELECT * FROM contacts WHERE deletedAt IS NULL ORDER BY name COLLATE NOCASE ASC",
+        `SELECT * FROM contacts
+          WHERE ownerId = ? AND deletedAt IS NULL
+          ORDER BY name COLLATE NOCASE ASC`,
       )
-      .all(),
+      .all(scope.ownerId),
   );
 
   const header = [

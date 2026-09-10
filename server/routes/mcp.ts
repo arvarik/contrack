@@ -1,8 +1,17 @@
+// =============================================================================
+// Routes — MCP: the read-only surface for an MCP client or a personal token
+// =============================================================================
+// Mounted in server/app.ts at /api, before contactsRouter so that
+// GET /api/contacts/action-items reaches this file rather than
+// GET /api/contacts/:id. Every handler takes the caller's scope.
+// =============================================================================
+
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { mcpService } from "../services/mcpService.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
@@ -21,7 +30,7 @@ router.get(
       industry: req.query.industry as string,
     };
 
-    const rows = mcpService.queryContacts(options);
+    const rows = mcpService.queryContacts(scopeOf(req), options);
 
     log.debug(
       "API",
@@ -35,7 +44,7 @@ router.get(
   "/contacts/action-items",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const rows = mcpService.getActionItems();
+    const rows = mcpService.getActionItems(scopeOf(req));
 
     log.debug(
       "API",
@@ -48,7 +57,7 @@ router.get(
 router.get(
   "/tags",
   asyncHandler(async (req, res) => {
-    const rows = mcpService.getTags();
+    const rows = mcpService.getTags(scopeOf(req));
     res.json(rows.map((r) => r.tag));
   }),
 );
@@ -56,7 +65,7 @@ router.get(
 router.get(
   "/industries",
   asyncHandler(async (req, res) => {
-    const rows = mcpService.getIndustries();
+    const rows = mcpService.getIndustries(scopeOf(req));
     res.json(rows.map((r) => r.industry));
   }),
 );
@@ -69,7 +78,7 @@ router.get(
     if (!q) throw new AppError("q parameter is required", 400);
 
     const type = req.query.type as string;
-    const rows = mcpService.searchInteractions(q, type);
+    const rows = mcpService.searchInteractions(scopeOf(req), q, type);
 
     log.debug(
       "API",
@@ -87,7 +96,7 @@ router.get(
     const since = req.query.since as string;
     const type = req.query.type as string;
 
-    const rows = mcpService.getGlobalTimeline(limit, since, type);
+    const rows = mcpService.getGlobalTimeline(scopeOf(req), limit, since, type);
 
     log.debug("API", `[${rid}] GET /api/timeline → ${rows.length} entries`);
     res.json(rows);

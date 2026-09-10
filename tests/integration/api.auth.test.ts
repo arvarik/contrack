@@ -678,9 +678,11 @@ describe("requireAdmin", () => {
     expect(run(undefined)).toEqual({ code: "UNAUTHORIZED", status: 401 });
   });
 
-  it("is mounted nowhere yet, which is deliberate until Phase 2g", () => {
+  it("is mounted nowhere yet, which is deliberate until Phase 3", () => {
     // Mounting it early would gate an endpoint that has no admin story behind
     // it, and would be invisible until somebody with a member account hit it.
+    // Phase 2 finished with fourteen routes classed `admin` in the manifest
+    // and none of them guarded, which is what this asserts.
     const routes = fs
       .readdirSync("server/routes", { recursive: true })
       .filter((f) => String(f).endsWith(".ts"))

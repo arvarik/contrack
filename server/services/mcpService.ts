@@ -1,17 +1,43 @@
+// =============================================================================
+// MCP Service — the read-only surface an MCP client or a personal token asks
+// =============================================================================
+// Six queries, one account. Every one of them names the caller's owner, so an
+// MCP client signed in with one account's personal token reads that account's
+// contacts and nothing else. The principal a token produces is an ordinary
+// user principal, so `scopeOf(req)` answers for a token exactly as it answers
+// for a browser session.
+// =============================================================================
+
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
+import type { Scope } from "../tenancy/scope.ts";
 
 export const mcpService = {
-  queryContacts(options: {
-    limit: number;
-    offset: number;
-    fields?: string;
-    role?: string;
-    company?: string;
-    industry?: string;
-  }) {
-    let q = "SELECT * FROM contacts WHERE 1=1";
-    const params: (string | number)[] = [];
+  /**
+   * The caller's contacts, filtered and paged.
+   *
+   * The active-row filters are new in sub-phase 2g. This query used to answer
+   * with trashed contacts, ghosts and the losing side of a merge, so an MCP
+   * client saw people the user had deleted, stubs the app never shows, and
+   * duplicates the app had already retired. `softMergeContacts` sets
+   * `canonicalId` and nothing else, so that third filter is what excludes a
+   * merged row. Archived contacts stay: the app shows those on their own page.
+   */
+  queryContacts(
+    scope: Scope,
+    options: {
+      limit: number;
+      offset: number;
+      fields?: string;
+      role?: string;
+      company?: string;
+      industry?: string;
+    },
+  ) {
+    let q = `SELECT * FROM contacts
+        WHERE ownerId = ? AND deletedAt IS NULL AND isGhost = 0
+          AND canonicalId IS NULL`;
+    const params: (string | number)[] = [scope.ownerId];
 
     if (options.role) {
       q += " AND role LIKE ?";
@@ -45,49 +71,68 @@ export const mcpService = {
     return rows;
   },
 
-  getActionItems() {
+  /** The caller's contacts that are due for follow-up. */
+  getActionItems(scope: Scope) {
     const now = new Date().toISOString();
     const rows = sqlite
       .prepare(
         `
-      SELECT * FROM contacts 
-      WHERE 
-        nextFollowUpAt <= ?
-        OR (
-           lastContactedAt IS NOT NULL AND cadenceDays > 0 AND 
-           datetime(lastContactedAt, '+' || cadenceDays || ' days') <= ?
+      SELECT * FROM contacts
+      WHERE ownerId = ?
+        AND (
+          nextFollowUpAt <= ?
+          OR (
+             lastContactedAt IS NOT NULL AND cadenceDays > 0 AND
+             datetime(lastContactedAt, '+' || cadenceDays || ' days') <= ?
+          )
         )
       ORDER BY lastContactedAt ASC
     `,
       )
-      .all(now, now);
+      .all(scope.ownerId, now, now);
 
     return contactRepo.hydrateMany(rows);
   },
 
-  getTags() {
-    return sqlite
-      .prepare("SELECT DISTINCT tag FROM contact_tags ORDER BY tag ASC")
-      .all() as { tag: string }[];
-  },
-
-  getIndustries() {
+  /**
+   * Every tag the caller uses.
+   *
+   * `contact_tags` carries no owner of its own, so the join to `contacts` is
+   * what makes this one account's list. Reading the child table alone returned
+   * the tag vocabulary of everybody on the instance.
+   */
+  getTags(scope: Scope) {
     return sqlite
       .prepare(
-        "SELECT DISTINCT industry FROM contacts WHERE industry IS NOT NULL AND industry != '' ORDER BY industry ASC",
+        `SELECT DISTINCT ct.tag FROM contact_tags ct
+           JOIN contacts c ON c.id = ct.contactId
+          WHERE c.ownerId = ?
+          ORDER BY ct.tag ASC`,
       )
-      .all() as { industry: string }[];
+      .all(scope.ownerId) as { tag: string }[];
   },
 
-  searchInteractions(q: string, type?: string) {
+  /** Every industry the caller's contacts name. */
+  getIndustries(scope: Scope) {
+    return sqlite
+      .prepare(
+        `SELECT DISTINCT industry FROM contacts
+          WHERE ownerId = ? AND industry IS NOT NULL AND industry != ''
+          ORDER BY industry ASC`,
+      )
+      .all(scope.ownerId) as { industry: string }[];
+  },
+
+  /** The caller's interactions whose title or body contains `q`. */
+  searchInteractions(scope: Scope, q: string, type?: string) {
     const safeQ = `%${q}%`;
     let sqlQuery = `
-      SELECT i.*, c.name as contactName 
+      SELECT i.*, c.name as contactName
       FROM interactions i
       JOIN contacts c ON i.contactId = c.id
-      WHERE (i.title LIKE ? OR i.content LIKE ?)
+      WHERE i.ownerId = ? AND (i.title LIKE ? OR i.content LIKE ?)
     `;
-    const params: string[] = [safeQ, safeQ];
+    const params: string[] = [scope.ownerId, safeQ, safeQ];
 
     if (type) {
       sqlQuery += " AND i.type = ?";
@@ -98,14 +143,26 @@ export const mcpService = {
     return sqlite.prepare(sqlQuery).all(...params);
   },
 
-  getGlobalTimeline(limit: number, since?: string, type?: string) {
+  /**
+   * The caller's whole timeline, newest first.
+   *
+   * The owner predicate sits on `interactions`, which carries its own
+   * `ownerId`, so this reads `idx_interactions_owner_date` rather than joining
+   * first and filtering afterwards.
+   */
+  getGlobalTimeline(
+    scope: Scope,
+    limit: number,
+    since?: string,
+    type?: string,
+  ) {
     let sqlQuery = `
       SELECT i.*, c.name as contactName, c.avatarUrl as contactAvatar, c.themeColor as contactThemeColor
       FROM interactions i
       JOIN contacts c ON i.contactId = c.id
-      WHERE 1=1
+      WHERE i.ownerId = ?
     `;
-    const params: (string | number)[] = [];
+    const params: (string | number)[] = [scope.ownerId];
 
     if (since) {
       sqlQuery += " AND i.date >= ?";

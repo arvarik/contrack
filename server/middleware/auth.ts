@@ -425,8 +425,9 @@ export function requireSession(
  * Gate for instance administration: user management, instance settings,
  * backups, the audit log.
  *
- * Mounted nowhere in Phase 1 by design. Phase 2g and Phase 3 mount it, and a
- * route test asserts it is absent until then.
+ * Mounted nowhere by design. Phase 2 classifies every admin route in
+ * `ROUTE_MANIFEST` and stops there; Phase 3 mounts this guard and tests it.
+ * A route test asserts it is absent until then.
  */
 export function requireAdmin(
   req: Request,
