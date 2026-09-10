@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiJson } from "./client";
 /**
  * AI Stats API hooks — React Query hooks for the AI Stats Page.
  *
@@ -36,11 +36,30 @@ export interface AIStatsQuota {
   grounding: { rpd: number; limit: number; remaining: number };
 }
 
+/** One account's share of the instance's AI spending. */
+export interface AIStatsUserUsage {
+  userId: string;
+  /** Null when the account has since been deleted but its rows have not. */
+  username: string | null;
+  totalInvocations: number;
+  freshCalls: number;
+  cachedCalls: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
 export interface AIStatsSummary {
   session: AIStatsSessionKPIs;
   tier: "FREE" | "PAID" | "MOCK";
   quota: AIStatsQuota;
-  cacheTiers: Record<string, AIStatsCacheTier>;
+  /**
+   * The shared in-process cache. Admin-only, and simply absent for a member,
+   * which is why the accordion that renders it is already conditional.
+   */
+  cacheTiers?: Record<string, AIStatsCacheTier>;
+  /** Present only for `scope: "all"`. */
+  byUser?: AIStatsUserUsage[];
+  scope?: "all";
   timestamp: string;
 }
 
@@ -51,8 +70,18 @@ export interface AIStatsFeedItem {
   tokenCount: number | null;
   latencyMs: number;
   cached: boolean;
-  description: string | null;
+  /**
+   * Optional, because the instance feed does not send it.
+   *
+   * It is the one column that can carry a fragment of what somebody asked
+   * about, and an operator reading the billing screen has no business seeing
+   * another account's. Decision D10.
+   */
+  description?: string | null;
   createdAt: string;
+  /** Present only on the instance feed. */
+  userId?: string;
+  username?: string | null;
 }
 
 export interface AIStatsFeedResponse {
@@ -75,6 +104,14 @@ export interface FeedQueryParams {
   operation?: string;
   cached?: "true" | "false";
   sort?: "newest" | "oldest";
+  /**
+   * `"all"` asks for the instance rather than the caller, and needs an admin.
+   *
+   * Never send it speculatively to find out whether somebody is an admin: a
+   * member gets `403 ADMIN_REQUIRED`, which the shared client turns into a
+   * toast on their screen.
+   */
+  scope?: "all";
 }
 
 // =============================================================================
@@ -85,14 +122,17 @@ export interface FeedQueryParams {
  * Fetch aggregate AI usage summary (session KPIs, quota, cache tiers).
  * 30-second stale time — dashboard data that refreshes on each mount.
  */
-export const useAIStatsSummary = () => {
+export const useAIStatsSummary = (scope?: "all") => {
   return useQuery({
-    queryKey: ["aiStats", "summary"],
-    queryFn: async ({ signal }): Promise<AIStatsSummary> => {
-      const res = await apiFetch(`/ai/stats/summary`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch AI stats summary");
-      return res.json();
-    },
+    // The scope is in the key. Without it the instance answer is served for
+    // the personal view and back again, and the two are different numbers
+    // with the same shape — which is the kind of wrong nobody notices.
+    queryKey: ["aiStats", "summary", scope ?? "mine"],
+    queryFn: ({ signal }): Promise<AIStatsSummary> =>
+      apiJson<AIStatsSummary>(
+        scope ? `/ai/stats/summary?scope=${scope}` : `/ai/stats/summary`,
+        { signal },
+      ),
     staleTime: 30_000,
   });
 };
@@ -111,19 +151,18 @@ export const useAIStatsFeed = (params: FeedQueryParams = {}) => {
   if (params.operation) searchParams.set("operation", params.operation);
   if (params.cached) searchParams.set("cached", params.cached);
   if (params.sort) searchParams.set("sort", params.sort);
+  if (params.scope) searchParams.set("scope", params.scope);
 
   const queryString = searchParams.toString();
 
   return useQuery({
+    // `params` carries the scope, so the key already distinguishes the two.
     queryKey: ["aiStats", "feed", params],
-    queryFn: async ({ signal }): Promise<AIStatsFeedResponse> => {
-      const url = queryString
-        ? `/ai/stats/feed?${queryString}`
-        : `/ai/stats/feed`;
-      const res = await apiFetch(url, { signal });
-      if (!res.ok) throw new Error("Failed to fetch AI stats feed");
-      return res.json();
-    },
+    queryFn: ({ signal }): Promise<AIStatsFeedResponse> =>
+      apiJson<AIStatsFeedResponse>(
+        queryString ? `/ai/stats/feed?${queryString}` : `/ai/stats/feed`,
+        { signal },
+      ),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
