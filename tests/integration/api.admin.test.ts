@@ -1697,6 +1697,49 @@ describe("the audit log", () => {
     }
   });
 
+  it("pages within the filter, not across it", async () => {
+    // The filter and the cursor share one parameter list, and the cursor's
+    // three values are bound before the filter's. A wrong order here would
+    // page through the whole log while claiming to be filtered, which the
+    // one-page test above could never see.
+    // Enough rows of one action to need several pages. Written straight
+    // through the service, because reaching five real sign-ins would spend
+    // the per-address credential budget the sign-in route shares.
+    for (let i = 0; i < 5; i++) {
+      auditService.record({
+        actorUserId: admin.id,
+        action: "auth.login.success",
+        targetType: "user",
+        targetId: admin.id,
+      });
+    }
+
+    const seen: string[] = [];
+    const actions: string[] = [];
+    let before: string | null = null;
+    for (let page = 0; page < 6; page++) {
+      const url =
+        `/api/admin/audit?limit=2&action=auth.login.success` +
+        (before ? `&before=${encodeURIComponent(before)}` : "");
+      const res: request.Response = await as(admin)(request(app).get(url));
+      expect(res.status).toBe(200);
+      for (const entry of res.body.entries as {
+        id: string;
+        action: string;
+      }[]) {
+        seen.push(entry.id);
+        actions.push(entry.action);
+      }
+      before = res.body.nextBefore as string | null;
+      if (!before) break;
+    }
+
+    expect(actions.length).toBeGreaterThan(2);
+    expect(new Set(actions)).toEqual(new Set(["auth.login.success"]));
+    // No row twice, which is what the composite cursor is for.
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
   it("refuses an action nobody writes rather than answering nothing", async () => {
     // An empty page in an audit log reads as "nothing happened". A typo must
     // not be able to produce one.
