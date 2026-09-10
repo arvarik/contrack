@@ -72,6 +72,11 @@ import {
 } from "../../server/services/settingsService.ts";
 import { invalidateProviderCache } from "../../server/ai/providerRegistry.ts";
 import { aiCache, ownerKey } from "../../server/utils/aiCache.ts";
+import {
+  clearOwnerEmbeddings,
+  dedupeQueue,
+} from "../../server/services/dedupe/index.ts";
+import { softMergeContacts } from "../../server/services/dedupe/merging.ts";
 
 const app = makeTestApp();
 
@@ -100,6 +105,14 @@ const COVERED = [
   "GET /api/contacts/map",
   "GET /api/dashboard",
   "GET /api/dashboard/insight",
+  "GET /api/dedupe/active",
+  "GET /api/dedupe/embedding-status",
+  "GET /api/dedupe/merge-log",
+  "GET /api/dedupe/status",
+  "GET /api/dedupe/stream",
+  "GET /api/dedupe/suggestion-for/:contactId",
+  "GET /api/dedupe/suggestions",
+  "GET /api/dedupe/suggestions/count",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
   "GET /api/search",
@@ -120,6 +133,15 @@ const COVERED = [
   "POST /api/contacts/:id/promote",
   "POST /api/contacts/bulk",
   "POST /api/contacts/bulk-delete",
+  "POST /api/contacts/merge",
+  "POST /api/contacts/merge-batch",
+  "POST /api/contacts/merge-cluster",
+  "POST /api/contacts/merge-clusters",
+  "POST /api/dedupe/merge-log/:id/undo",
+  "POST /api/dedupe/scan",
+  "POST /api/dedupe/suggestions/:id/dismiss",
+  "POST /api/dedupe/suggestions/:id/merge",
+  "POST /api/dev/seed-duplicates",
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
@@ -1885,6 +1907,460 @@ describe("AI stats count the caller's own work", () => {
 
     expect(detail).toContain("idx_ai_inv_owner_created");
     expect(detail).not.toContain("SCAN ai_invocations");
+  });
+});
+
+// =============================================================================
+// Dedupe: scans, suggestions, merges, and the merge log
+// =============================================================================
+// Dedupe is the one feature whose whole job is to decide that two rows are the
+// same person. Two rules govern it, and both are proved below: a scan reads
+// one account's contacts, and a merge refuses a pair the caller does not own
+// before it moves a single child row.
+//
+// The tests in this block run in order and share fixtures on purpose. A scan
+// clears and rewrites the pending suggestion table, so the order the queue
+// sees them in is part of what is under test.
+
+describe("dedupe scans and merges stop at the account that asked", () => {
+  /** A's identical pair, and B's identical pair with the same name and email. */
+  let janeA: string[];
+  let janeB: string[];
+  /** A's soft-merged pair, for the merge log and undo. */
+  let roeA: string[];
+  let mergeLogIdA: string;
+  let scanIdA: string;
+
+  const create = async (actor: Actor, body: Record<string, unknown>) => {
+    const res = await asUser(actor)(
+      request(app).post("/api/contacts").send(body),
+    );
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  };
+
+  const pendingRows = (
+    owner: string,
+  ): { contactIdA: string; contactIdB: string }[] =>
+    sqlite
+      .prepare(
+        `SELECT contactIdA, contactIdB FROM dedupe_suggestions
+          WHERE ownerId = ? AND status = 'pending'`,
+      )
+      .all(owner) as { contactIdA: string; contactIdB: string }[];
+
+  const scan = (actor: Actor, body: Record<string, unknown>) =>
+    asUser(actor)(request(app).post("/api/dedupe/scan").send(body));
+
+  const status = (actor: Actor, scanId: string) =>
+    asUser(actor)(request(app).get("/api/dedupe/status").query({ scanId }));
+
+  beforeAll(async () => {
+    dedupeQueue.__resetForTests();
+    // The same two people, twice. Same name, same address, different accounts.
+    // A duplicate is only ever a duplicate inside one account: these four rows
+    // are two problems, not one, and never six pairs.
+    janeA = [
+      await create(A, { name: "Jane Doe", emails: ["jane.doe@example.com"] }),
+      await create(A, { name: "Jane Doe", emails: ["jane.doe@example.com"] }),
+    ];
+    janeB = [
+      await create(B, { name: "Jane Doe", emails: ["jane.doe@example.com"] }),
+      await create(B, { name: "Jane Doe", emails: ["jane.doe@example.com"] }),
+    ];
+    roeA = [
+      await create(A, { name: "John Roe Primary" }),
+      await create(A, { name: "John Roe Duplicate" }),
+    ];
+  });
+
+  afterAll(() => dedupeQueue.__resetForTests());
+
+  it("finds one cluster holding A's two contacts and nothing of B's", async () => {
+    // 0.99 keeps the pair out of the auto-merger: the shared address scores
+    // 0.98, so the cluster is reported for review instead of being merged
+    // away, which is what the suggestion tests below need.
+    const started = await scan(A, { mode: "quick", autoMergeThreshold: 0.99 });
+    expect(started.status).toBe(200);
+    scanIdA = started.body.scanId;
+
+    const done = await eventually(async () => {
+      const res = await status(A, scanIdA);
+      return res.body.phase === "complete" ? res.body : null;
+    });
+    expect(done.phase).toBe("complete");
+    expect(done.clusters).toHaveLength(1);
+    expect(ids(done.clusters[0].contacts).sort()).toEqual([...janeA].sort());
+
+    // Every pair the scan persisted is a pair of A's rows.
+    const pairs = pendingRows(A.user.id);
+    expect(pairs).toHaveLength(1);
+    expect([pairs[0].contactIdA, pairs[0].contactIdB].sort()).toEqual(
+      [...janeA].sort(),
+    );
+
+    // B's identical pair is untouched: A's scan neither found it nor cleared
+    // B's own review queue on its way past.
+    expect(pendingRows(B.user.id)).toHaveLength(0);
+    expect(rowsOwnedBy("dedupe_suggestions", B.user.id)).toBe(0);
+  });
+
+  it("answers B's status and stream for A's scan the way it answers an unknown id", async () => {
+    const own = await status(A, scanIdA);
+    const foreign = await status(B, scanIdA);
+    const missing = await status(B, randomId());
+
+    expect(own.status).toBe(200);
+    expect(own.body.scanId).toBe(scanIdA);
+    expect(foreign.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(missing.body),
+    );
+
+    // A scan record carries every cluster it found with the contacts hydrated
+    // inside it, so the stream has to refuse before its first write.
+    const stream = await asUser(B)(
+      request(app).get("/api/dedupe/stream").query({ scanId: scanIdA }),
+    );
+    expect(stream.status).toBe(404);
+    expect(stream.text).not.toContain("data:");
+    expect(stream.text).not.toContain(janeA[0]);
+  });
+
+  it("reports an active scan only to the account running it", async () => {
+    dedupeQueue.__resetForTests();
+    const mine = dedupeQueue.createScan(A.scope, "quick");
+
+    const forA = await asUser(A)(request(app).get("/api/dedupe/active"));
+    const forB = await asUser(B)(request(app).get("/api/dedupe/active"));
+
+    expect(forA.body).toMatchObject({ active: true });
+    expect(forA.body.scan.scanId).toBe(mine.scanId);
+    expect(forB.body).toEqual({ active: false });
+    dedupeQueue.__resetForTests();
+  });
+
+  it("queues the next account behind the running scan with the standard 429", async () => {
+    dedupeQueue.__resetForTests();
+    // A holds the global run lock. One scan at a time is a 2.0 decision: a
+    // scan normalizes every contact it owns and can call a provider per
+    // candidate batch, so two at once double the memory and split one quota.
+    const running = dedupeQueue.createScan(A.scope, "quick");
+    dedupeQueue.setProcessing(true);
+
+    const queued = await scan(B, { mode: "quick", autoMergeThreshold: 0.99 });
+    expect(queued.status).toBe(429);
+    expect(queued.body.error.code).toBe("RATE_LIMITED");
+    expect(queued.body.error.message).toContain("queued");
+    expect(queued.body.error.details).toMatchObject({
+      yours: false,
+      queued: true,
+    });
+    expect(queued.body.error.requestId).toBeTruthy();
+    expect(dedupeQueue.queueLength()).toBe(1);
+
+    // A asking again is refused for a different reason and books no place:
+    // a second scan of the same account would repeat the work of the first.
+    const again = await scan(A, { mode: "quick" });
+    expect(again.status).toBe(429);
+    expect(again.body.error.details).toMatchObject({
+      yours: true,
+      queued: false,
+    });
+    expect(dedupeQueue.queueLength()).toBe(1);
+
+    const waiting = dedupeQueue.getActiveScan(B.scope);
+    expect(waiting).not.toBeNull();
+
+    // A finishing hands the lock to B, and B's scan runs for B.
+    dedupeQueue.complete(running.scanId, []);
+    const finished = await eventually(() => {
+      const scanB = dedupeQueue.getScan(B.scope, waiting!.scanId);
+      return scanB?.phase === "complete" ? scanB : null;
+    });
+    expect(finished?.phase).toBe("complete");
+    expect(dedupeQueue.queueLength()).toBe(0);
+
+    // B's scan found B's pair, and only B's pair.
+    const pairs = pendingRows(B.user.id);
+    expect(pairs).toHaveLength(1);
+    expect([pairs[0].contactIdA, pairs[0].contactIdB].sort()).toEqual(
+      [...janeB].sort(),
+    );
+    dedupeQueue.__resetForTests();
+  });
+
+  it("lists and counts only the caller's suggestions", async () => {
+    const forA = await asUser(A)(request(app).get("/api/dedupe/suggestions"));
+    const forB = await asUser(B)(request(app).get("/api/dedupe/suggestions"));
+    const forC = await asUser(C)(request(app).get("/api/dedupe/suggestions"));
+
+    const idsIn = (res: {
+      body: { suggestions: { contactIdA: string; contactIdB: string }[] };
+    }) => res.body.suggestions.flatMap((x) => [x.contactIdA, x.contactIdB]);
+
+    expect(idsIn(forA).sort()).toEqual([...janeA].sort());
+    expect(idsIn(forB).sort()).toEqual([...janeB].sort());
+    expect(forC.body.suggestions).toEqual([]);
+
+    const countA = await asUser(A)(
+      request(app).get("/api/dedupe/suggestions/count"),
+    );
+    const countC = await asUser(C)(
+      request(app).get("/api/dedupe/suggestions/count"),
+    );
+    expect(countA.body).toEqual({ count: 1, pairs: 1 });
+    expect(countC.body).toEqual({ count: 0, pairs: 0 });
+  });
+
+  it("finds no suggestion for a contact the caller does not own", async () => {
+    const own = await asUser(A)(
+      request(app).get(`/api/dedupe/suggestion-for/${janeA[0]}`),
+    );
+    const foreign = await asUser(B)(
+      request(app).get(`/api/dedupe/suggestion-for/${janeA[0]}`),
+    );
+    expect(own.body.suggestion).toBeTruthy();
+    expect(own.body.suggestion.contactIdA).toBe([...janeA].sort()[0]);
+    expect(foreign.body.suggestion).toBeNull();
+  });
+
+  it("refuses B's dismiss and B's merge of A's suggestion", async () => {
+    const list = await asUser(A)(request(app).get("/api/dedupe/suggestions"));
+    const suggestionId = list.body.suggestions[0].id as string;
+    const before = snapshotRow("contacts", janeA[1]);
+
+    const dismiss = await asUser(B)(
+      request(app).post(`/api/dedupe/suggestions/${suggestionId}/dismiss`),
+    );
+    const dismissMissing = await asUser(B)(
+      request(app).post(`/api/dedupe/suggestions/${randomId()}/dismiss`),
+    );
+    expect(dismiss.status).toBe(404);
+    expect(dismissMissing.status).toBe(404);
+
+    const merge = await asUser(B)(
+      request(app)
+        .post(`/api/dedupe/suggestions/${suggestionId}/merge`)
+        .send({ primaryId: janeA[0] }),
+    );
+    expect(merge.status).toBe(404);
+
+    // A's pair survived both attempts, and the suggestion is still pending.
+    expect(snapshotRow("contacts", janeA[1])).toEqual(before);
+    expect(pendingRows(A.user.id)).toHaveLength(1);
+    expect(rowsOwnedBy("dedupe_exclusions", B.user.id)).toBe(0);
+  });
+
+  it("dismisses A's own suggestion and records the exclusion under A", async () => {
+    const list = await asUser(A)(request(app).get("/api/dedupe/suggestions"));
+    const suggestionId = list.body.suggestions[0].id as string;
+
+    const res = await asUser(A)(
+      request(app).post(`/api/dedupe/suggestions/${suggestionId}/dismiss`),
+    );
+    expect(res.status).toBe(200);
+    expect(pendingRows(A.user.id)).toHaveLength(0);
+    expect(rowsOwnedBy("dedupe_exclusions", A.user.id)).toBe(1);
+    expect(rowsOwnedBy("dedupe_exclusions", B.user.id)).toBe(0);
+    // B's queue is untouched by A's review.
+    expect(pendingRows(B.user.id)).toHaveLength(1);
+  });
+
+  it("refuses every merge endpoint a pair of A's ids, and changes nothing", async () => {
+    const before = snapshotA();
+    const janeBefore = janeA.map((id) => snapshotRow("contacts", id));
+    const logBefore = rowsOwnedBy("dedupe_merge_log", A.user.id);
+
+    const single = await asUser(B)(
+      request(app)
+        .post("/api/contacts/merge")
+        .send({ primaryId: janeA[0], duplicateId: janeA[1] }),
+    );
+    const unknown = await asUser(B)(
+      request(app)
+        .post("/api/contacts/merge")
+        .send({ primaryId: randomId(), duplicateId: randomId() }),
+    );
+    expect(single.status).toBe(404);
+    expect(unknown.status).toBe(404);
+    expect(single.body.error.code).toBe(unknown.body.error.code);
+
+    const batch = await asUser(B)(
+      request(app)
+        .post("/api/contacts/merge-batch")
+        .send({ merges: [{ primaryId: janeA[0], duplicateId: janeA[1] }] }),
+    );
+    expect(batch.status).toBe(200);
+    expect(batch.body.succeeded).toBe(0);
+
+    const cluster = await asUser(B)(
+      request(app)
+        .post("/api/contacts/merge-cluster")
+        .send({ primaryId: janeA[0], duplicateIds: [janeA[1]] }),
+    );
+    expect(cluster.body.merged).toBe(0);
+    expect(cluster.body.failed).toBe(1);
+
+    const clusters = await asUser(B)(
+      request(app)
+        .post("/api/contacts/merge-clusters")
+        .send({
+          clusters: [{ primaryId: janeA[0], duplicateIds: [janeA[1]] }],
+        }),
+    );
+    expect(clusters.body.totalMerged).toBe(0);
+    expect(clusters.body.totalFailed).toBe(1);
+
+    // Nothing of A's moved, and no audit row was written under either account.
+    expect(snapshotA()).toEqual(before);
+    expect(janeA.map((id) => snapshotRow("contacts", id))).toEqual(janeBefore);
+    expect(rowsOwnedBy("dedupe_merge_log", A.user.id)).toBe(logBefore);
+    expect(rowsOwnedBy("dedupe_merge_log", B.user.id)).toBe(0);
+  });
+
+  it("refuses a mixed pair without touching the account it does not own", async () => {
+    // B owns the primary, A owns the duplicate. The merge cannot run, and the
+    // interesting part is what it must not do on the way to saying so.
+    const mine = await create(B, { name: "Bob Mixed Merge" });
+    const before = snapshotRow("contacts", janeA[0]);
+
+    const res = await asUser(B)(
+      request(app)
+        .post("/api/contacts/merge")
+        .send({ primaryId: mine, duplicateId: janeA[0] }),
+    );
+    expect(res.status).toBeLessThan(500);
+    expect(snapshotRow("contacts", janeA[0])).toEqual(before);
+    expect(rowsOwnedBy("dedupe_merge_log", B.user.id)).toBe(0);
+  });
+
+  it("shows the merge log and refuses B's undo of A's entry", async () => {
+    // A soft merge is the shape the scan's auto-merger writes, and the only
+    // shape undo accepts. Driven through the service against the real database,
+    // exactly as the auto-merger drives it.
+    softMergeContacts(
+      A.scope,
+      roeA[0],
+      roeA[1],
+      0.95,
+      "two-owner check",
+      "test",
+    );
+
+    const logA = await asUser(A)(request(app).get("/api/dedupe/merge-log"));
+    const logB = await asUser(B)(request(app).get("/api/dedupe/merge-log"));
+    const entry = logA.body.entries.find(
+      (e: { primaryId: string }) => e.primaryId === roeA[0],
+    );
+    expect(entry).toBeTruthy();
+    expect(entry.mergeType).toBe("soft");
+    mergeLogIdA = entry.id;
+    // The names come back hydrated, and B's log holds none of it.
+    expect(entry.primaryName).toBe("John Roe Primary");
+    expect(logB.body.entries.map((e: { id: string }) => e.id)).not.toContain(
+      mergeLogIdA,
+    );
+
+    const foreign = await asUser(B)(
+      request(app).post(`/api/dedupe/merge-log/${mergeLogIdA}/undo`),
+    );
+    const missing = await asUser(B)(
+      request(app).post(`/api/dedupe/merge-log/${randomId()}/undo`),
+    );
+    expect(foreign.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(comparableError(foreign.body).code).toBe(
+      comparableError(missing.body).code,
+    );
+
+    // The duplicate is still merged away, and the audit row is still open.
+    const dup = snapshotRow("contacts", roeA[1]);
+    expect(dup?.canonicalId).toBe(roeA[0]);
+    expect(
+      sqlite
+        .prepare("SELECT undoneAt FROM dedupe_merge_log WHERE id = ?")
+        .get(mergeLogIdA),
+    ).toEqual({ undoneAt: null });
+  });
+
+  it("lets A undo A's own merge", async () => {
+    const res = await asUser(A)(
+      request(app).post(`/api/dedupe/merge-log/${mergeLogIdA}/undo`),
+    );
+    expect(res.status).toBe(200);
+    expect(snapshotRow("contacts", roeA[1])?.canonicalId).toBeNull();
+  });
+
+  it("reports embedding coverage for the caller's own contacts", async () => {
+    const forA = await asUser(A)(
+      request(app).get("/api/dedupe/embedding-status"),
+    );
+    const forC = await asUser(C)(
+      request(app).get("/api/dedupe/embedding-status"),
+    );
+
+    expect(forA.body.total).toBe(activeCount(A.user.id));
+    // C has written nothing, so an instance-wide count would have told C its
+    // index was complete while none of its own contacts were embedded.
+    expect(forC.body).toEqual({
+      embedded: 0,
+      total: 0,
+      missing: 0,
+      coverage: 0,
+    });
+  });
+
+  it("clears one account's dedupe vectors and leaves the other account's", async () => {
+    const vector = Buffer.from(new Float32Array(768).buffer);
+    const insert = sqlite.prepare(
+      `INSERT INTO contact_embeddings (contactId, ownerId, embedding)
+       VALUES (?, ?, ?)`,
+    );
+    const count = (owner: string) =>
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) AS n FROM contact_embeddings WHERE ownerId = ?",
+          )
+          .get(owner) as { n: number }
+      ).n;
+
+    insert.run(janeA[0], A.user.id, vector);
+    insert.run(janeB[0], B.user.id, vector);
+    insert.run(janeB[1], B.user.id, vector);
+    expect(count(A.user.id)).toBe(1);
+    expect(count(B.user.id)).toBe(2);
+
+    // A full-mode scan starts by throwing its own vectors away. Until 2e that
+    // was one unqualified DELETE, so one person choosing "full" erased every
+    // other account's dedupe index and made their next scan pay to rebuild it.
+    const before = count(B.user.id);
+    const full = await scan(A, { mode: "full", autoMergeThreshold: 0.99 });
+    expect(full.status).toBe(200);
+    await eventually(async () => {
+      const res = await status(A, full.body.scanId);
+      return res.body.phase === "complete" ? res.body : null;
+    });
+    expect(count(B.user.id)).toBe(before);
+
+    // With no provider configured the scan skips the embedding stage, so the
+    // reset itself is called directly. It is the same call the scan makes.
+    clearOwnerEmbeddings(A.scope);
+    expect(count(A.user.id)).toBe(0);
+    expect(count(B.user.id)).toBe(before);
+  });
+
+  it("stamps dev-seeded duplicates with the account that asked for them", async () => {
+    const beforeA = rowsOwnedBy("contacts", A.user.id);
+    const beforeC = rowsOwnedBy("contacts", C.user.id);
+
+    const res = await asUser(C)(request(app).post("/api/dev/seed-duplicates"));
+    expect(res.status).toBe(200);
+
+    expect(rowsOwnedBy("contacts", C.user.id)).toBe(beforeC + 4);
+    expect(rowsOwnedBy("contacts", A.user.id)).toBe(beforeA);
   });
 });
 
