@@ -33,9 +33,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   administrator holds a password that administrator chose, so every data route
   answers `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it. Their
   own account settings stay reachable, which is where the change happens.
+- **Phase 3.** Personal API tokens. `POST /api/auth/tokens` mints one,
+  `GET` lists them with enough of each to tell two apart, and `DELETE`
+  revokes one. A token acts as its own account everywhere that reads owned
+  data, so an MCP client signed in with one reads the contacts of whoever
+  issued it. It cannot reach any route that manages the account, which means
+  a script can neither mint a second token nor change the password that would
+  revoke its own.
+- **Phase 3.** Open registration, off by default. `POST /api/auth/register`
+  answers `403 REGISTRATION_CLOSED` until an admin turns it on through
+  `PUT /api/admin/settings`, and the account it creates is always a member.
+- **Phase 3.** `GET` and `PUT /api/admin/settings` hold the instance
+  settings: open registration and the session lifetime.
+  `PUT /api/auth/session-policy` writes the same session value and is
+  deprecated.
+- **Phase 3.** A second rate limit on the AI routes, per account rather than
+  per address, at thirty requests a minute. On a multi-user instance behind
+  one office address the older per-address limit let one person spend
+  everybody's provider budget. `GET /api/dashboard/insight` and
+  `POST /api/dedupe/scan` join the list both limits cover, and a `429` from
+  either now carries a `Retry-After` header.
+- **Phase 3.** One daily maintenance sweep, gated by
+  `DISABLE_BACKGROUND_JOBS`. It removes audit rows past ninety days, expired
+  sessions, tokens revoked more than thirty days ago, invitations that died
+  more than thirty days ago, and AI invocations outside the stats window.
+  Before this the invocation cleanup ran once at boot and the session sweep
+  was boot-only, so an instance left running for a year swept twice.
+- **Phase 3.** `?scope=all` on `GET /api/ai/stats/summary` and
+  `/feed` gives an admin the instance totals and a per-account breakdown,
+  because the provider key is one key and the bill is one bill. A member
+  asking for it gets `403 ADMIN_REQUIRED`. The instance feed names the
+  account behind each call and omits the description, which is the one field
+  that can carry a fragment of what somebody asked about.
 
 ### Fixed
 
+- **Phase 3.** A personal token's `lastUsedAt` is stamped at most once an
+  hour, as it was always meant to be. The hourly check compared a database
+  timestamp (`2026-09-10 05:33:50`) against a JavaScript one
+  (`2026-09-10T04:33:50.000Z`), and a space sorts before a `T`, so the stored
+  value looked older than any cut-off from the same day and the row was
+  written on every request a script made.
 - **Phase 3.** An invitation link no longer reaches the access log. The link
   carries its secret in a query string, and the invitee's browser sends it to
   this server as an ordinary page request, so the one value the invitation
@@ -68,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lasts, and it lives in the auth router, which the gate exempts so that a
   password change stays reachable. The exemption is now the six paths an
   account with a temporary password actually needs.
+- **Phase 3.** `GET /api/auth/status` reports `registrationOpen`,
+  `localOwnerPresent` and `legacyTokenConfigured`, and `GET /api/auth/me`
+  reports `via`. The environment `API_TOKEN` still works, still acts as the
+  first admin, and now logs one deprecation warning at startup. It is removed
+  in 3.0, and a personal token replaces it.
 - **Phase 3.** Disabling an account ends its sessions at once and refuses its
   personal tokens while it is off. Enabling gives the tokens back. The
   sessions stay gone, because revoking one is a delete rather than a flag.
