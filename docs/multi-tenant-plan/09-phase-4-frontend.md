@@ -286,15 +286,73 @@ until the job completes.
 
 ## 3. Acceptance criteria
 
-- [ ] Manual walkthrough recorded in `docs/multi-tenant-plan/bench/ui-walkthrough.md` with screenshots: fresh install with auth off (no account UI shown), turn auth on (setup wizard says "Secure this instance"), invite a member, accept in a private window, member cannot see the Administration group, admin resets the member's password, member is forced to change it, admin disables the member (the member's tab drops to sign-in with the disabled reason), admin exports and deletes the member.
-- [ ] Two browsers signed in as two users: contacts, lists, dashboard, search, dedupe, AI stats show only their own data.
-- [ ] Mobile viewport: every admin table renders as cards, modals as bottom sheets, touch targets 44 px, identity row visible at the top of Settings.
-- [ ] Contrast audit (`npm run audit:contrast`) passes for the new views.
-- [ ] `npm run build` passes. The admin views are in their own chunk (check the Vite build output).
-- [ ] `frontend.apiClient.test.ts` proves no API module bypasses the shared handler.
-- [ ] Existing frontend unit tests pass. New pure-function tests for the invitation link parser and the temporary-password display formatter (`tests/unit/frontend.invite.test.ts`).
-- [ ] `.agent/STYLE.md` states the bottom-sheet and 44 px rules.
-- [ ] CHANGELOG Unreleased has a `Phase 4` block.
+- [x] Manual walkthrough recorded in `docs/multi-tenant-plan/bench/ui-walkthrough.md` with screenshots: fresh install with auth off (no account UI shown), turn auth on (setup wizard says "Secure this instance"), invite a member, accept in a private window, member cannot see the Administration group, admin resets the member's password, member is forced to change it, admin disables the member (the member's tab drops to sign-in with the disabled reason), admin exports and deletes the member. **One deviation, recorded in section 7 of that document: disabling revokes the account's sessions, so the member's tab drops to sign-in reading "Signed out" and the disabled explanation arrives on the sign-in attempt that follows. A `403 ACCOUNT_DISABLED` cannot reach a browser whose cookie the disable just deleted.**
+- [x] Two browsers signed in as two users: contacts, lists, dashboard, search, dedupe, AI stats show only their own data.
+- [x] Mobile viewport: every admin table renders as cards, modals as bottom sheets, touch targets 44 px, identity row visible at the top of Settings.
+- [x] Contrast audit (`npm run audit:contrast`) passes for the new views. Zero failures on all five administration pages, on Settings and on Account. The audit needed three fixes to be a real gate; see section 14 of the walkthrough.
+- [x] `npm run build` passes. The admin views are in their own chunk (check the Vite build output). Five chunks, verified by string rather than by filename.
+- [x] `frontend.apiClient.test.ts` proves no API module bypasses the shared handler. It scans all of `src/`, not only `src/api/`, because the three real leaks were in components.
+- [x] Existing frontend unit tests pass. New pure-function tests for the invitation link parser and the temporary-password display formatter (`tests/unit/frontend.invite.test.ts`).
+- [x] `.agent/STYLE.md` states the bottom-sheet and 44 px rules.
+- [x] CHANGELOG Unreleased has a `Phase 4` block.
+
+### Where the code and this document differ
+
+Every one of these is deliberate. The plan was written against `v1.5.5` and
+several of its stated facts had already changed by the time Phase 3 closed.
+
+1. **Section 0.2 is stale about the API modules.** It says ten of twelve
+   bypass `apiFetch`. On `v2.0` only `src/api/auth.ts` calls `fetch` directly,
+   and it does so by design. The migration landed in `c27d621`. What task 4.11
+   actually had left to do was the classification of the new `403` codes, the
+   `CustomEvent` reasons, and three *components* that reached `/api` with a
+   bare `fetch`: the bulk import, the link unfurler and enrichment.
+2. **`src/api/enrichment.ts:67` is worse than the plan says.** The block that
+   maps every `429` to the grounding quota could not run at all: `apiFetch`
+   throws for any non-2xx, so the three branches reading `res.status` were
+   unreachable. Deleted rather than edited.
+3. **`AccountUser` already had `status`, `credentialState` and
+   `mustChangePassword`**, and `AuthStatus` already had `deviceContacts`.
+   Only the three instance fields were missing.
+4. **STYLE.md already stated the touch-target rule** at line 126. Only the
+   44 px floor and the bottom-sheet rule were absent.
+5. **`GET /api/dedupe/active` gained a `queued` field.** A server change
+   inside a frontend phase, and there is no honest client-side substitute: a
+   booked scan is a real record with phase `starting`, identical to a scan
+   that began a moment ago, and the `429` that would tell them apart belongs
+   to one tab and is gone after a reload. Without it a reloaded page shows a
+   progress bar frozen at zero for as long as the other account takes.
+6. **`GET /api/admin/audit` gained an `action` filter.** Task 4.7 asks for
+   "filter by action" and section 4 of `13-api-changes.md` documents no such
+   parameter. Filtering a fetched page would have been a lie: fifty rows
+   narrowed to the two sign-ins among them, with no way to reach the rest.
+   The filter validates against the vocabulary the app writes, because an
+   audit log answering a typo with an empty page is the one answer it must
+   never give by accident.
+7. **`403 ADMIN_REQUIRED` raises no toast**, which task 4.11 asks for.
+   `useGroundingCapacity` polls an admin-only route every two minutes from the
+   command palette, which is mounted on every screen, so every member saw a
+   red error on load and again every two minutes for a request they did not
+   make. The query no longer runs for a member either.
+8. **`401 INVALID_CREDENTIALS` is not announced as an expiry.** It is the one
+   `401` in the API about a password somebody just typed rather than the
+   credential the browser holds. Announcing it ejected a person from the
+   forced-password-change screen for a typo.
+9. **The sidebar identity panel is not `role="menu"`.** That role promises
+   arrow-key movement, Home and End and a roving tabindex, and forbids the
+   name, email and role badge the panel exists to show.
+10. **The AI configuration keeps a row of its own only inside Administration.**
+    For an admin it is reached through Instance rather than as a sixth row in
+    the Administration group; the group's Instance description names it. For a
+    member the Intelligence group carries a read-only capabilities card.
+11. **The session-length card moved in this phase's second pull request**, not
+    the first, so the first never leaves the instance without a way to set it.
+12. **The Settings back button gained a 44 px floor.** It is not new code, but
+    it is a touch control on every page this phase adds, and it was 36 px.
+13. **One pre-existing contrast failure is fixed** — the AI usage empty state
+    at `text-on-surface-variant/30`, which measures 1.57:1 — because the audit
+    gates this phase and an empty state nobody can read is not an empty
+    state.
 
 ---
 

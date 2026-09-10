@@ -66,6 +66,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   account behind each call and omits the description, which is the one field
   that can carry a fragment of what somebody asked about.
 
+- **Phase 4.** An administration area, for admins only and downloaded only by
+  them. Accounts (create, invite, edit, reset a password, disable, export,
+  delete), Invitations, Instance (who can join, how long a sign-in lasts, the
+  AI configuration and SearXNG), Backups, and the Audit log with a filter and
+  paging. Each is a separate chunk, so a member never fetches five pages of
+  account management to be told they may not open them.
+- **Phase 4.** Backups have a UI. The service has taken snapshots and rotated
+  them for years and nothing in the app has ever shown one, so the only way to
+  know it was working was to look in the data directory.
+- **Phase 4.** AI usage gained a **Mine / All users** control for admins, with
+  a per-account breakdown of calls, tokens and cost. The provider key is one
+  key and the bill is one bill. A member sees only their own, and asking for
+  the instance view without an admin account is a `403`.
+- **Phase 4.** Deleting an account shows what it owns before it goes. The
+  first click is refused with `409 USER_HAS_DATA`, the counts in that refusal
+  are what the dialog shows, and the delete needs both an explicit checkbox
+  and an "export their data first" button beside it.
+
 - **Phase 4.** The sign-in flow covers every way an account starts. A new
   instance is set up; an instance that has been running without sign-in is
   _secured_, and the screen says so and explains that the contacts already
@@ -117,6 +135,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The value of `token`, `secret` and `api_key` is replaced in every logged
   URL.
 
+- **Phase 4.** The Settings back button was a 36 px touch target, on the one
+  control every page in that area shares. The AI usage empty state was drawn
+  at 1.57:1 contrast, the only text in the app the audit fails on.
+- **Phase 4.** `npm run audit:contrast` could not gate anything it was pointed
+  at. Its default port was one nothing listens on, its route list named none
+  of the administration pages, and it drives a browser with no session — so on
+  a gated instance it measured the sign-in screen a dozen times and reported
+  zero failures. It now defaults to the port `npm run dev` serves, sweeps the
+  administration area, and says in the file that it has to run against an
+  instance with sign-in off.
+
 - **Phase 4.** Enrichment reported every refusal as the daily grounding quota
   being exhausted. The branch that did it could not run at all — the shared
   client throws for any non-2xx, so the code reading `res.status` was
@@ -141,6 +170,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   next one.
 
 ### Changed
+
+- **Phase 4.** Session length moved from Account settings to Administration →
+  Instance. It decides how long every account's sign-in lasts, which stopped
+  being a personal setting the moment an instance could have more than one
+  account. `/settings/ai-config` redirects for the same reason: one set of
+  provider keys pays one bill.
+- **Phase 4.** `GET /api/dedupe/active` reports `queued`. A booked scan is a
+  real record with phase `starting`, identical to a scan that began a moment
+  ago, and this is the only thing that tells them apart after a reload.
+- **Phase 4.** `GET /api/admin/audit` takes an `action` filter, validated
+  against the actions the app writes. Filtering a fetched page would show two
+  sign-ins out of fifty rows with no way to reach the rest, and an audit log
+  that answers a typo with an empty page reads as "nothing happened".
 
 - **Phase 4.** Signing in as a different account replaces the whole component
   tree rather than reusing it. Clearing the query cache removed what the
