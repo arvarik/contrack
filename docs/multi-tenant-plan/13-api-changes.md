@@ -92,6 +92,7 @@ All under `/api/admin`, class `admin`.
 | DELETE | `/invitations/:id` | | `{ revoked: true }` |
 | GET | `/settings` | | `{ registrationOpen, sessionTtlDays, sessionTtlRange: { min, max, default } }` |
 | PUT | `/settings` | `{ registrationOpen?, sessionTtlDays? }` | same shape |
+| GET | `/health` | | The instance as it is now: schema versions, database and write-ahead log sizes, the newest backup and its verification, the dedupe and enrichment queues with the account each is running for, search-index progress per account, AI cache hit rates, and the provider's tier and paused models. Read only, no secrets, safe to poll. Added by quality story S9. |
 | GET | `/audit?limit=&before=` | | `{ entries: [{ id, actor: { id, username } \| null, action, targetType, targetId, details, ip, createdAt }], nextBefore }`. `before` is the opaque cursor a previous page returned as `nextBefore`, which is `<createdAt>\|<id>`: `createdAt` alone has one-second resolution and a bare timestamp cursor would skip every row sharing a second with the last row of the page. |
 
 `AdminUserSummary`:

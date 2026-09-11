@@ -19,6 +19,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import {
+  Activity,
   Archive,
   Brain,
   ChevronLeft,
@@ -55,8 +56,8 @@ import { usePageTitle } from "../hooks/usePageTitle";
 // The administration area, loaded only for the people who can open it
 // ---------------------------------------------------------------------------
 // Every other subpage here is a static import, so all eight share the one
-// Settings chunk. These five are not, and the reason is not size: a member
-// can never open any of them, and a member should not download five pages of
+// Settings chunk. These six are not, and the reason is not size: a member
+// can never open any of them, and a member should not download six pages of
 // account management to be told they may not. The split shows up in the build
 // output as chunks of their own, which is the check.
 
@@ -89,6 +90,10 @@ const BackupsView = lazyAdmin(
 const AuditView = lazyAdmin(
   () => import("./settings/admin/AuditView"),
   "AuditView",
+);
+const HealthView = lazyAdmin(
+  () => import("./settings/admin/HealthView"),
+  "HealthView",
 );
 
 // ---------------------------------------------------------------------------
@@ -168,6 +173,12 @@ const SUBPAGES: SubpageMeta[] = [
     segment: "admin/audit",
     title: "Audit log",
     icon: ScrollText,
+    tone: "text-primary",
+  },
+  {
+    segment: "admin/health",
+    title: "Instance health",
+    icon: Activity,
     tone: "text-primary",
   },
 ];
@@ -361,6 +372,14 @@ export const SettingsView = () => {
             element={
               <AdminRoute>
                 <AuditView />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/health"
+            element={
+              <AdminRoute>
+                <HealthView />
               </AdminRoute>
             }
           />

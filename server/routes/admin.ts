@@ -43,6 +43,7 @@ import {
   revokeInvitation,
 } from "../services/invitationService.ts";
 import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
+import { instanceHealth } from "../services/healthService.ts";
 import {
   getSessionTtlDays,
   setSessionTtlDays,
@@ -86,6 +87,29 @@ function requestOrigin(req: Request): string {
   const host = candidates.find((v) => v && HOST_SHAPE.test(v)) ?? "localhost";
   return `${req.protocol}://${host}`;
 }
+
+// ─── Health ──────────────────────────────────────────────────────────────────
+
+/**
+ * What an operator needs to know about this instance.
+ *
+ * Admin rather than public, and deliberately not part of `/healthz`. That
+ * probe is reachable without a credential and must stay two states and no
+ * detail: an unauthenticated endpoint that describes the instance tells
+ * anybody who can reach the port what version it runs, how big it is, and how
+ * many accounts it has.
+ *
+ * Nothing here is written, so it is safe to poll, and nothing here is a
+ * secret. The most identifying value in the payload is a username beside a
+ * queue position, and the caller can already list every account.
+ */
+router.get(
+  "/health",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(instanceHealth());
+  }),
+);
 
 // ─── Accounts ────────────────────────────────────────────────────────────────
 

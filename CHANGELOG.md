@@ -106,6 +106,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than showing a progress bar at zero. `GET /api/dedupe/active` gained a
   `queued` field, which is the only way a reloaded page can tell a booked scan
   from one that has hung.
+- **Extra S9.** An instance health panel, at Settings, Administration,
+  Instance health. `GET /api/admin/health` answers what an operator needs when
+  several people share one instance: the schema versions this database is
+  actually on, the database and write-ahead log sizes, the newest backup and
+  whether it verified, which account the dedupe scan is running for and who is
+  waiting behind it, how much of each account's contacts the search index
+  covers, the AI cache hit rates, and the provider's tier and paused models.
+  Every one of those was answerable only by reading the server log or opening
+  the database. `/healthz` is unchanged and stays two states and no detail: it
+  answers without a credential, and an unauthenticated endpoint must not
+  describe the instance.
 - **Extra S6.** The daily sweep checkpoints the write-ahead log. The database
   runs in WAL mode and nothing in the codebase had ever called a checkpoint:
   SQLite runs one by itself past a thousand pages, but only when no reader is

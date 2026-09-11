@@ -1454,6 +1454,89 @@ An account created or reset by an admin holds a password that admin chose, so
 every route outside the six the sign-in flow needs answers
 `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it.
 
+### `GET /api/admin/health`
+
+Admin only. Everything this instance can say about itself. Read only, safe to
+poll, and deliberately separate from `GET /healthz`, which anybody who can
+reach the port may ask and which therefore stays two states and no detail.
+
+```bash
+curl http://localhost:3210/api/admin/health
+```
+
+```json
+{
+  "uptimeSeconds": 93142,
+  "startedAt": "2026-09-09T18:02:11.004Z",
+  "schema": {
+    "tenancy": 2,
+    "tenancyExpected": 2,
+    "fts": 3,
+    "ftsExpected": 3,
+    "vec": "v0.1.9",
+    "upToDate": true
+  },
+  "database": {
+    "bytes": 18452480,
+    "walBytes": 1204224,
+    "truncateAtBytes": 67108864,
+    "lastCheckpoint": {
+      "at": "…",
+      "mode": "passive",
+      "busy": false,
+      "logPages": 294,
+      "checkpointedPages": 294,
+      "bytesBefore": 1204224,
+      "bytesAfter": 1204224
+    },
+    "busyErrors": 0,
+    "lastBusyErrorAt": null,
+    "rows": { "contacts": 431, "users": 3, "…": 0 }
+  },
+  "backup": {
+    "filename": "…",
+    "sizeBytes": 0,
+    "createdAt": "…",
+    "verification": {}
+  },
+  "queues": {
+    "dedupe": { "running": { "id": "…", "username": "maya" }, "pending": [] },
+    "aiSearch": { "running": null, "activeBatches": 0, "contactsRemaining": 0 }
+  },
+  "embeddings": {
+    "available": true,
+    "byUser": [
+      {
+        "user": { "id": "…", "username": "maya" },
+        "contacts": 431,
+        "embedded": 431
+      }
+    ]
+  },
+  "aiCache": {
+    "briefing": { "entries": 12, "hits": 40, "misses": 8, "hitRate": 0.83 }
+  },
+  "provider": {
+    "aiTier": "FREE",
+    "circuitBreakers": [],
+    "grounding": { "rpd": 12, "limit": 500, "remaining": 488 }
+  }
+}
+```
+
+- `schema.upToDate` is false while a migration has not finished, which
+  explains a great many other symptoms.
+- `queues` names the account each job is running for, and who is waiting
+  behind the dedupe scan. "A scan is running" is not something an operator can
+  act on when several people share an instance.
+- `embeddings.byUser` is two numbers rather than a percentage, because the
+  useful question is which account has contacts search cannot reach yet.
+- `database.busyErrors` counts requests refused with `503 DB_BUSY` since the
+  process started. `startedAt` is the window those counts cover.
+- **No secrets.** No key, no token, no invitation link, no contact of
+  anybody's. The most identifying value is a username beside a queue position,
+  and the caller can already list every account.
+
 ---
 
 ## Trash (Undoable Deletes)

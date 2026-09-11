@@ -196,6 +196,27 @@ class DedupeJobQueue extends EventEmitter {
     return this.processing;
   }
 
+  /**
+   * Who is scanning and who is waiting, across the whole instance.
+   *
+   * For the admin health panel and nowhere else. Every other reader of this
+   * queue asks about one account, because one account is all a member may
+   * know about. "A scan is running" is not an answer an operator can act on
+   * when four people share an instance and one of them is waiting.
+   */
+  instanceState(): { running: OwnerId | null; pending: OwnerId[] } {
+    let running: OwnerId | null = null;
+    if (this.processing) {
+      for (const owned of this.scans.values()) {
+        if (owned.scan.phase !== "complete" && owned.scan.phase !== "error") {
+          running = owned.ownerId;
+          break;
+        }
+      }
+    }
+    return { running, pending: this.pending.map((p) => p.ownerId) };
+  }
+
   /** Set processing lock — called by the service during scan execution. */
   setProcessing(value: boolean): void {
     this.processing = value;

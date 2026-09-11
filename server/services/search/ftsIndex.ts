@@ -8,7 +8,14 @@ export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) =
 // Version 3 adds `ownerTok`. The gate below drops and rebuilds the table when
 // the stored user_version differs, so the first boot after upgrade re-indexes
 // every active contact. Measured at 233 ms for 50,000 contacts.
-const VERSION = 3;
+/**
+ * The FTS schema version, kept in `PRAGMA user_version`.
+ *
+ * Exported so the admin health panel can report what this database is on
+ * without opening it, which is the whole point of the panel.
+ */
+export const FTS_SCHEMA_VERSION = 3;
+const VERSION = FTS_SCHEMA_VERSION;
 
 /**
  * Every contacts_fts column, in order. Position 0 is the UNINDEXED contactId.
