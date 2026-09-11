@@ -21,6 +21,7 @@ import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
+import { recordBusyError } from "../services/walHealth.ts";
 
 interface SqliteLikeError {
   code?: string;
@@ -123,6 +124,13 @@ function translate(err: unknown): {
     e?.code?.startsWith("SQLITE_BUSY") ||
     e?.code?.startsWith("SQLITE_LOCKED")
   ) {
+    // Counted here and nowhere else. This is the one place that knows a
+    // request was actually turned away, rather than a lock better-sqlite3
+    // waited out inside its five second busy timeout and nobody noticed. The
+    // admin health panel reports the count, because "it told me to try again"
+    // is the symptom people report and one unlucky moment looks exactly like
+    // a pattern until somebody can see how many there have been.
+    recordBusyError();
     return {
       statusCode: 503,
       code: "DB_BUSY",

@@ -6,6 +6,11 @@
 // ago that nobody is going to ask about them, invitations that were revoked
 // or expired a month back, and AI invocations outside the stats window.
 //
+// The sweep also checkpoints the write-ahead log, which is a different kind of
+// growth with the same shape: nothing removes it in the ordinary course of
+// things and it only becomes visible once it is a problem. `walHealth.ts` has
+// the reasoning.
+//
 // Before Phase 3 there was nothing to attach this to. `cleanupOldInvocations`
 // ran once at boot and the session sweep was boot-only, so an instance left
 // running for a year swept twice.
@@ -22,6 +27,7 @@ import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { cleanupOldInvocations } from "./aiStatsService.ts";
+import { runWalMaintenance } from "./walHealth.ts";
 
 /** How long each kind of row is kept. */
 export const AUDIT_RETENTION_DAYS = 90;
@@ -34,6 +40,8 @@ export interface MaintenanceCounts {
   agedTokens: number;
   deadInvitations: number;
   oldInvocations: number;
+  /** Pages the checkpoint moved back into the database. */
+  walPagesCheckpointed: number;
 }
 
 /**
@@ -59,6 +67,7 @@ export function runDailyMaintenance(): MaintenanceCounts {
     agedTokens: 0,
     deadInvitations: 0,
     oldInvocations: 0,
+    walPagesCheckpointed: 0,
   };
 
   try {
@@ -104,6 +113,11 @@ export function runDailyMaintenance(): MaintenanceCounts {
       `Daily sweep failed part way through: ${getErrorMessage(err)}`,
     );
   }
+
+  // Outside the try above on purpose. A delete that throws must not take the
+  // checkpoint with it: the two have nothing to do with each other beyond
+  // sharing a schedule, and the WAL is the one that grows without bound.
+  counts.walPagesCheckpointed = runWalMaintenance()?.checkpointedPages ?? 0;
 
   const total =
     counts.auditRows +
