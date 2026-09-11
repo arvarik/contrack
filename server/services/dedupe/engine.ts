@@ -32,6 +32,17 @@ import { softMergeContacts, mergeContacts } from "./merging.ts";
 import type { DedupeScanMode, RawPair, MatchType } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
+/**
+ * The confidence at which a pair is merged with nobody asked.
+ *
+ * A different number from `THRESHOLD_AUTO` in scoring.ts, which routes a pair
+ * to the auto bucket rather than to the model. They have been equal since
+ * they were written and they are still two decisions: one is "stop spending
+ * tokens on this pair", the other is "change somebody's data without telling
+ * them". Named and exported so the dedupe eval pins it.
+ */
+export const DEFAULT_AUTO_MERGE_THRESHOLD = 0.93;
+
 function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
   switch (mode) {
     case "quick":
@@ -184,7 +195,7 @@ export const dedupeService = {
     scanId: string,
     mode: DedupeScanMode,
     rid: string,
-    autoMergeThreshold = 0.93,
+    autoMergeThreshold = DEFAULT_AUTO_MERGE_THRESHOLD,
   ): Promise<void> {
     dedupeQueue.setProcessing(true);
     const resolved = resolveMode(mode);
@@ -451,7 +462,7 @@ export const dedupeService = {
   async incrementalDedupeCheck(
     contactId: string,
     rid: string,
-    autoMergeThreshold = 0.93,
+    autoMergeThreshold = DEFAULT_AUTO_MERGE_THRESHOLD,
   ): Promise<void> {
     const scope = scopeOfContact(contactId);
     if (!scope) {
@@ -510,7 +521,8 @@ export const dedupeService = {
     /** Imported contacts that matched something. The rest are new people. */
     matchedIds: Set<string>;
   }> {
-    const autoMergeThreshold = options.autoMergeThreshold ?? 0.93;
+    const autoMergeThreshold =
+      options.autoMergeThreshold ?? DEFAULT_AUTO_MERGE_THRESHOLD;
     const matchedIds = new Set<string>();
     let autoMerged = 0;
     let pending = 0;

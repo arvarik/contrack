@@ -189,9 +189,16 @@ export function computeCompositeScore(signals: MatchSignals): number {
 // Pair Classification
 // =============================================================================
 
-/** Score thresholds for pair routing. */
-const THRESHOLD_AUTO = 0.93; // ≥ 0.93 → auto-merge quality (or send straight to cluster)
-const THRESHOLD_AI = 0.6; // 0.60–0.93 → needs AI verification
+/**
+ * Score thresholds for pair routing.
+ *
+ * Exported so `tests/eval/dedupe.eval.test.ts` can pin them. Moving either
+ * number changes which pairs reach a person and which are merged without one
+ * being asked, and a preset change that nobody wrote down is exactly what the
+ * dedupe eval exists to refuse.
+ */
+export const THRESHOLD_AUTO = 0.93; // ≥ 0.93 → auto-merge quality (or send straight to cluster)
+export const THRESHOLD_AI = 0.6; // 0.60–0.93 → needs AI verification
 // < 0.60 → discard (too different)
 
 /**
