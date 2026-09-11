@@ -324,6 +324,10 @@ _Populated by the ML Engineer during the Build phase. Track AI feature quality m
 | Search Relevance (RRF MRR)            | ≥0.7356 ± 0.01         | 0.7356  | Same run, mean reciprocal rank of the first correct contact                            | search-eval | N/A (algorithmic)             | 2026-09-10 |
 | Keyword Ranking (BM25 Recall@10)      | ≥0.78 ± 0.01           | 0.7800  | Same run, `lexicalSearch` alone. This is the number the BM25 column weights move       | search-eval | N/A (algorithmic)             | 2026-09-10 |
 | Quick Search Recall@10                | ≥0.30 ± 0.01           | 0.3000  | Same run, `searchService.searchFts`, the sidebar box. AND only, so a sentence scores 0 | search-eval | N/A (algorithmic)             | 2026-09-10 |
+| Dedupe Precision (combined pass)      | ≥0.6738 ± 0.01         | 0.6738  | `tests/eval/dedupe.eval.test.ts`, deterministic and funnel together, AI off            | dedupe-eval | N/A (algorithmic)             | 2026-09-11 |
+| Dedupe Recall (combined pass)         | ≥0.8597 ± 0.01         | 0.8597  | Same run, 221 labelled duplicate pairs across twelve kinds                             | dedupe-eval | N/A (algorithmic)             | 2026-09-11 |
+| Dedupe Precision at auto-merge        | ≥0.6258 ± 0.01         | 0.6258  | Same run, pairs at or above 0.93, which merge with nobody asked                        | dedupe-eval | N/A (algorithmic)             | 2026-09-11 |
+| Dedupe Recall (import path)           | ≥0.7557 ± 0.01         | 0.7557  | Same run, `findIncrementalPairs`, the path a bulk import takes                         | dedupe-eval | N/A (algorithmic)             | 2026-09-11 |
 | AI Dossier Accuracy (Two-Pass)        | ≥85% field correctness | —       | Compare AI Search output fields against known ground truth contacts                    | N/A         | v1.0 (`promptTemplate.ts:31`) | —          |
 | AI Dossier Hallucination Rate         | ≤5%                    | —       | Spot-check AI-generated fields (social links, education, experience) against source    | N/A         | v1.0 (`promptTemplate.ts:31`) | —          |
 | Mention Extraction Precision          | ≥95%                   | —       | Compare extracted mentions against manually tagged interaction notes                   | N/A         | v1.0 (`aiService.ts:280`)     | —          |
@@ -344,6 +348,27 @@ _Populated by the ML Engineer during the Build phase. Track AI feature quality m
 - **Re-recording**: `npm run eval:record`. It rebuilds the corpus, embeds it
   with the real model, and rewrites the baseline. The baseline diff is the
   evidence for a ranking change and belongs in the pull request.
+- **eval_set**: `dedupe-eval`. 745 contacts and 332 labelled pairs, built by
+  `scripts/dedupe-eval/corpus.ts` at run time by both the gate and the
+  recorder, so there is no fixture on disk to drift. 221 duplicate pairs
+  across twelve kinds (typo, nickname, moved company, shared email, shared
+  phone, cross-source, initial, diacritic, married name, middle name, title
+  or suffix, formatting) and 111 hard negatives across seven (father and son,
+  shared landline, shared inbox, same common name, siblings, colleagues,
+  namesake). `validateCorpus` refuses a corpus in which two records of one
+  person could go unlabelled, which is what makes "every produced pair that is
+  not labelled is a false positive" a fair rule.
+- **Reading the dedupe numbers**: AI is off, so these are the deterministic
+  numbers and recall is higher on an instance with a provider configured. The
+  corpus is deliberately adversarial — a third of the labelled pairs are near
+  misses written to be as confusing as possible — so precision here is
+  precision against that, not precision on somebody's real address book.
+- **Re-recording**: `npm run eval:record:dedupe`. The baseline lives in
+  `tests/eval/dedupe.baseline.json` and the gate fails when precision, recall,
+  F1, mean confidence, recall per duplicate kind or the count of hard
+  negatives matched moves in either direction. The three thresholds the engine
+  routes on are read from the engine and pinned in the baseline, so a preset
+  change fails by name.
 - **holdout_set**: No holdout set configured yet — HUMAN-ONLY when created
 
 ## 5. Bugs Found (Fix Phase Queue)

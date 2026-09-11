@@ -158,6 +158,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing fails the check, which is the failure an integrity check alone
   cannot see. `GET` and `POST /api/backups` carry the result. At boot the
   server warns when the newest verified snapshot is older than two intervals.
+- **Story 8.** A dedupe precision and recall gate.
+  `tests/eval/dedupe.eval.test.ts` runs four routes over a corpus of 745
+  contacts with 332 labelled pairs and compares precision, recall, F1, mean
+  confidence, recall per duplicate kind and hard negatives matched per kind
+  with a committed baseline. The unit tests covered the matchers one at a
+  time, so a change to blocking, to a threshold or to the order the passes ran
+  in could move which pairs came out and nothing would notice. The fixture
+  carries twelve kinds of duplicate and seven kinds of near miss, including a
+  father and a son at one firm and a couple sharing a landline, and
+  `validateCorpus` refuses a corpus whose labels are not the whole truth.
+  Re-record with `npm run eval:record:dedupe`.
+- **Story 7.** A name in a timeline note is resolved against the contacts the
+  account already has, in tiers: the normalized name, then the nickname table,
+  then the phonetic hash, then a fuzzy comparison, with the company and a
+  person the contact has shared a note with as tiebreakers. It used to be an
+  exact string match, which missed "Jon" for "Jonathan Smith" and made a
+  second ghost every time. Above a confidence threshold the mention attaches
+  to the contact; below it, and above a lower one, the ghost is made and a
+  suggestion pairs it with the candidate in the same review queue as a
+  duplicate; below both it is a plain ghost as before. Two contacts that score
+  the same demote the answer to review however high the top score is, because
+  linking one of them would be a coin flip nothing on screen would show.
 - **Extra S2.** A search quality gate. `tests/eval/search.eval.test.ts` runs
   fifty golden queries against a fixed corpus of three hundred contacts and
   compares recall at ten and mean reciprocal rank with a committed baseline,
@@ -170,6 +192,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Story 1.** The embedding model runs on a `worker_threads` thread instead
+  of the request thread. A backfill of 2,000 contacts took 2.4 seconds and
+  blocked the event loop for 2.19 of them, in bursts of up to 83 ms, so while
+  one account's index was built every other account's requests waited. The
+  same backfill now blocks it for 0.03 seconds with a worst single stall of 7
+  ms. The worker has no database connection and no way to get one, so the
+  single-writer rule holds by construction. A worker that will not spawn falls
+  back to running in process, and `DISABLE_CPU_WORKER=true` selects that
+  deliberately.
+- **Story 1.** The deterministic dedupe pass no longer joins contacts to
+  contacts through a function. It matched on
+  `LOWER(TRIM(name)) = LOWER(TRIM(name))`, which no index can answer, so
+  SQLite compared every contact with every other: 42.9 seconds on 10,000
+  contacts to find no duplicates at all, and the cost grew with the size of
+  the account rather than with the number of duplicates in it. The email pass
+  had the same shape. Both group rows that are already loaded, which is 24 ms
+  at 10,000 contacts and 131 ms at 50,000.
+- **Story 1.** The scoring pass no longer asks the vector store for a
+  similarity when there is no vector store. Every one of those queries failed
+  inside its own try/catch and returned zero, so 30,000 candidate pairs meant
+  30,000 failing queries: 1.16 seconds of a 1.2-second pass.
+- **Story 1.** `normalizeCompany` compiles its thirty-three suffix patterns
+  once instead of on every call. It was the most expensive thing in the dedupe
+  normalizer and in mention resolution: 339 ms to 69 ms per 50,000 calls.
+- **Story 4.** The vector search filters inside the index rather than around
+  it. Both `vec0` tables carry the contact's ghost, archived and active state
+  as sqlite-vec metadata columns, so the nearest neighbours are chosen from
+  contacts somebody can see rather than filtered afterwards. It replaced a
+  subquery that made SQLite list every active contact in the account on every
+  search: 43.68 ms to 1.48 ms per query on 50,000 contacts, 8.16 ms to 0.36 ms
+  on 10,000, for the same fifty contacts in the same order. A trigger keeps
+  the columns equal to the contact row. The dedupe neighbour search applies
+  the same predicate, so it no longer spends a neighbour slot on an archived
+  or trashed contact the scorer would drop.
+- **Story 4.** Archiving a contact no longer deletes its search vector. The
+  vector encodes the contact's text, which a status change does not touch, so
+  archiving and restoring somebody used to cost an embedding for nothing.
+- **Story 7.** The name tokenizer folds accents onto the base letter.
+  "María García" tokenized to four fragments with a surname of "a", because
+  every accented character was treated as punctuation and replaced with a
+  space. Every consumer improves: the dedupe eval's diacritic recall went from
+  0.9375 to 1.0 with precision up and nothing else moved.
+- **Story 7.** A ghost never survives a merge with a real contact.
+  `computePrimaryScore` counted fields and nothing else, so a bare real
+  contact and a ghost both scored 5 and the survivor came down to which id
+  sorted first.
 - **Extra S3.** A bulk import checks its contacts for duplicates in one pass
   instead of one pass each. Every check normalized the whole account and built
   a whole scan context of its own, so importing `n` contacts into a corpus of

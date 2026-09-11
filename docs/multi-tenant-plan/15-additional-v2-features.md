@@ -329,18 +329,18 @@ insight capability, and an export as an image.
 These do not add a feature. They make an existing one faster, make it
 produce better results, or make it fail less. Each is grounded in a specific
 place in the `v1.5.5` code. Rank is importance; "Ships in" also weighs size
-and risk. Five ship in 2.0, five in 2.1.
+and risk. Nine ship in 2.0, one in 2.1.
 
 | Rank | Story | Kind | Ships in | Size | Today |
 | ---- | ----- | ---- | -------- | ---- | ----- |
-| 1 | CPU-bound work off the main thread | Performance, Stability | 2.1 | L | Local embeddings and dedupe passes run on the event loop |
+| 1 | CPU-bound work off the main thread | Performance, Stability | 2.0 | L | Local embeddings and dedupe passes run on the event loop |
 | 2 | Search quality gate | Accuracy | 2.0 | S to M | No eval set; ranking changes are unmeasured |
 | 3 | One scan after a bulk import | Performance | 2.0 | S | One incremental check per imported contact |
-| 4 | Filters inside the vector index | Accuracy, Performance | 2.1 | M | Global top 500, then a JavaScript filter |
+| 4 | Filters inside the vector index | Accuracy, Performance | 2.0 | M | Global top 500, then a JavaScript filter |
 | 5 | Verified backups | Stability | 2.0 | S | Snapshot written, never opened |
 | 6 | WAL checkpoint and write health | Stability | 2.0 | S | No checkpoint call anywhere |
-| 7 | Fuzzy mention resolution | Accuracy | 2.1 | M | Exact match on `contacts.name` |
-| 8 | Dedupe precision and recall gate | Accuracy | 2.1 | M | Unit tests per matcher, no pair-level gate |
+| 7 | Fuzzy mention resolution | Accuracy | 2.0 | M | Exact match on `contacts.name` |
+| 8 | Dedupe precision and recall gate | Accuracy | 2.0 | M | Unit tests per matcher, no pair-level gate |
 | 9 | Admin health panel | Stability | 2.0 | S | Health is `SELECT 1` |
 | 10 | Incremental relationship scoring | Performance | 2.1 | S to M | Hourly full recompute of every contact |
 
@@ -401,7 +401,11 @@ computed for the stats page), provider circuit state, and uptime. One card
 grid under Administration. No secrets. Earliest start: after Phase 3;
 the view with Phase 4.
 
-### Ships in 2.1
+### Also shipped in 2.0
+
+Four of these five were taken after the six small extras landed. Each
+paragraph below is as it was written against `v1.5.5`; what was actually
+found and done is in the decision record.
 
 **1. CPU-bound work off the main thread.** The Transformers.js embedding
 pipeline (`server/services/search/localEmbeddings.ts:42-44`) and the dedupe
@@ -451,6 +455,8 @@ asserting precision and recall per pass against a committed baseline. The
 fixture doubles as the regression suite for the 2.1 mention work and for
 any threshold preset change.
 
+### Ships in 2.1
+
 **10. Incremental relationship scoring.** `recomputeAll`
 (`server/services/relationshipService.ts:289-336`) scores every non-ghost,
 non-archived contact every hour (`server.ts:210-217`), in batches of 200. On
@@ -496,6 +502,10 @@ Fill in as decisions are made, so the release PR can list what shipped.
 | S5 | Verified backups | Accepted. Shipped in [#41](https://github.com/arvarik/contrack/pull/41). | 2026-09-10 |
 | S6 | WAL checkpoint and write health | Accepted. Shipped in [#42](https://github.com/arvarik/contrack/pull/42). | 2026-09-10 |
 | S9 | Admin health panel | Accepted. Shipped in [#43](https://github.com/arvarik/contrack/pull/43). | 2026-09-10 |
+| S1 | CPU-bound work off the main thread | Accepted. Shipped in [#45](https://github.com/arvarik/contrack/pull/45). The embedding model moved to a `worker_threads` worker as the paragraph asks: a 2,000-contact backfill blocked the event loop for 2.19 s of its 2.4 s and now blocks for 0.03 s, worst single stall 83 ms to 7 ms. Three deviations, all from measuring first. The query path went to the worker too, which the paragraph does not ask for: 0.44 ms against 0.39 ms in process, and it keeps one copy of the model in memory rather than two. The worker is given data rather than its own read connection; the guarantee the paragraph states for that connection is "the main thread writes", and a worker with nothing to write with holds it more simply. And the dedupe passes were **not** moved. A second worker job for them was written and measured and removed: almost none of their cost was CPU. The deterministic pass joined `LOWER(TRIM(name))` to itself, which no index can answer, so it took 42.9 s on 10,000 contacts to find nothing; the funnel asked the vector store for a similarity per candidate even with no vector store, 30,000 failing queries per scan; and `normalizeCompany` compiled thirty-three regular expressions on every call. Fixed in place, those passes cost 34 ms at 10,000 contacts and about 500 ms at 50,000, against roughly 180 ms to ship the corpus across the boundary. The work was better removed than moved. | 2026-09-11 |
+| S4 | Filters inside the vector index | Accepted. Shipped in [#45](https://github.com/arvarik/contrack/pull/45). The paragraph's premise is out of date and the item is worth doing anyway. It describes `findSearchNeighbors` taking the global top 500 and filtering in JavaScript, which is what `v1.5.5` did; Phase 2c had already pushed both the active predicate and the id list into the `MATCH`, and sqlite-vec applies those inside the scan, so a hard filter matching few contacts already returned them. Measured on 50,000 contacts: k=10 with twelve nearer hidden rows returns the one visible row, and no ghost or archived contact leaks. What remained was the cost. The subquery made SQLite list every active contact in the account on every search — `EXPLAIN QUERY PLAN` showed `LIST SUBQUERY` / `SCAN c` — at 43.68 ms per query on 50,000 contacts, 8.16 ms on 10,000 and 0.83 ms on 1,000. With the three states as metadata columns it is 1.48, 0.36 and 0.10 ms, for the same fifty contacts in the same order. A trigger keeps the columns equal to the contact row, narrowed so the hourly score recompute pays 2.9 ms per 5,000 rows against 2.6 ms with no trigger at all. | 2026-09-11 |
+| S7 | Fuzzy mention resolution | Accepted. Shipped in [#45](https://github.com/arvarik/contrack/pull/45). Tiers, tiebreakers and the three outcomes are as the paragraph describes. One deviation: it says "create a possible mention suggestion **instead of** a ghost", and the ghost is still created. A mention has to point at a contact or the timeline cannot render it, and `dedupe_suggestions` holds a pair of contact ids, so the suggestion pairs the ghost with the candidate and accepting it merges the ghost away. That is the same review queue the paragraph asks for. Two defects found on the way: the shared name tokenizer treated every accent as punctuation, so "María García" tokenized to four fragments with a surname of "a"; and `computePrimaryScore` had no ghost term, so a bare real contact and a ghost both scored 5 and the survivor of a merge came down to which id sorted first — which a mention suggestion makes the common case rather than the edge. | 2026-09-11 |
+| S8 | Dedupe precision and recall gate | Accepted. Shipped in [#45](https://github.com/arvarik/contrack/pull/45). 745 contacts and 332 labelled pairs: 221 duplicates across twelve kinds and 111 hard negatives across seven. It found four defects in its own corpus while it was written and named the diacritic improvement in S7 on its own. It also reports something nobody had measured: on this deliberately adversarial corpus, with AI off, a scan produces 58 pairs at or above the auto-merge threshold that are two different people — every father and son, every couple on one landline, every pair on a team alias. Not fixed here. The paragraph asks for the measurement, and changing a threshold is the next change rather than part of this one. | 2026-09-11 |
 
 The five accepted stories land in the order this table lists them, one pull
 request each, from `v2.0-extra-<slug>`. The rules at the top of this document
@@ -508,7 +518,19 @@ landed, and went in as one pull request rather than six: every one of them is
 XS or S, they touch no common code, and six pull requests of a dozen lines
 each is process for its own sake.
 
+Four of the five 2.1 stories were accepted on 2026-09-11 and went in as one
+pull request, in the order S8, S4, S7, S1. S8 first on purpose: it is the
+measurement the other three lean on, and it is what showed that S7's tokenizer
+change improved matching rather than moved it, and that S1's rewrite of the
+deterministic pass changed nothing at all.
+
+The table rows above record where the work differed from the paragraph. Three
+of the four differ, and in each case because something was measured before it
+was built: S4's stated accuracy problem had already been fixed by Phase 2c and
+its performance problem had not, and S1's dedupe half turned out to be two
+quadratic joins rather than CPU-bound work.
+
 Nothing else was accepted. The four headline features are not rejected on
-their merits. They were not taken for 2.0, so the fourth rule at the top of
-this document applies to them: whatever is not merged when the Phase 5
-security review begins ships in 2.1.
+their merits, and neither is S10. They were not taken for 2.0, so the fourth
+rule at the top of this document applies to them: whatever is not merged when
+the Phase 5 security review begins ships in 2.1.
