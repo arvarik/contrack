@@ -106,6 +106,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than showing a progress bar at zero. `GET /api/dedupe/active` gained a
   `queued` field, which is the only way a reloaded page can tell a booked scan
   from one that has hung.
+- **Extra S5.** Every backup is opened again as soon as it is written. The
+  service produced a snapshot, rotated the old ones, and trusted all of it,
+  so the first person to find out whether any of it worked would have been
+  somebody restoring after losing the original. Each snapshot is now opened
+  read only, put through `PRAGMA quick_check`, and counted against the live
+  database, and the answer is recorded beside the file and shown as a badge
+  per snapshot in Administration. A snapshot that reads perfectly and holds
+  nothing fails the check, which is the failure an integrity check alone
+  cannot see. `GET` and `POST /api/backups` carry the result. At boot the
+  server warns when the newest verified snapshot is older than two intervals.
 - **Extra S2.** A search quality gate. `tests/eval/search.eval.test.ts` runs
   fifty golden queries against a fixed corpus of three hundred contacts and
   compares recall at ten and mean reciprocal rank with a committed baseline,
