@@ -1,0 +1,7 @@
+{
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "dimension": 384,
+  "contacts": 300,
+  "queries": 50,
+  "recordedAt": "2026-09-11T04:00:05.848Z"
+}

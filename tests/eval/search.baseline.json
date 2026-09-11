@@ -1,0 +1,90 @@
+{
+  "recordedAt": "2026-09-11T04:00:05.949Z",
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "corpus": {
+    "contacts": 300,
+    "queries": 50
+  },
+  "channels": {
+    "sidebar": {
+      "recallAt10": 0.3,
+      "mrr": 0.3
+    },
+    "lexical": {
+      "recallAt10": 0.78,
+      "mrr": 0.69
+    },
+    "hybrid": {
+      "recallAt10": 0.92,
+      "mrr": 0.7356
+    }
+  },
+  "byKind": {
+    "sidebar": {
+      "company-role": {
+        "recallAt10": 0,
+        "mrr": 0
+      },
+      "location-interest": {
+        "recallAt10": 0.2,
+        "mrr": 0.2
+      },
+      "name-typo": {
+        "recallAt10": 0,
+        "mrr": 0
+      },
+      "nickname": {
+        "recallAt10": 0.3,
+        "mrr": 0.3
+      },
+      "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      }
+    },
+    "lexical": {
+      "company-role": {
+        "recallAt10": 0.9,
+        "mrr": 0.5
+      },
+      "location-interest": {
+        "recallAt10": 1,
+        "mrr": 0.95
+      },
+      "name-typo": {
+        "recallAt10": 0,
+        "mrr": 0
+      },
+      "nickname": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      }
+    },
+    "hybrid": {
+      "company-role": {
+        "recallAt10": 1,
+        "mrr": 0.5833
+      },
+      "location-interest": {
+        "recallAt10": 1,
+        "mrr": 0.775
+      },
+      "name-typo": {
+        "recallAt10": 0.6,
+        "mrr": 0.3194
+      },
+      "nickname": {
+        "recallAt10": 1,
+        "mrr": 1
+      },
+      "note-phrase": {
+        "recallAt10": 1,
+        "mrr": 1
+      }
+    }
+  }
+}

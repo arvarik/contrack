@@ -317,21 +317,33 @@ _Populated by the SDET during the Trap phase. Every interactive component must b
 
 _Populated by the ML Engineer during the Build phase. Track AI feature quality metrics._
 
-| Metric                                | Target                 | Current | Method                                                                              | Eval Set | Prompt Ver.                   | Last Run |
-| ------------------------------------- | ---------------------- | ------- | ----------------------------------------------------------------------------------- | -------- | ----------------------------- | -------- |
-| Search Relevance (Reranker Precision) | ≥90%                   | —       | Manual review of reranker output vs query intent                                    | N/A      | v1.0 (`aiService.ts:422`)     | —        |
-| Search Relevance (RRF Recall@10)      | ≥80%                   | —       | Measure how often correct contact appears in top-10 hybrid results                  | N/A      | N/A (algorithmic)             | —        |
-| AI Dossier Accuracy (Two-Pass)        | ≥85% field correctness | —       | Compare AI Search output fields against known ground truth contacts                 | N/A      | v1.0 (`promptTemplate.ts:31`) | —        |
-| AI Dossier Hallucination Rate         | ≤5%                    | —       | Spot-check AI-generated fields (social links, education, experience) against source | N/A      | v1.0 (`promptTemplate.ts:31`) | —        |
-| Mention Extraction Precision          | ≥95%                   | —       | Compare extracted mentions against manually tagged interaction notes                | N/A      | v1.0 (`aiService.ts:280`)     | —        |
-| Catch-Me-Up Briefing Relevance        | ≥85%                   | —       | Human rating of briefing bullet point grounding in actual interaction data          | N/A      | v1.0 (`aiService.ts:213`)     | —        |
-| Contact Parse Accuracy                | ≥90%                   | —       | Compare parsed contact fields against original unstructured text                    | N/A      | v1.0 (`aiService.ts:84`)      | —        |
-| Search Expansion Quality              | ≥80% term relevance    | —       | Human review of Doc2Query expansion terms vs contact profile                        | N/A      | v1.0 (`aiService.ts:680`)     | —        |
-| Synthesis Brief Quality               | ≥85%                   | —       | Human rating of executive brief accuracy and completeness                           | N/A      | v1.0 (`aiService.ts:748`)     | —        |
+| Metric                                | Target                 | Current | Method                                                                                 | Eval Set    | Prompt Ver.                   | Last Run   |
+| ------------------------------------- | ---------------------- | ------- | -------------------------------------------------------------------------------------- | ----------- | ----------------------------- | ---------- |
+| Search Relevance (Reranker Precision) | ≥90%                   | —       | Manual review of reranker output vs query intent                                       | N/A         | v1.0 (`aiService.ts:422`)     | —          |
+| Search Relevance (RRF Recall@10)      | ≥0.92 ± 0.01           | 0.9200  | `tests/eval/search.eval.test.ts`, hybrid channel, 50 golden queries                    | search-eval | N/A (algorithmic)             | 2026-09-10 |
+| Search Relevance (RRF MRR)            | ≥0.7356 ± 0.01         | 0.7356  | Same run, mean reciprocal rank of the first correct contact                            | search-eval | N/A (algorithmic)             | 2026-09-10 |
+| Keyword Ranking (BM25 Recall@10)      | ≥0.78 ± 0.01           | 0.7800  | Same run, `lexicalSearch` alone. This is the number the BM25 column weights move       | search-eval | N/A (algorithmic)             | 2026-09-10 |
+| Quick Search Recall@10                | ≥0.30 ± 0.01           | 0.3000  | Same run, `searchService.searchFts`, the sidebar box. AND only, so a sentence scores 0 | search-eval | N/A (algorithmic)             | 2026-09-10 |
+| AI Dossier Accuracy (Two-Pass)        | ≥85% field correctness | —       | Compare AI Search output fields against known ground truth contacts                    | N/A         | v1.0 (`promptTemplate.ts:31`) | —          |
+| AI Dossier Hallucination Rate         | ≤5%                    | —       | Spot-check AI-generated fields (social links, education, experience) against source    | N/A         | v1.0 (`promptTemplate.ts:31`) | —          |
+| Mention Extraction Precision          | ≥95%                   | —       | Compare extracted mentions against manually tagged interaction notes                   | N/A         | v1.0 (`aiService.ts:280`)     | —          |
+| Catch-Me-Up Briefing Relevance        | ≥85%                   | —       | Human rating of briefing bullet point grounding in actual interaction data             | N/A         | v1.0 (`aiService.ts:213`)     | —          |
+| Contact Parse Accuracy                | ≥90%                   | —       | Compare parsed contact fields against original unstructured text                       | N/A         | v1.0 (`aiService.ts:84`)      | —          |
+| Search Expansion Quality              | ≥80% term relevance    | —       | Human review of Doc2Query expansion terms vs contact profile                           | N/A         | v1.0 (`aiService.ts:680`)     | —          |
+| Synthesis Brief Quality               | ≥85%                   | —       | Human rating of executive brief accuracy and completeness                              | N/A         | v1.0 (`aiService.ts:748`)     | —          |
 
 ### Eval / Holdout Boundary
 
-- **eval_set**: No eval set configured yet
+- **eval_set**: `search-eval`. 300 contacts and 50 golden queries in
+  `tests/fixtures/search-eval/`, generated from `scripts/search-eval/corpus.ts`.
+  Five kinds of query: a misspelt name, a company plus a job title, a place
+  plus an interest, a nickname where the record holds the formal name, and a
+  phrase out of somebody's notes. The baseline lives in
+  `tests/eval/search.baseline.json` and the gate fails when a number moves in
+  either direction by more than 0.01, which is less than one query.
+- **Re-recording**: `npm run eval:record`. It rebuilds the corpus, embeds it
+  with the real model, and rewrites the baseline. The baseline diff is the
+  evidence for a ranking change and belongs in the pull request.
 - **holdout_set**: No holdout set configured yet — HUMAN-ONLY when created
 
 ## 5. Bugs Found (Fix Phase Queue)

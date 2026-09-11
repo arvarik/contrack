@@ -1,0 +1,404 @@
+[
+  {
+    "id": "q01",
+    "kind": "name-typo",
+    "q": "Jonathon Smyth",
+    "expect": [
+      "jonathan-smith"
+    ]
+  },
+  {
+    "id": "q02",
+    "kind": "name-typo",
+    "q": "Katharine Oconnel",
+    "expect": [
+      "katherine-oconnell"
+    ]
+  },
+  {
+    "id": "q03",
+    "kind": "name-typo",
+    "q": "Shivaun Murphey",
+    "expect": [
+      "siobhan-murphy"
+    ]
+  },
+  {
+    "id": "q04",
+    "kind": "name-typo",
+    "q": "Kristof Novak",
+    "expect": [
+      "krzysztof-nowak"
+    ]
+  },
+  {
+    "id": "q05",
+    "kind": "name-typo",
+    "q": "Eefa Gallacher",
+    "expect": [
+      "aoife-gallagher"
+    ]
+  },
+  {
+    "id": "q06",
+    "kind": "name-typo",
+    "q": "Jeffrey Thwaight",
+    "expect": [
+      "geoffrey-thwaite"
+    ]
+  },
+  {
+    "id": "q07",
+    "kind": "name-typo",
+    "q": "Xiomarra Reyez",
+    "expect": [
+      "xiomara-reyes"
+    ]
+  },
+  {
+    "id": "q08",
+    "kind": "name-typo",
+    "q": "Bartholemew Quigly",
+    "expect": [
+      "bartholomew-quigley"
+    ]
+  },
+  {
+    "id": "q09",
+    "kind": "name-typo",
+    "q": "Annalise Hoffman",
+    "expect": [
+      "anneliese-hofmann"
+    ]
+  },
+  {
+    "id": "q10",
+    "kind": "name-typo",
+    "q": "Porrig O'Callahan",
+    "expect": [
+      "padraig-ocallaghan"
+    ]
+  },
+  {
+    "id": "q11",
+    "kind": "company-role",
+    "q": "product manager at Northwind Logistics",
+    "expect": [
+      "marcus-delgado"
+    ]
+  },
+  {
+    "id": "q12",
+    "kind": "company-role",
+    "q": "staff engineer at Northwind Logistics",
+    "expect": [
+      "priya-raghunathan"
+    ]
+  },
+  {
+    "id": "q13",
+    "kind": "company-role",
+    "q": "product manager at Halcyon Design Studio",
+    "expect": [
+      "tomas-lindqvist"
+    ]
+  },
+  {
+    "id": "q14",
+    "kind": "company-role",
+    "q": "engineering manager at Kestrel Analytics",
+    "expect": [
+      "nadia-benali"
+    ]
+  },
+  {
+    "id": "q15",
+    "kind": "company-role",
+    "q": "data analyst at Meridian Health Trust",
+    "expect": [
+      "declan-mcgrath"
+    ]
+  },
+  {
+    "id": "q16",
+    "kind": "company-role",
+    "q": "product manager at Drachen Robotics",
+    "expect": [
+      "yuki-tanabe"
+    ]
+  },
+  {
+    "id": "q17",
+    "kind": "company-role",
+    "q": "finance director at Solstice Renewables",
+    "expect": [
+      "oliver-brandt"
+    ]
+  },
+  {
+    "id": "q18",
+    "kind": "company-role",
+    "q": "data protection officer at Ravensworth Legal",
+    "expect": [
+      "hassan-farouk"
+    ]
+  },
+  {
+    "id": "q19",
+    "kind": "company-role",
+    "q": "chief operating officer at Baltic Freight Union",
+    "expect": [
+      "ingrid-solberg"
+    ]
+  },
+  {
+    "id": "q20",
+    "kind": "company-role",
+    "q": "clinical lead at Meridian Health Trust",
+    "expect": [
+      "aoife-gallagher"
+    ]
+  },
+  {
+    "id": "q21",
+    "kind": "location-interest",
+    "q": "who in Lisbon goes rock climbing",
+    "expect": [
+      "elena-vasquez",
+      "rafael-moreno",
+      "renata-costa"
+    ]
+  },
+  {
+    "id": "q22",
+    "kind": "location-interest",
+    "q": "bouldering in Berlin",
+    "expect": [
+      "samuel-adeyemi"
+    ]
+  },
+  {
+    "id": "q23",
+    "kind": "location-interest",
+    "q": "someone in Barcelona who cooks",
+    "expect": [
+      "mireia-puig"
+    ]
+  },
+  {
+    "id": "q24",
+    "kind": "location-interest",
+    "q": "ski touring near Innsbruck",
+    "expect": [
+      "lukas-meyer"
+    ]
+  },
+  {
+    "id": "q25",
+    "kind": "location-interest",
+    "q": "beekeeping in Nairobi",
+    "expect": [
+      "grace-okonkwo"
+    ]
+  },
+  {
+    "id": "q26",
+    "kind": "location-interest",
+    "q": "trail running in Umea",
+    "expect": [
+      "felix-bergstrom"
+    ]
+  },
+  {
+    "id": "q27",
+    "kind": "location-interest",
+    "q": "open water swimming in Paris",
+    "expect": [
+      "amara-diallo"
+    ]
+  },
+  {
+    "id": "q28",
+    "kind": "location-interest",
+    "q": "guitar player in Porto",
+    "expect": [
+      "diego-ferreira"
+    ]
+  },
+  {
+    "id": "q29",
+    "kind": "location-interest",
+    "q": "cold water swimming in Helsinki",
+    "expect": [
+      "hanna-virtanen"
+    ]
+  },
+  {
+    "id": "q30",
+    "kind": "location-interest",
+    "q": "climbing partner in Seville",
+    "expect": [
+      "xiomara-reyes"
+    ]
+  },
+  {
+    "id": "q31",
+    "kind": "nickname",
+    "q": "Kate at the interiors studio",
+    "expect": [
+      "katherine-ashworth"
+    ]
+  },
+  {
+    "id": "q32",
+    "kind": "nickname",
+    "q": "Bob Castellanos the fleet manager",
+    "expect": [
+      "robert-castellanos"
+    ]
+  },
+  {
+    "id": "q33",
+    "kind": "nickname",
+    "q": "Peggy at Crestwood Capital",
+    "expect": [
+      "margaret-ellington"
+    ]
+  },
+  {
+    "id": "q34",
+    "kind": "nickname",
+    "q": "Bill in Lagos who does distribution",
+    "expect": [
+      "william-oyelaran"
+    ]
+  },
+  {
+    "id": "q35",
+    "kind": "nickname",
+    "q": "Liz the rail signalling engineer",
+    "expect": [
+      "elizabeth-varga"
+    ]
+  },
+  {
+    "id": "q36",
+    "kind": "nickname",
+    "q": "Ted at Frostline Cold Chain",
+    "expect": [
+      "theodore-lindgren"
+    ]
+  },
+  {
+    "id": "q37",
+    "kind": "nickname",
+    "q": "Sasha who leads materials research",
+    "expect": [
+      "alexandra-petrova"
+    ]
+  },
+  {
+    "id": "q38",
+    "kind": "nickname",
+    "q": "Chris the network architect",
+    "expect": [
+      "christopher-nwosu"
+    ]
+  },
+  {
+    "id": "q39",
+    "kind": "nickname",
+    "q": "Jo who runs supply chain in Bologna",
+    "expect": [
+      "josephine-marchetti"
+    ]
+  },
+  {
+    "id": "q40",
+    "kind": "nickname",
+    "q": "Kolya the optical designer",
+    "expect": [
+      "nikolai-abramov"
+    ]
+  },
+  {
+    "id": "q41",
+    "kind": "note-phrase",
+    "q": "cross laminated floor plates over bad coffee",
+    "expect": [
+      "imogen-halvorsen"
+    ]
+  },
+  {
+    "id": "q42",
+    "kind": "note-phrase",
+    "q": "airport lounge in Changi",
+    "expect": [
+      "ravi-krishnan"
+    ]
+  },
+  {
+    "id": "q43",
+    "kind": "note-phrase",
+    "q": "sketchbook photograph of the tram stop",
+    "expect": [
+      "beatrix-lang"
+    ]
+  },
+  {
+    "id": "q44",
+    "kind": "note-phrase",
+    "q": "licensing regime on a napkin",
+    "expect": [
+      "olusegun-bello"
+    ]
+  },
+  {
+    "id": "q45",
+    "kind": "note-phrase",
+    "q": "lorry full of rose stuck at the border",
+    "expect": [
+      "clementine-roux"
+    ]
+  },
+  {
+    "id": "q46",
+    "kind": "note-phrase",
+    "q": "laminated card of the contract dates",
+    "expect": [
+      "mateusz-wojcik"
+    ]
+  },
+  {
+    "id": "q47",
+    "kind": "note-phrase",
+    "q": "freshwater pearl mussels counted by hand",
+    "expect": [
+      "saoirse-brennan"
+    ]
+  },
+  {
+    "id": "q48",
+    "kind": "note-phrase",
+    "q": "two pieces of cedar on the meeting room table",
+    "expect": [
+      "haruto-ishikawa"
+    ]
+  },
+  {
+    "id": "q49",
+    "kind": "note-phrase",
+    "q": "most frightening afternoon of her professional life",
+    "expect": [
+      "valentina-rossi"
+    ]
+  },
+  {
+    "id": "q50",
+    "kind": "note-phrase",
+    "q": "drew the autonomy stack on a whiteboard from memory",
+    "expect": [
+      "emeka-onyeka"
+    ]
+  }
+]
