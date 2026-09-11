@@ -106,6 +106,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than showing a progress bar at zero. `GET /api/dedupe/active` gained a
   `queued` field, which is the only way a reloaded page can tell a booked scan
   from one that has hung.
+- **Extra S2.** A search quality gate. `tests/eval/search.eval.test.ts` runs
+  fifty golden queries against a fixed corpus of three hundred contacts and
+  compares recall at ten and mean reciprocal rank with a committed baseline,
+  for the quick search box, for keyword ranking on its own, and for the hybrid
+  fusion. Ranking could be changed by one number in one string before this,
+  and nothing in the suite would have noticed. The gate fails on an
+  improvement as well as on a regression, so a ranking change arrives with the
+  measurement that justifies it. The contact and query embeddings are recorded
+  by `npm run eval:record`, so the gate needs no model and no network.
 
 ### Fixed
 

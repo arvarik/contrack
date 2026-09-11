@@ -1,0 +1,5742 @@
+[
+  {
+    "key": "jonathan-smith",
+    "name": "Jonathan Smith",
+    "firstName": "Jonathan",
+    "lastName": "Smith",
+    "company": "Northwind Logistics",
+    "role": "Operations Director",
+    "location": "Manchester",
+    "industry": "Logistics",
+    "headline": "Keeps the northern depots running",
+    "about": "Runs the night shift rota out of the Trafford Park depot. Wants to talk about pallet tracking before the new year.",
+    "tags": [
+      "operations",
+      "logistics"
+    ],
+    "interests": [
+      "cycling",
+      "real ale"
+    ]
+  },
+  {
+    "key": "katherine-oconnell",
+    "name": "Katherine O'Connell",
+    "firstName": "Katherine",
+    "lastName": "O'Connell",
+    "company": "Halcyon Design Studio",
+    "role": "Creative Director",
+    "location": "Dublin",
+    "industry": "Design",
+    "headline": "Brand systems and type",
+    "about": "Redrew the whole identity in six weeks and kept the old wordmark as an easter egg on the invoices.",
+    "tags": [
+      "design",
+      "brand"
+    ],
+    "interests": [
+      "letterpress",
+      "sea swimming"
+    ]
+  },
+  {
+    "key": "siobhan-murphy",
+    "name": "Siobhan Murphy",
+    "firstName": "Siobhan",
+    "lastName": "Murphy",
+    "company": "Kestrel Analytics",
+    "role": "Data Scientist",
+    "location": "Galway",
+    "industry": "Analytics",
+    "headline": "Forecasting and demand models",
+    "about": "Built the demand model that replaced the spreadsheet nobody could open. Prefers a phone call to a meeting.",
+    "tags": [
+      "analytics",
+      "forecasting"
+    ],
+    "interests": [
+      "birdwatching",
+      "chess"
+    ]
+  },
+  {
+    "key": "krzysztof-nowak",
+    "name": "Krzysztof Nowak",
+    "firstName": "Krzysztof",
+    "lastName": "Nowak",
+    "company": "Baltic Freight Union",
+    "role": "Port Liaison",
+    "location": "Gdansk",
+    "industry": "Shipping",
+    "headline": "Customs and port clearance",
+    "about": "Knows every customs officer between Gdansk and Rostock by first name. Answers email at five in the morning.",
+    "tags": [
+      "shipping",
+      "customs"
+    ],
+    "interests": [
+      "sailing",
+      "jazz"
+    ]
+  },
+  {
+    "key": "aoife-gallagher",
+    "name": "Aoife Gallagher",
+    "firstName": "Aoife",
+    "lastName": "Gallagher",
+    "company": "Meridian Health Trust",
+    "role": "Clinical Lead",
+    "location": "Cork",
+    "industry": "Healthcare",
+    "headline": "Outpatient pathway redesign",
+    "about": "Cut the outpatient waiting list by a third without hiring anybody. Writes very short emails.",
+    "tags": [
+      "healthcare",
+      "clinical"
+    ],
+    "interests": [
+      "distance running",
+      "cookery"
+    ]
+  },
+  {
+    "key": "geoffrey-thwaite",
+    "name": "Geoffrey Thwaite",
+    "firstName": "Geoffrey",
+    "lastName": "Thwaite",
+    "company": "Ferrous Works",
+    "role": "Plant Manager",
+    "location": "Sheffield",
+    "industry": "Manufacturing",
+    "headline": "Steel finishing and heat treatment",
+    "about": "Third generation at the same works. Will show you the annealing line if you ask nicely.",
+    "tags": [
+      "manufacturing",
+      "steel"
+    ],
+    "interests": [
+      "brass band",
+      "allotment"
+    ]
+  },
+  {
+    "key": "xiomara-reyes",
+    "name": "Xiomara Reyes",
+    "firstName": "Xiomara",
+    "lastName": "Reyes",
+    "company": "Solstice Renewables",
+    "role": "Grid Engineer",
+    "location": "Seville",
+    "industry": "Energy",
+    "headline": "Storage and grid connection",
+    "about": "Spends her week arguing with the grid operator about connection queues. Very good at it.",
+    "tags": [
+      "energy",
+      "grid"
+    ],
+    "interests": [
+      "flamenco guitar",
+      "rock climbing"
+    ]
+  },
+  {
+    "key": "bartholomew-quigley",
+    "name": "Bartholomew Quigley",
+    "firstName": "Bartholomew",
+    "lastName": "Quigley",
+    "company": "Ravensworth Legal",
+    "role": "Partner",
+    "location": "Edinburgh",
+    "industry": "Legal",
+    "headline": "Commercial contracts",
+    "about": "Reads every schedule twice and finds the clause nobody else did. Hates video calls.",
+    "tags": [
+      "legal",
+      "contracts"
+    ],
+    "interests": [
+      "hillwalking",
+      "whisky"
+    ]
+  },
+  {
+    "key": "anneliese-hofmann",
+    "name": "Anneliese Hofmann",
+    "firstName": "Anneliese",
+    "lastName": "Hofmann",
+    "company": "Drachen Robotics",
+    "role": "Head of Firmware",
+    "location": "Stuttgart",
+    "industry": "Robotics",
+    "headline": "Motion control firmware",
+    "about": "Wrote the motion controller that the whole product line still runs on. Keeps a paper notebook.",
+    "tags": [
+      "robotics",
+      "firmware"
+    ],
+    "interests": [
+      "cross country skiing",
+      "piano"
+    ]
+  },
+  {
+    "key": "padraig-ocallaghan",
+    "name": "Padraig O'Callaghan",
+    "firstName": "Padraig",
+    "lastName": "O'Callaghan",
+    "company": "Tidewater Marine",
+    "role": "Survey Lead",
+    "location": "Limerick",
+    "industry": "Marine",
+    "headline": "Hydrographic survey",
+    "about": "Maps estuary channels for a living. Has strong views about single beam versus multibeam.",
+    "tags": [
+      "marine",
+      "survey"
+    ],
+    "interests": [
+      "kayaking",
+      "photography"
+    ]
+  },
+  {
+    "key": "marcus-delgado",
+    "name": "Marcus Delgado",
+    "firstName": "Marcus",
+    "lastName": "Delgado",
+    "company": "Northwind Logistics",
+    "role": "Product Manager",
+    "location": "Bristol",
+    "industry": "Logistics",
+    "headline": "Owns the tracking product",
+    "about": "Took the pallet tracking product from a pilot to eleven depots in a year. Asks for the numbers first.",
+    "tags": [
+      "product",
+      "logistics"
+    ],
+    "interests": [
+      "bouldering",
+      "espresso"
+    ]
+  },
+  {
+    "key": "priya-raghunathan",
+    "name": "Priya Raghunathan",
+    "firstName": "Priya",
+    "lastName": "Raghunathan",
+    "company": "Northwind Logistics",
+    "role": "Staff Engineer",
+    "location": "Bristol",
+    "industry": "Logistics",
+    "headline": "Routing and optimisation",
+    "about": "Rewrote the routing solver over one winter and halved the fuel bill. Reviews every pull request properly.",
+    "tags": [
+      "engineering",
+      "routing"
+    ],
+    "interests": [
+      "long distance walking",
+      "baking"
+    ]
+  },
+  {
+    "key": "tomas-lindqvist",
+    "name": "Tomas Lindqvist",
+    "firstName": "Tomas",
+    "lastName": "Lindqvist",
+    "company": "Halcyon Design Studio",
+    "role": "Product Manager",
+    "location": "Stockholm",
+    "industry": "Design",
+    "headline": "Runs the client side of the studio",
+    "about": "The person clients actually call. Keeps a running list of everything the studio promised.",
+    "tags": [
+      "product",
+      "design"
+    ],
+    "interests": [
+      "sailing",
+      "vinyl records"
+    ]
+  },
+  {
+    "key": "nadia-benali",
+    "name": "Nadia Benali",
+    "firstName": "Nadia",
+    "lastName": "Benali",
+    "company": "Kestrel Analytics",
+    "role": "Engineering Manager",
+    "location": "Lyon",
+    "industry": "Analytics",
+    "headline": "Platform and data infrastructure",
+    "about": "Runs the platform team. Insists on a runbook before anything ships.",
+    "tags": [
+      "engineering",
+      "platform"
+    ],
+    "interests": [
+      "trail running",
+      "ceramics"
+    ]
+  },
+  {
+    "key": "declan-mcgrath",
+    "name": "Declan McGrath",
+    "firstName": "Declan",
+    "lastName": "McGrath",
+    "company": "Meridian Health Trust",
+    "role": "Data Analyst",
+    "location": "Cork",
+    "industry": "Healthcare",
+    "headline": "Waiting list analytics",
+    "about": "Produces the waiting list report the board actually reads. Will not round a number to make it look better.",
+    "tags": [
+      "analytics",
+      "healthcare"
+    ],
+    "interests": [
+      "sea kayaking",
+      "folk music"
+    ]
+  },
+  {
+    "key": "yuki-tanabe",
+    "name": "Yuki Tanabe",
+    "firstName": "Yuki",
+    "lastName": "Tanabe",
+    "company": "Drachen Robotics",
+    "role": "Product Manager",
+    "location": "Stuttgart",
+    "industry": "Robotics",
+    "headline": "Owns the industrial arm line",
+    "about": "Came from the factory floor into product and it shows in every spec she writes.",
+    "tags": [
+      "product",
+      "robotics"
+    ],
+    "interests": [
+      "aikido",
+      "woodworking"
+    ]
+  },
+  {
+    "key": "oliver-brandt",
+    "name": "Oliver Brandt",
+    "firstName": "Oliver",
+    "lastName": "Brandt",
+    "company": "Solstice Renewables",
+    "role": "Finance Director",
+    "location": "Seville",
+    "industry": "Energy",
+    "headline": "Project finance for storage",
+    "about": "Structures the project finance on every storage site. Fluent in four languages and modest about it.",
+    "tags": [
+      "finance",
+      "energy"
+    ],
+    "interests": [
+      "cycling",
+      "opera"
+    ]
+  },
+  {
+    "key": "renata-costa",
+    "name": "Renata Costa",
+    "firstName": "Renata",
+    "lastName": "Costa",
+    "company": "Solstice Renewables",
+    "role": "Grid Engineer",
+    "location": "Lisbon",
+    "industry": "Energy",
+    "headline": "Substation design",
+    "about": "Designs the substations. Turned down a move to head office twice to stay near the sites.",
+    "tags": [
+      "energy",
+      "grid"
+    ],
+    "interests": [
+      "rock climbing",
+      "fado"
+    ]
+  },
+  {
+    "key": "hassan-farouk",
+    "name": "Hassan Farouk",
+    "firstName": "Hassan",
+    "lastName": "Farouk",
+    "company": "Ravensworth Legal",
+    "role": "Data Protection Officer",
+    "location": "Edinburgh",
+    "industry": "Legal",
+    "headline": "Privacy and data protection",
+    "about": "The person every team asks before they collect anything. Answers within the hour, always.",
+    "tags": [
+      "legal",
+      "privacy"
+    ],
+    "interests": [
+      "chess",
+      "cricket"
+    ]
+  },
+  {
+    "key": "ingrid-solberg",
+    "name": "Ingrid Solberg",
+    "firstName": "Ingrid",
+    "lastName": "Solberg",
+    "company": "Baltic Freight Union",
+    "role": "Chief Operating Officer",
+    "location": "Oslo",
+    "industry": "Shipping",
+    "headline": "Runs the freight operation",
+    "about": "Took over an operation losing money and turned it round without laying anybody off.",
+    "tags": [
+      "operations",
+      "shipping"
+    ],
+    "interests": [
+      "cross country skiing",
+      "sailing"
+    ]
+  },
+  {
+    "key": "elena-vasquez",
+    "name": "Elena Vasquez",
+    "firstName": "Elena",
+    "lastName": "Vasquez",
+    "company": "Aurora Bioworks",
+    "role": "Research Lead",
+    "location": "Lisbon",
+    "industry": "Biotechnology",
+    "headline": "Enzyme engineering",
+    "about": "Runs the enzyme programme. Climbs every weekend the weather allows and some when it does not.",
+    "tags": [
+      "research",
+      "biotech"
+    ],
+    "interests": [
+      "rock climbing",
+      "cold water swimming"
+    ]
+  },
+  {
+    "key": "samuel-adeyemi",
+    "name": "Samuel Adeyemi",
+    "firstName": "Samuel",
+    "lastName": "Adeyemi",
+    "company": "Cobalt Payments",
+    "role": "Security Engineer",
+    "location": "Berlin",
+    "industry": "Fintech",
+    "headline": "Application security",
+    "about": "Found the authentication bug that everybody else had walked past. Runs a bouldering group on Thursdays.",
+    "tags": [
+      "security",
+      "fintech"
+    ],
+    "interests": [
+      "bouldering",
+      "electronic music"
+    ]
+  },
+  {
+    "key": "mireia-puig",
+    "name": "Mireia Puig",
+    "firstName": "Mireia",
+    "lastName": "Puig",
+    "company": "Cobalt Payments",
+    "role": "Customer Success Lead",
+    "location": "Barcelona",
+    "industry": "Fintech",
+    "headline": "Keeps the large accounts happy",
+    "about": "Handles the accounts nobody else wants and keeps every one of them. Cooks for twenty without blinking.",
+    "tags": [
+      "customer success",
+      "fintech"
+    ],
+    "interests": [
+      "cookery",
+      "open water swimming"
+    ]
+  },
+  {
+    "key": "lukas-meyer",
+    "name": "Lukas Meyer",
+    "firstName": "Lukas",
+    "lastName": "Meyer",
+    "company": "Alpine Instruments",
+    "role": "Field Engineer",
+    "location": "Innsbruck",
+    "industry": "Instrumentation",
+    "headline": "Installs and calibrates in the field",
+    "about": "Spends half the year on mountain sites. Ski touring is not a hobby so much as a commute.",
+    "tags": [
+      "instrumentation",
+      "field"
+    ],
+    "interests": [
+      "ski touring",
+      "mountaineering"
+    ]
+  },
+  {
+    "key": "grace-okonkwo",
+    "name": "Grace Okonkwo",
+    "firstName": "Grace",
+    "lastName": "Okonkwo",
+    "company": "Verdant Farms Group",
+    "role": "Agronomy Director",
+    "location": "Nairobi",
+    "industry": "Agriculture",
+    "headline": "Soil and yield programmes",
+    "about": "Runs the soil programme across four regions. Keeps bees at home and will tell you about it.",
+    "tags": [
+      "agriculture",
+      "agronomy"
+    ],
+    "interests": [
+      "beekeeping",
+      "long distance running"
+    ]
+  },
+  {
+    "key": "felix-bergstrom",
+    "name": "Felix Bergstrom",
+    "firstName": "Felix",
+    "lastName": "Bergstrom",
+    "company": "Norrland Timber",
+    "role": "Sustainability Lead",
+    "location": "Umea",
+    "industry": "Forestry",
+    "headline": "Certification and carbon accounting",
+    "about": "Handles certification across the whole estate. Runs an ultra most years and is quiet about it.",
+    "tags": [
+      "sustainability",
+      "forestry"
+    ],
+    "interests": [
+      "trail running",
+      "foraging"
+    ]
+  },
+  {
+    "key": "amara-diallo",
+    "name": "Amara Diallo",
+    "firstName": "Amara",
+    "lastName": "Diallo",
+    "company": "Lumen Publishing",
+    "role": "Editorial Director",
+    "location": "Paris",
+    "industry": "Publishing",
+    "headline": "Non fiction list",
+    "about": "Built the non fiction list from nothing. Swims in the Seine basin every morning in summer.",
+    "tags": [
+      "publishing",
+      "editorial"
+    ],
+    "interests": [
+      "open water swimming",
+      "cinema"
+    ]
+  },
+  {
+    "key": "diego-ferreira",
+    "name": "Diego Ferreira",
+    "firstName": "Diego",
+    "lastName": "Ferreira",
+    "company": "Atlas Surveying",
+    "role": "Principal Surveyor",
+    "location": "Porto",
+    "industry": "Construction",
+    "headline": "Structural survey",
+    "about": "Surveys the difficult buildings. Plays in a band that has outlasted three of his jobs.",
+    "tags": [
+      "construction",
+      "survey"
+    ],
+    "interests": [
+      "guitar",
+      "rock climbing"
+    ]
+  },
+  {
+    "key": "hanna-virtanen",
+    "name": "Hanna Virtanen",
+    "firstName": "Hanna",
+    "lastName": "Virtanen",
+    "company": "Boreal Software",
+    "role": "Principal Engineer",
+    "location": "Helsinki",
+    "industry": "Software",
+    "headline": "Distributed systems",
+    "about": "Wrote the consensus layer. Swims in the sea in February and considers this normal.",
+    "tags": [
+      "engineering",
+      "distributed systems"
+    ],
+    "interests": [
+      "cold water swimming",
+      "knitting"
+    ]
+  },
+  {
+    "key": "rafael-moreno",
+    "name": "Rafael Moreno",
+    "firstName": "Rafael",
+    "lastName": "Moreno",
+    "company": "Solstice Renewables",
+    "role": "Site Manager",
+    "location": "Lisbon",
+    "industry": "Energy",
+    "headline": "Builds the sites",
+    "about": "Runs construction on the Iberian sites. Climbs with the same partner he has had for fifteen years.",
+    "tags": [
+      "energy",
+      "construction"
+    ],
+    "interests": [
+      "rock climbing",
+      "barbecue"
+    ]
+  },
+  {
+    "key": "katherine-ashworth",
+    "name": "Katherine Ashworth",
+    "firstName": "Katherine",
+    "lastName": "Ashworth",
+    "company": "Pinewood Interiors",
+    "role": "Studio Director",
+    "location": "Leeds",
+    "industry": "Interiors",
+    "headline": "Residential interiors",
+    "about": "Runs the studio and the accounts. Everybody calls her Kate and the invoices say Katherine.",
+    "tags": [
+      "interiors",
+      "studio"
+    ],
+    "interests": [
+      "antiques",
+      "gardening"
+    ]
+  },
+  {
+    "key": "robert-castellanos",
+    "name": "Robert Castellanos",
+    "firstName": "Robert",
+    "lastName": "Castellanos",
+    "company": "Harbourline Shipping",
+    "role": "Fleet Manager",
+    "location": "Valencia",
+    "industry": "Shipping",
+    "headline": "Fleet maintenance",
+    "about": "Keeps eleven vessels in service on a budget for eight. Answers to Bob and nothing else.",
+    "tags": [
+      "shipping",
+      "fleet"
+    ],
+    "interests": [
+      "fishing",
+      "domino"
+    ]
+  },
+  {
+    "key": "margaret-ellington",
+    "name": "Margaret Ellington",
+    "firstName": "Margaret",
+    "lastName": "Ellington",
+    "company": "Crestwood Capital",
+    "role": "Investment Director",
+    "location": "London",
+    "industry": "Investment",
+    "headline": "Growth stage investment",
+    "about": "Sits on six boards and reads every pack. Signs herself Peggy in anything that is not a contract.",
+    "tags": [
+      "investment",
+      "finance"
+    ],
+    "interests": [
+      "bridge",
+      "horticulture"
+    ]
+  },
+  {
+    "key": "william-oyelaran",
+    "name": "William Oyelaran",
+    "firstName": "William",
+    "lastName": "Oyelaran",
+    "company": "Sable Media Group",
+    "role": "Head of Distribution",
+    "location": "Lagos",
+    "industry": "Media",
+    "headline": "Distribution partnerships",
+    "about": "Knows every distributor on the continent. Introduces himself as Bill and signs off as William.",
+    "tags": [
+      "media",
+      "distribution"
+    ],
+    "interests": [
+      "football",
+      "highlife"
+    ]
+  },
+  {
+    "key": "elizabeth-varga",
+    "name": "Elizabeth Varga",
+    "firstName": "Elizabeth",
+    "lastName": "Varga",
+    "company": "Danube Rail Works",
+    "role": "Chief Engineer",
+    "location": "Budapest",
+    "industry": "Rail",
+    "headline": "Signalling and interlocking",
+    "about": "The engineer the regulator asks for by name. Called Liz by everybody who has worked with her.",
+    "tags": [
+      "rail",
+      "signalling"
+    ],
+    "interests": [
+      "thermal baths",
+      "violin"
+    ]
+  },
+  {
+    "key": "theodore-lindgren",
+    "name": "Theodore Lindgren",
+    "firstName": "Theodore",
+    "lastName": "Lindgren",
+    "company": "Frostline Cold Chain",
+    "role": "Commercial Director",
+    "location": "Malmo",
+    "industry": "Cold Chain",
+    "headline": "Sells the cold chain",
+    "about": "Closed the pharmaceutical contract everybody said was impossible. Ted on the phone, Theodore on paper.",
+    "tags": [
+      "commercial",
+      "cold chain"
+    ],
+    "interests": [
+      "ice hockey",
+      "crime fiction"
+    ]
+  },
+  {
+    "key": "alexandra-petrova",
+    "name": "Alexandra Petrova",
+    "firstName": "Alexandra",
+    "lastName": "Petrova",
+    "company": "Zenith Materials",
+    "role": "Head of Research",
+    "location": "Riga",
+    "industry": "Materials",
+    "headline": "Composite materials",
+    "about": "Holds nine patents on the composite line. Sasha to her team and nobody minds.",
+    "tags": [
+      "research",
+      "materials"
+    ],
+    "interests": [
+      "orienteering",
+      "mushroom picking"
+    ]
+  },
+  {
+    "key": "christopher-nwosu",
+    "name": "Christopher Nwosu",
+    "firstName": "Christopher",
+    "lastName": "Nwosu",
+    "company": "Beacon Telecom",
+    "role": "Network Architect",
+    "location": "Manchester",
+    "industry": "Telecom",
+    "headline": "Core network design",
+    "about": "Designed the core the whole north runs on. Goes by Chris except on the org chart.",
+    "tags": [
+      "telecom",
+      "network"
+    ],
+    "interests": [
+      "squash",
+      "barbecue"
+    ]
+  },
+  {
+    "key": "josephine-marchetti",
+    "name": "Josephine Marchetti",
+    "firstName": "Josephine",
+    "lastName": "Marchetti",
+    "company": "Olivetta Foods",
+    "role": "Supply Chain Director",
+    "location": "Bologna",
+    "industry": "Food",
+    "headline": "Sourcing and supply",
+    "about": "Rebuilt the supplier base after the bad year. Signs everything Jo and means it.",
+    "tags": [
+      "supply chain",
+      "food"
+    ],
+    "interests": [
+      "cycling",
+      "wine"
+    ]
+  },
+  {
+    "key": "nikolai-abramov",
+    "name": "Nikolai Abramov",
+    "firstName": "Nikolai",
+    "lastName": "Abramov",
+    "company": "Polaris Optics",
+    "role": "Optical Designer",
+    "location": "Tallinn",
+    "industry": "Optics",
+    "headline": "Lens and coating design",
+    "about": "Designs the lenses the competition copies. Known as Kolya in every lab he has worked in.",
+    "tags": [
+      "optics",
+      "design"
+    ],
+    "interests": [
+      "astronomy",
+      "cross country skiing"
+    ]
+  },
+  {
+    "key": "imogen-halvorsen",
+    "name": "Imogen Halvorsen",
+    "firstName": "Imogen",
+    "lastName": "Halvorsen",
+    "company": "Tessellate Architects",
+    "role": "Associate Architect",
+    "location": "Bergen",
+    "industry": "Architecture",
+    "headline": "Housing and public buildings",
+    "about": "Met at the timber conference and spent an hour arguing about cross laminated floor plates over bad coffee.",
+    "tags": [
+      "architecture",
+      "housing"
+    ],
+    "interests": [
+      "hiking",
+      "drawing"
+    ]
+  },
+  {
+    "key": "ravi-krishnan",
+    "name": "Ravi Krishnan",
+    "firstName": "Ravi",
+    "lastName": "Krishnan",
+    "company": "Stonebridge Advisory",
+    "role": "Managing Consultant",
+    "location": "Singapore",
+    "industry": "Consulting",
+    "headline": "Operating model design",
+    "about": "Introduced by his old colleague at the airport lounge in Changi, of all the places to meet somebody.",
+    "tags": [
+      "consulting",
+      "strategy"
+    ],
+    "interests": [
+      "badminton",
+      "street food"
+    ]
+  },
+  {
+    "key": "beatrix-lang",
+    "name": "Beatrix Lang",
+    "firstName": "Beatrix",
+    "lastName": "Lang",
+    "company": "Kaleido Games",
+    "role": "Art Director",
+    "location": "Vienna",
+    "industry": "Games",
+    "headline": "Art direction and pipeline",
+    "about": "Sent me the sketchbook photograph of the tram stop that became the whole colour palette for the game.",
+    "tags": [
+      "games",
+      "art"
+    ],
+    "interests": [
+      "sketching",
+      "coffee"
+    ]
+  },
+  {
+    "key": "olusegun-bello",
+    "name": "Olusegun Bello",
+    "firstName": "Olusegun",
+    "lastName": "Bello",
+    "company": "Harmattan Energy",
+    "role": "Regulatory Affairs Lead",
+    "location": "Abuja",
+    "industry": "Energy",
+    "headline": "Licensing and regulation",
+    "about": "Explained the entire licensing regime on the back of a napkin in under ten minutes and it was correct.",
+    "tags": [
+      "energy",
+      "regulation"
+    ],
+    "interests": [
+      "chess",
+      "afrobeat"
+    ]
+  },
+  {
+    "key": "clementine-roux",
+    "name": "Clementine Roux",
+    "firstName": "Clementine",
+    "lastName": "Roux",
+    "company": "Vigne et Terre",
+    "role": "Export Manager",
+    "location": "Bordeaux",
+    "industry": "Wine",
+    "headline": "Export markets",
+    "about": "Told me the story about the lorry full of rose that spent a week stuck at the wrong border crossing.",
+    "tags": [
+      "wine",
+      "export"
+    ],
+    "interests": [
+      "cycling",
+      "cooking"
+    ]
+  },
+  {
+    "key": "mateusz-wojcik",
+    "name": "Mateusz Wojcik",
+    "firstName": "Mateusz",
+    "lastName": "Wojcik",
+    "company": "Granite Build",
+    "role": "Commercial Manager",
+    "location": "Krakow",
+    "industry": "Construction",
+    "headline": "Commercial management",
+    "about": "Keeps a laminated card of the contract dates in his wallet and produced it in the middle of dinner.",
+    "tags": [
+      "construction",
+      "commercial"
+    ],
+    "interests": [
+      "mountain biking",
+      "history"
+    ]
+  },
+  {
+    "key": "saoirse-brennan",
+    "name": "Saoirse Brennan",
+    "firstName": "Saoirse",
+    "lastName": "Brennan",
+    "company": "Clearwater Environmental",
+    "role": "Principal Ecologist",
+    "location": "Sligo",
+    "industry": "Environment",
+    "headline": "Freshwater ecology",
+    "about": "Counted the freshwater pearl mussels by hand for eleven summers and has the photographs to prove it.",
+    "tags": [
+      "environment",
+      "ecology"
+    ],
+    "interests": [
+      "wild swimming",
+      "botany"
+    ]
+  },
+  {
+    "key": "haruto-ishikawa",
+    "name": "Haruto Ishikawa",
+    "firstName": "Haruto",
+    "lastName": "Ishikawa",
+    "company": "Shinrin Timber",
+    "role": "Export Director",
+    "location": "Sapporo",
+    "industry": "Forestry",
+    "headline": "Timber export",
+    "about": "Walked me through the whole grading standard with two pieces of cedar on the meeting room table.",
+    "tags": [
+      "forestry",
+      "export"
+    ],
+    "interests": [
+      "hot springs",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "valentina-rossi",
+    "name": "Valentina Rossi",
+    "firstName": "Valentina",
+    "lastName": "Rossi",
+    "company": "Ponte Infrastructure",
+    "role": "Bridge Engineer",
+    "location": "Genoa",
+    "industry": "Infrastructure",
+    "headline": "Bridge assessment",
+    "about": "Described the cable inspection as the most frightening afternoon of her professional life and laughed.",
+    "tags": [
+      "infrastructure",
+      "engineering"
+    ],
+    "interests": [
+      "sailing",
+      "espresso"
+    ]
+  },
+  {
+    "key": "emeka-onyeka",
+    "name": "Emeka Onyeka",
+    "firstName": "Emeka",
+    "lastName": "Onyeka",
+    "company": "Kernel Robotics",
+    "role": "Chief Technology Officer",
+    "location": "Dublin",
+    "industry": "Robotics",
+    "headline": "Autonomy stack",
+    "about": "Drew the entire autonomy stack on a whiteboard from memory while the projector refused to work.",
+    "tags": [
+      "robotics",
+      "autonomy"
+    ],
+    "interests": [
+      "running",
+      "jollof"
+    ]
+  },
+  {
+    "key": "collide-marcus-delgado",
+    "name": "Daniel Northwind",
+    "firstName": "Daniel",
+    "lastName": "Northwind",
+    "company": "Logistics Partners",
+    "role": "Product Manager",
+    "location": "Lisbon",
+    "industry": "Publishing",
+    "headline": "Product Manager working in Publishing",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "sailing"
+    ]
+  },
+  {
+    "key": "collide-priya-raghunathan",
+    "name": "Paulo Northwind",
+    "firstName": "Paulo",
+    "lastName": "Northwind",
+    "company": "Logistics Partners",
+    "role": "Staff Engineer",
+    "location": "Athens",
+    "industry": "Telecom",
+    "headline": "Staff Engineer working in Telecom",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "sailing"
+    ]
+  },
+  {
+    "key": "collide-tomas-lindqvist",
+    "name": "Yara Halcyon",
+    "firstName": "Yara",
+    "lastName": "Halcyon",
+    "company": "Design Studio Partners",
+    "role": "Product Manager",
+    "location": "Warsaw",
+    "industry": "Media",
+    "headline": "Product Manager working in Media",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "painting"
+    ]
+  },
+  {
+    "key": "collide-nadia-benali",
+    "name": "Stefan Kestrel",
+    "firstName": "Stefan",
+    "lastName": "Kestrel",
+    "company": "Analytics Partners",
+    "role": "Engineering Manager",
+    "location": "Glasgow",
+    "industry": "Marine",
+    "headline": "Engineering Manager working in Marine",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "squash"
+    ]
+  },
+  {
+    "key": "collide-declan-mcgrath",
+    "name": "Anders Meridian",
+    "firstName": "Anders",
+    "lastName": "Meridian",
+    "company": "Health Trust Partners",
+    "role": "Data Analyst",
+    "location": "Lyon",
+    "industry": "Telecom",
+    "headline": "Data Analyst working in Telecom",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "photography"
+    ]
+  },
+  {
+    "key": "collide-yuki-tanabe",
+    "name": "Ana Drachen",
+    "firstName": "Ana",
+    "lastName": "Drachen",
+    "company": "Robotics Partners",
+    "role": "Product Manager",
+    "location": "Milan",
+    "industry": "Rail",
+    "headline": "Product Manager working in Rail",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "rail"
+    ],
+    "interests": [
+      "archery"
+    ]
+  },
+  {
+    "key": "collide-oliver-brandt",
+    "name": "Astrid Solstice",
+    "firstName": "Astrid",
+    "lastName": "Solstice",
+    "company": "Renewables Partners",
+    "role": "Finance Director",
+    "location": "Riga",
+    "industry": "Consulting",
+    "headline": "Finance Director working in Consulting",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "hiking"
+    ]
+  },
+  {
+    "key": "collide-renata-costa",
+    "name": "Ulrika Solstice",
+    "firstName": "Ulrika",
+    "lastName": "Solstice",
+    "company": "Renewables Partners",
+    "role": "Grid Engineer",
+    "location": "Barcelona",
+    "industry": "Energy",
+    "headline": "Grid Engineer working in Energy",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "energy"
+    ],
+    "interests": [
+      "golf"
+    ]
+  },
+  {
+    "key": "collide-hassan-farouk",
+    "name": "Simone Ravensworth",
+    "firstName": "Simone",
+    "lastName": "Ravensworth",
+    "company": "Legal Partners",
+    "role": "Data Protection Officer",
+    "location": "Antwerp",
+    "industry": "Robotics",
+    "headline": "Data Protection Officer working in Robotics",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "badminton"
+    ]
+  },
+  {
+    "key": "collide-ingrid-solberg",
+    "name": "Fiona Baltic",
+    "firstName": "Fiona",
+    "lastName": "Baltic",
+    "company": "Freight Union Partners",
+    "role": "Chief Operating Officer",
+    "location": "Riga",
+    "industry": "Instrumentation",
+    "headline": "Chief Operating Officer working in Instrumentation",
+    "about": "No relation to the firm of the same name, which comes up every single time.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "yoga"
+    ]
+  },
+  {
+    "key": "near-jonathan-smith",
+    "name": "Ida Silva",
+    "firstName": "Ida",
+    "lastName": "Silva",
+    "company": "Northwind Logistics",
+    "role": "Data Scientist",
+    "location": "Zurich",
+    "industry": "Agriculture",
+    "headline": "Second career, first love",
+    "about": "Introduced at the Agriculture event in Zurich. Worth a follow up next quarter.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "cycling",
+      "photography"
+    ]
+  },
+  {
+    "key": "near-katherine-oconnell",
+    "name": "Sara Keller",
+    "firstName": "Sara",
+    "lastName": "Keller",
+    "company": "Veritas Metrics",
+    "role": "Creative Director",
+    "location": "Bratislava",
+    "industry": "Healthcare",
+    "headline": "Works across Healthcare",
+    "about": "Moved to Veritas Metrics last year and is still finding the shape of the role.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "letterpress",
+      "model railways"
+    ]
+  },
+  {
+    "key": "near-siobhan-murphy",
+    "name": "Erik Fischer",
+    "firstName": "Erik",
+    "lastName": "Fischer",
+    "company": "Nightingale Care",
+    "role": "Partnerships Lead",
+    "location": "Galway",
+    "industry": "Environment",
+    "headline": "Second career, first love",
+    "about": "Moved to Nightingale Care last year and is still finding the shape of the role.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "tennis",
+      "woodworking"
+    ]
+  },
+  {
+    "key": "near-krzysztof-nowak",
+    "name": "Nils Tamm",
+    "firstName": "Nils",
+    "lastName": "Tamm",
+    "company": "Baltic Freight Union",
+    "role": "Commercial Lead",
+    "location": "Zagreb",
+    "industry": "Forestry",
+    "headline": "Works across Forestry",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "forestry"
+    ],
+    "interests": [
+      "sailing",
+      "piano"
+    ]
+  },
+  {
+    "key": "near-aoife-gallagher",
+    "name": "Nils Dahl",
+    "firstName": "Nils",
+    "lastName": "Dahl",
+    "company": "Quarryfield Build",
+    "role": "Clinical Lead",
+    "location": "Edinburgh",
+    "industry": "Games",
+    "headline": "Covers the Edinburgh region",
+    "about": "Moved to Quarryfield Build last year and is still finding the shape of the role.",
+    "tags": [
+      "games"
+    ],
+    "interests": [
+      "distance running",
+      "photography"
+    ]
+  },
+  {
+    "key": "near-geoffrey-thwaite",
+    "name": "Petra Tamm",
+    "firstName": "Petra",
+    "lastName": "Tamm",
+    "company": "Marlowe Textiles",
+    "role": "Marketing Lead",
+    "location": "Sheffield",
+    "industry": "Analytics",
+    "headline": "Second career, first love",
+    "about": "Moved to Marlowe Textiles last year and is still finding the shape of the role.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "cinema",
+      "jazz"
+    ]
+  },
+  {
+    "key": "near-xiomara-reyes",
+    "name": "Henrik Dahl",
+    "firstName": "Henrik",
+    "lastName": "Dahl",
+    "company": "Solstice Renewables",
+    "role": "Design Lead",
+    "location": "Genoa",
+    "industry": "Software",
+    "headline": "Design Lead with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "flamenco guitar",
+      "tennis"
+    ]
+  },
+  {
+    "key": "near-bartholomew-quigley",
+    "name": "Malik Sorensen",
+    "firstName": "Malik",
+    "lastName": "Sorensen",
+    "company": "Arcadia Systems",
+    "role": "Partner",
+    "location": "Zagreb",
+    "industry": "Media",
+    "headline": "Covers the Zagreb region",
+    "about": "Introduced at the Media event in Zagreb. Worth a follow up next quarter.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "hillwalking",
+      "knitting"
+    ]
+  },
+  {
+    "key": "near-anneliese-hofmann",
+    "name": "Gemma Kowalski",
+    "firstName": "Gemma",
+    "lastName": "Kowalski",
+    "company": "Arcadia Systems",
+    "role": "Business Analyst",
+    "location": "Stuttgart",
+    "industry": "Rail",
+    "headline": "Business Analyst with a long run at one company",
+    "about": "Has been in Rail long enough to have seen this cycle twice already.",
+    "tags": [
+      "rail"
+    ],
+    "interests": [
+      "botany",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "near-padraig-ocallaghan",
+    "name": "Carlos Romano",
+    "firstName": "Carlos",
+    "lastName": "Romano",
+    "company": "Tidewater Marine",
+    "role": "Plant Manager",
+    "location": "Athens",
+    "industry": "Agriculture",
+    "headline": "Plant Manager with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "kayaking",
+      "pottery"
+    ]
+  },
+  {
+    "key": "near-marcus-delgado",
+    "name": "Bruno Lopes",
+    "firstName": "Bruno",
+    "lastName": "Lopes",
+    "company": "Juniper Labs",
+    "role": "Product Manager",
+    "location": "Ljubljana",
+    "industry": "Healthcare",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Healthcare event in Ljubljana. Worth a follow up next quarter.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "bouldering",
+      "surfing"
+    ]
+  },
+  {
+    "key": "near-priya-raghunathan",
+    "name": "Yara Zielinski",
+    "firstName": "Yara",
+    "lastName": "Zielinski",
+    "company": "Ironbark Supply",
+    "role": "Programme Director",
+    "location": "Bristol",
+    "industry": "Agriculture",
+    "headline": "Second career, first love",
+    "about": "Introduced at the Agriculture event in Bristol. Worth a follow up next quarter.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "hiking",
+      "cycling"
+    ]
+  },
+  {
+    "key": "near-tomas-lindqvist",
+    "name": "Simone Bianchi",
+    "firstName": "Simone",
+    "lastName": "Bianchi",
+    "company": "Halcyon Design Studio",
+    "role": "Security Engineer",
+    "location": "Barcelona",
+    "industry": "Telecom",
+    "headline": "Covers the Barcelona region",
+    "about": "Moved to Halcyon Design Studio last year and is still finding the shape of the role.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "sailing",
+      "knitting"
+    ]
+  },
+  {
+    "key": "near-nadia-benali",
+    "name": "Marta Vandenberg",
+    "firstName": "Marta",
+    "lastName": "Vandenberg",
+    "company": "Juniper Labs",
+    "role": "Engineering Manager",
+    "location": "Ljubljana",
+    "industry": "Optics",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "trail running",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "near-declan-mcgrath",
+    "name": "Cecilia Eriksson",
+    "firstName": "Cecilia",
+    "lastName": "Eriksson",
+    "company": "Lanterna Studios",
+    "role": "Chief Executive",
+    "location": "Cork",
+    "industry": "Energy",
+    "headline": "Chief Executive with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "energy"
+    ],
+    "interests": [
+      "tennis",
+      "board games"
+    ]
+  },
+  {
+    "key": "near-yuki-tanabe",
+    "name": "Erik Fabbri",
+    "firstName": "Erik",
+    "lastName": "Fabbri",
+    "company": "Drachen Robotics",
+    "role": "Staff Engineer",
+    "location": "Bristol",
+    "industry": "Marine",
+    "headline": "Works across Marine",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "aikido",
+      "cinema"
+    ]
+  },
+  {
+    "key": "near-oliver-brandt",
+    "name": "Gabriel Mikkelsen",
+    "firstName": "Gabriel",
+    "lastName": "Mikkelsen",
+    "company": "Marlowe Textiles",
+    "role": "Finance Director",
+    "location": "Genoa",
+    "industry": "Software",
+    "headline": "Finance Director with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "cycling",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "near-renata-costa",
+    "name": "Kamil Sandberg",
+    "firstName": "Kamil",
+    "lastName": "Sandberg",
+    "company": "Juniper Labs",
+    "role": "Operations Director",
+    "location": "Lisbon",
+    "industry": "Fintech",
+    "headline": "Works across Fintech",
+    "about": "Introduced at the Fintech event in Lisbon. Worth a follow up next quarter.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "bridge",
+      "photography"
+    ]
+  },
+  {
+    "key": "near-hassan-farouk",
+    "name": "Paulo Pereira",
+    "firstName": "Paulo",
+    "lastName": "Pereira",
+    "company": "Ravensworth Legal",
+    "role": "Operations Director",
+    "location": "Aarhus",
+    "industry": "Legal",
+    "headline": "Operations Director with a long run at one company",
+    "about": "Has been in Legal long enough to have seen this cycle twice already.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "chess",
+      "painting"
+    ]
+  },
+  {
+    "key": "near-ingrid-solberg",
+    "name": "Simone Romano",
+    "firstName": "Simone",
+    "lastName": "Romano",
+    "company": "Hollowell Media",
+    "role": "Chief Operating Officer",
+    "location": "Krakow",
+    "industry": "Architecture",
+    "headline": "Works across Architecture",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "cross country skiing",
+      "bouldering"
+    ]
+  },
+  {
+    "key": "near-elena-vasquez",
+    "name": "Kamil Eriksson",
+    "firstName": "Kamil",
+    "lastName": "Eriksson",
+    "company": "Thornbury Wines",
+    "role": "Head of People",
+    "location": "Lisbon",
+    "industry": "Design",
+    "headline": "Head of People with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "bouldering",
+      "botany"
+    ]
+  },
+  {
+    "key": "near-samuel-adeyemi",
+    "name": "Julia Sorensen",
+    "firstName": "Julia",
+    "lastName": "Sorensen",
+    "company": "Cobalt Payments",
+    "role": "Site Manager",
+    "location": "Krakow",
+    "industry": "Design",
+    "headline": "Covers the Krakow region",
+    "about": "Moved to Cobalt Payments last year and is still finding the shape of the role.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "bouldering",
+      "hiking"
+    ]
+  },
+  {
+    "key": "near-mireia-puig",
+    "name": "Lucia Mensah",
+    "firstName": "Lucia",
+    "lastName": "Mensah",
+    "company": "Fairhaven Trust",
+    "role": "Customer Success Lead",
+    "location": "Paris",
+    "industry": "Architecture",
+    "headline": "Works across Architecture",
+    "about": "Moved to Fairhaven Trust last year and is still finding the shape of the role.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "cookery",
+      "darts"
+    ]
+  },
+  {
+    "key": "near-lukas-meyer",
+    "name": "Karin Lehmann",
+    "firstName": "Karin",
+    "lastName": "Lehmann",
+    "company": "Delphi Freight",
+    "role": "Marketing Lead",
+    "location": "Innsbruck",
+    "industry": "Construction",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Delphi Freight last year and is still finding the shape of the role.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "knitting",
+      "darts"
+    ]
+  },
+  {
+    "key": "near-grace-okonkwo",
+    "name": "Leon Fabbri",
+    "firstName": "Leon",
+    "lastName": "Fabbri",
+    "company": "Verdant Farms Group",
+    "role": "Data Scientist",
+    "location": "Prague",
+    "industry": "Robotics",
+    "headline": "Data Scientist with a long run at one company",
+    "about": "Introduced at the Robotics event in Prague. Worth a follow up next quarter.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "beekeeping",
+      "botany"
+    ]
+  },
+  {
+    "key": "near-felix-bergstrom",
+    "name": "Joao Novotny",
+    "firstName": "Joao",
+    "lastName": "Novotny",
+    "company": "Kirkwall Marine",
+    "role": "Sustainability Lead",
+    "location": "Riga",
+    "industry": "Materials",
+    "headline": "Sustainability Lead with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "materials"
+    ],
+    "interests": [
+      "trail running",
+      "running"
+    ]
+  },
+  {
+    "key": "near-amara-diallo",
+    "name": "Edward Moreau",
+    "firstName": "Edward",
+    "lastName": "Moreau",
+    "company": "Ironbark Supply",
+    "role": "Business Analyst",
+    "location": "Paris",
+    "industry": "Optics",
+    "headline": "Works across Optics",
+    "about": "Keen on bouldering and will find a way to mention it.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "bouldering",
+      "squash"
+    ]
+  },
+  {
+    "key": "near-diego-ferreira",
+    "name": "Sara Fischer",
+    "firstName": "Sara",
+    "lastName": "Fischer",
+    "company": "Atlas Surveying",
+    "role": "Business Analyst",
+    "location": "Krakow",
+    "industry": "Logistics",
+    "headline": "Second career, first love",
+    "about": "Keen on guitar and will find a way to mention it.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "guitar",
+      "tennis"
+    ]
+  },
+  {
+    "key": "near-hanna-virtanen",
+    "name": "Irene Kowalski",
+    "firstName": "Irene",
+    "lastName": "Kowalski",
+    "company": "Westport Cold Store",
+    "role": "Principal Engineer",
+    "location": "Manchester",
+    "industry": "Rail",
+    "headline": "Works across Rail",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "rail"
+    ],
+    "interests": [
+      "cold water swimming",
+      "darts"
+    ]
+  },
+  {
+    "key": "near-rafael-moreno",
+    "name": "Sergio Horvath",
+    "firstName": "Sergio",
+    "lastName": "Horvath",
+    "company": "Pellworm Energy",
+    "role": "Product Manager",
+    "location": "Lisbon",
+    "industry": "Environment",
+    "headline": "Second career, first love",
+    "about": "Moved to Pellworm Energy last year and is still finding the shape of the role.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "chess",
+      "board games"
+    ]
+  },
+  {
+    "key": "near-katherine-ashworth",
+    "name": "Igor Schmidt",
+    "firstName": "Igor",
+    "lastName": "Schmidt",
+    "company": "Pinewood Interiors",
+    "role": "Finance Director",
+    "location": "Cork",
+    "industry": "Publishing",
+    "headline": "Covers the Cork region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "antiques",
+      "crochet"
+    ]
+  },
+  {
+    "key": "near-robert-castellanos",
+    "name": "Edward Schmidt",
+    "firstName": "Edward",
+    "lastName": "Schmidt",
+    "company": "Lanterna Studios",
+    "role": "Fleet Manager",
+    "location": "Zagreb",
+    "industry": "Healthcare",
+    "headline": "Fleet Manager with a long run at one company",
+    "about": "Keen on fishing and will find a way to mention it.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "fishing",
+      "fishing"
+    ]
+  },
+  {
+    "key": "near-margaret-ellington",
+    "name": "Vera Kowalski",
+    "firstName": "Vera",
+    "lastName": "Kowalski",
+    "company": "Glenmore Foods",
+    "role": "Plant Manager",
+    "location": "London",
+    "industry": "Food",
+    "headline": "Covers the London region",
+    "about": "Keen on cookery and will find a way to mention it.",
+    "tags": [
+      "food"
+    ],
+    "interests": [
+      "cookery",
+      "botany"
+    ]
+  },
+  {
+    "key": "near-william-oyelaran",
+    "name": "Miriam Haas",
+    "firstName": "Miriam",
+    "lastName": "Haas",
+    "company": "Sable Media Group",
+    "role": "Sales Director",
+    "location": "Turin",
+    "industry": "Publishing",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Sable Media Group last year and is still finding the shape of the role.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "football",
+      "yoga"
+    ]
+  },
+  {
+    "key": "near-elizabeth-varga",
+    "name": "Leon Fischer",
+    "firstName": "Leon",
+    "lastName": "Fischer",
+    "company": "Veritas Metrics",
+    "role": "Chief Engineer",
+    "location": "Athens",
+    "industry": "Design",
+    "headline": "Second career, first love",
+    "about": "Has been in Design long enough to have seen this cycle twice already.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "thermal baths",
+      "fishing"
+    ]
+  },
+  {
+    "key": "near-theodore-lindgren",
+    "name": "Karin Pereira",
+    "firstName": "Karin",
+    "lastName": "Pereira",
+    "company": "Westport Cold Store",
+    "role": "Product Manager",
+    "location": "Malmo",
+    "industry": "Design",
+    "headline": "Second career, first love",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "calligraphy",
+      "botany"
+    ]
+  },
+  {
+    "key": "near-alexandra-petrova",
+    "name": "Carlos Moreau",
+    "firstName": "Carlos",
+    "lastName": "Moreau",
+    "company": "Zenith Materials",
+    "role": "Supply Chain Director",
+    "location": "Bratislava",
+    "industry": "Fintech",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Fintech event in Bratislava. Worth a follow up next quarter.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "orienteering",
+      "opera"
+    ]
+  },
+  {
+    "key": "near-christopher-nwosu",
+    "name": "Julia Fischer",
+    "firstName": "Julia",
+    "lastName": "Fischer",
+    "company": "Oakhurst Rail",
+    "role": "Network Architect",
+    "location": "Bratislava",
+    "industry": "Environment",
+    "headline": "Covers the Bratislava region",
+    "about": "Introduced at the Environment event in Bratislava. Worth a follow up next quarter.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "squash",
+      "badminton"
+    ]
+  },
+  {
+    "key": "near-josephine-marchetti",
+    "name": "Linnea Weber",
+    "firstName": "Linnea",
+    "lastName": "Weber",
+    "company": "Marlowe Textiles",
+    "role": "Principal Engineer",
+    "location": "Bologna",
+    "industry": "Investment",
+    "headline": "Second career, first love",
+    "about": "Has been in Investment long enough to have seen this cycle twice already.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "painting",
+      "badminton"
+    ]
+  },
+  {
+    "key": "near-nikolai-abramov",
+    "name": "Sofia Lopes",
+    "firstName": "Sofia",
+    "lastName": "Lopes",
+    "company": "Polaris Optics",
+    "role": "Business Analyst",
+    "location": "Leeds",
+    "industry": "Architecture",
+    "headline": "Second career, first love",
+    "about": "Keen on astronomy and will find a way to mention it.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "astronomy",
+      "fishing"
+    ]
+  },
+  {
+    "key": "near-imogen-halvorsen",
+    "name": "Anders Ricci",
+    "firstName": "Anders",
+    "lastName": "Ricci",
+    "company": "Redcastle Optics",
+    "role": "Associate Architect",
+    "location": "Seville",
+    "industry": "Agriculture",
+    "headline": "Associate Architect with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "hiking",
+      "fishing"
+    ]
+  },
+  {
+    "key": "near-ravi-krishnan",
+    "name": "Bruno Tamm",
+    "firstName": "Bruno",
+    "lastName": "Tamm",
+    "company": "Silverbeck Legal",
+    "role": "Data Scientist",
+    "location": "Singapore",
+    "industry": "Energy",
+    "headline": "Covers the Singapore region",
+    "about": "Introduced at the Energy event in Singapore. Worth a follow up next quarter.",
+    "tags": [
+      "energy"
+    ],
+    "interests": [
+      "ice hockey",
+      "woodworking"
+    ]
+  },
+  {
+    "key": "near-beatrix-lang",
+    "name": "Rosa Moreau",
+    "firstName": "Rosa",
+    "lastName": "Moreau",
+    "company": "Kaleido Games",
+    "role": "Finance Director",
+    "location": "Gothenburg",
+    "industry": "Materials",
+    "headline": "Works across Materials",
+    "about": "Keen on sketching and will find a way to mention it.",
+    "tags": [
+      "materials"
+    ],
+    "interests": [
+      "sketching",
+      "fishing"
+    ]
+  },
+  {
+    "key": "near-olusegun-bello",
+    "name": "Kemal Tamm",
+    "firstName": "Kemal",
+    "lastName": "Tamm",
+    "company": "Juniper Labs",
+    "role": "Regulatory Affairs Lead",
+    "location": "Milan",
+    "industry": "Manufacturing",
+    "headline": "Works across Manufacturing",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "chess",
+      "badminton"
+    ]
+  },
+  {
+    "key": "near-clementine-roux",
+    "name": "Nora Tamm",
+    "firstName": "Nora",
+    "lastName": "Tamm",
+    "company": "Kirkwall Marine",
+    "role": "Plant Manager",
+    "location": "Bordeaux",
+    "industry": "Software",
+    "headline": "Covers the Bordeaux region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "board games",
+      "yoga"
+    ]
+  },
+  {
+    "key": "near-mateusz-wojcik",
+    "name": "Marta Haas",
+    "firstName": "Marta",
+    "lastName": "Haas",
+    "company": "Granite Build",
+    "role": "Supply Chain Director",
+    "location": "Bratislava",
+    "industry": "Environment",
+    "headline": "Covers the Bratislava region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "mountain biking",
+      "badminton"
+    ]
+  },
+  {
+    "key": "near-saoirse-brennan",
+    "name": "Edward Ricci",
+    "firstName": "Edward",
+    "lastName": "Ricci",
+    "company": "Lanterna Studios",
+    "role": "Principal Ecologist",
+    "location": "Stuttgart",
+    "industry": "Healthcare",
+    "headline": "Principal Ecologist with a long run at one company",
+    "about": "Introduced at the Healthcare event in Stuttgart. Worth a follow up next quarter.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "wild swimming",
+      "baking"
+    ]
+  },
+  {
+    "key": "near-haruto-ishikawa",
+    "name": "Rasmus Fischer",
+    "firstName": "Rasmus",
+    "lastName": "Fischer",
+    "company": "Glenmore Foods",
+    "role": "Data Analyst",
+    "location": "Sapporo",
+    "industry": "Design",
+    "headline": "Joined from a larger competitor",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "painting",
+      "board games"
+    ]
+  },
+  {
+    "key": "near-valentina-rossi",
+    "name": "Dorota Zielinski",
+    "firstName": "Dorota",
+    "lastName": "Zielinski",
+    "company": "Ponte Infrastructure",
+    "role": "Account Manager",
+    "location": "Vilnius",
+    "industry": "Publishing",
+    "headline": "Works across Publishing",
+    "about": "Moved to Ponte Infrastructure last year and is still finding the shape of the role.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "sailing",
+      "archery"
+    ]
+  },
+  {
+    "key": "near-emeka-onyeka",
+    "name": "Franz Garcia",
+    "firstName": "Franz",
+    "lastName": "Garcia",
+    "company": "Silverbeck Legal",
+    "role": "Chief Technology Officer",
+    "location": "Sheffield",
+    "industry": "Consulting",
+    "headline": "Works across Consulting",
+    "about": "Keen on running and will find a way to mention it.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "running",
+      "kayaking"
+    ]
+  },
+  {
+    "key": "noise-000",
+    "name": "Nils Zielinski",
+    "firstName": "Nils",
+    "lastName": "Zielinski",
+    "company": "Veritas Metrics",
+    "role": "Head of People",
+    "location": "Barcelona",
+    "industry": "Healthcare",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Veritas Metrics last year and is still finding the shape of the role.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "running",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-001",
+    "name": "Jana Kaminski",
+    "firstName": "Jana",
+    "lastName": "Kaminski",
+    "company": "Pellworm Energy",
+    "role": "Research Lead",
+    "location": "Bologna",
+    "industry": "Optics",
+    "headline": "Works across Optics",
+    "about": "Moved to Pellworm Energy last year and is still finding the shape of the role.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "cookery",
+      "fishing"
+    ]
+  },
+  {
+    "key": "noise-002",
+    "name": "Petra Eriksson",
+    "firstName": "Petra",
+    "lastName": "Eriksson",
+    "company": "Delphi Freight",
+    "role": "Programme Director",
+    "location": "Athens",
+    "industry": "Forestry",
+    "headline": "Programme Director with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "forestry"
+    ],
+    "interests": [
+      "cycling",
+      "yoga"
+    ]
+  },
+  {
+    "key": "noise-003",
+    "name": "Malik Dubois",
+    "firstName": "Malik",
+    "lastName": "Dubois",
+    "company": "Veritas Metrics",
+    "role": "Quality Lead",
+    "location": "Budapest",
+    "industry": "Publishing",
+    "headline": "Quality Lead with a long run at one company",
+    "about": "Introduced at the Publishing event in Budapest. Worth a follow up next quarter.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "piano",
+      "cookery"
+    ]
+  },
+  {
+    "key": "noise-004",
+    "name": "Fatima Kowalski",
+    "firstName": "Fatima",
+    "lastName": "Kowalski",
+    "company": "Lanterna Studios",
+    "role": "Partnerships Lead",
+    "location": "Sheffield",
+    "industry": "Robotics",
+    "headline": "Works across Robotics",
+    "about": "Moved to Lanterna Studios last year and is still finding the shape of the role.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "birdwatching",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-005",
+    "name": "Nora Mikkelsen",
+    "firstName": "Nora",
+    "lastName": "Mikkelsen",
+    "company": "Redcastle Optics",
+    "role": "Operations Director",
+    "location": "Belfast",
+    "industry": "Robotics",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Redcastle Optics last year and is still finding the shape of the role.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "woodworking",
+      "cookery"
+    ]
+  },
+  {
+    "key": "noise-006",
+    "name": "Rosa Carvalho",
+    "firstName": "Rosa",
+    "lastName": "Carvalho",
+    "company": "Hollowell Media",
+    "role": "Product Manager",
+    "location": "Stuttgart",
+    "industry": "Construction",
+    "headline": "Second career, first love",
+    "about": "Has been in Construction long enough to have seen this cycle twice already.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "baking",
+      "cycling"
+    ]
+  },
+  {
+    "key": "noise-007",
+    "name": "Rita Vargas",
+    "firstName": "Rita",
+    "lastName": "Vargas",
+    "company": "Arcadia Systems",
+    "role": "Marketing Lead",
+    "location": "Cork",
+    "industry": "Robotics",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Arcadia Systems last year and is still finding the shape of the role.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "knitting",
+      "badminton"
+    ]
+  },
+  {
+    "key": "noise-008",
+    "name": "Adele Baptista",
+    "firstName": "Adele",
+    "lastName": "Baptista",
+    "company": "Hollowell Media",
+    "role": "Data Scientist",
+    "location": "Turin",
+    "industry": "Consulting",
+    "headline": "Second career, first love",
+    "about": "Has been in Consulting long enough to have seen this cycle twice already.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "ice hockey",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-009",
+    "name": "Laura Keller",
+    "firstName": "Laura",
+    "lastName": "Keller",
+    "company": "Juniper Labs",
+    "role": "Operations Director",
+    "location": "Cork",
+    "industry": "Marine",
+    "headline": "Second career, first love",
+    "about": "Keen on badminton and will find a way to mention it.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "badminton",
+      "board games"
+    ]
+  },
+  {
+    "key": "noise-010",
+    "name": "Zoltan Jensen",
+    "firstName": "Zoltan",
+    "lastName": "Jensen",
+    "company": "Redcastle Optics",
+    "role": "Engineering Manager",
+    "location": "Barcelona",
+    "industry": "Legal",
+    "headline": "Covers the Barcelona region",
+    "about": "Introduced at the Legal event in Barcelona. Worth a follow up next quarter.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "bridge",
+      "archery"
+    ]
+  },
+  {
+    "key": "noise-011",
+    "name": "Kemal Fabbri",
+    "firstName": "Kemal",
+    "lastName": "Fabbri",
+    "company": "Veritas Metrics",
+    "role": "Marketing Lead",
+    "location": "Leeds",
+    "industry": "Healthcare",
+    "headline": "Covers the Leeds region",
+    "about": "Has been in Healthcare long enough to have seen this cycle twice already.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "baking",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-012",
+    "name": "Daniel Fabbri",
+    "firstName": "Daniel",
+    "lastName": "Fabbri",
+    "company": "Oakhurst Rail",
+    "role": "Partnerships Lead",
+    "location": "Seville",
+    "industry": "Optics",
+    "headline": "Covers the Seville region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "baking",
+      "badminton"
+    ]
+  },
+  {
+    "key": "noise-013",
+    "name": "Fatima Andersen",
+    "firstName": "Fatima",
+    "lastName": "Andersen",
+    "company": "Marlowe Textiles",
+    "role": "Data Scientist",
+    "location": "Vilnius",
+    "industry": "Telecom",
+    "headline": "Works across Telecom",
+    "about": "Moved to Marlowe Textiles last year and is still finding the shape of the role.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "running",
+      "kayaking"
+    ]
+  },
+  {
+    "key": "noise-014",
+    "name": "Tomasz Marino",
+    "firstName": "Tomasz",
+    "lastName": "Marino",
+    "company": "Ironbark Supply",
+    "role": "Customer Success Lead",
+    "location": "Ljubljana",
+    "industry": "Design",
+    "headline": "Second career, first love",
+    "about": "Has been in Design long enough to have seen this cycle twice already.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "cookery",
+      "fishing"
+    ]
+  },
+  {
+    "key": "noise-015",
+    "name": "Sara Novotny",
+    "firstName": "Sara",
+    "lastName": "Novotny",
+    "company": "Marlowe Textiles",
+    "role": "Partnerships Lead",
+    "location": "Gothenburg",
+    "industry": "Fintech",
+    "headline": "Partnerships Lead with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "darts",
+      "botany"
+    ]
+  },
+  {
+    "key": "noise-016",
+    "name": "Tomasz Sorensen",
+    "firstName": "Tomasz",
+    "lastName": "Sorensen",
+    "company": "Pellworm Energy",
+    "role": "Partnerships Lead",
+    "location": "Lisbon",
+    "industry": "Environment",
+    "headline": "Covers the Lisbon region",
+    "about": "Introduced at the Environment event in Lisbon. Worth a follow up next quarter.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "bouldering",
+      "chess"
+    ]
+  },
+  {
+    "key": "noise-017",
+    "name": "Hana Vargas",
+    "firstName": "Hana",
+    "lastName": "Vargas",
+    "company": "Kirkwall Marine",
+    "role": "Account Manager",
+    "location": "Genoa",
+    "industry": "Architecture",
+    "headline": "Second career, first love",
+    "about": "Moved to Kirkwall Marine last year and is still finding the shape of the role.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "sailing",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-018",
+    "name": "Esther Dubois",
+    "firstName": "Esther",
+    "lastName": "Dubois",
+    "company": "Quarryfield Build",
+    "role": "Research Lead",
+    "location": "Vilnius",
+    "industry": "Manufacturing",
+    "headline": "Works across Manufacturing",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "ice hockey",
+      "squash"
+    ]
+  },
+  {
+    "key": "noise-019",
+    "name": "Tomasz Moreau",
+    "firstName": "Tomasz",
+    "lastName": "Moreau",
+    "company": "Oakhurst Rail",
+    "role": "Data Scientist",
+    "location": "Leeds",
+    "industry": "Investment",
+    "headline": "Covers the Leeds region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "photography",
+      "jazz"
+    ]
+  },
+  {
+    "key": "noise-020",
+    "name": "Omar Nielsen",
+    "firstName": "Omar",
+    "lastName": "Nielsen",
+    "company": "Thornbury Wines",
+    "role": "Finance Director",
+    "location": "Budapest",
+    "industry": "Instrumentation",
+    "headline": "Covers the Budapest region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "cinema",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-021",
+    "name": "Daniel Weber",
+    "firstName": "Daniel",
+    "lastName": "Weber",
+    "company": "Cindersoft",
+    "role": "Product Manager",
+    "location": "Bilbao",
+    "industry": "Infrastructure",
+    "headline": "Joined from a larger competitor",
+    "about": "Has been in Infrastructure long enough to have seen this cycle twice already.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "opera",
+      "piano"
+    ]
+  },
+  {
+    "key": "noise-022",
+    "name": "Rasmus Ricci",
+    "firstName": "Rasmus",
+    "lastName": "Ricci",
+    "company": "Glenmore Foods",
+    "role": "Account Manager",
+    "location": "Barcelona",
+    "industry": "Wine",
+    "headline": "Covers the Barcelona region",
+    "about": "Keen on woodworking and will find a way to mention it.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "woodworking",
+      "kayaking"
+    ]
+  },
+  {
+    "key": "noise-023",
+    "name": "Paulo Weber",
+    "firstName": "Paulo",
+    "lastName": "Weber",
+    "company": "Cindersoft",
+    "role": "Site Manager",
+    "location": "Berlin",
+    "industry": "Construction",
+    "headline": "Second career, first love",
+    "about": "Has been in Construction long enough to have seen this cycle twice already.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "hiking",
+      "painting"
+    ]
+  },
+  {
+    "key": "noise-024",
+    "name": "Gabriel Vargas",
+    "firstName": "Gabriel",
+    "lastName": "Vargas",
+    "company": "Quarryfield Build",
+    "role": "Head of People",
+    "location": "Berlin",
+    "industry": "Construction",
+    "headline": "Works across Construction",
+    "about": "Has been in Construction long enough to have seen this cycle twice already.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "calligraphy",
+      "photography"
+    ]
+  },
+  {
+    "key": "noise-025",
+    "name": "Dorota Laine",
+    "firstName": "Dorota",
+    "lastName": "Laine",
+    "company": "Thornbury Wines",
+    "role": "Research Lead",
+    "location": "Oslo",
+    "industry": "Marine",
+    "headline": "Works across Marine",
+    "about": "Introduced at the Marine event in Oslo. Worth a follow up next quarter.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "squash",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-026",
+    "name": "Nils Hansen",
+    "firstName": "Nils",
+    "lastName": "Hansen",
+    "company": "Kirkwall Marine",
+    "role": "Commercial Lead",
+    "location": "Helsinki",
+    "industry": "Wine",
+    "headline": "Covers the Helsinki region",
+    "about": "Moved to Kirkwall Marine last year and is still finding the shape of the role.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "darts",
+      "bridge"
+    ]
+  },
+  {
+    "key": "noise-027",
+    "name": "Erik Lopes",
+    "firstName": "Erik",
+    "lastName": "Lopes",
+    "company": "Fairhaven Trust",
+    "role": "Technical Writer",
+    "location": "Bergen",
+    "industry": "Robotics",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "painting",
+      "model railways"
+    ]
+  },
+  {
+    "key": "noise-028",
+    "name": "Julia Novotny",
+    "firstName": "Julia",
+    "lastName": "Novotny",
+    "company": "Redcastle Optics",
+    "role": "Finance Director",
+    "location": "Budapest",
+    "industry": "Analytics",
+    "headline": "Joined from a larger competitor",
+    "about": "Keen on cinema and will find a way to mention it.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "cinema",
+      "tennis"
+    ]
+  },
+  {
+    "key": "noise-029",
+    "name": "Joao Olsen",
+    "firstName": "Joao",
+    "lastName": "Olsen",
+    "company": "Silverbeck Legal",
+    "role": "Plant Manager",
+    "location": "Zagreb",
+    "industry": "Architecture",
+    "headline": "Works across Architecture",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "darts",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-030",
+    "name": "Ulrika Sorensen",
+    "firstName": "Ulrika",
+    "lastName": "Sorensen",
+    "company": "Arcadia Systems",
+    "role": "Technical Writer",
+    "location": "Sheffield",
+    "industry": "Fintech",
+    "headline": "Joined from a larger competitor",
+    "about": "Keen on darts and will find a way to mention it.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "darts",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-031",
+    "name": "Anders Santos",
+    "firstName": "Anders",
+    "lastName": "Santos",
+    "company": "Silverbeck Legal",
+    "role": "Principal Engineer",
+    "location": "Turin",
+    "industry": "Software",
+    "headline": "Covers the Turin region",
+    "about": "Keen on yoga and will find a way to mention it.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "yoga",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-032",
+    "name": "Hana Pereira",
+    "firstName": "Hana",
+    "lastName": "Pereira",
+    "company": "Glenmore Foods",
+    "role": "Marketing Lead",
+    "location": "Innsbruck",
+    "industry": "Construction",
+    "headline": "Marketing Lead with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "pottery",
+      "model railways"
+    ]
+  },
+  {
+    "key": "noise-033",
+    "name": "Sara Schmidt",
+    "firstName": "Sara",
+    "lastName": "Schmidt",
+    "company": "Ironbark Supply",
+    "role": "Studio Director",
+    "location": "Helsinki",
+    "industry": "Consulting",
+    "headline": "Studio Director with a long run at one company",
+    "about": "Introduced at the Consulting event in Helsinki. Worth a follow up next quarter.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "gardening",
+      "chess"
+    ]
+  },
+  {
+    "key": "noise-034",
+    "name": "Daniel Sorensen",
+    "firstName": "Daniel",
+    "lastName": "Sorensen",
+    "company": "Veritas Metrics",
+    "role": "Supply Chain Director",
+    "location": "Innsbruck",
+    "industry": "Food",
+    "headline": "Second career, first love",
+    "about": "Keen on tennis and will find a way to mention it.",
+    "tags": [
+      "food"
+    ],
+    "interests": [
+      "tennis",
+      "gardening"
+    ]
+  },
+  {
+    "key": "noise-035",
+    "name": "Hana Weber",
+    "firstName": "Hana",
+    "lastName": "Weber",
+    "company": "Hollowell Media",
+    "role": "Operations Director",
+    "location": "Nairobi",
+    "industry": "Healthcare",
+    "headline": "Second career, first love",
+    "about": "Has been in Healthcare long enough to have seen this cycle twice already.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "scuba diving",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-036",
+    "name": "Esther Dahl",
+    "firstName": "Esther",
+    "lastName": "Dahl",
+    "company": "Hollowell Media",
+    "role": "Partnerships Lead",
+    "location": "Ghent",
+    "industry": "Infrastructure",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "botany",
+      "photography"
+    ]
+  },
+  {
+    "key": "noise-037",
+    "name": "Astrid Petit",
+    "firstName": "Astrid",
+    "lastName": "Petit",
+    "company": "Fairhaven Trust",
+    "role": "Staff Engineer",
+    "location": "Athens",
+    "industry": "Telecom",
+    "headline": "Second career, first love",
+    "about": "Introduced at the Telecom event in Athens. Worth a follow up next quarter.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "pottery",
+      "birdwatching"
+    ]
+  },
+  {
+    "key": "noise-038",
+    "name": "Igor Vargas",
+    "firstName": "Igor",
+    "lastName": "Vargas",
+    "company": "Redcastle Optics",
+    "role": "Account Manager",
+    "location": "Athens",
+    "industry": "Fintech",
+    "headline": "Second career, first love",
+    "about": "Has been in Fintech long enough to have seen this cycle twice already.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "kayaking",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-039",
+    "name": "Adele Lehmann",
+    "firstName": "Adele",
+    "lastName": "Lehmann",
+    "company": "Marlowe Textiles",
+    "role": "Security Engineer",
+    "location": "Vienna",
+    "industry": "Design",
+    "headline": "Works across Design",
+    "about": "Has been in Design long enough to have seen this cycle twice already.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "tennis",
+      "violin"
+    ]
+  },
+  {
+    "key": "noise-040",
+    "name": "Bruno Jansen",
+    "firstName": "Bruno",
+    "lastName": "Jansen",
+    "company": "Ironbark Supply",
+    "role": "Account Manager",
+    "location": "Athens",
+    "industry": "Materials",
+    "headline": "Account Manager with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "materials"
+    ],
+    "interests": [
+      "running",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-041",
+    "name": "Marta Pereira",
+    "firstName": "Marta",
+    "lastName": "Pereira",
+    "company": "Juniper Labs",
+    "role": "Studio Director",
+    "location": "Vilnius",
+    "industry": "Optics",
+    "headline": "Studio Director with a long run at one company",
+    "about": "Moved to Juniper Labs last year and is still finding the shape of the role.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "badminton",
+      "piano"
+    ]
+  },
+  {
+    "key": "noise-042",
+    "name": "Gabriel Kaminski",
+    "firstName": "Gabriel",
+    "lastName": "Kaminski",
+    "company": "Veritas Metrics",
+    "role": "Site Manager",
+    "location": "Antwerp",
+    "industry": "Games",
+    "headline": "Covers the Antwerp region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "games"
+    ],
+    "interests": [
+      "darts",
+      "baking"
+    ]
+  },
+  {
+    "key": "noise-043",
+    "name": "Sofia Mensah",
+    "firstName": "Sofia",
+    "lastName": "Mensah",
+    "company": "Silverbeck Legal",
+    "role": "Data Scientist",
+    "location": "Glasgow",
+    "industry": "Environment",
+    "headline": "Data Scientist with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "calligraphy",
+      "surfing"
+    ]
+  },
+  {
+    "key": "noise-044",
+    "name": "Jana Vargas",
+    "firstName": "Jana",
+    "lastName": "Vargas",
+    "company": "Delphi Freight",
+    "role": "Sales Director",
+    "location": "Zagreb",
+    "industry": "Logistics",
+    "headline": "Second career, first love",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "golf",
+      "squash"
+    ]
+  },
+  {
+    "key": "noise-045",
+    "name": "Camille Weber",
+    "firstName": "Camille",
+    "lastName": "Weber",
+    "company": "Quarryfield Build",
+    "role": "Head of People",
+    "location": "Bologna",
+    "industry": "Wine",
+    "headline": "Head of People with a long run at one company",
+    "about": "Has been in Wine long enough to have seen this cycle twice already.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "hiking",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-046",
+    "name": "Franz Laine",
+    "firstName": "Franz",
+    "lastName": "Laine",
+    "company": "Thornbury Wines",
+    "role": "Partnerships Lead",
+    "location": "Glasgow",
+    "industry": "Shipping",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "squash",
+      "bridge"
+    ]
+  },
+  {
+    "key": "noise-047",
+    "name": "Vera Weber",
+    "firstName": "Vera",
+    "lastName": "Weber",
+    "company": "Ironbark Supply",
+    "role": "Principal Engineer",
+    "location": "Berlin",
+    "industry": "Environment",
+    "headline": "Second career, first love",
+    "about": "Keen on birdwatching and will find a way to mention it.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "birdwatching",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-048",
+    "name": "Astrid Lopes",
+    "firstName": "Astrid",
+    "lastName": "Lopes",
+    "company": "Umberslade Farms",
+    "role": "Research Lead",
+    "location": "Munich",
+    "industry": "Instrumentation",
+    "headline": "Covers the Munich region",
+    "about": "Introduced at the Instrumentation event in Munich. Worth a follow up next quarter.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "badminton",
+      "botany"
+    ]
+  },
+  {
+    "key": "noise-049",
+    "name": "Anders Hansen",
+    "firstName": "Anders",
+    "lastName": "Hansen",
+    "company": "Delphi Freight",
+    "role": "Sales Director",
+    "location": "Cardiff",
+    "industry": "Rail",
+    "headline": "Sales Director with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "rail"
+    ],
+    "interests": [
+      "scuba diving",
+      "kayaking"
+    ]
+  },
+  {
+    "key": "noise-050",
+    "name": "Carlos Schmidt",
+    "firstName": "Carlos",
+    "lastName": "Schmidt",
+    "company": "Arcadia Systems",
+    "role": "Studio Director",
+    "location": "Dublin",
+    "industry": "Infrastructure",
+    "headline": "Studio Director with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "woodworking",
+      "woodworking"
+    ]
+  },
+  {
+    "key": "noise-051",
+    "name": "Rosa Romano",
+    "firstName": "Rosa",
+    "lastName": "Romano",
+    "company": "Oakhurst Rail",
+    "role": "Finance Director",
+    "location": "Bordeaux",
+    "industry": "Instrumentation",
+    "headline": "Finance Director with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "pottery",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-052",
+    "name": "Nils Olsen",
+    "firstName": "Nils",
+    "lastName": "Olsen",
+    "company": "Westport Cold Store",
+    "role": "Supply Chain Director",
+    "location": "Budapest",
+    "industry": "Manufacturing",
+    "headline": "Joined from a larger competitor",
+    "about": "Has been in Manufacturing long enough to have seen this cycle twice already.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "botany",
+      "tennis"
+    ]
+  },
+  {
+    "key": "noise-053",
+    "name": "Omar Schmidt",
+    "firstName": "Omar",
+    "lastName": "Schmidt",
+    "company": "Oakhurst Rail",
+    "role": "Marketing Lead",
+    "location": "Glasgow",
+    "industry": "Manufacturing",
+    "headline": "Joined from a larger competitor",
+    "about": "Has been in Manufacturing long enough to have seen this cycle twice already.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "yoga",
+      "archery"
+    ]
+  },
+  {
+    "key": "noise-054",
+    "name": "Sofia Mensah",
+    "firstName": "Sofia",
+    "lastName": "Mensah",
+    "company": "Quarryfield Build",
+    "role": "Data Scientist",
+    "location": "Vienna",
+    "industry": "Food",
+    "headline": "Covers the Vienna region",
+    "about": "Introduced at the Food event in Vienna. Worth a follow up next quarter.",
+    "tags": [
+      "food"
+    ],
+    "interests": [
+      "kayaking",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "noise-055",
+    "name": "Nora Dahl",
+    "firstName": "Nora",
+    "lastName": "Dahl",
+    "company": "Marlowe Textiles",
+    "role": "Studio Director",
+    "location": "Valencia",
+    "industry": "Analytics",
+    "headline": "Works across Analytics",
+    "about": "Keen on knitting and will find a way to mention it.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "knitting",
+      "scuba diving"
+    ]
+  },
+  {
+    "key": "noise-056",
+    "name": "Leon Nielsen",
+    "firstName": "Leon",
+    "lastName": "Nielsen",
+    "company": "Kirkwall Marine",
+    "role": "Principal Engineer",
+    "location": "Tallinn",
+    "industry": "Media",
+    "headline": "Principal Engineer with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "woodworking",
+      "painting"
+    ]
+  },
+  {
+    "key": "noise-057",
+    "name": "Jakob Silva",
+    "firstName": "Jakob",
+    "lastName": "Silva",
+    "company": "Thornbury Wines",
+    "role": "Quality Lead",
+    "location": "Zagreb",
+    "industry": "Energy",
+    "headline": "Quality Lead with a long run at one company",
+    "about": "Introduced at the Energy event in Zagreb. Worth a follow up next quarter.",
+    "tags": [
+      "energy"
+    ],
+    "interests": [
+      "jazz",
+      "cycling"
+    ]
+  },
+  {
+    "key": "noise-058",
+    "name": "Jana Okafor",
+    "firstName": "Jana",
+    "lastName": "Okafor",
+    "company": "Westport Cold Store",
+    "role": "Quality Lead",
+    "location": "Cork",
+    "industry": "Marine",
+    "headline": "Second career, first love",
+    "about": "Has been in Marine long enough to have seen this cycle twice already.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "chess",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-059",
+    "name": "Kemal Bauer",
+    "firstName": "Kemal",
+    "lastName": "Bauer",
+    "company": "Yardley Payments",
+    "role": "Staff Engineer",
+    "location": "Manchester",
+    "industry": "Investment",
+    "headline": "Staff Engineer with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "cycling",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-060",
+    "name": "Fiona Pereira",
+    "firstName": "Fiona",
+    "lastName": "Pereira",
+    "company": "Marlowe Textiles",
+    "role": "Studio Director",
+    "location": "Sheffield",
+    "industry": "Instrumentation",
+    "headline": "Studio Director with a long run at one company",
+    "about": "Has been in Instrumentation long enough to have seen this cycle twice already.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "knitting",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-061",
+    "name": "Adele Bauer",
+    "firstName": "Adele",
+    "lastName": "Bauer",
+    "company": "Oakhurst Rail",
+    "role": "Partnerships Lead",
+    "location": "Cardiff",
+    "industry": "Fintech",
+    "headline": "Covers the Cardiff region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "cycling",
+      "bouldering"
+    ]
+  },
+  {
+    "key": "noise-062",
+    "name": "Lucia Moreau",
+    "firstName": "Lucia",
+    "lastName": "Moreau",
+    "company": "Silverbeck Legal",
+    "role": "Business Analyst",
+    "location": "Stuttgart",
+    "industry": "Environment",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Environment event in Stuttgart. Worth a follow up next quarter.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "violin",
+      "yoga"
+    ]
+  },
+  {
+    "key": "noise-063",
+    "name": "Leon Carvalho",
+    "firstName": "Leon",
+    "lastName": "Carvalho",
+    "company": "Oakhurst Rail",
+    "role": "Commercial Lead",
+    "location": "Barcelona",
+    "industry": "Logistics",
+    "headline": "Joined from a larger competitor",
+    "about": "Has been in Logistics long enough to have seen this cycle twice already.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "yoga",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-064",
+    "name": "Joao Vandenberg",
+    "firstName": "Joao",
+    "lastName": "Vandenberg",
+    "company": "Nightingale Care",
+    "role": "Supply Chain Director",
+    "location": "Munich",
+    "industry": "Fintech",
+    "headline": "Covers the Munich region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "piano",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-065",
+    "name": "Dorota Martins",
+    "firstName": "Dorota",
+    "lastName": "Martins",
+    "company": "Fairhaven Trust",
+    "role": "Field Engineer",
+    "location": "Bordeaux",
+    "industry": "Materials",
+    "headline": "Field Engineer with a long run at one company",
+    "about": "Keen on model railways and will find a way to mention it.",
+    "tags": [
+      "materials"
+    ],
+    "interests": [
+      "model railways",
+      "surfing"
+    ]
+  },
+  {
+    "key": "noise-066",
+    "name": "Hana Silva",
+    "firstName": "Hana",
+    "lastName": "Silva",
+    "company": "Ironbark Supply",
+    "role": "Chief Executive",
+    "location": "Nairobi",
+    "industry": "Analytics",
+    "headline": "Covers the Nairobi region",
+    "about": "Moved to Ironbark Supply last year and is still finding the shape of the role.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "birdwatching",
+      "violin"
+    ]
+  },
+  {
+    "key": "noise-067",
+    "name": "Lucia Fabbri",
+    "firstName": "Lucia",
+    "lastName": "Fabbri",
+    "company": "Umberslade Farms",
+    "role": "Engineering Manager",
+    "location": "Ljubljana",
+    "industry": "Consulting",
+    "headline": "Engineering Manager with a long run at one company",
+    "about": "Has been in Consulting long enough to have seen this cycle twice already.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "pottery",
+      "board games"
+    ]
+  },
+  {
+    "key": "noise-068",
+    "name": "Rosa Sandberg",
+    "firstName": "Rosa",
+    "lastName": "Sandberg",
+    "company": "Kirkwall Marine",
+    "role": "Customer Success Lead",
+    "location": "Malmo",
+    "industry": "Optics",
+    "headline": "Joined from a larger competitor",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "knitting",
+      "baking"
+    ]
+  },
+  {
+    "key": "noise-069",
+    "name": "Edward Jensen",
+    "firstName": "Edward",
+    "lastName": "Jensen",
+    "company": "Hollowell Media",
+    "role": "Security Engineer",
+    "location": "Bratislava",
+    "industry": "Environment",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Hollowell Media last year and is still finding the shape of the role.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "cycling",
+      "yoga"
+    ]
+  },
+  {
+    "key": "noise-070",
+    "name": "Nils Sorensen",
+    "firstName": "Nils",
+    "lastName": "Sorensen",
+    "company": "Brightpath Consulting",
+    "role": "Quality Lead",
+    "location": "Bristol",
+    "industry": "Shipping",
+    "headline": "Second career, first love",
+    "about": "Has been in Shipping long enough to have seen this cycle twice already.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "surfing",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-071",
+    "name": "Sergio Fischer",
+    "firstName": "Sergio",
+    "lastName": "Fischer",
+    "company": "Hollowell Media",
+    "role": "Head of People",
+    "location": "Athens",
+    "industry": "Telecom",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Hollowell Media last year and is still finding the shape of the role.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "calligraphy",
+      "board games"
+    ]
+  },
+  {
+    "key": "noise-072",
+    "name": "Simone Vlasov",
+    "firstName": "Simone",
+    "lastName": "Vlasov",
+    "company": "Lanterna Studios",
+    "role": "Site Manager",
+    "location": "Cardiff",
+    "industry": "Media",
+    "headline": "Covers the Cardiff region",
+    "about": "Keen on orienteering and will find a way to mention it.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "orienteering",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-073",
+    "name": "Sara Dubois",
+    "firstName": "Sara",
+    "lastName": "Dubois",
+    "company": "Delphi Freight",
+    "role": "Head of People",
+    "location": "London",
+    "industry": "Software",
+    "headline": "Works across Software",
+    "about": "Moved to Delphi Freight last year and is still finding the shape of the role.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "birdwatching",
+      "darts"
+    ]
+  },
+  {
+    "key": "noise-074",
+    "name": "Yara Vlasov",
+    "firstName": "Yara",
+    "lastName": "Vlasov",
+    "company": "Fairhaven Trust",
+    "role": "Business Analyst",
+    "location": "Sheffield",
+    "industry": "Rail",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "rail"
+    ],
+    "interests": [
+      "piano",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-075",
+    "name": "Rita Andersen",
+    "firstName": "Rita",
+    "lastName": "Andersen",
+    "company": "Lanterna Studios",
+    "role": "Security Engineer",
+    "location": "Innsbruck",
+    "industry": "Logistics",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "yoga",
+      "cookery"
+    ]
+  },
+  {
+    "key": "noise-076",
+    "name": "Kamil Jansen",
+    "firstName": "Kamil",
+    "lastName": "Jansen",
+    "company": "Silverbeck Legal",
+    "role": "Sales Director",
+    "location": "Prague",
+    "industry": "Media",
+    "headline": "Sales Director with a long run at one company",
+    "about": "Introduced at the Media event in Prague. Worth a follow up next quarter.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "jazz",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-077",
+    "name": "Lucia Lehmann",
+    "firstName": "Lucia",
+    "lastName": "Lehmann",
+    "company": "Hollowell Media",
+    "role": "Supply Chain Director",
+    "location": "Krakow",
+    "industry": "Games",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Hollowell Media last year and is still finding the shape of the role.",
+    "tags": [
+      "games"
+    ],
+    "interests": [
+      "woodworking",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "noise-078",
+    "name": "Dorota Fischer",
+    "firstName": "Dorota",
+    "lastName": "Fischer",
+    "company": "Fairhaven Trust",
+    "role": "Plant Manager",
+    "location": "Vienna",
+    "industry": "Food",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "food"
+    ],
+    "interests": [
+      "birdwatching",
+      "piano"
+    ]
+  },
+  {
+    "key": "noise-079",
+    "name": "Ida Lopes",
+    "firstName": "Ida",
+    "lastName": "Lopes",
+    "company": "Oakhurst Rail",
+    "role": "Account Manager",
+    "location": "Warsaw",
+    "industry": "Marine",
+    "headline": "Covers the Warsaw region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "calligraphy",
+      "bouldering"
+    ]
+  },
+  {
+    "key": "noise-080",
+    "name": "Sergio Vlasov",
+    "firstName": "Sergio",
+    "lastName": "Vlasov",
+    "company": "Yardley Payments",
+    "role": "Principal Engineer",
+    "location": "Bilbao",
+    "industry": "Forestry",
+    "headline": "Principal Engineer with a long run at one company",
+    "about": "Has been in Forestry long enough to have seen this cycle twice already.",
+    "tags": [
+      "forestry"
+    ],
+    "interests": [
+      "cycling",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-081",
+    "name": "Julia Fabbri",
+    "firstName": "Julia",
+    "lastName": "Fabbri",
+    "company": "Westport Cold Store",
+    "role": "Studio Director",
+    "location": "Zurich",
+    "industry": "Infrastructure",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "tennis",
+      "darts"
+    ]
+  },
+  {
+    "key": "noise-082",
+    "name": "Sofia Mikkelsen",
+    "firstName": "Sofia",
+    "lastName": "Mikkelsen",
+    "company": "Cindersoft",
+    "role": "Technical Writer",
+    "location": "Bergen",
+    "industry": "Wine",
+    "headline": "Technical Writer with a long run at one company",
+    "about": "Keen on piano and will find a way to mention it.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "piano",
+      "model railways"
+    ]
+  },
+  {
+    "key": "noise-083",
+    "name": "Malik Lehmann",
+    "firstName": "Malik",
+    "lastName": "Lehmann",
+    "company": "Fairhaven Trust",
+    "role": "Marketing Lead",
+    "location": "Naples",
+    "industry": "Marine",
+    "headline": "Works across Marine",
+    "about": "Has been in Marine long enough to have seen this cycle twice already.",
+    "tags": [
+      "marine"
+    ],
+    "interests": [
+      "piano",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-084",
+    "name": "Karin Garcia",
+    "firstName": "Karin",
+    "lastName": "Garcia",
+    "company": "Pellworm Energy",
+    "role": "Technical Writer",
+    "location": "Zagreb",
+    "industry": "Robotics",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "knitting",
+      "surfing"
+    ]
+  },
+  {
+    "key": "noise-085",
+    "name": "Lucia Keller",
+    "firstName": "Lucia",
+    "lastName": "Keller",
+    "company": "Pellworm Energy",
+    "role": "Customer Success Lead",
+    "location": "Basel",
+    "industry": "Construction",
+    "headline": "Works across Construction",
+    "about": "Has been in Construction long enough to have seen this cycle twice already.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "ice hockey",
+      "tennis"
+    ]
+  },
+  {
+    "key": "noise-086",
+    "name": "Elif Mensah",
+    "firstName": "Elif",
+    "lastName": "Mensah",
+    "company": "Everstone Partners",
+    "role": "Product Manager",
+    "location": "Bordeaux",
+    "industry": "Environment",
+    "headline": "Works across Environment",
+    "about": "Introduced at the Environment event in Bordeaux. Worth a follow up next quarter.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "birdwatching",
+      "knitting"
+    ]
+  },
+  {
+    "key": "noise-087",
+    "name": "Omar Tamm",
+    "firstName": "Omar",
+    "lastName": "Tamm",
+    "company": "Yardley Payments",
+    "role": "Staff Engineer",
+    "location": "Krakow",
+    "industry": "Agriculture",
+    "headline": "Staff Engineer with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "crochet",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-088",
+    "name": "Bruno Ricci",
+    "firstName": "Bruno",
+    "lastName": "Ricci",
+    "company": "Redcastle Optics",
+    "role": "Security Engineer",
+    "location": "Antwerp",
+    "industry": "Media",
+    "headline": "Security Engineer with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "crochet",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-089",
+    "name": "Gabriel Weber",
+    "firstName": "Gabriel",
+    "lastName": "Weber",
+    "company": "Juniper Labs",
+    "role": "Sales Director",
+    "location": "Lisbon",
+    "industry": "Construction",
+    "headline": "Covers the Lisbon region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "scuba diving",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-090",
+    "name": "Leon Vargas",
+    "firstName": "Leon",
+    "lastName": "Vargas",
+    "company": "Pellworm Energy",
+    "role": "Chief Executive",
+    "location": "Stockholm",
+    "industry": "Infrastructure",
+    "headline": "Works across Infrastructure",
+    "about": "Moved to Pellworm Energy last year and is still finding the shape of the role.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "opera",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-091",
+    "name": "Matteo Kowalski",
+    "firstName": "Matteo",
+    "lastName": "Kowalski",
+    "company": "Lanterna Studios",
+    "role": "Finance Director",
+    "location": "Vienna",
+    "industry": "Infrastructure",
+    "headline": "Finance Director with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "pottery",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-092",
+    "name": "Cecilia Kaminski",
+    "firstName": "Cecilia",
+    "lastName": "Kaminski",
+    "company": "Hollowell Media",
+    "role": "Data Scientist",
+    "location": "Stockholm",
+    "industry": "Shipping",
+    "headline": "Data Scientist with a long run at one company",
+    "about": "Keen on jazz and will find a way to mention it.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "jazz",
+      "surfing"
+    ]
+  },
+  {
+    "key": "noise-093",
+    "name": "Daniel Dubois",
+    "firstName": "Daniel",
+    "lastName": "Dubois",
+    "company": "Yardley Payments",
+    "role": "Business Analyst",
+    "location": "Bordeaux",
+    "industry": "Logistics",
+    "headline": "Second career, first love",
+    "about": "Introduced at the Logistics event in Bordeaux. Worth a follow up next quarter.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "surfing",
+      "cycling"
+    ]
+  },
+  {
+    "key": "noise-094",
+    "name": "Paulo Olsen",
+    "firstName": "Paulo",
+    "lastName": "Olsen",
+    "company": "Veritas Metrics",
+    "role": "Staff Engineer",
+    "location": "Rotterdam",
+    "industry": "Architecture",
+    "headline": "Works across Architecture",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "badminton",
+      "model railways"
+    ]
+  },
+  {
+    "key": "noise-095",
+    "name": "Sara Vargas",
+    "firstName": "Sara",
+    "lastName": "Vargas",
+    "company": "Kirkwall Marine",
+    "role": "Plant Manager",
+    "location": "Vienna",
+    "industry": "Legal",
+    "headline": "Second career, first love",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "surfing",
+      "cookery"
+    ]
+  },
+  {
+    "key": "noise-096",
+    "name": "Simone Novotny",
+    "firstName": "Simone",
+    "lastName": "Novotny",
+    "company": "Thornbury Wines",
+    "role": "Partnerships Lead",
+    "location": "Ghent",
+    "industry": "Investment",
+    "headline": "Partnerships Lead with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "jazz",
+      "crochet"
+    ]
+  },
+  {
+    "key": "noise-097",
+    "name": "Fiona Jansen",
+    "firstName": "Fiona",
+    "lastName": "Jansen",
+    "company": "Redcastle Optics",
+    "role": "Chief Executive",
+    "location": "Bristol",
+    "industry": "Fintech",
+    "headline": "Works across Fintech",
+    "about": "Has been in Fintech long enough to have seen this cycle twice already.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "knitting",
+      "fishing"
+    ]
+  },
+  {
+    "key": "noise-098",
+    "name": "Rosa Mikkelsen",
+    "firstName": "Rosa",
+    "lastName": "Mikkelsen",
+    "company": "Cindersoft",
+    "role": "Sales Director",
+    "location": "Warsaw",
+    "industry": "Instrumentation",
+    "headline": "Works across Instrumentation",
+    "about": "Introduced at the Instrumentation event in Warsaw. Worth a follow up next quarter.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "chess",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-099",
+    "name": "Stefan Kaminski",
+    "firstName": "Stefan",
+    "lastName": "Kaminski",
+    "company": "Cindersoft",
+    "role": "Site Manager",
+    "location": "Cork",
+    "industry": "Agriculture",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "fishing",
+      "yoga"
+    ]
+  },
+  {
+    "key": "noise-100",
+    "name": "Sara Horvath",
+    "firstName": "Sara",
+    "lastName": "Horvath",
+    "company": "Cindersoft",
+    "role": "Security Engineer",
+    "location": "Bologna",
+    "industry": "Legal",
+    "headline": "Works across Legal",
+    "about": "Has been in Legal long enough to have seen this cycle twice already.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "crochet",
+      "badminton"
+    ]
+  },
+  {
+    "key": "noise-101",
+    "name": "Elif Muller",
+    "firstName": "Elif",
+    "lastName": "Muller",
+    "company": "Oakhurst Rail",
+    "role": "Head of People",
+    "location": "Basel",
+    "industry": "Analytics",
+    "headline": "Joined from a larger competitor",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "hiking",
+      "painting"
+    ]
+  },
+  {
+    "key": "noise-102",
+    "name": "Rita Romano",
+    "firstName": "Rita",
+    "lastName": "Romano",
+    "company": "Redcastle Optics",
+    "role": "Customer Success Lead",
+    "location": "Seville",
+    "industry": "Construction",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "painting",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-103",
+    "name": "Henrik Dubois",
+    "firstName": "Henrik",
+    "lastName": "Dubois",
+    "company": "Redcastle Optics",
+    "role": "Plant Manager",
+    "location": "Budapest",
+    "industry": "Agriculture",
+    "headline": "Second career, first love",
+    "about": "Has been in Agriculture long enough to have seen this cycle twice already.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "photography",
+      "knitting"
+    ]
+  },
+  {
+    "key": "noise-104",
+    "name": "Adele Muller",
+    "firstName": "Adele",
+    "lastName": "Muller",
+    "company": "Kirkwall Marine",
+    "role": "Staff Engineer",
+    "location": "Barcelona",
+    "industry": "Forestry",
+    "headline": "Staff Engineer with a long run at one company",
+    "about": "Has been in Forestry long enough to have seen this cycle twice already.",
+    "tags": [
+      "forestry"
+    ],
+    "interests": [
+      "squash",
+      "cycling"
+    ]
+  },
+  {
+    "key": "noise-105",
+    "name": "Adele Haas",
+    "firstName": "Adele",
+    "lastName": "Haas",
+    "company": "Juniper Labs",
+    "role": "Research Lead",
+    "location": "Manchester",
+    "industry": "Infrastructure",
+    "headline": "Covers the Manchester region",
+    "about": "Has been in Infrastructure long enough to have seen this cycle twice already.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "pottery",
+      "scuba diving"
+    ]
+  },
+  {
+    "key": "noise-106",
+    "name": "Edward Dubois",
+    "firstName": "Edward",
+    "lastName": "Dubois",
+    "company": "Quarryfield Build",
+    "role": "Engineering Manager",
+    "location": "Munich",
+    "industry": "Consulting",
+    "headline": "Engineering Manager with a long run at one company",
+    "about": "Has been in Consulting long enough to have seen this cycle twice already.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "running",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-107",
+    "name": "Gemma Petit",
+    "firstName": "Gemma",
+    "lastName": "Petit",
+    "company": "Thornbury Wines",
+    "role": "Programme Director",
+    "location": "Nairobi",
+    "industry": "Analytics",
+    "headline": "Works across Analytics",
+    "about": "Introduced at the Analytics event in Nairobi. Worth a follow up next quarter.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "knitting",
+      "yoga"
+    ]
+  },
+  {
+    "key": "noise-108",
+    "name": "Rosa Muller",
+    "firstName": "Rosa",
+    "lastName": "Muller",
+    "company": "Redcastle Optics",
+    "role": "Principal Engineer",
+    "location": "Barcelona",
+    "industry": "Shipping",
+    "headline": "Works across Shipping",
+    "about": "Moved to Redcastle Optics last year and is still finding the shape of the role.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "golf",
+      "chess"
+    ]
+  },
+  {
+    "key": "noise-109",
+    "name": "Leon Eriksson",
+    "firstName": "Leon",
+    "lastName": "Eriksson",
+    "company": "Everstone Partners",
+    "role": "Engineering Manager",
+    "location": "Vienna",
+    "industry": "Wine",
+    "headline": "Second career, first love",
+    "about": "Introduced at the Wine event in Vienna. Worth a follow up next quarter.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "cycling",
+      "darts"
+    ]
+  },
+  {
+    "key": "noise-110",
+    "name": "Erik Jansen",
+    "firstName": "Erik",
+    "lastName": "Jansen",
+    "company": "Everstone Partners",
+    "role": "Design Lead",
+    "location": "Antwerp",
+    "industry": "Agriculture",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "board games",
+      "birdwatching"
+    ]
+  },
+  {
+    "key": "noise-111",
+    "name": "Paulo Horvath",
+    "firstName": "Paulo",
+    "lastName": "Horvath",
+    "company": "Quarryfield Build",
+    "role": "Finance Director",
+    "location": "Vilnius",
+    "industry": "Design",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Quarryfield Build last year and is still finding the shape of the role.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "botany",
+      "squash"
+    ]
+  },
+  {
+    "key": "noise-112",
+    "name": "Adele Muller",
+    "firstName": "Adele",
+    "lastName": "Muller",
+    "company": "Silverbeck Legal",
+    "role": "Commercial Lead",
+    "location": "Ljubljana",
+    "industry": "Media",
+    "headline": "Works across Media",
+    "about": "Has been in Media long enough to have seen this cycle twice already.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "squash",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-113",
+    "name": "Emil Santos",
+    "firstName": "Emil",
+    "lastName": "Santos",
+    "company": "Everstone Partners",
+    "role": "Plant Manager",
+    "location": "Genoa",
+    "industry": "Fintech",
+    "headline": "Covers the Genoa region",
+    "about": "Moved to Everstone Partners last year and is still finding the shape of the role.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "cinema",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-114",
+    "name": "Ulrika Dahl",
+    "firstName": "Ulrika",
+    "lastName": "Dahl",
+    "company": "Brightpath Consulting",
+    "role": "Engineering Manager",
+    "location": "Lyon",
+    "industry": "Environment",
+    "headline": "Engineering Manager with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "birdwatching",
+      "violin"
+    ]
+  },
+  {
+    "key": "noise-115",
+    "name": "Igor Santos",
+    "firstName": "Igor",
+    "lastName": "Santos",
+    "company": "Pellworm Energy",
+    "role": "Data Scientist",
+    "location": "Zurich",
+    "industry": "Architecture",
+    "headline": "Data Scientist with a long run at one company",
+    "about": "Has been in Architecture long enough to have seen this cycle twice already.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "kayaking",
+      "kayaking"
+    ]
+  },
+  {
+    "key": "noise-116",
+    "name": "Miriam Hansen",
+    "firstName": "Miriam",
+    "lastName": "Hansen",
+    "company": "Umberslade Farms",
+    "role": "Operations Director",
+    "location": "Leeds",
+    "industry": "Telecom",
+    "headline": "Covers the Leeds region",
+    "about": "Moved to Umberslade Farms last year and is still finding the shape of the role.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "bouldering",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-117",
+    "name": "Laura Sorensen",
+    "firstName": "Laura",
+    "lastName": "Sorensen",
+    "company": "Veritas Metrics",
+    "role": "Security Engineer",
+    "location": "Prague",
+    "industry": "Design",
+    "headline": "Joined from a larger competitor",
+    "about": "Keen on bouldering and will find a way to mention it.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "bouldering",
+      "chess"
+    ]
+  },
+  {
+    "key": "noise-118",
+    "name": "Vera Garcia",
+    "firstName": "Vera",
+    "lastName": "Garcia",
+    "company": "Juniper Labs",
+    "role": "Data Scientist",
+    "location": "Barcelona",
+    "industry": "Architecture",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "running",
+      "baking"
+    ]
+  },
+  {
+    "key": "noise-119",
+    "name": "Emil Weber",
+    "firstName": "Emil",
+    "lastName": "Weber",
+    "company": "Marlowe Textiles",
+    "role": "Site Manager",
+    "location": "Genoa",
+    "industry": "Logistics",
+    "headline": "Covers the Genoa region",
+    "about": "Keen on pottery and will find a way to mention it.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "pottery",
+      "opera"
+    ]
+  },
+  {
+    "key": "noise-120",
+    "name": "Arjun Hansen",
+    "firstName": "Arjun",
+    "lastName": "Hansen",
+    "company": "Umberslade Farms",
+    "role": "Technical Writer",
+    "location": "Athens",
+    "industry": "Publishing",
+    "headline": "Technical Writer with a long run at one company",
+    "about": "Keen on archery and will find a way to mention it.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "archery",
+      "crochet"
+    ]
+  },
+  {
+    "key": "noise-121",
+    "name": "Anita Dubois",
+    "firstName": "Anita",
+    "lastName": "Dubois",
+    "company": "Delphi Freight",
+    "role": "Finance Director",
+    "location": "Prague",
+    "industry": "Publishing",
+    "headline": "Joined from a larger competitor",
+    "about": "Keen on yoga and will find a way to mention it.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "yoga",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-122",
+    "name": "Dorota Muller",
+    "firstName": "Dorota",
+    "lastName": "Muller",
+    "company": "Silverbeck Legal",
+    "role": "Technical Writer",
+    "location": "Lisbon",
+    "industry": "Forestry",
+    "headline": "Covers the Lisbon region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "forestry"
+    ],
+    "interests": [
+      "scuba diving",
+      "cinema"
+    ]
+  },
+  {
+    "key": "noise-123",
+    "name": "Anders Ricci",
+    "firstName": "Anders",
+    "lastName": "Ricci",
+    "company": "Umberslade Farms",
+    "role": "Data Scientist",
+    "location": "Stockholm",
+    "industry": "Infrastructure",
+    "headline": "Second career, first love",
+    "about": "Moved to Umberslade Farms last year and is still finding the shape of the role.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "jazz",
+      "violin"
+    ]
+  },
+  {
+    "key": "noise-124",
+    "name": "Tomasz Silva",
+    "firstName": "Tomasz",
+    "lastName": "Silva",
+    "company": "Yardley Payments",
+    "role": "Commercial Lead",
+    "location": "Manchester",
+    "industry": "Infrastructure",
+    "headline": "Second career, first love",
+    "about": "Has been in Infrastructure long enough to have seen this cycle twice already.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "calligraphy",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-125",
+    "name": "Astrid Dahl",
+    "firstName": "Astrid",
+    "lastName": "Dahl",
+    "company": "Redcastle Optics",
+    "role": "Account Manager",
+    "location": "Innsbruck",
+    "industry": "Materials",
+    "headline": "Second career, first love",
+    "about": "Keen on violin and will find a way to mention it.",
+    "tags": [
+      "materials"
+    ],
+    "interests": [
+      "violin",
+      "woodworking"
+    ]
+  },
+  {
+    "key": "noise-126",
+    "name": "Paulo Fischer",
+    "firstName": "Paulo",
+    "lastName": "Fischer",
+    "company": "Fairhaven Trust",
+    "role": "Engineering Manager",
+    "location": "Helsinki",
+    "industry": "Optics",
+    "headline": "Joined from a larger competitor",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "ice hockey",
+      "cycling"
+    ]
+  },
+  {
+    "key": "noise-127",
+    "name": "Kamil Ricci",
+    "firstName": "Kamil",
+    "lastName": "Ricci",
+    "company": "Arcadia Systems",
+    "role": "Field Engineer",
+    "location": "Seville",
+    "industry": "Wine",
+    "headline": "Field Engineer with a long run at one company",
+    "about": "Introduced at the Wine event in Seville. Worth a follow up next quarter.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "birdwatching",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-128",
+    "name": "Petra Vandenberg",
+    "firstName": "Petra",
+    "lastName": "Vandenberg",
+    "company": "Brightpath Consulting",
+    "role": "Account Manager",
+    "location": "Rotterdam",
+    "industry": "Manufacturing",
+    "headline": "Second career, first love",
+    "about": "Has been in Manufacturing long enough to have seen this cycle twice already.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "bouldering",
+      "model railways"
+    ]
+  },
+  {
+    "key": "noise-129",
+    "name": "Edward Bianchi",
+    "firstName": "Edward",
+    "lastName": "Bianchi",
+    "company": "Kirkwall Marine",
+    "role": "Field Engineer",
+    "location": "Ljubljana",
+    "industry": "Agriculture",
+    "headline": "Field Engineer with a long run at one company",
+    "about": "Moved to Kirkwall Marine last year and is still finding the shape of the role.",
+    "tags": [
+      "agriculture"
+    ],
+    "interests": [
+      "fishing",
+      "knitting"
+    ]
+  },
+  {
+    "key": "noise-130",
+    "name": "Edward Jensen",
+    "firstName": "Edward",
+    "lastName": "Jensen",
+    "company": "Juniper Labs",
+    "role": "Principal Engineer",
+    "location": "Warsaw",
+    "industry": "Media",
+    "headline": "Principal Engineer with a long run at one company",
+    "about": "Has been in Media long enough to have seen this cycle twice already.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "violin",
+      "fishing"
+    ]
+  },
+  {
+    "key": "noise-131",
+    "name": "Camille Carvalho",
+    "firstName": "Camille",
+    "lastName": "Carvalho",
+    "company": "Veritas Metrics",
+    "role": "Technical Writer",
+    "location": "Zagreb",
+    "industry": "Architecture",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "knitting",
+      "tennis"
+    ]
+  },
+  {
+    "key": "noise-132",
+    "name": "Fatima Horvath",
+    "firstName": "Fatima",
+    "lastName": "Horvath",
+    "company": "Marlowe Textiles",
+    "role": "Quality Lead",
+    "location": "Cardiff",
+    "industry": "Fintech",
+    "headline": "Covers the Cardiff region",
+    "about": "Keen on violin and will find a way to mention it.",
+    "tags": [
+      "fintech"
+    ],
+    "interests": [
+      "violin",
+      "piano"
+    ]
+  },
+  {
+    "key": "noise-133",
+    "name": "Gemma Vargas",
+    "firstName": "Gemma",
+    "lastName": "Vargas",
+    "company": "Glenmore Foods",
+    "role": "Head of People",
+    "location": "Ljubljana",
+    "industry": "Legal",
+    "headline": "Joined from a larger competitor",
+    "about": "Has been in Legal long enough to have seen this cycle twice already.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "sailing",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-134",
+    "name": "Emil Jensen",
+    "firstName": "Emil",
+    "lastName": "Jensen",
+    "company": "Thornbury Wines",
+    "role": "Studio Director",
+    "location": "Ghent",
+    "industry": "Robotics",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Thornbury Wines last year and is still finding the shape of the role.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "orienteering",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-135",
+    "name": "Elif Dubois",
+    "firstName": "Elif",
+    "lastName": "Dubois",
+    "company": "Brightpath Consulting",
+    "role": "Principal Engineer",
+    "location": "Munich",
+    "industry": "Telecom",
+    "headline": "Covers the Munich region",
+    "about": "Keen on cinema and will find a way to mention it.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "cinema",
+      "scuba diving"
+    ]
+  },
+  {
+    "key": "noise-136",
+    "name": "Linnea Keller",
+    "firstName": "Linnea",
+    "lastName": "Keller",
+    "company": "Hollowell Media",
+    "role": "Principal Engineer",
+    "location": "Rotterdam",
+    "industry": "Legal",
+    "headline": "Works across Legal",
+    "about": "Introduced at the Legal event in Rotterdam. Worth a follow up next quarter.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "chess",
+      "baking"
+    ]
+  },
+  {
+    "key": "noise-137",
+    "name": "Esther Andersen",
+    "firstName": "Esther",
+    "lastName": "Andersen",
+    "company": "Quarryfield Build",
+    "role": "Customer Success Lead",
+    "location": "Rotterdam",
+    "industry": "Construction",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Construction event in Rotterdam. Worth a follow up next quarter.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "pottery",
+      "knitting"
+    ]
+  },
+  {
+    "key": "noise-138",
+    "name": "Paulo Carvalho",
+    "firstName": "Paulo",
+    "lastName": "Carvalho",
+    "company": "Quarryfield Build",
+    "role": "Sales Director",
+    "location": "Bologna",
+    "industry": "Environment",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Environment event in Bologna. Worth a follow up next quarter.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "surfing",
+      "fishing"
+    ]
+  },
+  {
+    "key": "noise-139",
+    "name": "Sergio Petit",
+    "firstName": "Sergio",
+    "lastName": "Petit",
+    "company": "Silverbeck Legal",
+    "role": "Sales Director",
+    "location": "Turin",
+    "industry": "Forestry",
+    "headline": "Covers the Turin region",
+    "about": "Has been in Forestry long enough to have seen this cycle twice already.",
+    "tags": [
+      "forestry"
+    ],
+    "interests": [
+      "kayaking",
+      "kayaking"
+    ]
+  },
+  {
+    "key": "noise-140",
+    "name": "Elif Garcia",
+    "firstName": "Elif",
+    "lastName": "Garcia",
+    "company": "Pellworm Energy",
+    "role": "Product Manager",
+    "location": "Helsinki",
+    "industry": "Shipping",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Shipping event in Helsinki. Worth a follow up next quarter.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "surfing",
+      "badminton"
+    ]
+  },
+  {
+    "key": "noise-141",
+    "name": "Irene Weber",
+    "firstName": "Irene",
+    "lastName": "Weber",
+    "company": "Redcastle Optics",
+    "role": "Operations Director",
+    "location": "Berlin",
+    "industry": "Construction",
+    "headline": "Second career, first love",
+    "about": "Moved to Redcastle Optics last year and is still finding the shape of the role.",
+    "tags": [
+      "construction"
+    ],
+    "interests": [
+      "fishing",
+      "scuba diving"
+    ]
+  },
+  {
+    "key": "noise-142",
+    "name": "Cecilia Schmidt",
+    "firstName": "Cecilia",
+    "lastName": "Schmidt",
+    "company": "Umberslade Farms",
+    "role": "Finance Director",
+    "location": "Glasgow",
+    "industry": "Shipping",
+    "headline": "Works across Shipping",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "golf",
+      "fishing"
+    ]
+  },
+  {
+    "key": "noise-143",
+    "name": "Simone Okafor",
+    "firstName": "Simone",
+    "lastName": "Okafor",
+    "company": "Fairhaven Trust",
+    "role": "Commercial Lead",
+    "location": "Budapest",
+    "industry": "Games",
+    "headline": "Commercial Lead with a long run at one company",
+    "about": "Moved to Fairhaven Trust last year and is still finding the shape of the role.",
+    "tags": [
+      "games"
+    ],
+    "interests": [
+      "photography",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-144",
+    "name": "Fatima Garcia",
+    "firstName": "Fatima",
+    "lastName": "Garcia",
+    "company": "Marlowe Textiles",
+    "role": "Staff Engineer",
+    "location": "Bilbao",
+    "industry": "Analytics",
+    "headline": "Works across Analytics",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "gardening",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-145",
+    "name": "Carlos Olsen",
+    "firstName": "Carlos",
+    "lastName": "Olsen",
+    "company": "Brightpath Consulting",
+    "role": "Partnerships Lead",
+    "location": "Bratislava",
+    "industry": "Optics",
+    "headline": "Joined from a larger competitor",
+    "about": "Introduced at the Optics event in Bratislava. Worth a follow up next quarter.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "painting",
+      "bridge"
+    ]
+  },
+  {
+    "key": "noise-146",
+    "name": "Malik Petit",
+    "firstName": "Malik",
+    "lastName": "Petit",
+    "company": "Delphi Freight",
+    "role": "Staff Engineer",
+    "location": "Riga",
+    "industry": "Architecture",
+    "headline": "Staff Engineer with a long run at one company",
+    "about": "Has been in Architecture long enough to have seen this cycle twice already.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "scuba diving",
+      "badminton"
+    ]
+  },
+  {
+    "key": "noise-147",
+    "name": "Fiona Olsen",
+    "firstName": "Fiona",
+    "lastName": "Olsen",
+    "company": "Everstone Partners",
+    "role": "Principal Engineer",
+    "location": "London",
+    "industry": "Investment",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Everstone Partners last year and is still finding the shape of the role.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "botany",
+      "painting"
+    ]
+  },
+  {
+    "key": "noise-148",
+    "name": "Lucia Muller",
+    "firstName": "Lucia",
+    "lastName": "Muller",
+    "company": "Nightingale Care",
+    "role": "Finance Director",
+    "location": "Innsbruck",
+    "industry": "Optics",
+    "headline": "Second career, first love",
+    "about": "Keen on model railways and will find a way to mention it.",
+    "tags": [
+      "optics"
+    ],
+    "interests": [
+      "model railways",
+      "jazz"
+    ]
+  },
+  {
+    "key": "noise-149",
+    "name": "Rosa Mensah",
+    "firstName": "Rosa",
+    "lastName": "Mensah",
+    "company": "Umberslade Farms",
+    "role": "Head of People",
+    "location": "Tallinn",
+    "industry": "Environment",
+    "headline": "Works across Environment",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "darts",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-150",
+    "name": "Jana Andersen",
+    "firstName": "Jana",
+    "lastName": "Andersen",
+    "company": "Arcadia Systems",
+    "role": "Principal Engineer",
+    "location": "Zagreb",
+    "industry": "Analytics",
+    "headline": "Works across Analytics",
+    "about": "Has been in Analytics long enough to have seen this cycle twice already.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "fishing",
+      "bouldering"
+    ]
+  },
+  {
+    "key": "noise-151",
+    "name": "Magnus Ricci",
+    "firstName": "Magnus",
+    "lastName": "Ricci",
+    "company": "Oakhurst Rail",
+    "role": "Data Scientist",
+    "location": "Glasgow",
+    "industry": "Shipping",
+    "headline": "Data Scientist with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "yoga",
+      "knitting"
+    ]
+  },
+  {
+    "key": "noise-152",
+    "name": "Rita Novotny",
+    "firstName": "Rita",
+    "lastName": "Novotny",
+    "company": "Pellworm Energy",
+    "role": "Quality Lead",
+    "location": "Bristol",
+    "industry": "Food",
+    "headline": "Works across Food",
+    "about": "Has been in Food long enough to have seen this cycle twice already.",
+    "tags": [
+      "food"
+    ],
+    "interests": [
+      "kayaking",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "noise-153",
+    "name": "Dorota Lopes",
+    "firstName": "Dorota",
+    "lastName": "Lopes",
+    "company": "Thornbury Wines",
+    "role": "Finance Director",
+    "location": "Naples",
+    "industry": "Instrumentation",
+    "headline": "Covers the Naples region",
+    "about": "Introduced at the Instrumentation event in Naples. Worth a follow up next quarter.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "board games",
+      "gardening"
+    ]
+  },
+  {
+    "key": "noise-154",
+    "name": "Vera Schmidt",
+    "firstName": "Vera",
+    "lastName": "Schmidt",
+    "company": "Marlowe Textiles",
+    "role": "Partnerships Lead",
+    "location": "Budapest",
+    "industry": "Logistics",
+    "headline": "Works across Logistics",
+    "about": "Keen on calligraphy and will find a way to mention it.",
+    "tags": [
+      "logistics"
+    ],
+    "interests": [
+      "calligraphy",
+      "archery"
+    ]
+  },
+  {
+    "key": "noise-155",
+    "name": "Igor Moreau",
+    "firstName": "Igor",
+    "lastName": "Moreau",
+    "company": "Silverbeck Legal",
+    "role": "Staff Engineer",
+    "location": "Bordeaux",
+    "industry": "Healthcare",
+    "headline": "Works across Healthcare",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "ice hockey",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-156",
+    "name": "Linnea Vargas",
+    "firstName": "Linnea",
+    "lastName": "Vargas",
+    "company": "Nightingale Care",
+    "role": "Commercial Lead",
+    "location": "Leeds",
+    "industry": "Shipping",
+    "headline": "Second career, first love",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "tennis",
+      "botany"
+    ]
+  },
+  {
+    "key": "noise-157",
+    "name": "Fatima Fabbri",
+    "firstName": "Fatima",
+    "lastName": "Fabbri",
+    "company": "Brightpath Consulting",
+    "role": "Research Lead",
+    "location": "Cardiff",
+    "industry": "Infrastructure",
+    "headline": "Research Lead with a long run at one company",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "knitting",
+      "pottery"
+    ]
+  },
+  {
+    "key": "noise-158",
+    "name": "Sara Bauer",
+    "firstName": "Sara",
+    "lastName": "Bauer",
+    "company": "Everstone Partners",
+    "role": "Programme Director",
+    "location": "Bergen",
+    "industry": "Architecture",
+    "headline": "Joined from a larger competitor",
+    "about": "Has been in Architecture long enough to have seen this cycle twice already.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "golf",
+      "bridge"
+    ]
+  },
+  {
+    "key": "noise-159",
+    "name": "Irene Vlasov",
+    "firstName": "Irene",
+    "lastName": "Vlasov",
+    "company": "Ironbark Supply",
+    "role": "Product Manager",
+    "location": "Zurich",
+    "industry": "Shipping",
+    "headline": "Second career, first love",
+    "about": "Keen on baking and will find a way to mention it.",
+    "tags": [
+      "shipping"
+    ],
+    "interests": [
+      "baking",
+      "board games"
+    ]
+  },
+  {
+    "key": "noise-160",
+    "name": "Irene Silva",
+    "firstName": "Irene",
+    "lastName": "Silva",
+    "company": "Umberslade Farms",
+    "role": "Partnerships Lead",
+    "location": "Innsbruck",
+    "industry": "Investment",
+    "headline": "Partnerships Lead with a long run at one company",
+    "about": "Has been in Investment long enough to have seen this cycle twice already.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "yoga",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-161",
+    "name": "Franz Zielinski",
+    "firstName": "Franz",
+    "lastName": "Zielinski",
+    "company": "Cindersoft",
+    "role": "Principal Engineer",
+    "location": "Barcelona",
+    "industry": "Media",
+    "headline": "Joined from a larger competitor",
+    "about": "Moved to Cindersoft last year and is still finding the shape of the role.",
+    "tags": [
+      "media"
+    ],
+    "interests": [
+      "pottery",
+      "darts"
+    ]
+  },
+  {
+    "key": "noise-162",
+    "name": "Bruno Martins",
+    "firstName": "Bruno",
+    "lastName": "Martins",
+    "company": "Pellworm Energy",
+    "role": "Security Engineer",
+    "location": "Berlin",
+    "industry": "Software",
+    "headline": "Covers the Berlin region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "violin",
+      "calligraphy"
+    ]
+  },
+  {
+    "key": "noise-163",
+    "name": "Malik Pereira",
+    "firstName": "Malik",
+    "lastName": "Pereira",
+    "company": "Ironbark Supply",
+    "role": "Studio Director",
+    "location": "Leeds",
+    "industry": "Legal",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "legal"
+    ],
+    "interests": [
+      "painting",
+      "gardening"
+    ]
+  },
+  {
+    "key": "noise-164",
+    "name": "Malik Tamm",
+    "firstName": "Malik",
+    "lastName": "Tamm",
+    "company": "Redcastle Optics",
+    "role": "Operations Director",
+    "location": "Zagreb",
+    "industry": "Healthcare",
+    "headline": "Second career, first love",
+    "about": "Moved to Redcastle Optics last year and is still finding the shape of the role.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "birdwatching",
+      "hiking"
+    ]
+  },
+  {
+    "key": "noise-165",
+    "name": "Carlos Vargas",
+    "firstName": "Carlos",
+    "lastName": "Vargas",
+    "company": "Quarryfield Build",
+    "role": "Sales Director",
+    "location": "Munich",
+    "industry": "Infrastructure",
+    "headline": "Joined from a larger competitor",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "baking",
+      "bridge"
+    ]
+  },
+  {
+    "key": "noise-166",
+    "name": "Viktor Hansen",
+    "firstName": "Viktor",
+    "lastName": "Hansen",
+    "company": "Redcastle Optics",
+    "role": "Customer Success Lead",
+    "location": "Genoa",
+    "industry": "Manufacturing",
+    "headline": "Joined from a larger competitor",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "fishing",
+      "gardening"
+    ]
+  },
+  {
+    "key": "noise-167",
+    "name": "Omar Jansen",
+    "firstName": "Omar",
+    "lastName": "Jansen",
+    "company": "Lanterna Studios",
+    "role": "Finance Director",
+    "location": "Malmo",
+    "industry": "Investment",
+    "headline": "Finance Director with a long run at one company",
+    "about": "Keen on yoga and will find a way to mention it.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "yoga",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-168",
+    "name": "Adam Eriksson",
+    "firstName": "Adam",
+    "lastName": "Eriksson",
+    "company": "Westport Cold Store",
+    "role": "Business Analyst",
+    "location": "Zurich",
+    "industry": "Consulting",
+    "headline": "Second career, first love",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "consulting"
+    ],
+    "interests": [
+      "pottery",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "noise-169",
+    "name": "Magnus Andersen",
+    "firstName": "Magnus",
+    "lastName": "Andersen",
+    "company": "Delphi Freight",
+    "role": "Business Analyst",
+    "location": "Bristol",
+    "industry": "Investment",
+    "headline": "Covers the Bristol region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "investment"
+    ],
+    "interests": [
+      "fishing",
+      "orienteering"
+    ]
+  },
+  {
+    "key": "noise-170",
+    "name": "Karin Martins",
+    "firstName": "Karin",
+    "lastName": "Martins",
+    "company": "Cindersoft",
+    "role": "Operations Director",
+    "location": "Nairobi",
+    "industry": "Publishing",
+    "headline": "Second career, first love",
+    "about": "Moved to Cindersoft last year and is still finding the shape of the role.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "birdwatching",
+      "cookery"
+    ]
+  },
+  {
+    "key": "noise-171",
+    "name": "Julia Lehmann",
+    "firstName": "Julia",
+    "lastName": "Lehmann",
+    "company": "Nightingale Care",
+    "role": "Chief Executive",
+    "location": "Vienna",
+    "industry": "Analytics",
+    "headline": "Chief Executive with a long run at one company",
+    "about": "Has been in Analytics long enough to have seen this cycle twice already.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "bouldering",
+      "crochet"
+    ]
+  },
+  {
+    "key": "noise-172",
+    "name": "Kamil Marino",
+    "firstName": "Kamil",
+    "lastName": "Marino",
+    "company": "Fairhaven Trust",
+    "role": "Data Scientist",
+    "location": "Tallinn",
+    "industry": "Architecture",
+    "headline": "Works across Architecture",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "architecture"
+    ],
+    "interests": [
+      "surfing",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-173",
+    "name": "Zoltan Lopes",
+    "firstName": "Zoltan",
+    "lastName": "Lopes",
+    "company": "Yardley Payments",
+    "role": "Research Lead",
+    "location": "Krakow",
+    "industry": "Environment",
+    "headline": "Second career, first love",
+    "about": "Keen on woodworking and will find a way to mention it.",
+    "tags": [
+      "environment"
+    ],
+    "interests": [
+      "woodworking",
+      "bridge"
+    ]
+  },
+  {
+    "key": "noise-174",
+    "name": "Astrid Fabbri",
+    "firstName": "Astrid",
+    "lastName": "Fabbri",
+    "company": "Silverbeck Legal",
+    "role": "Product Manager",
+    "location": "Vienna",
+    "industry": "Wine",
+    "headline": "Covers the Vienna region",
+    "about": "Keen on yoga and will find a way to mention it.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "yoga",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-175",
+    "name": "Simone Schmidt",
+    "firstName": "Simone",
+    "lastName": "Schmidt",
+    "company": "Thornbury Wines",
+    "role": "Technical Writer",
+    "location": "Porto",
+    "industry": "Rail",
+    "headline": "Covers the Porto region",
+    "about": "Talks fast and answers email slowly. Best reached by phone.",
+    "tags": [
+      "rail"
+    ],
+    "interests": [
+      "ice hockey",
+      "gardening"
+    ]
+  },
+  {
+    "key": "noise-176",
+    "name": "Stefan Nielsen",
+    "firstName": "Stefan",
+    "lastName": "Nielsen",
+    "company": "Quarryfield Build",
+    "role": "Data Analyst",
+    "location": "Milan",
+    "industry": "Publishing",
+    "headline": "Second career, first love",
+    "about": "Keen on ice hockey and will find a way to mention it.",
+    "tags": [
+      "publishing"
+    ],
+    "interests": [
+      "ice hockey",
+      "surfing"
+    ]
+  },
+  {
+    "key": "noise-177",
+    "name": "Kemal Kaminski",
+    "firstName": "Kemal",
+    "lastName": "Kaminski",
+    "company": "Fairhaven Trust",
+    "role": "Business Analyst",
+    "location": "Prague",
+    "industry": "Telecom",
+    "headline": "Covers the Prague region",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "telecom"
+    ],
+    "interests": [
+      "knitting",
+      "bouldering"
+    ]
+  },
+  {
+    "key": "noise-178",
+    "name": "Esther Jensen",
+    "firstName": "Esther",
+    "lastName": "Jensen",
+    "company": "Kirkwall Marine",
+    "role": "Staff Engineer",
+    "location": "Barcelona",
+    "industry": "Manufacturing",
+    "headline": "Staff Engineer with a long run at one company",
+    "about": "Introduced at the Manufacturing event in Barcelona. Worth a follow up next quarter.",
+    "tags": [
+      "manufacturing"
+    ],
+    "interests": [
+      "cycling",
+      "birdwatching"
+    ]
+  },
+  {
+    "key": "noise-179",
+    "name": "Igor Fischer",
+    "firstName": "Igor",
+    "lastName": "Fischer",
+    "company": "Pellworm Energy",
+    "role": "Research Lead",
+    "location": "Basel",
+    "industry": "Healthcare",
+    "headline": "Second career, first love",
+    "about": "Keen on bridge and will find a way to mention it.",
+    "tags": [
+      "healthcare"
+    ],
+    "interests": [
+      "bridge",
+      "sailing"
+    ]
+  },
+  {
+    "key": "noise-180",
+    "name": "Cecilia Bauer",
+    "firstName": "Cecilia",
+    "lastName": "Bauer",
+    "company": "Brightpath Consulting",
+    "role": "Partnerships Lead",
+    "location": "Sheffield",
+    "industry": "Games",
+    "headline": "Joined from a larger competitor",
+    "about": "Keen on bridge and will find a way to mention it.",
+    "tags": [
+      "games"
+    ],
+    "interests": [
+      "bridge",
+      "photography"
+    ]
+  },
+  {
+    "key": "noise-181",
+    "name": "Arjun Silva",
+    "firstName": "Arjun",
+    "lastName": "Silva",
+    "company": "Umberslade Farms",
+    "role": "Field Engineer",
+    "location": "Vienna",
+    "industry": "Software",
+    "headline": "Works across Software",
+    "about": "Has been in Software long enough to have seen this cycle twice already.",
+    "tags": [
+      "software"
+    ],
+    "interests": [
+      "tennis",
+      "botany"
+    ]
+  },
+  {
+    "key": "noise-182",
+    "name": "Rosa Laine",
+    "firstName": "Rosa",
+    "lastName": "Laine",
+    "company": "Westport Cold Store",
+    "role": "Chief Executive",
+    "location": "Bratislava",
+    "industry": "Robotics",
+    "headline": "Second career, first love",
+    "about": "Moved to Westport Cold Store last year and is still finding the shape of the role.",
+    "tags": [
+      "robotics"
+    ],
+    "interests": [
+      "kayaking",
+      "woodworking"
+    ]
+  },
+  {
+    "key": "noise-183",
+    "name": "Erik Bianchi",
+    "firstName": "Erik",
+    "lastName": "Bianchi",
+    "company": "Silverbeck Legal",
+    "role": "Head of People",
+    "location": "Warsaw",
+    "industry": "Design",
+    "headline": "Works across Design",
+    "about": "Introduced at the Design event in Warsaw. Worth a follow up next quarter.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "squash",
+      "running"
+    ]
+  },
+  {
+    "key": "noise-184",
+    "name": "Anders Bianchi",
+    "firstName": "Anders",
+    "lastName": "Bianchi",
+    "company": "Nightingale Care",
+    "role": "Business Analyst",
+    "location": "Helsinki",
+    "industry": "Wine",
+    "headline": "Covers the Helsinki region",
+    "about": "Moved to Nightingale Care last year and is still finding the shape of the role.",
+    "tags": [
+      "wine"
+    ],
+    "interests": [
+      "bridge",
+      "piano"
+    ]
+  },
+  {
+    "key": "noise-185",
+    "name": "Marta Vargas",
+    "firstName": "Marta",
+    "lastName": "Vargas",
+    "company": "Yardley Payments",
+    "role": "Security Engineer",
+    "location": "Leeds",
+    "industry": "Design",
+    "headline": "Joined from a larger competitor",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "design"
+    ],
+    "interests": [
+      "badminton",
+      "golf"
+    ]
+  },
+  {
+    "key": "noise-186",
+    "name": "Linnea Weber",
+    "firstName": "Linnea",
+    "lastName": "Weber",
+    "company": "Everstone Partners",
+    "role": "Design Lead",
+    "location": "Belfast",
+    "industry": "Analytics",
+    "headline": "Design Lead with a long run at one company",
+    "about": "Came recommended by a mutual contact. Straightforward to deal with.",
+    "tags": [
+      "analytics"
+    ],
+    "interests": [
+      "yoga",
+      "botany"
+    ]
+  },
+  {
+    "key": "noise-187",
+    "name": "Dorota Petit",
+    "firstName": "Dorota",
+    "lastName": "Petit",
+    "company": "Brightpath Consulting",
+    "role": "Technical Writer",
+    "location": "Manchester",
+    "industry": "Instrumentation",
+    "headline": "Technical Writer with a long run at one company",
+    "about": "Keen on model railways and will find a way to mention it.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "model railways",
+      "ice hockey"
+    ]
+  },
+  {
+    "key": "noise-188",
+    "name": "Hana Moreau",
+    "firstName": "Hana",
+    "lastName": "Moreau",
+    "company": "Fairhaven Trust",
+    "role": "Engineering Manager",
+    "location": "Cardiff",
+    "industry": "Infrastructure",
+    "headline": "Works across Infrastructure",
+    "about": "Has been in Infrastructure long enough to have seen this cycle twice already.",
+    "tags": [
+      "infrastructure"
+    ],
+    "interests": [
+      "woodworking",
+      "painting"
+    ]
+  },
+  {
+    "key": "noise-189",
+    "name": "Joao Petit",
+    "firstName": "Joao",
+    "lastName": "Petit",
+    "company": "Thornbury Wines",
+    "role": "Supply Chain Director",
+    "location": "London",
+    "industry": "Instrumentation",
+    "headline": "Covers the London region",
+    "about": "Introduced at the Instrumentation event in London. Worth a follow up next quarter.",
+    "tags": [
+      "instrumentation"
+    ],
+    "interests": [
+      "fishing",
+      "birdwatching"
+    ]
+  }
+]

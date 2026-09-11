@@ -41,13 +41,15 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seedMock.ts",
-    "test": "vitest run --project unit --project integration",
-    "test:watch": "vitest --project unit --project integration",
-    "test:coverage": "vitest run --project unit --project integration --coverage",
+    "test": "vitest run --project unit --project integration --project eval",
+    "test:watch": "vitest --project unit --project integration --project eval",
+    "test:coverage": "vitest run --project unit --project integration --project eval --coverage",
     "prepare": "husky",
     "test:contract": "vitest run --project contract",
     "audit:contrast": "node scripts/contrast-audit.mjs",
-    "tenancy:verify": "tsx scripts/tenancy-verify.ts"
+    "tenancy:verify": "tsx scripts/tenancy-verify.ts",
+    "eval:record": "tsx scripts/record-search-eval.ts",
+    "test:eval": "vitest run --project eval"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

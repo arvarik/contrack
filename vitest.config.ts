@@ -19,6 +19,22 @@ export default defineConfig({
         },
       },
       {
+        // The search quality gate. Same real database as the integration
+        // project, and the same setup file builds it, but the eval is its own
+        // project because it answers a different question: integration asks
+        // whether a route behaves, and this asks whether ranking still ranks
+        // the same way. A failure here is a number to look at, not a bug.
+        test: {
+          name: "eval",
+          environment: "node",
+          globals: true,
+          include: ["tests/eval/**/*.eval.test.ts"],
+          setupFiles: ["./tests/integration-setup.ts"],
+          testTimeout: 120_000,
+          pool: "forks",
+        },
+      },
+      {
         // Contract tests call REAL provider APIs and are deliberately NOT in
         // the default run: cloning the repo and running `npm test` must work
         // with no credentials at all. Each provider block skips itself when its
