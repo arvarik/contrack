@@ -17,6 +17,23 @@
 // accident. Importing anything that reaches `server/db.ts` would open the
 // database a second time and re-run every migration on this thread. The
 // imports below are the protocol and the model, and nothing else.
+//
+// ONE LOAD PER PROCESS. onnxruntime-node's native addon registers itself with
+// the Node environment that loads it first, and every later load anywhere in
+// the same process fails with "Module did not self-register" — including in
+// the main thread, and including after the thread that loaded it has been
+// terminated. Measured on linux/x64, which is what the image runs:
+//
+//   worker #1, first load in the process   ok
+//   worker #2, after #1 was terminated     Module did not self-register
+//   main thread, after #1 was terminated   Module did not self-register
+//   a worker that never imports it         ok, as many times as you like
+//
+// Two rules come out of that, and both are in `cpuHost.ts`: this worker is
+// never replaced once it has been spawned, and the in-process fallback is
+// only reachable when the worker never started at all. The third is here: a
+// job with nothing to embed must not touch the model, or every empty job
+// spends the process's one load.
 // =============================================================================
 
 import { parentPort } from "worker_threads";
@@ -85,9 +102,28 @@ async function ensureModel(): Promise<FeatureExtractionPipeline> {
  * report and every vector alive at once.
  */
 async function runEmbed(id: number, job: EmbedJob): Promise<void> {
-  const model = await ensureModel();
   const { texts, batchSize } = job;
 
+  // Nothing to embed, so nothing to load. Not an optimization: loading the
+  // model is the one irreversible thing this process can do, and spending it
+  // on a job with no texts would leave a worker that can never be replaced in
+  // exchange for no vectors at all.
+  if (texts.length === 0) {
+    send({
+      type: "result",
+      id,
+      payload: {
+        kind: "embed",
+        flat: new Float32Array(0),
+        count: 0,
+        dimension: 0,
+        modelLoaded: false,
+      },
+    });
+    return;
+  }
+
+  const model = await ensureModel();
   let dimension = 0;
   const rows: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
@@ -106,7 +142,13 @@ async function runEmbed(id: number, job: EmbedJob): Promise<void> {
     {
       type: "result",
       id,
-      payload: { kind: "embed", flat, count: rows.length, dimension },
+      payload: {
+        kind: "embed",
+        flat,
+        count: rows.length,
+        dimension,
+        modelLoaded: true,
+      },
     },
     // Transferred, not copied. The worker gives up the buffer, which is
     // correct: it has no use for it once it is sent.

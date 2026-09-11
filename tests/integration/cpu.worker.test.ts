@@ -28,6 +28,8 @@ const {
   __maxInFlight,
   __resetCpuWorker,
   cancelJob,
+  hasSpawnedWorker,
+  isModelSpent,
   isWorkerActive,
   runOnWorker,
   startJob,
@@ -85,11 +87,27 @@ describe("the worker thread", () => {
 
     const payload = await result;
 
-    // An empty job is still a job: the worker starts, resolves its imports,
-    // and answers. It never reaches the model, which is what keeps this test
-    // free of a download.
     expect(payload.kind).toBe("embed");
     expect(payload.count).toBe(0);
+    expect(hasSpawnedWorker()).toBe(true);
+  });
+
+  it("does not load the model for a job with nothing to embed", async () => {
+    const payload = await startJob({
+      kind: "embed",
+      texts: [],
+      batchSize: 8,
+    }).result;
+
+    // This is a correctness rule, not an optimization, and CI is where it was
+    // learned. onnxruntime-node registers itself with the first Node
+    // environment that loads it and refuses every later load anywhere in the
+    // process — another worker, the main thread, even after the first thread
+    // has gone. A job with no texts that loaded the model would spend that one
+    // load and leave a worker that can never be replaced, in exchange for no
+    // vectors at all.
+    expect(payload.kind === "embed" && payload.modelLoaded).toBe(false);
+    expect(isModelSpent()).toBe(false);
   });
 
   it("keeps the main thread free while it works", async () => {
@@ -261,7 +279,13 @@ describe("the result", () => {
   it("splits a flat buffer back into one vector per row", () => {
     const flat = new Float32Array([1, 2, 3, 4, 5, 6]);
 
-    const rows = unflatten({ kind: "embed", flat, count: 3, dimension: 2 });
+    const rows = unflatten({
+      kind: "embed",
+      flat,
+      count: 3,
+      dimension: 2,
+      modelLoaded: true,
+    });
 
     // The worker sends one buffer and transfers it, rather than an array of
     // arrays it would have to copy. Two thousand 384-wide vectors is three
@@ -277,6 +301,7 @@ describe("the result", () => {
       flat: new Float32Array(0),
       count: 0,
       dimension: 384,
+      modelLoaded: false,
     });
 
     expect(rows).toEqual([]);

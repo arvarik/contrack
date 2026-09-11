@@ -157,6 +157,25 @@ The indexes are fixed-width, so switching models rebuilds them and re-embeds
 every contact in the background. Search falls back to keyword (FTS5) matching
 while that runs. The built-in local model needs no key and works offline.
 
+### Where the built-in model runs
+
+On a `worker_threads` thread, not the request thread. Building an index for
+one account used to stall every other account's requests for as long as it
+took: a 2,000-contact backfill blocked the event loop for 2.19 seconds of the
+2.4 it ran for. The same backfill now blocks it for 0.03 seconds.
+
+`DISABLE_CPU_WORKER=true` moves it back onto the request thread. It is there
+for a Node build or a sandbox that cannot spawn threads, and the server falls
+back to it by itself if the worker will not start, with one warning in the
+log.
+
+**The model loads exactly once per process.** Its native runtime registers
+itself with whichever thread loads it first and refuses every later load
+anywhere in that process, including in the main thread and including after
+the first thread has gone. So the worker is started once and never replaced:
+if it dies, the server logs that embeddings are unavailable and keeps serving
+keyword search until it is restarted. Everything else carries on.
+
 ---
 
 ## AI Tier Configuration

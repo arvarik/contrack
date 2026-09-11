@@ -77,6 +77,14 @@ export interface EmbedResult {
   flat: Float32Array;
   count: number;
   dimension: number;
+  /**
+   * Whether this job needed the model.
+   *
+   * Reported because loading it is a one-way door for the whole process, so
+   * "did that job load it" is the difference between a worker that can be
+   * replaced and one that cannot. See the note in `cpuWorker.ts`.
+   */
+  modelLoaded: boolean;
 }
 
 /** Split a flat result back into one vector per row. */

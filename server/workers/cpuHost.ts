@@ -6,11 +6,23 @@
 // two accounts asking for an embedding backfill at once take turns on one
 // thread rather than fighting for the event loop on the main one.
 //
-// Everything has a fallback. A worker that will not spawn — an unusual Node
-// build, a sandbox with no thread support, a packaging mistake — must not
-// stop the product embedding anything, so every entry point below takes an
-// in-process function to run instead, and uses it on the first failure and
-// on every call after that. The failure is logged once, not per call.
+// ONE WORKER PER PROCESS, AND IT IS NEVER REPLACED. onnxruntime-node's native
+// addon registers itself with whichever Node environment loads it first, and
+// every later load anywhere in the process fails with "Module did not
+// self-register" — in another worker, in the main thread, and after the
+// original thread has been terminated. Measured on linux/x64; `cpuWorker.ts`
+// has the table.
+//
+// So a worker that dies cannot be replaced by one that works, and the
+// in-process fallback cannot work either once the worker has loaded the
+// model. The host does not pretend otherwise: it falls back only when the
+// worker never started, and says plainly when embeddings have been lost for
+// the life of the process rather than retrying into a second failure.
+//
+// A worker that will not spawn at all — an unusual Node build, a sandbox with
+// no thread support, a packaging mistake — is the case the fallback is for.
+// There the model was never loaded, so the main thread can still load it.
+// The failure is logged once, not per call.
 // =============================================================================
 
 import { Worker } from "worker_threads";
@@ -55,6 +67,18 @@ const pending = new Map<number, Pending>();
  */
 let disabled = false;
 
+/**
+ * True once a worker has reported a job that loaded the model.
+ *
+ * After that the process has spent its single onnxruntime load, so neither a
+ * replacement worker nor the main thread can embed anything. Falling back
+ * would fail a second time and report the wrong reason.
+ */
+let modelSpent = false;
+
+/** True once a worker has been spawned, whether or not it is still running. */
+let everSpawned = false;
+
 /** Set by tests to force the fallback path. */
 let forceFallback = process.env.DISABLE_CPU_WORKER === "true";
 
@@ -89,6 +113,16 @@ function workerUrl(): URL {
 /** Spawn the worker, or return the one already running. */
 function ensureWorker(): Promise<Worker> {
   if (ready) return ready;
+  if (modelSpent) {
+    return Promise.reject(
+      new Error(
+        "The CPU worker stopped after loading the embedding model. " +
+          "onnxruntime-node can only be loaded once per process, so no " +
+          "replacement worker can embed anything. Restart the server.",
+      ),
+    );
+  }
+  everSpawned = true;
 
   ready = new Promise<Worker>((resolve, reject) => {
     let settled = false;
@@ -165,8 +199,14 @@ function handle(message: WorkerMessage): void {
     return;
   }
   pending.delete(message.id);
-  if (message.type === "result") entry.resolve(message.payload);
-  else entry.reject(new Error(message.message));
+  if (message.type === "result") {
+    if (message.payload.kind === "embed" && message.payload.modelLoaded) {
+      modelSpent = true;
+    }
+    entry.resolve(message.payload);
+  } else {
+    entry.reject(new Error(message.message));
+  }
   refIfBusy();
 }
 
@@ -258,6 +298,19 @@ export async function runOnWorker<T>(
     return translate(await result);
   } catch (err: unknown) {
     if (getErrorMessage(err) === CANCELLED) throw err;
+
+    // The model is already loaded somewhere in this process, so running in
+    // process would fail too, with an error naming the wrong problem.
+    if (modelSpent) {
+      log.error(
+        "CpuWorker",
+        `The CPU worker failed after loading the embedding model, and the ` +
+          `model cannot be loaded again in this process. Embeddings are ` +
+          `unavailable until the server restarts: ${getErrorMessage(err)}`,
+      );
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+
     disabled = true;
     log.warn(
       "CpuWorker",
@@ -291,6 +344,21 @@ export function isWorkerActive(): boolean {
   return !disabled && !forceFallback;
 }
 
+/**
+ * True once this process has spent its single onnxruntime load.
+ *
+ * Exported for the health panel and for tests. There is no way back from it
+ * short of restarting.
+ */
+export function isModelSpent(): boolean {
+  return modelSpent;
+}
+
+/** True once a worker has been spawned, whether or not it is still running. */
+export function hasSpawnedWorker(): boolean {
+  return everSpawned;
+}
+
 /** Stop the worker. Called when the server shuts down, and by tests. */
 export async function stopCpuWorker(): Promise<void> {
   const running = worker;
@@ -313,6 +381,13 @@ export async function __resetCpuWorker(
   await stopCpuWorker();
   cancelledJobs.clear();
   maxInFlight = 0;
+  // Tests only, and the reason this is not something production does: a
+  // process that has loaded the model cannot start over, and pretending it
+  // can is how a test passes on a machine where the model was never loaded
+  // and fails on the one where it was. Every test that resets uses jobs with
+  // no texts, which never reach the model.
+  modelSpent = false;
+  everSpawned = false;
   disabled = false;
   forceFallback =
     options.fallbackOnly ?? process.env.DISABLE_CPU_WORKER === "true";
