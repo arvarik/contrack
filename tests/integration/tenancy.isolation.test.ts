@@ -2345,9 +2345,15 @@ describe("dedupe scans and merges stop at the account that asked", () => {
 
   it("clears one account's dedupe vectors and leaves the other account's", async () => {
     const vector = Buffer.from(new Float32Array(768).buffer);
+    // Owner and status come out of the contact row, the way every production
+    // write into a vec0 table does. Binding them by hand is what the product
+    // deliberately made impossible: sqlite-vec refuses a NULL status column,
+    // so a hand-written row either matches its contact or does not exist.
     const insert = sqlite.prepare(
-      `INSERT INTO contact_embeddings (contactId, ownerId, embedding)
-       VALUES (?, ?, ?)`,
+      `INSERT INTO contact_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
+       SELECT c.id, c.ownerId, c.isGhost, COALESCE(c.isArchived, 0),
+              (c.deletedAt IS NULL AND c.canonicalId IS NULL), ?
+         FROM contacts c WHERE c.id = ?`,
     );
     const count = (owner: string) =>
       (
@@ -2358,9 +2364,9 @@ describe("dedupe scans and merges stop at the account that asked", () => {
           .get(owner) as { n: number }
       ).n;
 
-    insert.run(janeA[0], A.user.id, vector);
-    insert.run(janeB[0], B.user.id, vector);
-    insert.run(janeB[1], B.user.id, vector);
+    insert.run(vector, janeA[0]);
+    insert.run(vector, janeB[0]);
+    insert.run(vector, janeB[1]);
     expect(count(A.user.id)).toBe(1);
     expect(count(B.user.id)).toBe(2);
 

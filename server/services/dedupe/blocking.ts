@@ -173,6 +173,13 @@ export function addEmbeddingCandidates(
   // only that owner's chunks and a neighbour from another account cannot be
   // produced at all. Reading it from the anchor makes "a neighbour shares the
   // anchor's owner" true by construction, with no caller left to get it wrong.
+  //
+  // The three status predicates are metadata columns, applied while the k
+  // nearest are being chosen. Before them the KNN could hand back an archived
+  // or trashed contact, which the scorer then dropped because the corpus has
+  // no normalized record for it — so the neighbour slot was spent on a
+  // candidate that could never become a pair. `.agent/STATUS.md` carried the
+  // archived half of that as a known issue.
   const knnStmt = sqlite.prepare(`
     SELECT ce.contactId, distance
     FROM contact_embeddings ce
@@ -180,6 +187,7 @@ export function addEmbeddingCandidates(
       SELECT embedding FROM contact_embeddings WHERE contactId = ?
     )
       AND ce.ownerId = (SELECT ownerId FROM contacts WHERE id = ?)
+      AND ce.isGhost = 0 AND ce.isArchived = 0 AND ce.active = 1
       AND k = ?
     ORDER BY distance
   `);

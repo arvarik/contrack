@@ -182,6 +182,28 @@ export function installSearchIndex(sqlite: Database.Database): void {
   }
 }
 
+/**
+ * The columns that make a stored search vector wrong.
+ *
+ * A shorter list than `SEARCH_COLUMNS`, and the difference is the point. The
+ * FTS row mirrors a contact's status as well as its text, so every column
+ * above re-indexes it. A vector encodes the TEXT — `contactToSearchText` reads
+ * name, company, role, location, industry, headline, about, preferences, tags
+ * and the expansion, and none of the four status columns — so archiving a
+ * contact does not make its vector wrong.
+ *
+ * Until the vec0 status columns landed, the two lists were the same one, and
+ * archiving a contact deleted its embedding and made the next backfill compute
+ * it again from text that had not changed. Now the status lives in the index
+ * and a trigger keeps it there, so a status change updates three integers
+ * instead of discarding a vector.
+ *
+ * `ownerId` stays, because a reassigned contact's vector sits in the wrong
+ * vec0 partition and a partition key is not something to update in place.
+ */
+export const SEARCH_VECTOR_COLUMNS =
+  "name, company, role, headline, location, about, industry, preferences, searchExpansion, ownerId";
+
 /** Remove outdated vectors in the same transaction as the contact change. */
 export function installSearchVectorTriggers(sqlite: Database.Database): void {
   // Both bodies delete the vector of the one contact row the trigger fired
@@ -189,7 +211,7 @@ export function installSearchVectorTriggers(sqlite: Database.Database): void {
   // tenant-lint: allow derived table
   sqlite.exec(`
     DROP TRIGGER IF EXISTS search_vector_update;
-    CREATE TRIGGER search_vector_update AFTER UPDATE OF ${SEARCH_COLUMNS} ON contacts BEGIN
+    CREATE TRIGGER search_vector_update AFTER UPDATE OF ${SEARCH_VECTOR_COLUMNS} ON contacts BEGIN
       DELETE FROM search_embeddings WHERE contactId = old.id;
     END;
     DROP TRIGGER IF EXISTS search_vector_delete;

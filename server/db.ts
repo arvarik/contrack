@@ -1493,23 +1493,17 @@ log.info(
 );
 
 // 9f. Contact embedding vector storage (requires sqlite-vec loaded above)
-sqlite.exec(`
-  CREATE VIRTUAL TABLE IF NOT EXISTS contact_embeddings USING vec0(
-    contactId TEXT PRIMARY KEY,
-    ownerId TEXT PARTITION KEY,
-    embedding FLOAT[768]
-  );
-`);
-
 // 9f-b. Search embedding vector storage (local model, 384-dim)
-// Separate from dedupe embeddings — optimized for search with local model
-sqlite.exec(`
-  CREATE VIRTUAL TABLE IF NOT EXISTS search_embeddings USING vec0(
-    contactId TEXT PRIMARY KEY,
-    ownerId TEXT PARTITION KEY,
-    embedding FLOAT[384]
-  );
-`);
+//
+// Separate tables: the dedupe index and the search index hold different
+// vectors of different widths from different models. Both are created from
+// `vecTableDdl` below, so the shape is written once.
+if (!tableExists("contact_embeddings")) {
+  sqlite.exec(vecTableDdl("contact_embeddings", 768));
+}
+if (!tableExists("search_embeddings")) {
+  sqlite.exec(vecTableDdl("search_embeddings", 384));
+}
 
 /**
  * The width a vec0 table actually has, read back from its DDL.
@@ -1553,13 +1547,100 @@ log.info(
 // API call happens.
 // =============================================================================
 
+/**
+ * The three status columns every vec0 table carries beside its vector.
+ *
+ * They are sqlite-vec METADATA columns, which means a predicate on one is
+ * evaluated inside the K-nearest-neighbour scan rather than after it. That is
+ * the difference between "the ten nearest rows, of which some are archived"
+ * and "the ten nearest rows that are not archived".
+ *
+ * The alternative, and what this replaced, was
+ * `contactId IN (SELECT c.id FROM contacts c WHERE ...)`. It gives the same
+ * answers — sqlite-vec pushes that constraint into the scan too — but SQLite
+ * has to materialize the subquery first, which is a full scan of `contacts`
+ * on every search. `EXPLAIN QUERY PLAN` shows it as `LIST SUBQUERY / SCAN c`.
+ *
+ * Measured through `findSearchNeighbors` itself, three accounts, k = 50, the
+ * same table and the same vectors both ways:
+ *
+ *     1,000 contacts     0.83 ms  ->  0.10 ms
+ *    10,000 contacts     8.16 ms  ->  0.36 ms
+ *    50,000 contacts    43.68 ms  ->  1.48 ms
+ *
+ * Same fifty contacts in the same order both ways. The cost is proportional
+ * to the account's contact count and independent of k, because the work is
+ * building the id list rather than searching the vectors.
+ *
+ * `active` is one column rather than two because a vec0 metadata predicate is
+ * a simple comparison: there is no `IS NULL` to push down, so the two null
+ * checks are folded into a boolean when the row is written.
+ */
+export const VEC_METADATA_COLUMNS = [
+  "isGhost",
+  "isArchived",
+  "active",
+] as const;
+
+/**
+ * The metadata values for a contact, as a SQL expression list.
+ *
+ * Every insert into a vec0 table reads these from `contacts` in the same
+ * statement, the way it already reads `ownerId`. sqlite-vec refuses a NULL
+ * metadata value and refuses an INSERT that omits one, so there is no way to
+ * write a row with the wrong status short of writing the wrong contact id.
+ *
+ * `c` is the alias the caller must give the contacts row.
+ */
+export const VEC_METADATA_SQL =
+  "c.isGhost, COALESCE(c.isArchived, 0), (c.deletedAt IS NULL AND c.canonicalId IS NULL)";
+
+/**
+ * The predicate that keeps a KNN to contacts somebody can actually see.
+ *
+ * Bare column names, not `c.`-qualified: these are the vec0 table's own
+ * columns, and the whole point is that there is no join to qualify them
+ * against. It is the metadata-column form of `ACTIVE_CONTACT_SQL`.
+ */
+export const VEC_ACTIVE_MATCH = "isGhost = 0 AND isArchived = 0 AND active = 1";
+
 /** vec0 tables and the DDL they must have. Pinned equal by a unit test. */
 export function vecTableDdl(table: string, dimension: number): string {
   return `CREATE VIRTUAL TABLE ${table} USING vec0(
     contactId TEXT PRIMARY KEY,
     ownerId TEXT PARTITION KEY,
+    isGhost INTEGER,
+    isArchived INTEGER,
+    active INTEGER,
     embedding FLOAT[${dimension}]
   )`;
+}
+
+/** True when the named table is already in this database. */
+function tableExists(name: string): boolean {
+  return (
+    sqlite
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table') AND name = ?",
+      )
+      .get(name) !== undefined
+  );
+}
+
+/**
+ * Whether a vec0 table has to be read out, dropped and rebuilt.
+ *
+ * Two reasons, both of which sqlite-vec cannot fix with ALTER TABLE: a table
+ * created before 2.0 has no partition key, and one created before the
+ * metadata columns has no status to filter on. ALTER TABLE on a vec0 table
+ * returns OK, leaves the shadow tables under the old name, and the next read
+ * fails with "no such table".
+ */
+function vecTableNeedsRebuild(ddl: string): boolean {
+  if (!/PARTITION KEY/i.test(ddl)) return true;
+  return VEC_METADATA_COLUMNS.some(
+    (column) => !new RegExp(`\\b${column}\\s+INTEGER`, "i").test(ddl),
+  );
 }
 
 /**
@@ -1587,13 +1668,28 @@ export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
   }
 }
 
-for (const table of ["search_embeddings", "contact_embeddings"]) {
+/**
+ * Read a vec0 table out, drop it, recreate it in the current shape and put the
+ * rows back. Returns what moved, or null when the table was already current.
+ *
+ * Exported so the upgrade path can be tested against a table built in an old
+ * shape, rather than only through a whole-database fixture. Callers at boot
+ * pass the two real tables.
+ *
+ * No embedding is recomputed. The stored `ai.embeddingsState` signature and
+ * dimension are untouched, so ensureEmbeddingStore and
+ * ensureDedupeEmbeddingStore see no change on the next boot and no provider
+ * API call happens.
+ */
+export function rebuildVecTable(
+  table: string,
+): { copied: number; dropped: number; dimension: number } | null {
   const ddl = (
     sqlite
       .prepare(`SELECT sql FROM sqlite_master WHERE name = ?`)
       .get(table) as { sql?: string } | undefined
   )?.sql;
-  if (!ddl || /PARTITION KEY/i.test(ddl)) continue;
+  if (!ddl || !vecTableNeedsRebuild(ddl)) return null;
 
   const width = vecTableWidth(table);
   const dimension = Number.parseInt(width, 10);
@@ -1603,7 +1699,6 @@ for (const table of ["search_embeddings", "contact_embeddings"]) {
     );
   }
 
-  const started = performance.now();
   let copied = 0;
   let dropped = 0;
   sqlite.transaction(() => {
@@ -1613,10 +1708,20 @@ for (const table of ["search_embeddings", "contact_embeddings"]) {
     const rows = sqlite
       .prepare(
         // tenant-lint: allow boot migration
-        `SELECT e.contactId AS contactId, c.ownerId AS ownerId, e.embedding AS embedding
+        `SELECT e.contactId AS contactId, c.ownerId AS ownerId, e.embedding AS embedding,
+                c.isGhost AS isGhost,
+                COALESCE(c.isArchived, 0) AS isArchived,
+                (c.deletedAt IS NULL AND c.canonicalId IS NULL) AS active
            FROM ${table} e JOIN contacts c ON c.id = e.contactId`,
       )
-      .all() as { contactId: string; ownerId: string; embedding: Buffer }[];
+      .all() as {
+      contactId: string;
+      ownerId: string;
+      embedding: Buffer;
+      isGhost: number;
+      isArchived: number;
+      active: number;
+    }[];
     const total = (
       sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
         n: number;
@@ -1627,21 +1732,93 @@ for (const table of ["search_embeddings", "contact_embeddings"]) {
     sqlite.exec(`DROP TABLE ${table}`);
     sqlite.exec(vecTableDdl(table, dimension));
 
+    // The three status values are bound as BigInt. better-sqlite3 binds every
+    // JavaScript number as REAL, and sqlite-vec answers a REAL for an INTEGER
+    // metadata column with "Expected integer ... received FLOAT". Every other
+    // write path reads them straight out of `contacts` in an INSERT..SELECT,
+    // where SQLite keeps the column type; this one cannot, because the rows
+    // were read before the table was dropped.
     const insert = sqlite.prepare(
-      `INSERT INTO ${table} (contactId, ownerId, embedding) VALUES (?, ?, ?)`,
+      `INSERT INTO ${table} (contactId, ownerId, isGhost, isArchived, active, embedding)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     for (const row of rows) {
-      insert.run(row.contactId, row.ownerId, row.embedding);
+      insert.run(
+        row.contactId,
+        row.ownerId,
+        BigInt(row.isGhost ?? 0),
+        BigInt(row.isArchived ?? 0),
+        BigInt(row.active ?? 1),
+        row.embedding,
+      );
       copied++;
     }
   })();
 
+  return { copied, dropped, dimension };
+}
+
+for (const table of ["search_embeddings", "contact_embeddings"]) {
+  const started = performance.now();
+  const result = rebuildVecTable(table);
+  if (!result) continue;
+
   log.info(
     "Database",
-    `Rebuilt ${table} with a partition key: ${copied} vectors copied at ${dimension} dim` +
-      `${dropped > 0 ? `, ${dropped} orphan(s) dropped` : ""} in ${(performance.now() - started).toFixed(0)}ms`,
+    `Rebuilt ${table} with a partition key and status columns: ${result.copied} vectors copied at ${result.dimension} dim` +
+      `${result.dropped > 0 ? `, ${result.dropped} orphan(s) dropped` : ""} in ${(performance.now() - started).toFixed(0)}ms`,
   );
 }
+
+// =============================================================================
+// 9k-b. vec0 status triggers
+// =============================================================================
+// The metadata columns are only useful while they agree with the contact row.
+// A vector is written once and then the contact is archived, restored,
+// trashed, un-trashed, merged away or promoted out of ghost state, and every
+// one of those happens somewhere other than the code that wrote the vector.
+//
+// So the database keeps them, not the application. This is the same argument
+// the FTS index already makes: a trigger is the only place that sees every
+// write, and a status column maintained by callers is a status column that is
+// wrong as soon as somebody adds a caller.
+//
+// Narrow on purpose. `AFTER UPDATE OF` fires only when one of the four
+// columns is in the SET list, and the WHEN clause drops the rest, so the
+// hourly relationship-score recompute over every contact pays almost nothing.
+// Measured on 10,000 contacts: 5,000 unrelated updates cost 2.9 ms with the
+// trigger against 2.6 ms without, and 5,000 real status changes cost 15.3 ms.
+// =============================================================================
+
+/** Keep both vec0 tables' status columns equal to the contact row. */
+export function installVecStatusTriggers(sqlite: Database.Database): void {
+  // Both bodies write the one row the trigger fired for, and the vec0 tables
+  // are derived from contacts and hold no other key.
+  // tenant-lint: allow derived table
+  sqlite.exec(
+    ["search_embeddings", "contact_embeddings"]
+      .map(
+        (table) => `
+    DROP TRIGGER IF EXISTS ${table}_status;
+    CREATE TRIGGER ${table}_status
+      AFTER UPDATE OF isGhost, isArchived, deletedAt, canonicalId ON contacts
+      WHEN NEW.isGhost IS NOT OLD.isGhost
+        OR NEW.isArchived IS NOT OLD.isArchived
+        OR NEW.deletedAt IS NOT OLD.deletedAt
+        OR NEW.canonicalId IS NOT OLD.canonicalId
+    BEGIN
+      UPDATE ${table}
+         SET isGhost = NEW.isGhost,
+             isArchived = COALESCE(NEW.isArchived, 0),
+             active = (NEW.deletedAt IS NULL AND NEW.canonicalId IS NULL)
+       WHERE contactId = NEW.id;
+    END;`,
+      )
+      .join("\n"),
+  );
+}
+
+installVecStatusTriggers(sqlite);
 
 // 9g. Embedding metadata: tracks when each contact was last embedded
 //     Used for staleness detection — if contact.updatedAt > embeddedAt, re-embed
