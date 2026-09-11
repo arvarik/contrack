@@ -204,6 +204,7 @@ const DEFAULT_ROUTES = [
   ["admin-invites", "/settings/admin/invitations"],
   ["admin-instance", "/settings/admin/instance"],
   ["admin-backups", "/settings/admin/backups"],
+  ["admin-health", "/settings/admin/health"],
   ["admin-audit", "/settings/admin/audit"],
 ];
 /**

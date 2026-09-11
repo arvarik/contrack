@@ -355,6 +355,35 @@ class AISearchJobQueue extends EventEmitter {
     return this.processing;
   }
 
+  /**
+   * Who is enriching and how much is left, across the whole instance.
+   *
+   * For the admin health panel. Unlike the dedupe queue this one has no line:
+   * a second account's batch is refused with a cooldown rather than booked,
+   * so there is a running owner and nothing behind it.
+   */
+  instanceState(): {
+    running: OwnerId | null;
+    activeBatches: number;
+    contactsRemaining: number;
+  } {
+    let running: OwnerId | null = null;
+    let activeBatches = 0;
+    let contactsRemaining = 0;
+    for (const owned of this.batches.values()) {
+      if (owned.batch.status !== "processing") continue;
+      activeBatches += 1;
+      running ??= owned.ownerId;
+      contactsRemaining += owned.batch.jobs.filter(
+        (job) =>
+          job.status === "queued" ||
+          job.status === "searching" ||
+          job.status === "merging",
+      ).length;
+    }
+    return { running, activeBatches, contactsRemaining };
+  }
+
   /** Cleanup completed batches older than GC_TTL_MS. */
   gc(): void {
     const now = Date.now();

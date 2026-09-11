@@ -145,15 +145,16 @@ describe("route manifest", () => {
     }
   });
 
-  it("counts the routes Phase 3 added", () => {
+  it("counts the admin surface", () => {
     // A cheap tripwire: the admin surface grew from fourteen classified rows
-    // to twenty-nine guarded ones, and a route added without a decision moves
-    // this number.
+    // to twenty-nine guarded ones in Phase 3, and to thirty with the health
+    // route in quality story S9. A route added without a decision moves this
+    // number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
-    expect(admin).toHaveLength(29);
+    expect(admin).toHaveLength(30);
     expect(
       ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
-    ).toHaveLength(15);
+    ).toHaveLength(16);
 
     // The three token routes act on the caller's own account, so a token
     // cannot reach them and neither can the implicit local owner.

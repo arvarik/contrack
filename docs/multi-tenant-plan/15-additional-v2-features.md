@@ -492,10 +492,10 @@ Fill in as decisions are made, so the release PR can list what shipped.
 | 3 | Nudges | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
 | 5 | Reconnect drafts | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
 | S2 | Search quality gate | Accepted. Shipped in [#39](https://github.com/arvarik/contrack/pull/39). | 2026-09-10 |
-| S3 | One scan after a bulk import | Accepted. | 2026-09-10 |
-| S5 | Verified backups | Accepted. | 2026-09-10 |
-| S6 | WAL checkpoint and write health | Accepted. | 2026-09-10 |
-| S9 | Admin health panel | Accepted. | 2026-09-10 |
+| S3 | One scan after a bulk import | Accepted. Shipped in [#40](https://github.com/arvarik/contrack/pull/40). | 2026-09-10 |
+| S5 | Verified backups | Accepted. Shipped in [#41](https://github.com/arvarik/contrack/pull/41). | 2026-09-10 |
+| S6 | WAL checkpoint and write health | Accepted. Shipped in [#42](https://github.com/arvarik/contrack/pull/42). | 2026-09-10 |
+| S9 | Admin health panel | Accepted. Shipped in [#43](https://github.com/arvarik/contrack/pull/43). | 2026-09-10 |
 
 The five accepted stories land in the order this table lists them, one pull
 request each, from `v2.0-extra-<slug>`. The rules at the top of this document

@@ -145,6 +145,16 @@ const { vec_version } = sqlite
   .get() as { vec_version: string };
 log.info("Database", `sqlite-vec loaded (version ${vec_version})`);
 
+/**
+ * The sqlite-vec build this process loaded.
+ *
+ * Read once at boot and exported for the admin health panel. An operator
+ * confirming that an upgrade actually took effect should not have to open the
+ * database to do it, and this is the one version number that comes from a
+ * native extension rather than from a row we wrote ourselves.
+ */
+export const VEC_VERSION = vec_version;
+
 // Before any migration runs. Partition keys arrived in 0.1.6 and every vector
 // query from Phase 2 on depends on them, so an instance that cannot have them
 // must refuse to start rather than migrate and then fail. `assertVecVersion`
@@ -597,7 +607,14 @@ export function claimUnownedData(ownerId: string): Record<string, number> {
   return claimed;
 }
 
-function readTenancyVersion(): number {
+/**
+ * The tenancy migration this database has reached.
+ *
+ * Exported for the admin health panel. `PRAGMA user_version` already holds
+ * the FTS schema version and is a single 32-bit field, which is why this one
+ * lives in `app_settings` instead.
+ */
+export function readTenancyVersion(): number {
   try {
     const row = sqlite
       .prepare(`SELECT value FROM app_settings WHERE key = 'schema.tenancy'`)

@@ -22,6 +22,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import {
+  Activity,
   Archive,
   ChevronRight,
   Copy,
@@ -354,6 +355,14 @@ export const SettingsHome = () => {
     ),
     adminBackups: hit("backups", "snapshot", "database", "restore", "admin"),
     adminAudit: hit("audit", "log", "history", "who did", "admin"),
+    adminHealth: hit(
+      "health",
+      "instance",
+      "status",
+      "uptime",
+      "diagnostics",
+      "admin",
+    ),
     aiSearch: hit(
       "contact enrichment",
       "ai search",
@@ -384,7 +393,8 @@ export const SettingsHome = () => {
         show.adminInvitations ||
         show.adminInstance ||
         show.adminBackups ||
-        show.adminAudit),
+        show.adminAudit ||
+        show.adminHealth),
   };
   const nothingMatches = !Object.values(groupShown).some(Boolean);
 
@@ -680,6 +690,13 @@ export const SettingsHome = () => {
               icon={ScrollText}
               title="Audit log"
               description="Every administrative action and every sign-in, newest first."
+            />
+            <SettingsLink
+              show={show.adminHealth}
+              to="/settings/admin/health"
+              icon={Activity}
+              title="Instance health"
+              description="Schema, database, backups, queues, and the AI provider."
             />
           </div>
         </section>

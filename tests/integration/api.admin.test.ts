@@ -214,7 +214,9 @@ describe("every admin route", () => {
   });
 
   it("covers the whole admin class, so the loops below miss nothing", () => {
-    expect(ADMIN_ROUTES).toHaveLength(29);
+    // Twenty-nine in Phase 3, and thirty with the instance health route in
+    // quality story S9.
+    expect(ADMIN_ROUTES).toHaveLength(30);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -251,6 +253,7 @@ describe("every admin route", () => {
       "/api/admin/users",
       "/api/admin/invitations",
       "/api/admin/audit",
+      "/api/admin/health",
     ]) {
       const res = await as(admin)(request(app).get(url));
       expect(res.status, url).toBe(200);

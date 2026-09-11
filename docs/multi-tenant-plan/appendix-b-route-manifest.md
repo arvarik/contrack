@@ -174,3 +174,4 @@ second added the three token routes, `POST /api/auth/register` and the two
 | GET | `/api/admin/settings` | admin | shipped |
 | PUT | `/api/admin/settings` | admin | shipped |
 | GET | `/api/admin/audit` | admin | shipped |
+| GET | `/api/admin/health` | admin | shipped |

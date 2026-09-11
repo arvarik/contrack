@@ -140,6 +140,69 @@ export interface BackupInfo {
 // Query keys
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Instance health
+// ---------------------------------------------------------------------------
+
+/** An account named by something other than its id. */
+export interface HealthAccount {
+  id: string;
+  username: string;
+}
+
+export interface InstanceHealth {
+  uptimeSeconds: number;
+  startedAt: string;
+  schema: {
+    tenancy: number;
+    tenancyExpected: number;
+    fts: number;
+    ftsExpected: number;
+    vec: string;
+    upToDate: boolean;
+  };
+  database: {
+    bytes: number;
+    walBytes: number;
+    truncateAtBytes: number;
+    lastCheckpoint: {
+      at: string;
+      mode: "passive" | "truncate";
+      busy: boolean;
+      logPages: number;
+      checkpointedPages: number;
+      bytesBefore: number;
+      bytesAfter: number;
+    } | null;
+    busyErrors: number;
+    lastBusyErrorAt: string | null;
+    startedAt: string;
+    rows: Record<string, number>;
+  };
+  backup: BackupInfo | null;
+  queues: {
+    dedupe: { running: HealthAccount | null; pending: HealthAccount[] };
+    aiSearch: {
+      running: HealthAccount | null;
+      activeBatches: number;
+      contactsRemaining: number;
+    };
+  };
+  embeddings: {
+    available: boolean;
+    byUser: { user: HealthAccount; contacts: number; embedded: number }[];
+  };
+  aiCache: Record<
+    string,
+    { entries: number; hits: number; misses: number; hitRate: number }
+  >;
+  provider: {
+    aiTier: string;
+    circuitBreakers: string[];
+    grounding: { rpd: number; limit: number; remaining: number };
+  };
+}
+
 export const adminKeys = {
   users: ["admin", "users"] as const,
   user: (id: string) => ["admin", "users", id] as const,
@@ -147,6 +210,7 @@ export const adminKeys = {
   settings: ["admin", "settings"] as const,
   audit: ["admin", "audit"] as const,
   backups: ["admin", "backups"] as const,
+  health: ["admin", "health"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -504,6 +568,23 @@ export const useBackups = () =>
         (data) => data.backups,
       ),
     staleTime: 30_000,
+  });
+
+/**
+ * The instance health panel.
+ *
+ * Refetched on an interval, because the numbers that matter most are the ones
+ * that move: whose scan is running, how big the write-ahead log is, how many
+ * requests were refused. Fifteen seconds is slow enough to be free on a page
+ * only admins open and fast enough that watching it is useful.
+ */
+export const useInstanceHealth = () =>
+  useQuery({
+    queryKey: adminKeys.health,
+    queryFn: ({ signal }) =>
+      apiJson<InstanceHealth>("/admin/health", { signal }),
+    staleTime: 5_000,
+    refetchInterval: 15_000,
   });
 
 export const useCreateBackup = () => {
