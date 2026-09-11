@@ -11,9 +11,9 @@
  * self-hosted app reachable from the internet with open registration is an
  * open door, and the person who exposed it did not necessarily decide to.
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { DoorOpen, Timer, TriangleAlert } from "lucide-react";
+import { DoorOpen, Tag, Timer, TriangleAlert } from "lucide-react";
 import {
   useInstanceSettings,
   useUpdateInstanceSettings,
@@ -246,14 +246,133 @@ const RegistrationCard = () => {
   );
 };
 
+/**
+ * What this instance calls itself.
+ *
+ * A single-user install never needed a name: there was one instance and it
+ * was yours. An invitation link changes that, because the person clicking one
+ * arrives at a sign-in screen belonging to an instance they have never seen.
+ *
+ * The field is uncontrolled against the server value until the server answers
+ * and then seeded once. A value that reset itself while somebody was typing,
+ * every time the query refetched, would be worse than no field.
+ */
+const InstanceNameCard = () => {
+  const { data, isLoading, isError, refetch } = useInstanceSettings();
+  const save = useUpdateInstanceSettings();
+  const [draft, setDraft] = useState<string | null>(null);
+  const stored = data?.instanceName ?? "";
+  const max = data?.instanceNameMax ?? 60;
+  const value = draft ?? stored;
+
+  // Seeded once, when the value first arrives. `draft` stays null until
+  // somebody types, so a refetch cannot overwrite what they are writing.
+  useEffect(() => {
+    if (draft === null && data) setDraft(data.instanceName);
+  }, [data, draft]);
+
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+
+  const dirty = value.trim() !== stored;
+
+  return (
+    <form
+      className={cn(CARD, "space-y-4")}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!dirty) return;
+        save.mutate(
+          { instanceName: value.trim() },
+          {
+            onSuccess: (settings) => {
+              setDraft(settings.instanceName);
+              toast.success(
+                settings.instanceName
+                  ? `This instance is now "${settings.instanceName}"`
+                  : "The instance name was cleared",
+              );
+            },
+            onError: (error: Error) => toast.error(error.message),
+          },
+        );
+      }}
+    >
+      <div className="space-y-1.5">
+        <label
+          htmlFor="instance-name"
+          className="block text-sm font-bold text-on-surface"
+        >
+          Instance name
+        </label>
+        <p className="text-sm text-on-surface-variant text-pretty">
+          Shown on the sign-in and join screens, in the account menu, and in the
+          browser tab. Leave it empty to show the product name.
+        </p>
+      </div>
+
+      <input
+        id="instance-name"
+        type="text"
+        value={value}
+        maxLength={max}
+        disabled={isLoading || save.isPending}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="Contrack"
+        autoComplete="off"
+        className={cn(
+          "w-full px-4 rounded-xl min-h-[44px]",
+          "bg-surface-container-high text-on-surface text-base sm:text-sm",
+          "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          "disabled:opacity-50",
+        )}
+      />
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs text-on-surface-variant">
+          {value.length} of {max}
+        </p>
+        <button
+          type="submit"
+          disabled={!dirty || save.isPending}
+          className={cn(
+            "inline-flex items-center gap-2 px-5 rounded-full",
+            "min-h-[44px] sm:min-h-0 sm:py-2.5 font-bold text-sm",
+            "bg-primary text-on-primary hover:bg-primary/90 transition-colors",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
+        >
+          <Tag className="w-4 h-4" />
+          {save.isPending ? "Saving…" : "Save"}
+        </button>
+      </div>
+
+      <p className="flex items-start gap-2 text-xs text-on-surface-variant text-pretty">
+        <DoorOpen className="w-4 h-4 shrink-0 mt-0.5" />
+        The sign-in screen has no credential behind it, so this name is visible
+        to anybody who can reach this instance.
+      </p>
+    </form>
+  );
+};
+
 export const InstanceView = () => (
   <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
     <section className="tile-enter" style={{ animationDelay: tileDelay(0) }}>
+      <GroupHeading>
+        <span className="inline-flex items-center gap-1.5">
+          <Tag className="w-3.5 h-3.5" />
+          Name
+        </span>
+      </GroupHeading>
+      <InstanceNameCard />
+    </section>
+
+    <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
       <GroupHeading>Who can join</GroupHeading>
       <RegistrationCard />
     </section>
 
-    <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
+    <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>
       <GroupHeading>
         <span className="inline-flex items-center gap-1.5">
           <Timer className="w-3.5 h-3.5" />
@@ -270,7 +389,7 @@ export const InstanceView = () => (
       so it is embedded rather than reimplemented. Its own route redirects
       here.
     */}
-    <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>
+    <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
       <GroupHeading>AI configuration</GroupHeading>
       <AISettingsView embedded />
     </section>

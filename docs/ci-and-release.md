@@ -107,4 +107,14 @@ re-register it, re-run the setup script — it is idempotent.
   plane outage. Jobs are still dispatched by GitHub; during the incident on
   2026-08-06 self-hosted runners were explicitly affected too. It helps with
   queue congestion and hosted-pool capacity, not with Actions being down.
-- Coverage is collected but no threshold is enforced.
+- Coverage is enforced, not just collected. `vitest.config.ts` carries a floor
+  set two points under what was measured when it landed: 71 / 56 / 71 / 73 for
+  the project, and 72 / 57 / 77 / 74 for `server/**` on its own. A run below
+  either exits non-zero, so `build-and-test` fails.
+- The two sets are close because only imported files are instrumented, and the
+  server is most of what the suite imports. The server line is an independent
+  check rather than a higher bar: a change that adds a lot of uncovered
+  frontend drags the project total down, and without it that would look the
+  same as somebody deleting the matrix and manifest tests.
+- Raise the numbers when the real coverage moves up. Lowering one is a
+  decision that belongs in a pull request description.

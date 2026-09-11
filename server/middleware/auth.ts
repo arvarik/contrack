@@ -103,26 +103,29 @@ export function resolveApiToken(): string | null {
     warnEnvTokenOnce();
     return token;
   }
-
-  // AUTH_TOKEN was this variable's name before accounts existed, when it was
-  // the only credential. Still honoured so an existing deployment does not
-  // break on upgrade; warned about once so it eventually goes away.
-  const legacy = process.env.AUTH_TOKEN?.trim();
-  if (legacy) {
-    warnLegacyTokenOnce();
-    warnEnvTokenOnce();
-    return legacy;
-  }
   return null;
 }
 
-let legacyWarned = false;
-function warnLegacyTokenOnce(): void {
-  if (legacyWarned) return;
-  legacyWarned = true;
-  log.warn(
-    "Auth",
-    "AUTH_TOKEN is deprecated — rename it to API_TOKEN. It now identifies machine clients (scripts, MCP); people sign in with an account.",
+/**
+ * `AUTH_TOKEN` is gone.
+ *
+ * It was this variable's name before accounts existed, when it was the only
+ * credential in the product. 1.x renamed it to `API_TOKEN` and went on
+ * honouring the old name with a warning at every boot, which is the right
+ * thing to do inside a major version and the wrong thing to carry across one.
+ *
+ * It is not silently ignored. An instance that still sets it would otherwise
+ * start with no credential at all and no explanation, which for an operator
+ * who believes their instance is protected is the worst of the three possible
+ * outcomes. The boot refuses instead, and says the one thing that fixes it.
+ */
+export function assertNoLegacyAuthToken(): void {
+  if (!process.env.AUTH_TOKEN?.trim()) return;
+  throw new Error(
+    "AUTH_TOKEN was removed in 2.0. Rename it to API_TOKEN. It identifies " +
+      "machine clients (scripts, MCP); people sign in with an account. " +
+      "API_TOKEN is itself deprecated and goes away in 3.0, so a personal " +
+      "token created in Settings, Account, API tokens is the better move.",
   );
 }
 
@@ -168,7 +171,6 @@ export function isAuthRequired(): boolean {
 
 /** Reset memoized warnings and the forced-auth latch. Test seam. */
 export function __resetAuthWarnings(): void {
-  legacyWarned = false;
   envTokenWarned = false;
   forcedAuth = false;
 }

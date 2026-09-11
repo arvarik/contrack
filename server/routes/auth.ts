@@ -55,6 +55,7 @@ import {
   countPasswordAccounts,
   convertLocalOwner,
   hasLocalOwner,
+  getInstanceName,
   isRegistrationOpen,
   getSessionTtlDays,
   setSessionTtlDays,
@@ -165,6 +166,14 @@ router.get("/status", (req, res) => {
     // The deprecated instance-wide environment token. The admin UI shows a
     // banner asking the operator to replace it with a personal one.
     legacyTokenConfigured: resolveApiToken() !== null,
+    // What this instance calls itself, or "" when nobody has named it.
+    //
+    // Read-only here and unauthenticated on purpose: it has to reach the
+    // sign-in and join screens, which are the two places somebody looks
+    // before they have a credential and the two places the answer matters
+    // most. An operator who names their instance is choosing to put that name
+    // in front of anybody who can reach the port.
+    instanceName: getInstanceName(),
   });
 });
 

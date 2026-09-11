@@ -67,6 +67,14 @@ export interface AuthStatus {
   localOwnerPresent: boolean;
   /** The deprecated instance-wide `API_TOKEN` is still set on the server. */
   legacyTokenConfigured: boolean;
+  /**
+   * What this instance calls itself, or "" when nobody has named it.
+   *
+   * Unauthenticated, because the sign-in and join screens are where it
+   * matters most and neither has a credential yet. An operator who names
+   * their instance is choosing to show that name to anybody who can reach it.
+   */
+  instanceName: string;
 }
 
 /** One personal API token, as the account's own token list shows it. */

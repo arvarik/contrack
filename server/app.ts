@@ -40,6 +40,11 @@ import {
 } from "./middleware/auth.ts";
 import { attachRequestContext } from "./tenancy/requestContext.ts";
 import { guardUploads } from "./middleware/uploads.ts";
+import {
+  NO_STORE_PREFIXES,
+  UPLOAD_CACHE_CONTROL,
+  noStore,
+} from "./middleware/cacheControl.ts";
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
 import { adminRouter } from "./routes/admin.ts";
@@ -224,6 +229,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     app.use(aiUserRateLimit);
   }
 
+  // Nothing under these four prefixes may be stored by a browser or by a
+  // proxy. Mounted before the routers so it applies to every response they
+  // produce, including the errors. `cacheControl.ts` says why each prefix is
+  // on the list.
+  app.use([...NO_STORE_PREFIXES], noStore);
+
   // Auth endpoints must stay reachable pre-auth (status, setup, login);
   // everything mounted after requireAuth — uploads and all other /api routes —
   // is gated when AUTH_REQUIRED or API_TOKEN is configured.
@@ -251,6 +262,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
         // instead of rendering — a stored .html/.svg would otherwise run
         // as same-origin script.
         res.setHeader("X-Content-Type-Options", "nosniff");
+        // `private`, because express.static's default `public` invites a
+        // shared cache to keep one account's attachment and serve it to
+        // whoever asks for that URL next.
+        res.setHeader("Cache-Control", UPLOAD_CACHE_CONTROL);
         const ext = path.extname(filePath).toLowerCase();
         if (!INLINE_UPLOAD_EXTENSIONS.has(ext)) {
           res.setHeader("Content-Disposition", "attachment");

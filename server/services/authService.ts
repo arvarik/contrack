@@ -102,6 +102,59 @@ export function setRegistrationOpen(value: unknown): boolean {
   return value;
 }
 
+// =============================================================================
+// The instance's own name
+// =============================================================================
+
+/**
+ * What this Contrack calls itself.
+ *
+ * A single-user install never needed one: there was one instance, and it was
+ * yours. An invitation link changes that. Somebody clicking one arrives at a
+ * sign-in screen from an instance they have never seen, sent by a person who
+ * said "join my Contrack", and the screen should say whose it is rather than
+ * leaving them to trust a hostname.
+ *
+ * Empty is a real answer and the default. An operator who has not set one
+ * sees the product name everywhere, exactly as before.
+ */
+export const INSTANCE_NAME_SETTING = "instance.name";
+export const INSTANCE_NAME_MAX = 60;
+
+export function getInstanceName(): string {
+  const stored = getSetting<string>(INSTANCE_NAME_SETTING);
+  return typeof stored === "string" ? stored.slice(0, INSTANCE_NAME_MAX) : "";
+}
+
+/**
+ * Set or clear it.
+ *
+ * The value reaches an unauthenticated sign-in screen, so it is trimmed,
+ * length-capped, and stripped of the control characters that would let a name
+ * span lines or hide text after itself. It is rendered as text by React and
+ * never as markup, so this is belt and braces rather than the only defence.
+ *
+ * An empty string clears it, which is why this cannot simply reject empties.
+ */
+export function setInstanceName(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new ValidationError("The instance name must be text.");
+  }
+  // eslint-disable-next-line no-control-regex
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+  if (cleaned.length > INSTANCE_NAME_MAX) {
+    throw new ValidationError(
+      `The instance name must be ${INSTANCE_NAME_MAX} characters or fewer.`,
+    );
+  }
+  setSetting(INSTANCE_NAME_SETTING, cleaned);
+  log.info(
+    "Auth",
+    cleaned ? `Instance name set to "${cleaned}"` : "Instance name cleared",
+  );
+  return cleaned;
+}
+
 /** Cap on the stored User-Agent — enough to name a device, not a fingerprint. */
 const USER_AGENT_MAX = 200;
 

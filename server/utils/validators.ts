@@ -314,6 +314,10 @@ export const adminSettingsSchema = z
   .object({
     registrationOpen: z.boolean().optional(),
     sessionTtlDays: z.number().int().optional(),
+    // An empty string is a real value here: it is how a name is cleared.
+    // `setInstanceName` trims, strips control characters, and enforces the
+    // length, so this only has to say what kind of thing it is.
+    instanceName: z.string().max(200).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "Send a setting to change",

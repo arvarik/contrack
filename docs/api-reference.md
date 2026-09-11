@@ -22,13 +22,34 @@ Bulk operations accept up to 5,000 unique IDs and report the number of rows they
 
 ### `GET /healthz`
 
-Liveness probe, mounted at the root (not under `/api`) and always reachable without a credential. Returns `200 {"status":"ok"}` when the event loop and SQLite both answer, `503 {"status":"unavailable"}` otherwise. This is what the Docker `HEALTHCHECK` polls; point uptime monitors here.
+Unauthenticated, and outside `/api` so the credential gate never touches it.
+Docker's `HEALTHCHECK` and any uptime monitor hold no credential.
 
 ```bash
 curl http://localhost:3210/healthz
 ```
 
----
+```json
+{
+  "status": "ok",
+  "schema": { "tenancy": 2, "fts": 3 },
+  "vec": "v0.1.9",
+  "expects": { "tenancy": 2, "fts": 3 }
+}
+```
+
+`schema` is what this database is on and `expects` is what this build wants.
+The pair is the point: one number alone cannot tell an operator whether the
+migration they just ran finished. Added by extra F4.
+
+Version numbers and nothing else. An unauthenticated endpoint must not
+describe the instance, so there are no counts, no configuration, no accounts
+and no name here. That picture is at `GET /api/admin/health`, which needs an
+admin.
+
+`503 { "status": "unavailable" }` when the database does not answer. A process
+can accept sockets long after SQLite has stopped responding, which is why the
+probe runs a query rather than just returning.
 
 ## Contacts
 
@@ -1449,6 +1470,13 @@ their own account (`400 CANNOT_TARGET_SELF`).
 
 `GET /api/admin/audit?limit=&before=` pages newest first. `before` is the
 opaque cursor a previous page returned as `nextBefore`.
+
+`GET` and `PUT /api/admin/settings` carry `instanceName` and
+`instanceNameMax`. The name is 60 characters or fewer, trimmed, with control
+characters replaced by spaces; an empty string clears it. It is reported
+read-only by `GET /api/auth/status`, which is unauthenticated, because the
+sign-in and join screens are where it matters and neither has a credential
+yet. Added by extra F3.
 
 An account created or reset by an admin holds a password that admin chose, so
 every route outside the six the sign-in flow needs answers

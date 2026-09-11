@@ -481,12 +481,12 @@ Fill in as decisions are made, so the release PR can list what shipped.
 
 | # | Item | Decision | Date |
 | - | ---- | -------- | ---- |
-| F1 | No-store cache headers | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
-| F2 | Coverage threshold | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
-| F3 | Instance name | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
-| F4 | Health schema versions | Not accepted on its own. The schema versions ship inside S9, on `GET /api/admin/health`, where an admin can already see them. `/healthz` is unchanged and stays two states and no detail. | 2026-09-10 |
-| F5 | Remove `AUTH_TOKEN` | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
-| F6 | Feed pagination | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| F1 | No-store cache headers | Accepted. Shipped in [#44](https://github.com/arvarik/contrack/pull/44). | 2026-09-11 |
+| F2 | Coverage threshold | Accepted. Shipped in [#44](https://github.com/arvarik/contrack/pull/44). | 2026-09-11 |
+| F3 | Instance name | Accepted. Shipped in [#44](https://github.com/arvarik/contrack/pull/44). | 2026-09-11 |
+| F4 | Health schema versions | Accepted. Shipped in [#44](https://github.com/arvarik/contrack/pull/44). The versions are on `/healthz` as the paragraph specifies, and also on `GET /api/admin/health` where S9 put them. `/healthz` carries version numbers and nothing else: no counts, no configuration, no accounts. | 2026-09-11 |
+| F5 | Remove `AUTH_TOKEN` | Accepted. Shipped in [#44](https://github.com/arvarik/contrack/pull/44). | 2026-09-11 |
+| F6 | Feed pagination | Accepted. The design decision was append. Shipped in [#44](https://github.com/arvarik/contrack/pull/44). | 2026-09-11 |
 | 1 | Contrack MCP server | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
 | 2 | Quick Capture | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
 | 3 | Nudges | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
@@ -503,7 +503,12 @@ say `v2.0/<slug>`, which git cannot create while a branch called `v2.0`
 exists: a ref is a file, and `refs/heads/v2.0/extra-s2` needs `v2.0` to be a
 directory. Every phase branch has used the same substitution.
 
-Nothing else was accepted. The four headline features and the six small extras
-are not rejected on their merits. They were not taken for 2.0, so the fourth
-rule at the top of this document applies to them: whatever is not merged when
-the Phase 5 security review begins ships in 2.1.
+The six small extras were accepted on 2026-09-11, after the quality stories
+landed, and went in as one pull request rather than six: every one of them is
+XS or S, they touch no common code, and six pull requests of a dozen lines
+each is process for its own sake.
+
+Nothing else was accepted. The four headline features are not rejected on
+their merits. They were not taken for 2.0, so the fourth rule at the top of
+this document applies to them: whatever is not merged when the Phase 5
+security review begins ships in 2.1.

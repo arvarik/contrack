@@ -13,6 +13,7 @@
  */
 import React from "react";
 import { cn } from "../../lib/utils";
+import { useAuth } from "./AuthGate";
 
 export const AuthShell = ({
   icon,
@@ -45,6 +46,17 @@ export const AuthShell = ({
         )}
       >
         <header className="space-y-3 text-center">
+          {/*
+            Whose Contrack this is, above everything else.
+
+            Somebody arriving from an invitation link has never seen this
+            instance. "Join my Contrack" and a hostname is not enough to know
+            you are in the right place, and this is the one screen where the
+            answer has to come before the question. Absent when nobody has
+            named the instance, which is the default and reads exactly as it
+            did before.
+          */}
+          <InstanceName />
           <span className="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto">
             {icon}
           </span>
@@ -69,6 +81,17 @@ export const AuthShell = ({
     </main>
   </div>
 );
+
+/** The instance's own name, or nothing at all. */
+const InstanceName = () => {
+  const { instanceName } = useAuth();
+  if (!instanceName) return null;
+  return (
+    <p className="text-xs font-bold uppercase tracking-widest text-primary text-balance">
+      {instanceName}
+    </p>
+  );
+};
 
 /**
  * A labelled text input.

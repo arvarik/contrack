@@ -106,6 +106,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than showing a progress bar at zero. `GET /api/dedupe/active` gained a
   `queued` field, which is the only way a reloaded page can tell a booked scan
   from one that has hung.
+- **Extra F3.** An instance name. One setting, 60 characters or fewer, shown
+  on the sign-in and join screens, in the account menu, and in the browser
+  tab. Somebody clicking an invitation arrives at a screen belonging to an
+  instance they have never seen, and a hostname is not an answer to "whose
+  Contrack is this". Set it under Administration, Instance. Leaving it empty
+  shows the product name, exactly as before.
+- **Extra F4.** `/healthz` reports the schema versions this database is on,
+  beside the versions this build expects, so an operator can confirm a
+  migration ran without opening the database or signing in. Version numbers
+  and nothing else: the endpoint answers without a credential, so it carries
+  no counts, no configuration and no accounts.
 - **Extra S9.** An instance health panel, at Settings, Administration,
   Instance health. `GET /api/admin/health` answers what an operator needs when
   several people share one instance: the schema versions this database is
@@ -117,6 +128,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the database. `/healthz` is unchanged and stays two states and no detail: it
   answers without a credential, and an unauthenticated endpoint must not
   describe the instance.
+- **Extra F1.** Nothing under `/api/auth`, `/api/admin`, `/api/ai/stats` or
+  `/api/export` may be stored by a browser or a proxy any more, and uploaded
+  files are `private` rather than `public`. Those four prefixes carry
+  responses that differ per caller, and an upload belongs to exactly one
+  account, so a shared cache holding one could hand it to whoever asked for
+  that URL next. Known issue S-03.
+- **Extra F6.** "Load older activity" on the AI usage feed adds a page instead
+  of replacing the one on screen. Reading the feed used to mean losing the
+  rows you had just read, with no way back. Known issue B-02, where the
+  blocker was the design decision rather than the code.
 - **Extra S6.** The daily sweep checkpoints the write-ahead log. The database
   runs in WAL mode and nothing in the codebase had ever called a checkpoint:
   SQLite runs one by itself past a thousand pages, but only when no reader is
@@ -238,8 +259,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/unit/frontend.apiClient.test.ts` scans the source and fails on the
   next one.
 
+### Removed
+
+- **Extra F5.** The environment variable `AUTH_TOKEN`. It was the name
+  `API_TOKEN` had before accounts existed, and 1.x went on honouring it with a
+  warning at every boot. **The server now refuses to start while it is set**
+  rather than starting with no credential at all: an operator who believes
+  their instance is protected is the worst of the three possible outcomes.
+  Rename it to `API_TOKEN`, which is itself deprecated and goes away in 3.0.
+
 ### Changed
 
+- **Extra F2.** CI enforces a coverage floor instead of only reporting one.
+  `vitest.config.ts` carries thresholds set two points under what was measured
+  when they landed, with a second, independent floor on `server/**`. The
+  matrix and manifest tests are what hold the isolation guarantee up, and
+  before this a pull request could delete them and go green.
 - **Phase 4.** Session length moved from Account settings to Administration →
   Instance. It decides how long every account's sign-in lasts, which stopped
   being a personal setting the moment an instance could have more than one
