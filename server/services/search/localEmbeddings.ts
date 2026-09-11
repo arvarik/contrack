@@ -28,6 +28,8 @@ import { log } from "../../utils/logger.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { isWorkerActive, runOnWorker } from "../../workers/cpuHost.ts";
+import { unflatten } from "../../workers/protocol.ts";
 import {
   resolveEmbeddings,
   embedWithProvider,
@@ -44,11 +46,13 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 // Types & State
 // =============================================================================
 
-/** The HuggingFace pipeline factory function (lazy-loaded via dynamic import). */
-let pipelineFactory:
-  typeof import("@huggingface/transformers").pipeline | null = null;
-/** The initialized feature-extraction pipeline instance. */
-let extractor: FeatureExtractionPipeline | null = null;
+/**
+ * The pipeline on THIS thread, used only when the worker could not start.
+ *
+ * Normally null for the life of the process: the model lives on the CPU
+ * worker and this thread never loads it.
+ */
+let fallbackExtractor: FeatureExtractionPipeline | null = null;
 let modelReady = false;
 let initPromise: Promise<void> | null = null;
 
@@ -71,29 +75,21 @@ export async function initLocalEmbeddings(): Promise<void> {
   initPromise = (async () => {
     try {
       const t0 = Date.now();
-      const { pipeline: createPipeline, env: hfEnv } =
-        await import("@huggingface/transformers");
-      pipelineFactory = createPipeline;
-
-      // Transformers.js ignores the Python-style TRANSFORMERS_CACHE env var;
-      // it only reads env.cacheDir (default: inside node_modules, which is
-      // ephemeral in Docker). Persist the model in DATA_DIR when configured.
-      const cacheDir =
-        process.env.TRANSFORMERS_CACHE ??
-        (process.env.DATA_DIR
-          ? path.join(process.env.DATA_DIR, ".cache")
-          : undefined);
-      if (cacheDir) hfEnv.cacheDir = cacheDir;
-
-      extractor = await pipelineFactory("feature-extraction", MODEL_ID, {
-        dtype: "q8", // quantized for speed + lower memory
-        session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
-      });
-
+      // One text through the real path, which loads the model wherever the
+      // model lives: on the worker normally, on this thread when the worker
+      // could not start. Doing it at boot rather than on the first search
+      // keeps the two-and-a-half second cold load off somebody's query.
+      const [probe] = await embedTexts(["contrack"]);
+      if (!probe || probe.length !== BUILTIN_DIMENSION) {
+        throw new Error(
+          `The embedding model returned ${probe?.length ?? 0} dimensions, expected ${BUILTIN_DIMENSION}`,
+        );
+      }
       modelReady = true;
       log.info(
         "LocalEmbeddings",
-        `Model ${MODEL_ID} loaded in ${Date.now() - t0}ms (384-dim, q8)`,
+        `Model ${MODEL_ID} ready in ${Date.now() - t0}ms (${BUILTIN_DIMENSION}-dim, q8, ` +
+          `${isWorkerActive() ? "CPU worker" : "in process"})`,
       );
     } catch (err: unknown) {
       log.warn(
@@ -109,6 +105,16 @@ export async function initLocalEmbeddings(): Promise<void> {
   } finally {
     initPromise = null;
   }
+}
+
+/** Where the model files live. DATA_DIR by default, so Docker keeps them. */
+function modelCacheDir(): string | undefined {
+  return (
+    process.env.TRANSFORMERS_CACHE ??
+    (process.env.DATA_DIR
+      ? path.join(process.env.DATA_DIR, ".cache")
+      : undefined)
+  );
 }
 
 /** Check if the local embedding model is ready. */
@@ -150,19 +156,64 @@ async function embedTexts(texts: string[]): Promise<Float32Array[]> {
     return vectors.map((v) => new Float32Array(v));
   }
 
-  if (!modelReady || !extractor) return [];
-  const output = await extractor(texts, { pooling: "mean", normalize: true });
-  const rows = output.tolist() as number[][];
-  return rows.map((values) => {
-    const vec = new Float32Array(values);
+  // No `modelReady` gate. This function is what decides whether the model
+  // works: `initLocalEmbeddings` calls it once at boot with a probe text and
+  // sets the flag from the answer. Gating on the flag here would mean the
+  // probe could never succeed.
+  //
+  // The model runs on the CPU worker. Running it here held the event loop for
+  // 3.1 of the 3.3 seconds a 2,000-contact backfill took, in bursts of up to
+  // 129 ms, and on a shared instance that is every other account's requests
+  // waiting behind one account's index being built.
+  //
+  // The query path goes the same way, even though one text is only 0.8 ms.
+  // Measured, the round trip costs 0.44 ms against 0.39 ms in process, and
+  // routing everything through one place means one copy of the model in
+  // memory rather than two.
+  const vectors = await runOnWorker(
+    { kind: "embed", texts, batchSize: BACKFILL_BATCH_SIZE },
+    () => embedTextsInProcess(texts),
+    (result) => {
+      if (result.kind !== "embed") throw new AppError("Wrong worker result");
+      // Copied out of the transferred buffer. `subarray` is a view, and the
+      // caller keeps these vectors past the life of the message.
+      return unflatten(result).map((v) => new Float32Array(v));
+    },
+  );
+
+  for (const vec of vectors) {
     // Guards against a silent local-model swap by a contributor.
     if (vec.length !== BUILTIN_DIMENSION) {
       throw new AppError(
         `Expected ${BUILTIN_DIMENSION}-dim vector from the built-in model, got ${vec.length}`,
       );
     }
-    return vec;
+  }
+  return vectors;
+}
+
+/**
+ * The model, on this thread.
+ *
+ * Only reached when the worker could not start. It keeps a second copy of the
+ * model in memory, which is the price of the product still working on a Node
+ * build where `worker_threads` is unavailable.
+ */
+async function embedTextsInProcess(texts: string[]): Promise<Float32Array[]> {
+  if (!fallbackExtractor) {
+    const { pipeline, env: hfEnv } = await import("@huggingface/transformers");
+    const cacheDir = modelCacheDir();
+    if (cacheDir) hfEnv.cacheDir = cacheDir;
+    fallbackExtractor = await pipeline("feature-extraction", MODEL_ID, {
+      dtype: "q8",
+      session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
+    });
+  }
+  const output = await fallbackExtractor(texts, {
+    pooling: "mean",
+    normalize: true,
   });
+  return (output.tolist() as number[][]).map((v) => new Float32Array(v));
 }
 
 /**

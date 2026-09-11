@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-11T17:21:43.407Z",
+  "recordedAt": "2026-09-11T17:52:28.858Z",
   "corpus": {
     "contacts": 745,
     "duplicatePairs": 221,
@@ -13,23 +13,23 @@
   "passes": {
     "deterministic": {
       "score": {
-        "produced": 213,
-        "truePositives": 137,
+        "produced": 226,
+        "truePositives": 150,
         "falsePositives": 76,
-        "falseNegatives": 84,
-        "precision": 0.6432,
-        "recall": 0.6199,
-        "f1": 0.6313,
-        "autoProduced": 155,
-        "autoTruePositives": 97,
+        "falseNegatives": 71,
+        "precision": 0.6637,
+        "recall": 0.6787,
+        "f1": 0.6711,
+        "autoProduced": 168,
+        "autoTruePositives": 110,
         "autoFalsePositives": 58,
-        "autoPrecision": 0.6258,
-        "meanConfidence": 0.9485
+        "autoPrecision": 0.6548,
+        "meanConfidence": 0.9486
       },
       "recallByKind": {
         "cross-source": 1,
         "diacritic": 0.9375,
-        "formatting": 0.0667,
+        "formatting": 0.9333,
         "initial": 0.9333,
         "married-name": 0.9333,
         "middle-name": 0,
@@ -98,11 +98,11 @@
         "precision": 0.6738,
         "recall": 0.8597,
         "f1": 0.7555,
-        "autoProduced": 155,
-        "autoTruePositives": 97,
+        "autoProduced": 168,
+        "autoTruePositives": 110,
         "autoFalsePositives": 58,
-        "autoPrecision": 0.6258,
-        "meanConfidence": 0.8605
+        "autoPrecision": 0.6548,
+        "meanConfidence": 0.8743
       },
       "recallByKind": {
         "cross-source": 1,

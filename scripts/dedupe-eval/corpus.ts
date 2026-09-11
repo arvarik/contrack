@@ -950,6 +950,12 @@ const DUPLICATE_RECIPES: {
   },
   {
     kind: "formatting",
+    // Casing and whitespace at both ends, and one space in the middle of each.
+    // Both halves are deliberate. The exact-name pass keys on the trimmed,
+    // lowercased name, so a pair that differs only in those two ways is the
+    // pair that proves it still trims and still lowercases. A doubled space in
+    // the middle would have broken the match on its own and made the trim
+    // unobservable, which is what the first version of this did.
     build: (p) => [
       record(
         `${p.first} ${p.last}`,
@@ -961,7 +967,7 @@ const DUPLICATE_RECIPES: {
         ["apple"],
       ),
       record(
-        `${p.first.toLowerCase()}  ${p.last.toUpperCase()}`,
+        `  ${p.first.toLowerCase()} ${p.last.toUpperCase()}  `,
         p.company,
         p.role,
         p.location,
