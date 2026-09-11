@@ -481,18 +481,29 @@ Fill in as decisions are made, so the release PR can list what shipped.
 
 | # | Item | Decision | Date |
 | - | ---- | -------- | ---- |
-| F1 | No-store cache headers | | |
-| F2 | Coverage threshold | | |
-| F3 | Instance name | | |
-| F4 | Health schema versions | | |
-| F5 | Remove `AUTH_TOKEN` | | |
-| F6 | Feed pagination | | |
-| 1 | Contrack MCP server | | |
-| 2 | Quick Capture | | |
-| 3 | Nudges | | |
-| 5 | Reconnect drafts | | |
-| S2 | Search quality gate | | |
-| S3 | One scan after a bulk import | | |
-| S5 | Verified backups | | |
-| S6 | WAL checkpoint and write health | | |
-| S9 | Admin health panel | | |
+| F1 | No-store cache headers | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| F2 | Coverage threshold | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| F3 | Instance name | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| F4 | Health schema versions | Not accepted on its own. The schema versions ship inside S9, on `GET /api/admin/health`, where an admin can already see them. `/healthz` is unchanged and stays two states and no detail. | 2026-09-10 |
+| F5 | Remove `AUTH_TOKEN` | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| F6 | Feed pagination | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| 1 | Contrack MCP server | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| 2 | Quick Capture | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| 3 | Nudges | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| 5 | Reconnect drafts | Not accepted for 2.0. Moves to 2.1. | 2026-09-10 |
+| S2 | Search quality gate | Accepted. Shipped in [#39](https://github.com/arvarik/contrack/pull/39). | 2026-09-10 |
+| S3 | One scan after a bulk import | Accepted. | 2026-09-10 |
+| S5 | Verified backups | Accepted. | 2026-09-10 |
+| S6 | WAL checkpoint and write health | Accepted. | 2026-09-10 |
+| S9 | Admin health panel | Accepted. | 2026-09-10 |
+
+The five accepted stories land in the order this table lists them, one pull
+request each, from `v2.0-extra-<slug>`. The rules at the top of this document
+say `v2.0/<slug>`, which git cannot create while a branch called `v2.0`
+exists: a ref is a file, and `refs/heads/v2.0/extra-s2` needs `v2.0` to be a
+directory. Every phase branch has used the same substitution.
+
+Nothing else was accepted. The four headline features and the six small extras
+are not rejected on their merits. They were not taken for 2.0, so the fourth
+rule at the top of this document applies to them: whatever is not merged when
+the Phase 5 security review begins ships in 2.1.
