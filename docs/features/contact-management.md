@@ -30,7 +30,10 @@ The parsing uses the active AI provider (`POST /api/parse-contact`).
 Access via **Settings → Import** or the import button on the contact list. Supports:
 
 - **CSV files** — Automatic column mapping with header detection
-- **vCard (.vcf)** — Standard contact card format
+- **vCard (.vcf)** — The format Apple Contacts, Google Contacts, Outlook and
+  every phone export. Long lines are unfolded, quoted-printable is decoded, and
+  both spellings of a parameter are understood, so a file from an older Android
+  or Outlook arrives with its accents and its labels intact
 - **EML files** — Email message parsing
 
 The import pipeline runs in 4 SSE-streamed phases:
@@ -41,6 +44,22 @@ The import pipeline runs in 4 SSE-streamed phases:
 4. **Summary** — Final counts (imported, auto-merged, needs review, new unique)
 
 <!-- Screenshot: import-modal.png -->
+
+### Export (vCard, CSV, JSON)
+
+**Settings → Data → Export your contacts.** Three formats, because they answer
+three different questions:
+
+- **vCard (.vcf)** — another address book. The only format that also comes back
+  in, and the same module writes and reads it, so a file exported from Contrack
+  and imported into it again is the same contacts rather than nearly.
+- **CSV** — a spreadsheet. Flat by definition: three emails become one cell.
+- **JSON** — Contrack itself. Contacts, interactions, lists, action items and
+  the merge log. Nothing else can rebuild the instance.
+
+Each downloads only the contacts of the account that asked. Trashed contacts
+and ghosts are left out of the vCard: one is a contact somebody deleted, the
+other is a name pulled out of a note with no card to write.
 
 ---
 

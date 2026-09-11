@@ -21,6 +21,7 @@ import { ValidationError } from "../utils/AppError.ts";
 import {
   AVATAR_STYLES,
   isAvatarStyle,
+  isAvatarTheme,
   renderAvatar,
 } from "../services/avatarService.ts";
 
@@ -50,10 +51,16 @@ router.get(
       throw new ValidationError("An avatar needs a seed");
     }
 
+    // An absent or unrecognised `theme` is not an error: the monogram then
+    // carries its own `prefers-color-scheme` rule and answers for both
+    // palettes, which is what the default `system` theme wants.
+    const theme = isAvatarTheme(req.query.theme) ? req.query.theme : undefined;
+
     const svg = renderAvatar({
       style,
       seed,
       background: req.query.bg === "1",
+      theme,
     });
 
     res.set("Cache-Control", `public, max-age=${MAX_AGE_SECONDS}`);

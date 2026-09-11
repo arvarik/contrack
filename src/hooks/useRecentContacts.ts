@@ -1,132 +1,124 @@
 /**
- * useRecentContacts — Tracks the last N visited contact IDs in sessionStorage.
+ * useRecentContacts — the last N contacts this tab visited, and how many of
+ * them the Network sidebar pins.
  *
- * Design:
- * - sessionStorage scoped: clears on browser tab close, not across sessions
- *   (more appropriate than localStorage for "recent" which should feel transient)
- * - De-duplicates: visiting a contact that's already in recent moves it to the front
- * - Stores up to MAX_STORED=10; display limit is user-configurable (default 3)
- * - Gracefully handles JSON parse errors (corrupted storage)
+ * Two different things, stored two different ways on purpose.
  *
- * Usage:
- *   const { recentIds, recordVisit, clearRecent } = useRecentContacts();
- *   // In a navigation handler:
- *   recordVisit(contactId);
- *   // In the UI:
- *   const recentContacts = contacts.filter(c => recentIds.includes(c.id));
+ * The visit list is per tab: it lives in `sessionStorage` and clears when the
+ * tab closes, because "recent" that survives a week is not recent. It is keyed
+ * by account id, so signing out and in as somebody else does not show their
+ * Network a list of ids they cannot open.
+ *
+ * The limit is a preference, so it lives on the account and follows it to
+ * another device. See contexts/PreferencesContext.
+ *
+ * @module hooks/useRecentContacts
  */
-import { useState, useCallback, useEffect } from "react";
-import { SETTINGS_CHANGED_EVENT, emitSettingsChanged } from "../lib/appEvents";
+import { useState, useCallback } from "react";
+import { usePreferences } from "../contexts/PreferencesContext";
+import { useAuth } from "../components/auth/AuthGate";
 
-const STORAGE_KEY = "contrack_recent_contacts";
-const LIMIT_KEY = "contrack_recent_limit";
+const STORAGE_PREFIX = "contrack_recent_contacts";
 
-/** Max entries to store in the ring buffer — always store more than we show so the ring doesn't shrink */
+/** Max entries to store — always more than we show, so the ring cannot shrink. */
 const MAX_STORED = 10;
 
-/** Default number of recent contacts visible in the Network sidebar strip */
+/** Default number of recent contacts visible in the Network sidebar strip. */
 export const DEFAULT_RECENT_LIMIT = 3;
 
-/** Min/max for the user-configurable limit */
+/** Min/max for the user-configurable limit. */
 export const MIN_RECENT_LIMIT = 0;
 export const MAX_RECENT_LIMIT = 10;
 
-const readFromStorage = (): string[] => {
+/**
+ * One key per account.
+ *
+ * `sessionStorage` is per tab, not per account, so signing out and in as
+ * somebody else in the same tab used to hand the new account the previous
+ * one's list of contact ids. They resolve to nothing — every read is scoped
+ * server-side — so the visible symptom was an empty strip, but the ids were
+ * still there to read.
+ */
+const storageKey = (accountId: string | null) =>
+  `${STORAGE_PREFIX}:${accountId ?? "local"}`;
+
+const readFromStorage = (key: string): string[] => {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(key);
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed)
       ? parsed.filter((id): id is string => typeof id === "string")
       : [];
   } catch {
-    // Corrupted storage — reset gracefully
+    // Corrupted storage — reset gracefully.
     return [];
   }
 };
 
-const writeToStorage = (ids: string[]): void => {
+const writeToStorage = (key: string, ids: string[]): void => {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    sessionStorage.setItem(key, JSON.stringify(ids));
   } catch {
-    // Storage quota exceeded — fail silently, recents are non-critical
+    // Storage quota exceeded — fail silently, recents are non-critical.
   }
 };
 
 // ---------------------------------------------------------------------------
-// useRecentContactsLimit — read/write the display limit preference
+// useRecentContactsLimit — how many are pinned
 // ---------------------------------------------------------------------------
 
-/**
- * Reads and persists the user's preferred number of recent contacts to show.
- * Stored in localStorage (survives sessions) and fires a storage event so
- * all mounted ContactList instances update without a page reload.
- */
 export const useRecentContactsLimit = () => {
-  const readLimit = (): number => {
-    try {
-      const stored = localStorage.getItem(LIMIT_KEY);
-      if (!stored) return DEFAULT_RECENT_LIMIT;
-      const n = parseInt(stored, 10);
-      return isNaN(n)
-        ? DEFAULT_RECENT_LIMIT
-        : Math.min(Math.max(n, MIN_RECENT_LIMIT), MAX_RECENT_LIMIT);
-    } catch {
-      return DEFAULT_RECENT_LIMIT;
-    }
-  };
+  const { preferences, setPreference } = usePreferences();
 
-  const [limit, setLimitState] = useState<number>(readLimit);
+  const setLimit = useCallback(
+    (n: number) =>
+      setPreference(
+        "recentLimit",
+        Math.min(Math.max(Math.round(n), MIN_RECENT_LIMIT), MAX_RECENT_LIMIT),
+      ),
+    [setPreference],
+  );
 
-  const setLimit = (n: number): void => {
-    const clamped = Math.min(
-      Math.max(Math.round(n), MIN_RECENT_LIMIT),
-      MAX_RECENT_LIMIT,
-    );
-    try {
-      localStorage.setItem(LIMIT_KEY, String(clamped));
-      // Notify other components (ContactList) that the preference changed
-      emitSettingsChanged();
-    } catch {
-      // Ignore quota errors
-    }
-    setLimitState(clamped);
-  };
-
-  // Stay in sync if another tab or component changes the preference
-  useEffect(() => {
-    const handler = () => setLimitState(readLimit());
-    window.addEventListener(SETTINGS_CHANGED_EVENT, handler);
-    return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, handler);
-  }, []);
-
-  return { limit, setLimit };
+  return { limit: preferences.recentLimit, setLimit };
 };
 
+// ---------------------------------------------------------------------------
+// useRecentContacts — which ones
+// ---------------------------------------------------------------------------
+
 export const useRecentContacts = () => {
-  // Mirror storage in state so components re-render when recents change
-  const [recentIds, setRecentIds] = useState<string[]>(readFromStorage);
+  const { user } = useAuth();
+  const key = storageKey(user?.id ?? null);
+  const [recentIds, setRecentIds] = useState<string[]>(() =>
+    readFromStorage(key),
+  );
 
   /**
-   * Record a contact visit. Moves existing entries to front, caps at MAX_RECENT.
-   * Safe to call on every contact navigation.
+   * Record a contact visit. Moves existing entries to the front, caps at
+   * MAX_STORED. Safe to call on every contact navigation.
    */
-  const recordVisit = useCallback((id: string) => {
-    setRecentIds((prev) => {
-      const deduped = prev.filter((existing) => existing !== id);
-      const updated = [id, ...deduped].slice(0, MAX_STORED);
-      writeToStorage(updated);
-      return updated;
-    });
-  }, []);
+  const recordVisit = useCallback(
+    (id: string) => {
+      setRecentIds((prev) => {
+        const deduped = prev.filter((existing) => existing !== id);
+        const updated = [id, ...deduped].slice(0, MAX_STORED);
+        writeToStorage(key, updated);
+        return updated;
+      });
+    },
+    [key],
+  );
 
-  /**
-   * Clear all recent contacts — useful for privacy or testing.
-   */
+  /** Clear all recent contacts — useful for privacy or testing. */
   const clearRecent = useCallback(() => {
-    sessionStorage.removeItem(STORAGE_KEY);
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      // Nothing to remove.
+    }
     setRecentIds([]);
-  }, []);
+  }, [key]);
 
   return { recentIds, recordVisit, clearRecent };
 };

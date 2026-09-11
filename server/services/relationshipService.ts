@@ -9,8 +9,28 @@
  *
  * Recomputation triggers:
  *   - On interaction creation (single contact, immediate)
- *   - On server startup (full sweep)
- *   - Every 60 minutes (full sweep, catches recency decay)
+ *   - On server startup (only what changed while the server was down)
+ *   - Every 60 minutes (only what changed, per owner)
+ *   - Every 24 hours (every contact, because recency decays with the clock)
+ *
+ * ── Why there are two sweeps ────────────────────────────────────────────────
+ * Four of the five signals only move when something is written: a new
+ * interaction, an edited cadence, a contact that was archived. Recency moves
+ * on its own, every day, for every contact — so a dirty-only sweep alone would
+ * freeze the score of anyone nobody has touched, which is exactly the person
+ * the score exists to surface.
+ *
+ * So the hourly pass reads `contacts.scoreDirty`, a flag the database sets
+ * through triggers on `contacts`, `interactions` and `action_items` (see §4 and
+ * §6 of server/db.ts), and the daily pass reads everything. On a quiet instance
+ * the hourly pass scans a partial index that holds no rows.
+ *
+ * ── Why per owner ──────────────────────────────────────────────────────────
+ * Both sweeps walk one owner at a time and take turns: a batch for each owner
+ * in round-robin, then a yield to the event loop. An account with fifty
+ * thousand contacts therefore cannot put an account with fifty behind it, and
+ * neither can hold a request waiting. It also keeps each transaction inside one
+ * account, which is what the rest of the server assumes.
  *
  * @module server/services/relationshipService
  */
@@ -83,6 +103,37 @@ const WEIGHTS = {
 } as const;
 
 /**
+ * The per-contact interaction rollup, prepared once.
+ *
+ * It used to be prepared inside the loop, so a sweep of 10,000 contacts
+ * compiled the same statement 10,000 times. Lazy rather than at module load
+ * because the unit project replaces `server/db.ts` with a stub.
+ */
+let statsStmt: ReturnType<typeof sqlite.prepare> | null = null;
+
+function statsStatement() {
+  statsStmt ??= sqlite.prepare(
+    // tenant-lint: allow owner-checked by caller
+    `SELECT
+       COALESCE(SUM(CASE WHEN date >= date('now', '-90 days') THEN 1 ELSE 0 END), 0) as total90d,
+       COALESCE(SUM(CASE WHEN date >= date('now', '-30 days') THEN 1 ELSE 0 END), 0) as total30d,
+       COALESCE(SUM(CASE WHEN date >= date('now', '-60 days') AND date < date('now', '-30 days') THEN 1 ELSE 0 END), 0) as totalPrev30d,
+       COALESCE(SUM(CASE WHEN type IN ('meeting', 'call', 'email') THEN 1 ELSE 0 END), 0) as bidirectionalCount,
+       COUNT(*) as totalTypeCount,
+       COALESCE(AVG(CASE WHEN content IS NOT NULL AND content != '' THEN LENGTH(content) ELSE NULL END), 0) as avgContentLength
+     FROM interactions
+     WHERE contactId = ?
+       AND date >= date('now', '-90 days')`,
+  );
+  return statsStmt;
+}
+
+/** Tests only: drop the cached statement when the database is replaced. */
+export function __resetScoringStatements(): void {
+  statsStmt = null;
+}
+
+/**
  * Compute a single contact's relationship score.
  * Returns a clamped integer 0-100.
  */
@@ -107,23 +158,7 @@ function computeBreakdown(contact: ContactScoreRow): ScoreBreakdown {
   // No lastContactedAt → 0 recency (never interacted)
 
   // ── Frequency, Depth, Reciprocity, Momentum (from interactions) ────────
-  const stats = sqlite
-    .prepare(
-      // tenant-lint: allow owner-checked by caller
-      `
-    SELECT
-      COALESCE(SUM(CASE WHEN date >= date('now', '-90 days') THEN 1 ELSE 0 END), 0) as total90d,
-      COALESCE(SUM(CASE WHEN date >= date('now', '-30 days') THEN 1 ELSE 0 END), 0) as total30d,
-      COALESCE(SUM(CASE WHEN date >= date('now', '-60 days') AND date < date('now', '-30 days') THEN 1 ELSE 0 END), 0) as totalPrev30d,
-      COALESCE(SUM(CASE WHEN type IN ('meeting', 'call', 'email') THEN 1 ELSE 0 END), 0) as bidirectionalCount,
-      COUNT(*) as totalTypeCount,
-      COALESCE(AVG(CASE WHEN content IS NOT NULL AND content != '' THEN LENGTH(content) ELSE NULL END), 0) as avgContentLength
-    FROM interactions
-    WHERE contactId = ?
-      AND date >= date('now', '-90 days')
-  `,
-    )
-    .get(contact.id) as InteractionStatsRow;
+  const stats = statsStatement().get(contact.id) as InteractionStatsRow;
 
   // Frequency (25%): 10+ interactions in 90 days = max score
   const frequency = Math.min(100, stats.total90d * 10);
@@ -226,6 +261,164 @@ function computeBreakdown(contact: ContactScoreRow): ScoreBreakdown {
 // Public API
 // =============================================================================
 
+// =============================================================================
+// The sweeps
+// =============================================================================
+
+/** What one sweep did. */
+export interface SweepResult {
+  /** Accounts that had at least one contact to look at. */
+  owners: number;
+  /** Contacts whose score was recomputed and written. */
+  scored: number;
+  /**
+   * Contacts that were marked for scoring but are not eligible for a score:
+   * a ghost, or archived. Their flag is cleared so the next sweep does not
+   * find them again, which is what stops one archived contact making its
+   * owner part of every hourly pass for ever.
+   */
+  cleared: number;
+  /** Contacts whose scoring threw. Logged one by one, never retried. */
+  skipped: number;
+  elapsedMs: number;
+}
+
+/**
+ * Contacts per transaction.
+ *
+ * better-sqlite3 is synchronous, so one transaction over a whole account would
+ * hold every pending HTTP request for its duration. Each batch commits on its
+ * own — about 2 ms per 100 contacts — and the loop yields between rounds.
+ */
+const BATCH_SIZE = 200;
+
+/** A contact is scored when it is neither a ghost nor archived. */
+const ELIGIBLE = "isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)";
+
+/** One account's remaining work in the current sweep. */
+interface OwnerQueue {
+  ownerId: string;
+  rows: ContactScoreRow[];
+  next: number;
+}
+
+function ownersWithWork(full: boolean): string[] {
+  const rows = full
+    ? (sqlite
+        .prepare(
+          // tenant-lint: allow instance sweep
+          `SELECT DISTINCT ownerId FROM contacts WHERE ${ELIGIBLE}`,
+        )
+        .all() as { ownerId: string | null }[])
+    : (sqlite
+        .prepare(
+          // tenant-lint: allow instance sweep
+          `SELECT DISTINCT ownerId FROM contacts WHERE scoreDirty = 1`,
+        )
+        .all() as { ownerId: string | null }[]);
+  return rows
+    .map((r) => r.ownerId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
+function candidatesFor(ownerId: string, full: boolean): ContactScoreRow[] {
+  const sql = full
+    ? `SELECT id, cadenceDays, lastContactedAt FROM contacts
+        WHERE ownerId = ? AND ${ELIGIBLE}`
+    : `SELECT id, cadenceDays, lastContactedAt FROM contacts
+        WHERE ownerId = ? AND scoreDirty = 1 AND ${ELIGIBLE}`;
+  return sqlite.prepare(sql).all(ownerId) as ContactScoreRow[];
+}
+
+/**
+ * Clear the flag on rows that are marked but cannot be scored.
+ *
+ * Archiving a contact is an edit, so the trigger marks it, and the sweep then
+ * refuses to score it. Without this the row stays marked and its owner joins
+ * every hourly sweep from then on to do nothing at all.
+ */
+function clearIneligible(ownerId: string): number {
+  return sqlite
+    .prepare(
+      `UPDATE contacts SET scoreDirty = 0
+        WHERE ownerId = ? AND scoreDirty = 1 AND NOT (${ELIGIBLE})`,
+    )
+    .run(ownerId).changes;
+}
+
+async function runSweep(options: { full: boolean }): Promise<SweepResult> {
+  const { full } = options;
+  const startMs = Date.now();
+  const label = full ? "full" : "incremental";
+
+  const queues: OwnerQueue[] = [];
+  let cleared = 0;
+  for (const ownerId of ownersWithWork(full)) {
+    if (!full) cleared += clearIneligible(ownerId);
+    const rows = candidatesFor(ownerId, full);
+    if (rows.length > 0) queues.push({ ownerId, rows, next: 0 });
+  }
+
+  const updateStmt = sqlite.prepare(
+    // tenant-lint: allow instance sweep
+    "UPDATE contacts SET relationshipScore = ?, scoreDirty = 0 WHERE id = ?",
+  );
+
+  let scored = 0;
+  let skipped = 0;
+
+  // Round-robin: one batch per account per round. An account with fifty
+  // thousand contacts therefore cannot put an account with fifty behind it.
+  while (queues.some((q) => q.next < q.rows.length)) {
+    for (const queue of queues) {
+      if (queue.next >= queue.rows.length) continue;
+      const batch = queue.rows.slice(queue.next, queue.next + BATCH_SIZE);
+      queue.next += batch.length;
+
+      const txn = sqlite.transaction(() => {
+        for (const contact of batch) {
+          try {
+            updateStmt.run(computeScoreForContact(contact), contact.id);
+            scored++;
+          } catch (err: unknown) {
+            skipped++;
+            log.warn(
+              "RelationshipScore",
+              `Skipped ${contact.id}: ${getErrorMessage(err)}`,
+            );
+          }
+        }
+      });
+      txn();
+    }
+    // Yield so pending HTTP requests are served between rounds.
+    if (queues.some((q) => q.next < q.rows.length)) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+
+  const elapsedMs = Date.now() - startMs;
+  const result: SweepResult = {
+    owners: queues.length,
+    scored,
+    cleared,
+    skipped,
+    elapsedMs,
+  };
+
+  // A sweep that found nothing is the normal hourly case on a quiet instance.
+  // Saying so every hour in the log is noise, so it goes to debug.
+  const message =
+    `${label} sweep: ${scored} scored across ${queues.length} account(s) ` +
+    `in ${elapsedMs}ms` +
+    (cleared > 0 ? `, ${cleared} cleared` : "") +
+    (skipped > 0 ? `, ${skipped} skipped` : "");
+  if (scored > 0 || skipped > 0) log.info("RelationshipScore", message);
+  else log.debug("RelationshipScore", message);
+
+  return result;
+}
+
 export const relationshipService = {
   /**
    * The score for a contact, together with the five signals that produced it.
@@ -250,8 +443,10 @@ export const relationshipService = {
     // trust the explanation exists to build. Recomputing already happened
     // above; persisting it costs one indexed write and makes the two agree.
     sqlite
-      // tenant-lint: allow owner-checked by caller
-      .prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?")
+      .prepare(
+        // tenant-lint: allow owner-checked by caller
+        "UPDATE contacts SET relationshipScore = ?, scoreDirty = 0 WHERE id = ?",
+      )
       .run(breakdown.score, contactId);
 
     return breakdown;
@@ -275,70 +470,32 @@ export const relationshipService = {
 
     const score = computeScoreForContact(contact);
     sqlite
-      // tenant-lint: allow owner-checked by caller
-      .prepare("UPDATE contacts SET relationshipScore = ? WHERE id = ?")
+      .prepare(
+        // tenant-lint: allow owner-checked by caller
+        "UPDATE contacts SET relationshipScore = ?, scoreDirty = 0 WHERE id = ?",
+      )
       .run(score, contactId);
     return score;
   },
 
   /**
-   * Batch recompute all non-archived, non-ghost contact scores.
-   * Called on server startup and every 60 minutes via setInterval.
+   * Score every eligible contact on the instance, one owner at a time.
    *
-   * Runs in batches of 200 with an event-loop yield between batches:
-   * better-sqlite3 is synchronous, so a single monolithic transaction over
-   * thousands of contacts would starve every pending HTTP request for the
-   * full duration. Each batch commits its own transaction (~2ms per 100
-   * contacts), so requests interleave between batches.
+   * The daily pass. Recency decays with the clock rather than with a write, so
+   * a contact nobody has touched still changes score overnight, and the dirty
+   * flag can never see that.
    */
-  async recomputeAll(): Promise<void> {
-    const startMs = Date.now();
+  async recomputeAll(): Promise<SweepResult> {
+    return runSweep({ full: true });
+  },
 
-    const contacts = sqlite
-      .prepare(
-        // tenant-lint: allow instance sweep
-        `
-      SELECT id, cadenceDays, lastContactedAt FROM contacts
-      WHERE isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-    `,
-      )
-      .all() as ContactScoreRow[];
-
-    const updateStmt = sqlite.prepare(
-      // tenant-lint: allow instance sweep
-      "UPDATE contacts SET relationshipScore = ? WHERE id = ?",
-    );
-
-    const BATCH_SIZE = 200;
-    let skipped = 0;
-    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
-      const batch = contacts.slice(i, i + BATCH_SIZE);
-      const txn = sqlite.transaction(() => {
-        for (const c of batch) {
-          try {
-            const score = computeScoreForContact(c);
-            updateStmt.run(score, c.id);
-          } catch (err: unknown) {
-            skipped++;
-            log.warn(
-              "RelationshipScore",
-              `Skipped ${c.id}: ${getErrorMessage(err)}`,
-            );
-          }
-        }
-      });
-      txn();
-
-      // Yield so pending HTTP requests are served between batches.
-      if (i + BATCH_SIZE < contacts.length) {
-        await new Promise<void>((resolve) => setImmediate(resolve));
-      }
-    }
-
-    const elapsed = Date.now() - startMs;
-    log.info(
-      "RelationshipScore",
-      `Recomputed ${contacts.length} scores in ${elapsed}ms${skipped > 0 ? ` (${skipped} skipped)` : ""}`,
-    );
+  /**
+   * Score only the contacts something changed, one owner at a time.
+   *
+   * The hourly pass, and the one that runs at startup. On a quiet instance it
+   * reads an empty partial index and returns in under a millisecond.
+   */
+  async recomputeStale(): Promise<SweepResult> {
+    return runSweep({ full: false });
   },
 };

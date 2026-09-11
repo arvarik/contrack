@@ -1,121 +1,84 @@
 /**
- * useSearchHistory — Persistent search history with terminal-style ↑/↓ recall.
+ * useSearchHistory — persistent search history with terminal-style ↑/↓ recall.
  *
  * Design decisions:
- * - localStorage (not sessionStorage): history is more valuable across sessions
- *   ("that query I ran yesterday"). Recently-viewed contacts use sessionStorage
- *   because recency is inherently transient — history is not.
- * - Case-insensitive deduplication: "VCs in SF" and "vcs in sf" are the same query.
- * - Max 20 stored, max 5 displayed in zero-state. The extra headroom prevents
- *   the display list feeling stale after a few evictions.
- * - Terminal-style ↑/↓: historyIndex tracks position in the history stack.
- *   -1 = not navigating. 0 = most recent entry. navigateHistory returns the
- *   query string to fill into the input, or null if at bounds.
+ * - Stored on the account, not in the browser. A search history is a list of
+ *   the things somebody looked for, and `localStorage` is keyed by origin: two
+ *   people using one browser shared the list, and clearing it cleared both.
+ *   It also now follows the person to another device, which is what makes
+ *   "that query I ran yesterday" work at all.
+ * - Case-insensitive deduplication: "VCs in SF" and "vcs in sf" are the same.
+ * - Max 20 stored, max 5 displayed in the zero state. The extra headroom keeps
+ *   the display list from feeling stale after a few evictions.
+ * - Terminal-style ↑/↓: `historyIndex` tracks position in the stack. -1 is not
+ *   navigating, 0 is the most recent entry. `navigateHistory` returns the query
+ *   to fill into the input, or null at the bounds.
  *
  * @module src/hooks/useSearchHistory
  */
 import { useState, useCallback, useRef } from "react";
+import { usePreferences } from "../contexts/PreferencesContext";
+import type { SearchHistoryEntry } from "../api/preferences";
 
-/** Duration in ms within which reopening the palette restores the last query */
+export type { SearchHistoryEntry };
+
+/** Duration in ms within which reopening the palette restores the last query. */
 const REPOPULATE_WINDOW_MS = 30_000;
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export interface SearchHistoryEntry {
-  /** The raw search text (without mode prefix for display) */
-  query: string;
-  /** Which mode was active when this search occurred */
-  mode: "normal" | "ai" | "action";
-  /** Epoch ms when the search was recorded */
-  timestamp: number;
-}
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const STORAGE_KEY = "contrack:search:history";
 const MAX_STORED = 20;
 const MAX_DISPLAY = 5;
 
-// ─── Storage helpers ─────────────────────────────────────────────────────────
-
-const readHistory = (): SearchHistoryEntry[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    // Validate shape — filter out corrupted entries
-    return parsed.filter(
-      (e: unknown): e is SearchHistoryEntry =>
-        typeof e === "object" &&
-        e !== null &&
-        typeof (e as Record<string, unknown>).query === "string" &&
-        typeof (e as Record<string, unknown>).mode === "string" &&
-        typeof (e as Record<string, unknown>).timestamp === "number",
-    );
-  } catch {
-    return [];
-  }
-};
-
-const writeHistory = (entries: SearchHistoryEntry[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  } catch {
-    // Storage quota exceeded — fail silently, history is non-critical
-  }
-};
-
-// ─── Hook ────────────────────────────────────────────────────────────────────
+/** The server refuses anything longer, so trim rather than lose the entry. */
+const MAX_QUERY_LENGTH = 200;
 
 export const useSearchHistory = () => {
-  const [entries, setEntries] = useState<SearchHistoryEntry[]>(readHistory);
+  const { preferences, setPreference } = usePreferences();
+  const entries = preferences.searchHistory;
+
   const [historyIndex, setHistoryIndex] = useState(-1);
-  // Stash the user's typed text before they started ↑/↓ so we can restore it on ↓ past 0
+  // Stash the user's typed text before they started ↑/↓, so ↓ past 0 restores it.
   const stashedInputRef = useRef<string>("");
-  // Track last meaningful query for 30s re-populate on modal reopen
+  // The last meaningful query, for the 30s re-populate on modal reopen.
   const lastQueryRef = useRef<{
     query: string;
     mode: string;
     timestamp: number;
   } | null>(null);
 
+  // `entries` in a ref as well, so `addEntry` and `navigateHistory` read the
+  // current list without being rebuilt on every keystroke that changes it.
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
+
   /**
-   * Record a successful search. Deduplicates case-insensitively and caps at MAX_STORED.
-   * Only call this after confirming the search returned meaningful results.
+   * Record a successful search. Deduplicates case-insensitively, caps at
+   * MAX_STORED. Only call after confirming the search returned something.
    */
   const addEntry = useCallback(
     (query: string, mode: "normal" | "ai" | "action") => {
-      const trimmed = query.trim();
-      if (trimmed.length < 2) return; // Don't record trivially short queries
+      const trimmed = query.trim().slice(0, MAX_QUERY_LENGTH);
+      if (trimmed.length < 2) return; // Don't record trivially short queries.
 
-      // Stamp the last-query ref for 30s re-populate
-      lastQueryRef.current = { query: trimmed, mode, timestamp: Date.now() };
+      const timestamp = Date.now();
+      lastQueryRef.current = { query: trimmed, mode, timestamp };
 
-      setEntries((prev) => {
-        // Remove existing entry with same query (case-insensitive)
-        const deduped = prev.filter(
-          (e) => e.query.toLowerCase() !== trimmed.toLowerCase(),
-        );
-        const updated: SearchHistoryEntry[] = [
-          { query: trimmed, mode, timestamp: Date.now() },
-          ...deduped,
-        ].slice(0, MAX_STORED);
-        writeHistory(updated);
-        return updated;
-      });
+      const deduped = entriesRef.current.filter(
+        (e) => e.query.toLowerCase() !== trimmed.toLowerCase(),
+      );
+      const updated: SearchHistoryEntry[] = [
+        { query: trimmed, mode, timestamp },
+        ...deduped,
+      ].slice(0, MAX_STORED);
+      setPreference("searchHistory", updated);
     },
-    [],
+    [setPreference],
   );
 
-  /**
-   * Clear all search history.
-   */
+  /** Clear all search history. */
   const clearHistory = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    setEntries([]);
+    setPreference("searchHistory", []);
     setHistoryIndex(-1);
-  }, []);
+  }, [setPreference]);
 
   /**
    * Terminal-style ↑/↓ navigation through history.
@@ -126,48 +89,41 @@ export const useSearchHistory = () => {
    */
   const navigateHistory = useCallback(
     (direction: "up" | "down", currentInput: string): string | null => {
-      const currentEntries = readHistory(); // Read fresh to avoid stale closure
+      const currentEntries = entriesRef.current;
       if (currentEntries.length === 0) return null;
 
       if (direction === "up") {
         const nextIndex = historyIndex + 1;
-        if (nextIndex >= currentEntries.length) return null; // At oldest entry
-        // Stash the user's input on first ↑ press
-        if (historyIndex === -1) {
-          stashedInputRef.current = currentInput;
-        }
+        if (nextIndex >= currentEntries.length) return null; // At oldest entry.
+        if (historyIndex === -1) stashedInputRef.current = currentInput;
         setHistoryIndex(nextIndex);
-        return currentEntries[nextIndex].query;
-      } else {
-        // direction === 'down'
-        if (historyIndex <= -1) return null; // Already at bottom
-        const nextIndex = historyIndex - 1;
-        setHistoryIndex(nextIndex);
-        if (nextIndex === -1) {
-          // Returned to "live" input — restore stashed text
-          return stashedInputRef.current;
-        }
         return currentEntries[nextIndex].query;
       }
+
+      if (historyIndex <= -1) return null; // Already at the bottom.
+      const nextIndex = historyIndex - 1;
+      setHistoryIndex(nextIndex);
+      // Back at the "live" input — restore the stashed text.
+      if (nextIndex === -1) return stashedInputRef.current;
+      return currentEntries[nextIndex].query;
     },
     [historyIndex],
   );
 
-  /**
-   * Reset navigation state. Call when user types a character or closes the palette.
-   */
+  /** Reset navigation state. Call when the user types or closes the palette. */
   const resetNavigation = useCallback(() => {
     setHistoryIndex(-1);
     stashedInputRef.current = "";
   }, []);
 
-  /** Top N entries for zero-state display */
+  /** Top N entries for the zero-state display. */
   const recentDisplay = entries.slice(0, MAX_DISPLAY);
 
   /**
-   * Get the last meaningful query if it was recorded within the past 30 seconds.
-   * Used to pre-fill the input when the modal is reopened quickly (flow-state preservation).
-   * Returns null if no recent query exists or the window has expired.
+   * The last meaningful query, if it was recorded in the past 30 seconds.
+   *
+   * Used to pre-fill the input when the modal is reopened quickly. Returns null
+   * when there is no recent query or the window has expired.
    */
   const getLastQuery = useCallback((): {
     query: string;

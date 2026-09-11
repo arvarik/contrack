@@ -45,6 +45,19 @@ export default tseslint.config(
       },
     },
   },
+  // The theme boot script. It is served to the browser as a plain file rather
+  // than bundled — the production CSP is `script-src 'self'`, so the palette
+  // cannot be painted before the first frame by an inline script — which puts
+  // it outside the app's TypeScript build and its browser globals.
+  {
+    files: ["public/**/*.js"],
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+      },
+    },
+  },
   {
     rules: {
       "no-empty": "off",

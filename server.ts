@@ -221,17 +221,26 @@ async function startServer() {
     ).unref();
   }
 
-  // Relationship scoring: chunked recompute on startup, then hourly sweep.
-  // recomputeAll yields to the event loop between batches so requests are
-  // never starved by a long synchronous scoring pass.
-  const runScoreSweep = () =>
-    relationshipService
-      .recomputeAll()
-      .catch((err) =>
-        log.warn("Server", `Relationship score sweep failed: ${err.message}`),
-      );
-  runScoreSweep();
-  setInterval(runScoreSweep, 60 * 60 * 1000);
+  // ── Relationship scoring ────────────────────────────────────────────────
+  // Two sweeps, both per owner and both yielding between batches so requests
+  // are never starved by a long synchronous scoring pass.
+  //
+  // Hourly reads `contacts.scoreDirty`, which the database sets through
+  // triggers on contacts, interactions and action items, so it does work in
+  // proportion to what changed rather than to how many contacts exist. Daily
+  // reads everything, because recency decays with the clock and no trigger can
+  // see that. Startup runs the incremental one: on a first boot after the
+  // upgrade every row is marked, so it is a full pass exactly once.
+  const runSweep = (kind: "stale" | "all") => () =>
+    (kind === "all"
+      ? relationshipService.recomputeAll()
+      : relationshipService.recomputeStale()
+    ).catch((err) =>
+      log.warn("Server", `Relationship score sweep failed: ${err.message}`),
+    );
+  runSweep("stale")();
+  setInterval(runSweep("stale"), 60 * 60 * 1000);
+  setInterval(runSweep("all"), 24 * 60 * 60 * 1000);
 
   // ── Local embedding model for Ask Contrack v3 ───────────────────────────
   // Load the Transformers.js model, then backfill search embeddings.

@@ -347,10 +347,27 @@ plain HTTP.
   **Settings → Trash** (or the undo toast, or `POST /api/trash/:id/restore`);
   "Delete forever" purges immediately (`DELETE /api/trash/:id`). Trash is
   permanently purged after `TRASH_RETENTION_DAYS` (default 30).
+- **Appearance:** light, dark or follow the machine, plus an accent colour, in
+  Settings. `system` is the default and needs no JavaScript: the stylesheet
+  answers `prefers-color-scheme`, so a machine that switches at sunset takes
+  the app with it. The accent picker keeps the hue you choose and darkens or
+  lightens it until it clears WCAG AA on every surface of the palette on
+  screen, so no choice can make the app unreadable.
+- **Preferences:** the theme, the accent, list density, the recent-contacts
+  limit, auto-merge sensitivity, the temperature unit and the search history
+  are stored on the account rather than in the browser, so they follow a
+  person to another device and are not shared between two accounts using one
+  browser. `GET` and `PATCH /api/auth/preferences`. A browser upgrading from
+  an older release hands over whatever it still holds, once, and then forgets
+  it.
 - **Backups:** SQLite snapshots are written to `DATA_DIR/backups` every
   `BACKUP_INTERVAL_HOURS` (online backup API — safe while the app runs),
   keeping the `BACKUP_KEEP` most recent. Trigger one manually with
   `POST /api/backups`; list them with `GET /api/backups`.
-- **Export:** `GET /api/export/json` downloads the full database (contacts,
-  interactions, lists, action items, merge log); `GET /api/export/csv`
-  downloads a flat contacts spreadsheet.
+- **Export:** three formats, all reachable from Settings and all scoped to the
+  account that asks. `GET /api/export/json` downloads everything (contacts,
+  interactions, lists, action items, merge log) and is the only one that can
+  rebuild this instance. `GET /api/export/csv` downloads a flat contacts
+  spreadsheet. `GET /api/export/vcard` downloads a vCard 3.0 `.vcf`, which is
+  what another address book opens and the only format that also comes back in
+  — the same module writes it and parses one dropped on the import modal.

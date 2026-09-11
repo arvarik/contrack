@@ -14,7 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { SETTINGS_CHANGED_EVENT } from "../lib/appEvents";
+import { usePreferences } from "../contexts/PreferencesContext";
 
 interface LocalTimeWeatherProps {
   lat: number | null;
@@ -101,7 +101,11 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
     timeZoneName: string;
     isDay: boolean;
   } | null>(null);
-  const [tempUnit, setTempUnit] = useState<"celsius" | "fahrenheit">("celsius");
+  // The unit is an account preference now, not a localStorage key this
+  // component polls: the provider re-renders every reader the moment it
+  // changes, which is what the settings-changed window event used to do.
+  const { preferences } = usePreferences();
+  const tempUnit = preferences.tempUnit;
 
   const timezone = React.useMemo(() => {
     if (lat === null || lng === null) return null;
@@ -111,22 +115,6 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
       return null;
     }
   }, [lat, lng]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("contrack_temp_unit");
-    if (saved === "fahrenheit" || saved === "celsius") {
-      setTempUnit(saved);
-    }
-    const handleSettingsChange = () => {
-      const updated = localStorage.getItem("contrack_temp_unit");
-      if (updated === "fahrenheit" || updated === "celsius") {
-        setTempUnit(updated);
-      }
-    };
-    window.addEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChange);
-    return () =>
-      window.removeEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChange);
-  }, []);
 
   useEffect(() => {
     if (!timezone) return;

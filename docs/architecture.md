@@ -94,16 +94,16 @@ Route (thin controller) → Service (business logic) → Repository (data access
 
 ### Key Services
 
-| Service               | Role                                               |
-| --------------------- | -------------------------------------------------- |
-| `contactService`      | CRUD, bulk operations, Magic Paste parsing         |
-| `interactionService`  | Timeline events, @mention extraction, briefings    |
-| `searchService`       | FTS5 keyword + vector KNN hybrid search            |
-| `dedupeService`       | Multi-pass deduplication with merge/undo           |
-| `relationshipService` | Scoring algorithm, hourly recompute                |
-| `dashboardService`    | Network health metrics, composition analytics      |
-| `aiStatsService`      | Token tracking, cache performance, cost estimation |
-| `zeroStateService`    | CRM intelligence signals for Cmd+K                 |
+| Service               | Role                                                        |
+| --------------------- | ----------------------------------------------------------- |
+| `contactService`      | CRUD, bulk operations, Magic Paste parsing                  |
+| `interactionService`  | Timeline events, @mention extraction, briefings             |
+| `searchService`       | FTS5 keyword + vector KNN hybrid search                     |
+| `dedupeService`       | Multi-pass deduplication with merge/undo                    |
+| `relationshipService` | Scoring algorithm, hourly incremental and daily full sweeps |
+| `dashboardService`    | Network health metrics, composition analytics               |
+| `aiStatsService`      | Token tracking, cache performance, cost estimation          |
+| `zeroStateService`    | CRM intelligence signals for Cmd+K                          |
 
 ### Error Handling
 

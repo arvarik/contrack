@@ -14,6 +14,16 @@
 type AvatarStyle = "avataaars" | "bottts" | "lorelei" | "initials";
 
 /**
+ * Which palette an avatar with a background of its own should be drawn for.
+ *
+ * Omitted means "let the image decide": the monogram carries its own
+ * `prefers-color-scheme` rule, which is right for the default `system` theme
+ * and needs no parameter. Pass a value only where the app knows the theme was
+ * chosen explicitly, so an `<img>` cannot be left in the other palette.
+ */
+export type AvatarTheme = "light" | "dark";
+
+/**
  * The seed the route will accept.
  *
  * An empty or whitespace seed is a `400 VALIDATION_ERROR`, which renders as a
@@ -29,8 +39,10 @@ function seedOf(value: string | null | undefined): string {
 function avatarUrl(
   style: AvatarStyle,
   seed: string | null | undefined,
+  theme?: AvatarTheme,
 ): string {
-  return `/api/avatar/${style}?seed=${encodeURIComponent(seedOf(seed))}`;
+  const suffix = theme ? `&theme=${theme}` : "";
+  return `/api/avatar/${style}?seed=${encodeURIComponent(seedOf(seed))}${suffix}`;
 }
 
 /** A contact with no picture of their own. */
@@ -47,6 +59,9 @@ export function fallbackAvatarUrl(name: string): string {
  * stable identifier — a display name changes, and an avatar that changes with
  * it stops being recognisable.
  */
-export function accountAvatarUrl(username: string | null | undefined): string {
-  return avatarUrl("initials", username);
+export function accountAvatarUrl(
+  username: string | null | undefined,
+  theme?: AvatarTheme,
+): string {
+  return avatarUrl("initials", username, theme);
 }

@@ -120,6 +120,7 @@ const COVERED = [
   "GET /api/dedupe/suggestions/count",
   "GET /api/export/csv",
   "GET /api/export/json",
+  "GET /api/export/vcard",
   "GET /api/industries",
   "GET /api/interactions/search",
   "GET /api/lists",
@@ -2643,6 +2644,18 @@ describe("an export carries one account's rows and nothing else", () => {
     );
   });
 
+  it("GET /api/export/vcard: writes only the caller's contacts", async () => {
+    const res = await asUser(B)(request(app).get("/api/export/vcard"));
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/vcard");
+    expect(res.text).toContain("bob Exported");
+    expect(res.text).not.toContain(ZEBULON);
+    expect(res.text).not.toContain("alice Contact");
+    expect(res.headers["content-disposition"]).toContain(
+      `contrack-contacts-${B.user.username}-`,
+    );
+  });
+
   it("GET /api/export/json: still gives the owner their own rows", async () => {
     const res = await asUser(A)(request(app).get("/api/export/json"));
     expect(res.status).toBe(200);
@@ -2882,7 +2895,7 @@ describe("no scoped route is waiting for its sub-phase", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(31);
+    expect(collections).toHaveLength(32);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

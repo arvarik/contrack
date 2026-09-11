@@ -24,7 +24,15 @@
 export type RouteClass =
   /** No credential needed: /healthz, /api/auth/status, /api/auth/login. */
   | "public"
-  /** Acts on the caller's own account: /api/auth/me, /api/auth/tokens. */
+  /**
+   * Acts on the caller's own account: /api/auth/me, /api/auth/tokens,
+   * /api/auth/preferences.
+   *
+   * Most of these require a session, so a personal token cannot change the
+   * credential that would revoke it. Preferences do not: an instance with
+   * sign-in switched off has no session to require, and its local owner must
+   * still be able to choose a theme.
+   */
   | "session-self"
   /** Reads or writes owned data for the caller's scope. */
   | "scoped"
@@ -284,6 +292,18 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     method: "POST",
     path: "/api/auth/register",
     class: "public",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/auth/preferences",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "PATCH",
+    path: "/api/auth/preferences",
+    class: "session-self",
     isolated: false,
   },
   {
@@ -573,6 +593,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   { method: "GET", path: "/api/export/csv", class: "scoped", isolated: true },
   { method: "GET", path: "/api/export/json", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/export/vcard", class: "scoped", isolated: true },
   { method: "GET", path: "/api/industries", class: "scoped", isolated: true },
   {
     method: "DELETE",

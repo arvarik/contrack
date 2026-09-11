@@ -94,7 +94,9 @@ export const BirthdayField = ({
         className={`text-sm font-medium py-0.5 px-2 -ml-2 rounded transition-colors hover:bg-surface-container-high ${
           display
             ? "text-on-surface"
-            : "text-on-surface-variant opacity-50 italic"
+            : // Italic rather than half-opacity: the same prompt measured
+              // 2.19:1 on a white card, and it is text somebody has to read.
+              "text-on-surface-variant italic"
         }`}
       >
         {display || "Add Birthday..."}

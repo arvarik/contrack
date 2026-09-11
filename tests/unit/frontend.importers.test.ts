@@ -132,8 +132,11 @@ describe("parseVCard", () => {
       { email: "jane@acme.com", label: "work", isPrimary: true },
       { email: "jane@personal.com", label: "home", isPrimary: false },
     ]);
+    // CELL, IPHONE and MOBILE are three exporters' words for one label, so
+    // they fold onto the one this app uses. Before that a person's phone was
+    // labelled differently depending on which address book the file came from.
     expect(c.phones).toEqual([
-      { phone: "(555) 123-4567", label: "cell", isPrimary: true },
+      { phone: "(555) 123-4567", label: "mobile", isPrimary: true },
     ]);
   });
 

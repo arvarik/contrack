@@ -29,6 +29,7 @@ import { fallbackAvatarUrl } from "../lib/avatar";
 import { escapeHtml } from "../lib/utils";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { buttonLike } from "../lib/a11y";
+import { usePreferences } from "../contexts/PreferencesContext";
 
 /**
  * Keeps the world filling the window, whatever the window is.
@@ -187,6 +188,8 @@ const createClusterCustomIcon = function (cluster: {
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
+  const { mode } = usePreferences();
+  const basemap = mode === "dark" ? "dark_all" : "light_all";
 
   // Measure BEFORE the map exists — see the header comment. useLayoutEffect
   // runs after layout but before paint, so the map still appears on the
@@ -262,8 +265,20 @@ export const MapView = () => {
           <MapClickHandler />
           <ZoomControl position="bottomright" />
           <TileLayer
+            /*
+             * The basemap is an image, so no palette token can reach it: a
+             * light map in a dark app is a bright rectangle in the middle of
+             * the page. CARTO publishes the same cartography in both, so the
+             * only thing that changes is one word in the URL.
+             *
+             * `key` is not decoration. Leaflet keeps the layer it already has
+             * and only swaps the URL template, which leaves every tile already
+             * on screen in the old palette until it is panned out of view.
+             * Keying on the basemap remounts the layer instead.
+             */
+            key={basemap}
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            url={`https://{s}.basemaps.cartocdn.com/${basemap}/{z}/{x}/{y}{r}.png`}
             // Never draw wrapped world copies: markers render only on the
             // canonical copy, so a wrapped continent is a continent with its
             // pins missing — which reads as "my contacts are in the ocean".

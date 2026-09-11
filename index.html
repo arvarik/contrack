@@ -15,7 +15,29 @@
       name="description"
       content="Contrack — A self-hosted People CRM for managing your personal and professional network. Keyboard-first, privacy-focused."
     />
-    <meta name="theme-color" content="#009edb" />
+    <!--
+      One per palette. The browser picks the matching one, so the phone's
+      status bar and the desktop title bar follow the page rather than sitting
+      in a colour the app stopped using several versions ago.
+    -->
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#f5f6f9"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0f1315"
+    />
+
+    <!--
+      Paints the chosen theme before the first frame. A file rather than an
+      inline script because the production CSP is `script-src 'self'`, and one
+      flash of the wrong palette is not worth loosening it. See
+      public/theme-boot.js.
+    -->
+    <script src="/theme-boot.js"></script>
 
     <!--
       Preload the two Latin faces. They are self-hosted (see src/fonts.css) and

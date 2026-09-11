@@ -12,6 +12,18 @@
  * @module lib/importers
  */
 import Papa from "papaparse";
+import {
+  firstRaw,
+  firstValue,
+  groupLabel,
+  parseVCards,
+  splitComponents,
+  splitList,
+  unescapeValue,
+  valuesOf,
+  type ParsedVCard,
+  type VCardProperty,
+} from "../../shared/vcard";
 
 // ===========================================================================
 // Parser output types — the wire shape POSTed to /api/contacts/bulk
@@ -61,6 +73,7 @@ export interface ImportedContact {
   addresses?: ImportedAddress[];
   socialLinks?: ImportedSocialLink[];
   sources?: ImportedSource[];
+  tags?: string[];
   /** Provenance stamp consumed by the bulk-import endpoint. */
   _sourcePlatform?: string;
 }
@@ -133,172 +146,151 @@ function resolveSocialProfile(
 }
 
 // ===========================================================================
-// Apple Contacts (vCard) Parser
-// Handles multi-value TEL/EMAIL entries with labels, addresses, social
-// profiles (including x-apple: handle format), and grouped item properties.
+// vCard (.vcf)
 // ===========================================================================
+// Apple Contacts, Google Contacts, Outlook, Android, and Contrack's own
+// export. One parser, because they all write vCard and the differences between
+// them are parameters rather than formats.
+//
+// The reading is done by `shared/vcard.ts`, which the server also uses to
+// WRITE the export. That is deliberate and it is what makes the round trip a
+// promise rather than a hope: a file this app produces is parsed back by the
+// same code that produced it, and `tests/unit/vcard.test.ts` walks a contact
+// out and back in and compares the fields.
+//
+// This layer is the mapping from vCard properties onto Contrack's shape, and
+// it is where the Apple-specific conventions live: `item1.`-grouped properties
+// with an `X-ABLabel`, `X-SOCIALPROFILE` with an `x-apple:` handle instead of
+// a URL, and a `PHOTO` folded across a dozen lines.
+// ===========================================================================
+
+/** Parameters that describe the transport rather than the label. */
+const NOISE_TYPES = new Set(["internet", "pref", "voice", "other", "x-apple"]);
+
+/**
+ * Names for the same label, folded onto one.
+ *
+ * Every exporter has its own word for a mobile number — Apple writes IPHONE
+ * and CELL, Android writes CELL, Outlook writes MOBILE — and keeping all three
+ * meant one person's phone was labelled three ways depending on which address
+ * book the file came out of. The app's own vocabulary is "mobile".
+ */
+const TYPE_ALIASES: Record<string, string> = {
+  cell: "mobile",
+  iphone: "mobile",
+  main: "work",
+  homepage: "website",
+};
+
+/**
+ * The label to show for one property.
+ *
+ * Apple's grouped `X-ABLabel` wins when there is one — it is the label the
+ * person typed. Otherwise the first TYPE that means something: `TYPE=WORK`
+ * is a label, `TYPE=INTERNET` and `TYPE=PREF` are plumbing.
+ */
+function labelFor(
+  card: ParsedVCard,
+  property: VCardProperty,
+  fallback: string,
+): string {
+  const custom = groupLabel(card, property.group);
+  if (custom && custom.toLowerCase() !== "other") return custom.toLowerCase();
+
+  const types = (property.params.TYPE ?? []).map((t) => t.toLowerCase());
+  const meaningful = types.find((t) => t && !NOISE_TYPES.has(t));
+  if (!meaningful) return fallback;
+  return TYPE_ALIASES[meaningful] ?? meaningful;
+}
+
+/** True when a property carries `TYPE=PREF`, whichever way it was written. */
+function isPreferred(property: VCardProperty): boolean {
+  return (property.params.TYPE ?? []).some((t) => /^pref$/i.test(t));
+}
+
+/**
+ * A readable one-line address from the seven ADR components.
+ *
+ * ADR is `PO Box;Extended;Street;City;Region;Postal;Country`. Contrack keeps
+ * one free-text address, so the components are joined; an address this app
+ * exported put everything in the street slot and comes back unchanged.
+ */
+function joinAddress(value: string): string {
+  const [, , street, city, region, postal, country] = splitComponents(value);
+  return [
+    (street ?? "").replace(/\n/g, ", ").trim(),
+    (city ?? "").trim(),
+    [(region ?? "").trim(), (postal ?? "").trim()].filter(Boolean).join(" "),
+    (country ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 export const parseVCard = (
   vcardData: string,
   sourcePlatform: string,
 ): ImportedContact[] => {
   const contacts: ImportedContact[] = [];
-  const cards = vcardData.split(/BEGIN:VCARD/i);
 
-  for (const card of cards) {
-    if (!card.trim()) continue;
+  for (const card of parseVCards(vcardData)) {
+    // A card with no name is not a contact anyone can use. FN is required by
+    // the specification; N is the fallback for exporters that skip it.
+    const nComponents = splitComponents(firstRaw(card, "N") ?? "");
+    const lastName = (nComponents[0] ?? "").trim() || null;
+    const firstName = (nComponents[1] ?? "").trim() || null;
 
-    const nameMatch = card.match(/^FN:(.*)$/m);
-    if (!nameMatch) continue;
+    const name =
+      (firstValue(card, "FN") ?? "").trim() ||
+      [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (!name) continue;
 
-    const orgMatch = card.match(/^ORG:(.*)$/m);
-    const titleMatch = card.match(/^TITLE:(.*)$/m);
-    const bdayMatch = card.match(/^BDAY:(.*)$/m);
-    const noteMatch = card.match(/^NOTE:(.*)$/m);
-
-    // Extract ALL emails — handles both standard and Apple grouped properties:
-    //   EMAIL;type=INTERNET;type=HOME:email@example.com
-    //   item1.EMAIL;type=INTERNET:email@example.com
-    const emailRegex = /^(?:item\d+\.)?EMAIL(?:[;][^:]*)*:(.+)$/gim;
+    // ── Emails ────────────────────────────────────────────────────────────
     const emails: ImportedEmail[] = [];
-    let emailMatch;
-    while ((emailMatch = emailRegex.exec(card)) !== null) {
-      const fullLine = emailMatch[0];
-      const emailValue = emailMatch[1].trim();
-      if (!emailValue) continue;
-
-      // Parse label from type parameters
-      let label = "personal";
-      const typeMatch = fullLine.match(/type=(\w+)/gi);
-      if (typeMatch) {
-        const types = typeMatch.map((t) =>
-          t.replace(/type=/i, "").toLowerCase(),
-        );
-        // Find the meaningful type (skip 'internet', 'pref')
-        const meaningful = types.find((t) => !["internet", "pref"].includes(t));
-        if (meaningful) label = meaningful;
-      }
-
-      // Skip duplicate emails
-      if (
-        emails.some((e) => e.email.toLowerCase() === emailValue.toLowerCase())
-      )
+    for (const property of valuesOf(card, "EMAIL")) {
+      const email = unescapeValue(property.value).trim();
+      if (!email) continue;
+      // The same address twice, in two groups, is one address.
+      if (emails.some((e) => e.email.toLowerCase() === email.toLowerCase()))
         continue;
-
       emails.push({
-        email: emailValue,
-        label,
-        isPrimary: emails.length === 0,
+        email,
+        label: labelFor(card, property, "personal"),
+        isPrimary: isPreferred(property) || emails.length === 0,
       });
     }
 
-    // Extract ALL phone numbers — handles Apple format:
-    //   TEL;type=IPHONE;type=CELL;type=VOICE;type=pref:(732) 423-3295
-    const phoneRegex = /^(?:item\d+\.)?TEL(?:[;][^:]*)*:(.+)$/gim;
+    // ── Phones ────────────────────────────────────────────────────────────
     const phones: ImportedPhone[] = [];
-    let phoneMatch;
-    while ((phoneMatch = phoneRegex.exec(card)) !== null) {
-      const fullLine = phoneMatch[0];
-      const phoneValue = phoneMatch[1].trim();
-      if (!phoneValue) continue;
-
-      let label = "mobile";
-      const typeMatch = fullLine.match(/type=(\w+)/gi);
-      if (typeMatch) {
-        const types = typeMatch.map((t) =>
-          t.replace(/type=/i, "").toLowerCase(),
-        );
-        const meaningful = types.find(
-          (t) => !["voice", "pref", "iphone"].includes(t),
-        );
-        if (meaningful) label = meaningful;
-      }
-
+    for (const property of valuesOf(card, "TEL")) {
+      const phone = unescapeValue(property.value).trim();
+      if (!phone) continue;
       phones.push({
-        phone: phoneValue,
-        label,
-        isPrimary: phones.length === 0,
+        phone,
+        label: labelFor(card, property, "mobile"),
+        isPrimary: isPreferred(property) || phones.length === 0,
       });
     }
 
-    // Extract ALL addresses (ADR) — handles:
-    //   ADR;type=WORK:;;222 2nd St;San Francisco;CA;94105;United States
-    //   item3.ADR;type=pref:;;15 Kinglet Dr S;Cranbury;NJ;08512;United States
-    //   item4.ADR;type=HOME:;;1 Brady St\nApt A-625;San Francisco;CA;94103;United States
-    const adrRegex = /^(?:item\d+\.)?ADR(?:[;][^:]*)*:(.+)$/gim;
+    // ── Addresses ─────────────────────────────────────────────────────────
     const addresses: ImportedAddress[] = [];
-    let adrMatch;
-    while ((adrMatch = adrRegex.exec(card)) !== null) {
-      const fullLine = adrMatch[0];
-      const adrValue = adrMatch[1].trim();
-      if (!adrValue) continue;
-
-      // ADR format: PO Box;Extended;Street;City;State;Zip;Country
-      const parts = adrValue.split(";");
-      const street = (parts[2] || "").replace(/\\n/g, ", ").trim();
-      const city = (parts[3] || "").trim();
-      const state = (parts[4] || "").trim();
-      const zip = (parts[5] || "").trim();
-      const country = (parts[6] || "").trim();
-
-      // Compose a readable address, skipping empty parts
-      const addressParts = [
-        street,
-        city,
-        [state, zip].filter(Boolean).join(" "),
-        country,
-      ].filter(Boolean);
-      const addressStr = addressParts.join(", ");
-      if (!addressStr) continue;
-
-      // Parse label
-      let label = "home";
-      const typeMatch = fullLine.match(/type=(\w+)/gi);
-      if (typeMatch) {
-        const types = typeMatch.map((t) =>
-          t.replace(/type=/i, "").toLowerCase(),
-        );
-        const meaningful = types.find((t) => !["pref"].includes(t));
-        if (meaningful) label = meaningful;
-      }
-
-      // Also check for X-ABLabel on the same item group
-      const itemPrefix = fullLine.match(/^(item\d+)\./i);
-      if (itemPrefix) {
-        const labelMatch = card.match(
-          new RegExp(`^${itemPrefix[1]}\\.X-ABLabel:(.+)$`, "mi"),
-        );
-        if (labelMatch) {
-          const customLabel = labelMatch[1]
-            .replace(/_\$!<|>!\$_/g, "")
-            .trim()
-            .toLowerCase();
-          if (customLabel && customLabel !== "other") label = customLabel;
-        }
-      }
-
+    for (const property of valuesOf(card, "ADR")) {
+      const address = joinAddress(property.value);
+      if (!address) continue;
       addresses.push({
-        address: addressStr,
-        label,
-        isPrimary: addresses.length === 0,
+        address,
+        label: labelFor(card, property, "home"),
+        isPrimary: isPreferred(property) || addresses.length === 0,
       });
     }
 
-    // Extract social profile URLs — handles:
-    //   X-SOCIALPROFILE;type=linkedin:http://www.linkedin.com/in/arvarik
-    //   X-SOCIALPROFILE;type=GitHub:x-apple:arvarik
-    const socialRegex = /^X-SOCIALPROFILE(?:;[^:]*)*:(.+)$/gim;
+    // ── Social profiles and URLs ──────────────────────────────────────────
     const socialLinks: ImportedSocialLink[] = [];
-    let socialMatch;
-    while ((socialMatch = socialRegex.exec(card)) !== null) {
-      const fullLine = socialMatch[0];
-      const rawUrl = socialMatch[1].trim();
-
-      // Extract platform from type= parameter
-      let platform = "other";
-      const typeMatch = fullLine.match(/type=([^;:]+)/i);
-      if (typeMatch) platform = typeMatch[1].toLowerCase();
-
-      const resolved = resolveSocialProfile(platform, rawUrl);
+    for (const property of valuesOf(card, "X-SOCIALPROFILE")) {
+      const raw = unescapeValue(property.value).trim();
+      if (!raw) continue;
+      const platform = (property.params.TYPE?.[0] ?? "other").toLowerCase();
+      const resolved = resolveSocialProfile(platform, raw);
       socialLinks.push({
         platform,
         url: resolved.url,
@@ -306,97 +298,72 @@ export const parseVCard = (
       });
     }
 
-    // Extract URLs — handles both standard and Apple grouped properties:
-    //   URL:https://example.com
-    //   item5.URL;type=pref:https://www.arvarik.com
-    const urlRegex = /^(?:item\d+\.)?URL(?:[;][^:]*)*:(.+)$/gim;
-    let urlMatch;
-    while ((urlMatch = urlRegex.exec(card)) !== null) {
-      const url = urlMatch[1].trim();
+    for (const property of valuesOf(card, "URL")) {
+      const url = unescapeValue(property.value).trim();
       if (!url) continue;
-
-      // Check the X-ABLabel for this item group to determine if it's a homepage
-      const fullLine = urlMatch[0];
-      const itemPrefix = fullLine.match(/^(item\d+)\./i);
-      let label = "website";
-      if (itemPrefix) {
-        const labelMatch = card.match(
-          new RegExp(`^${itemPrefix[1]}\\.X-ABLabel:(.+)$`, "mi"),
-        );
-        if (labelMatch) {
-          const customLabel = labelMatch[1]
-            .replace(/_\$!<|>!\$_/g, "")
-            .trim()
-            .toLowerCase();
-          if (customLabel) label = customLabel;
-        }
-      }
-
-      // Don't add duplicate URLs that are already in social links
-      if (
-        !socialLinks.some((sl) => sl.url.toLowerCase() === url.toLowerCase())
-      ) {
-        socialLinks.push({
-          platform: label === "homepage" ? "website" : label,
-          url,
-          handle: null,
-        });
-      }
+      if (socialLinks.some((s) => s.url.toLowerCase() === url.toLowerCase()))
+        continue;
+      const label = labelFor(card, property, "website");
+      socialLinks.push({
+        platform: label === "homepage" ? "website" : label,
+        url,
+        handle: null,
+      });
     }
 
-    // Extract PHOTO as base64 data URL
+    // ── Photo ─────────────────────────────────────────────────────────────
+    // Base64 in 3.0 (`PHOTO;ENCODING=b;TYPE=JPEG:`), a data URI or a plain URL
+    // in 4.0. Folding is already undone, so the value is whole either way.
     let avatarUrl: string | null = null;
-    // Match multi-line PHOTO property (base64 data continues on indented lines)
-    const photoMatch = card.match(
-      /^PHOTO;ENCODING=b;TYPE=(\w+):(.+(?:\r?\n[ \t]+.+)*)/im,
-    );
-    if (photoMatch) {
-      const mimeType = photoMatch[1].toLowerCase();
-      const base64Data = photoMatch[2].replace(/\r?\n[ \t]+/g, "").trim();
-      avatarUrl = `data:image/${mimeType};base64,${base64Data}`;
+    const photo = valuesOf(card, "PHOTO")[0];
+    if (photo) {
+      const value = photo.value.replace(/\s+/g, "");
+      if (value.startsWith("data:") || /^https?:/i.test(value)) {
+        avatarUrl = value;
+      } else if (value) {
+        const type = (photo.params.TYPE?.[0] ?? "jpeg").toLowerCase();
+        avatarUrl = `data:image/${type};base64,${value}`;
+      }
     }
 
-    // Parse structured name for firstName/lastName
-    const nMatch = card.match(/^N:([^;]*);([^;]*)(?:;.*)?$/m);
-    let firstName = null;
-    let lastName = null;
-    if (nMatch) {
-      lastName = nMatch[1].trim() || null;
-      firstName = nMatch[2].trim() || null;
-    }
+    // ── The rest ──────────────────────────────────────────────────────────
+    const org = splitComponents(firstRaw(card, "ORG") ?? "");
+    const website =
+      socialLinks.find(
+        (s) => s.platform === "website" || s.platform === "homepage",
+      )?.url ?? null;
 
-    // Build location from the primary address
-    let location: string | null = null;
-    if (addresses.length > 0) {
-      const primary = addresses.find((a) => a.isPrimary) || addresses[0];
-      location = primary.address;
-    }
-
-    // Extract website from social links (prefer homepage-labeled URL)
-    const websiteLink = socialLinks.find(
-      (sl) => sl.platform === "website" || sl.platform === "homepage",
-    );
-    const website = websiteLink?.url || null;
+    const categories = firstRaw(card, "CATEGORIES");
+    const tags = categories
+      ? splitList(categories)
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
 
     contacts.push({
-      name: nameMatch[1].trim(),
+      name,
       firstName,
       lastName,
-      company: orgMatch ? orgMatch[1].split(";")[0].trim() : null,
-      role: titleMatch ? titleMatch[1].trim() : null,
-      birthday: bdayMatch ? bdayMatch[1].trim() : null,
-      about: noteMatch ? noteMatch[1].trim() : null,
-      location,
+      company: (org[0] ?? "").trim() || null,
+      role: (firstValue(card, "TITLE") ?? "").trim() || null,
+      birthday: (firstValue(card, "BDAY") ?? "").trim() || null,
+      about: (firstValue(card, "NOTE") ?? "").trim() || null,
+      location:
+        addresses.find((a) => a.isPrimary)?.address ??
+        addresses[0]?.address ??
+        null,
       website,
       avatarUrl,
       emails,
       phones,
       addresses,
       socialLinks,
+      tags,
       sources: [{ platform: sourcePlatform }],
       _sourcePlatform: sourcePlatform,
     });
   }
+
   return contacts;
 };
 

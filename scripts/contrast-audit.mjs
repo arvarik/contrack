@@ -15,12 +15,26 @@
  *   npm run dev                       # in another terminal
  *   npm run audit:contrast
  *   npm run audit:contrast -- --url http://127.0.0.1:3210 --routes /,/pulse
+ *   npm run audit:contrast -- --theme dark
+ *   npm run audit:contrast -- --theme both --accent "#b45309"
  *
  * Exits non-zero when any text fails, so it can gate CI.
  *
+ * Both palettes are walked by default. A theme is applied two ways at once,
+ * because the app answers both: `data-theme` on <html> for a chosen palette,
+ * and the emulated `prefers-color-scheme` for the stylesheet's own media
+ * query. Setting only one of them would audit a page that is half dark.
+ *
+ * `--accent` additionally paints the five derived tokens, which is the only
+ * way to see a picked accent composited against real backgrounds.
+ * `tests/unit/theme.contrast.test.ts` checks the palettes and the derivation
+ * arithmetically and needs no browser; this checks what a browser paints.
+ *
  * Notes / limits:
  *   - Only text that is rendered on load is checked. States behind
- *     interaction (open modals, dropdowns, select mode, hover) are not.
+ *     interaction (open modals, dropdowns, select mode, hover) are not. The
+ *     active filter pill is one of those, which is why the static gate in
+ *     tests/unit/theme.contrast.test.ts exists alongside this.
  *   - Gradient-filled text is skipped: it is painted by its background, so
  *     its `color` is meaningless.
  *   - Disabled controls are reported separately. WCAG exempts them; an
@@ -44,6 +58,19 @@ const argOf = (name, fallback) => {
 // this defaulted to a port nothing listens on — so a bare run connected to
 // nothing and reported zero failures for a dozen blank pages.
 const BASE = argOf("url", "http://127.0.0.1:3210");
+
+const THEME_ARG = argOf("theme", "both");
+if (!["light", "dark", "both"].includes(THEME_ARG)) {
+  console.error(`--theme takes light, dark or both (got "${THEME_ARG}")`);
+  process.exit(2);
+}
+const THEMES = THEME_ARG === "both" ? ["light", "dark"] : [THEME_ARG];
+
+const ACCENT = argOf("accent", null);
+if (ACCENT && !/^#[0-9a-fA-F]{6}$/.test(ACCENT)) {
+  console.error(`--accent takes a six-digit hex colour (got "${ACCENT}")`);
+  process.exit(2);
+}
 const chrome = spawn(
   CHROME,
   [
@@ -235,31 +262,79 @@ const routes = argOf("routes", null)
       .split(",")
       .map((p) => [p, p])
   : await withDetailRoute(DEFAULT_ROUTES);
+/**
+ * Paint a palette, both ways the app can be in one.
+ *
+ * `data-theme` is what a chosen palette writes; the emulated media feature is
+ * what the stylesheet's own `prefers-color-scheme` block reads. Both are set
+ * so that neither half of the CSS is left in the other palette.
+ *
+ * The accent, when given, is derived in the page: `src/lib/theme.ts` is a
+ * module this script cannot import, so the five values are computed by asking
+ * the running app for them. Every build ships that module, so the arithmetic
+ * here is the arithmetic the product uses rather than a second copy of it.
+ */
+async function applyTheme(theme) {
+  const accentScript = ACCENT
+    ? `(async () => {
+         const { deriveAccent } = await import("/src/lib/theme.ts");
+         const tokens = deriveAccent(${JSON.stringify(ACCENT)}, ${JSON.stringify(theme)});
+         for (const [k, v] of Object.entries(tokens)) {
+           document.documentElement.style.setProperty("--color-" + k, v);
+         }
+       })()`
+    : "0";
+  await send("Runtime.evaluate", {
+    expression: `document.documentElement.setAttribute("data-theme", ${JSON.stringify(theme)}); ${accentScript}`,
+    awaitPromise: Boolean(ACCENT),
+  });
+}
+
 const all = [];
-for (const [name, path] of routes) {
-  await send("Emulation.setDeviceMetricsOverride", {
-    width: 1440,
-    height: 1000,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
-  await send("Page.navigate", { url: BASE + path });
-  await sleep(4200);
-  const res = await send("Runtime.evaluate", {
-    expression: AUDIT,
-    returnByValue: true,
-  });
-  const fails = JSON.parse(res.result.value || "[]");
+for (const theme of THEMES) {
   console.log(
-    `${name.padEnd(14)} ${String(fails.length).padStart(3)} failing text elements`,
+    `\n──── ${theme} palette${ACCENT ? ` · accent ${ACCENT}` : ""} ────`,
   );
-  for (const f of fails) all.push({ ...f, route: name });
+  // Before the navigation, not after. The app follows `prefers-color-scheme`
+  // on its own when the theme setting is "system", so emulating it first means
+  // the page loads in the palette being audited rather than transitioning into
+  // it — and a `transition-all` control read mid-transition reports the colour
+  // it is leaving, which is a failure that exists only in the measurement.
+  await send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-color-scheme", value: theme }],
+  });
+  for (const [name, path] of routes) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width: 1440,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await send("Page.navigate", { url: BASE + path });
+    await sleep(4200);
+    // After the navigation: a fresh document has neither the attribute nor the
+    // inline properties, and the app writes the attribute itself once its
+    // preferences arrive.
+    await applyTheme(theme);
+    // Let every transition finish. Without this the audit reads controls that
+    // are still animating between the two palettes.
+    await sleep(600);
+    const res = await send("Runtime.evaluate", {
+      expression: AUDIT,
+      returnByValue: true,
+    });
+    const fails = JSON.parse(res.result.value || "[]");
+    console.log(
+      `${name.padEnd(14)} ${String(fails.length).padStart(3)} failing text elements`,
+    );
+    for (const f of fails) all.push({ ...f, route: name, theme });
+  }
 }
 
 console.log("\n──── failures grouped by colour pair ────");
 const groups = new Map();
 for (const f of all) {
-  const key = `${f.fg} on ${f.bgHex}${f.disabled ? "  [disabled]" : ""}`;
+  const key = `[${f.theme}] ${f.fg} on ${f.bgHex}${f.disabled ? "  [disabled]" : ""}`;
   if (!groups.has(key)) groups.set(key, { n: 0, minRatio: 99, samples: [] });
   const g = groups.get(key);
   g.n++;
@@ -274,6 +349,12 @@ for (const [k, g] of [...groups.entries()].sort((a, b) => b[1].n - a[1].n)) {
   for (const s of g.samples) console.log(`      ${s}`);
 }
 const blocking = all.filter((f) => !f.disabled);
+for (const theme of THEMES) {
+  const n = all.filter((f) => f.theme === theme && !f.disabled).length;
+  console.log(
+    `\n${theme.padEnd(6)} ${String(n).padStart(4)} blocking failures`,
+  );
+}
 console.log(
   `\nTOTAL failing text elements: ${all.length}` +
     (all.length !== blocking.length
