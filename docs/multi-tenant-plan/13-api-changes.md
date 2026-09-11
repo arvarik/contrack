@@ -125,6 +125,7 @@ alias is removed if feature F5 in
 | Upload URLs | `/uploads/avatars/<file>`, `/uploads/<file>` | `/uploads/u/<ownerId>/avatars/<file>`, `/uploads/u/<ownerId>/files/<file>` |
 | `GET /api/export/json` | every row on the instance | the caller's rows |
 | `GET /api/query/contacts` | includes trashed and ghost contacts | excludes them |
+| `GET` and `POST /api/backups` | `{ filename, sizeBytes, createdAt }` | the same plus `verification`, which is `{ ok, checkedAt, integrity, rows, liveRows, problem? }` or `null` for a snapshot taken before 2.0 |
 
 ---
 

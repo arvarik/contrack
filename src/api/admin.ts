@@ -104,10 +104,36 @@ export interface AuditPage {
   nextBefore: string | null;
 }
 
+/**
+ * What opening a snapshot found.
+ *
+ * Every snapshot is read back as soon as it is written: opened read only, put
+ * through `PRAGMA quick_check`, and counted against the live database. A
+ * snapshot that reads perfectly and holds nothing is the failure that would
+ * otherwise be found by somebody restoring it.
+ */
+export interface BackupVerification {
+  ok: boolean;
+  checkedAt: string;
+  /** `PRAGMA quick_check`, "ok" when the file is sound. */
+  integrity: string;
+  /** Row counts inside the snapshot, by table. */
+  rows: Record<string, number>;
+  /** The same counts in the live database when the check ran. */
+  liveRows: Record<string, number>;
+  /** Why `ok` is false. Absent when it is true. */
+  problem?: string;
+}
+
 export interface BackupInfo {
   filename: string;
   sizeBytes: number;
   createdAt: string;
+  /**
+   * Null for a snapshot taken before 2.0, which is not the same as a failed
+   * check and must not be shown as one.
+   */
+  verification: BackupVerification | null;
 }
 
 // ---------------------------------------------------------------------------

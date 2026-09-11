@@ -122,10 +122,22 @@ router.post(
       action: "backup.created",
       targetType: "backup",
       targetId: backup.filename,
-      details: { filename: backup.filename },
+      // `verified` is in the audit row because a snapshot that failed its
+      // check is an event somebody should be able to find later, and the
+      // sidecar next to a rotated-out file will not be there to find.
+      details: {
+        filename: backup.filename,
+        verified: backup.verification?.ok ?? false,
+        ...(backup.verification?.problem
+          ? { problem: backup.verification.problem }
+          : {}),
+      },
       ip: req.ip ?? null,
     });
-    log.info("API", `[${rid}] POST /api/backups → ${backup.filename}`);
+    log.info(
+      "API",
+      `[${rid}] POST /api/backups → ${backup.filename} (${backup.verification?.ok ? "verified" : "NOT verified"})`,
+    );
     res.status(201).json(backup);
   }),
 );

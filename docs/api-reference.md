@@ -1483,14 +1483,42 @@ SQLite snapshots (online backup API — safe while the app runs) written to `DAT
 
 ### `GET /api/backups`
 
+Admin only. A snapshot is the whole database, so it holds every account's rows.
+
 ```bash
 curl http://localhost:3210/api/backups
-# → { "backups": [{ "filename", "sizeBytes", "createdAt" }] }
+# → { "backups": [{ "filename", "sizeBytes", "createdAt", "verification" }] }
 ```
+
+Every snapshot is opened again as soon as it is written: read only, through
+`PRAGMA quick_check`, and counted against the live database. `verification`
+carries the answer.
+
+```json
+{
+  "ok": true,
+  "checkedAt": "2026-09-10T18:04:11.204Z",
+  "integrity": "ok",
+  "rows": { "contacts": 431, "users": 3, "interactions": 1904 },
+  "liveRows": { "contacts": 431, "users": 3, "interactions": 1904 }
+}
+```
+
+- `ok` is false when the file does not open, when `quick_check` reports
+  damage, when a counted table is missing, or when a table that has rows in
+  the live database has none in the snapshot. The last is the one an integrity
+  check cannot see: a sound, readable snapshot that restores nothing.
+- `problem` is present only when `ok` is false and says which of those it was.
+- `rows` and `liveRows` cover the eight owned tables and `users`.
+- `verification` is `null` for a snapshot taken before 2.0. That is not a
+  failed check and is shown differently.
 
 ### `POST /api/backups`
 
-Take a snapshot now. Returns `201` with the new backup's metadata.
+Admin only. Take a snapshot now. Returns `201` with the new backup's metadata,
+including its `verification`. A snapshot that fails verification is still
+written and still returned: the file may be salvageable, and deleting the
+evidence helps nobody.
 
 ---
 
