@@ -2,9 +2,10 @@
 // Integration Tests — the bulk-import tail keeps the importer's scope
 // =============================================================================
 // The non-stream import answers the client and then keeps working: it embeds
-// the new contacts, waits for the writes to settle, and runs a dedupe check
-// over each one. That second half starts from a timer, long after the response
-// has been sent, so nothing about the request is still in scope by then.
+// the new contacts, waits for the writes to settle, and runs one dedupe scan
+// over all of them. That second half starts from a timer, long after the
+// response has been sent, so nothing about the request is still in scope by
+// then.
 //
 // Both halves are wrapped in runWithContext with the scope captured at the top
 // of the handler. This file reads the owner off the AI invocation rows they
@@ -60,7 +61,11 @@ vi.mock("../../server/services/dedupe/index.ts", async (importActual) => {
     ...actual,
     dedupeService: {
       ...actual.dedupeService,
-      incrementalDedupeCheck: async () => {
+      // The import tail runs one scan for the whole batch rather than one
+      // check per contact, so this is the entry point that stands in for the
+      // real matching now. What the test is about is unchanged: whichever
+      // account the tail runs for is the account its rows name.
+      runImportScan: async () => {
         recordInvocation({
           operation: "parse",
           model: "mock",
@@ -69,6 +74,7 @@ vi.mock("../../server/services/dedupe/index.ts", async (importActual) => {
           cached: false,
           description: "import tail: dedupe",
         });
+        return { autoMerged: 0, pending: 0, matchedIds: new Set<string>() };
       },
     },
   };

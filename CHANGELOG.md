@@ -118,6 +118,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Extra S3.** A bulk import checks its contacts for duplicates in one pass
+  instead of one pass each. Every check normalized the whole account and built
+  a whole scan context of its own, so importing `n` contacts into a corpus of
+  `m` did about `n × m` work and nearly all of it was the same work repeated.
+  Measured: a thousand contacts into a corpus of ten thousand went from 113
+  seconds to 1.8 seconds, and the gap widens as the corpus grows. The
+  streaming import used its own separate matching, written out in the route
+  and weaker than the other path's, so what counted as a duplicate depended on
+  whether the client asked for a stream. Both paths now run the same scan, and
+  a streaming import finds nicknames and close profiles it could not see
+  before. One behaviour changed with it: an imported contact whose name
+  already exists is now a suggestion to review rather than an automatic merge.
+  The streaming import scored that at 0.95 and merged it, the other import
+  scored it at 0.92 and asked, and two people can share a name.
 - **Phase 3.** An expired personal token is refused from the moment it
   expires. The expiry check compared a database timestamp against a
   JavaScript one, and a space sorts before a `T`, so a token whose expiry fell

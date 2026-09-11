@@ -209,6 +209,18 @@ The SSE stream sends progress events through 4 phases:
 3. `scanning` — Looking for duplicates
 4. `done` — Summary with counts (imported, auto-merged, needs-review, new-unique)
 
+Both modes run the same duplicate scan over the imported contacts, against the
+caller's own contacts only. It compares each new contact with the existing
+ones and with the rest of the import, so the same person on two rows of one
+spreadsheet is found. A shared email address or phone number is merged
+automatically; a matching name, a nickname, or a close profile becomes a
+suggestion to review.
+
+The difference between the two modes is when the scan runs. In streaming mode
+it runs before the `done` event, and the counts in the summary are its result.
+In standard mode the response returns first and the scan starts a few seconds
+later, so `GET /api/dedupe/suggestions` is where its result appears.
+
 ---
 
 ### `POST /api/contacts/bulk-delete`

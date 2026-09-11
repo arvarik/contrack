@@ -4,35 +4,23 @@ import { runWithContext } from "../../tenancy/requestContext.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
-import { normalizePhone, isNicknameMatch } from "../../utils/nlp/index.ts";
 import { dedupeQueue } from "./jobQueue.ts";
 import { buildPassContext } from "./context.ts";
 import {
   backfillOwnerEmbeddings,
   isEmbeddingAvailable,
   getEmbeddingCount,
-  getEmbedding,
-  findNearestNeighbors,
   clearOwnerEmbeddings,
   reEmbedStaleContacts,
 } from "./embeddings.ts";
 import {
-  normalizeContacts,
-  normalizeContactById,
-  scopeOfContact,
-} from "./normalization.ts";
-import { loadNegativeConstraints, pairKey } from "./blocking.ts";
-import {
-  computeMatchSignals,
-  computeCompositeScore,
-  classifyPair,
-  distanceToSimilarity,
-} from "./scoring.ts";
-import {
-  runDeterministicPass,
-  runFunnelPass,
-  buildScoringReasoning,
-} from "./passes.ts";
+  buildIncrementalCorpus,
+  findIncrementalPairs,
+  normalizeTarget,
+  type IncrementalCorpus,
+} from "./incremental.ts";
+import { scopeOfContact } from "./normalization.ts";
+import { runDeterministicPass, runFunnelPass } from "./passes.ts";
 import { buildClusters, computePrimaryScore } from "./clustering.ts";
 import {
   storeSuggestion,
@@ -41,13 +29,7 @@ import {
   clearAllPendingSuggestions,
 } from "./suggestions.ts";
 import { softMergeContacts, mergeContacts } from "./merging.ts";
-import type {
-  DedupeScanMode,
-  RawPair,
-  MatchType,
-  NormalizedContact,
-  ContactRow,
-} from "./types.ts";
+import type { DedupeScanMode, RawPair, MatchType } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
@@ -66,6 +48,79 @@ function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
 }
 
 /**
+ * Persist the pairs one contact produced.
+ *
+ * Anything at or above the auto-merge threshold is merged now and recorded as
+ * `auto_merged`; everything else becomes a pending suggestion for somebody to
+ * look at. A merge that throws becomes a pending suggestion too, because the
+ * pair is still a pair even when the merge could not be completed.
+ *
+ * Returns what went where, so a batch can add up its own summary, and adds
+ * every merged-away contact to `corpus.retired` so later contacts in the same
+ * batch stop being offered a contact that is no longer there.
+ */
+function persistIncrementalPairs(
+  corpus: IncrementalCorpus,
+  pairs: RawPair[],
+  rid: string,
+  autoMergeThreshold: number,
+): { autoMerged: number; pending: number } {
+  const { scope } = corpus;
+  let autoMerged = 0;
+  let pending = 0;
+
+  const qualifying = pairs.filter((p) => p.confidence >= autoMergeThreshold);
+  for (const pair of pairs) {
+    if (pair.confidence >= autoMergeThreshold) continue;
+    storeSuggestion(scope, pair, "pending");
+    pending++;
+  }
+
+  if (qualifying.length === 0) return { autoMerged, pending };
+
+  const ids = [...new Set(qualifying.flatMap((p) => [p.idA, p.idB]))];
+  const hydrated = new Map(
+    contactRepo
+      .hydrateMany(contactRepo.findManyOwned(scope, ids))
+      .map((c) => [c.id, c]),
+  );
+
+  for (const pair of qualifying) {
+    try {
+      const rawA = hydrated.get(pair.idA);
+      const rawB = hydrated.get(pair.idB);
+      if (!rawA || !rawB) continue;
+
+      const scoreA = computePrimaryScore(scope, rawA);
+      const scoreB = computePrimaryScore(scope, rawB);
+      const [primaryId, duplicateId] =
+        scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
+
+      dedupeService.softMergeContacts(
+        scope,
+        primaryId,
+        duplicateId,
+        pair.confidence,
+        pair.reasoning,
+        rid,
+      );
+      storeSuggestion(scope, pair, "auto_merged");
+      corpus.retired.add(duplicateId);
+      autoMerged++;
+    } catch (err: unknown) {
+      log.warn(
+        "DedupeService",
+        `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`,
+      );
+      storeSuggestion(scope, pair, "pending");
+      pending++;
+    }
+  }
+
+  return { autoMerged, pending };
+}
+
+/**
  * The body of one incremental check, inside the contact owner's context.
  *
  * Every read below names that owner: a duplicate of a contact can only be
@@ -79,9 +134,9 @@ async function runIncrementalCheck(
   autoMergeThreshold: number,
 ): Promise<void> {
   const t0 = Date.now();
-
   try {
-    const target = normalizeContactById(scope, contactId);
+    const corpus = buildIncrementalCorpus(scope, rid);
+    const target = normalizeTarget(corpus, contactId);
     if (!target) {
       log.debug(
         "DedupeService",
@@ -90,189 +145,7 @@ async function runIncrementalCheck(
       return;
     }
 
-    const distinctPairs = loadNegativeConstraints(scope);
-    const pairs: RawPair[] = [];
-    const seenPairs = new Set<string>();
-
-    if (target.emailsNorm.length > 0) {
-      const placeholders = target.emailsNorm.map(() => "?").join(",");
-      const emailMatches = sqlite
-        .prepare(
-          `
-          SELECT DISTINCT ce.contactId
-          FROM contact_emails ce
-          JOIN contacts c ON c.id = ce.contactId
-          WHERE c.ownerId = ?
-            AND LOWER(TRIM(ce.email)) IN (${placeholders})
-            AND ce.contactId != ?
-            AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-        `,
-        )
-        .all(scope.ownerId, ...target.emailsNorm, contactId) as {
-        contactId: string;
-      }[];
-
-      for (const match of emailMatches) {
-        const pk = pairKey(contactId, match.contactId);
-        if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
-          seenPairs.add(pk);
-          pairs.push({
-            idA: contactId,
-            idB: match.contactId,
-            matchType: "email",
-            confidence: 0.99,
-            reasoning: "Shared email address",
-          });
-        }
-      }
-    }
-
-    if (target.phonesNorm.length > 0) {
-      const allPhones = sqlite
-        .prepare(
-          `
-          SELECT cp.contactId, cp.phone FROM contact_phones cp
-          JOIN contacts c ON c.id = cp.contactId
-          WHERE c.ownerId = ? AND cp.contactId != ?
-            AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-        `,
-        )
-        .all(scope.ownerId, contactId) as {
-        contactId: string;
-        phone: string;
-      }[];
-
-      const targetPhoneSet = new Set(target.phonesNorm);
-      for (const row of allPhones) {
-        const norm = normalizePhone(row.phone);
-        if (norm && targetPhoneSet.has(norm)) {
-          const pk = pairKey(contactId, row.contactId);
-          if (!seenPairs.has(pk) && !distinctPairs.has(pk)) {
-            seenPairs.add(pk);
-            pairs.push({
-              idA: contactId,
-              idB: row.contactId,
-              matchType: "phone",
-              confidence: 0.99,
-              reasoning: "Shared phone number",
-            });
-          }
-        }
-      }
-    }
-
-    if (target.nameNorm) {
-      const allNormalized = normalizeContacts(scope);
-      const targetBlockKeys = new Set(target.blockKeys);
-
-      for (const other of allNormalized) {
-        if (other.id === contactId) continue;
-        const pk = pairKey(contactId, other.id);
-        if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-
-        const sharesBlock = other.blockKeys.some((k) => targetBlockKeys.has(k));
-        if (!sharesBlock) continue;
-
-        if (target.nameNorm === other.nameNorm) {
-          seenPairs.add(pk);
-          const isCrossSource =
-            target.sources.length > 0 &&
-            other.sources.length > 0 &&
-            !target.sources.some((s) => other.sources.includes(s));
-          pairs.push({
-            idA: contactId,
-            idB: other.id,
-            matchType: isCrossSource ? "cross_source" : "name",
-            confidence: isCrossSource ? 0.95 : 0.92,
-            reasoning: isCrossSource
-              ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
-              : "Exact name match",
-          });
-          continue;
-        }
-
-        if (
-          target.lastNameNorm &&
-          target.lastNameNorm === other.lastNameNorm &&
-          target.firstNameNorm &&
-          other.firstNameNorm
-        ) {
-          if (isNicknameMatch(target.firstNameNorm, other.firstNameNorm)) {
-            seenPairs.add(pk);
-            pairs.push({
-              idA: contactId,
-              idB: other.id,
-              matchType: "nickname",
-              confidence: 0.88,
-              reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
-            });
-          }
-        }
-      }
-    }
-
-    if (isEmbeddingAvailable()) {
-      try {
-        const queryVec = getEmbedding(contactId);
-        if (queryVec) {
-          const neighbors = findNearestNeighbors(scope, queryVec, 5, contactId);
-          const normalizedCache = new Map<string, NormalizedContact>();
-
-          const targetSimCtx = buildPassContext(scope, rid);
-
-          for (const neighbor of neighbors) {
-            const pk = pairKey(contactId, neighbor.contactId);
-            if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-
-            if (!normalizedCache.has(neighbor.contactId)) {
-              const n = normalizeContactById(scope, neighbor.contactId);
-              if (n) normalizedCache.set(neighbor.contactId, n);
-            }
-            const otherNorm = normalizedCache.get(neighbor.contactId);
-            if (!otherNorm) continue;
-
-            const pairDistinct = distinctPairs.has(pk);
-            const signals = computeMatchSignals(
-              target,
-              otherNorm,
-              distanceToSimilarity(neighbor.distance),
-              pairDistinct,
-              targetSimCtx.socialUrlsByContact.get(target.id) ?? [],
-              targetSimCtx.socialUrlsByContact.get(otherNorm.id) ?? [],
-            );
-            const score = computeCompositeScore(signals);
-            const classification = classifyPair(score);
-
-            if (classification !== "discard") {
-              seenPairs.add(pk);
-              const rawA =
-                (contactRepo.findOwned(
-                  scope,
-                  contactId,
-                ) as ContactRow | null) ?? undefined;
-              const rawB =
-                (contactRepo.findOwned(
-                  scope,
-                  neighbor.contactId,
-                ) as ContactRow | null) ?? undefined;
-              pairs.push({
-                idA: contactId,
-                idB: neighbor.contactId,
-                matchType: "fuzzy",
-                confidence: score,
-                reasoning: buildScoringReasoning(signals, score, rawA, rawB),
-              });
-            }
-          }
-        }
-      } catch (err: unknown) {
-        log.debug(
-          "DedupeService",
-          `[${rid}] Incremental KNN failed: ${getErrorMessage(err)}`,
-        );
-      }
-    }
-
+    const pairs = findIncrementalPairs(corpus, contactId, target, new Set());
     if (pairs.length === 0) {
       log.debug(
         "DedupeService",
@@ -281,54 +154,7 @@ async function runIncrementalCheck(
       return;
     }
 
-    const qualifyingPairs = pairs.filter(
-      (p) => p.confidence >= autoMergeThreshold,
-    );
-    const pendingPairs = pairs.filter((p) => p.confidence < autoMergeThreshold);
-    for (const pair of pendingPairs) {
-      storeSuggestion(scope, pair, "pending");
-    }
-
-    if (qualifyingPairs.length > 0) {
-      const pairIds = [
-        ...new Set(qualifyingPairs.flatMap((p) => [p.idA, p.idB])),
-      ];
-      const pairHydratedMap = new Map(
-        contactRepo
-          .hydrateMany(contactRepo.findManyOwned(scope, pairIds))
-          .map((c) => [c.id, c]),
-      );
-
-      for (const pair of qualifyingPairs) {
-        try {
-          const rawA = pairHydratedMap.get(pair.idA);
-          const rawB = pairHydratedMap.get(pair.idB);
-          if (!rawA || !rawB) continue;
-
-          const scoreA = computePrimaryScore(scope, rawA);
-          const scoreB = computePrimaryScore(scope, rawB);
-          const [primaryId, duplicateId] =
-            scoreA >= scoreB ? [pair.idA, pair.idB] : [pair.idB, pair.idA];
-
-          dedupeService.softMergeContacts(
-            scope,
-            primaryId,
-            duplicateId,
-            pair.confidence,
-            pair.reasoning,
-            rid,
-          );
-          storeSuggestion(scope, pair, "auto_merged");
-        } catch (err: unknown) {
-          log.warn(
-            "DedupeService",
-            `[${rid}] Incremental auto-merge failed: ${getErrorMessage(err)}`,
-          );
-          storeSuggestion(scope, pair, "pending");
-        }
-      }
-    }
-
+    persistIncrementalPairs(corpus, pairs, rid, autoMergeThreshold);
     log.info(
       "DedupeService",
       `[${rid}] Incremental: ${pairs.length} match(es) for ${contactId} in ${Date.now() - t0}ms`,
@@ -643,6 +469,100 @@ export const dedupeService = {
       },
       () => runIncrementalCheck(scope, contactId, rid, autoMergeThreshold),
     );
+  },
+
+  /**
+   * Check a whole import against the account it landed in, in one pass.
+   *
+   * This replaces a loop that called `incrementalDedupeCheck` once per
+   * imported contact. Each of those calls normalized the entire corpus and
+   * built a whole pass context of its own, so importing `n` contacts into a
+   * corpus of `m` did about `n × m` work, almost all of it the same work
+   * repeated. The corpus is now built once and every new contact is matched
+   * against that one snapshot.
+   *
+   * The new contacts are the left side of every pair. Nothing compares two
+   * contacts that were both already there, which is what a full scan is for
+   * and what `POST /api/dedupe/scan` still does.
+   *
+   * It is NOT `runScan` with another mode, though the plan describes it that
+   * way. `runScan` takes the instance-wide run lock and clears every pending
+   * suggestion the account has before it writes its own. An import may do
+   * neither: it must not empty somebody's review queue, and it must not block
+   * or be blocked by a scan somebody asked for. What `runScan` and this share
+   * is the matching, not the lifecycle.
+   *
+   * Yields to the event loop between contacts. The per-contact work is
+   * synchronous and a large import would otherwise hold the thread for the
+   * whole batch, which on a shared instance is everybody else's requests.
+   */
+  async runImportScan(
+    scope: Scope,
+    contactIds: string[],
+    rid: string,
+    options: {
+      autoMergeThreshold?: number;
+      onProgress?: (checked: number, total: number) => void;
+    } = {},
+  ): Promise<{
+    autoMerged: number;
+    pending: number;
+    /** Imported contacts that matched something. The rest are new people. */
+    matchedIds: Set<string>;
+  }> {
+    const autoMergeThreshold = options.autoMergeThreshold ?? 0.93;
+    const matchedIds = new Set<string>();
+    let autoMerged = 0;
+    let pending = 0;
+
+    if (contactIds.length === 0) return { autoMerged, pending, matchedIds };
+
+    const t0 = Date.now();
+    const corpus = buildIncrementalCorpus(scope, rid);
+    const imported = new Set(contactIds);
+    // Shared across the batch, so a pair between two of the imported contacts
+    // is produced once rather than once from each end.
+    const seen = new Set<string>();
+
+    for (let i = 0; i < contactIds.length; i++) {
+      if (i > 0) await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const contactId = contactIds[i];
+      try {
+        if (corpus.retired.has(contactId)) continue;
+        const target = normalizeTarget(corpus, contactId);
+        if (!target) continue;
+
+        const pairs = findIncrementalPairs(corpus, contactId, target, seen);
+        if (pairs.length === 0) continue;
+
+        for (const pair of pairs) {
+          matchedIds.add(pair.idA);
+          if (imported.has(pair.idB)) matchedIds.add(pair.idB);
+        }
+
+        const counts = persistIncrementalPairs(
+          corpus,
+          pairs,
+          rid,
+          autoMergeThreshold,
+        );
+        autoMerged += counts.autoMerged;
+        pending += counts.pending;
+      } catch (err: unknown) {
+        log.warn(
+          "DedupeService",
+          `[${rid}] Import scan failed for ${contactId}: ${getErrorMessage(err)}`,
+        );
+      }
+      options.onProgress?.(i + 1, contactIds.length);
+    }
+
+    log.info(
+      "DedupeService",
+      `[${rid}] Import scan: ${contactIds.length} new contacts against ${corpus.normalized.length} existing in ${Date.now() - t0}ms — ${autoMerged} auto-merged, ${pending} pending`,
+    );
+    return { autoMerged, pending, matchedIds };
   },
 
   seedDuplicates(scope: Scope) {
