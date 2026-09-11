@@ -42,7 +42,7 @@ import {
   type Preferences,
   type PreferencesResponse,
 } from "../api/preferences";
-import { applyTheme, type ResolvedMode } from "../lib/theme";
+import { applyTheme, readThemeCache, type ResolvedMode } from "../lib/theme";
 import { takeLocalPreferences } from "../lib/localPreferenceMigration";
 
 const QUERY_KEY = ["preferences"] as const;
@@ -104,7 +104,19 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     gcTime: Infinity,
   });
 
-  const preferences = data?.preferences ?? DEFAULT_PREFERENCES;
+  // Until the account answers, the theme and the accent come from whatever
+  // this browser last painted — which the boot script has already put on the
+  // screen. Starting from the defaults instead would repaint to light and back
+  // on every load, and would leave a browser that cannot reach the server
+  // showing the default rather than the choice.
+  const fallback = useMemo(() => {
+    const cached = readThemeCache();
+    return cached
+      ? { ...DEFAULT_PREFERENCES, theme: cached.theme, accent: cached.accent }
+      : DEFAULT_PREFERENCES;
+  }, []);
+
+  const preferences = data?.preferences ?? fallback;
 
   const mutation = useMutation({
     mutationFn: savePreferences,

@@ -353,10 +353,42 @@ export const THEME_CACHE_KEY = "contrack.theme";
 export interface ThemeCache {
   /** What was chosen: light, dark, or follow the machine. */
   theme: ThemeMode;
-  /** What that resolved to when it was last painted. */
+  /** The accent that was chosen, so the app can start from it too. */
+  accent: string;
+  /** What the theme resolved to when it was last painted. */
   mode: ResolvedMode;
   /** `--color-*` name to value. Empty when the default accent is in use. */
   vars: Record<string, string>;
+}
+
+/**
+ * The last theme this browser painted, for the app to start from.
+ *
+ * The boot script has already applied it by the time React runs, so starting
+ * from the defaults instead would mean one of two things: the app repaints to
+ * the default and then back when the account's answer arrives, or — when the
+ * server cannot be reached at all — it repaints to the default and stays
+ * there, which turns a network failure into somebody's theme being reset.
+ *
+ * Anything unreadable answers null and the defaults apply, which is what a
+ * browser that has never painted this app gets anyway.
+ */
+export function readThemeCache(): { theme: ThemeMode; accent: string } | null {
+  try {
+    const raw = localStorage.getItem(THEME_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as Partial<ThemeCache>;
+    const theme = cached.theme;
+    if (theme !== "light" && theme !== "dark" && theme !== "system")
+      return null;
+    const accent =
+      typeof cached.accent === "string" && /^#[0-9a-f]{6}$/i.test(cached.accent)
+        ? cached.accent.toLowerCase()
+        : DEFAULT_ACCENT;
+    return { theme, accent };
+  } catch {
+    return null;
+  }
 }
 
 /** `system` asks the operating system; the other two answer for themselves. */
@@ -405,7 +437,12 @@ export function applyTheme(
   }
 
   try {
-    const cache: ThemeCache = { theme, mode, vars };
+    const cache: ThemeCache = {
+      theme,
+      accent: accent.toLowerCase(),
+      mode,
+      vars,
+    };
     localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(cache));
   } catch {
     // Private browsing, or storage that is full. The theme still applied; the

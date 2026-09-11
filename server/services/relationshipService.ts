@@ -128,11 +128,6 @@ function statsStatement() {
   return statsStmt;
 }
 
-/** Tests only: drop the cached statement when the database is replaced. */
-export function __resetScoringStatements(): void {
-  statsStmt = null;
-}
-
 /**
  * Compute a single contact's relationship score.
  * Returns a clamped integer 0-100.

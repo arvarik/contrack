@@ -2,24 +2,22 @@
  * appEvents.ts — Named window events used for cross-tree signalling.
  *
  * A handful of things need to travel between components that share no useful
- * ancestor: a preference written to localStorage in Settings that a widget
- * three routes away renders, or a modal owned by App that a nav button in the
- * sidebar wants to open. Threading either through context would put a
- * high-churn value in a provider that most of the app subscribes to, purely to
- * serve one consumer.
+ * ancestor: a modal owned by App that a nav button in the sidebar wants to
+ * open, or the answer to a credential the API client saw refused. Threading
+ * either through context would put a high-churn value in a provider that most
+ * of the app subscribes to, purely to serve one consumer.
+ *
+ * There used to be a settings-changed event here as well, for preferences that
+ * lived in localStorage and had no other way to reach a widget three routes
+ * away. Preferences are on the account now, behind one React Query cache, so
+ * every reader of one re-renders when it changes and the event had nothing
+ * left to announce.
  *
  * Window events keep those couplings explicit and cheap. The names live here
  * so a listener and its dispatcher cannot drift apart over a typo.
  *
  * @module lib/appEvents
  */
-
-/**
- * A locally-stored preference changed (temperature unit, recent-contact
- * limit). Listeners re-read localStorage; the event carries no payload
- * because the store is the source of truth.
- */
-export const SETTINGS_CHANGED_EVENT = "contrack_settings_changed";
 
 /** Someone asked for the keyboard-shortcuts overlay. Owned by App. */
 export const OPEN_SHORTCUTS_EVENT = "contrack:open-shortcuts";
@@ -71,11 +69,6 @@ export type AuthExpiryReason = "expired" | "disabled";
 export interface AuthExpiredDetail {
   reason: AuthExpiryReason;
 }
-
-/** Announce that a locally-stored preference changed. */
-export const emitSettingsChanged = (): void => {
-  window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
-};
 
 /**
  * Open the keyboard-shortcuts overlay from anywhere.

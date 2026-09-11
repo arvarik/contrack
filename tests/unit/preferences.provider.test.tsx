@@ -160,6 +160,63 @@ describe("reading", () => {
   });
 });
 
+describe("starting from what the browser last painted", () => {
+  it("uses the cached theme until the account answers", () => {
+    // The boot script has already put this on the screen. Starting from the
+    // defaults would repaint to light and straight back on every load.
+    localStorage.setItem(
+      "contrack.theme",
+      JSON.stringify({
+        theme: "dark",
+        accent: "#b45309",
+        mode: "dark",
+        vars: {},
+      }),
+    );
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    expect(result.current.isLoaded).toBe(false);
+    expect(result.current.mode).toBe("dark");
+    expect(result.current.preferences.accent).toBe("#b45309");
+  });
+
+  it("keeps it when the server cannot be reached", async () => {
+    // A network failure must not read as "your theme was reset".
+    localStorage.setItem(
+      "contrack.theme",
+      JSON.stringify({
+        theme: "dark",
+        accent: "#006a91",
+        mode: "dark",
+        vars: {},
+      }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute("data-theme")).toBe("dark"),
+    );
+    expect(result.current.mode).toBe("dark");
+  });
+
+  it("falls back to the defaults when the cache is unreadable", () => {
+    localStorage.setItem("contrack.theme", "{not json");
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    expect(result.current.preferences).toEqual(DEFAULT_PREFERENCES);
+  });
+});
+
 describe("writing", () => {
   it("shows the new value before the server has answered", async () => {
     const { result } = renderHook(() => usePreferences(), {

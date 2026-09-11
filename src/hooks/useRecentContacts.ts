@@ -23,9 +23,6 @@ const STORAGE_PREFIX = "contrack_recent_contacts";
 /** Max entries to store — always more than we show, so the ring cannot shrink. */
 const MAX_STORED = 10;
 
-/** Default number of recent contacts visible in the Network sidebar strip. */
-export const DEFAULT_RECENT_LIMIT = 3;
-
 /** Min/max for the user-configurable limit. */
 export const MIN_RECENT_LIMIT = 0;
 export const MAX_RECENT_LIMIT = 10;
