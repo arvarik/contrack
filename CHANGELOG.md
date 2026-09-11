@@ -106,6 +106,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than showing a progress bar at zero. `GET /api/dedupe/active` gained a
   `queued` field, which is the only way a reloaded page can tell a booked scan
   from one that has hung.
+- **Extra S6.** The daily sweep checkpoints the write-ahead log. The database
+  runs in WAL mode and nothing in the codebase had ever called a checkpoint:
+  SQLite runs one by itself past a thousand pages, but only when no reader is
+  looking at an older version of the database, so a dedupe scan or a full
+  export holds every checkpoint off for as long as it runs and the log grows
+  for the whole time. The sweep now runs a passive checkpoint always, and a
+  truncating one when the log is over 64 MB and no scan is running, because a
+  truncating checkpoint behind a scan would hold the write lock until the scan
+  finished. Requests refused with a database-busy error are counted, which is
+  the symptom people report and the one nobody could previously measure.
 - **Extra S5.** Every backup is opened again as soon as it is written. The
   service produced a snapshot, rotated the old ones, and trusted all of it,
   so the first person to find out whether any of it worked would have been

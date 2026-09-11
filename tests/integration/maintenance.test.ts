@@ -304,6 +304,11 @@ describe("the daily sweep", () => {
       agedTokens: 1,
       deadInvitations: 1,
       oldInvocations: 1,
+      // The sweep also checkpoints the write-ahead log, and how many pages
+      // that moves depends on everything written before this test ran.
+      // `expect.any` keeps the shape exhaustive, so a field added later still
+      // fails here, without pinning a number nobody can predict.
+      walPagesCheckpointed: expect.any(Number),
     });
     for (const table of [
       "audit_log",
@@ -324,6 +329,7 @@ describe("the daily sweep", () => {
       agedTokens: 0,
       deadInvitations: 0,
       oldInvocations: 0,
+      walPagesCheckpointed: expect.any(Number),
     });
     expect(ids("audit_log")).toEqual(["new"]);
   });
