@@ -13,6 +13,7 @@
 
 import { Router, type Request } from "express";
 import { AppError } from "../utils/AppError.ts";
+import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
 import {
@@ -29,6 +30,12 @@ import {
   revokeToken,
 } from "../services/apiTokenService.ts";
 import { resolveApiToken } from "../middleware/auth.ts";
+import {
+  getPreferences,
+  preferencesPatchSchema,
+  setPreferences,
+  storedPreferenceKeys,
+} from "../services/userPreferencesService.ts";
 import {
   requireAdmin,
   requirePasswordCurrent,
@@ -403,6 +410,57 @@ router.patch(
     });
     res.json({ user: publicUser(user) });
   }),
+);
+
+// =============================================================================
+// Preferences
+// =============================================================================
+// List density, the recent-contacts limit, dedupe sensitivity, the temperature
+// unit, the theme and the search history. One GET and one PATCH, because they
+// are read together on every page load and written one at a time.
+//
+// NOT `requireSession`, and that is the whole reason these two are here rather
+// than beside /me. An instance with sign-in switched off runs as the local
+// owner, whose principal is `implicit` — there is no session to require, and a
+// gate that asks for one would leave the default single-user setup unable to
+// choose a theme. Any principal that is a person acts on that person's own
+// account and nobody else's, which is what the route class means.
+//
+// `stored` names the keys this account has actually chosen. The browser needs
+// it to tell "the default, because nobody said" apart from "the default,
+// because somebody chose it", which is what makes the one-time migration out
+// of localStorage safe to run.
+
+router.get("/preferences", (req, res) => {
+  const user = currentUser(req);
+  if (!user) {
+    throw new AppError("Authentication required", 401, {
+      code: "UNAUTHORIZED",
+    });
+  }
+  res.json({
+    preferences: getPreferences(user.id),
+    stored: storedPreferenceKeys(user.id),
+  });
+});
+
+router.patch(
+  "/preferences",
+  validateBody(preferencesPatchSchema),
+  (req, res) => {
+    const user = currentUser(req);
+    if (!user) {
+      throw new AppError("Authentication required", 401, {
+        code: "UNAUTHORIZED",
+      });
+    }
+    const preferences = setPreferences(user.id, req.body);
+    log.info(
+      "API",
+      `[${req.requestId}] PATCH /api/auth/preferences → ${Object.keys(req.body).join(", ")}`,
+    );
+    res.json({ preferences, stored: storedPreferenceKeys(user.id) });
+  },
 );
 
 router.post(

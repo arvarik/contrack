@@ -44,6 +44,9 @@ import { useAuth } from "../../components/auth/AuthGate";
 import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
 import { AiCapabilitiesCard } from "./AiCapabilitiesCard";
 import { Segmented } from "../../components/ui/Segmented";
+import { AccentPicker } from "../../components/ui/AccentPicker";
+import { ExportCard } from "./ExportCard";
+import { usePreferences } from "../../contexts/PreferencesContext";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
@@ -54,7 +57,6 @@ import {
 } from "../../hooks/useRecentContacts";
 import { useDedupeSettings } from "../../hooks/useDedupeSettings";
 import { useListDensity } from "../../hooks/useListDensity";
-import { emitSettingsChanged } from "../../lib/appEvents";
 
 // ---------------------------------------------------------------------------
 // Building blocks
@@ -237,8 +239,6 @@ const SettingsFilter = ({
 // Page
 // ---------------------------------------------------------------------------
 
-const TEMP_UNIT_KEY = "contrack_temp_unit";
-
 /**
  * What each sensitivity actually does, in the terms that matter: the
  * confidence a pair needs before Contrack merges it without asking.
@@ -257,9 +257,7 @@ const DEDUPE_PRESET_COPY = {
 } as const;
 
 export const SettingsHome = () => {
-  const [tempUnit, setTempUnit] = React.useState<"celsius" | "fahrenheit">(
-    "celsius",
-  );
+  const { preferences, setPreference, mode } = usePreferences();
   const { limit: recentLimit, setLimit: setRecentLimit } =
     useRecentContactsLimit();
   const { preset, setPreset } = useDedupeSettings();
@@ -296,8 +294,29 @@ export const SettingsHome = () => {
       "weather",
       "degrees",
     ),
+    theme: hit(
+      "theme",
+      "appearance",
+      "dark mode",
+      "light mode",
+      "night",
+      "colour scheme",
+      "color scheme",
+    ),
+    accent: hit("accent", "colour", "color", "brand", "primary", "palette"),
     density: hit("list density", "compact", "comfortable", "rows", "spacing"),
     recent: hit("recent contacts", "recently visited", "history", "pinned"),
+    export: hit(
+      "export",
+      "download",
+      "backup my contacts",
+      "vcard",
+      "vcf",
+      "csv",
+      "json",
+      "migrate",
+      "take my data",
+    ),
     sensitivity: hit(
       "auto-merge sensitivity",
       "duplicates",
@@ -380,10 +399,15 @@ export const SettingsHome = () => {
   const groupShown = {
     account: show.account,
     preferences:
-      show.tempUnit || show.density || show.recent || show.sensitivity,
+      show.theme ||
+      show.accent ||
+      show.tempUnit ||
+      show.density ||
+      show.recent ||
+      show.sensitivity,
     intelligence: show.aiConfig || show.aiSearch || show.aiStats,
     organize: show.dedupe || show.lists,
-    data: show.archived || show.trash,
+    data: show.archived || show.trash || show.export,
     // Administration is only a group for the people who have one. A member
     // seeing five rows that redirect them back here would be worse than not
     // seeing them, and the server refuses every one of those pages anyway.
@@ -397,17 +421,6 @@ export const SettingsHome = () => {
         show.adminHealth),
   };
   const nothingMatches = !Object.values(groupShown).some(Boolean);
-
-  React.useEffect(() => {
-    const saved = localStorage.getItem(TEMP_UNIT_KEY);
-    if (saved === "fahrenheit" || saved === "celsius") setTempUnit(saved);
-  }, []);
-
-  const handleUnitChange = (unit: "celsius" | "fahrenheit") => {
-    setTempUnit(unit);
-    localStorage.setItem(TEMP_UNIT_KEY, unit);
-    emitSettingsChanged();
-  };
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
@@ -460,14 +473,47 @@ export const SettingsHome = () => {
             className={cn(CARD, "p-4 sm:p-6 divide-y divide-surface-container")}
           >
             <PreferenceRow
+              show={show.theme}
+              title="Theme"
+              description={
+                preferences.theme === "system"
+                  ? `Following this device, which is currently ${mode}.`
+                  : `Always ${preferences.theme}, whatever this device is set to.`
+              }
+            >
+              <Segmented
+                label="Theme"
+                value={preferences.theme}
+                onChange={(next) => setPreference("theme", next)}
+                options={[
+                  { value: "light", label: "Light" },
+                  { value: "dark", label: "Dark" },
+                  { value: "system", label: "System" },
+                ]}
+              />
+            </PreferenceRow>
+
+            <PreferenceRow
+              show={show.accent}
+              title="Accent colour"
+              description="The colour of links, buttons, and anything the app wants you to notice. Every shade is adjusted until it is readable on both palettes."
+            >
+              <AccentPicker
+                value={preferences.accent}
+                mode={mode}
+                onChange={(next) => setPreference("accent", next)}
+              />
+            </PreferenceRow>
+
+            <PreferenceRow
               show={show.tempUnit}
               title="Temperature unit"
               description="How weather reads on a contact's local-time badge."
             >
               <Segmented
                 label="Temperature unit"
-                value={tempUnit}
-                onChange={handleUnitChange}
+                value={preferences.tempUnit}
+                onChange={(next) => setPreference("tempUnit", next)}
                 options={[
                   { value: "celsius", label: "°C" },
                   { value: "fahrenheit", label: "°F" },
@@ -644,6 +690,9 @@ export const SettingsHome = () => {
               title="Trash"
               description="Recently deleted contacts. Empties itself after 30 days."
             />
+          </div>
+          <div className="mt-3">
+            <ExportCard show={show.export} />
           </div>
         </section>
       )}

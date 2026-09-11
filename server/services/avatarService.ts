@@ -173,6 +173,28 @@ const BACKGROUND_COLORS = [
   "ffdfbf",
 ] as const;
 
+/**
+ * The same five hues, deep enough to sit in a dark card.
+ *
+ * The pastels above are backgrounds rather than text, so they carry no
+ * contrast duty — but five bright squares in a grid on a near-black page are
+ * the brightest thing on screen, which is not what a picker should be.
+ */
+const BACKGROUND_COLORS_DARK = [
+  "14405a",
+  "3b2f5c",
+  "2b3163",
+  "5b2733",
+  "5c3a18",
+] as const;
+
+/** Which palette an avatar is being drawn for. */
+export type AvatarTheme = "light" | "dark";
+
+export function isAvatarTheme(value: unknown): value is AvatarTheme {
+  return value === "light" || value === "dark";
+}
+
 // ---------------------------------------------------------------------------
 // Generation
 // ---------------------------------------------------------------------------
@@ -183,6 +205,15 @@ export interface RenderAvatarOptions {
   seed: string;
   /** Apply the pastel background wash (the picker does; list avatars do not). */
   background?: boolean;
+  /**
+   * Which palette to draw for.
+   *
+   * Undefined means "decide in the browser": the monogram then carries its own
+   * `prefers-color-scheme` rule, which is the right answer for the default
+   * `system` theme and needs no request parameter at all. A value pins it,
+   * which is what a person who chose light or dark explicitly needs.
+   */
+  theme?: AvatarTheme;
 }
 
 /**
@@ -194,15 +225,30 @@ export interface RenderAvatarOptions {
 type AvatarOptions = Record<string, unknown>;
 
 /** Options common to every style. */
-function baseOptions(seed: string, background: boolean): AvatarOptions {
+function baseOptions(
+  seed: string,
+  background: boolean,
+  theme: AvatarTheme | undefined,
+): AvatarOptions {
   return {
     seed,
-    ...(background ? { backgroundColor: [...BACKGROUND_COLORS] } : {}),
+    ...(background
+      ? {
+          backgroundColor: [
+            ...(theme === "dark" ? BACKGROUND_COLORS_DARK : BACKGROUND_COLORS),
+          ],
+        }
+      : {}),
   };
 }
 
-function renderStyle({ style, seed, background = false }: RenderAvatarOptions) {
-  const base = baseOptions(seed, background);
+function renderStyle({
+  style,
+  seed,
+  background = false,
+  theme,
+}: RenderAvatarOptions) {
+  const base = baseOptions(seed, background, theme);
 
   switch (style) {
     case "avataaars": {
@@ -226,7 +272,7 @@ function renderStyle({ style, seed, background = false }: RenderAvatarOptions) {
     case "bottts":
       return createAvatar(bottts, base).toString();
     case "initials":
-      return plainMonogram(seed);
+      return plainMonogram(seed, theme);
     default:
       // TypeScript proves this is unreachable for well-typed callers, but the
       // style can arrive from a persisted URL or a hand-edited database row.
@@ -261,7 +307,7 @@ export function renderAvatar(options: RenderAvatarOptions): string {
       "Avatar",
       `initials fallback failed: ${getErrorMessage(err)} — using a plain monogram`,
     );
-    return plainMonogram(options.seed);
+    return plainMonogram(options.seed, options.theme);
   }
 }
 
@@ -269,7 +315,7 @@ export function renderAvatar(options: RenderAvatarOptions): string {
  * Absolute last resort: a hand-built monogram with no library involved, so
  * this path cannot itself fail.
  */
-function plainMonogram(seed: string): string {
+function plainMonogram(seed: string, theme?: AvatarTheme): string {
   const letters =
     seed
       .trim()
@@ -290,11 +336,31 @@ function plainMonogram(seed: string): string {
         "'": "&apos;",
       })[c]!,
   );
+  // The two palettes' `surface-container` and `on-surface-variant`. Hard-coded
+  // rather than read from a token, because this SVG is served as an image and
+  // no page stylesheet reaches it.
+  const LIGHT = { bg: "#e8eff1", fg: "#566164" };
+  const DARK = { bg: "#1d2326", fg: "#b2bbbf" };
+
+  // With no theme given the SVG decides for itself. An `<img>` cannot inherit
+  // the page's palette, but it can carry its own media query, and that is the
+  // correct answer for the default `system` theme: no parameter, no cache
+  // split, and right on both.
+  const style =
+    theme === undefined
+      ? `<style>:root{--bg:${LIGHT.bg};--fg:${LIGHT.fg}}` +
+        `@media (prefers-color-scheme:dark){:root{--bg:${DARK.bg};--fg:${DARK.fg}}}</style>`
+      : "";
+  const picked = theme === "dark" ? DARK : LIGHT;
+  const bg = theme === undefined ? "var(--bg)" : picked.bg;
+  const fg = theme === undefined ? "var(--fg)" : picked.fg;
+
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
-    `<rect width="100" height="100" fill="#e8eff1"/>` +
+    style +
+    `<rect width="100" height="100" fill="${bg}"/>` +
     `<text x="50" y="50" dy=".35em" text-anchor="middle" ` +
-    `font-family="sans-serif" font-size="42" font-weight="700" fill="#566164">${safe}</text>` +
+    `font-family="sans-serif" font-size="42" font-weight="700" fill="${fg}">${safe}</text>` +
     `</svg>`
   );
 }
@@ -311,9 +377,10 @@ function plainMonogram(seed: string): string {
 export function buildAvatarUrl(
   seed: string,
   style: AvatarStyle = "avataaars",
-  options: { background?: boolean } = {},
+  options: { background?: boolean; theme?: AvatarTheme } = {},
 ): string {
   const params = new URLSearchParams({ seed });
   if (options.background) params.set("bg", "1");
+  if (options.theme) params.set("theme", options.theme);
   return `/api/avatar/${style}?${params.toString()}`;
 }

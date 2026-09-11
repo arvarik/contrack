@@ -8,7 +8,8 @@ import {
   Palette,
   Trash2,
 } from "lucide-react";
-import { VIBE_COLORS } from "../contact-detail/components/VibePickerPopover";
+import { VIBES, vibeTokens } from "../../lib/theme";
+import { usePreferences } from "../../contexts/PreferencesContext";
 import { cn } from "../../lib/utils";
 
 const BulkActionBtn = ({
@@ -59,6 +60,7 @@ export const BulkActionToolbar = ({
   onExportCSV,
   onDelete,
 }: BulkActionToolbarProps) => {
+  const { mode } = usePreferences();
   const [showBulkColorPicker, setShowBulkColorPicker] = React.useState(false);
   const bulkColorPickerRef = useRef<HTMLDivElement>(null);
 
@@ -148,17 +150,19 @@ export const BulkActionToolbar = ({
                 exit={{ opacity: 0, scale: 0.9, y: 6 }}
                 className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 glass-panel rounded-xl shadow-xl p-3 z-50 grid grid-cols-4 gap-2 w-[120px] place-items-center"
               >
-                {VIBE_COLORS.map((vibe) => (
+                {VIBES.map((vibe) => (
                   <button
-                    aria-label={`Set colour to ${vibe.id}`}
+                    aria-label={`Set colour to ${vibe.label}`}
                     key={vibe.id}
                     onClick={() => {
                       onColorChange(vibe.id);
                       setShowBulkColorPicker(false);
                     }}
                     disabled={isPending}
-                    style={{ backgroundColor: vibe.primary }}
-                    title={vibe.id}
+                    style={{
+                      backgroundColor: vibeTokens(vibe.id, mode).primary,
+                    }}
+                    title={vibe.label}
                     className="w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm hover:ring-2 hover:ring-white/50 hover:ring-offset-1 hover:ring-offset-surface disabled:opacity-50"
                   />
                 ))}

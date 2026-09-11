@@ -158,6 +158,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing fails the check, which is the failure an integrity check alone
   cannot see. `GET` and `POST /api/backups` carry the result. At boot the
   server warns when the newest verified snapshot is older than two intervals.
+- **Themes.** A dark palette, a three-way setting, and an accent colour. The
+  app had one light palette of `--color-*` tokens and no `color-scheme` rule at
+  all, so a dark machine got a white page with dark scrollbars. Light, Dark and
+  System are in Settings, System is the default and costs no JavaScript — the
+  stylesheet answers `prefers-color-scheme` on its own — and the choice is
+  stored on the account, so it follows a person to their phone. The accent
+  picker derives the primary and container tokens from any colour: hue and
+  chroma are kept and lightness is searched until the result clears WCAG AA on
+  every surface it lands on, in both palettes, which is checked over 6,000
+  colours in `tests/unit/theme.contrast.test.ts`. The map swaps to a dark
+  basemap, the monogram avatar carries its own `prefers-color-scheme` rule so a
+  served image follows the palette, and the eight per-contact vibe colours are
+  derived the same way the accent is instead of being eight hand-written light
+  values.
+- **Server-side preferences.** List density, the recent-contacts limit, the
+  auto-merge sensitivity, the temperature unit, the theme and the accent, and
+  the search history, all live in `user_settings` behind
+  `GET` and `PATCH /api/auth/preferences`. They were `localStorage` keys, which
+  is per browser rather than per account: a preference set on a laptop never
+  reached a phone, and two people signing in and out of one browser shared
+  every value including the search history. Whatever a browser still holds is
+  moved to the account once and then removed, and a key the account has already
+  chosen on another device is left alone. Neither route needs a session, so an
+  instance with sign-in switched off can still choose a theme.
+- **vCard export.** `GET /api/export/vcard` writes the caller's contacts as a
+  vCard 3.0 file, and Settings offers it beside the CSV and JSON exports, which
+  had no link anywhere in the app. The same `shared/vcard.ts` writes the file
+  and parses one dropped on the import modal, so a round trip is lossless
+  rather than nearly: `tests/unit/vcard.test.ts` walks contacts out and back in
+  and compares every field, including a semicolon in a surname, a comma in a
+  company, a newline in a note, an emoji across a fold, and a name long enough
+  to fold four times.
 - **Story 8.** A dedupe precision and recall gate.
   `tests/eval/dedupe.eval.test.ts` runs four routes over a corpus of 745
   contacts with 332 labelled pairs and compares precision, recall, F1, mean
@@ -192,6 +224,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Story 10.** The hourly relationship-score sweep recomputes only what
+  changed. It scored every contact of every account every hour — 989 ms on
+  50,000 contacts to change almost nothing — and now reads a partial index of
+  contacts a trigger has marked, which is 0.08 ms on a quiet instance and 1.79
+  ms after ten new interactions. A daily full pass still runs, because recency
+  decays with the clock and no trigger can see that; it is 435 ms on the same
+  50,000 contacts, down from 989 ms, because the per-contact statement is now
+  prepared once rather than per contact. Both sweeps take turns between
+  accounts a batch at a time, so a large account cannot put a small one behind
+  it.
+- **Story 10.** Writing a relationship score is no longer an edit. The sweep
+  wrote `relationshipScore` on every contact every hour, which fired the
+  `contacts_auto_updated_at` trigger and stamped `updatedAt` across the whole
+  instance. `updatedAt` therefore meant "the last sweep" rather than "when this
+  contact was last edited", and `findStaleEmbeddings` re-embedded every contact
+  in the account on the next dedupe scan, through whichever provider is
+  configured. Both `updatedAt` triggers now name their columns, and the list is
+  derived from the table so a column added later is covered.
+- **Themes.** Two placeholder prompts on the contact detail page are readable.
+  "Add Birthday..." and "Add Industry..." were drawn at half opacity, which is
+  half the contrast: 2.19:1 and 2.86:1 on a white card. They are italic and
+  muted now instead. Found by the contrast audit on the first run that reached
+  the contact detail route, which needs an instance with contacts in it.
+- **vCard import.** The vCard parser unfolds long lines, decodes
+  quoted-printable, and understands both spellings of a parameter. It was a set
+  of regular expressions over raw lines, so a name longer than 75 characters
+  arrived cut in half, `TEL;WORK;VOICE:` from a phone arrived with no label,
+  and an address book exported from an older Android or Outlook rendered
+  "José" as "JosÃ©". A `CELL`, an `IPHONE` and a `MOBILE` are now one label
+  rather than three.
 - **Story 1.** The embedding model runs on a `worker_threads` thread instead
   of the request thread. A backfill of 2,000 contacts took 2.4 seconds and
   blocked the event loop for 2.19 of them, in bursts of up to 83 ms, so while

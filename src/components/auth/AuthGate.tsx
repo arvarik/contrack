@@ -59,6 +59,7 @@ import { SetupWizard } from "./SetupWizard";
 import { Register } from "./Register";
 import { AcceptInvitation } from "./AcceptInvitation";
 import { ForcedPasswordChange } from "./ForcedPasswordChange";
+import { PreferencesProvider } from "../../contexts/PreferencesContext";
 
 interface AuthContextValue {
   /** The signed-in account, or null when nobody is signed in. */
@@ -145,6 +146,12 @@ type GateState =
 const AppScope = ({ children }: { children: React.ReactNode }) => (
   <>{children}</>
 );
+
+/*
+ * PreferencesProvider is mounted INSIDE AppScope, so the identity key drops it
+ * too. The account's settings — theme, accent, density, search history — must
+ * not survive a change of account for even one render.
+ */
 
 export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<GateState>("checking");
@@ -411,7 +418,11 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         // `open` and `unreachable` both render the app. The key is the whole
         // point: a change of identity replaces the tree rather than reusing
         // the previous account's component state.
-        return <AppScope key={user?.id ?? "anon"}>{children}</AppScope>;
+        return (
+          <AppScope key={user?.id ?? "anon"}>
+            <PreferencesProvider>{children}</PreferencesProvider>
+          </AppScope>
+        );
     }
   }
 

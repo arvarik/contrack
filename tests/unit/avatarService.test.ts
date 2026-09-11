@@ -22,6 +22,7 @@ import {
   FRIENDLY_MOUTH,
   buildAvatarUrl,
   isAvatarStyle,
+  isAvatarTheme,
   renderAvatar,
   type AvatarStyle,
 } from "../../server/services/avatarService.ts";
@@ -161,6 +162,77 @@ describe("buildAvatarUrl", () => {
     expect(buildAvatarUrl("Ada", "lorelei", { background: true })).toContain(
       "bg=1",
     );
+  });
+});
+
+describe("drawing for a dark palette", () => {
+  // An avatar is served as an image, so no page stylesheet reaches inside it.
+  // A monogram built from the light palette's surface is a pale square in the
+  // middle of a dark card — the one avatar case that actually breaks, because
+  // it is the only style that paints a background of its own by default.
+
+  it("answers both palettes when no theme is named", () => {
+    // The default `system` theme needs no parameter at all: the SVG carries
+    // its own media query, which is right on both and costs no cache split.
+    const svg = renderAvatar({ style: "initials", seed: "Ada Lovelace" });
+    expect(svg).toContain("prefers-color-scheme:dark");
+    expect(svg).toContain("var(--bg)");
+    expect(svg).toContain("var(--fg)");
+  });
+
+  it("pins the colours when a theme is named", () => {
+    const light = renderAvatar({
+      style: "initials",
+      seed: "Ada Lovelace",
+      theme: "light",
+    });
+    const dark = renderAvatar({
+      style: "initials",
+      seed: "Ada Lovelace",
+      theme: "dark",
+    });
+
+    expect(light).toContain("#e8eff1");
+    expect(light).not.toContain("prefers-color-scheme");
+    expect(dark).toContain("#1d2326");
+    expect(dark).not.toContain("#e8eff1");
+    expect(dark).not.toContain("prefers-color-scheme");
+    // Same letters either way.
+    expect(light).toContain(">AL<");
+    expect(dark).toContain(">AL<");
+  });
+
+  it("uses a deeper wash for the picker grid in dark", () => {
+    const light = renderAvatar({
+      style: "avataaars",
+      seed: "Grace Hopper",
+      background: true,
+      theme: "light",
+    });
+    const dark = renderAvatar({
+      style: "avataaars",
+      seed: "Grace Hopper",
+      background: true,
+      theme: "dark",
+    });
+    expect(light).not.toBe(dark);
+  });
+
+  it("keeps the theme out of the URL unless it is asked for", () => {
+    // The picker saves this URL onto the contact, so a theme in it would pin
+    // that person's avatar to one palette for every viewer for ever.
+    expect(buildAvatarUrl("Ada", "initials")).not.toContain("theme");
+    expect(buildAvatarUrl("Ada", "initials", { theme: "dark" })).toContain(
+      "theme=dark",
+    );
+  });
+
+  it("accepts only the two palettes", () => {
+    expect(isAvatarTheme("light")).toBe(true);
+    expect(isAvatarTheme("dark")).toBe(true);
+    for (const value of ["", "DARK", "sepia", null, undefined, 1]) {
+      expect(isAvatarTheme(value), String(value)).toBe(false);
+    }
   });
 });
 

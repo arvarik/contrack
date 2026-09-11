@@ -20,6 +20,7 @@ import { listBackups, runBackup } from "../services/backupService.ts";
 import {
   buildFullExport,
   buildContactsCsv,
+  buildContactsVcf,
 } from "../services/exportService.ts";
 
 const router = Router();
@@ -193,6 +194,24 @@ router.get(
     );
     log.info("API", `[${rid}] GET /api/export/csv`);
     res.send(csv);
+  }),
+);
+
+router.get(
+  "/export/vcard",
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+    const vcf = buildContactsVcf(scopeOf(req));
+    const stamp = new Date().toISOString().slice(0, 10);
+    // `text/vcard` is the registered type. Every desktop and mobile address
+    // book opens it from a download; `text/plain` shows the file instead.
+    res.setHeader("Content-Type", "text/vcard; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="contrack-contacts-${exportOwnerSlug(req)}-${stamp}.vcf"`,
+    );
+    log.info("API", `[${rid}] GET /api/export/vcard`);
+    res.send(vcf);
   }),
 );
 

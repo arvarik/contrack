@@ -527,6 +527,15 @@ const TRIGGERS_DROPPED_FOR_CLAIM = [
   "action_items_sync_delete",
   "search_vector_update",
   "search_vector_delete",
+  // Story S10. The claim writes `ownerId` on every row, which is an edit as
+  // far as these are concerned. §4 and §6 put them back on the same boot.
+  "contacts_score_dirty",
+  "interactions_score_dirty_ins",
+  "interactions_score_dirty_upd",
+  "interactions_score_dirty_del",
+  "action_items_score_dirty_ins",
+  "action_items_score_dirty_upd",
+  "action_items_score_dirty_del",
 ];
 
 function countUsers(): number {
@@ -1248,7 +1257,16 @@ sqlite.exec(
 );
 
 // These columns must exist before the search migration on older installations.
-for (const column of ["canonicalId TEXT", "isArchived INTEGER DEFAULT 0"]) {
+//
+// `relationshipScore` and `scoreDirty` are here rather than in §7 because §4
+// below builds its trigger from the column list and has to see them. §7 keeps
+// its statement and is a no-op.
+for (const column of [
+  "canonicalId TEXT",
+  "isArchived INTEGER DEFAULT 0",
+  "relationshipScore INTEGER DEFAULT 50",
+  "scoreDirty INTEGER NOT NULL DEFAULT 1",
+]) {
   const name = column.split(" ")[0];
   const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
   if (!columns.some((c) => c.name === name))
@@ -1257,24 +1275,83 @@ for (const column of ["canonicalId TEXT", "isArchived INTEGER DEFAULT 0"]) {
 installSearchIndex(sqlite);
 
 // =============================================================================
-// 4. Auto-stamp updatedAt on every contacts mutation
+// 4. Auto-stamp updatedAt, and mark a contact for re-scoring
 // =============================================================================
 // Guarantees updatedAt is always current regardless of which code path
 // (geocoder, archive toggle, bulk update, etc.) mutates the row.
 // Uses AFTER UPDATE to avoid recursion — the trigger itself runs after
 // the original UPDATE, and the SET updatedAt is a no-op if already current.
+//
+// BOTH TRIGGERS LIST THEIR COLUMNS. A bare `AFTER UPDATE ON contacts` fires
+// for any write, and two writes on this table are not edits: the hourly
+// relationship score and the dirty flag that schedules it. With the broad
+// trigger the hourly sweep stamped `updatedAt` on every contact in the
+// instance, every hour. Three things followed from that:
+//
+//   • `updatedAt` stopped meaning "when this contact was last edited" and
+//     started meaning "the last sweep". Measured on 10,000 contacts: every
+//     row's `updatedAt` moved on every pass.
+//   • `findStaleEmbeddings` re-embeds any contact whose `updatedAt` is newer
+//     than its `embeddedAt`, so the next dedupe scan re-embedded the whole
+//     corpus through the configured provider.
+//   • Story S10 cannot work at all. "Score only what changed" needs a signal
+//     that scoring does not itself set.
+//
+// The column list is derived from the table rather than written out, so a
+// column added later is covered without anyone remembering to come back here.
+// `tests/integration/scoring.incremental.test.ts` asserts the list is exactly
+// the table minus SCORE_COLUMNS.
 // =============================================================================
+
+/**
+ * Columns that hold what Contrack computed about a contact, not the contact.
+ *
+ * Writing one of these is not an edit, so it neither stamps `updatedAt` nor
+ * schedules another recompute.
+ */
+export const SCORE_COLUMNS = ["relationshipScore", "scoreDirty"] as const;
+
+/** Every `contacts` column except {@link SCORE_COLUMNS}, quoted for DDL. */
+export function contactEditColumns(db: Database.Database): string[] {
+  const columns = db.pragma("table_info(contacts)") as { name: string }[];
+  return columns
+    .map((c) => c.name)
+    .filter((name) => !(SCORE_COLUMNS as readonly string[]).includes(name));
+}
+
+const editColumnList = contactEditColumns(sqlite)
+  .map((name) => `"${name}"`)
+  .join(", ");
 
 // tenant-lint: allow boot migration
 sqlite.exec(`
   DROP TRIGGER IF EXISTS contacts_auto_updated_at;
-  CREATE TRIGGER contacts_auto_updated_at AFTER UPDATE ON contacts
+  CREATE TRIGGER contacts_auto_updated_at
+  AFTER UPDATE OF ${editColumnList} ON contacts
   FOR EACH ROW
   WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
   BEGIN
     UPDATE contacts SET updatedAt = datetime('now') WHERE id = NEW.id;
   END;
+
+  DROP TRIGGER IF EXISTS contacts_score_dirty;
+  CREATE TRIGGER contacts_score_dirty
+  AFTER UPDATE OF ${editColumnList} ON contacts
+  FOR EACH ROW
+  WHEN NEW.scoreDirty = 0
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1 WHERE id = NEW.id;
+  END;
 `);
+
+// The hourly sweep reads this and nothing else. A partial index holds only the
+// dirty rows, so an instance with nothing to do pays for an empty index scan
+// rather than a scan of every contact it has.
+// tenant-lint: allow boot migration
+sqlite.exec(
+  `CREATE INDEX IF NOT EXISTS idx_contacts_score_dirty
+     ON contacts(ownerId) WHERE scoreDirty = 1`,
+);
 
 // =============================================================================
 // 5. Auto-stamp updatedAt on every interactions mutation
@@ -1304,7 +1381,7 @@ sqlite.exec(`
 
 log.info(
   "Database",
-  "updatedAt triggers installed (contacts, interactions, action_items)",
+  "updatedAt and score-dirty triggers installed (contacts, interactions, action_items)",
 );
 
 // =============================================================================
@@ -1359,10 +1436,79 @@ sqlite.exec(`
   END;
 `);
 
+// A new contact starts dirty through the column default, so no INSERT trigger
+// is needed here. The three statements below cover the rows a contact does not
+// own: an interaction or an action item that is written, changed, or removed
+// changes what the score is computed from.
+//
+// Each is guarded by `scoreDirty = 0`, so importing a thousand interactions
+// against one already-dirty contact costs a thousand index seeks and one row
+// write rather than a thousand.
+//
+// Action items do not feed the formula today — it reads `cadenceDays`,
+// `lastContactedAt` and the interaction history and nothing else. They are
+// marked anyway because the story names them and because a formula that grows
+// to read them must not need a migration to be correct.
+// tenant-lint: allow boot migration
+sqlite.exec(`
+  DROP TRIGGER IF EXISTS interactions_score_dirty_ins;
+  CREATE TRIGGER interactions_score_dirty_ins AFTER INSERT ON interactions
+  FOR EACH ROW
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1
+     WHERE id = NEW.contactId AND scoreDirty = 0;
+  END;
+
+  DROP TRIGGER IF EXISTS interactions_score_dirty_upd;
+  CREATE TRIGGER interactions_score_dirty_upd AFTER UPDATE ON interactions
+  FOR EACH ROW
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1
+     WHERE id IN (NEW.contactId, OLD.contactId) AND scoreDirty = 0;
+  END;
+
+  DROP TRIGGER IF EXISTS interactions_score_dirty_del;
+  CREATE TRIGGER interactions_score_dirty_del AFTER DELETE ON interactions
+  FOR EACH ROW
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1
+     WHERE id = OLD.contactId AND scoreDirty = 0;
+  END;
+
+  DROP TRIGGER IF EXISTS action_items_score_dirty_ins;
+  CREATE TRIGGER action_items_score_dirty_ins AFTER INSERT ON action_items
+  FOR EACH ROW
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1
+     WHERE id = NEW.contactId AND scoreDirty = 0;
+  END;
+
+  DROP TRIGGER IF EXISTS action_items_score_dirty_upd;
+  CREATE TRIGGER action_items_score_dirty_upd AFTER UPDATE ON action_items
+  FOR EACH ROW
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1
+     WHERE id IN (NEW.contactId, OLD.contactId) AND scoreDirty = 0;
+  END;
+
+  DROP TRIGGER IF EXISTS action_items_score_dirty_del;
+  CREATE TRIGGER action_items_score_dirty_del AFTER DELETE ON action_items
+  FOR EACH ROW
+  BEGIN
+    UPDATE contacts SET scoreDirty = 1
+     WHERE id = OLD.contactId AND scoreDirty = 0;
+  END;
+`);
+
 log.info("Database", "action_items table + sync triggers installed");
 
 // =============================================================================
 // 7. Ensure relationshipScore column exists on contacts
+// =============================================================================
+// A no-op since story S10: the column is added with the pre-FTS block above,
+// because §4 builds its trigger from the column list and has to see it. The
+// statement stays so an operator reading this section still finds the schema
+// where the section numbering says it is.
 // =============================================================================
 
 try {

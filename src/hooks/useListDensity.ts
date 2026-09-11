@@ -8,20 +8,16 @@
  * without dropping any information — the avatar shrinks and the padding
  * tightens, but the same fields are shown.
  *
- * Persisted in localStorage and broadcast on the shared settings event, so the
- * list re-renders the moment the preference changes in Settings rather than on
- * the next reload.
+ * Stored on the account rather than in the browser, so the choice follows the
+ * person to their phone. See contexts/PreferencesContext.
  *
  * @module hooks/useListDensity
  */
-import { useCallback, useEffect, useState } from "react";
-import { SETTINGS_CHANGED_EVENT, emitSettingsChanged } from "../lib/appEvents";
+import { useCallback } from "react";
+import { usePreferences } from "../contexts/PreferencesContext";
+import type { ListDensity } from "../api/preferences";
 
-const STORAGE_KEY = "contrack_list_density";
-
-export type ListDensity = "comfortable" | "compact";
-
-const DEFAULT_DENSITY: ListDensity = "comfortable";
+export type { ListDensity };
 
 /**
  * Row geometry per density.
@@ -39,36 +35,14 @@ export const DENSITY_METRICS: Record<
   compact: { rowHeight: 52, avatarSize: 34 },
 };
 
-function readDensity(): ListDensity {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "compact" || stored === "comfortable"
-      ? stored
-      : DEFAULT_DENSITY;
-  } catch {
-    return DEFAULT_DENSITY;
-  }
-}
-
 export function useListDensity() {
-  const [density, setDensityState] = useState<ListDensity>(readDensity);
+  const { preferences, setPreference } = usePreferences();
+  const density = preferences.listDensity;
 
-  const setDensity = useCallback((next: ListDensity) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-      emitSettingsChanged();
-    } catch {
-      // Ignore quota errors — the in-memory value below still applies.
-    }
-    setDensityState(next);
-  }, []);
-
-  // Stay in sync when the preference changes elsewhere (Settings, another tab).
-  useEffect(() => {
-    const handler = () => setDensityState(readDensity());
-    window.addEventListener(SETTINGS_CHANGED_EVENT, handler);
-    return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, handler);
-  }, []);
+  const setDensity = useCallback(
+    (next: ListDensity) => setPreference("listDensity", next),
+    [setPreference],
+  );
 
   return { density, setDensity, metrics: DENSITY_METRICS[density] };
 }

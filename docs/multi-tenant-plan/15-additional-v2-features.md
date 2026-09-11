@@ -342,7 +342,7 @@ and risk. Nine ship in 2.0, one in 2.1.
 | 7 | Fuzzy mention resolution | Accuracy | 2.0 | M | Exact match on `contacts.name` |
 | 8 | Dedupe precision and recall gate | Accuracy | 2.0 | M | Unit tests per matcher, no pair-level gate |
 | 9 | Admin health panel | Stability | 2.0 | S | Health is `SELECT 1` |
-| 10 | Incremental relationship scoring | Performance | 2.1 | S to M | Hourly full recompute of every contact |
+| 10 | Incremental relationship scoring | Performance | 2.0 | S to M | Hourly full recompute of every contact |
 
 Effort for the five 2.0 stories together: about 6 to 10 engineer-days. They
 touch files the phases already open, so most of them ride along with the
@@ -455,8 +455,6 @@ asserting precision and recall per pass against a committed baseline. The
 fixture doubles as the regression suite for the 2.1 mention work and for
 any threshold preset change.
 
-### Ships in 2.1
-
 **10. Incremental relationship scoring.** `recomputeAll`
 (`server/services/relationshipService.ts:289-336`) scores every non-ghost,
 non-archived contact every hour (`server.ts:210-217`), in batches of 200. On
@@ -468,7 +466,53 @@ nothing else changes.
 
 ---
 
-## 8. Not planned for 2.x
+## 8. Four more, accepted after the quality stories
+
+Proposed on 2026-09-11, after the quality stories and the small extras had
+landed, and accepted the same day. None of them is in the tables above,
+because none of them came out of the same review: two are gaps the frontend
+work made visible, one is the other half of an escape hatch that only ever
+worked in one direction, and the fourth is the last story of the ten.
+
+| # | Item | Kind | Size | Today |
+| - | ---- | ---- | ---- | ----- |
+| T1 | Themes: dark, system, and a custom accent | Feature | M | One light palette, no `color-scheme` rule |
+| T2 | Server-side user preferences | Feature, Privacy | S | Five `localStorage` keys shared by every account in a browser |
+| T3 | vCard import and export | Feature | S to M | The import modal mentions vCard; nothing writes one |
+| S10 | Incremental relationship scoring | Performance | S to M | Hourly full recompute of every contact |
+
+**T1 and T2 ship together, and that is not a convenience.** A theme is a
+preference, and a preference that lives in the browser is a theme that does
+not follow you to your phone. The same plumbing carries both, so building one
+without the other would mean building the storage twice.
+
+**T1.** `src/index.css` holds one palette of `--color-*` tokens and no
+`color-scheme` declaration at all, so an operating system set to dark gets a
+white page with dark scrollbars and dark select popups. Add a dark token set,
+a three-way setting (light, dark, system), and an accent picker that derives
+the primary and container tokens. `system` is the default and should cost no
+JavaScript: `prefers-color-scheme` in the stylesheet answers it, cannot flash,
+and follows a machine that switches at sunset. The map is an image and the
+avatar is a served SVG, so neither can inherit a token; both need their own
+answer. Extend `scripts/contrast-audit.mjs` to walk both palettes.
+
+**T2.** List density, the recent-contacts limit, the dedupe sensitivity, the
+temperature unit and the search history are `localStorage` keys.
+`localStorage` is keyed by origin rather than by account, so two people
+signing in and out of one browser share every one of them — including the
+search history, which is a list of the things somebody looked for. Move them
+into `user_settings`, which the schema has held empty since Phase 2z, behind
+one `GET`/`PATCH /api/auth/preferences`.
+
+**T3.** `parseVCard` exists in `src/lib/importers.ts` and nothing writes a
+`.vcf`. An escape hatch that only works in one direction is not an escape
+hatch, and for a self-hosted tool the direction that matters most is out. The
+same module should write and read, because then the round trip is a property
+a test can assert rather than two implementations that agree today.
+
+---
+
+## 9. Not planned for 2.x
 
 Kept short. Each is tracked in [11-future.md](11-future.md).
 
@@ -481,7 +525,7 @@ Kept short. Each is tracked in [11-future.md](11-future.md).
 
 ---
 
-## 9. Decision record
+## 10. Decision record
 
 Fill in as decisions are made, so the release PR can list what shipped.
 
@@ -507,6 +551,11 @@ Fill in as decisions are made, so the release PR can list what shipped.
 | S7 | Fuzzy mention resolution | Accepted. Shipped in [#45](https://github.com/arvarik/contrack/pull/45). Tiers, tiebreakers and the three outcomes are as the paragraph describes. One deviation: it says "create a possible mention suggestion **instead of** a ghost", and the ghost is still created. A mention has to point at a contact or the timeline cannot render it, and `dedupe_suggestions` holds a pair of contact ids, so the suggestion pairs the ghost with the candidate and accepting it merges the ghost away. That is the same review queue the paragraph asks for. Two defects found on the way: the shared name tokenizer treated every accent as punctuation, so "María García" tokenized to four fragments with a surname of "a"; and `computePrimaryScore` had no ghost term, so a bare real contact and a ghost both scored 5 and the survivor of a merge came down to which id sorted first — which a mention suggestion makes the common case rather than the edge. | 2026-09-11 |
 | S8 | Dedupe precision and recall gate | Accepted. Shipped in [#45](https://github.com/arvarik/contrack/pull/45). 745 contacts and 332 labelled pairs: 221 duplicates across twelve kinds and 111 hard negatives across seven. It found four defects in its own corpus while it was written and named the diacritic improvement in S7 on its own. It also reports something nobody had measured: on this deliberately adversarial corpus, with AI off, a scan produces 58 pairs at or above the auto-merge threshold that are two different people — every father and son, every couple on one landline, every pair on a team alias. Not fixed here. The paragraph asks for the measurement, and changing a threshold is the next change rather than part of this one. | 2026-09-11 |
 
+| T1 | Themes: dark, system, custom accent | Accepted. Shipped in [#46](https://github.com/arvarik/contrack/pull/46). Three states, with `system` the default and free: the stylesheet's own `prefers-color-scheme` block answers it, so the default theme needs no JavaScript and cannot flash. The accent picker does more than the paragraph asks: rather than mapping a colour onto fixed tokens it searches for one, keeping the chosen hue and chroma and moving lightness until the result clears WCAG AA on every surface it lands on — the pale washes a pill is built from included. Verified over 6,000 colours around the hue circle in both palettes, worst case 4.53:1, worst hue drift 3.1 degrees. Four things had no token and needed their own answer: the map (a dark basemap), the monogram avatar (a served image, so it carries its own media query), Leaflet's own chrome, and the eight per-contact vibe colours, which were eight hand-written light values and are now derived exactly the way the accent is. The contrast audit takes `--theme light\|dark\|both` and `--accent`, and applying the palette before the navigation rather than after it matters: a `transition-all` control read mid-transition reports the colour it is leaving. The full sweep is zero blocking failures in both palettes across nineteen routes. It found two defects on the way, both pre-existing and both light as well as dark: two placeholder prompts drawn at half opacity, fixed here, and `text-primary` on `bg-primary/15`, recorded as A-03 and not fixed — the fix is a darker brand colour across 295 call sites, which is a product decision rather than a side effect of adding a dark mode. | 2026-09-11 |
+| T2 | Server-side user preferences | Accepted. Shipped in [#46](https://github.com/arvarik/contrack/pull/46). One `GET`/`PATCH /api/auth/preferences` over `user_settings`, one row per preference under a `pref.` prefix so a later feature can use the table without guessing. One deviation, and it is the reason the routes are where they are: they do **not** require a session. An instance with sign-in switched off runs as the local owner, whose principal is implicit, so `requireSession` would answer 403 to somebody trying to turn on dark mode. The temperature unit went with the four the paragraph names, because it is the same leak. Whatever a browser still holds is migrated once and then removed — removed even when it was not sent, because a key skipped as already-chosen is exactly the key that must not be left in a shared browser. | 2026-09-11 |
+| T3 | vCard import and export | Accepted. Shipped in [#46](https://github.com/arvarik/contrack/pull/46). `GET /api/export/vcard`, and a card in Settings that also gives the CSV and JSON exports their first link in the app. One module writes and reads, which turns the round trip into an assertion: out through the serializer, back in through the importer, every field compared, and written again byte-identically. That test found three defects in its first run, all one bug — a structured value unescaped before it was split, so `N:Smith\; Jr.;Robert` came back as a surname of "Smith" and a given name of "Jr.". The import path was rewritten rather than extended: it was regular expressions over raw lines, so a name longer than 75 characters arrived cut in half, `TEL;WORK;VOICE:` from a phone arrived with no label, and an older Android export rendered "José" as "JosÃ©". Two things the paragraph does not mention: `N` is guessed from the display name when a contact has no structured one, because a contact added by hand has only one name field and `N:;;;;` files somebody under nothing in another address book; and `REV` is normalised, because SQLite writes `2026-09-11 19:35:49` and a space where the `T` belongs is not a date-time. | 2026-09-11 |
+| S10 | Incremental relationship scoring | Accepted. Shipped in [#46](https://github.com/arvarik/contrack/pull/46). The flag, not the timestamp: `contacts.scoreDirty` with a partial index, set by triggers on contacts, interactions and action items. Hourly went from 989 ms on 50,000 contacts to 0.08 ms on a quiet instance and 1.79 ms after ten new interactions, and the daily full pass is 435 ms rather than 989 because the per-contact statement is prepared once rather than once per contact. Both sweeps take turns between accounts a batch at a time, which is what "per owner" has to mean if a large account is not to delay a small one. The story could not be built as written until a defect under it was fixed, and that defect turned out to be the larger half: the sweep wrote `relationshipScore` on every contact, which fired `contacts_auto_updated_at` and stamped `updatedAt` across the instance every hour. So `updatedAt` meant "the last sweep" rather than "the last edit", and `findStaleEmbeddings` re-embedded the whole corpus on the next dedupe scan through whichever provider is configured. Both `updatedAt` triggers now name their columns, and the list is derived from the table so a column added later is covered. Action items are marked as the paragraph asks, although the formula does not read them today. | 2026-09-11 |
+
 The five accepted stories land in the order this table lists them, one pull
 request each, from `v2.0-extra-<slug>`. The rules at the top of this document
 say `v2.0/<slug>`, which git cannot create while a branch called `v2.0`
@@ -530,7 +579,10 @@ was built: S4's stated accuracy problem had already been fixed by Phase 2c and
 its performance problem had not, and S1's dedupe half turned out to be two
 quadratic joins rather than CPU-bound work.
 
+S10 was accepted on 2026-09-11, with the three items in section 8, after the
+other nine stories had landed. All ten quality stories are therefore in 2.0.
+
 Nothing else was accepted. The four headline features are not rejected on
-their merits, and neither is S10. They were not taken for 2.0, so the fourth
-rule at the top of this document applies to them: whatever is not merged when
-the Phase 5 security review begins ships in 2.1.
+their merits. They were not taken for 2.0, so the fourth rule at the top of
+this document applies to them: whatever is not merged when the Phase 5
+security review begins ships in 2.1.

@@ -72,7 +72,12 @@ export const IndustryField = ({
       })}
       className={cn(
         "cursor-pointer hover:bg-surface-container-high px-1 -mx-1 rounded transition-colors whitespace-pre-wrap max-w-full break-words outline-none text-sm font-medium",
-        !value && "opacity-50 italic",
+        // Italic and the muted token, NOT opacity. Half-opacity text is half
+        // the contrast: this placeholder measured 2.86:1 on a white card, and
+        // a prompt somebody is meant to read and click is content rather than
+        // decoration. The browser audit found it on the contact detail route
+        // the first time that route was reachable.
+        !value && "italic text-on-surface-variant",
       )}
     >
       {value || "Add Industry..."}

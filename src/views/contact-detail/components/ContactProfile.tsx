@@ -61,7 +61,8 @@ const DossierTab = React.lazy(() =>
   import("./DossierTab").then((m) => ({ default: m.DossierTab })),
 );
 import { TimelineTab } from "./TimelineTab";
-import { VIBE_COLORS } from "./VibePickerPopover";
+import { vibeTokens } from "../../../lib/theme";
+import { usePreferences } from "../../../contexts/PreferencesContext";
 import { DupeBanner } from "./DupeBanner";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -84,6 +85,7 @@ export const ContactProfile = ({
   showNetworkButton = false,
 }: ContactProfileProps) => {
   const navigate = useNavigate();
+  const { mode } = usePreferences();
 
   // ── Data queries ──────────────────────────────────────────────────────
   const { data: contact, isLoading: contactLoading } = useContact(id);
@@ -217,12 +219,16 @@ export const ContactProfile = ({
     return <div className="p-12 text-center">Contact not found.</div>;
 
   // ── Theme ─────────────────────────────────────────────────────────────
-  const currentTheme =
-    VIBE_COLORS.find((v) => v.id === contact.themeColor) || VIBE_COLORS[0];
+  // The vibe replaces the primary palette for this page only, so it has to be
+  // derived for the palette on screen: the light values on a dark page put the
+  // brand blue at 2.84:1 against the background.
+  const vibe = vibeTokens(contact.themeColor, mode);
   const themeStyles = {
-    "--color-primary": currentTheme.primary,
-    "--color-primary-dim": currentTheme.dim,
-    "--color-primary-container": currentTheme.container,
+    "--color-primary": vibe.primary,
+    "--color-primary-dim": vibe["primary-dim"],
+    "--color-primary-container": vibe["primary-container"],
+    "--color-on-primary": vibe["on-primary"],
+    "--color-on-primary-container": vibe["on-primary-container"],
   } as React.CSSProperties;
 
   // ═══════════════════════════════════════════════════════════════════════

@@ -90,6 +90,48 @@ describe("GET /api/avatar/:style", () => {
   });
 });
 
+describe("the palette an avatar is drawn for", () => {
+  it("answers both when nothing is asked for", async () => {
+    const res = await request(app)
+      .get("/api/avatar/initials")
+      .query({ seed: "Ada Lovelace" });
+    expect(res.status).toBe(200);
+    expect(svgOf(res)).toContain("prefers-color-scheme:dark");
+  });
+
+  it("pins the palette when one is named", async () => {
+    const dark = await request(app)
+      .get("/api/avatar/initials")
+      .query({ seed: "Ada Lovelace", theme: "dark" });
+    expect(dark.status).toBe(200);
+    expect(svgOf(dark)).toContain("#1d2326");
+    expect(svgOf(dark)).not.toContain("prefers-color-scheme");
+  });
+
+  it("ignores a theme it does not know rather than refusing", async () => {
+    // A stale URL from an older build, or a hand-typed one. The media-query
+    // form is a correct answer for any caller, so there is nothing to refuse.
+    const res = await request(app)
+      .get("/api/avatar/initials")
+      .query({ seed: "Ada Lovelace", theme: "sepia" });
+    expect(res.status).toBe(200);
+    expect(svgOf(res)).toContain("prefers-color-scheme:dark");
+  });
+
+  it("caches the two palettes apart", async () => {
+    const light = await request(app)
+      .get("/api/avatar/initials")
+      .query({ seed: "Ada Lovelace", theme: "light" });
+    const dark = await request(app)
+      .get("/api/avatar/initials")
+      .query({ seed: "Ada Lovelace", theme: "dark" });
+    // Different bytes means a different ETag, so a browser holding one cannot
+    // be served the other from its own cache.
+    expect(svgOf(light)).not.toBe(svgOf(dark));
+    expect(light.headers.etag).not.toBe(dark.headers.etag);
+  });
+});
+
 describe("contact creation", () => {
   it("assigns a same-origin avatar, never a third-party URL", async () => {
     const res = await request(app)

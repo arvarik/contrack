@@ -6,6 +6,8 @@
 import React from "react";
 
 import { fallbackAvatarUrl } from "../lib/avatar";
+import { vibeTokens } from "../lib/theme";
+import { usePreferences } from "../contexts/PreferencesContext";
 
 interface HealthRingAvatarProps {
   contact: {
@@ -16,29 +18,19 @@ interface HealthRingAvatarProps {
   size?: number;
 }
 
-const VIBE_COLORS: Record<string, string> = {
-  brand: "#009EDB",
-  emerald: "#10B981",
-  amber: "#F59E0B",
-  rose: "#F43F5E",
-  indigo: "#6366F1",
-  pink: "#EC4899",
-  violet: "#8B5CF6",
-  teal: "#14B8A6",
-};
-
 export const HealthRingAvatar: React.FC<HealthRingAvatarProps> = ({
   contact,
   size = 48,
 }) => {
+  const { mode } = usePreferences();
   const strokeWidth = 3.5;
   const radius = size / 2 - strokeWidth;
   const circumference = 2 * Math.PI * radius;
 
-  const ringColor =
-    contact.themeColor && VIBE_COLORS[contact.themeColor]
-      ? VIBE_COLORS[contact.themeColor]
-      : VIBE_COLORS.brand;
+  // The ring is the contact's vibe, derived for the palette on screen. It used
+  // to be a second, brighter copy of the vibe list — so the ring and the
+  // profile page it opens were two different colours for the same contact.
+  const ringColor = vibeTokens(contact.themeColor, mode).primary;
 
   return (
     <div

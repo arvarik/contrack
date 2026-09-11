@@ -23,6 +23,7 @@ import { accountAvatarUrl } from "../../lib/avatar";
 import { cn } from "../../lib/utils";
 import { useAuth } from "./AuthGate";
 import type { AccountUser } from "../../api/auth";
+import { usePreferences } from "../../contexts/PreferencesContext";
 
 /**
  * The account's role, as a pill.
@@ -59,20 +60,30 @@ export const AccountAvatar = ({
   user: Pick<AccountUser, "username" | "displayName">;
   size?: number;
   className?: string;
-}) => (
-  <img
-    src={accountAvatarUrl(user.username)}
-    alt=""
-    width={size}
-    height={size}
-    // Decorative: every place this appears also carries the name in text or
-    // in an accessible label, and a screen reader announcing the same account
-    // twice is noise.
-    aria-hidden="true"
-    className={cn("rounded-full bg-surface-container-high shrink-0", className)}
-    style={{ width: size, height: size }}
-  />
-);
+}) => {
+  // The monogram is a served image, so it cannot inherit the page's palette.
+  // It answers `prefers-color-scheme` on its own, which covers the default
+  // `system` theme; a theme chosen explicitly has to travel in the URL.
+  const { preferences, mode } = usePreferences();
+  const theme = preferences.theme === "system" ? undefined : mode;
+  return (
+    <img
+      src={accountAvatarUrl(user.username, theme)}
+      alt=""
+      width={size}
+      height={size}
+      // Decorative: every place this appears also carries the name in text or
+      // in an accessible label, and a screen reader announcing the same account
+      // twice is noise.
+      aria-hidden="true"
+      className={cn(
+        "rounded-full bg-surface-container-high shrink-0",
+        className,
+      )}
+      style={{ width: size, height: size }}
+    />
+  );
+};
 
 /** The name to show, falling back through what the account actually has. */
 export function accountLabel(user: AccountUser): string {

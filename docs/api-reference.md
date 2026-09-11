@@ -1374,6 +1374,47 @@ The signed-in account. `PATCH /api/auth/me` updates `displayName`, `username`, o
 
 ---
 
+### `GET /api/auth/preferences` _(account)_
+
+Every per-account preference, with defaults filling anything the account has
+not chosen, plus `stored`: the keys it actually chose. `PATCH` writes any
+subset and returns the whole set again.
+
+```bash
+curl -b cookies.txt http://localhost:3210/api/auth/preferences
+curl -X PATCH http://localhost:3210/api/auth/preferences \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"theme": "dark", "accent": "#b45309"}'
+```
+
+```json
+{
+  "preferences": {
+    "theme": "system",
+    "accent": "#006a91",
+    "listDensity": "comfortable",
+    "recentLimit": 3,
+    "dedupePreset": "default",
+    "tempUnit": "celsius",
+    "searchHistory": []
+  },
+  "stored": []
+}
+```
+
+A key the server does not know refuses the whole request with `400`, rather
+than being stripped: a client asking for `colorScheme` instead of `theme`
+should be told, not quietly ignored. `theme` is `light`, `dark` or `system`;
+`accent` is a six-digit hex colour, from which the primary and container
+tokens are derived; `searchHistory` holds at most twenty entries of
+`{ query, mode, timestamp }`.
+
+These two are the only routes under `/api/auth` that a personal token can
+reach, and the only ones that work on an instance with sign-in switched off —
+which runs as the local owner, who has no session to require.
+
+---
+
 ### `POST /api/auth/change-password` _(account)_
 
 ```bash
@@ -1647,6 +1688,21 @@ Downloads a flat, RFC-4180-escaped CSV of all non-trashed contacts.
 curl -OJ http://localhost:3210/api/export/csv
 ```
 
+### `GET /api/export/vcard`
+
+Downloads the caller's contacts as a vCard 3.0 `.vcf` — the format Apple
+Contacts, Google Contacts, Outlook and every phone import. Trashed contacts
+and ghosts are left out: one is a contact the person deleted, and the other
+is a name pulled out of a note with no card to write.
+
+```bash
+curl -OJ http://localhost:3210/api/export/vcard
+```
+
+The same module writes this file and parses one dropped on the import modal,
+so a file exported from Contrack and imported back into it is the same
+contacts rather than nearly.
+
 ---
 
 ## Additional Endpoints
@@ -1657,7 +1713,7 @@ Smaller surfaces, documented compactly. Shapes follow the conventions above.
 | ------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `GET /api/contacts/:id/score`               | The contact's relationship-score breakdown (the five signals behind the number)        |
 | `GET /api/contacts/:id/relationships`       | The contact's @mention relationship graph                                              |
-| `GET /api/avatar/:style`                    | Generated avatar SVG for a style + seed (query `seed=`)                                |
+| `GET /api/avatar/:style`                    | Generated avatar SVG for a style + seed (query `seed=`, `bg=1`, `theme=light\|dark`)   |
 | `POST /api/contacts/merge-batch`            | Merge many independent pairs in one call                                               |
 | `POST /api/contacts/merge-clusters`         | Merge many clusters in one call (auto-merge flow)                                      |
 | `GET /api/dedupe/stream`                    | SSE progress stream for a running scan (query `scanId=`)                               |

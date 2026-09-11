@@ -6,6 +6,7 @@ import { Modal } from "./ui/Modal";
 import { useUploadAvatar, useSetDicebearAvatar } from "../api";
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
+import { usePreferences } from "../contexts/PreferencesContext";
 
 // ---------------------------------------------------------------------------
 // Dicebear cartoon presets — a curated set of fun seeds across 3 styles
@@ -63,6 +64,18 @@ function avatarUrl(style: AvatarStyle, seed: string) {
   return `/api/avatar/${style}?seed=${encodeURIComponent(seed)}&bg=1`;
 }
 
+/**
+ * The same avatar, drawn for the palette on screen.
+ *
+ * Kept separate from {@link avatarUrl} on purpose. The URL this picker SAVES
+ * must not name a theme: it is stored on the contact and read back for ever,
+ * so a `theme=dark` in it would pin that person's avatar to the dark palette
+ * for every viewer on every device. The theme belongs to the preview only.
+ */
+function previewUrl(url: string, theme?: "light" | "dark") {
+  return theme ? `${url}&theme=${theme}` : url;
+}
+
 // ---------------------------------------------------------------------------
 // AvatarPickerModal
 // ---------------------------------------------------------------------------
@@ -74,6 +87,11 @@ interface Props {
 }
 
 export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
+  // The grid draws its wash for the palette on screen. `undefined` under the
+  // default `system` theme, where the image answers `prefers-color-scheme`
+  // itself and needs no parameter.
+  const { preferences, mode } = usePreferences();
+  const pinnedTheme = preferences.theme === "system" ? undefined : mode;
   const [tab, setTab] = useState<"avatar" | "upload">("avatar");
   const [style, setStyle] = useState<AvatarStyle>("avataaars");
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
@@ -204,6 +222,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                 {SEEDS.map((seed) => {
                   const url = avatarUrl(style, seed);
                   const isSelected = selectedUrl === url;
+                  const preview = previewUrl(url, pinnedTheme);
                   return (
                     <button
                       key={seed}
@@ -217,7 +236,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                       title={seed}
                     >
                       <img
-                        src={url}
+                        src={preview}
                         alt={seed}
                         className="w-full h-full object-cover bg-surface-container-low"
                         loading="lazy"

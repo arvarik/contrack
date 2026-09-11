@@ -103,6 +103,231 @@
 }
 
 /* =====================================================================
+ * COLOUR SCHEME
+ * =====================================================================
+ * Declared outside `@theme`, which only takes custom properties. Without
+ * it the browser paints form controls, scrollbars and the canvas behind
+ * the page from its own default — so on a dark machine the light palette
+ * shipped with dark scrollbars and dark select popups.
+ * ===================================================================== */
+
+:root {
+  color-scheme: light;
+}
+
+/* =====================================================================
+ * THE DARK PALETTE
+ * =====================================================================
+ * Three selectors, because a theme has three states and only two of them
+ * need to be written down:
+ *
+ *   :root                               the light palette, above.
+ *   @media (prefers-color-scheme: dark)
+ *     :root:not([data-theme="light"])   the machine asked for dark and
+ *                                       nobody overruled it.
+ *   :root[data-theme="dark"]            somebody chose dark.
+ *
+ * The middle one is what makes "system" free: with no attribute on <html>
+ * at all, the app already follows the machine, so the default costs no
+ * JavaScript and cannot flash. The attribute is written only when a person
+ * picks light or dark explicitly, and the `:not()` is what lets a chosen
+ * light palette win on a dark machine.
+ *
+ * DO NOT EDIT THESE VALUES ALONE. They are duplicated in `src/lib/theme.ts`,
+ * which is where the accent derivation reads the surfaces it has to be
+ * readable on, and `tests/unit/theme.contrast.test.ts` asserts that the two
+ * files agree token for token and that every text colour here clears WCAG AA
+ * on every surface it lands on.
+ *
+ * Not an inversion of the light palette. Inverting it puts a card below the
+ * page it sits on, and every shadow in this app says the card is above it —
+ * so the stack is reversed on purpose: the page is the darkest thing on
+ * screen and a card is lighter than the page.
+ * ===================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-primary: #6ec6ee;
+    --color-primary-dim: #8ed4f4;
+    --color-primary-container: #00506f;
+    --color-on-primary: #00242f;
+    --color-on-primary-container: #c2e7fb;
+    --color-secondary: #b0c2ca;
+    --color-secondary-container: #2d4049;
+    --color-on-secondary-container: #cfe6f2;
+    --color-success: #5ad3a3;
+    --color-warning: #f1b569;
+    --color-info: #72c5ec;
+    --color-error: #ff9d95;
+    --color-on-error: #4c0c0c;
+    --color-surface: #0f1315;
+    --color-on-surface: #dfe4e6;
+    --color-surface-variant: #394145;
+    --color-on-surface-variant: #b2bbbf;
+    --color-surface-container-lowest: #191e21;
+    --color-surface-container-low: #141819;
+    --color-surface-container: #1d2326;
+    --color-surface-container-high: #242a2d;
+    --color-surface-container-highest: #2b3235;
+    --color-outline-variant: #394044;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary: #6ec6ee;
+  --color-primary-dim: #8ed4f4;
+  --color-primary-container: #00506f;
+  --color-on-primary: #00242f;
+  --color-on-primary-container: #c2e7fb;
+  --color-secondary: #b0c2ca;
+  --color-secondary-container: #2d4049;
+  --color-on-secondary-container: #cfe6f2;
+  --color-success: #5ad3a3;
+  --color-warning: #f1b569;
+  --color-info: #72c5ec;
+  --color-error: #ff9d95;
+  --color-on-error: #4c0c0c;
+  --color-surface: #0f1315;
+  --color-on-surface: #dfe4e6;
+  --color-surface-variant: #394145;
+  --color-on-surface-variant: #b2bbbf;
+  --color-surface-container-lowest: #191e21;
+  --color-surface-container-low: #141819;
+  --color-surface-container: #1d2326;
+  --color-surface-container-high: #242a2d;
+  --color-surface-container-highest: #2b3235;
+  --color-outline-variant: #394044;
+}
+
+/* Chosen light beats a dark machine, `color-scheme` included. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* =====================================================================
+ * SURFACES THAT ARE NOT TOKENS
+ * =====================================================================
+ * Three things paint a colour no `--color-*` token describes, because each
+ * was written as a literal: the frosted panel and the two swipe overlays.
+ * (The map is the fourth; its tiles come from a URL, so MapView swaps the
+ * basemap instead.)
+ * ===================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    .glass-panel {
+      /* 80% white over a light page; the same idea over a dark one. */
+      background: rgba(25, 30, 33, 0.82);
+    }
+
+    /*
+     * The swipe overlays are a tint of green or red over a card. Twelve percent
+     * of emerald over white reads clearly; twelve percent over a near-black card
+     * is almost nothing, so the dark values are stronger and lighter.
+     */
+    .swipe-approve-overlay {
+      background: linear-gradient(
+        135deg,
+        rgba(90, 211, 163, 0.22) 0%,
+        rgba(90, 211, 163, 0.06) 100%
+      );
+    }
+    .swipe-reject-overlay {
+      background: linear-gradient(
+        135deg,
+        rgba(255, 157, 149, 0.22) 0%,
+        rgba(255, 157, 149, 0.06) 100%
+      );
+    }
+
+    /*
+     * Leaflet paints its own chrome — the attribution strip, the zoom buttons
+     * and the popup — from its stylesheet, in white with a blue link. On a dark
+     * basemap that is a white box in the corner, and the browser audit measured
+     * its link at 3.22:1. Leaflet's class names are the only handle there is.
+     */
+    .leaflet-control-attribution {
+      background: rgba(15, 19, 21, 0.85);
+      color: var(--color-on-surface-variant);
+    }
+    .leaflet-control-attribution a {
+      color: var(--color-primary);
+    }
+    .leaflet-bar a {
+      background-color: var(--color-surface-container-lowest);
+      color: var(--color-on-surface);
+      border-bottom-color: var(--color-outline-variant);
+    }
+    .leaflet-bar a:hover {
+      background-color: var(--color-surface-container-high);
+      color: var(--color-on-surface);
+    }
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-tip {
+      background: var(--color-surface-container-lowest);
+      color: var(--color-on-surface);
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  .glass-panel {
+    /* 80% white over a light page; the same idea over a dark one. */
+    background: rgba(25, 30, 33, 0.82);
+  }
+
+  /*
+   * The swipe overlays are a tint of green or red over a card. Twelve percent
+   * of emerald over white reads clearly; twelve percent over a near-black card
+   * is almost nothing, so the dark values are stronger and lighter.
+   */
+  .swipe-approve-overlay {
+    background: linear-gradient(
+      135deg,
+      rgba(90, 211, 163, 0.22) 0%,
+      rgba(90, 211, 163, 0.06) 100%
+    );
+  }
+  .swipe-reject-overlay {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 157, 149, 0.22) 0%,
+      rgba(255, 157, 149, 0.06) 100%
+    );
+  }
+
+  /*
+   * Leaflet paints its own chrome — the attribution strip, the zoom buttons
+   * and the popup — from its stylesheet, in white with a blue link. On a dark
+   * basemap that is a white box in the corner, and the browser audit measured
+   * its link at 3.22:1. Leaflet's class names are the only handle there is.
+   */
+  .leaflet-control-attribution {
+    background: rgba(15, 19, 21, 0.85);
+    color: var(--color-on-surface-variant);
+  }
+  .leaflet-control-attribution a {
+    color: var(--color-primary);
+  }
+  .leaflet-bar a {
+    background-color: var(--color-surface-container-lowest);
+    color: var(--color-on-surface);
+    border-bottom-color: var(--color-outline-variant);
+  }
+  .leaflet-bar a:hover {
+    background-color: var(--color-surface-container-high);
+    color: var(--color-on-surface);
+  }
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: var(--color-surface-container-lowest);
+    color: var(--color-on-surface);
+  }
+}
+
+/* =====================================================================
  * BASE LAYER
  * ===================================================================== */
 
