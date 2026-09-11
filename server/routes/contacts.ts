@@ -23,7 +23,6 @@ import {
 import { z } from "zod";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { sqlite } from "../db.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { providerIdFor } from "../ai/gateway.ts";
@@ -38,18 +37,6 @@ import {
   isEmbeddingAvailable,
 } from "../services/dedupe/embeddings.ts";
 import { dedupeService } from "../services/dedupe/index.ts";
-import { ParallelQueue } from "../ai/routing/ParallelQueue.ts";
-import {
-  normalizeContactById,
-  normalizeContacts,
-} from "../services/dedupe/normalization.ts";
-import { normalizePhone, isNicknameMatch } from "../utils/nlp/index.ts";
-import {
-  loadNegativeConstraints,
-  pairKey,
-} from "../services/dedupe/blocking.ts";
-import { storeSuggestion } from "../services/dedupe/suggestions.ts";
-import { computePrimaryScore } from "../services/dedupe/clustering.ts";
 import {
   contactRepo,
   RELATION_REGISTRY,
@@ -260,267 +247,42 @@ router.post(
         }
       }
 
-      // Phase 3: Dedupe scan against imported contacts
+      // Phase 3: Dedupe scan against the imported contacts
+      //
+      // This used to be about two hundred and fifty lines of matching written
+      // out here, which found exact names, emails and phone numbers and
+      // nothing else. The JSON branch below ran a different and stronger
+      // check on the same contacts, so what counted as a duplicate depended
+      // on whether the client had asked for a stream. Both branches now call
+      // the same scan.
       let autoMerged = 0;
       let needsReview = 0;
-      // Track which imported contacts were involved in any match
-      const matchedImportIds = new Set<string>();
+      let matchedImportIds = new Set<string>();
 
       if (createdIds.length >= 1) {
         send({ phase: "scanning", message: "Looking for duplicates…" });
 
         try {
-          const importedSet = new Set(createdIds);
-          const distinctPairs = loadNegativeConstraints(scope);
-          const allNormalized = normalizeContacts(scope);
-          const seenPairs = new Set<string>();
-
-          // For each imported contact, check for duplicates against ALL contacts
-          for (let i = 0; i < createdIds.length; i++) {
-            // Yield between contacts: the per-contact scan is O(all contacts)
-            // of synchronous work, so a large import would otherwise starve
-            // every concurrent request (and the SSE flush) for the whole scan.
-            if (i > 0) {
-              await new Promise<void>((resolve) => setImmediate(resolve));
-            }
-            const contactId = createdIds[i];
-            const target = normalizeContactById(scope, contactId);
-            if (!target) continue;
-
-            // Check exact name matches
-            if (target.nameNorm) {
-              for (const other of allNormalized) {
-                if (other.id === contactId) continue;
-                // Skip other imported contacts in this same batch
-                if (importedSet.has(other.id)) continue;
-                const pk = pairKey(contactId, other.id);
-                if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-
-                if (target.nameNorm === other.nameNorm) {
-                  seenPairs.add(pk);
-                  matchedImportIds.add(contactId);
-
-                  // During import, an exact name match against an existing contact
-                  // is almost certainly a duplicate — use higher confidence (0.95)
-                  // than the general scan's 0.92 for same-source matches.
-                  const pair = {
-                    idA: contactId,
-                    idB: other.id,
-                    matchType: "name",
-                    confidence: 0.95,
-                    reasoning: "Exact name match (import-time detection)",
-                  };
-
-                  try {
-                    const rawA = contactRepo.hydrate(
-                      contactRepo.findOwned(scope, pair.idA),
-                    );
-                    const rawB = contactRepo.hydrate(
-                      contactRepo.findOwned(scope, pair.idB),
-                    );
-                    const scoreA = computePrimaryScore(scope, rawA);
-                    const scoreB = computePrimaryScore(scope, rawB);
-                    const [primaryId, duplicateId] =
-                      scoreA >= scoreB
-                        ? [pair.idA, pair.idB]
-                        : [pair.idB, pair.idA];
-
-                    dedupeService.softMergeContacts(
-                      scope,
-                      primaryId,
-                      duplicateId,
-                      pair.confidence,
-                      pair.reasoning,
-                      rid,
-                    );
-                    storeSuggestion(scope, pair, "auto_merged");
-                    autoMerged++;
-                  } catch (err: unknown) {
-                    log.warn(
-                      "API",
-                      `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
-                    );
-                    storeSuggestion(scope, pair, "pending");
-                    needsReview++;
-                  }
-                  continue;
+          const result = await dedupeService.runImportScan(
+            scope,
+            createdIds,
+            rid,
+            {
+              onProgress: (checked, total) => {
+                if (checked % 50 === 0 && checked < total) {
+                  send({
+                    phase: "scanning",
+                    message: `Checked ${checked}/${total} contacts…`,
+                    autoMerged,
+                    needsReview,
+                  });
                 }
-
-                // Nickname match
-                if (
-                  target.lastNameNorm &&
-                  target.lastNameNorm === other.lastNameNorm &&
-                  target.firstNameNorm &&
-                  other.firstNameNorm
-                ) {
-                  if (
-                    isNicknameMatch(target.firstNameNorm, other.firstNameNorm)
-                  ) {
-                    seenPairs.add(pk);
-                    matchedImportIds.add(contactId);
-                    const pair = {
-                      idA: contactId,
-                      idB: other.id,
-                      matchType: "nickname",
-                      confidence: 0.88,
-                      reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
-                    };
-                    storeSuggestion(scope, pair, "pending");
-                    needsReview++;
-                  }
-                }
-              }
-            }
-
-            // Check email overlap
-            if (target.emailsNorm.length > 0) {
-              const placeholders = target.emailsNorm.map(() => "?").join(",");
-              const emailMatches = sqlite
-                .prepare(
-                  `
-              SELECT DISTINCT ce.contactId
-              FROM contact_emails ce
-              JOIN contacts c ON c.id = ce.contactId
-              WHERE LOWER(TRIM(ce.email)) IN (${placeholders})
-                AND ce.contactId != ?
-                AND c.ownerId = ?
-                AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-            `,
-                )
-                .all(...target.emailsNorm, contactId, scope.ownerId) as {
-                contactId: string;
-              }[];
-
-              for (const match of emailMatches) {
-                if (importedSet.has(match.contactId)) continue;
-                const pk = pairKey(contactId, match.contactId);
-                if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-                seenPairs.add(pk);
-                matchedImportIds.add(contactId);
-
-                const pair = {
-                  idA: contactId,
-                  idB: match.contactId,
-                  matchType: "email",
-                  confidence: 0.99,
-                  reasoning: "Shared email address",
-                };
-
-                try {
-                  const rawA = contactRepo.hydrate(
-                    contactRepo.findOwned(scope, pair.idA),
-                  );
-                  const rawB = contactRepo.hydrate(
-                    contactRepo.findOwned(scope, pair.idB),
-                  );
-                  const scoreA = computePrimaryScore(scope, rawA);
-                  const scoreB = computePrimaryScore(scope, rawB);
-                  const [primaryId, duplicateId] =
-                    scoreA >= scoreB
-                      ? [pair.idA, pair.idB]
-                      : [pair.idB, pair.idA];
-
-                  dedupeService.softMergeContacts(
-                    scope,
-                    primaryId,
-                    duplicateId,
-                    pair.confidence,
-                    pair.reasoning,
-                    rid,
-                  );
-                  storeSuggestion(scope, pair, "auto_merged");
-                  autoMerged++;
-                } catch (err: unknown) {
-                  log.warn(
-                    "API",
-                    `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
-                  );
-                  storeSuggestion(scope, pair, "pending");
-                  needsReview++;
-                }
-              }
-            }
-
-            // Check phone overlap
-            if (target.phonesNorm.length > 0) {
-              const allPhones = sqlite
-                .prepare(
-                  `
-              SELECT cp.contactId, cp.phone FROM contact_phones cp
-              JOIN contacts c ON c.id = cp.contactId
-              WHERE cp.contactId != ? AND c.ownerId = ?
-                AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL) AND c.canonicalId IS NULL
-            `,
-                )
-                .all(contactId, scope.ownerId) as {
-                contactId: string;
-                phone: string;
-              }[];
-
-              const targetPhoneSet = new Set(target.phonesNorm);
-              for (const row of allPhones) {
-                if (importedSet.has(row.contactId)) continue;
-                const norm = normalizePhone(row.phone);
-                if (norm && targetPhoneSet.has(norm)) {
-                  const pk = pairKey(contactId, row.contactId);
-                  if (seenPairs.has(pk) || distinctPairs.has(pk)) continue;
-                  seenPairs.add(pk);
-                  matchedImportIds.add(contactId);
-
-                  const pair = {
-                    idA: contactId,
-                    idB: row.contactId,
-                    matchType: "phone",
-                    confidence: 0.95,
-                    reasoning: "Shared phone number",
-                  };
-
-                  try {
-                    const rawA = contactRepo.hydrate(
-                      contactRepo.findOwned(scope, pair.idA),
-                    );
-                    const rawB = contactRepo.hydrate(
-                      contactRepo.findOwned(scope, pair.idB),
-                    );
-                    const scoreA = computePrimaryScore(scope, rawA);
-                    const scoreB = computePrimaryScore(scope, rawB);
-                    const [primaryId, duplicateId] =
-                      scoreA >= scoreB
-                        ? [pair.idA, pair.idB]
-                        : [pair.idB, pair.idA];
-
-                    dedupeService.softMergeContacts(
-                      scope,
-                      primaryId,
-                      duplicateId,
-                      pair.confidence,
-                      pair.reasoning,
-                      rid,
-                    );
-                    storeSuggestion(scope, pair, "auto_merged");
-                    autoMerged++;
-                  } catch (err: unknown) {
-                    log.warn(
-                      "API",
-                      `[${rid}] Auto-merge failed, queued for review: ${getErrorMessage(err)}`,
-                    );
-                    storeSuggestion(scope, pair, "pending");
-                    needsReview++;
-                  }
-                }
-              }
-            }
-
-            // Stream progress periodically
-            if (i > 0 && i % 50 === 0) {
-              send({
-                phase: "scanning",
-                message: `Checked ${i}/${createdIds.length} contacts…`,
-                autoMerged,
-                needsReview,
-              });
-            }
-          }
+              },
+            },
+          );
+          autoMerged = result.autoMerged;
+          needsReview = result.pending;
+          matchedImportIds = result.matchedIds;
 
           log.info(
             "API",
@@ -574,27 +336,28 @@ router.post(
                 `Background bulk embedding failed: ${getErrorMessage(err)}`,
               ),
             );
-            // Process incremental dedupe sequentially in the background to prevent lock saturation and CPU spikes
+            // One scan for the whole import, not one check per contact.
+            //
+            // The loop that was here called `incrementalDedupeCheck` once per
+            // created contact, and every one of those normalized the account's
+            // whole corpus and built a pass context of its own. Importing `n`
+            // contacts into a corpus of `m` cost about `n × m`, nearly all of
+            // it the same work done again. `runImportScan` builds the corpus
+            // once and matches every new contact against that.
             void (async () => {
               // Let bulk inserts and embedding tasks settle first.
               await new Promise((resolve) =>
                 setTimeout(resolve, IMPORT_SETTLE_MS),
               );
-              await ParallelQueue.process(createdIds, 1, async (cid) => {
-                const irid = `imp-${cid.slice(0, 8)}`;
-                try {
-                  await dedupeService.incrementalDedupeCheck(cid, irid);
-                } catch (err) {
-                  log.warn(
-                    "API",
-                    `Incremental dedupe for ${cid} failed: ${getErrorMessage(err)}`,
-                  );
-                }
-              });
+              await dedupeService.runImportScan(
+                scope,
+                createdIds,
+                `imp-${rid}`,
+              );
             })().catch((err) =>
               log.error(
                 "API",
-                `Bulk background dedupe queue crashed: ${getErrorMessage(err)}`,
+                `Bulk background dedupe scan crashed: ${getErrorMessage(err)}`,
               ),
             );
           },
