@@ -29,6 +29,19 @@ let B: Actor;
 /** A score no computation produces, so "was this row written" is answerable. */
 const UNSCORED = -1;
 
+/**
+ * How long ago every contact here was last contacted.
+ *
+ * Not "now", and the reason is a cliff in the formula rather than a
+ * preference. `recencyScore` returns 100 when `daysSince <= 0` and falls
+ * straight to 91.68 at any positive value, so a contact stamped with the
+ * current instant scores one of two numbers eight points apart depending on
+ * whether the reader lands in the same millisecond as the writer. Two scores
+ * of the same contact taken microseconds apart then disagree, which made
+ * `explainScore` look inconsistent with the sweep about one run in twenty.
+ */
+const LAST_CONTACTED = new Date(Date.now() - 5 * 86_400_000).toISOString();
+
 let seq = 0;
 
 function addContact(
@@ -54,7 +67,7 @@ function addContact(
       owner,
       overrides.name ?? `Scored Person ${seq}`,
       overrides.cadenceDays ?? 90,
-      overrides.lastContactedAt ?? new Date().toISOString(),
+      overrides.lastContactedAt ?? LAST_CONTACTED,
       overrides.isGhost ?? 0,
       overrides.isArchived ?? 0,
       UNSCORED,
@@ -449,10 +462,7 @@ describe("the full sweep", () => {
   });
 
   it("still answers with a score a person can read", async () => {
-    const id = addContact(A.user.id, {
-      lastContactedAt: new Date().toISOString(),
-      cadenceDays: 30,
-    });
+    const id = addContact(A.user.id, { cadenceDays: 30 });
     addInteraction(A.user.id, id);
     await relationshipService.recomputeStale();
 
@@ -460,6 +470,9 @@ describe("the full sweep", () => {
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(100);
 
+    // The explanation and the badge beside it have to be the same number.
+    // They are computed at two different instants, so this only holds while
+    // the formula is continuous over that gap — see LAST_CONTACTED.
     const breakdown = relationshipService.explainScore(id);
     expect(breakdown?.score).toBe(score);
     // Explaining writes the fresh score back, and that is not an edit either.
