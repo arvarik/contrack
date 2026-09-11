@@ -6,7 +6,11 @@ import { apiJson } from "./client";
  * - useAIStatsSummary()  → GET /api/ai/stats/summary
  * - useAIStatsFeed()     → GET /api/ai/stats/feed
  */
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  keepPreviousData,
+} from "@tanstack/react-query";
 
 // =============================================================================
 // Types (match backend response shapes exactly)
@@ -138,32 +142,85 @@ export const useAIStatsSummary = (scope?: "all") => {
 };
 
 /**
- * Fetch paginated, filterable AI invocation feed.
- * Uses `placeholderData: keepPreviousData` for smooth pagination transitions.
+ * How many rows one page of the feed holds.
+ *
+ * Here rather than in the view, because this is the module that pages. Two
+ * constants of the same name in two files, one of them a fallback the other
+ * always overrode, is how a page size ends up being 20 in one code path and
+ * 50 in another with nobody able to say which is the real one.
+ */
+export const FEED_PAGE_SIZE = 50;
+
+/**
+ * The AI invocation feed, one page at a time, appended.
+ *
+ * "Load older activity" used to raise an offset on a plain query, which
+ * **replaced** what was on screen with the next twenty rows. Reading a feed
+ * meant losing the rows you had just read, and going back meant a button that
+ * did not exist. It was carried in `.agent/STATUS.md` as known issue B-02,
+ * and the blocker was the design decision rather than the code.
+ *
+ * The decision is append. A feed is a list of things that happened, read
+ * downward, and the thing somebody is doing with it is scanning for the entry
+ * that explains a cost — which is a search, not a lookup at a known page
+ * number. Numbered pages would be the right answer for a list you return to
+ * at a remembered position, and nobody remembers a position in a log.
+ *
+ * The offset is the cursor and is kept by the query rather than by the view,
+ * so a filter change starts a new query and the list resets by itself. The
+ * previous list stays on screen while the new one loads.
  */
 export const useAIStatsFeed = (params: FeedQueryParams = {}) => {
-  // Build URLSearchParams from non-undefined values
-  const searchParams = new URLSearchParams();
-  if (params.offset !== undefined)
-    searchParams.set("offset", String(params.offset));
-  if (params.limit !== undefined)
-    searchParams.set("limit", String(params.limit));
-  if (params.operation) searchParams.set("operation", params.operation);
-  if (params.cached) searchParams.set("cached", params.cached);
-  if (params.sort) searchParams.set("sort", params.sort);
-  if (params.scope) searchParams.set("scope", params.scope);
+  const limit = params.limit ?? FEED_PAGE_SIZE;
 
-  const queryString = searchParams.toString();
+  const urlFor = (offset: number): string => {
+    const searchParams = new URLSearchParams();
+    searchParams.set("offset", String(offset));
+    searchParams.set("limit", String(limit));
+    if (params.operation) searchParams.set("operation", params.operation);
+    if (params.cached) searchParams.set("cached", params.cached);
+    if (params.sort) searchParams.set("sort", params.sort);
+    if (params.scope) searchParams.set("scope", params.scope);
+    return `/ai/stats/feed?${searchParams.toString()}`;
+  };
 
-  return useQuery({
-    // `params` carries the scope, so the key already distinguishes the two.
-    queryKey: ["aiStats", "feed", params],
-    queryFn: ({ signal }): Promise<AIStatsFeedResponse> =>
-      apiJson<AIStatsFeedResponse>(
-        queryString ? `/ai/stats/feed?${queryString}` : `/ai/stats/feed`,
-        { signal },
-      ),
+  const query = useInfiniteQuery({
+    // The offset is deliberately NOT in the key. It is the cursor inside this
+    // query, and a key that moved with it would make every page a separate
+    // cache entry and defeat the whole thing.
+    queryKey: [
+      "aiStats",
+      "feed",
+      {
+        limit,
+        operation: params.operation,
+        cached: params.cached,
+        sort: params.sort,
+        scope: params.scope,
+      },
+    ],
+    initialPageParam: 0,
+    queryFn: ({ pageParam, signal }): Promise<AIStatsFeedResponse> =>
+      apiJson<AIStatsFeedResponse>(urlFor(pageParam), { signal }),
+    getNextPageParam: (last) =>
+      last.pagination.hasMore
+        ? last.pagination.offset + last.pagination.limit
+        : undefined,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
+
+  const pages = query.data?.pages ?? [];
+  return {
+    ...query,
+    /** Every row fetched so far, oldest request first. */
+    items: pages.flatMap((page) => page.items),
+    /**
+     * How many rows match the filter in total.
+     *
+     * From the first page. Every page reports the same number, and the first
+     * is the one that exists as soon as anything does.
+     */
+    totalCount: pages[0]?.pagination.totalCount ?? 0,
+  };
 };

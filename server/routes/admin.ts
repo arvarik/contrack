@@ -45,10 +45,13 @@ import {
 import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
 import { instanceHealth } from "../services/healthService.ts";
 import {
+  getInstanceName,
+  setInstanceName,
   getSessionTtlDays,
   setSessionTtlDays,
   isRegistrationOpen,
   setRegistrationOpen,
+  INSTANCE_NAME_MAX,
   MIN_SESSION_TTL_DAYS,
   MAX_SESSION_TTL_DAYS,
   DEFAULT_SESSION_TTL_DAYS,
@@ -276,6 +279,8 @@ function settingsView() {
       max: MAX_SESSION_TTL_DAYS,
       default: DEFAULT_SESSION_TTL_DAYS,
     },
+    instanceName: getInstanceName(),
+    instanceNameMax: INSTANCE_NAME_MAX,
   };
 }
 
@@ -311,6 +316,10 @@ router.put(
     if (req.body.sessionTtlDays !== undefined) {
       setSessionTtlDays(req.body.sessionTtlDays);
       changed.push("auth.sessionTtlDays");
+    }
+    if (req.body.instanceName !== undefined) {
+      setInstanceName(req.body.instanceName);
+      changed.push("instance.name");
     }
 
     const ctx = adminContext(req);

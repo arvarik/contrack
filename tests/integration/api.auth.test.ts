@@ -20,6 +20,7 @@ import { makeTestApp } from "./helpers.ts";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import {
+  assertNoLegacyAuthToken,
   requireAdmin,
   __resetAuthWarnings,
 } from "../../server/middleware/auth.ts";
@@ -424,17 +425,37 @@ describe("API token", () => {
     }
   });
 
-  it("still honours the deprecated AUTH_TOKEN name", async () => {
+  it("no longer honours the AUTH_TOKEN name, which 2.0 removed", async () => {
     delete process.env.API_TOKEN;
     process.env.AUTH_TOKEN = "legacy-token-value";
     try {
       const res = await request(app)
         .get("/api/contacts")
         .set("Authorization", "Bearer legacy-token-value");
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(401);
     } finally {
       delete process.env.AUTH_TOKEN;
     }
+  });
+
+  it("refuses to boot at all while AUTH_TOKEN is set", () => {
+    // Not silently ignored. An instance still setting the old name would
+    // otherwise start with no credential and no explanation, and an operator
+    // who believes their instance is protected is the worst of the three
+    // possible outcomes. `server.ts` calls this before anything else looks at
+    // a credential.
+    process.env.AUTH_TOKEN = "legacy-token-value";
+    try {
+      expect(() => assertNoLegacyAuthToken()).toThrow(/AUTH_TOKEN was removed/);
+    } finally {
+      delete process.env.AUTH_TOKEN;
+    }
+  });
+
+  it("boots without complaint when AUTH_TOKEN is absent", () => {
+    delete process.env.AUTH_TOKEN;
+
+    expect(() => assertNoLegacyAuthToken()).not.toThrow();
   });
 
   it("cannot reach account endpoints — a token is not a session", async () => {

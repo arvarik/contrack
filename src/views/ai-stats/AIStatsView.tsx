@@ -12,7 +12,7 @@ import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { MetricCard } from "../dashboard/MetricCard";
-import { useAIStatsSummary, useAIStatsFeed } from "../../api";
+import { FEED_PAGE_SIZE, useAIStatsSummary, useAIStatsFeed } from "../../api";
 import type { FeedQueryParams } from "../../api";
 import { SummaryBar } from "./components/SummaryBar";
 import { AIStatsSkeleton } from "./components/AIStatsSkeleton";
@@ -36,8 +36,6 @@ function formatCompact(n: number): string {
 // =============================================================================
 // Component
 // =============================================================================
-
-const FEED_PAGE_SIZE = 50;
 
 export const AIStatsView = () => {
   const { isAdmin } = useAuth();
@@ -63,10 +61,8 @@ export const AIStatsView = () => {
     "all",
   );
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
-  const [offset, setOffset] = useState(0);
 
   const feedParams: FeedQueryParams = {
-    offset,
     limit: FEED_PAGE_SIZE,
     sort,
     ...(cacheFilter === "fresh" ? { cached: "false" as const } : {}),
@@ -75,24 +71,27 @@ export const AIStatsView = () => {
   };
 
   const {
-    data: feed,
+    items: feedItems,
+    totalCount,
     isLoading: feedLoading,
     isFetching: feedFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
   } = useAIStatsFeed(feedParams);
 
-  // Reset offset when filters change
+  // No offset to reset. The filters are part of the query key, so changing
+  // one starts a new query whose first page is the only page, and the
+  // previous list stays on screen until it lands.
   const handleCacheFilterChange = useCallback(
-    (f: "all" | "fresh" | "cached") => {
-      setCacheFilter(f);
-      setOffset(0);
-    },
+    (f: "all" | "fresh" | "cached") => setCacheFilter(f),
     [],
   );
 
-  const handleSortChange = useCallback((s: "newest" | "oldest") => {
-    setSort(s);
-    setOffset(0);
-  }, []);
+  const handleSortChange = useCallback(
+    (s: "newest" | "oldest") => setSort(s),
+    [],
+  );
 
   /**
    * The scope control, and only for an admin.
@@ -113,10 +112,7 @@ export const AIStatsView = () => {
       <Segmented
         label="Whose AI usage"
         value={scope}
-        onChange={(next) => {
-          setScope(next);
-          setOffset(0);
-        }}
+        onChange={(next) => setScope(next)}
         options={[
           { value: "mine", label: "Mine" },
           { value: "all", label: "All users" },
@@ -218,9 +214,11 @@ export const AIStatsView = () => {
           {feedFetching && !feedLoading && (
             <Loader2 className="w-3 h-3 animate-spin text-primary" />
           )}
-          {feed && (
+          {!feedLoading && (
             <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
-              {feed.pagination.totalCount}
+              {feedItems.length < totalCount
+                ? `${feedItems.length} of ${totalCount}`
+                : totalCount}
             </span>
           )}
         </div>
@@ -244,25 +242,30 @@ export const AIStatsView = () => {
               <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
               Loading activity...
             </div>
-          ) : feed && feed.items.length > 0 ? (
+          ) : feedItems.length > 0 ? (
             <>
-              {feed.items.map((item, i) => (
+              {feedItems.map((item, i) => (
                 <FeedItem key={item.id} item={item} index={i} />
               ))}
 
-              {/* Pagination */}
-              {feed.pagination.hasMore && (
+              {/*
+                Appends. Pressing this used to raise an offset and replace
+                everything above it with the next twenty rows, so reading the
+                feed meant losing what you had just read and there was no way
+                back. Known issue B-02.
+              */}
+              {hasNextPage && (
                 <div className="pt-3 flex justify-center">
                   <button
-                    onClick={() => setOffset(offset + FEED_PAGE_SIZE)}
-                    disabled={feedFetching}
+                    onClick={() => void fetchNextPage()}
+                    disabled={isFetchingNextPage}
                     className={cn(
                       "px-4 py-2 rounded-full text-xs font-bold transition-all",
                       "bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
                       "disabled:opacity-50",
                     )}
                   >
-                    {feedFetching ? "Loading..." : "Load older activity"}
+                    {isFetchingNextPage ? "Loading..." : "Load older activity"}
                   </button>
                 </div>
               )}

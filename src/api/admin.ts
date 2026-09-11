@@ -79,6 +79,9 @@ export interface InstanceSettings {
   registrationOpen: boolean;
   sessionTtlDays: number;
   sessionTtlRange: { min: number; max: number; default: number };
+  /** What this instance calls itself, or "" when nobody has named it. */
+  instanceName: string;
+  instanceNameMax: number;
 }
 
 export interface AuditEntry {
@@ -453,6 +456,7 @@ export const useUpdateInstanceSettings = () => {
     mutationFn: (input: {
       registrationOpen?: boolean;
       sessionTtlDays?: number;
+      instanceName?: string;
     }) =>
       apiJson<InstanceSettings>("/admin/settings", {
         method: "PUT",
@@ -461,11 +465,13 @@ export const useUpdateInstanceSettings = () => {
     onSuccess: (settings) => {
       qc.setQueryData(adminKeys.settings, settings);
       qc.invalidateQueries({ queryKey: adminKeys.audit });
-      // `/api/auth/status` reports `registrationOpen` to the sign-in screen,
-      // and the gate holds it in state rather than in the query cache — so
-      // invalidating a query key could never have refreshed it. Without this
-      // an admin who closes registration and then signs out in the same tab
-      // is still offered "Create one" on the way back in.
+      // `/api/auth/status` reports `registrationOpen` and `instanceName` to
+      // the sign-in screen, and the gate holds both in state rather than in
+      // the query cache — so invalidating a query key could never have
+      // refreshed them. Without this an admin who closes registration and
+      // then signs out in the same tab is still offered "Create one" on the
+      // way back in, and one who renames the instance sees the old name in
+      // the sidebar and the browser tab until a reload.
       emitAuthStatusStale();
     },
   });

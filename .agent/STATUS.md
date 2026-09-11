@@ -78,9 +78,9 @@ _None — next feature not started._
 
 ## Known Issues Carried Forward
 
-- B-02: Feed pagination replaces pages instead of appending (design decision needed)
+- B-02: ~~Feed pagination replaces pages instead of appending~~ — **resolved 2026-09-11** by extra F6. The decision was append: `useAIStatsFeed` is an infinite query and "Load older activity" adds a page rather than replacing the one on screen
 - S-02: Error messages reflect raw user input in JSON (low risk, React escapes)
-- S-03: No `Cache-Control: no-store` header on stats endpoints (low risk)
+- S-03: ~~No `Cache-Control: no-store` header on stats endpoints~~ — **resolved 2026-09-11** by extra F1. `server/middleware/cacheControl.ts` marks `/api/auth`, `/api/admin`, `/api/ai/stats` and `/api/export` as never storable, and uploads are `private` rather than `public`
 - D-02: ~~OpenAI/Anthropic adapters lack retry/error handling~~ — **resolved 2026-05-14** via the shared `server/ai/resilience.ts` module (`withTimeout` + `withRetry` + `parseAIJson` integrated into all three adapters)
 
 ## Carried Tech Debt (not blocking ship)

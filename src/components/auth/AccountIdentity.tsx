@@ -96,7 +96,7 @@ const MENU_ITEM = cn(
  * grey circle that turns into a face is worse than a gap that fills.
  */
 export const SidebarIdentity = () => {
-  const { user, authRequired, isAdmin, signOut } = useAuth();
+  const { user, authRequired, isAdmin, instanceName, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   // Closing puts focus back on the avatar. Without it, dismissing with Escape
@@ -149,6 +149,16 @@ export const SidebarIdentity = () => {
           )}
         >
           <div className="px-3 py-2">
+            {/*
+              Which instance, above who. Somebody with an account on two
+              Contracks has two identical menus otherwise, and the account
+              name is the half that is the same on both.
+            */}
+            {instanceName && (
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary truncate mb-1">
+                {instanceName}
+              </p>
+            )}
             <p className="font-bold text-sm text-on-surface truncate">
               {label}
             </p>

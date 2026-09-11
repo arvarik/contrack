@@ -73,6 +73,13 @@ interface AuthContextValue {
   registrationOpen: boolean;
   /** The deprecated environment `API_TOKEN` is still set on the server. */
   legacyTokenConfigured: boolean;
+  /**
+   * What this instance calls itself, or "" when nobody has named it.
+   *
+   * Available before anybody signs in, because the two screens that most need
+   * it — sign in and join — are the two a person sees without a credential.
+   */
+  instanceName: string;
   /** This instance has never been secured. */
   localOwnerPresent: boolean;
   /**
@@ -98,6 +105,7 @@ const AuthContext = createContext<AuthContextValue>({
   registrationOpen: false,
   legacyTokenConfigured: false,
   localOwnerPresent: false,
+  instanceName: "",
   isResolved: false,
   refresh: async () => {},
   signOut: async () => {},
@@ -145,6 +153,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [deviceContacts, setDeviceContacts] = useState(0);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [legacyTokenConfigured, setLegacyTokenConfigured] = useState(false);
+  const [instanceName, setInstanceName] = useState("");
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
   // Why the sign-in screen is showing. Null when the user asked for it
   // (sign-out) or simply arrived signed-out; "expired" when a credential we
@@ -193,6 +202,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setDeviceContacts(status.deviceContacts ?? status.existingContacts ?? 0);
     setRegistrationOpen(status.registrationOpen ?? false);
     setLegacyTokenConfigured(status.legacyTokenConfigured ?? false);
+    setInstanceName(status.instanceName ?? "");
     setLocalOwnerPresent(status.localOwnerPresent ?? false);
 
     // Order matters, and each rung rules out the ones below it.
@@ -347,6 +357,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     registrationOpen,
     legacyTokenConfigured,
     localOwnerPresent,
+    instanceName,
     isResolved: state !== "checking" && state !== "unreachable",
     refresh: check,
     signOut: handleSignOut,

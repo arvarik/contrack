@@ -41,7 +41,6 @@ process.env.GEMINI_API_KEY = "";
 process.env.OPENAI_API_KEY = "";
 process.env.ANTHROPIC_API_KEY = "";
 process.env.MAPBOX_API_KEY = "";
-process.env.AUTH_TOKEN = "";
 process.env.AUTH_REQUIRED = "";
 
 // Suppress fire-and-forget background work (geocoding fetches, debounced

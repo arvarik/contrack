@@ -78,4 +78,6 @@ export const SETTING_KEYS = {
   embeddingsState: "ai.embeddingsState",
   /** boolean — whether anybody may create an account without an invitation */
   registrationOpen: "auth.registrationOpen",
+  /** string — what this instance calls itself, 1 to 60 characters */
+  instanceName: "instance.name",
 } as const;

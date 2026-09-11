@@ -5,6 +5,50 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
+      /**
+       * A floor, not a target.
+       *
+       * `docs/ci-and-release.md` said coverage was collected and nothing was
+       * enforced, which made it a number somebody could read and nothing
+       * more. The matrix and manifest tests are what hold the isolation
+       * guarantee up, and before this a pull request could delete them and go
+       * green.
+       *
+       * Set two points under what was measured when this landed, which is
+       * both what extra F2 specifies and roughly the room a normal change
+       * needs. Only imported files are instrumented, so a test that reaches
+       * into a large untested module lowers the total by adding coverage —
+       * two points is what absorbs that.
+       *
+       * Raise these when the real number moves up. Lowering one is a decision
+       * that belongs in a pull request description.
+       */
+      thresholds: {
+        // Whole project, measured at 73.15 / 58.99 / 73.21 / 75.00.
+        statements: 71,
+        branches: 56,
+        functions: 71,
+        lines: 73,
+        /**
+         * The server, on its own.
+         *
+         * The two sets of numbers are close, because the server is most of
+         * what gets instrumented — only imported files are, and the unit
+         * project reaches a small part of the frontend. So this is not a
+         * higher bar so much as an independent one: a change that adds a lot
+         * of uncovered frontend drags the project total down, and without
+         * this line that would be indistinguishable from somebody deleting
+         * the tests that hold the isolation guarantee up.
+         *
+         * Measured at 74.08 / 59.66 / 79.68 / 76.10.
+         */
+        "**/server/**": {
+          statements: 72,
+          branches: 57,
+          functions: 77,
+          lines: 74,
+        },
+      },
     },
     projects: [
       {

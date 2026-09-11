@@ -90,8 +90,8 @@ All under `/api/admin`, class `admin`.
 | GET | `/invitations` | | `{ invitations: [{ id, email, role, createdAt, expiresAt, acceptedAt, acceptedBy, revokedAt, invitedBy }] }` |
 | POST | `/invitations` | `{ email?, role, expiresInDays? }` | `201 { id, link, expiresAt }`. `link` appears only here. |
 | DELETE | `/invitations/:id` | | `{ revoked: true }` |
-| GET | `/settings` | | `{ registrationOpen, sessionTtlDays, sessionTtlRange: { min, max, default } }` |
-| PUT | `/settings` | `{ registrationOpen?, sessionTtlDays? }` | same shape |
+| GET | `/settings` | | `{ registrationOpen, sessionTtlDays, sessionTtlRange: { min, max, default }, instanceName, instanceNameMax }` |
+| PUT | `/settings` | `{ registrationOpen?, sessionTtlDays?, instanceName? }` | same shape. `instanceName` is 60 characters or fewer and an empty string clears it. Added by extra F3 |
 | GET | `/health` | | The instance as it is now: schema versions, database and write-ahead log sizes, the newest backup and its verification, the dedupe and enrichment queues with the account each is running for, search-index progress per account, AI cache hit rates, and the provider's tier and paused models. Read only, no secrets, safe to poll. Added by quality story S9. |
 | GET | `/audit?limit=&before=` | | `{ entries: [{ id, actor: { id, username } \| null, action, targetType, targetId, details, ip, createdAt }], nextBefore }`. `before` is the opaque cursor a previous page returned as `nextBefore`, which is `<createdAt>\|<id>`: `createdAt` alone has one-second resolution and a bare timestamp cursor would skip every row sharing a second with the last row of the page. |
 
@@ -111,10 +111,14 @@ All under `/api/admin`, class `admin`.
 
 ## 5. Removed
 
-Nothing is removed in 2.0. `PUT /api/auth/session-policy` and the environment
-`API_TOKEN` are deprecated with a removal note for 3.0. The `AUTH_TOKEN`
-alias is removed if feature F5 in
-[15-additional-v2-features.md](15-additional-v2-features.md) is accepted.
+The environment variable `AUTH_TOKEN` is removed, which extra F5 accepted. It
+was the pre-accounts name for `API_TOKEN` and 1.x honoured it with a warning
+at every boot. The server now refuses to start while it is set, rather than
+starting with no credential and no explanation for an operator who believes
+their instance is protected.
+
+Nothing else is removed in 2.0. `PUT /api/auth/session-policy` and the
+environment `API_TOKEN` are deprecated with a removal note for 3.0.
 
 ## 5a. Changed shapes, for script authors
 
@@ -126,6 +130,10 @@ alias is removed if feature F5 in
 | Upload URLs | `/uploads/avatars/<file>`, `/uploads/<file>` | `/uploads/u/<ownerId>/avatars/<file>`, `/uploads/u/<ownerId>/files/<file>` |
 | `GET /api/export/json` | every row on the instance | the caller's rows |
 | `GET /api/query/contacts` | includes trashed and ghost contacts | excludes them |
+| `GET /healthz` | `{ status }` | the same plus `schema: { tenancy, fts }`, `vec` and `expects`. Extra F4 |
+| `GET /api/auth/status` | no instance name | gains `instanceName`, `""` when nobody has set one. Extra F3 |
+| Responses under `/api/auth`, `/api/admin`, `/api/ai/stats`, `/api/export` | no caching headers | `Cache-Control: no-store, no-cache, must-revalidate`. Extra F1 |
+| Files under `/uploads` | `Cache-Control: public, max-age=0` | `private, max-age=0, must-revalidate`. Extra F1 |
 | `GET` and `POST /api/backups` | `{ filename, sizeBytes, createdAt }` | the same plus `verification`, which is `{ ok, checkedAt, integrity, rows, liveRows, problem? }` or `null` for a snapshot taken before 2.0 |
 
 ---
