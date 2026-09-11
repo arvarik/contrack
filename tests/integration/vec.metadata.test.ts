@@ -2,7 +2,7 @@
 // Integration Tests — status columns inside the vector index
 // =============================================================================
 // The vector channel has to return contacts somebody can actually see: not a
-// ghost, not archived, not in the trash, not merged away. Until 2.1 that was
+// ghost, not archived, not in the trash, not merged away. Until 2.0 that was
 // `contactId IN (SELECT c.id FROM contacts c WHERE ...)` wrapped around the
 // KNN, which gave the right answers and made SQLite materialize a list of
 // every active contact the account has, on every search.

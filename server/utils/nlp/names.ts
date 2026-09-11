@@ -34,12 +34,38 @@ const TITLE_SUFFIXES = new Set([
 ]);
 
 /**
- * Tokenize and clean a name: lowercase, strip titles/suffixes, remove punctuation.
+ * Fold accents onto the base letter: "García" → "Garcia", "Søren" → "Soren".
+ *
+ * NFD splits an accented character into its base letter and a combining mark,
+ * and the range below is those marks. Without this, the `[^\w\s'-]` class
+ * further down treated every accent as punctuation and replaced it with a
+ * space, so "María García" tokenized to ["mar", "a", "garc", "a"] — four
+ * fragments, a surname of "a", and a blocking key nothing else could match.
+ *
+ * Two of the three letters that do not decompose are handled by hand. "ø" and
+ * "ł" carry their stroke inside the code point rather than as a combining
+ * mark, so NFD leaves them alone and `\w` then drops them.
+ */
+function foldDiacritics(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ø/g, "o")
+    .replace(/ł/g, "l")
+    .replace(/đ/g, "d")
+    .replace(/ß/g, "ss")
+    .replace(/æ/g, "ae")
+    .replace(/œ/g, "oe");
+}
+
+/**
+ * Tokenize and clean a name: lowercase, fold accents, strip titles/suffixes,
+ * remove punctuation.
  * "Dr. Sarah Chen III" → ["sarah", "chen"]
+ * "María García"       → ["maria", "garcia"]
  */
 export function tokenizeName(name: string): string[] {
-  return name
-    .toLowerCase()
+  return foldDiacritics(name.toLowerCase())
     .replace(/[''`]/g, "'")
     .replace(/[^\w\s'-]/g, " ")
     .split(/\s+/)

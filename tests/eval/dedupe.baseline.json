@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-11T17:06:20.925Z",
+  "recordedAt": "2026-09-11T17:21:43.407Z",
   "corpus": {
     "contacts": 745,
     "duplicatePairs": 221,
@@ -52,22 +52,22 @@
     },
     "funnel": {
       "score": {
-        "produced": 280,
-        "truePositives": 189,
+        "produced": 281,
+        "truePositives": 190,
         "falsePositives": 91,
-        "falseNegatives": 32,
-        "precision": 0.675,
-        "recall": 0.8552,
-        "f1": 0.7545,
+        "falseNegatives": 31,
+        "precision": 0.6762,
+        "recall": 0.8597,
+        "f1": 0.757,
         "autoProduced": 125,
         "autoTruePositives": 94,
         "autoFalsePositives": 31,
         "autoPrecision": 0.752,
-        "meanConfidence": 0.7536
+        "meanConfidence": 0.753
       },
       "recallByKind": {
         "cross-source": 1,
-        "diacritic": 0.9375,
+        "diacritic": 1,
         "formatting": 1,
         "initial": 0.9333,
         "married-name": 0.9333,
@@ -91,22 +91,22 @@
     },
     "combined": {
       "score": {
-        "produced": 281,
-        "truePositives": 189,
+        "produced": 282,
+        "truePositives": 190,
         "falsePositives": 92,
-        "falseNegatives": 32,
-        "precision": 0.6726,
-        "recall": 0.8552,
-        "f1": 0.753,
+        "falseNegatives": 31,
+        "precision": 0.6738,
+        "recall": 0.8597,
+        "f1": 0.7555,
         "autoProduced": 155,
         "autoTruePositives": 97,
         "autoFalsePositives": 58,
         "autoPrecision": 0.6258,
-        "meanConfidence": 0.8615
+        "meanConfidence": 0.8605
       },
       "recallByKind": {
         "cross-source": 1,
-        "diacritic": 0.9375,
+        "diacritic": 1,
         "formatting": 1,
         "initial": 0.9333,
         "married-name": 0.9333,
@@ -130,22 +130,22 @@
     },
     "incremental": {
       "score": {
-        "produced": 258,
-        "truePositives": 166,
+        "produced": 259,
+        "truePositives": 167,
         "falsePositives": 92,
-        "falseNegatives": 55,
-        "precision": 0.6434,
-        "recall": 0.7511,
-        "f1": 0.6931,
-        "autoProduced": 205,
-        "autoTruePositives": 143,
+        "falseNegatives": 54,
+        "precision": 0.6448,
+        "recall": 0.7557,
+        "f1": 0.6958,
+        "autoProduced": 206,
+        "autoTruePositives": 144,
         "autoFalsePositives": 62,
-        "autoPrecision": 0.6976,
-        "meanConfidence": 0.9597
+        "autoPrecision": 0.699,
+        "meanConfidence": 0.9596
       },
       "recallByKind": {
         "cross-source": 1,
-        "diacritic": 0.9375,
+        "diacritic": 1,
         "formatting": 1,
         "initial": 0.9333,
         "married-name": 0.9333,

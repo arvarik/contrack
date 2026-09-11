@@ -27,6 +27,22 @@ export function computePrimaryScore(
   const contact = candidate!;
   let score = 0;
 
+  // A ghost never survives a merge with a real contact.
+  //
+  // A ghost is a record nobody confirmed: a name a model pulled out of a note.
+  // The other side of the pair is somebody the account actually added. Every
+  // other term here is a count of fields, and a bare real contact scores the
+  // same 5 as a ghost, so without this the survivor came down to whichever id
+  // sorted first — which is to say, to chance.
+  //
+  // It stopped being a rare tie when mention resolution started queueing a
+  // ghost against the contact it might be. That pair is a real contact and a
+  // ghost by construction, so it is now the common case rather than the edge.
+  //
+  // Large enough to be decisive. A ghost carries a name and sometimes a
+  // company, so it cannot score above about 8.
+  if (contact.isGhost) score -= 50;
+
   // Custom imported avatar = massive priority boost (user invested effort)
   if (contact.avatarUrl) {
     const isCustom = contact.avatarUrl.startsWith("/uploads/avatars/");
