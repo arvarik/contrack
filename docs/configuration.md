@@ -8,30 +8,31 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable                  | Description                                                                                                                                                                       | Default      | Required |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------- |
-| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                           | `gemini`     | No       |
-| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                                                             | —            | No       |
-| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                                                    | —            | No       |
-| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                                                 | —            | No       |
-| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                              | `FREE`       | No       |
-| `PORT`                    | Express listening port                                                                                                                                                            | `3210`       | No       |
-| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                  | `127.0.0.1`  | No       |
-| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                        | — (disabled) | No       |
-| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                         | project root | No       |
-| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                        | —            | No       |
-| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                       | `false`      | No       |
-| `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token | — (auth off) | No       |
-| `AUTH_TOKEN`              | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                             | —            | No       |
-| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                    | `30`         | No       |
-| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                                                  | `24`         | No       |
-| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                                          | `7`          | No       |
-| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                           | — (auto)     | No       |
-| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                                                          | — (auto)     | No       |
-| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                                                        | — (auto)     | No       |
-| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                            | — (built-in) | No       |
-| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                           | `false`      | No       |
-| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                 | — (dev)      | No       |
+| Variable                  | Description                                                                                                                                                                                    | Default      | Required |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------- |
+| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                                        | `gemini`     | No       |
+| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                                                                          | —            | No       |
+| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                                                                 | —            | No       |
+| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                                                              | —            | No       |
+| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                                           | `FREE`       | No       |
+| `PORT`                    | Express listening port                                                                                                                                                                         | `3210`       | No       |
+| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`  | No       |
+| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled) | No       |
+| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root | No       |
+| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                                     | —            | No       |
+| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                    | `false`      | No       |
+| `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token              | — (auth off) | No       |
+| `AUTH_TOKEN`              | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                          | —            | No       |
+| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                                 | `30`         | No       |
+| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                                                               | `24`         | No       |
+| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                                                       | `7`          | No       |
+| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                                        | — (auto)     | No       |
+| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                                                                       | — (auto)     | No       |
+| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                                                                     | — (auto)     | No       |
+| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                                         | — (built-in) | No       |
+| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                                        | `false`      | No       |
+| `DISABLE_CPU_WORKER`      | `true` runs the embedding model on the request thread instead of a worker thread. Slower for everybody else while an index is built, and there only for a Node build that cannot spawn threads | `false`      | No       |
+| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                              | — (dev)      | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -155,6 +156,25 @@ detection — so "built-in (local)" genuinely means nothing leaves the machine.
 The indexes are fixed-width, so switching models rebuilds them and re-embeds
 every contact in the background. Search falls back to keyword (FTS5) matching
 while that runs. The built-in local model needs no key and works offline.
+
+### Where the built-in model runs
+
+On a `worker_threads` thread, not the request thread. Building an index for
+one account used to stall every other account's requests for as long as it
+took: a 2,000-contact backfill blocked the event loop for 2.19 seconds of the
+2.4 it ran for. The same backfill now blocks it for 0.03 seconds.
+
+`DISABLE_CPU_WORKER=true` moves it back onto the request thread. It is there
+for a Node build or a sandbox that cannot spawn threads, and the server falls
+back to it by itself if the worker will not start, with one warning in the
+log.
+
+**The model loads exactly once per process.** Its native runtime registers
+itself with whichever thread loads it first and refuses every later load
+anywhere in that process, including in the main thread and including after
+the first thread has gone. So the worker is started once and never replaced:
+if it dies, the server logs that embeddings are unavailable and keeps serving
+keyword search until it is restarted. Everything else carries on.
 
 ---
 

@@ -18,7 +18,12 @@
 // - Graceful degradation: if embedding fails, log a warning and continue
 // =============================================================================
 
-import { sqlite, vecTableDdl } from "../../db.ts";
+import {
+  sqlite,
+  vecTableDdl,
+  VEC_ACTIVE_MATCH,
+  VEC_METADATA_SQL,
+} from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
@@ -201,8 +206,9 @@ const _stmts = {
   // the caller: an INSERT that omits a partition key stores NULL silently, and
   // a NULL partition is invisible to every scoped KNN Phase 2 writes.
   insert: sqlite.prepare(
-    `INSERT INTO contact_embeddings (contactId, ownerId, embedding)
-     SELECT ?, c.ownerId, ? FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
+    `INSERT INTO contact_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
+     SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ?
+       FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
   ),
   // tenant-lint: allow owner-checked by caller
   delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
@@ -230,6 +236,7 @@ const _stmts = {
     FROM contact_embeddings
     WHERE embedding MATCH ?
       AND ownerId = ?
+      AND ${VEC_ACTIVE_MATCH}
       AND k = ?
     ORDER BY distance
   `),
@@ -253,7 +260,7 @@ const _stmts = {
 const _upsertTxn = sqlite.transaction(
   (contactId: string, buf: Buffer, at: string) => {
     _stmts.delete.run(contactId);
-    _stmts.insert.run(contactId, buf, contactId);
+    _stmts.insert.run(buf, contactId);
     _stmts.upsertMeta.run(contactId, at);
   },
 );
@@ -278,7 +285,7 @@ export function storeEmbeddings(
   const txn = sqlite.transaction(() => {
     for (const { contactId, embedding } of entries) {
       _stmts.delete.run(contactId);
-      _stmts.insert.run(contactId, Buffer.from(embedding.buffer), contactId);
+      _stmts.insert.run(Buffer.from(embedding.buffer), contactId);
       _stmts.upsertMeta.run(contactId, now);
     }
   });

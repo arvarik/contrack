@@ -20,6 +20,8 @@ import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { AppError } from "../utils/AppError.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
+import { buildMentionCorpus, resolveMention } from "./mentionResolution.ts";
+import { storeSuggestion } from "./dedupe/suggestions.ts";
 import { SharedWork } from "../ai/workQueue.ts";
 
 // =============================================================================
@@ -58,6 +60,10 @@ import { getErrorMessage } from "../utils/helpers.ts";
  * that matches nothing becomes a ghost the caller owns. Without the owner in
  * the match, a note saying "lunch with Sarah" would link to a stranger's
  * Sarah, and every later read of that mention would cross the boundary.
+ *
+ * The match itself is in `mentionResolution.ts`. It used to be
+ * `eq(contacts.name, m.name)`, which missed "Jon" for "Jonathan Smith" and
+ * made a second ghost every time.
  */
 async function runMentionExtraction(
   scope: Scope,
@@ -76,43 +82,95 @@ async function runMentionExtraction(
       .get(interactionId, scope.ownerId, contactId) as
       { content: string } | undefined;
     if (!current || current.content !== content) return;
+
+    // One corpus for the whole note. Every name in it is matched against the
+    // same set of contacts, so tokenizing per name would repeat the account's
+    // whole address book once for each person mentioned.
+    const corpus = buildMentionCorpus(scope, contactId);
+
     sqlite.transaction(() => {
       const mappedMentions = [];
       for (const m of mentions) {
-        let existing = db
-          .select()
-          .from(schema.contacts)
-          .where(
-            and(
-              eq(schema.contacts.name, m.name),
-              eq(schema.contacts.ownerId, scope.ownerId),
-            ),
-          )
-          .get();
-        if (!existing) {
-          const ghostId = crypto.randomUUID();
-          const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][
-            Math.floor(Math.random() * 5)
-          ];
-          existing = db
-            .insert(schema.contacts)
-            .values({
-              id: ghostId,
-              name: m.name,
-              company: m.company || null,
-              isGhost: 1,
-              themeColor: newTheme,
-              ownerId: scope.ownerId,
-            })
-            .returning()
+        const resolution = resolveMention(corpus, m);
+
+        // Confident: attach the mention to the contact that is already there.
+        if (resolution.kind === "link") {
+          const linked = db
+            .select()
+            .from(schema.contacts)
+            .where(
+              and(
+                eq(schema.contacts.id, resolution.match.contactId),
+                eq(schema.contacts.ownerId, scope.ownerId),
+              ),
+            )
             .get();
+          if (linked) {
+            log.info(
+              "AI Service",
+              `Mention "${m.name}" resolved to ${linked.name} ` +
+                `(${resolution.match.tier}, ${Math.round(resolution.match.confidence * 100)}%)`,
+            );
+            mappedMentions.push({
+              contactId: linked.id,
+              name: linked.name,
+              context: m.context,
+              isGhost: linked.isGhost === 1,
+            });
+            continue;
+          }
+        }
+
+        // Not confident: the ghost is made either way, because the note has to
+        // point at something and a mention with no contact is a mention the
+        // timeline cannot show. What changes is whether anybody is told.
+        const ghostId = crypto.randomUUID();
+        const newTheme = ["brand", "indigo", "rose", "emerald", "amber"][
+          Math.floor(Math.random() * 5)
+        ];
+        const ghost = db
+          .insert(schema.contacts)
+          .values({
+            id: ghostId,
+            name: m.name,
+            company: m.company || null,
+            isGhost: 1,
+            themeColor: newTheme,
+            ownerId: scope.ownerId,
+          })
+          .returning()
+          .get();
+
+        if (resolution.kind === "review") {
+          // Into the same queue as a duplicate, because that is what it is:
+          // two records that might be one person. Accepting it merges the
+          // ghost away and the mention follows, which `mergeContacts` already
+          // does for `interaction_mentions`.
+          storeSuggestion(
+            scope,
+            {
+              idA: resolution.match.contactId,
+              idB: ghostId,
+              matchType: "mention",
+              confidence: resolution.match.confidence,
+              reasoning: `Mentioned as "${m.name}" in a note: ${resolution.match.reason}`,
+            },
+            "pending",
+          );
+          log.info(
+            "AI Service",
+            `Mention "${m.name}" may be ${resolution.match.name} ` +
+              `(${Math.round(resolution.match.confidence * 100)}%) — queued for review`,
+          );
+        } else {
           log.info("AI Service", `Inferred ghost contact: ${m.name}`);
         }
+
         mappedMentions.push({
-          contactId: existing.id,
-          name: existing.name,
+          contactId: ghost.id,
+          name: ghost.name,
           context: m.context,
-          isGhost: existing.isGhost === 1,
+          isGhost: true,
         });
       }
       db.update(schema.interactions)

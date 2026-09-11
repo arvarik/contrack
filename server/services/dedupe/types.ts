@@ -15,7 +15,15 @@ export type MatchType =
   | "nickname"
   | "cross_source"
   | "fuzzy"
-  | "ai";
+  | "ai"
+  /**
+   * A name in a note that might be a contact the account already has.
+   *
+   * Written by mention resolution rather than by a scan, and it is a pair of
+   * contacts like any other: the ghost the note made, and the person it looks
+   * like. Accepting it merges the ghost away and the mention follows.
+   */
+  | "mention";
 
 export interface RawPair {
   idA: string;

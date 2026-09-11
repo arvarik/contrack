@@ -1373,9 +1373,12 @@ describe("deleting an account", () => {
     ).id;
     sqlite
       .prepare(
-        "INSERT INTO contact_embeddings (contactId, ownerId, embedding) VALUES (?, ?, ?)",
+        `INSERT INTO contact_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
+         SELECT c.id, c.ownerId, c.isGhost, COALESCE(c.isArchived, 0),
+                (c.deletedAt IS NULL AND c.canonicalId IS NULL), ?
+           FROM contacts c WHERE c.id = ?`,
       )
-      .run(contactId, victim.id, Buffer.from(new Float32Array(768).buffer));
+      .run(Buffer.from(new Float32Array(768).buffer), contactId);
     sqlite
       .prepare(
         `INSERT INTO dedupe_embedding_meta (contactId, embeddedAt)

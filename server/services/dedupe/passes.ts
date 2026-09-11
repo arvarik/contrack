@@ -97,25 +97,54 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
 
   // D1: Exact email
   //
-  // Both sides of the self-join reach `contacts` for their owner. Two people
-  // who share an email address are a duplicate only inside one account: the
-  // same address in two accounts is two people who each wrote it down. The
-  // `contactMap.has()` test below still runs, so a row outside this scan is
-  // dropped twice over.
-  const emailDupes = sqlite
+  // One scoped read and a Map, not a self-join.
+  //
+  // The join was `ON LOWER(TRIM(e1.email)) = LOWER(TRIM(e2.email))`, and a
+  // join predicate wrapped in a function cannot use an index, so SQLite ran a
+  // nested loop: every email row against every other. `EXPLAIN QUERY PLAN`
+  // said `SCAN e1` / `SEARCH e2 (contactId>?)`, and on 10,000 contacts with no
+  // duplicates at all it took 7.4 seconds to return nothing. Grouping the same
+  // rows by the same key in JavaScript is linear and gives the same pairs.
+  //
+  // Still one account's rows: two people who share an email address are a
+  // duplicate only inside one account, because the same address in two
+  // accounts is two people who each wrote it down. The `contactMap.has()`
+  // test below still runs, so a row outside this scan is dropped twice over.
+  const emailRows = sqlite
     .prepare(
-      `
-    SELECT e1.contactId AS id1, e2.contactId AS id2, e1.email AS matchedField
-    FROM contact_emails e1
-    JOIN contacts c1 ON c1.id = e1.contactId AND c1.ownerId = ?
-    JOIN contact_emails e2
-      ON LOWER(TRIM(e1.email)) = LOWER(TRIM(e2.email))
-    JOIN contacts c2 ON c2.id = e2.contactId AND c2.ownerId = ?
-    WHERE e1.contactId < e2.contactId
-    GROUP BY e1.contactId, e2.contactId
-  `,
+      `SELECT ce.contactId, ce.email FROM contact_emails ce
+       JOIN contacts c ON c.id = ce.contactId WHERE c.ownerId = ?`,
     )
-    .all(owner, owner) as { id1: string; id2: string; matchedField: string }[];
+    .all(owner) as { contactId: string; email: string }[];
+
+  // The first spelling of each address wins as `matchedField`, which is what
+  // the self-join's `e1.email` gave: the row with the lower contact id.
+  const byEmail = new Map<string, { ids: string[]; original: string }>();
+  for (const row of emailRows) {
+    const key = row.email.toLowerCase().trim();
+    if (key.length === 0) continue;
+    let entry = byEmail.get(key);
+    if (!entry) {
+      entry = { ids: [], original: row.email };
+      byEmail.set(key, entry);
+    }
+    if (!entry.ids.includes(row.contactId)) entry.ids.push(row.contactId);
+  }
+
+  const emailDupes: { id1: string; id2: string; matchedField: string }[] = [];
+  for (const [, entry] of byEmail) {
+    if (entry.ids.length < 2) continue;
+    const ids = [...entry.ids].sort();
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        emailDupes.push({
+          id1: ids[i],
+          id2: ids[j],
+          matchedField: entry.original,
+        });
+      }
+    }
+  }
 
   for (const m of emailDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
@@ -174,27 +203,51 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   }
 
   // D3: Exact name match
-  const nameDupes = sqlite
-    .prepare(
-      `
-    SELECT c1.id AS id1, c2.id AS id2, c1.name AS name1, c2.name AS name2
-    FROM contacts c1
-    JOIN contacts c2
-      ON LOWER(TRIM(c1.name)) = LOWER(TRIM(c2.name))
-      AND c1.id < c2.id
-    WHERE c1.ownerId = ? AND c2.ownerId = ?
-      AND c1.isGhost = 0 AND c2.isGhost = 0
-      AND (c1.isArchived = 0 OR c1.isArchived IS NULL)
-      AND (c2.isArchived = 0 OR c2.isArchived IS NULL)
-      AND c1.canonicalId IS NULL AND c2.canonicalId IS NULL
-  `,
-    )
-    .all(owner, owner) as {
+  //
+  // No query at all. `ctx.allContacts` was loaded with exactly the filters
+  // this self-join carried — one owner, not a ghost, not archived, not merged
+  // away — so the rows are already here and grouping them by the same key is
+  // linear.
+  //
+  // It was the worst of the two joins: `LOWER(TRIM(c1.name)) =
+  // LOWER(TRIM(c2.name))` cannot use an index, so `EXPLAIN QUERY PLAN` showed
+  // `SCAN c1` against `SEARCH c2 (id>?)` and 10,000 contacts with no
+  // duplicates took 10.2 seconds to return nothing. The cost was quadratic in
+  // the account's size and independent of how many duplicates there were.
+  //
+  // The key is the raw name lowercased and trimmed, which is what the SQL
+  // compared. Deliberately NOT the normalized name the funnel uses: that
+  // strips titles and generation suffixes, so "James Whitfield Sr." and
+  // "James Whitfield Jr." would become an exact match at 0.95 and merge a
+  // father into his son without anybody being asked.
+  const byName = new Map<string, ContactRow[]>();
+  for (const contact of ctx.allContacts) {
+    const key = (contact.name ?? "").toLowerCase().trim();
+    if (key.length === 0) continue;
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key)!.push(contact);
+  }
+
+  const nameDupes: {
     id1: string;
     id2: string;
     name1: string;
     name2: string;
-  }[];
+  }[] = [];
+  for (const [, group] of byName) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => (a.id < b.id ? -1 : 1));
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        nameDupes.push({
+          id1: sorted[i].id,
+          id2: sorted[j].id,
+          name1: sorted[i].name,
+          name2: sorted[j].name,
+        });
+      }
+    }
+  }
 
   const allSources = sqlite
     .prepare(
@@ -402,7 +455,15 @@ export async function runFunnelPass(
       candidate.idB,
       distinctPairs,
     );
-    const embSim = getEmbeddingSimilarity(candidate.idA, candidate.idB, ctx);
+    // Only when there is a vector store to ask. `getEmbeddingSimilarity` runs
+    // a KNN per pair, and with no embeddings every one of those threw inside
+    // its own try/catch and returned zero: 30,000 candidates meant 30,000
+    // failing queries, which was 1.1 seconds of the funnel's 1.2 on a corpus
+    // of 2,000. `useEmbeddings` already governed whether the KNN contributed
+    // candidates; it now governs whether it is consulted at all.
+    const embSim = useEmbeddings
+      ? getEmbeddingSimilarity(candidate.idA, candidate.idB, ctx)
+      : 0;
 
     const signals = computeMatchSignals(
       nA,

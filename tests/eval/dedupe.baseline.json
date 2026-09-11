@@ -1,0 +1,171 @@
+{
+  "recordedAt": "2026-09-11T17:52:28.858Z",
+  "corpus": {
+    "contacts": 745,
+    "duplicatePairs": 221,
+    "hardNegatives": 111
+  },
+  "thresholds": {
+    "auto": 0.93,
+    "ai": 0.6,
+    "autoMerge": 0.93
+  },
+  "passes": {
+    "deterministic": {
+      "score": {
+        "produced": 226,
+        "truePositives": 150,
+        "falsePositives": 76,
+        "falseNegatives": 71,
+        "precision": 0.6637,
+        "recall": 0.6787,
+        "f1": 0.6711,
+        "autoProduced": 168,
+        "autoTruePositives": 110,
+        "autoFalsePositives": 58,
+        "autoPrecision": 0.6548,
+        "meanConfidence": 0.9486
+      },
+      "recallByKind": {
+        "cross-source": 1,
+        "diacritic": 0.9375,
+        "formatting": 0.9333,
+        "initial": 0.9333,
+        "married-name": 0.9333,
+        "middle-name": 0,
+        "moved-company": 1,
+        "nickname": 0.9615,
+        "shared-email": 1,
+        "shared-phone": 1,
+        "title-suffix": 0,
+        "typo": 0.027
+      },
+      "negativesMatchedByKind": {
+        "father-and-son": 0,
+        "shared-landline": 16,
+        "shared-inbox": 15,
+        "same-common-name": 17,
+        "siblings": 13,
+        "colleagues": 0,
+        "namesake": 15
+      }
+    },
+    "funnel": {
+      "score": {
+        "produced": 281,
+        "truePositives": 190,
+        "falsePositives": 91,
+        "falseNegatives": 31,
+        "precision": 0.6762,
+        "recall": 0.8597,
+        "f1": 0.757,
+        "autoProduced": 125,
+        "autoTruePositives": 94,
+        "autoFalsePositives": 31,
+        "autoPrecision": 0.752,
+        "meanConfidence": 0.753
+      },
+      "recallByKind": {
+        "cross-source": 1,
+        "diacritic": 1,
+        "formatting": 1,
+        "initial": 0.9333,
+        "married-name": 0.9333,
+        "middle-name": 0.0667,
+        "moved-company": 1,
+        "nickname": 0.9615,
+        "shared-email": 1,
+        "shared-phone": 1,
+        "title-suffix": 1,
+        "typo": 0.6216
+      },
+      "negativesMatchedByKind": {
+        "father-and-son": 16,
+        "shared-landline": 16,
+        "shared-inbox": 15,
+        "same-common-name": 17,
+        "siblings": 13,
+        "colleagues": 0,
+        "namesake": 14
+      }
+    },
+    "combined": {
+      "score": {
+        "produced": 282,
+        "truePositives": 190,
+        "falsePositives": 92,
+        "falseNegatives": 31,
+        "precision": 0.6738,
+        "recall": 0.8597,
+        "f1": 0.7555,
+        "autoProduced": 168,
+        "autoTruePositives": 110,
+        "autoFalsePositives": 58,
+        "autoPrecision": 0.6548,
+        "meanConfidence": 0.8743
+      },
+      "recallByKind": {
+        "cross-source": 1,
+        "diacritic": 1,
+        "formatting": 1,
+        "initial": 0.9333,
+        "married-name": 0.9333,
+        "middle-name": 0.0667,
+        "moved-company": 1,
+        "nickname": 0.9615,
+        "shared-email": 1,
+        "shared-phone": 1,
+        "title-suffix": 1,
+        "typo": 0.6216
+      },
+      "negativesMatchedByKind": {
+        "father-and-son": 16,
+        "shared-landline": 16,
+        "shared-inbox": 15,
+        "same-common-name": 17,
+        "siblings": 13,
+        "colleagues": 0,
+        "namesake": 15
+      }
+    },
+    "incremental": {
+      "score": {
+        "produced": 259,
+        "truePositives": 167,
+        "falsePositives": 92,
+        "falseNegatives": 54,
+        "precision": 0.6448,
+        "recall": 0.7557,
+        "f1": 0.6958,
+        "autoProduced": 206,
+        "autoTruePositives": 144,
+        "autoFalsePositives": 62,
+        "autoPrecision": 0.699,
+        "meanConfidence": 0.9596
+      },
+      "recallByKind": {
+        "cross-source": 1,
+        "diacritic": 1,
+        "formatting": 1,
+        "initial": 0.9333,
+        "married-name": 0.9333,
+        "middle-name": 0,
+        "moved-company": 1,
+        "nickname": 0.9615,
+        "shared-email": 1,
+        "shared-phone": 1,
+        "title-suffix": 1,
+        "typo": 0.027
+      },
+      "negativesMatchedByKind": {
+        "father-and-son": 16,
+        "shared-landline": 16,
+        "shared-inbox": 15,
+        "same-common-name": 17,
+        "siblings": 13,
+        "colleagues": 0,
+        "namesake": 15
+      }
+    }
+  }
+}
