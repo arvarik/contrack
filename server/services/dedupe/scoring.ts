@@ -14,7 +14,11 @@
 // (Section 2.7) and tuned for a personal CRM with ~1,000 contacts.
 // =============================================================================
 
-import { jaroWinkler, isNicknameMatch } from "../../utils/nlp/index.ts";
+import {
+  jaroWinkler,
+  isNicknameMatch,
+  isSharedMailbox,
+} from "../../utils/nlp/index.ts";
 import type {
   NormalizedContact,
   MatchSignals,
@@ -51,10 +55,14 @@ export function computeMatchSignals(
   socialUrlsB: string[] = [],
 ): MatchSignals {
   // --- Identity anchors ---
-  const emailOverlap =
-    a.emailsNorm.length > 0 &&
-    b.emailsNorm.length > 0 &&
-    a.emailsNorm.some((e) => b.emailsNorm.includes(e));
+  //
+  // A shared address is only an anchor when it names a person. Two contacts
+  // recorded against `team.northwind@example.net` are colleagues, and merging
+  // them loses one of them. `isSharedMailbox` splits the two cases, and the
+  // shared alias is scored below as an employer signal instead.
+  const sharedEmails = a.emailsNorm.filter((e) => b.emailsNorm.includes(e));
+  const emailOverlap = sharedEmails.some((e) => !isSharedMailbox(e));
+  const sharedMailboxOverlap = !emailOverlap && sharedEmails.length > 0;
 
   const phoneOverlap =
     a.phonesNorm.length > 0 &&
@@ -113,6 +121,7 @@ export function computeMatchSignals(
 
   return {
     emailOverlap,
+    sharedMailboxOverlap,
     phoneOverlap,
     socialUrlOverlap,
     nameExactMatch,
@@ -168,7 +177,9 @@ export function computeCompositeScore(signals: MatchSignals): number {
   if (signals.nameMetaphoneMatch) score += 0.08;
 
   // --- Context boosters ---
-  if (signals.companyMatch) {
+  // A shared mailbox makes the same claim a matching company does, said a
+  // different way, so it earns the same booster and never more than once.
+  if (signals.companyMatch || signals.sharedMailboxOverlap) {
     score += 0.12;
   } else if (signals.companyFuzzy > 0.7) {
     score += 0.08;

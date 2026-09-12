@@ -202,7 +202,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center shrink-0">
           <button
             onClick={onClose}
-            className="flex items-center gap-2 text-primary font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
+            className="flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
@@ -601,7 +601,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     if (onClose) onClose();
                     navigate(`/contact/${contact.id}`);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl font-bold hover:bg-primary/20 transition-colors text-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-on-primary-wash rounded-xl font-bold hover:bg-primary/20 transition-colors text-sm"
                 >
                   <ArrowUpRight className="w-4 h-4" />
                   Open in Network

@@ -28,6 +28,40 @@ import { SharedWork } from "../ai/workQueue.ts";
 // Interaction Payload Types
 // =============================================================================
 
+/**
+ * Now, in the same shape the app writes timestamps in.
+ *
+ * `datetime('now')` gives `2026-09-11 18:45:11` and this file writes
+ * `2026-09-11T18:45:10.665Z`. The two do not compare as strings, because a
+ * space sorts below `T`, so a clamp built on `datetime('now')` would treat
+ * every ISO timestamp as the later value and clamp nothing.
+ */
+const NOW_ISO_SQL = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
+
+/**
+ * `lastContactedAt` is the newest interaction, and never the future.
+ *
+ * The column is derived from `MAX(interactions.date)`, and the route refuses a
+ * future date with five minutes of clock slack. `MIN` here closes the slack
+ * and the rows an older version wrote: `recencyScore` returns 100 for any date
+ * at or ahead of now and 91.68 one millisecond later, so a contact stamped
+ * ahead scores full marks on a 40 percent signal until the next real
+ * interaction. Recorded as A-05 in `.agent/STATUS.md`.
+ *
+ * SQLite's two-argument `MIN` returns NULL when either side is NULL, so a
+ * contact with no interactions left still comes out NULL rather than now.
+ *
+ * @param contactColumn - Placeholder or literal for the contact id.
+ * @param ownerColumn - Placeholder or literal for the owner id.
+ */
+function lastContactedSql(contactColumn: string, ownerColumn: string): string {
+  return (
+    // tenant-lint: allow owner-checked by caller
+    `MIN((SELECT MAX(date) FROM interactions ` +
+    `WHERE contactId = ${contactColumn} AND ownerId = ${ownerColumn}), ${NOW_ISO_SQL})`
+  );
+}
+
 /** Payload for creating a new interaction. */
 interface CreateInteractionPayload {
   type: string;
@@ -313,7 +347,12 @@ export const interactionService = {
 
       db.update(schema.contacts)
         .set({
-          lastContactedAt: sql`(SELECT MAX(date) FROM interactions WHERE contactId = ${contactId} AND ownerId = ${scope.ownerId})`,
+          // `sql.raw` for the clamp, and not `${NOW_ISO_SQL}`: drizzle binds
+          // an interpolated value as a parameter, so the expression went in as
+          // the literal string "strftime(...)" and MIN compared against that.
+          // A string beginning with a letter sorts above every timestamp, so
+          // the clamp silently did nothing.
+          lastContactedAt: sql`MIN((SELECT MAX(date) FROM interactions WHERE contactId = ${contactId} AND ownerId = ${scope.ownerId}), ${sql.raw(NOW_ISO_SQL)})`,
           updatedAt: new Date().toISOString(),
           aiBriefing: null,
           aiBriefingAt: null,
@@ -595,7 +634,9 @@ export const interactionService = {
         .run();
       sqlite
         .prepare(
-          "UPDATE contacts SET lastContactedAt = (SELECT MAX(date) FROM interactions WHERE contactId = ? AND ownerId = ?), aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?",
+          // tenant-lint: allow owner-checked by caller
+          `UPDATE contacts SET lastContactedAt = ${lastContactedSql("?", "?")}, ` +
+            `aiBriefing = NULL, aiBriefingAt = NULL WHERE id = ? AND ownerId = ?`,
         )
         .run(
           existing.contactId,

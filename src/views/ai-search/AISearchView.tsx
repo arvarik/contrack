@@ -195,7 +195,7 @@ export function AISearchView() {
                 </span>
                 <button
                   onClick={toggleSelectAll}
-                  className="text-xs font-bold text-primary px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
+                  className="text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
                 >
                   {selectedIds.size === filteredContacts.length &&
                   filteredContacts.length > 0

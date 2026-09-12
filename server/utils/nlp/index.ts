@@ -7,4 +7,5 @@ export * from "./nicknames.ts";
 export * from "./names.ts";
 export * from "./phone.ts";
 export * from "./company.ts";
+export * from "./emails.ts";
 export * from "./phonetics.ts";

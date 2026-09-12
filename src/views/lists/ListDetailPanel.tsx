@@ -180,7 +180,7 @@ export const ListDetailPanel = ({
           </div>
           <button
             onClick={onViewInNetwork}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
             title="View filtered in Network page"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -203,7 +203,7 @@ export const ListDetailPanel = ({
           </div>
           <button
             onClick={onViewInNetwork}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Network
@@ -231,7 +231,7 @@ export const ListDetailPanel = ({
                   className={cn(
                     "p-2 rounded-xl transition-all flex items-center justify-center",
                     active
-                      ? "bg-primary/15 text-primary ring-2 ring-primary/30 shadow-sm scale-110"
+                      ? "bg-primary/15 text-on-primary-wash ring-2 ring-primary/30 shadow-sm scale-110"
                       : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
                   )}
                   title={key}

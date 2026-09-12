@@ -19,8 +19,12 @@
 //      a colour picker safe: the alternative is a control that lets somebody
 //      make their own app unreadable.
 //
-// One case is excluded and named rather than quietly dropped: `text-primary`
-// on `bg-primary/20`. See the last block.
+// One pairing is excluded and named rather than quietly dropped: `text-primary`
+// on a `bg-primary/15` or `/20` wash, which the shipped light primary does not
+// clear. `--color-on-primary-wash` is what carries text there instead, and the
+// last block holds both halves: the wash token clears every alpha, and the
+// primary still does not, which is why the token exists. A source scan keeps
+// the two from being written together again.
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
@@ -31,10 +35,13 @@ import {
   AA,
   DEFAULT_ACCENT,
   deriveAccent,
+  deriveWashText,
   LIGHT,
   DARK,
   PALETTES,
+  PILL_SURFACES,
   WASH_ALPHA,
+  WASH_ALPHAS,
   type Palette,
   type ResolvedMode,
 } from "../../src/lib/theme";
@@ -66,14 +73,6 @@ const SURFACES = [
   "surface-container-highest",
 ] as const;
 
-/** Where a pill or badge actually sits: a page, a section, or a card. */
-const PILL_SURFACES = [
-  "surface",
-  "surface-container-lowest",
-  "surface-container-low",
-  "surface-container",
-] as const;
-
 /** Every token used as text or as an icon, with its usage count in the app. */
 const TEXT_TOKENS = [
   "on-surface",
@@ -89,20 +88,20 @@ const TEXT_TOKENS = [
 /**
  * Alphas each token's own wash is enforced at.
  *
- * `primary` stops at 0.10 rather than 0.20, and that is a recorded exception
- * rather than an oversight: the shipped light primary does not clear AA on its
- * own 15% or 20% wash. The measured numbers are pinned in the last block of
- * this file so they cannot get worse, and the dark palette and every derived
- * accent are held to the full set.
+ * `primary` stops at 0.10, which is the heaviest wash `text-primary` is
+ * allowed to sit on. Anything heavier carries `text-on-primary-wash`
+ * instead, and that token is held to the full set in the last block.
  */
-const WASH_ALPHAS: Partial<Record<(typeof TEXT_TOKENS)[number], number[]>> = {
+const ENFORCED_WASH_ALPHAS: Partial<
+  Record<(typeof TEXT_TOKENS)[number], number[]>
+> = {
   primary: [0.1],
   error: [0.1],
   warning: [0.1],
 };
 
 /** Every alpha `bg-primary/*` is written at in the app. */
-const ALL_PRIMARY_ALPHAS = [0.1, WASH_ALPHA, 0.2];
+const ALL_PRIMARY_ALPHAS = [...WASH_ALPHAS];
 
 /** Text painted directly on a filled token. */
 const FILLS: [keyof Palette, keyof Palette][] = [
@@ -113,7 +112,7 @@ const FILLS: [keyof Palette, keyof Palette][] = [
 ];
 
 /** Every (text, background) pair one palette has to answer for. */
-function casesFor(palette: Palette, alphas = WASH_ALPHAS) {
+function casesFor(palette: Palette, alphas = ENFORCED_WASH_ALPHAS) {
   const cases: { label: string; ratio: number }[] = [];
 
   for (const token of TEXT_TOKENS) {
@@ -398,63 +397,115 @@ describe("deriveAccent", () => {
 // ---------------------------------------------------------------------------
 
 describe("the heavier primary washes", () => {
-  /** The worst `text-primary` on `bg-primary/<alpha>` reaches in one palette. */
-  const washWorst = (palette: Palette, alpha: number) => {
-    const fg = hexToRgb(palette.primary);
-    return Math.min(
-      ...PILL_SURFACES.map((s) =>
-        contrast(fg, over(fg, alpha, hexToRgb(palette[s]))),
+  /** The worst a text colour reaches on `primary/<alpha>` in one palette. */
+  const washWorst = (palette: Palette, text: string, alpha: number) =>
+    Math.min(
+      ...PILL_SURFACES.map((surface) =>
+        contrast(
+          hexToRgb(text),
+          over(hexToRgb(palette.primary), alpha, hexToRgb(palette[surface])),
+        ),
       ),
     );
-  };
 
-  it("records what the shipped light primary measures, so it cannot get worse", () => {
-    // `bg-primary/15 text-primary` is the active filter pill, the selected row
-    // in the list manager, and the audit view's range chips. `bg-primary/20` is
-    // two static uses and about twenty hover states. Neither clears AA with the
-    // shipped light primary, and neither is introduced here.
-    //
-    // The browser-driven audit cannot see this: an active filter pill and a
-    // hover state are both behind an interaction, and it only reads what is on
-    // screen at load. That is why this file exists.
-    //
-    // NOT FIXED HERE. The fix is a darker brand colour — #005d80 clears the
-    // 15% wash, #005778 clears 20% as well — which changes how 295 call sites
-    // render and is a product decision rather than a side effect of adding a
-    // dark mode. Recorded as A-03 in .agent/STATUS.md.
-    //
-    // The numbers are asserted from both sides. A change that improves them
-    // fails this test and should: the bound is what somebody reads to know the
-    // exception is still the exception.
-    const fifteen = washWorst(LIGHT, 0.15);
-    expect(fifteen).toBeGreaterThan(4.15);
-    expect(fifteen).toBeLessThan(AA);
-
-    const twenty = washWorst(LIGHT, 0.2);
-    expect(twenty).toBeGreaterThan(3.85);
-    expect(twenty).toBeLessThan(AA);
-  });
-
-  it("clears every one of them in the dark palette", () => {
-    for (const alpha of ALL_PRIMARY_ALPHAS) {
-      expect(
-        washWorst(DARK, alpha),
-        `dark primary/${alpha * 100}`,
-      ).toBeGreaterThanOrEqual(AA);
-    }
-  });
-
-  it("clears every one of them for a derived accent", () => {
-    // The derivation's own search includes the 20% wash, so an accent somebody
-    // picks is held to the bar the default misses.
-    for (const hex of ["#b45309", "#be123c", "#0f766e", "#6d28d9"]) {
-      for (const mode of ["light", "dark"] as const) {
+  it("carries text on every one of them with the wash token", () => {
+    // The guarantee this token exists for. `bg-primary/15` is the active
+    // filter pill, the selected row in the list manager and the audit view's
+    // range chips; `bg-primary/20` is two static uses and about twenty hover
+    // states. All of them read.
+    for (const mode of ["light", "dark"] as const) {
+      const palette = PALETTES[mode];
+      for (const alpha of ALL_PRIMARY_ALPHAS) {
         expect(
-          worstPrimary(deriveAccent(hex, mode).primary, mode),
-          `${hex} ${mode}`,
+          washWorst(palette, palette["on-primary-wash"], alpha),
+          `${mode} on-primary-wash over primary/${alpha * 100}`,
         ).toBeGreaterThanOrEqual(AA);
       }
     }
+  });
+
+  it("still could not carry it with the primary, which is why the token exists", () => {
+    // Pinned from both sides on purpose. If a future light primary clears its
+    // own 15% wash then `--color-on-primary-wash` is dead weight and this test
+    // says so by failing, rather than leaving a token nobody can justify.
+    //
+    // The browser-driven audit cannot see either number: an active filter pill
+    // and a hover state are both behind an interaction, and it reads what is on
+    // screen at load. That is why this file exists.
+    const fifteen = washWorst(LIGHT, LIGHT.primary, 0.15);
+    expect(fifteen).toBeGreaterThan(4.15);
+    expect(fifteen).toBeLessThan(AA);
+
+    const twenty = washWorst(LIGHT, LIGHT.primary, 0.2);
+    expect(twenty).toBeGreaterThan(3.85);
+    expect(twenty).toBeLessThan(AA);
+
+    // Dark needs no separate token, and keeping the two equal is what makes
+    // the dark pills look exactly as they shipped.
+    expect(DARK["on-primary-wash"]).toBe(DARK.primary);
+  });
+
+  it("never writes the primary and a heavy wash into one class string", () => {
+    // The rule the two tests above imply, checked against the source. A class
+    // string that names both is a pill whose text is 4.21:1, and neither the
+    // palette tests nor the browser audit can see it.
+    //
+    // One string at a time, which is what the app writes: a wash and its text
+    // are set together. A wash on one element and a colour on a child three
+    // lines down is outside this check, and `scripts/contrast-audit.mjs` with
+    // a populated instance is what would find that.
+    const root = path.join(here, "../../src");
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(ts|tsx|css)$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(root);
+
+    // No leading boundary: a class string starts right after a quote or a
+    // brace as often as after a space, and requiring one made this scan pass
+    // on a line that named both. The trailing guards are what matter, so
+    // `bg-primary/150` and `text-primary-dim` do not count.
+    const heavyWash = /bg-primary\/(?:15|20)(?!\d)/;
+    const primaryText = /text-primary(?![-\w])/;
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (/index\.css$|lib\/theme\.ts$|lib\/color\.ts$/.test(file)) continue;
+      const lines = fs.readFileSync(file, "utf8").split("\n");
+      lines.forEach((line, i) => {
+        if (heavyWash.test(line) && primaryText.test(line)) {
+          offenders.push(`${path.relative(root, file)}:${i + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("clears every one of them for a derived accent", () => {
+    // A picked accent gets its own wash token from `deriveWashText`, so the
+    // guarantee is the same one the shipped palettes give and not a weaker
+    // version of it.
+    for (const hex of ["#b45309", "#be123c", "#0f766e", "#6d28d9"]) {
+      for (const mode of ["light", "dark"] as const) {
+        const tokens = deriveAccent(hex, mode);
+        const palette = { ...PALETTES[mode], ...tokens };
+        for (const alpha of ALL_PRIMARY_ALPHAS) {
+          expect(
+            washWorst(palette, tokens["on-primary-wash"], alpha),
+            `${hex} ${mode} wash/${alpha * 100}`,
+          ).toBeGreaterThanOrEqual(AA);
+        }
+      }
+    }
+  });
+
+  it("returns the primary unchanged when it already reads on its own wash", () => {
+    // Not an optimisation, a guarantee: a dark accent that already works keeps
+    // one colour for both jobs, so a pill and the text beside it match.
+    expect(deriveWashText(DARK.primary, DARK, "dark")).toBe(DARK.primary);
   });
 
   it("still treats the default accent as the hand-tuned palette", () => {

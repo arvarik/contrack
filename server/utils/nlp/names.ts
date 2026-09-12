@@ -130,6 +130,47 @@ function singleTokenScore(a: string, b: string): number {
 }
 
 /**
+ * Whether one name is the other with middle names added.
+ *
+ * "Anton Kovacs" and "Anton Peter Kovacs" are one person written down twice.
+ * Jaro-Winkler on the joined strings scores that pair 0.879 to 0.955, which
+ * lands it between the discard and the auto thresholds, so with no AI provider
+ * configured the engine found 0 of 15 such pairs in the eval corpus. The shape
+ * is exact, so it is worth testing for exactly rather than approximating with
+ * a distance.
+ *
+ * Three conditions, and each one refuses a pair that the subsequence test
+ * alone would accept:
+ *
+ * 1. The first tokens agree. "Peter Kovacs" inside "Anton Peter Kovacs" is
+ *    somebody going by their middle name, or somebody else entirely.
+ * 2. The last tokens agree. A shared surname is the anchor.
+ * 3. The shorter name's tokens appear in the longer one in order, and the
+ *    longer one is strictly longer. "Robert Lee Smith" against "Robert Ann
+ *    Smith" is two people, and equal lengths refuse it.
+ *
+ * A one-token name never qualifies: "Kovacs" is not evidence of anything.
+ *
+ * @param a - Tokens of the first name, from {@link tokenizeName}.
+ * @param b - Tokens of the second name, from {@link tokenizeName}.
+ * @returns True when the two differ only by added middle names.
+ */
+export function isMiddleNameExtension(a: string[], b: string[]): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length < 2 || longer.length <= shorter.length) return false;
+  if (shorter[0] !== longer[0]) return false;
+  if (shorter[shorter.length - 1] !== longer[longer.length - 1]) return false;
+
+  let at = 0;
+  for (const token of shorter) {
+    at = longer.indexOf(token, at);
+    if (at === -1) return false;
+    at++;
+  }
+  return true;
+}
+
+/**
  * Production-grade name similarity — multi-signal comparator.
  */
 export function nameSimilarity(a: string, b: string): number {

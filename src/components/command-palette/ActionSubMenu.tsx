@@ -270,7 +270,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
               w-8 h-8 flex items-center justify-center rounded-lg shrink-0
               ${
                 i === selectedIndex
-                  ? "bg-primary/15 text-primary"
+                  ? "bg-primary/15 text-on-primary-wash"
                   : "bg-surface-container-high text-on-surface-variant"
               }
             `}

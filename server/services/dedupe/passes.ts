@@ -6,6 +6,8 @@ import {
   normalizePhone,
   normalizeCompany,
   isNicknameMatch,
+  isMiddleNameExtension,
+  isSharedMailbox,
 } from "../../utils/nlp/index.ts";
 import {
   buildBlockIndex,
@@ -123,6 +125,13 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   for (const row of emailRows) {
     const key = row.email.toLowerCase().trim();
     if (key.length === 0) continue;
+    // A shared mailbox is not an identity. Two contacts recorded against
+    // `team.northwind@` work together and two on `haddad.family@` live
+    // together, and this rule would merge one of each pair away at 0.98 with
+    // nobody asked. The pair still reaches the funnel through the `EM:`
+    // blocking key, which scores it on the name and the company like any
+    // other candidate.
+    if (isSharedMailbox(key)) continue;
     let entry = byEmail.get(key);
     if (!entry) {
       entry = { ids: [], original: row.email };
@@ -344,6 +353,33 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
             matchType: "nickname",
             confidence: 0.88,
             reasoning: `Nickname match: "${rawA?.name}" ↔ "${rawB?.name}"`,
+          });
+          continue;
+        }
+
+        // D6: one name is the other with middle names added.
+        //
+        // "Anton Kovacs" and "Anton Peter Kovacs" scored 0.643 to 0.750 on the
+        // composite, which is the band a provider verifies. With no provider
+        // configured the funnel keeps a pair only at 0.75 and above, so the
+        // engine found 1 of 15 of these. The shape is exact, so it is tested
+        // for here rather than approximated by a distance.
+        //
+        // 0.88 and not higher on purpose. It is the same number the nickname
+        // rule uses and it sits below the auto-merge threshold, so the pair
+        // reaches a person. A middle name added is strong evidence of one
+        // person and it is not proof: a father and a son can differ by exactly
+        // this much.
+        if (isMiddleNameExtension(a.nameTokens, b.nameTokens)) {
+          seenPairs.add(pk);
+          const rawA = contactMap.get(a.id);
+          const rawB = contactMap.get(b.id);
+          pairs.push({
+            idA: a.id,
+            idB: b.id,
+            matchType: "middle_name",
+            confidence: 0.88,
+            reasoning: `Same name with a middle name added: "${rawA?.name}" ↔ "${rawB?.name}"`,
           });
         }
       }

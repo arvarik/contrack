@@ -41,7 +41,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
           }
         }}
         disabled={generateBriefing.isPending}
-        className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center shrink-0"
+        className="p-1.5 rounded-lg bg-primary/10 text-on-primary-wash hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center shrink-0"
         title="Catch Me Up"
         aria-label="Generate AI briefing"
       >
@@ -111,7 +111,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
                     </p>
                     <button
                       onClick={() => generateBriefing.mutate(contact.id)}
-                      className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                      className="text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                       aria-label="Regenerate briefing"
                     >
                       Regenerate

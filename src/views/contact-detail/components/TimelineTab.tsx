@@ -375,7 +375,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                               onClick={(e) => e.stopPropagation()}
                               className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
                             >
-                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-on-primary-wash">
                                 {mention.name.charAt(0)}
                               </div>
                               <span className="text-xs font-semibold text-on-surface line-clamp-1">

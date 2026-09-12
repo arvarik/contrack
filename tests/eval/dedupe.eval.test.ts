@@ -249,6 +249,33 @@ describe("floors that a re-recorded baseline cannot lower", () => {
     expect(measurement.combined.negativesMatchedByKind["colleagues"]).toBe(0);
   });
 
+  it("never claims two people who share a mailbox", () => {
+    // A team alias and a household address are not identities. Both the scan
+    // and the import path skip them, so no pass may match this kind at all.
+    // Before that, 15 of the 45 pairs the engine merged with nobody asked were
+    // two colleagues on one inbox.
+    for (const pass of PASSES) {
+      expect(
+        measurement[pass].negativesMatchedByKind["shared-inbox"],
+        pass,
+      ).toBe(0);
+    }
+  });
+
+  it("finds every duplicate that differs by a middle name", () => {
+    // A rule of its own at 0.88, below the auto threshold. Jaro-Winkler put
+    // these between the discard and auto cuts, so with no provider configured
+    // the funnel found 1 of 15.
+    expect(measurement.combined.recallByKind["middle-name"]).toBe(1);
+  });
+
+  it("keeps two siblings apart", () => {
+    // Reachable only since the corpus stopped giving both siblings the same
+    // first name. While it did, 13 pairs were two records of one person and no
+    // engine change could have separated them.
+    expect(measurement.combined.negativesMatchedByKind["siblings"]).toBe(0);
+  });
+
   it("produces something at all, on every pass", () => {
     for (const pass of PASSES) {
       expect(measurement[pass].score.produced, pass).toBeGreaterThan(50);

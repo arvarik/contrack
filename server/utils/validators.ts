@@ -21,6 +21,46 @@ export const dateSchema = z
     value.length === 10 ? value : new Date(value).toISOString(),
   );
 
+/**
+ * A date that has already happened.
+ *
+ * `dateSchema` alone is wrong for an interaction, because an interaction is
+ * something that took place. A future one is a data error, and it has a cost
+ * beyond the row itself: `contacts.lastContactedAt` is the newest interaction
+ * date, and `recencyScore` returns 100 for any date at or ahead of now while
+ * the curve underneath gives 91.68 one millisecond later. So one future
+ * interaction pins a contact's recency signal at full marks until the next
+ * real one arrives. Recorded as A-05 in `.agent/STATUS.md`.
+ *
+ * Five minutes of slack, and the reason is clocks rather than kindness. A
+ * browser whose clock runs a minute ahead of the server stamps "now" as the
+ * near future, and refusing that would refuse an honest write. Five minutes
+ * cannot move a recency score that is measured in days.
+ *
+ * `nextFollowUpAt` deliberately keeps `dateSchema`: a follow-up is supposed to
+ * be in the future.
+ */
+const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+export const pastDateSchema = dateSchema.refine(
+  (value) => {
+    if (value.length === 10) {
+      // A date with no time names a day rather than an instant, so the
+      // question is whether that day has arrived. One day of slack, for a
+      // client east of UTC whose local today is tomorrow here. A date-only
+      // value parses to midnight, so today can never be ahead of now anyway,
+      // and the `MIN` in interactionService holds the slack case.
+      const latest = new Date(Date.now() + ONE_DAY_MS)
+        .toISOString()
+        .slice(0, 10);
+      return value <= latest;
+    }
+    return new Date(value).getTime() <= Date.now() + FUTURE_TOLERANCE_MS;
+  },
+  { message: "Date cannot be in the future" },
+);
+
 /** Validate a bounded ID list and remove duplicate IDs before writes. */
 export const idsSchema = z
   .array(z.string().trim().min(1).max(200))
@@ -178,7 +218,7 @@ export const interactionCreateSchema = z.object({
   type: z.string().trim().min(1, "Type is required"),
   title: z.string().trim().min(1, "Title is required"),
   content: z.string().nullable().optional(),
-  date: dateSchema.nullable().optional(),
+  date: pastDateSchema.nullable().optional(),
   duration: z.number().nonnegative().max(525600).nullable().optional(),
   source: z.string().nullable().optional(),
   isViaId: z.string().nullable().optional(),

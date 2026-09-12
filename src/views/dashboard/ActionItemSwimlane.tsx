@@ -63,19 +63,19 @@ const SnoozeDropdown = ({
         </div>
         <button
           onClick={() => handleSnooze(1)}
-          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors"
+          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
         >
           <Clock className="w-3 h-3 mr-2 opacity-80" /> Tomorrow
         </button>
         <button
           onClick={() => handleSnooze(3)}
-          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors"
+          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
         >
           <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> In 3 days
         </button>
         <button
           onClick={() => handleSnooze(7)}
-          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-primary transition-colors"
+          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
         >
           <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> Next week
         </button>

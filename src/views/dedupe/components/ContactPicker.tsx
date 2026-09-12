@@ -89,7 +89,8 @@ export const ContactPicker = ({
                   onClick={() => removeContact(c.id)}
                   className="p-0.5 rounded-full hover:bg-primary/20 transition-colors"
                 >
-                  <X className="w-3 h-3 text-primary" />
+                  {/* On a primary/20 wash while hovered, so the wash token. */}
+                  <X className="w-3 h-3 text-on-primary-wash" />
                 </button>
               </motion.div>
             ))}

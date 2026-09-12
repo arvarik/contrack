@@ -65,7 +65,7 @@ export const navLink = (active: boolean, extra?: string) =>
   cn(
     "p-3 rounded-xl transition-colors",
     active
-      ? "bg-primary/15 text-primary"
+      ? "bg-primary/15 text-on-primary-wash"
       : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
     extra,
   );
@@ -158,7 +158,7 @@ export const filterPill = (active: boolean) =>
   cn(
     "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
     active
-      ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/30"
+      ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
       : "text-on-surface-variant hover:bg-surface-container-high",
   );
 
