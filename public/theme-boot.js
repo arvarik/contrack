@@ -26,7 +26,7 @@
     }
 
     // A cached accent belongs to the palette it was derived for. When the
-    // machine has flipped since the last visit, the five colours are for the
+    // machine has flipped since the last visit, the accent colours are for the
     // wrong palette, so they are left off and the app derives them again.
     var wanted =
       cached.theme === "system"

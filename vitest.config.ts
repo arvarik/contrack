@@ -24,8 +24,8 @@ export default defineConfig({
        * that belongs in a pull request description.
        */
       thresholds: {
-        // Whole project, measured at 76.78 / 64.09 / 76.55 / 78.58.
-        statements: 74,
+        // Whole project, measured at 77.19 / 64.66 / 76.93 / 78.98.
+        statements: 75,
         branches: 62,
         functions: 74,
         lines: 76,
@@ -40,7 +40,7 @@ export default defineConfig({
          * this line that would be indistinguishable from somebody deleting
          * the tests that hold the isolation guarantee up.
          *
-         * Measured at 76.42 / 63.29 / 81.35 / 78.36. Read from
+         * Measured at 76.77 / 63.74 / 81.76 / 78.71. Read from
          * `coverage/coverage-final.json` and aggregated over the glob, NOT
          * from the `server` row of the text report: that row covers the
          * top-level `server/*.ts` files alone and reads about fourteen points

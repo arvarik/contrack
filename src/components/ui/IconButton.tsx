@@ -36,7 +36,7 @@ const toneClasses: Record<Tone, string> = {
     "text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest",
   subtle:
     "text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest",
-  primary: "text-primary hover:bg-primary/10 active:bg-primary/20",
+  primary: "text-on-primary-wash hover:bg-primary/10 active:bg-primary/20",
   danger: "text-error hover:bg-error/10 active:bg-error/20",
 };
 

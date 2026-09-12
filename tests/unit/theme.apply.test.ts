@@ -4,7 +4,7 @@
 // =============================================================================
 // `applyTheme` has two jobs and the second one is the easy one to get wrong.
 //
-// It paints: an attribute on <html> and, for a chosen accent, five inline
+// It paints: an attribute on <html> and, for a chosen accent, inline
 // custom properties that beat the stylesheet.
 //
 // And it remembers, for `public/theme-boot.js` to replay before the first

@@ -160,7 +160,7 @@ export const ArchivedContactsView = () => {
                 ? () => setSelectedIds(new Set())
                 : selectAll
             }
-            className="text-xs font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
+            className="text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
           >
             {selectedCount === contacts.length ? "Deselect All" : "Select All"}
           </button>

@@ -36,19 +36,28 @@
    * =================================================================== */
 
   /* ── Primary Palette ────────────────────────────────────────────── */
-  /* 6.05:1 on white · 5.60:1 on surface · 4.68:1 on surface-container-high,
-     and 4.89:1 on the worst real case — an active filter pill, where primary
-     text sits on a primary/15 wash over a sectional background. Chosen to
-     clear 4.5:1 on EVERY surface in the stack rather than only the ones in
-     use today, so a new `text-primary` call site cannot silently fail.
+  /* 6.05:1 on white · 5.60:1 on surface · 4.68:1 on surface-container-high.
      Also the fill behind white button labels: contrast is symmetric, so one
-     value satisfies both directions. */
+     value satisfies both directions.
+     This used to claim 4.89:1 on an active filter pill as well. It does not:
+     the real number is 4.21:1 on a primary/15 wash over a sectional
+     background and 3.92:1 on primary/20, both short of 4.5. The claim was
+     written before anything measured it. `--color-on-primary-wash` below is
+     what carries text on a wash now, and tests/unit/theme.contrast.test.ts
+     measures both. */
   --color-primary: #006a91;
   --color-primary-dim: #00628a;
   /* Light end of the branding gradient and pale fills only — never text. */
   --color-primary-container: #47befd;
   --color-on-primary: #ffffff;
   --color-on-primary-container: #001e2f;
+  /* Text and icons drawn ON a bg-primary/10, /15 or /20 wash: the active
+     filter pill, the selected row in the list manager, the audit range chips
+     and about twenty hover states. Four lightness steps below the primary,
+     which is the least that clears 4.5:1 on all three washes over all four
+     surfaces a pill sits on. Worst case 4.66:1. Use `text-on-primary-wash`
+     there and `text-primary` everywhere else. */
+  --color-on-primary-wash: #005e81;
 
   /* ── Secondary / Neutral ────────────────────────────────────────── */
   --color-secondary: #4d626c;
@@ -153,6 +162,8 @@
     --color-primary-container: #00506f;
     --color-on-primary: #00242f;
     --color-on-primary-container: #c2e7fb;
+    /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
+    --color-on-primary-wash: #6ec6ee;
     --color-secondary: #b0c2ca;
     --color-secondary-container: #2d4049;
     --color-on-secondary-container: #cfe6f2;
@@ -181,6 +192,8 @@
   --color-primary-container: #00506f;
   --color-on-primary: #00242f;
   --color-on-primary-container: #c2e7fb;
+  /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
+  --color-on-primary-wash: #6ec6ee;
   --color-secondary: #b0c2ca;
   --color-secondary-container: #2d4049;
   --color-on-secondary-container: #cfe6f2;

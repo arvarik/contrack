@@ -531,7 +531,7 @@ export const ContactList = () => {
                 <div className="relative" ref={addMenuRef}>
                   <button
                     onClick={() => setShowAddMenu(!showAddMenu)}
-                    className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors"
+                    className="p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
                     title="Add New..."
                     aria-label="Add new contact or list"
                     aria-expanded={showAddMenu}
@@ -594,7 +594,7 @@ export const ContactList = () => {
                     ? clearSelection
                     : selectAll
                 }
-                className="text-xs font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
+                className="text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
               >
                 {selectedCount === filteredContacts.length
                   ? "Deselect All"
@@ -834,7 +834,7 @@ export const ContactList = () => {
                     onClick={() =>
                       navigate(`/search?q=${encodeURIComponent(searchQuery)}`)
                     }
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/20 transition-colors"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     Search with AI

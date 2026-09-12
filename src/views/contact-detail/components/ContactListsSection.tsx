@@ -102,7 +102,7 @@ export const ContactListsSection = ({
       {contactLists.map((list) => (
         <span
           key={list.id}
-          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-primary px-2.5 py-1 rounded-full group/listpill transition-colors hover:bg-primary/20"
+          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-on-primary-wash px-2.5 py-1 rounded-full group/listpill transition-colors hover:bg-primary/20"
         >
           <DetailListIcon icon={list.icon} className="w-3 h-3" />
           {list.name}

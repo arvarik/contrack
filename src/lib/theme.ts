@@ -48,6 +48,33 @@ export const AA = 4.5;
  */
 export const WASH_ALPHA = 0.15;
 
+/**
+ * Every alpha `bg-primary/<n>` is used at, heaviest last.
+ *
+ * `WASH_ALPHA` above is the one the primary search uses, because it is the
+ * common case and the primary has other duties. This list is what the text
+ * that sits ON a wash is held to, and there the heaviest one binds: 20% is
+ * two static pills and about twenty hover states, and a hover state that
+ * drops below AA is still a hover state somebody has to read.
+ */
+export const WASH_ALPHAS = [0.1, WASH_ALPHA, 0.2] as const;
+
+/**
+ * The surfaces a pale pill actually sits on.
+ *
+ * Narrower than {@link SURFACE_TOKENS} on purpose. `surface-variant` is used
+ * zero times as a background in this app, and including it made the contract
+ * stricter than the product without making any screen more readable. These
+ * four are the page, a card, and the two sectional greys a filter bar or a
+ * list row is drawn on.
+ */
+export const PILL_SURFACES = [
+  "surface",
+  "surface-container-lowest",
+  "surface-container-low",
+  "surface-container",
+] as const;
+
 // ---------------------------------------------------------------------------
 // The palettes
 // ---------------------------------------------------------------------------
@@ -59,6 +86,21 @@ export interface Palette {
   "primary-container": string;
   "on-primary": string;
   "on-primary-container": string;
+  /**
+   * Text and icons drawn ON a `bg-primary/<n>` wash.
+   *
+   * Usually the primary itself, and in the light palette it cannot be. The
+   * shipped light primary measures 4.21:1 on its own 15% wash and 3.92:1 on
+   * the 20% one, against a 4.5 requirement, so an active filter pill and
+   * every `hover:bg-primary/20` fell short. Recorded as A-03 for one release
+   * before this token existed.
+   *
+   * A separate token rather than a darker brand: `--color-primary` is 299
+   * call sites, every filled button and the branding gradient, and darkening
+   * it to satisfy a pill is a product decision. This changes only the text
+   * that sits on a wash, which is the only place the number was wrong.
+   */
+  "on-primary-wash": string;
   secondary: string;
   "secondary-container": string;
   "on-secondary-container": string;
@@ -85,6 +127,9 @@ export const LIGHT: Palette = {
   "primary-container": "#47befd",
   "on-primary": "#ffffff",
   "on-primary-container": "#001e2f",
+  // Four lightness steps below the primary, which is what `deriveWashText`
+  // returns for it. 4.66:1 at worst, against 4.21:1 for the primary itself.
+  "on-primary-wash": "#005e81",
   secondary: "#4d626c",
   "secondary-container": "#cfe6f2",
   "on-secondary-container": "#40555f",
@@ -124,6 +169,10 @@ export const DARK: Palette = {
   "primary-container": "#00506f",
   "on-primary": "#00242f",
   "on-primary-container": "#c2e7fb",
+  // The primary unchanged. It already reads at 5.38:1 on its own heaviest
+  // wash, so `deriveWashText` returns it at step zero and the dark pills look
+  // exactly as they shipped.
+  "on-primary-wash": "#6ec6ee",
   secondary: "#b0c2ca",
   "secondary-container": "#2d4049",
   "on-secondary-container": "#cfe6f2",
@@ -164,13 +213,14 @@ export const SURFACE_TOKENS = [
 // Accent derivation
 // ---------------------------------------------------------------------------
 
-/** The five tokens an accent replaces. */
+/** The tokens an accent replaces. */
 export const ACCENT_TOKENS = [
   "primary",
   "primary-dim",
   "primary-container",
   "on-primary",
   "on-primary-container",
+  "on-primary-wash",
 ] as const;
 
 export type AccentTokens = Record<(typeof ACCENT_TOKENS)[number], string>;
@@ -189,6 +239,52 @@ function primaryBackgrounds(primaryHex: string, palette: Palette) {
     ...surfaces,
     ...surfaces.map((surface) => over(primary, WASH_ALPHA, surface)),
   ];
+}
+
+/**
+ * A colour that reads on every wash made from `primaryHex`.
+ *
+ * The wash is `primaryHex` at 10, 15 or 20 percent over one of the four
+ * surfaces a pill sits on, so the twelve backgrounds are all built from the
+ * primary being passed in. The search walks lightness away from the surfaces,
+ * one step at a time, and stops at the first value that clears AA on all
+ * twelve.
+ *
+ * Step zero is tried first and returned unchanged when it passes, which is
+ * what happens in the dark palette: the dark primary already reads on its own
+ * heaviest wash, so dark pills keep exactly the colour they had.
+ *
+ * @param primaryHex - The primary the wash is made from.
+ * @param palette - The palette whose surfaces sit behind the wash.
+ * @param mode - Light walks darker, dark walks lighter.
+ * @returns A hex colour that clears AA on every wash, or the darkest or
+ *   lightest the hue reaches if none does.
+ */
+export function deriveWashText(
+  primaryHex: string,
+  palette: Palette,
+  mode: ResolvedMode,
+): string {
+  const primary = hexToRgb(primaryHex);
+  const backgrounds = PILL_SURFACES.flatMap((token) =>
+    WASH_ALPHAS.map((alpha) => over(primary, alpha, hexToRgb(palette[token]))),
+  );
+  const base = rgbToOklch(primary);
+  const step = mode === "light" ? -0.01 : 0.01;
+
+  let candidate = primaryHex;
+  for (let i = 0; i < 200; i++) {
+    const lightness = Math.max(0, Math.min(1, base.l + step * i));
+    candidate = rgbToHex(oklchToRgb(withLightness(base, lightness)));
+    const worst = backgrounds.reduce(
+      (low, background) =>
+        Math.min(low, contrast(hexToRgb(candidate), background)),
+      Infinity,
+    );
+    if (worst >= AA) return candidate;
+    if (lightness === 0 || lightness === 1) break;
+  }
+  return candidate;
 }
 
 /** The lowest contrast `text-primary` reaches anywhere in the app. */
@@ -236,7 +332,7 @@ function bestOn(fillHex: string): string {
 }
 
 /**
- * Turn one chosen colour into the five tokens the app paints with.
+ * Turn one chosen colour into the accent tokens the app paints with.
  *
  * The input is a wish, not an instruction. Hue is kept exactly, chroma is kept
  * as far as the sRGB gamut allows, and lightness is whatever the contrast
@@ -290,6 +386,10 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
     "primary-container": container,
     "on-primary": bestOn(primary),
     "on-primary-container": onContainer,
+    // From the searched primary, not from `hex`. The wash on screen is made
+    // from the primary that ends up in the stylesheet, so that is the colour
+    // the text has to read against.
+    "on-primary-wash": deriveWashText(primary, palette, mode),
   };
 }
 
@@ -347,7 +447,7 @@ export const THEME_CACHE_KEY = "contrack.theme";
  *
  * This cache is per browser, not per account, because the boot script runs
  * before anyone has signed in. Nothing in it is private — a palette choice and
- * five colours — and the account's real preference replaces it one request
+ * a handful of colours — and the account's real preference replaces it one request
  * later.
  */
 export interface ThemeCache {
@@ -406,7 +506,7 @@ export function resolveMode(theme: ThemeMode): ResolvedMode {
  * The accent is applied as inline custom properties on `<html>`, which beat
  * the stylesheet's `:root` values. The default accent applies none of them:
  * the shipped palette is hand-tuned and measured, and re-deriving it would
- * replace five audited values with five computed ones for no gain.
+ * replace audited values with computed ones for no gain.
  */
 export function applyTheme(
   theme: ThemeMode,
@@ -429,7 +529,7 @@ export function applyTheme(
 
   // Every accent token is written or removed on every call, never only
   // written. Going back to the default accent has to take the previous one
-  // off, or the five inline properties outlive the choice that made them.
+  // off, or the inline properties outlive the choice that made them.
   for (const token of ACCENT_TOKENS) {
     const name = `--color-${token}`;
     if (vars[name]) root.style.setProperty(name, vars[name]);

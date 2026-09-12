@@ -175,7 +175,7 @@ export const ListManagerView = () => {
                   className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
                     isSelected
-                      ? "bg-primary/15 text-primary"
+                      ? "bg-primary/15 text-on-primary-wash"
                       : "bg-surface-container-low text-on-surface-variant",
                   )}
                 >

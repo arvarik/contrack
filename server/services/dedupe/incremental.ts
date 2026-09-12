@@ -23,7 +23,11 @@
 import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
-import { isNicknameMatch } from "../../utils/nlp/index.ts";
+import {
+  isNicknameMatch,
+  isMiddleNameExtension,
+  isSharedMailbox,
+} from "../../utils/nlp/index.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import {
   findNearestNeighbors,
@@ -201,8 +205,15 @@ export function findIncrementalPairs(
     pairs.push({ idA: contactId, idB: otherId, ...pair });
   };
 
-  // 1. A shared email address.
+  // 1. A shared email address that names a person.
+  //
+  // A shared mailbox is skipped here for the same reason the scan's
+  // exact-email rule skips it: two contacts on `team.northwind@` are
+  // colleagues and two on `haddad.family@` are a household, and claiming the
+  // pair at 0.99 merges one of them away during an import. The fuzzy matcher
+  // below still sees the pair.
   for (const email of target.emailsNorm) {
+    if (isSharedMailbox(email)) continue;
     for (const otherId of corpus.contactsByEmail.get(email) ?? []) {
       if (!isCandidate(corpus, otherId, contactId, seen)) continue;
       claim(otherId, {
@@ -259,6 +270,18 @@ export function findIncrementalPairs(
           matchType: "nickname",
           confidence: 0.88,
           reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
+        });
+        continue;
+      }
+
+      // The same rule the scan runs as D6. An import is where a middle name
+      // arrives: one export writes "Anton Kovacs" and the next writes "Anton
+      // Peter Kovacs", and without this the second one lands as a new person.
+      if (isMiddleNameExtension(target.nameTokens, other.nameTokens)) {
+        claim(other.id, {
+          matchType: "middle_name",
+          confidence: 0.88,
+          reasoning: `Same name with a middle name added ("${target.nameNorm}" ↔ "${other.nameNorm}")`,
         });
       }
     }

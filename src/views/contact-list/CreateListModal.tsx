@@ -112,7 +112,7 @@ export const CreateListModal = ({
                   className={cn(
                     "p-2.5 rounded-xl transition-all flex items-center justify-center",
                     active
-                      ? "bg-primary/15 text-primary ring-2 ring-primary/30 shadow-sm scale-110"
+                      ? "bg-primary/15 text-on-primary-wash ring-2 ring-primary/30 shadow-sm scale-110"
                       : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
                   )}
                   title={key}

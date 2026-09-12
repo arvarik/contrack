@@ -378,6 +378,7 @@ export interface ClusterPair {
     | "name"
     | "name_company"
     | "nickname"
+    | "middle_name"
     | "cross_source"
     | "fuzzy"
     | "ai";

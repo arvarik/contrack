@@ -35,7 +35,7 @@ export const VibePickerPopover = ({
     <div className="relative shrink-0" ref={ref}>
       <button
         onClick={() => setShowVibePicker(!showVibePicker)}
-        className={`p-2 rounded-xl transition-all ${showVibePicker ? "bg-primary/20 text-primary" : "text-on-surface-variant hover:bg-surface-container hover:text-primary"}`}
+        className={`p-2 rounded-xl transition-all ${showVibePicker ? "bg-primary/20 text-on-primary-wash" : "text-on-surface-variant hover:bg-surface-container hover:text-on-primary-wash"}`}
         title="Change Theme Vibe"
         aria-label="Change theme color"
         aria-pressed={showVibePicker}

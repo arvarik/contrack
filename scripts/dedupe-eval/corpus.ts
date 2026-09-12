@@ -633,6 +633,25 @@ function transpose(word: string): string {
   return word;
 }
 
+/**
+ * A sibling's first name: the same opening as `first`, a different ending.
+ *
+ * The shared opening is the point. Two siblings block together on the
+ * first-three-letters key, which is the near miss the `siblings` negative
+ * exists to measure.
+ *
+ * The guard is not theoretical. Taking the last three letters of the other
+ * person's name spelled the base name straight back whenever the two happened
+ * to end alike: "Edw" and Gaspard's "ard" rebuilt "Edward", so a pair labelled
+ * `siblings` held two records of one name and measured nothing.
+ */
+function siblingFirstName(first: string, other: string): string {
+  const prefix = first.slice(0, 3);
+  const tail = other.length > 3 ? other.slice(3) : other.slice(-3);
+  const built = prefix + tail;
+  return built === first ? `${built}a` : built;
+}
+
 /** Drop one letter of a doubled pair, or the third letter if there is none. */
 function dropLetter(word: string): string {
   for (let i = 1; i < word.length - 1; i++) {
@@ -979,6 +998,20 @@ const DUPLICATE_RECIPES: {
   },
 ];
 
+/**
+ * The negative kinds that give both people the same name on purpose.
+ *
+ * A namesake and two strangers who share a common name are duplicates to
+ * every signal the engine has, and that is what makes them worth measuring:
+ * they are the ceiling on precision, not a bug to fix. Every other kind must
+ * name two different people, which `validateCorpus` enforces.
+ */
+const SAME_NAME_NEGATIVES: ReadonlySet<NegativeKind> = new Set([
+  "namesake",
+  "same-common-name",
+  "father-and-son",
+]);
+
 const NEGATIVE_RECIPES: {
   kind: NegativeKind;
   why: string;
@@ -1094,7 +1127,7 @@ const NEGATIVE_RECIPES: {
         ["linkedin"],
       ),
       record(
-        `${p.first.slice(0, 3)}${other.first.slice(-3)} ${p.last}`,
+        `${siblingFirstName(p.first, other.first)} ${p.last}`,
         p.company,
         other.role,
         p.location,
@@ -1175,6 +1208,22 @@ const BASE_LAST_POOL =
   "Attwater Brancaster Coldwell Dunmore Eastleigh Fenwicke Garrowby Hatherleigh Inglewood Jessamine Kelsingham Loxworth Mardenhall Netherby Oakhanger Pettigrew Quarrendon Ravelston Stanbridge Tarleton Uffington Vyvyan Wrenbury Yatesbury Zouchley Ashendon Bexwell Corstorphine Dalmahoy Ellersleigh Fordingbridge Granborough Hazelmere Ingoldsby Jerningham".split(
     " ",
   );
+/**
+ * First names for the second person in a hard negative.
+ *
+ * Its own pool, for the same reason `OTHER_LAST_POOL` is: a name assembled
+ * from one pool for the first half and another for the second half can land
+ * on a name some other row already owns. This one is disjoint from
+ * `FORMAL_FIRSTS` and from the distractor pool, so `other.first` beside a base
+ * surname cannot reproduce a base person.
+ *
+ * Longer than `BASES_PER_RECIPE`, so the 13 consecutive indices one recipe
+ * takes get 13 different people rather than one person repeated.
+ */
+const OTHER_FIRST_POOL =
+  "Aurelio Bastienne Cressida Damaris Evander Fenella Gaspard Hesper Ilaria Jolyon Konstantin Leocadia Mirabel Nestor Orsolya Pelagia Rurik".split(
+    " ",
+  );
 const OTHER_LAST_POOL =
   "Ardleigh Bettesworth Chafford Drummond-Hay Eskdaill Farthingale Glenholme Harkaway Inverleith Jocelyn Kingsmill Larchfield Monkswood Northiam Ormesby Pilkington Quenington Rushbrooke Swanbourne Thurlestone Ulcombe Verewood Wolverton Yealmpton Zennorby".split(
     " ",
@@ -1233,9 +1282,29 @@ function baseFor(index: number): BasePerson {
  * The second person in a hard negative: the sibling, the flatmate, the
  * colleague. Its own surname pool, disjoint from every other pool here, so it
  * cannot collide with a primary base or with a distractor.
+ *
+ * ── Why the first name comes from its own pool ─────────────────────────────
+ * This read `firstNameFor(index + 1)`, which looks like "the next person" and
+ * is not. `firstNameFor` advances the first name once per full surname cycle
+ * of 35, so adding 1 to the index changed the name at 1 index in 35. A recipe
+ * takes 13 consecutive indices, so for 13 of every 16 pairs `other.first`
+ * came back equal to `p.first`.
+ *
+ * Two recipes then measured nothing. The sibling recipe builds its second
+ * name from a prefix of one first name and a suffix of the other, so "Edward"
+ * and "Edward" rebuilt "Edward": 13 of 16 sibling pairs were two records of
+ * one name at one company, which no engine can separate. The shared-landline
+ * recipe put one household number on "Charles Hatherleigh" and "Charles
+ * Hatherleigh" rather than on two members of one family. The gate counted all
+ * 26 as engine errors, which is what inflated A-01 from 32 to 58.
+ *
+ * Advancing inside `FORMAL_FIRSTS` does not fix it. `validateCorpus` refused
+ * that: "Edward" beside the base surname "Hatherleigh" is a name a later base
+ * index owns, so the corpus grew an unlabelled duplicate. The second person
+ * needs a first-name pool of its own, which is what `OTHER_FIRST_POOL` is.
  */
 function otherFor(index: number): BasePerson {
-  const first = firstNameFor(index + 1);
+  const first = OTHER_FIRST_POOL[index % OTHER_FIRST_POOL.length];
   const last = OTHER_LAST_POOL[index % OTHER_LAST_POOL.length];
   return {
     first,
@@ -1484,6 +1553,8 @@ export function pairId(a: string, b: string): string {
 export function validateCorpus(corpus: Corpus): void {
   const { contacts, duplicates, negatives } = corpus;
 
+  const byKey = new Map(contacts.map((c) => [c.key, c]));
+
   const keys = new Set<string>();
   for (const contact of contacts) {
     if (keys.has(contact.key)) {
@@ -1548,5 +1619,31 @@ export function validateCorpus(corpus: Corpus): void {
         }
       }
     }
+  }
+
+  // A hard negative that carries one name twice.
+  //
+  // The check above cannot see this, because a labelled negative is allowed to
+  // share a name and two of these kinds are built to. The rest are not, and a
+  // pair of identical names under one of those labels measures nothing: no
+  // signal separates two records that agree on every field, so the gate counts
+  // it as an engine error that no engine change can remove.
+  //
+  // This is how A-01 came to be reported as 58 auto-merged pairs of different
+  // people when 26 of them were two records of one person. The generator
+  // advanced the second person's first name by one index where it needed a
+  // full cycle, and nothing failed.
+  for (const pair of negatives) {
+    if (SAME_NAME_NEGATIVES.has(pair.kind)) continue;
+    const a = byKey.get(pair.a)!;
+    const b = byKey.get(pair.b)!;
+    if (tokenizeName(a.name).join(" ") !== tokenizeName(b.name).join(" ")) {
+      continue;
+    }
+    throw new Error(
+      `dedupe-eval: the ${pair.kind} negative ${pair.a}/${pair.b} gives both ` +
+        `people the name "${a.name}". Only ${[...SAME_NAME_NEGATIVES].join(" and ")} ` +
+        `are built that way, and a pair no signal can separate measures nothing`,
+    );
   }
 }

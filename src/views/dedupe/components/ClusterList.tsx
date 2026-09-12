@@ -160,7 +160,7 @@ export const ClusterList = ({
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
               allSelected
-                ? "bg-primary/15 text-primary"
+                ? "bg-primary/15 text-on-primary-wash"
                 : "bg-surface-container-low text-on-surface-variant hover:text-on-surface",
             )}
           >
@@ -338,7 +338,7 @@ export const ClusterList = ({
                     }}
                     disabled={mergeCluster.isPending}
                     aria-label={`Merge ${cluster.size} contacts in this cluster`}
-                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
                   >
                     Merge
                   </button>

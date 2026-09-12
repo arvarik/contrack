@@ -13,6 +13,8 @@ export type MatchType =
   | "name"
   | "name_company"
   | "nickname"
+  /** One name is the other with middle names added. */
+  | "middle_name"
   | "cross_source"
   | "fuzzy"
   | "ai"
@@ -58,7 +60,15 @@ export interface PassContext {
 export type PairClassification = "auto" | "ai" | "discard";
 
 export interface MatchSignals {
+  /** A shared address that names a person. An identity anchor. */
   emailOverlap: boolean;
+  /**
+   * A shared address that names a group: `info@`, `team.x@`, `smith.family@`.
+   *
+   * Says the two contacts share an employer or a household, not that they are
+   * one person. Scored like a company match rather than like `emailOverlap`.
+   */
+  sharedMailboxOverlap: boolean;
   phoneOverlap: boolean;
   socialUrlOverlap: boolean;
   nameExactMatch: boolean;

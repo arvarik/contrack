@@ -1,5 +1,5 @@
 import React from "react";
-import { AtSign, Mail, Phone, Sparkles, Zap } from "lucide-react";
+import { AtSign, Mail, Phone, Sparkles, UserPlus, Zap } from "lucide-react";
 
 // =============================================================================
 // MatchBadge — Match type indicator (email/phone/AI/manual)
@@ -27,6 +27,15 @@ export const MatchBadge = ({ type, confidence }: MatchBadgeProps) => {
       icon: <Sparkles className="w-3.5 h-3.5" />,
       label: "AI Match",
       color: "text-primary bg-primary/10",
+    },
+    // One name is the other with middle names added: "Anton Kovacs" and
+    // "Anton Peter Kovacs". Named rather than left to the generic badge
+    // because what a reviewer has to decide here is specific: a middle name
+    // added is usually one person and sometimes a son.
+    middle_name: {
+      icon: <UserPlus className="w-3.5 h-3.5" />,
+      label: "Middle Name Added",
+      color: "text-info bg-blue-500/10",
     },
     // Not found by a scan. A note named somebody, the name was close to this
     // contact but not close enough to attach without asking, so the pair is

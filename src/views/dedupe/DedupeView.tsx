@@ -411,7 +411,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleNewScan}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
                   >
                     <ScanSearch className="w-3.5 h-3.5" />
                     New Scan
@@ -733,7 +733,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                   </p>
                   <button
                     onClick={handleNewScan}
-                    className="px-6 py-2.5 bg-primary/10 text-primary font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
+                    className="px-6 py-2.5 bg-primary/10 text-on-primary-wash font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
                   >
                     Scan Again
                   </button>
@@ -781,7 +781,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={handleNewScan}
-                          className="px-6 py-2.5 bg-primary/10 text-primary font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
+                          className="px-6 py-2.5 bg-primary/10 text-on-primary-wash font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
                         >
                           New Scan
                         </button>
