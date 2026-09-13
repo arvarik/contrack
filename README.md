@@ -8,7 +8,7 @@
 [![React 19](https://img.shields.io/badge/Frontend-React_19-61DAFB?logo=react)](https://react.dev/)
 [![Tailwind v4](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-518_passing-brightgreen)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-1695_passing-brightgreen)](https://vitest.dev/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 </div>
 
@@ -136,9 +136,13 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 - **Quick Note** (`Cmd+Shift+I`) — Log interactions from anywhere
 - **Link Unfurling** — Zero-Chromium OpenGraph extraction via Cheerio
 - **Logo Proxy** — Heuristic company logo discovery with local caching
+- **Themes** — Light, dark, or follow the machine, plus an accent colour that derives a readable palette of its own
 - **Trash & Undo** — Deletes are soft: restore from Settings → Trash within 30 days
-- **Automatic Backups** — Scheduled SQLite snapshots with rotation, plus one-click JSON/CSV export
-- **Accounts** — Optional sign-in with username/password, server-side sessions you can revoke per device, plus a bearer token for scripts and MCP
+- **Export** — vCard, CSV and JSON, each covering only your own contacts. vCard reads back in, so moving out and back in is honest
+- **Automatic Backups** — Scheduled SQLite snapshots with rotation. Every snapshot is reopened, checked and counted against the live database, and the answer shows per file
+- **Accounts** — Optional sign-in with username/password, server-side sessions you can revoke per device, plus personal API tokens for scripts and MCP
+- **Administration** — Member and admin roles, invitations, instance settings, an audit log and a health panel. Every query is scoped to one account, which a lint rule and a verification script both enforce
+- **Settings follow the account** — Theme, accent, list density, recent contacts, search history and dedupe thresholds live on the server, so a phone and a laptop agree
 
 ---
 
@@ -195,13 +199,13 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 
 | Domain       | Technology                                                            |
 | ------------ | --------------------------------------------------------------------- |
-| **Frontend** | React 19, Vite 6, React Query v5, Tailwind CSS v4, Tiptap, Motion     |
+| **Frontend** | React 19, Vite 8, React Query v5, Tailwind CSS v4, Tiptap, Motion     |
 | **Backend**  | Node.js 22, Express, TypeScript (tsx), Zod validation                 |
 | **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
 | **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
 | **Mapping**  | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding           |
-| **Testing**  | Vitest — 500+ unit & integration tests, no API keys needed            |
+| **Testing**  | Vitest — 1,695 unit, integration and eval tests, no API keys needed   |
 
 ---
 
@@ -233,21 +237,21 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 ## 🔐 Environment Variables
 
-| Variable                | Description                                               | Default      |
-| ----------------------- | --------------------------------------------------------- | ------------ |
-| `AI_PROVIDER`           | Preferred provider for capabilities set to Auto           | `gemini`     |
-| `GEMINI_API_KEY`        | Gemini API key                                            | —            |
-| `OPENAI_API_KEY`        | OpenAI API key                                            | —            |
-| `ANTHROPIC_API_KEY`     | Anthropic API key                                         | —            |
-| `AI_TIER`               | `FREE` or `PAID` rate limit profile                       | `FREE`       |
-| `PORT`                  | Express listening port                                    | `3210`       |
-| `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)               | `127.0.0.1`  |
-| `AUTH_REQUIRED`         | `true` = require sign-in with an account                  | `false`      |
-| `API_TOKEN`             | Machine credential for scripts/MCP (`Bearer`); also gates | — (off)      |
-| `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache) | project root |
-| `MAPBOX_API_KEY`        | Mapbox geocoding (optional, higher accuracy)              | —            |
-| `BACKUP_INTERVAL_HOURS` | Hours between automatic DB snapshots (`0` disables)       | `24`         |
-| `BACKUP_KEEP`           | Rotation depth for automatic snapshots                    | `7`          |
+| Variable                | Description                                                                                                                                       | Default      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `AI_PROVIDER`           | Preferred provider for capabilities set to Auto                                                                                                   | `gemini`     |
+| `GEMINI_API_KEY`        | Gemini API key                                                                                                                                    | —            |
+| `OPENAI_API_KEY`        | OpenAI API key                                                                                                                                    | —            |
+| `ANTHROPIC_API_KEY`     | Anthropic API key                                                                                                                                 | —            |
+| `AI_TIER`               | `FREE` or `PAID` rate limit profile                                                                                                               | `FREE`       |
+| `PORT`                  | Express listening port                                                                                                                            | `3210`       |
+| `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)                                                                                                       | `127.0.0.1`  |
+| `AUTH_REQUIRED`         | `true` = require sign-in with an account                                                                                                          | `false`      |
+| `API_TOKEN`             | **Deprecated.** Instance-wide machine credential, and setting it gates the instance. Removed in 3.0, use a personal token from Settings → Account | — (off)      |
+| `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache)                                                                                         | project root |
+| `MAPBOX_API_KEY`        | Mapbox geocoding (optional, higher accuracy)                                                                                                      | —            |
+| `BACKUP_INTERVAL_HOURS` | Hours between automatic DB snapshots (`0` disables)                                                                                               | `24`         |
+| `BACKUP_KEEP`           | Rotation depth for automatic snapshots                                                                                                            | `7`          |
 
 More variables (per-capability model pins, CORS, trash retention, background-job control) in the [Configuration Guide](docs/configuration.md). A liveness probe lives at `GET /healthz` — always reachable without a credential, used by the Docker `HEALTHCHECK`, and safe to point an uptime monitor at.
 
