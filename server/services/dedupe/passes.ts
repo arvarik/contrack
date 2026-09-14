@@ -18,6 +18,12 @@ import {
 } from "./blocking.ts";
 import { getEmbeddingSimilarity } from "./context.ts";
 import {
+  NAME_CONFIDENCE,
+  weighAnchor,
+  weighName,
+  withCaveat,
+} from "./policy.ts";
+import {
   computeMatchSignals,
   computeCompositeScore,
   classifyPair,
@@ -155,17 +161,31 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     }
   }
 
+  // Weighed by the policy rather than claimed at a fixed number. An address
+  // three contacts carry is worth a little less, and an address between two
+  // different first names is capped below every preset, so a couple on one
+  // inbox reach a person. The import path runs the same call.
   for (const m of emailDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
     const pk = pairKey(m.id1, m.id2);
     if (seenPairs.has(pk)) continue;
+    const nA = normalizedMap.get(m.id1);
+    const nB = normalizedMap.get(m.id2);
+    if (!nA || !nB) continue;
     seenPairs.add(pk);
+    const key = m.matchedField.toLowerCase().trim();
+    const weighed = weighAnchor(
+      "email",
+      nA,
+      nB,
+      ctx.frequency.emails.get(key) ?? 2,
+    );
     pairs.push({
       idA: m.id1,
       idB: m.id2,
       matchType: "email",
-      confidence: 0.98,
-      reasoning: `Shared email address: ${m.matchedField}`,
+      confidence: weighed.confidence,
+      reasoning: withCaveat(`Shared email address: ${m.matchedField}`, weighed),
       matchedField: m.matchedField,
     });
   }
@@ -185,13 +205,21 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     if (!phoneMap.has(norm)) phoneMap.set(norm, []);
     phoneMap.get(norm)!.push(p.contactId);
   }
+  // Same weighing as D1. A household on one landline is the case: "Ada
+  // Twin" and "Ben Twin" share a number and are two people, and this rule
+  // used to merge them at 0.95 with nobody asked. The eval corpus counted 16
+  // such pairs at auto, all now capped at 0.85 and reviewed.
   for (const [normPhone, contactIds] of phoneMap) {
     const unique = [...new Set(contactIds)];
     if (unique.length < 2) continue;
+    const carriers = ctx.frequency.phones.get(normPhone) ?? unique.length;
     for (let i = 0; i < unique.length; i++) {
       for (let j = i + 1; j < unique.length; j++) {
         const pk = pairKey(unique[i], unique[j]);
         if (seenPairs.has(pk)) continue;
+        const nA = normalizedMap.get(unique[i]);
+        const nB = normalizedMap.get(unique[j]);
+        if (!nA || !nB) continue;
         seenPairs.add(pk);
         const origPhone =
           allPhones.find(
@@ -199,12 +227,13 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
               p.contactId === unique[i] &&
               normalizePhone(p.phone) === normPhone,
           )?.phone || normPhone;
+        const weighed = weighAnchor("phone", nA, nB, carriers);
         pairs.push({
           idA: unique[i],
           idB: unique[j],
           matchType: "phone",
-          confidence: 0.95,
-          reasoning: `Shared phone number: ${origPhone}`,
+          confidence: weighed.confidence,
+          reasoning: withCaveat(`Shared phone number: ${origPhone}`, weighed),
           matchedField: origPhone,
         });
       }
@@ -242,6 +271,8 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     id2: string;
     name1: string;
     name2: string;
+    /** How many active contacts carry this exact name. */
+    carriers: number;
   }[] = [];
   for (const [, group] of byName) {
     if (group.length < 2) continue;
@@ -253,6 +284,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
           id2: sorted[j].id,
           name1: sorted[i].name,
           name2: sorted[j].name,
+          carriers: group.length,
         });
       }
     }
@@ -296,29 +328,41 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
 
     seenPairs.add(pk);
 
+    // A name three contacts carry is a common name, and each carrier beyond
+    // the pair costs the match a little. Same table and same weighing as the
+    // import path.
     if (sameCompany) {
+      const weighed = weighName(NAME_CONFIDENCE.nameCompany, m.carriers);
       pairs.push({
         idA: m.id1,
         idB: m.id2,
         matchType: "name_company",
-        confidence: 0.95,
-        reasoning: `Exact name match "${m.name1}" with same company`,
+        confidence: weighed.confidence,
+        reasoning: withCaveat(
+          `Exact name match "${m.name1}" with same company`,
+          weighed,
+        ),
       });
     } else if (isCrossSource) {
+      const weighed = weighName(NAME_CONFIDENCE.crossSource, m.carriers);
       pairs.push({
         idA: m.id1,
         idB: m.id2,
         matchType: "cross_source",
-        confidence: 0.92,
-        reasoning: `Exact name match "${m.name1}" from different sources (${[...srcA!].join(", ")} ↔ ${[...srcB!].join(", ")})`,
+        confidence: weighed.confidence,
+        reasoning: withCaveat(
+          `Exact name match "${m.name1}" from different sources (${[...srcA!].join(", ")} ↔ ${[...srcB!].join(", ")})`,
+          weighed,
+        ),
       });
     } else {
+      const weighed = weighName(NAME_CONFIDENCE.name, m.carriers);
       pairs.push({
         idA: m.id1,
         idB: m.id2,
         matchType: "name",
-        confidence: 0.9,
-        reasoning: `Exact name match: "${m.name1}"`,
+        confidence: weighed.confidence,
+        reasoning: withCaveat(`Exact name match: "${m.name1}"`, weighed),
       });
     }
   }
@@ -351,7 +395,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
             idA: a.id,
             idB: b.id,
             matchType: "nickname",
-            confidence: 0.88,
+            confidence: NAME_CONFIDENCE.nickname,
             reasoning: `Nickname match: "${rawA?.name}" ↔ "${rawB?.name}"`,
           });
           continue;
@@ -378,7 +422,7 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
             idA: a.id,
             idB: b.id,
             matchType: "middle_name",
-            confidence: 0.88,
+            confidence: NAME_CONFIDENCE.middleName,
             reasoning: `Same name with a middle name added: "${rawA?.name}" ↔ "${rawB?.name}"`,
           });
         }
@@ -508,6 +552,7 @@ export async function runFunnelPass(
       distinct,
       ctx.socialUrlsByContact.get(candidate.idA) ?? [],
       ctx.socialUrlsByContact.get(candidate.idB) ?? [],
+      ctx.frequency,
     );
 
     const score = computeCompositeScore(signals);

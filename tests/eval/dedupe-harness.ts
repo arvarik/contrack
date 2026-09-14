@@ -340,6 +340,12 @@ export interface PassMeasurement {
   recallByKind: Record<string, number>;
   /** Hard negatives the pass produced anyway, per kind. Lower is better. */
   negativesMatchedByKind: Record<string, number>;
+  /**
+   * Hard negatives the pass produced AT OR ABOVE the auto-merge threshold,
+   * per kind. The subset of the line above that loses data: a matched
+   * negative is a wrong suggestion, and one of these is a wrong merge.
+   */
+  autoNegativesByKind: Record<string, number>;
 }
 
 export type Measurement = Record<PassName, PassMeasurement>;
@@ -395,8 +401,10 @@ export function scorePass(
   let autoTruePositives = 0;
   let autoFalsePositives = 0;
   const negativesMatchedByKind: Record<string, number> = {};
+  const autoNegativesByKind: Record<string, number> = {};
   for (const kind of new Set(corpus.negatives.map((n) => n.kind))) {
     negativesMatchedByKind[kind] = 0;
+    autoNegativesByKind[kind] = 0;
   }
 
   for (const [id, confidence] of produced) {
@@ -408,7 +416,10 @@ export function scorePass(
       falsePositives++;
       if (isAuto) autoFalsePositives++;
       const kind = negativeKind.get(id);
-      if (kind) negativesMatchedByKind[kind]++;
+      if (kind) {
+        negativesMatchedByKind[kind]++;
+        if (isAuto) autoNegativesByKind[kind]++;
+      }
     }
   }
 
@@ -459,6 +470,7 @@ export function scorePass(
     },
     recallByKind,
     negativesMatchedByKind,
+    autoNegativesByKind,
   };
 }
 

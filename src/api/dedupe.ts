@@ -28,10 +28,7 @@ const API_BASE = "/api";
 
 export const useStartDedupeScan = () => {
   return useMutation({
-    mutationFn: async (opts: {
-      mode: DedupeScanMode;
-      autoMergeThreshold?: number;
-    }) => {
+    mutationFn: async (opts: { mode: DedupeScanMode }) => {
       // `apiFetch` throws `ApiError` for any non-2xx, with the message read
       // out of the standard `{ error: { code, message } }` envelope, so the
       // caller's `onError` toast shows the server's own words. The busy 429
@@ -39,13 +36,14 @@ export const useStartDedupeScan = () => {
       // `{ error: string }`, which the block that used to sit below read by
       // hand; since 2e it sends the envelope like everything else and carries
       // `details.yours` and `details.queued` for Phase 4 to act on.
+      //
+      // No threshold in the body. The server reads the account's sensitivity
+      // preset for a scan exactly as it does for an import, so the browser
+      // no longer carries a copy of the preset table that could disagree.
       const res = await apiFetch(`/dedupe/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: opts.mode,
-          autoMergeThreshold: opts.autoMergeThreshold,
-        }),
+        body: JSON.stringify({ mode: opts.mode }),
       });
       return res.json() as Promise<{ scanId: string; mode: DedupeScanMode }>;
     },

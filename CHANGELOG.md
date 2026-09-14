@@ -224,6 +224,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- One merge policy, on every path that merges. The import path scored a
+  shared phone number 0.99 where a scan scored it 0.95, scored an exact name
+  across two sources 0.95 where a scan scored it 0.92, and ran at a fixed
+  0.93 whatever sensitivity the account had chosen. `dedupe/policy.ts` now
+  holds the one table of confidences and the one preset table, and the scan,
+  the import, and the check after a contact is added all read the account's
+  preset from it. The browser sends the scan mode and nothing else.
+  `POST /api/dedupe/scan` still accepts `autoMergeThreshold` as an override
+  for one scan.
+- A shared identifier is weaker evidence when many contacts carry it, and no
+  evidence of one person when the names disagree. Each contact beyond the pair
+  costs a match three points, so a phone number on three contacts asks under
+  the balanced preset. A shared number or address between two different first
+  names, or between "Sr." and "Jr.", is capped at 0.85, below every preset,
+  and reaches the review queue with the reason written on it. On the eval
+  corpus the pairs a scan would merge that are two different people fell from
+  30 to 14, and the import path's from 47 to 14, with the scan losing one
+  correct merge to review and the import path none that a scan would have
+  made.
 - The interaction composer keeps a note until the save that keeps it. It
   cleared its editor the moment a save started, on the button and on
   Mod-Enter alike, so a request that failed took the note with it. On

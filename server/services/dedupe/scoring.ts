@@ -19,10 +19,19 @@ import {
   isNicknameMatch,
   isSharedMailbox,
 } from "../../utils/nlp/index.ts";
+import {
+  ANCHOR_CONFIDENCE,
+  carriersOf,
+  generationsContradict,
+  namesContradict,
+  weaken,
+  weighClaim,
+} from "./policy.ts";
 import type {
   NormalizedContact,
   MatchSignals,
   PairClassification,
+  ValueFrequency,
 } from "./types.ts";
 
 // =============================================================================
@@ -45,6 +54,9 @@ import type {
  * @param isKnownDistinct     - Whether this pair is in the negative constraint set
  * @param socialUrlsA         - Pre-loaded social link URLs for contact A
  * @param socialUrlsB         - Pre-loaded social link URLs for contact B
+ * @param frequency           - How widely each value is shared in the account,
+ *                              from `countValues`. Absent means every shared
+ *                              value is treated as the pair's alone.
  */
 export function computeMatchSignals(
   a: NormalizedContact,
@@ -53,6 +65,7 @@ export function computeMatchSignals(
   isKnownDistinct: boolean,
   socialUrlsA: string[] = [],
   socialUrlsB: string[] = [],
+  frequency?: ValueFrequency,
 ): MatchSignals {
   // --- Identity anchors ---
   //
@@ -61,13 +74,12 @@ export function computeMatchSignals(
   // them loses one of them. `isSharedMailbox` splits the two cases, and the
   // shared alias is scored below as an employer signal instead.
   const sharedEmails = a.emailsNorm.filter((e) => b.emailsNorm.includes(e));
-  const emailOverlap = sharedEmails.some((e) => !isSharedMailbox(e));
+  const personalEmails = sharedEmails.filter((e) => !isSharedMailbox(e));
+  const emailOverlap = personalEmails.length > 0;
   const sharedMailboxOverlap = !emailOverlap && sharedEmails.length > 0;
 
-  const phoneOverlap =
-    a.phonesNorm.length > 0 &&
-    b.phonesNorm.length > 0 &&
-    a.phonesNorm.some((p) => b.phonesNorm.includes(p));
+  const sharedPhones = a.phonesNorm.filter((p) => b.phonesNorm.includes(p));
+  const phoneOverlap = sharedPhones.length > 0;
 
   const socialUrlOverlap =
     socialUrlsA.length > 0 &&
@@ -75,7 +87,14 @@ export function computeMatchSignals(
     socialUrlsA.some((u) => socialUrlsB.includes(u));
 
   // --- Name signals ---
-  const nameExactMatch = a.nameNorm.length > 0 && a.nameNorm === b.nameNorm;
+  //
+  // "Robert Hale Sr." and "Robert Hale Jr." normalize to one name and are
+  // two people, so a generation conflict is not an exact match. The pair
+  // still scores on the similarity below, which is what a near miss gets.
+  const nameExactMatch =
+    a.nameNorm.length > 0 &&
+    a.nameNorm === b.nameNorm &&
+    !generationsContradict(a, b);
 
   const nicknameMatch = isNicknameMatch(
     a.nameTokens.join(" "),
@@ -135,6 +154,12 @@ export function computeMatchSignals(
     isCrossSource,
     isKnownDistinct,
     embeddingSimilarity,
+    namesContradict: namesContradict(a, b),
+    emailCarriers: carriersOf(frequency?.emails, personalEmails),
+    phoneCarriers: carriersOf(frequency?.phones, sharedPhones),
+    nameCarriers: nameExactMatch
+      ? carriersOf(frequency?.names, [a.nameNorm])
+      : 2,
   };
 }
 
@@ -158,16 +183,37 @@ export function computeCompositeScore(signals: MatchSignals): number {
   // Hard veto — physically impossible (co-occurred in same interaction, or user dismissed)
   if (signals.isKnownDistinct) return 0;
 
-  // Identity anchors — near-certain, return immediately
-  if (signals.emailOverlap) return 0.98;
-  if (signals.phoneOverlap) return 0.95;
-  if (signals.socialUrlOverlap) return 0.93;
+  // Identity anchors — near-certain, return immediately.
+  //
+  // Near-certain when the pair owns the value and the names agree. A number
+  // three contacts carry, or an address between "ada" and "ben", is weighed
+  // down by the policy: each extra carrier costs a little, and a
+  // contradiction caps the pair below every auto-merge preset.
+  if (signals.emailOverlap) {
+    return weighClaim(
+      ANCHOR_CONFIDENCE.email,
+      signals.emailCarriers,
+      signals.namesContradict,
+    );
+  }
+  if (signals.phoneOverlap) {
+    return weighClaim(
+      ANCHOR_CONFIDENCE.phone,
+      signals.phoneCarriers,
+      signals.namesContradict,
+    );
+  }
+  if (signals.socialUrlOverlap) {
+    return weighClaim(ANCHOR_CONFIDENCE.social, 2, signals.namesContradict);
+  }
 
   let score = 0;
 
   // --- Name signals (primary weight) ---
   if (signals.nameExactMatch) {
-    score += 0.6;
+    // A common name is worth less. Same rule as the anchors, applied to the
+    // weight rather than to the whole score.
+    score += weaken(0.6, signals.nameCarriers, false);
   } else if (signals.nicknameMatch && signals.lastNameExactMatch) {
     score += 0.55;
   } else {

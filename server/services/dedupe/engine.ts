@@ -29,19 +29,21 @@ import {
   clearAllPendingSuggestions,
 } from "./suggestions.ts";
 import { softMergeContacts, mergeContacts } from "./merging.ts";
+import {
+  autoMergeThresholdFor,
+  DEFAULT_AUTO_MERGE_THRESHOLD,
+} from "./policy.ts";
 import type { DedupeScanMode, RawPair, MatchType } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 /**
- * The confidence at which a pair is merged with nobody asked.
+ * The threshold with nothing chosen, re-exported from the policy.
  *
- * A different number from `THRESHOLD_AUTO` in scoring.ts, which routes a pair
- * to the auto bucket rather than to the model. They have been equal since
- * they were written and they are still two decisions: one is "stop spending
- * tokens on this pair", the other is "change somebody's data without telling
- * them". Named and exported so the dedupe eval pins it.
+ * The number itself lives in policy.ts beside the preset table it belongs
+ * to. It is still exported from here because the dedupe eval and the identity
+ * tests pin it by this name.
  */
-export const DEFAULT_AUTO_MERGE_THRESHOLD = 0.93;
+export { DEFAULT_AUTO_MERGE_THRESHOLD };
 
 function resolveMode(mode: DedupeScanMode): "quick" | "deep" | "full" {
   switch (mode) {
@@ -195,10 +197,15 @@ export const dedupeService = {
     scanId: string,
     mode: DedupeScanMode,
     rid: string,
-    autoMergeThreshold = DEFAULT_AUTO_MERGE_THRESHOLD,
+    requestedThreshold?: number,
   ): Promise<void> {
     dedupeQueue.setProcessing(true);
     const resolved = resolveMode(mode);
+    // The account's preset unless the caller named a number. The same
+    // resolution the import and the single-contact check make, so a preset
+    // chosen in Settings governs every path that merges.
+    const autoMergeThreshold =
+      requestedThreshold ?? autoMergeThresholdFor(scope);
     let embeddingsReady = false;
 
     try {
@@ -462,7 +469,7 @@ export const dedupeService = {
   async incrementalDedupeCheck(
     contactId: string,
     rid: string,
-    autoMergeThreshold = DEFAULT_AUTO_MERGE_THRESHOLD,
+    requestedThreshold?: number,
   ): Promise<void> {
     const scope = scopeOfContact(contactId);
     if (!scope) {
@@ -472,6 +479,8 @@ export const dedupeService = {
       );
       return;
     }
+    const autoMergeThreshold =
+      requestedThreshold ?? autoMergeThresholdFor(scope);
     return runWithContext(
       {
         requestId: `job-dedupe-incremental-${contactId.slice(0, 8)}`,
@@ -521,8 +530,11 @@ export const dedupeService = {
     /** Imported contacts that matched something. The rest are new people. */
     matchedIds: Set<string>;
   }> {
+    // The account's preset, the same way a scan resolves it. This used to
+    // be a fixed 0.93, so the sensitivity chosen in Settings reached the
+    // scan and never the import.
     const autoMergeThreshold =
-      options.autoMergeThreshold ?? DEFAULT_AUTO_MERGE_THRESHOLD;
+      options.autoMergeThreshold ?? autoMergeThresholdFor(scope);
     const matchedIds = new Set<string>();
     let autoMerged = 0;
     let pending = 0;
@@ -572,7 +584,7 @@ export const dedupeService = {
 
     log.info(
       "DedupeService",
-      `[${rid}] Import scan: ${contactIds.length} new contacts against ${corpus.normalized.length} existing in ${Date.now() - t0}ms — ${autoMerged} auto-merged, ${pending} pending`,
+      `[${rid}] Import scan: ${contactIds.length} new contacts against ${corpus.normalized.length} existing in ${Date.now() - t0}ms at threshold ${autoMergeThreshold} — ${autoMerged} auto-merged, ${pending} pending`,
     );
     return { autoMerged, pending, matchedIds };
   },

@@ -38,7 +38,7 @@ import type {
 } from "../types";
 
 interface DedupeContextValue {
-  startScan: (mode: DedupeScanMode, autoMergeThreshold?: number) => void;
+  startScan: (mode: DedupeScanMode) => void;
   scan: DedupeScanProgress | null;
   /** Cluster-based results from the latest scan. */
   clusters: DedupeCluster[];
@@ -219,9 +219,9 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   useDedupeStream(scanId, handleUpdate);
 
   const startScan = useCallback(
-    (mode: DedupeScanMode, autoMergeThreshold?: number) => {
+    (mode: DedupeScanMode) => {
       startMutation.mutate(
-        { mode, autoMergeThreshold },
+        { mode },
         {
           onSuccess: (result) => {
             // Set optimistic scan state BEFORE the SSE event arrives.
