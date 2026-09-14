@@ -440,6 +440,7 @@ describe("POST /api/contacts/bulk with a stream", () => {
       autoMerged: 1,
       needsReview: 0,
       newUnique: 1,
+      failed: 0,
     });
   });
 

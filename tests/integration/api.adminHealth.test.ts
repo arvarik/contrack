@@ -17,7 +17,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 
 const { makeTestApp } = await import("./helpers.ts");
-const { sqlite, TENANCY_SCHEMA_VERSION } = await import("../../server/db.ts");
+const { sqlite, OWNED_TABLES, TENANCY_SCHEMA_VERSION } =
+  await import("../../server/db.ts");
 const { FTS_SCHEMA_VERSION } =
   await import("../../server/services/search/ftsIndex.ts");
 const { dedupeQueue } =
@@ -145,7 +146,13 @@ describe("what it says", () => {
     expect(body.database.bytes).toBeGreaterThan(0);
     expect(body.database.rows.users).toBeGreaterThanOrEqual(2);
     expect(body.database.rows.contacts).toBeGreaterThanOrEqual(0);
-    expect(Object.keys(body.database.rows)).toHaveLength(9);
+    // The owned tables plus `users`: nine before the import record, ten
+    // with it. Derived rather than written out, so the next owned table
+    // moves this by itself.
+    expect(Object.keys(body.database.rows)).toHaveLength(
+      OWNED_TABLES.length + 1,
+    );
+    expect(Object.keys(body.database.rows)).toContain("imports");
     expect(body.database.busyErrors).toBe(0);
   });
 

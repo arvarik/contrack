@@ -249,6 +249,7 @@ export function resetAccounts(): void {
     DELETE FROM dedupe_exclusions;
     DELETE FROM dedupe_suggestions;
     DELETE FROM ai_invocations;
+    DELETE FROM imports;
     DELETE FROM action_items;
     DELETE FROM interactions;
     DELETE FROM lists;

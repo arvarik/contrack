@@ -37,6 +37,7 @@ export const OWNED_TABLES = [
   "dedupe_exclusions",
   "dedupe_merge_log",
   "ai_invocations",
+  "imports",
 ];
 
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */

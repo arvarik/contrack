@@ -33,6 +33,13 @@ import { runWalMaintenance } from "./walHealth.ts";
 export const AUDIT_RETENTION_DAYS = 90;
 export const REVOKED_TOKEN_RETENTION_DAYS = 30;
 export const DEAD_INVITATION_RETENTION_DAYS = 30;
+/**
+ * How long a finished import is kept. Long enough to come back to a failed
+ * row list after a holiday, short enough that a kept payload does not sit
+ * around for ever. A running one is never swept: a process that dies leaves
+ * it `running`, and the next read is what settles it.
+ */
+export const IMPORT_RETENTION_DAYS = 30;
 
 export interface MaintenanceCounts {
   auditRows: number;
@@ -40,6 +47,8 @@ export interface MaintenanceCounts {
   agedTokens: number;
   deadInvitations: number;
   oldInvocations: number;
+  /** Finished imports past retention, with their rows. */
+  oldImports: number;
   /** Pages the checkpoint moved back into the database. */
   walPagesCheckpointed: number;
 }
@@ -67,6 +76,7 @@ export function runDailyMaintenance(): MaintenanceCounts {
     agedTokens: 0,
     deadInvitations: 0,
     oldInvocations: 0,
+    oldImports: 0,
     walPagesCheckpointed: 0,
   };
 
@@ -107,6 +117,17 @@ export function runDailyMaintenance(): MaintenanceCounts {
       .run(`-${DEAD_INVITATION_RETENTION_DAYS} days`).changes;
 
     counts.oldInvocations = cleanupOldInvocations();
+
+    // Every account's, which is what a sweep is. `import_rows` goes with
+    // each one through ON DELETE CASCADE.
+    counts.oldImports = sqlite
+      .prepare(
+        // tenant-lint: allow instance sweep
+        `DELETE FROM imports
+          WHERE status IN ('complete', 'failed')
+            AND datetime(updatedAt) < datetime('now', ?)`,
+      )
+      .run(`-${IMPORT_RETENTION_DAYS} days`).changes;
   } catch (err) {
     log.warn(
       "Maintenance",
@@ -124,7 +145,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
     counts.expiredSessions +
     counts.agedTokens +
     counts.deadInvitations +
-    counts.oldInvocations;
+    counts.oldInvocations +
+    counts.oldImports;
   if (total > 0) {
     log.info(
       "Maintenance",
@@ -132,7 +154,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `${counts.expiredSessions} expired sessions, ` +
         `${counts.agedTokens} aged revoked tokens, ` +
         `${counts.deadInvitations} dead invitations, ` +
-        `${counts.oldInvocations} old AI invocations`,
+        `${counts.oldInvocations} old AI invocations, ` +
+        `${counts.oldImports} old imports`,
     );
   }
   return counts;
