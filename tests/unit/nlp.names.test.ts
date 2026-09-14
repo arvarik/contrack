@@ -35,6 +35,33 @@ describe("NLP Names & Nicknames", () => {
     it("gives low scores to unrelated names", () => {
       expect(nameSimilarity("James Kirk", "Vladimir Petrov")).toBeLessThan(0.6);
     });
+
+    it("scores name typo pairs highly", () => {
+      expect(
+        nameSimilarity("Jonathon Smyth", "Jonathan Smith"),
+      ).toBeGreaterThan(0.9);
+      expect(
+        nameSimilarity("Katharine Oconnel", "Katherine O'Connell"),
+      ).toBeGreaterThan(0.9);
+      expect(
+        nameSimilarity("Shivaun Murphey", "Siobhan Murphy"),
+      ).toBeGreaterThan(0.8);
+      expect(
+        nameSimilarity("Kristof Novak", "Krzysztof Nowak"),
+      ).toBeGreaterThan(0.85);
+      expect(
+        nameSimilarity("Eefa Gallacher", "Aoife Gallagher"),
+      ).toBeGreaterThan(0.85);
+      expect(
+        nameSimilarity("Jeffrey Thwaight", "Geoffrey Thwaite"),
+      ).toBeGreaterThan(0.9);
+      expect(nameSimilarity("Xiomarra Reyez", "Xiomara Reyes")).toBeGreaterThan(
+        0.9,
+      );
+      expect(
+        nameSimilarity("Bartholemew Quigly", "Bartholomew Quigley"),
+      ).toBeGreaterThan(0.9);
+    });
   });
 
   describe("isNicknameMatch", () => {

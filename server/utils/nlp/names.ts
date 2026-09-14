@@ -2,8 +2,9 @@
 // Name Tokenization & Similarity
 // =============================================================================
 
-import { jaroWinkler } from "./distances.ts";
+import { jaroWinkler, damerauLevenshtein } from "./distances.ts";
 import { areNicknameEquivalent } from "./nicknames.ts";
+import { doubleMetaphone } from "./phonetics.ts";
 
 /** Titles and suffixes to strip from name tokens before comparison */
 const TITLE_SUFFIXES = new Set([
@@ -164,7 +165,34 @@ function singleTokenScore(a: string, b: string): number {
   if (initA && b.startsWith(initA)) return 0.85;
   if (initB && a.startsWith(initB)) return 0.85;
 
-  return jaroWinkler(a, b);
+  const dmA = doubleMetaphone(a);
+  const dmB = doubleMetaphone(b);
+  const phoneticMatch = Boolean(
+    (dmA.primary &&
+      (dmA.primary === dmB.primary || dmA.primary === dmB.alternate)) ||
+    (dmA.alternate &&
+      (dmA.alternate === dmB.primary || dmA.alternate === dmB.alternate)),
+  );
+
+  const dist = damerauLevenshtein(a, b);
+  const maxLen = Math.max(a.length, b.length);
+  const minLen = Math.min(a.length, b.length);
+
+  // If phonetically equivalent, reward with high score
+  if (phoneticMatch) {
+    const jw = jaroWinkler(a, b);
+    return Math.max(jw, 0.88);
+  }
+
+  // Without phonetic equivalence, two tokens with > 2 edits are not typos.
+  // Also require distance to be at most half of the shorter word.
+  if (dist > 2 || dist > Math.ceil(minLen / 2)) {
+    return 0;
+  }
+
+  const dl = maxLen > 0 ? 1 - dist / maxLen : 0;
+  const jw = jaroWinkler(a, b);
+  return Math.max(jw, dl);
 }
 
 /**
@@ -222,7 +250,16 @@ export function nameSimilarity(a: string, b: string): number {
   const tokB = tokenizeName(b);
 
   const tokenScore = tokenSimilarity(tokA, tokB);
-  const fullJW = jaroWinkler(la, lb);
 
-  return Math.max(tokenScore, fullJW);
+  // Full-string similarity only applies when both have the same token structure
+  // (e.g. both single words or both full names) to avoid a short token
+  // artificially matching a substring across full names.
+  if (tokA.length === tokB.length) {
+    const fullJW = jaroWinkler(la, lb);
+    const maxLen = Math.max(la.length, lb.length);
+    const fullDL = maxLen > 0 ? 1 - damerauLevenshtein(la, lb) / maxLen : 0;
+    return Math.max(tokenScore, fullJW, fullDL);
+  }
+
+  return tokenScore;
 }

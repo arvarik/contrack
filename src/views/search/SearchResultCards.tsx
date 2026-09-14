@@ -61,11 +61,15 @@ export const ResultCard = ({
           <span className="font-bold text-on-surface truncate">
             {match.name}
           </span>
-          {isFallback && (
+          {match.approximate ? (
+            <span className="text-[9px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+              Approximate
+            </span>
+          ) : isFallback ? (
             <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
               Keyword
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* Role / Company / Location / Industry */}
