@@ -57,7 +57,9 @@ export async function generateFor(
     );
   }
 
-  const timeoutMs = Math.min(options.timeoutMs ?? 60_000, 90_000);
+  const timeoutMs =
+    Number(process.env.AI_GATEWAY_TIMEOUT_OVERRIDE) ||
+    Math.min(options.timeoutMs ?? 60_000, 90_000);
   return withTimeout(
     (signal) =>
       generations.run(

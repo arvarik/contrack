@@ -73,7 +73,7 @@ export function wrapUntrusted(
 // =============================================================================
 
 /** Patterns that indicate an AI output field echoed injected instructions. */
-const INJECTION_ECHO_PATTERNS = [
+export const INJECTION_ECHO_PATTERNS = [
   /<\/?\s*untrusted_data/i,
   /ignore (all |any )?(previous|prior|above) instructions/i,
   /disregard (all |any )?(previous|prior|above) instructions/i,

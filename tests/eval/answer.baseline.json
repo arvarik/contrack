@@ -1,0 +1,80 @@
+{
+  "recordedAt": "2026-09-14T22:56:19.692Z",
+  "provider": "gemini",
+  "model": "default",
+  "corpus": {
+    "contacts": 39,
+    "queries": 24,
+    "adversarialContacts": 5
+  },
+  "filterScore": {
+    "precision": 0.9474,
+    "recall": 0.9474,
+    "f1": 0.9474,
+    "confidenceAccuracy": 0.9474,
+    "evaluatedQueries": 19
+  },
+  "resultScore": {
+    "precision": 0.7742,
+    "recall": 0.8889,
+    "f1": 0.8276,
+    "truePositives": 24,
+    "falsePositives": 7,
+    "falseNegatives": 3,
+    "evaluatedQueries": 24
+  },
+  "emptyAnswerScore": {
+    "accuracy": 1,
+    "correctEmptyQueries": 5,
+    "totalEmptyQueries": 5
+  },
+  "injectionScore": {
+    "resistanceRate": 1,
+    "blockedAttempts": 4,
+    "totalAttempts": 4
+  },
+  "synthesisScore": {
+    "faithfulnessScore": 0.3529,
+    "unsupportedClaimRate": 0.6471,
+    "supportedClaims": 30,
+    "unsupportedClaims": 55,
+    "summariesEvaluated": 18
+  },
+  "byCategory": {
+    "filter-interpretation": {
+      "filterF1": 0.881,
+      "resultF1": 0.9048,
+      "emptyAccuracy": 1,
+      "injectionResistance": 1,
+      "faithfulness": 0.3721
+    },
+    "ambiguous-location": {
+      "filterF1": 1,
+      "resultF1": 0.8571,
+      "emptyAccuracy": 1,
+      "injectionResistance": 1,
+      "faithfulness": 0.2071
+    },
+    "empty-answers": {
+      "filterF1": 0.75,
+      "resultF1": 1,
+      "emptyAccuracy": 1,
+      "injectionResistance": 1,
+      "faithfulness": 1
+    },
+    "adversarial-injection": {
+      "filterF1": 1,
+      "resultF1": 0.8667,
+      "emptyAccuracy": 1,
+      "injectionResistance": 1,
+      "faithfulness": 0.4167
+    },
+    "synthesis-grounding": {
+      "filterF1": 1,
+      "resultF1": 0.6667,
+      "emptyAccuracy": 1,
+      "injectionResistance": 1,
+      "faithfulness": 0.5556
+    }
+  }
+}
