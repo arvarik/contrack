@@ -132,9 +132,9 @@ export function registerSuggestionRoutes(router: Router) {
       const rid = req.requestId;
       const id = String(req.params.id);
 
-      undoSoftMerge(scopeOf(req), id, rid);
+      const result = undoSoftMerge(scopeOf(req), id, rid);
       log.info("API", `[${rid}] POST /api/dedupe/merge-log/${id}/undo`);
-      res.json({ success: true });
+      res.json({ success: true, ...result });
     }),
   );
 }

@@ -24,6 +24,7 @@ import { ContactCard } from "./shared/ContactCard";
 import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { detectMergeConflicts } from "../utils/conflicts";
 
 // =============================================================================
 // ClusterSwipeCard — N-contact cluster review card with draggable gestures
@@ -70,6 +71,11 @@ export const ClusterSwipeCard = ({
   );
 
   const duplicateIds = useMemo(() => duplicates.map((c) => c.id), [duplicates]);
+
+  const conflicts = useMemo(
+    () => detectMergeConflicts(primary, duplicates),
+    [primary, duplicates],
+  );
 
   const handleDragEnd = useCallback(
     (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
@@ -352,6 +358,26 @@ export const ClusterSwipeCard = ({
                 <EvidenceRow key={i} pair={pair} contacts={cluster.contacts} />
               ))}
             </motion.div>
+          )}
+
+          {/* Conflicting field values banner */}
+          {conflicts.length > 0 && (
+            <div className="flex items-start gap-2.5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-on-surface">
+              <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-warning">
+                  {conflicts.length} field conflict(s):
+                </span>{" "}
+                <span className="text-on-surface-variant">
+                  {conflicts
+                    .map((c) => c.label)
+                    .slice(0, 3)
+                    .join(", ")}
+                  {conflicts.length > 3 ? ` +${conflicts.length - 3} more` : ""}
+                  . Primary values will be kept.
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Action buttons */}

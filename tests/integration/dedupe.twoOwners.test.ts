@@ -215,7 +215,7 @@ describe("a merge moves one account's children and no other account's", () => {
       )
       .all(twinsA.primaryId) as { ownerId: string; mergeType: string }[];
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toEqual({ ownerId: A.user.id, mergeType: "hard" });
+    expect(rows[0]).toEqual({ ownerId: A.user.id, mergeType: "soft" });
   });
 
   it("merges B's pair afterwards with the same result", async () => {

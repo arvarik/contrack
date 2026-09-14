@@ -54,6 +54,16 @@ export const ContactCard = ({
     return a !== b;
   };
 
+  const isConflict = (field: keyof Contact) => {
+    if (!other) return false;
+    const a = contact[field];
+    const b = other[field];
+    if (!a || !b) return false;
+    if (typeof a === "string" && typeof b === "string")
+      return a.toLowerCase().trim() !== b.toLowerCase().trim();
+    return a !== b;
+  };
+
   const primaryEmail = contact.emails?.[0]?.email;
   const primaryPhone = contact.phones?.[0]?.phone;
 
@@ -119,15 +129,28 @@ export const ContactCard = ({
           alt={contact.name}
           className="w-12 h-12 rounded-full object-cover bg-surface-container-high"
         />
-        <div>
-          <div
-            className={`text-base font-bold ${isDiff("name") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
-          >
-            {contact.name}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`text-base font-bold truncate ${isDiff("name") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+            >
+              {contact.name}
+            </span>
+            {isConflict("name") && (
+              <span
+                className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                  isPrimary
+                    ? "bg-emerald-500/20 text-success"
+                    : "bg-amber-500/20 text-warning"
+                }`}
+              >
+                {isPrimary ? "Kept" : "Discarded"}
+              </span>
+            )}
           </div>
           {contact.headline && (
             <div
-              className={`text-xs text-on-surface-variant italic ${isDiff("headline") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
+              className={`text-xs text-on-surface-variant italic truncate ${isDiff("headline") ? "bg-amber-500/8 rounded-lg px-2 py-0.5 -mx-2" : ""}`}
             >
               {contact.headline}
             </div>
@@ -142,6 +165,14 @@ export const ContactCard = ({
             icon={<Briefcase className="w-4 h-4" />}
             label="Role"
             highlighted={isDiff("role")}
+            conflict={isConflict("role")}
+            conflictLabel={
+              isConflict("role")
+                ? isPrimary
+                  ? "Kept"
+                  : "Discarded"
+                : undefined
+            }
           >
             {contact.role}
           </FieldRow>
@@ -151,6 +182,14 @@ export const ContactCard = ({
             icon={<Building className="w-4 h-4" />}
             label="Company"
             highlighted={isDiff("company")}
+            conflict={isConflict("company")}
+            conflictLabel={
+              isConflict("company")
+                ? isPrimary
+                  ? "Kept"
+                  : "Discarded"
+                : undefined
+            }
           >
             {contact.company}
           </FieldRow>
@@ -160,6 +199,14 @@ export const ContactCard = ({
             icon={<MapPin className="w-4 h-4" />}
             label="Location"
             highlighted={isDiff("location")}
+            conflict={isConflict("location")}
+            conflictLabel={
+              isConflict("location")
+                ? isPrimary
+                  ? "Kept"
+                  : "Discarded"
+                : undefined
+            }
           >
             {contact.location}
           </FieldRow>
@@ -169,6 +216,14 @@ export const ContactCard = ({
             icon={<Globe className="w-4 h-4" />}
             label="Industry"
             highlighted={isDiff("industry")}
+            conflict={isConflict("industry")}
+            conflictLabel={
+              isConflict("industry")
+                ? isPrimary
+                  ? "Kept"
+                  : "Discarded"
+                : undefined
+            }
           >
             {contact.industry}
           </FieldRow>

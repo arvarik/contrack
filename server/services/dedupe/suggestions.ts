@@ -18,12 +18,21 @@
 // =============================================================================
 
 import crypto from "crypto";
-import { sqlite } from "../../db.ts";
+import { sqlite, db } from "../../db.ts";
+import * as schema from "../../../src/db/schema.ts";
+import { and, eq } from "drizzle-orm";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import { AppError } from "../../utils/AppError.ts";
-import type { HydratedContact } from "./types.ts";
+import { scheduleSearchIndex } from "../search/indexQueue.ts";
+import type {
+  ContactRow,
+  HydratedContact,
+  MergeConflict,
+  MergeSnapshotData,
+  UndoMergeResult,
+} from "./types.ts";
 import { UnionFind } from "../../utils/unionFind.ts";
 
 // =============================================================================
@@ -167,7 +176,7 @@ const _stmts = {
     SET status = 'pending', reviewedAt = NULL, reviewedBy = NULL
     WHERE ownerId = ?
       AND ((contactIdA = ? AND contactIdB = ?) OR (contactIdA = ? AND contactIdB = ?))
-      AND status = 'auto_merged'
+      AND status IN ('auto_merged', 'user_merged', 'merged')
   `),
 };
 
@@ -537,25 +546,257 @@ export function getMergeLog(scope: Scope, limit: number = 50): MergeLogEntry[] {
   return rows;
 }
 
+function restoreChildRow(
+  table: string,
+  row: Record<string, unknown>,
+  targetContactId: string,
+  scope: Scope,
+  newId?: string,
+) {
+  const insertId = newId ?? (row.id as string);
+  switch (table) {
+    case "contact_emails":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_emails (id, contactId, email, label, isPrimary, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.email ?? "",
+          row.label ?? null,
+          row.isPrimary ?? 0,
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_phones":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.phone ?? "",
+          row.label ?? null,
+          row.isPrimary ?? 0,
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_addresses":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.address ?? "",
+          row.label ?? null,
+          row.isPrimary ?? 0,
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_social_links":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_social_links (id, contactId, platform, url, createdAt) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.platform ?? "",
+          row.url ?? "",
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_education":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_education (id, contactId, school, degree, fieldOfStudy, startYear, endYear, isCurrent, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.school ?? "",
+          row.degree ?? null,
+          row.fieldOfStudy ?? null,
+          row.startYear ?? null,
+          row.endYear ?? null,
+          row.isCurrent ?? 0,
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_experience":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_experience (id, contactId, company, role, location, description, startYear, endYear, isCurrent, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.company ?? "",
+          row.role ?? null,
+          row.location ?? null,
+          row.description ?? null,
+          row.startYear ?? null,
+          row.endYear ?? null,
+          row.isCurrent ?? 0,
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_sources":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_sources (id, contactId, platform, externalId, createdAt) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.platform ?? "",
+          row.externalId ?? "",
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_tags":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_tags (id, contactId, tag, createdAt) VALUES (?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.tag ?? "",
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_interests":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_interests (id, contactId, interest, createdAt) VALUES (?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.interest ?? "",
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "contact_attributes":
+      sqlite
+        .prepare(
+          "INSERT INTO contact_attributes (id, contactId, name, value, createdAt) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.name ?? "",
+          row.value ?? "",
+          row.createdAt ?? new Date().toISOString(),
+        );
+      break;
+    case "interactions":
+      sqlite
+        .prepare(
+          "INSERT INTO interactions (id, contactId, type, title, summary, date, location, channel, sentiment, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.type ?? "meeting",
+          row.title ?? null,
+          row.summary ?? "",
+          row.date ?? new Date().toISOString(),
+          row.location ?? null,
+          row.channel ?? null,
+          row.sentiment ?? null,
+          scope.ownerId,
+          row.createdAt ?? new Date().toISOString(),
+          row.updatedAt ?? new Date().toISOString(),
+        );
+      break;
+    case "action_items":
+      sqlite
+        .prepare(
+          "INSERT INTO action_items (id, contactId, interactionId, title, dueAt, completedAt, ownerId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          insertId,
+          targetContactId,
+          row.interactionId ?? null,
+          row.title ?? "",
+          row.dueAt ?? new Date().toISOString(),
+          row.completedAt ?? null,
+          scope.ownerId,
+          row.createdAt ?? new Date().toISOString(),
+          row.updatedAt ?? new Date().toISOString(),
+        );
+      break;
+  }
+}
+
+function isChildRowModified(
+  table: string,
+  currentRow: Record<string, unknown>,
+  originalRow: Record<string, unknown>,
+): boolean {
+  const compareKeys: Record<string, string[]> = {
+    contact_emails: ["email", "label"],
+    contact_phones: ["phone", "label"],
+    contact_addresses: ["address", "label"],
+    contact_social_links: ["platform", "url"],
+    contact_education: [
+      "school",
+      "degree",
+      "fieldOfStudy",
+      "startYear",
+      "endYear",
+      "isCurrent",
+    ],
+    contact_experience: [
+      "company",
+      "role",
+      "location",
+      "description",
+      "startYear",
+      "endYear",
+      "isCurrent",
+    ],
+    contact_sources: ["platform", "externalId"],
+    contact_tags: ["tag"],
+    contact_interests: ["interest"],
+    contact_attributes: ["name", "value"],
+    interactions: [
+      "type",
+      "title",
+      "summary",
+      "date",
+      "location",
+      "channel",
+      "sentiment",
+    ],
+  };
+  const keys = compareKeys[table] ?? [];
+  for (const k of keys) {
+    const cur = (currentRow[k] ?? "") + "";
+    const orig = (originalRow[k] ?? "") + "";
+    if (cur !== orig) return true;
+  }
+  return false;
+}
+
 /**
- * Undo a soft merge — restores the duplicate contact's visibility.
+ * Undo a merge — restores the duplicate contact's visibility, reverses
+ * unchanged record transfers, preserves post-merge edits on survivor,
+ * recomputes task follow-ups, and reports any conflicts encountered.
  *
- * What this does:
- * 1. Sets `canonicalId = NULL` on the duplicate contact
- * 2. Marks the merge log entry as undone
- *
- * What this does NOT do:
- * - Does NOT reverse child record transfers (emails, phones, etc. stay on primary)
- *   This is by design: additive merges are safe to keep, and reversing them
- *   risks data loss if the primary was edited after merge.
- *
- * @throws Error if the merge log entry is not found, already undone, or was a hard merge
+ * @throws Error if the merge log entry is not found, already undone, or was a permanently deleted legacy hard merge
  */
 export function undoSoftMerge(
   scope: Scope,
   mergeLogId: string,
   rid: string,
-): void {
+): UndoMergeResult {
   const entry = _stmts.getMergeLogById.get(mergeLogId, scope.ownerId) as
     MergeLogEntry | undefined;
 
@@ -574,21 +815,21 @@ export function undoSoftMerge(
       },
     );
   }
-  if (entry.mergeType !== "soft") {
-    throw new AppError(
-      `Cannot undo a hard merge — the duplicate was permanently deleted`,
-      409,
-      {
-        code: "HARD_MERGE_IRREVERSIBLE",
-        details: { mergeLogId },
-      },
-    );
-  }
 
-  // Verify the duplicate contact still exists (it should — soft merge doesn't delete)
+  // Check duplicate contact exists
   const duplicate = contactRepo.findOwned(scope, entry.duplicateId);
 
   if (!duplicate) {
+    if (entry.mergeType === "hard" && !entry.duplicateSnapshot) {
+      throw new AppError(
+        `Cannot undo a hard merge — the duplicate was permanently deleted`,
+        409,
+        {
+          code: "HARD_MERGE_IRREVERSIBLE",
+          details: { mergeLogId },
+        },
+      );
+    }
     throw new AppError(
       `Duplicate contact ${entry.duplicateId} no longer exists — cannot undo`,
       410,
@@ -607,15 +848,364 @@ export function undoSoftMerge(
     );
   }
 
+  const conflicts: MergeConflict[] = [];
+
   const txn = sqlite.transaction(() => {
-    // 1. Restore the duplicate contact's visibility
+    if (entry.duplicateSnapshot) {
+      try {
+        const snapshot = JSON.parse(
+          entry.duplicateSnapshot,
+        ) as MergeSnapshotData;
+
+        // 1. Reverse child tables
+        const childTableMapping: Record<
+          keyof MergeSnapshotData["changes"]["movedRecords"],
+          { table: string; snapshotKey: keyof MergeSnapshotData["duplicate"] }
+        > = {
+          emails: { table: "contact_emails", snapshotKey: "emails" },
+          phones: { table: "contact_phones", snapshotKey: "phones" },
+          addresses: { table: "contact_addresses", snapshotKey: "addresses" },
+          socialLinks: {
+            table: "contact_social_links",
+            snapshotKey: "socialLinks",
+          },
+          education: { table: "contact_education", snapshotKey: "education" },
+          experience: {
+            table: "contact_experience",
+            snapshotKey: "experience",
+          },
+          sources: { table: "contact_sources", snapshotKey: "sources" },
+          tags: { table: "contact_tags", snapshotKey: "tags" },
+          interests: { table: "contact_interests", snapshotKey: "interests" },
+          attributes: {
+            table: "contact_attributes",
+            snapshotKey: "attributes",
+          },
+          interactions: { table: "interactions", snapshotKey: "interactions" },
+          actionItems: { table: "action_items", snapshotKey: "actionItems" },
+        };
+
+        for (const [key, mapping] of Object.entries(childTableMapping) as [
+          keyof MergeSnapshotData["changes"]["movedRecords"],
+          { table: string; snapshotKey: keyof MergeSnapshotData["duplicate"] },
+        ][]) {
+          if (key === "actionItems") {
+            // Action items handled separately below for follow-up date calculation
+            continue;
+          }
+          const movedIds = snapshot.changes?.movedRecords?.[key] ?? [];
+          const originalList = (snapshot.duplicate[mapping.snapshotKey] ??
+            []) as Record<string, unknown>[];
+          const originalMap = new Map<string, Record<string, unknown>>(
+            originalList.map((r) => [r.id as string, r]),
+          );
+
+          for (const recId of movedIds) {
+            const originalRow = originalMap.get(recId);
+            const currentRow = (
+              mapping.table === "interactions"
+                ? sqlite
+                    .prepare(
+                      // tenant-lint: allow owner-checked by caller
+                      "SELECT * FROM interactions WHERE id = ? AND ownerId = ?",
+                    )
+                    .get(recId, scope.ownerId)
+                : sqlite
+                    .prepare(`SELECT * FROM ${mapping.table} WHERE id = ?`)
+                    .get(recId)
+            ) as Record<string, unknown> | undefined;
+
+            if (!currentRow) {
+              // Deleted from survivor
+              if (originalRow) {
+                restoreChildRow(
+                  mapping.table,
+                  originalRow,
+                  entry.duplicateId,
+                  scope,
+                );
+                conflicts.push({
+                  type: "record_deleted",
+                  entity: mapping.table,
+                  id: recId,
+                  message: `${mapping.table} record was deleted from survivor after merge. Restored original to duplicate.`,
+                });
+              }
+            } else if (currentRow.contactId !== entry.primaryId) {
+              // Moved elsewhere
+              if (originalRow) {
+                const freshId = crypto.randomUUID();
+                restoreChildRow(
+                  mapping.table,
+                  originalRow,
+                  entry.duplicateId,
+                  scope,
+                  freshId,
+                );
+                conflicts.push({
+                  type: "record_edited",
+                  entity: mapping.table,
+                  id: recId,
+                  message: `${mapping.table} record was moved away from survivor. Restored copy to duplicate.`,
+                });
+              }
+            } else {
+              // Record is still on primary: check if modified
+              if (
+                originalRow &&
+                isChildRowModified(mapping.table, currentRow, originalRow)
+              ) {
+                // Keep edited row on primary, restore original copy to duplicate with fresh UUID
+                const freshId = crypto.randomUUID();
+                restoreChildRow(
+                  mapping.table,
+                  originalRow,
+                  entry.duplicateId,
+                  scope,
+                  freshId,
+                );
+                conflicts.push({
+                  type: "record_edited",
+                  entity: mapping.table,
+                  id: recId,
+                  message: `${mapping.table} record was modified on survivor after merge. Survivor retains edit; original restored to duplicate.`,
+                });
+              } else {
+                // Unchanged: move back to duplicate!
+                if (mapping.table === "interactions") {
+                  sqlite
+                    .prepare(
+                      // tenant-lint: allow owner-checked by caller
+                      "UPDATE interactions SET contactId = ? WHERE id = ? AND ownerId = ?",
+                    )
+                    .run(entry.duplicateId, recId, scope.ownerId);
+                } else {
+                  sqlite
+                    .prepare(
+                      `UPDATE ${mapping.table} SET contactId = ? WHERE id = ?`,
+                    )
+                    .run(entry.duplicateId, recId);
+                }
+              }
+            }
+          }
+        }
+
+        // 2. Action items
+        const movedActionItemIds =
+          snapshot.changes?.movedRecords?.actionItems ?? [];
+        const originalActionItems = snapshot.duplicate?.actionItems ?? [];
+        const origTaskMap = new Map<string, Record<string, unknown>>(
+          originalActionItems.map((a) => [a.id as string, a]),
+        );
+
+        for (const taskId of movedActionItemIds) {
+          const originalTask = origTaskMap.get(taskId);
+          const currentTask = sqlite
+            .prepare("SELECT * FROM action_items WHERE id = ? AND ownerId = ?")
+            .get(taskId, scope.ownerId) as Record<string, unknown> | undefined;
+
+          if (!currentTask) {
+            // Task deleted from survivor
+            if (originalTask) {
+              restoreChildRow(
+                "action_items",
+                originalTask,
+                entry.duplicateId,
+                scope,
+              );
+              conflicts.push({
+                type: "record_deleted",
+                entity: "action_items",
+                id: taskId,
+                message:
+                  "Follow-up task was deleted from survivor after merge. Restored to duplicate.",
+              });
+            }
+          } else if (currentTask.contactId !== entry.primaryId) {
+            // Task moved elsewhere
+            if (originalTask) {
+              const freshId = crypto.randomUUID();
+              restoreChildRow(
+                "action_items",
+                originalTask,
+                entry.duplicateId,
+                scope,
+                freshId,
+              );
+              conflicts.push({
+                type: "record_edited",
+                entity: "action_items",
+                id: taskId,
+                message:
+                  "Follow-up task was moved away from survivor. Restored copy to duplicate.",
+              });
+            }
+          } else if (currentTask.completedAt && !originalTask?.completedAt) {
+            // Task was completed on survivor!
+            const freshId = crypto.randomUUID();
+            restoreChildRow(
+              "action_items",
+              originalTask!,
+              entry.duplicateId,
+              scope,
+              freshId,
+            );
+            conflicts.push({
+              type: "task_completed",
+              entity: "action_items",
+              id: taskId,
+              message:
+                "Follow-up task was completed on survivor after merge. Survivor retains completed task; restored pending task on duplicate.",
+            });
+          } else if (
+            originalTask &&
+            (currentTask.title !== originalTask.title ||
+              currentTask.dueAt !== originalTask.dueAt)
+          ) {
+            // Task was edited on survivor!
+            const freshId = crypto.randomUUID();
+            restoreChildRow(
+              "action_items",
+              originalTask,
+              entry.duplicateId,
+              scope,
+              freshId,
+            );
+            conflicts.push({
+              type: "record_edited",
+              entity: "action_items",
+              id: taskId,
+              message:
+                "Follow-up task was edited on survivor after merge. Survivor retains edit; original restored to duplicate.",
+            });
+          } else {
+            // Unchanged: move back to duplicate!
+            sqlite
+              .prepare(
+                "UPDATE action_items SET contactId = ? WHERE id = ? AND ownerId = ?",
+              )
+              .run(entry.duplicateId, taskId, scope.ownerId);
+          }
+        }
+
+        // Recompute nextFollowUpAt for BOTH primary and duplicate
+        sqlite
+          .prepare(
+            `UPDATE contacts SET nextFollowUpAt = (
+               SELECT MIN(dueAt) FROM action_items
+               WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
+             ) WHERE id = ? AND ownerId = ?`,
+          )
+          .run(entry.primaryId, scope.ownerId, entry.primaryId, scope.ownerId);
+
+        sqlite
+          .prepare(
+            `UPDATE contacts SET nextFollowUpAt = (
+               SELECT MIN(dueAt) FROM action_items
+               WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
+             ) WHERE id = ? AND ownerId = ?`,
+          )
+          .run(
+            entry.duplicateId,
+            scope.ownerId,
+            entry.duplicateId,
+            scope.ownerId,
+          );
+
+        // 3. Mentions
+        for (const mid of snapshot.changes?.movedMentions ?? []) {
+          sqlite
+            .prepare(
+              "UPDATE interaction_mentions SET contactId = ? WHERE contactId = ? AND interactionId = ?",
+            )
+            .run(entry.duplicateId, entry.primaryId, mid);
+        }
+        for (const mid of snapshot.changes?.deletedMentions ?? []) {
+          sqlite
+            .prepare(
+              "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
+            )
+            .run(mid, entry.duplicateId);
+        }
+
+        // 4. Scalar fields
+        const currentPrimary = sqlite
+          .prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?")
+          .get(entry.primaryId, scope.ownerId) as
+          Record<string, unknown> | undefined;
+
+        if (currentPrimary && snapshot.changes?.scalarUpdates) {
+          const scalarReverts: Record<string, unknown> = {};
+          for (const [field, { oldValue, transferredValue }] of Object.entries(
+            snapshot.changes.scalarUpdates,
+          )) {
+            const curr = currentPrimary[field];
+            if (curr === transferredValue) {
+              scalarReverts[field] = oldValue;
+            } else {
+              conflicts.push({
+                type: "scalar_edited",
+                entity: "contacts",
+                field,
+                currentValue: curr,
+                oldValue,
+                duplicateValue: transferredValue,
+                message: `Contact field '${field}' was edited on survivor after merge. Survivor retained value '${curr}'.`,
+              });
+            }
+          }
+          if (snapshot.changes.addedAtUpdated) {
+            if (
+              currentPrimary.addedAt ===
+              snapshot.changes.addedAtUpdated.newAddedAt
+            ) {
+              scalarReverts.addedAt =
+                snapshot.changes.addedAtUpdated.oldAddedAt;
+            }
+          }
+          if (Object.keys(scalarReverts).length > 0) {
+            scalarReverts.updatedAt = new Date().toISOString();
+            db.update(schema.contacts)
+              .set(scalarReverts as Partial<ContactRow>)
+              .where(
+                and(
+                  eq(schema.contacts.id, entry.primaryId),
+                  eq(schema.contacts.ownerId, scope.ownerId),
+                ),
+              )
+              .run();
+          }
+        }
+
+        // 5. List memberships
+        for (const listId of snapshot.changes?.addedListIds ?? []) {
+          sqlite
+            .prepare(
+              "DELETE FROM list_members WHERE listId = ? AND contactId = ?",
+            )
+            .run(listId, entry.primaryId);
+          sqlite
+            .prepare(
+              "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
+            )
+            .run(listId, entry.duplicateId);
+        }
+      } catch (err) {
+        log.warn(
+          "DedupeSuggestions",
+          `[${rid}] Error restoring from snapshot, falling back to basic undo: ${err}`,
+        );
+      }
+    }
+
+    // 6. Restore the duplicate contact's visibility
     _stmts.restoreDuplicate.run(entry.duplicateId, scope.ownerId);
 
-    // 2. Mark the merge log entry as undone
+    // 7. Mark the merge log entry as undone
     _stmts.undoMergeLog.run(mergeLogId, scope.ownerId);
 
-    // 3. Remove the corresponding suggestion's "auto_merged" status
-    //    so it can re-appear as "pending" if the user wants to re-evaluate
+    // 8. Reopen corresponding suggestion
     _stmts.reopenSuggestion.run(
       scope.ownerId,
       entry.primaryId,
@@ -624,12 +1214,21 @@ export function undoSoftMerge(
       entry.primaryId,
     );
   });
+
   txn();
+
+  scheduleSearchIndex(entry.primaryId);
+  scheduleSearchIndex(entry.duplicateId);
 
   log.info(
     "DedupeSuggestions",
-    `[${rid}] Undone soft merge ${mergeLogId}: restored ${entry.duplicateId} (was merged into ${entry.primaryId})`,
+    `[${rid}] Undone merge ${mergeLogId}: restored ${entry.duplicateId} (was merged into ${entry.primaryId}) with ${conflicts.length} conflict(s)`,
   );
+
+  return {
+    restoredContactId: entry.duplicateId,
+    conflicts,
+  };
 }
 
 // =============================================================================
