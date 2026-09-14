@@ -180,6 +180,11 @@ export const CommandPalette = () => {
     [mode, semanticSearch.data],
   );
   const aiFallback: boolean = mode === "ai" && !!semanticSearch.data?.fallback;
+  // The question `aiResults` answer, stamped on the results by the hook. The
+  // synthesis brief reads this rather than the debounced input, which is a
+  // different string for the whole of the debounce window.
+  const aiAnsweredQuery: string =
+    mode === "ai" ? (semanticSearch.data?.query ?? "") : "";
 
   // Build a lookup map from search results for O(1) peek resolution
   const resultMap = useMemo(() => {
@@ -894,7 +899,7 @@ export const CommandPalette = () => {
                     !aiFallback &&
                     aiResults.length > 0 && (
                       <SynthesisBar
-                        query={debouncedAiQuery}
+                        query={aiAnsweredQuery}
                         contacts={aiResults}
                         resultCount={aiResults.length}
                         compact

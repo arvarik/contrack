@@ -460,6 +460,15 @@ export interface SemanticMatch extends Contact {
  * are plain FTS5 keyword matches with no AI reasoning.
  */
 export interface SemanticSearchResult {
+  /**
+   * The question these matches answer, exactly as it was sent.
+   *
+   * Written by the client, not the server: `useSemanticSearch` stamps it on
+   * every chunk it stores. It lives on the result rather than beside it so a
+   * result set can never be shown under a question it did not answer. The
+   * synthesis brief reads this, never the editable input.
+   */
+  query: string;
   matches: SemanticMatch[];
   fallback: boolean;
   tokensUsed?: number;

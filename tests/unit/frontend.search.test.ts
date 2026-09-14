@@ -121,3 +121,50 @@ describe("search streaming", () => {
     expect(signal.aborted).toBe(true);
   });
 });
+describe("the submitted question", () => {
+  it("is exposed while the answer streams and attached to the results", async () => {
+    const pending = stream();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(pending.response));
+    const { result: hook } = renderHook(() => useSemanticSearch());
+    let work!: Promise<void>;
+    act(() => {
+      work = hook.current.mutate("Alice");
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    // Nothing has arrived, and the question is already known.
+    expect(hook.current.submittedQuery).toBe("Alice");
+    expect(hook.current.data).toBeNull();
+    await act(async () => {
+      pending.push(result("Alice"));
+      pending.end();
+      await work;
+    });
+    expect(hook.current.data?.query).toBe("Alice");
+    expect(hook.current.submittedQuery).toBe("Alice");
+  });
+  it("is forgotten by reset, so the same question can be asked again", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(result("Alice") + "\n")),
+    );
+    const { result: hook } = renderHook(() => useSemanticSearch());
+    await act(async () => {
+      await hook.current.mutate("Alice");
+    });
+    expect(hook.current.submittedQuery).toBe("Alice");
+    act(() => hook.current.reset());
+    expect(hook.current.submittedQuery).toBe("");
+    expect(hook.current.data).toBeNull();
+  });
+  it("is read back from results the session kept when the hook remounts", () => {
+    const { result: hook } = renderHook(() =>
+      useSemanticSearch({
+        data: { query: "Kept", matches: [], fallback: false },
+        setData: () => {},
+        phase: "done",
+        setPhase: () => {},
+      }),
+    );
+    expect(hook.current.submittedQuery).toBe("Kept");
+  });
+});

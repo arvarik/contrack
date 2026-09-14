@@ -64,6 +64,13 @@ export const useSemanticSearch = (externalState?: {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  /**
+   * The question `mutate` was last given, or null when this hook has not
+   * asked one. Set before the request leaves, so a caller can tell "the same
+   * question, still being answered" apart from "a new question" without a
+   * ref of its own, and kept through an error, so Retry knows what to retry.
+   */
+  const [askedQuery, setAskedQuery] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(
@@ -83,6 +90,7 @@ export const useSemanticSearch = (externalState?: {
       setIsPending(true);
       setError(null);
       setIsSuccess(false);
+      setAskedQuery(query);
       setPhase("idle");
       setData(null);
       let complete = false;
@@ -105,6 +113,7 @@ export const useSemanticSearch = (externalState?: {
             if (complete)
               throw new Error("The server sent data after search completed.");
             setData({
+              query,
               matches:
                 chunk.matches as unknown as SemanticSearchResult["matches"],
               fallback: chunk.fallback,
@@ -142,7 +151,17 @@ export const useSemanticSearch = (externalState?: {
     setIsPending(false);
     setError(null);
     setIsSuccess(false);
+    setAskedQuery(null);
   }, [setData, setPhase]);
+
+  /**
+   * The question this search is about, or "" when there is none.
+   *
+   * The one this hook asked, while it is pending or failed. Otherwise the one
+   * stamped on the results, which is how a view that remounts over results
+   * the session kept still knows what they answer.
+   */
+  const submittedQuery = askedQuery ?? data?.query ?? "";
 
   return {
     data,
@@ -151,6 +170,7 @@ export const useSemanticSearch = (externalState?: {
     isError: !!error,
     isSuccess,
     error,
+    submittedQuery,
     mutate,
     reset,
   };
