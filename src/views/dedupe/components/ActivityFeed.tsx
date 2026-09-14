@@ -81,8 +81,14 @@ export const ActivityFeed = () => {
 
   const handleUndo = async (id: string, name: string | undefined) => {
     try {
-      await undoMerge.mutateAsync(id);
-      toast.success(`Restored "${name}"`);
+      const res = await undoMerge.mutateAsync(id);
+      if (res?.conflicts && res.conflicts.length > 0) {
+        toast.warning(
+          `Restored "${name}" with ${res.conflicts.length} conflict(s): survivor edits were retained.`,
+        );
+      } else {
+        toast.success(`Restored "${name}"`);
+      }
     } catch (err: unknown) {
       toast.error(
         `Undo failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -123,7 +129,7 @@ export const ActivityFeed = () => {
             {group.items.map((entry, i) => {
               const isAuto = entry.mergedBy === "auto";
               const isUndone = !!entry.undoneAt;
-              const canUndo = entry.mergeType === "soft" && !isUndone;
+              const canUndo = !isUndone;
 
               return (
                 <motion.div

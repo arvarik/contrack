@@ -11,9 +11,11 @@ import {
   Shield,
   FileText,
   ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import type { Contact, ContactEmail, ContactPhone } from "../../../types";
+import { detectMergeConflicts } from "../utils/conflicts";
 
 /** Child records annotated with which duplicate contributed them. */
 type AnnotatedEmail = ContactEmail & { _from?: string };
@@ -125,6 +127,11 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
     };
   }, [primary, duplicates]);
 
+  const conflicts = useMemo(
+    () => detectMergeConflicts(primary, duplicates),
+    [primary, duplicates],
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -158,6 +165,48 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
           <Shield className="w-3.5 h-3.5 text-success" />
         </div>
       </div>
+
+      {/* Conflicting field values banner */}
+      {conflicts.length > 0 && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+          <div className="flex items-center gap-2 text-warning font-bold text-sm">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>Conflicting Field Values ({conflicts.length})</span>
+          </div>
+          <p className="text-xs text-on-surface-variant leading-relaxed">
+            The following fields differ between contacts. The primary contact's
+            value will be kept; duplicate values will be discarded.
+          </p>
+          <div className="divide-y divide-amber-500/10 rounded-lg bg-surface-container-low/60 p-2 text-xs space-y-2">
+            {conflicts.map((c, i) => (
+              <div key={i} className="pt-2 first:pt-0 space-y-1">
+                <div className="font-bold text-on-surface flex items-center justify-between">
+                  <span>{c.label}</span>
+                  <span className="text-[10px] text-on-surface-variant font-normal">
+                    from {c.duplicateName}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 p-1.5 rounded bg-emerald-500/10 text-success">
+                    <span className="text-[10px] uppercase font-bold px-1 py-0.5 rounded bg-emerald-500/20">
+                      Kept
+                    </span>
+                    <span className="font-medium truncate">
+                      {c.primaryValue}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1.5 rounded bg-amber-500/10 text-on-surface-variant line-through">
+                    <span className="text-[10px] uppercase font-bold px-1 py-0.5 rounded bg-amber-500/20 text-warning not-line-through">
+                      Discarded
+                    </span>
+                    <span className="truncate">{c.duplicateValue}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Preview card */}
       <div className={cn(CARD, "space-y-5 ring-2 ring-primary/20")}>

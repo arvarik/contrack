@@ -5,7 +5,7 @@
  * a likely duplicate of the currently viewed contact. Provides inline
  * review with side-by-side comparison and one-click merge/dismiss.
  */
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeftRight,
@@ -13,6 +13,7 @@ import {
   Loader2,
   Sparkles,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -21,6 +22,7 @@ import {
   useMergeSuggestion,
 } from "../../../api";
 import { ContactCard } from "../../dedupe/components/shared/ContactCard";
+import { detectMergeConflicts } from "../../dedupe/utils/conflicts";
 
 // =============================================================================
 // Props
@@ -42,23 +44,27 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
   const [showReview, setShowReview] = useState(false);
   const [swapped, setSwapped] = useState(false);
 
-  if (isLoading || !suggestion || dismissed) return null;
-
   const currentContact =
-    suggestion.contactIdA === contactId
+    suggestion?.contactIdA === contactId
       ? suggestion.contactA
-      : suggestion.contactB;
+      : suggestion?.contactB;
 
   const otherContact =
-    suggestion.contactIdA === contactId
+    suggestion?.contactIdA === contactId
       ? suggestion.contactB
-      : suggestion.contactA;
-
-  if (!otherContact || !currentContact) return null;
+      : suggestion?.contactA;
 
   // By default, the current contact is primary (user came to this page)
   const primary = swapped ? otherContact : currentContact;
   const duplicate = swapped ? currentContact : otherContact;
+
+  const conflicts = useMemo(() => {
+    if (!primary || !duplicate) return [];
+    return detectMergeConflicts(primary, [duplicate]);
+  }, [primary, duplicate]);
+
+  if (isLoading || !suggestion || dismissed) return null;
+  if (!otherContact || !currentContact) return null;
 
   const handleDismiss = async () => {
     try {
@@ -169,6 +175,28 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                 <ArrowLeftRight className="w-3.5 h-3.5" />
                 Swap Primary / Duplicate
               </button>
+
+              {/* Conflicting field values banner */}
+              {conflicts.length > 0 && (
+                <div className="flex items-start gap-2.5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-on-surface">
+                  <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-warning">
+                      {conflicts.length} field conflict(s):
+                    </span>{" "}
+                    <span className="text-on-surface-variant">
+                      {conflicts
+                        .map((c) => c.label)
+                        .slice(0, 3)
+                        .join(", ")}
+                      {conflicts.length > 3
+                        ? ` +${conflicts.length - 3} more`
+                        : ""}
+                      . Primary values will be kept.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="flex items-center justify-center gap-3">

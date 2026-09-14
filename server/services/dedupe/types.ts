@@ -179,3 +179,75 @@ export interface DedupeCluster {
   /** True for clusters with >10 contacts — requires explicit user confirmation before merge */
   requiresConfirmation: boolean;
 }
+
+export interface MergeConflict {
+  type: "scalar_edited" | "record_edited" | "record_deleted" | "task_completed";
+  entity: string;
+  id?: string;
+  field?: string;
+  primaryValue?: unknown;
+  duplicateValue?: unknown;
+  currentValue?: unknown;
+  oldValue?: unknown;
+  message: string;
+}
+
+export interface MergeSnapshotData {
+  version: 1;
+  primaryId: string;
+  duplicateId: string;
+  primary: {
+    contact: Record<string, unknown>;
+    listIds: string[];
+    emails: Array<Record<string, unknown>>;
+    phones: Array<Record<string, unknown>>;
+    addresses: Array<Record<string, unknown>>;
+    attributes: Array<Record<string, unknown>>;
+  };
+  duplicate: {
+    contact: Record<string, unknown>;
+    listIds: string[];
+    emails: Array<Record<string, unknown>>;
+    phones: Array<Record<string, unknown>>;
+    addresses: Array<Record<string, unknown>>;
+    socialLinks: Array<Record<string, unknown>>;
+    education: Array<Record<string, unknown>>;
+    experience: Array<Record<string, unknown>>;
+    sources: Array<Record<string, unknown>>;
+    tags: Array<Record<string, unknown>>;
+    interests: Array<Record<string, unknown>>;
+    attributes: Array<Record<string, unknown>>;
+    interactions: Array<Record<string, unknown>>;
+    actionItems: Array<Record<string, unknown>>;
+    mentions: Array<{ interactionId: string; contactId: string }>;
+  };
+  changes: {
+    movedRecords: {
+      interactions: string[];
+      actionItems: string[];
+      emails: string[];
+      phones: string[];
+      socialLinks: string[];
+      education: string[];
+      experience: string[];
+      sources: string[];
+      tags: string[];
+      interests: string[];
+      attributes: string[];
+      addresses: string[];
+    };
+    movedMentions: string[];
+    deletedMentions: string[];
+    scalarUpdates: Record<
+      string,
+      { oldValue: unknown; transferredValue: unknown }
+    >;
+    addedListIds: string[];
+    addedAtUpdated?: { oldAddedAt: string | null; newAddedAt: string | null };
+  };
+}
+
+export interface UndoMergeResult {
+  restoredContactId: string;
+  conflicts: MergeConflict[];
+}

@@ -14,7 +14,11 @@ import { apiFetch } from "./client";
  * @module api/suggestions
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { PersistedDedupeSuggestion, MergeLogEntry } from "../types";
+import type {
+  PersistedDedupeSuggestion,
+  MergeLogEntry,
+  UndoMergeResponse,
+} from "../types";
 
 // =============================================================================
 // Query Keys
@@ -151,7 +155,7 @@ export const useDismissSuggestion = () => {
 export const useUndoMerge = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (mergeLogId: string) => {
+    mutationFn: async (mergeLogId: string): Promise<UndoMergeResponse> => {
       const res = await apiFetch(`/dedupe/merge-log/${mergeLogId}/undo`, {
         method: "POST",
       });
@@ -159,7 +163,7 @@ export const useUndoMerge = () => {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "Undo failed");
       }
-      return res.json();
+      return res.json() as Promise<UndoMergeResponse>;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: suggestionKeys.count });

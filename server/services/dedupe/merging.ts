@@ -8,13 +8,7 @@ import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
 import { NotFoundError } from "../../utils/AppError.ts";
-import type { ContactRow } from "./types.ts";
-import type {
-  ContactPhoneRow,
-  ContactEducationRow,
-  ContactExperienceRow,
-  ContactSourceRow,
-} from "../../repositories/types.ts";
+import type { ContactRow, MergeSnapshotData } from "./types.ts";
 
 /**
  * Load both sides of a merge in one statement that names the owner.
@@ -95,15 +89,21 @@ function transferActionItems(
   return moved;
 }
 
-export function mergeContacts(
+export interface ExecuteMergeOptions {
+  mergedBy: "user" | "auto";
+  confidence: number;
+  reasoning: string;
+  rid: string;
+}
+
+export function executeMerge(
   scope: Scope,
   primaryId: string,
   duplicateId: string,
-  rid: string,
+  options: ExecuteMergeOptions,
 ) {
-  // Note: the TOCTOU window between this SELECT and the BEGIN inside the
-  // transaction is bounded by SQLite's serialized writer. The transaction
-  // itself re-reads both rows before mutating (see comment inside the txn).
+  const { mergedBy, confidence, reasoning, rid } = options;
+
   const { primary, duplicate } = loadMergePair(scope, primaryId, duplicateId);
 
   if (!primary) {
@@ -113,25 +113,30 @@ export function mergeContacts(
   if (!duplicate) {
     log.warn(
       "DedupeService",
-      `[${rid}] Duplicate ${duplicateId} already deleted, skipping merge into ${primaryId}`,
+      `[${rid}] Duplicate ${duplicateId} not found — skipping merge into ${primaryId}`,
+    );
+    return contactRepo.hydrate(primary);
+  }
+
+  if (duplicate.canonicalId) {
+    log.warn(
+      "DedupeService",
+      `[${rid}] Duplicate ${duplicateId} already soft-merged — skipping`,
     );
     return contactRepo.hydrate(primary);
   }
 
   const mergeTxn = sqlite.transaction(() => {
     // Re-read inside the transaction so we observe a consistent snapshot.
-    // SQLite's WAL mode + foreign-keys=ON guarantees the writer is serialized,
-    // but we still need the in-tx read to catch the case where the primary
-    // was deleted between the outer SELECT and the BEGIN.
     const primaryInTx = sqlite
-      .prepare("SELECT id FROM contacts WHERE id = ? AND ownerId = ?")
-      .get(primaryId, scope.ownerId);
+      .prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?")
+      .get(primaryId, scope.ownerId) as ContactRow | undefined;
     if (!primaryInTx) {
       throw new NotFoundError("Primary contact", primaryId);
     }
     const duplicateInTx = sqlite
-      .prepare("SELECT id FROM contacts WHERE id = ? AND ownerId = ?")
-      .get(duplicateId, scope.ownerId);
+      .prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?")
+      .get(duplicateId, scope.ownerId) as ContactRow | undefined;
     if (!duplicateInTx) {
       log.warn(
         "DedupeService",
@@ -139,33 +144,158 @@ export function mergeContacts(
       );
       return;
     }
+    if (duplicateInTx.canonicalId) {
+      log.warn(
+        "DedupeService",
+        `[${rid}] Duplicate ${duplicateId} concurrently merged — aborting txn`,
+      );
+      return;
+    }
 
-    // Both contacts share the owner, proven by `loadMergePair` above, so the
-    // row keeps its `ownerId` and the Phase 1 mismatch trigger accepts the
-    // move to a different contact.
-    sqlite
+    // 1. Take raw pre-merge snapshots of child records
+    const dupeEmails = sqlite
+      .prepare("SELECT * FROM contact_emails WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryEmails = sqlite
+      .prepare("SELECT * FROM contact_emails WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupePhones = sqlite
+      .prepare("SELECT * FROM contact_phones WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryPhones = sqlite
+      .prepare("SELECT * FROM contact_phones WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeAddresses = sqlite
+      .prepare("SELECT * FROM contact_addresses WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryAddresses = sqlite
+      .prepare("SELECT * FROM contact_addresses WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeSocialLinks = sqlite
+      .prepare("SELECT * FROM contact_social_links WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primarySocialLinks = sqlite
+      .prepare("SELECT * FROM contact_social_links WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeEducation = sqlite
+      .prepare("SELECT * FROM contact_education WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryEducation = sqlite
+      .prepare("SELECT * FROM contact_education WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeExperience = sqlite
+      .prepare("SELECT * FROM contact_experience WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryExperience = sqlite
+      .prepare("SELECT * FROM contact_experience WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeSources = sqlite
+      .prepare("SELECT * FROM contact_sources WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primarySources = sqlite
+      .prepare("SELECT * FROM contact_sources WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeTags = sqlite
+      .prepare("SELECT * FROM contact_tags WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryTags = sqlite
+      .prepare("SELECT * FROM contact_tags WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeInterests = sqlite
+      .prepare("SELECT * FROM contact_interests WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryInterests = sqlite
+      .prepare("SELECT * FROM contact_interests WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeAttributes = sqlite
+      .prepare("SELECT * FROM contact_attributes WHERE contactId = ?")
+      .all(duplicateId) as Record<string, unknown>[];
+    const primaryAttributes = sqlite
+      .prepare("SELECT * FROM contact_attributes WHERE contactId = ?")
+      .all(primaryId) as Record<string, unknown>[];
+
+    const dupeInteractions = sqlite
       .prepare(
         // tenant-lint: allow owner-checked by caller
-        "UPDATE interactions SET contactId = ? WHERE contactId = ?",
+        "SELECT * FROM interactions WHERE contactId = ? AND ownerId = ?",
       )
-      .run(primaryId, duplicateId);
+      .all(duplicateId, scope.ownerId) as Record<string, unknown>[];
 
-    sqlite
+    const dupeActionItems = sqlite
+      .prepare("SELECT * FROM action_items WHERE contactId = ? AND ownerId = ?")
+      .all(duplicateId, scope.ownerId) as Record<string, unknown>[];
+
+    const dupeMentions = sqlite
       .prepare(
-        `
-      UPDATE interaction_mentions SET contactId = ?
-      WHERE contactId = ? AND interactionId NOT IN (
-        SELECT interactionId FROM interaction_mentions WHERE contactId = ?
+        "SELECT interactionId, contactId FROM interaction_mentions WHERE contactId = ?",
       )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-    sqlite
-      .prepare("DELETE FROM interaction_mentions WHERE contactId = ?")
-      .run(duplicateId);
+      .all(duplicateId) as { interactionId: string; contactId: string }[];
 
-    // Before the DELETE at the end of this transaction, which cascades into
-    // `action_items` and would take every task the duplicate still holds.
+    const dupeListRows = sqlite
+      .prepare("SELECT listId FROM list_members WHERE contactId = ?")
+      .all(duplicateId) as { listId: string }[];
+    const primaryListRows = sqlite
+      .prepare("SELECT listId FROM list_members WHERE contactId = ?")
+      .all(primaryId) as { listId: string }[];
+
+    // 2. Child record mutations & change tracking
+
+    // Interactions
+    const movedInteractionIds = dupeInteractions.map((i) => i.id as string);
+    if (movedInteractionIds.length > 0) {
+      sqlite
+        .prepare(
+          // tenant-lint: allow owner-checked by caller
+          "UPDATE interactions SET contactId = ? WHERE contactId = ? AND ownerId = ?",
+        )
+        .run(primaryId, duplicateId, scope.ownerId);
+    }
+
+    // Interaction mentions
+    const primaryMentions = sqlite
+      .prepare(
+        "SELECT interactionId FROM interaction_mentions WHERE contactId = ?",
+      )
+      .all(primaryId) as { interactionId: string }[];
+    const primaryMentionSet = new Set(
+      primaryMentions.map((m) => m.interactionId),
+    );
+    const movedMentionInteractionIds: string[] = [];
+    const deletedMentionInteractionIds: string[] = [];
+    for (const dm of dupeMentions) {
+      if (primaryMentionSet.has(dm.interactionId)) {
+        deletedMentionInteractionIds.push(dm.interactionId);
+      } else {
+        movedMentionInteractionIds.push(dm.interactionId);
+      }
+    }
+    if (movedMentionInteractionIds.length > 0) {
+      sqlite
+        .prepare(
+          `UPDATE interaction_mentions SET contactId = ?
+           WHERE contactId = ? AND interactionId NOT IN (
+             SELECT interactionId FROM interaction_mentions WHERE contactId = ?
+           )`,
+        )
+        .run(primaryId, duplicateId, primaryId);
+    }
+    if (deletedMentionInteractionIds.length > 0) {
+      sqlite
+        .prepare("DELETE FROM interaction_mentions WHERE contactId = ?")
+        .run(duplicateId);
+    }
+
+    // Action items
+    const movedActionItemIds = dupeActionItems.map((a) => a.id as string);
     const movedTasks = transferActionItems(scope, primaryId, duplicateId);
     if (movedTasks > 0) {
       log.info(
@@ -174,173 +304,214 @@ export function mergeContacts(
       );
     }
 
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_emails SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(email)) NOT IN (
-        SELECT LOWER(TRIM(email)) FROM contact_emails WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    const primaryPhones = sqlite
-      .prepare("SELECT phone FROM contact_phones WHERE contactId = ?")
-      .all(primaryId) as Pick<ContactPhoneRow, "phone">[];
-    const primaryPhoneNorms = new Set(
-      primaryPhones.map((p) => normalizePhone(p.phone)),
+    // Emails
+    const primaryEmailNorms = new Set(
+      primaryEmails.map((e) =>
+        ((e.email as string) || "").toLowerCase().trim(),
+      ),
     );
-    const dupePhones = sqlite
-      .prepare("SELECT id, phone FROM contact_phones WHERE contactId = ?")
-      .all(duplicateId) as Pick<ContactPhoneRow, "id" | "phone">[];
+    const movedEmailIds: string[] = [];
+    for (const de of dupeEmails) {
+      const norm = ((de.email as string) || "").toLowerCase().trim();
+      if (!primaryEmailNorms.has(norm)) {
+        movedEmailIds.push(de.id as string);
+        primaryEmailNorms.add(norm);
+      }
+    }
+    const hasPrimaryEmail = primaryEmails.length > 0;
+    for (const id of movedEmailIds) {
+      sqlite
+        .prepare(
+          "UPDATE contact_emails SET contactId = ?" +
+            (hasPrimaryEmail ? ", isPrimary = 0" : "") +
+            " WHERE id = ?",
+        )
+        .run(primaryId, id);
+    }
+
+    // Phones
+    const primaryPhoneNorms = new Set(
+      primaryPhones.map((p) => normalizePhone(p.phone as string)),
+    );
+    const movedPhoneIds: string[] = [];
     for (const dp of dupePhones) {
-      if (!primaryPhoneNorms.has(normalizePhone(dp.phone))) {
+      const norm = normalizePhone(dp.phone as string);
+      if (!primaryPhoneNorms.has(norm)) {
+        movedPhoneIds.push(dp.id as string);
+        primaryPhoneNorms.add(norm);
+      }
+    }
+    const hasPrimaryPhone = primaryPhones.length > 0;
+    for (const id of movedPhoneIds) {
+      sqlite
+        .prepare(
+          "UPDATE contact_phones SET contactId = ?" +
+            (hasPrimaryPhone ? ", isPrimary = 0" : "") +
+            " WHERE id = ?",
+        )
+        .run(primaryId, id);
+    }
+
+    // Social Links
+    const primarySocialKeys = new Set(
+      primarySocialLinks.map(
+        (s) =>
+          `${((s.platform as string) || "").toLowerCase().trim()}::${((s.url as string) || "").toLowerCase().trim()}`,
+      ),
+    );
+    const movedSocialLinkIds: string[] = [];
+    for (const ds of dupeSocialLinks) {
+      const key = `${((ds.platform as string) || "").toLowerCase().trim()}::${((ds.url as string) || "").toLowerCase().trim()}`;
+      if (!primarySocialKeys.has(key)) {
+        movedSocialLinkIds.push(ds.id as string);
+        primarySocialKeys.add(key);
         sqlite
-          .prepare("UPDATE contact_phones SET contactId = ? WHERE id = ?")
-          .run(primaryId, dp.id);
+          .prepare("UPDATE contact_social_links SET contactId = ? WHERE id = ?")
+          .run(primaryId, ds.id);
       }
     }
 
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_social_links SET contactId = ?
-      WHERE contactId = ? AND (platform || '::' || LOWER(TRIM(url))) NOT IN (
-        SELECT platform || '::' || LOWER(TRIM(url)) FROM contact_social_links WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    const primaryEdu = sqlite
-      .prepare(
-        "SELECT school, degree FROM contact_education WHERE contactId = ?",
-      )
-      .all(primaryId) as Pick<ContactEducationRow, "school" | "degree">[];
+    // Education
     const primaryEduKeys = new Set(
-      primaryEdu.map(
+      primaryEducation.map(
         (e) =>
-          `${(e.school || "").toLowerCase().trim()}::${(e.degree || "").toLowerCase().trim()}`,
+          `${((e.school as string) || "").toLowerCase().trim()}::${((e.degree as string) || "").toLowerCase().trim()}`,
       ),
     );
-    const dupeEdu = sqlite
-      .prepare(
-        "SELECT id, school, degree FROM contact_education WHERE contactId = ?",
-      )
-      .all(duplicateId) as Pick<
-      ContactEducationRow,
-      "id" | "school" | "degree"
-    >[];
-    for (const edu of dupeEdu) {
-      const key = `${(edu.school || "").toLowerCase().trim()}::${(edu.degree || "").toLowerCase().trim()}`;
+    const movedEducationIds: string[] = [];
+    for (const de of dupeEducation) {
+      const key = `${((de.school as string) || "").toLowerCase().trim()}::${((de.degree as string) || "").toLowerCase().trim()}`;
       if (!primaryEduKeys.has(key)) {
+        movedEducationIds.push(de.id as string);
+        primaryEduKeys.add(key);
         sqlite
           .prepare("UPDATE contact_education SET contactId = ? WHERE id = ?")
-          .run(primaryId, edu.id);
+          .run(primaryId, de.id);
       }
     }
 
-    const primaryExp = sqlite
-      .prepare(
-        "SELECT company, role FROM contact_experience WHERE contactId = ?",
-      )
-      .all(primaryId) as Pick<ContactExperienceRow, "company" | "role">[];
+    // Experience
     const primaryExpKeys = new Set(
-      primaryExp.map(
+      primaryExperience.map(
         (e) =>
-          `${(e.company || "").toLowerCase().trim()}::${(e.role || "").toLowerCase().trim()}`,
+          `${((e.company as string) || "").toLowerCase().trim()}::${((e.role as string) || "").toLowerCase().trim()}`,
       ),
     );
-    const dupeExp = sqlite
-      .prepare(
-        "SELECT id, company, role FROM contact_experience WHERE contactId = ?",
-      )
-      .all(duplicateId) as Pick<
-      ContactExperienceRow,
-      "id" | "company" | "role"
-    >[];
-    for (const exp of dupeExp) {
-      const key = `${(exp.company || "").toLowerCase().trim()}::${(exp.role || "").toLowerCase().trim()}`;
+    const movedExperienceIds: string[] = [];
+    for (const de of dupeExperience) {
+      const key = `${((de.company as string) || "").toLowerCase().trim()}::${((de.role as string) || "").toLowerCase().trim()}`;
       if (!primaryExpKeys.has(key)) {
+        movedExperienceIds.push(de.id as string);
+        primaryExpKeys.add(key);
         sqlite
           .prepare("UPDATE contact_experience SET contactId = ? WHERE id = ?")
-          .run(primaryId, exp.id);
+          .run(primaryId, de.id);
       }
     }
 
-    const primarySrc = sqlite
-      .prepare(
-        "SELECT platform, externalId FROM contact_sources WHERE contactId = ?",
-      )
-      .all(primaryId) as Pick<ContactSourceRow, "platform" | "externalId">[];
+    // Sources
     const primarySrcKeys = new Set(
-      primarySrc.map(
+      primarySources.map(
         (s) =>
-          `${(s.platform || "").toLowerCase().trim()}::${(s.externalId || "").toLowerCase().trim()}`,
+          `${((s.platform as string) || "").toLowerCase().trim()}::${((s.externalId as string) || "").toLowerCase().trim()}`,
       ),
     );
-    const dupeSrc = sqlite
-      .prepare(
-        "SELECT id, platform, externalId FROM contact_sources WHERE contactId = ?",
-      )
-      .all(duplicateId) as Pick<
-      ContactSourceRow,
-      "id" | "platform" | "externalId"
-    >[];
-    for (const src of dupeSrc) {
-      const key = `${(src.platform || "").toLowerCase().trim()}::${(src.externalId || "").toLowerCase().trim()}`;
+    const movedSourceIds: string[] = [];
+    for (const ds of dupeSources) {
+      const key = `${((ds.platform as string) || "").toLowerCase().trim()}::${((ds.externalId as string) || "").toLowerCase().trim()}`;
       if (!primarySrcKeys.has(key)) {
+        movedSourceIds.push(ds.id as string);
+        primarySrcKeys.add(key);
         sqlite
           .prepare("UPDATE contact_sources SET contactId = ? WHERE id = ?")
-          .run(primaryId, src.id);
+          .run(primaryId, ds.id);
       }
     }
 
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_tags SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(tag)) NOT IN (
-        SELECT LOWER(TRIM(tag)) FROM contact_tags WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
+    // Tags
+    const primaryTagKeys = new Set(
+      primaryTags.map((t) => ((t.tag as string) || "").toLowerCase().trim()),
+    );
+    const movedTagIds: string[] = [];
+    for (const dt of dupeTags) {
+      const norm = ((dt.tag as string) || "").toLowerCase().trim();
+      if (!primaryTagKeys.has(norm)) {
+        movedTagIds.push(dt.id as string);
+        primaryTagKeys.add(norm);
+        sqlite
+          .prepare("UPDATE contact_tags SET contactId = ? WHERE id = ?")
+          .run(primaryId, dt.id);
+      }
+    }
 
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_interests SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(interest)) NOT IN (
-        SELECT LOWER(TRIM(interest)) FROM contact_interests WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
+    // Interests
+    const primaryInterestKeys = new Set(
+      primaryInterests.map((i) =>
+        ((i.interest as string) || "").toLowerCase().trim(),
+      ),
+    );
+    const movedInterestIds: string[] = [];
+    for (const di of dupeInterests) {
+      const norm = ((di.interest as string) || "").toLowerCase().trim();
+      if (!primaryInterestKeys.has(norm)) {
+        movedInterestIds.push(di.id as string);
+        primaryInterestKeys.add(norm);
+        sqlite
+          .prepare("UPDATE contact_interests SET contactId = ? WHERE id = ?")
+          .run(primaryId, di.id);
+      }
+    }
 
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_attributes SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(name)) NOT IN (
-        SELECT LOWER(TRIM(name)) FROM contact_attributes WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
+    // Attributes
+    const primaryAttrKeys = new Set(
+      primaryAttributes.map((a) =>
+        ((a.name as string) || "").toLowerCase().trim(),
+      ),
+    );
+    const movedAttributeIds: string[] = [];
+    for (const da of dupeAttributes) {
+      const norm = ((da.name as string) || "").toLowerCase().trim();
+      if (!primaryAttrKeys.has(norm)) {
+        movedAttributeIds.push(da.id as string);
+        primaryAttrKeys.add(norm);
+        sqlite
+          .prepare("UPDATE contact_attributes SET contactId = ? WHERE id = ?")
+          .run(primaryId, da.id);
+      }
+    }
 
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_addresses SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(address)) NOT IN (
-        SELECT LOWER(TRIM(address)) FROM contact_addresses WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
+    // Addresses
+    const primaryAddrKeys = new Set(
+      primaryAddresses.map((a) =>
+        ((a.address as string) || "").toLowerCase().trim(),
+      ),
+    );
+    const movedAddressIds: string[] = [];
+    for (const da of dupeAddresses) {
+      const norm = ((da.address as string) || "").toLowerCase().trim();
+      if (!primaryAddrKeys.has(norm)) {
+        movedAddressIds.push(da.id as string);
+        primaryAddrKeys.add(norm);
+        sqlite
+          .prepare("UPDATE contact_addresses SET contactId = ? WHERE id = ?")
+          .run(primaryId, da.id);
+      }
+    }
 
+    // List memberships
+    const primaryListSet = new Set(primaryListRows.map((l) => l.listId));
+    const addedListIds: string[] = [];
+    const insertMember = sqlite.prepare(
+      "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
+    );
+    for (const dl of dupeListRows) {
+      if (!primaryListSet.has(dl.listId)) {
+        insertMember.run(dl.listId, primaryId);
+        addedListIds.push(dl.listId);
+      }
+    }
+
+    // Scalar fields
     const scalarFields = [
       "firstName",
       "lastName",
@@ -363,9 +534,6 @@ export function mergeContacts(
       "aiSummary",
       "aiBriefingAt",
     ] as const;
-    // Uniform value union (all scalar columns are TEXT or REAL) so the
-    // union-keyed writes below type-check; narrowed back to per-column
-    // types at the `.set()` call site.
     const updates: Partial<
       Record<
         (typeof scalarFields)[number] | "updatedAt" | "addedAt",
@@ -374,27 +542,30 @@ export function mergeContacts(
     > = {
       updatedAt: new Date().toISOString(),
     };
+    const scalarUpdates: Record<
+      string,
+      { oldValue: unknown; transferredValue: unknown }
+    > = {};
     for (const field of scalarFields) {
-      if (!primary[field] && duplicate[field]) {
-        updates[field] = duplicate[field];
+      if (!primaryInTx[field] && duplicateInTx[field]) {
+        updates[field] = duplicateInTx[field];
+        scalarUpdates[field] = {
+          oldValue: primaryInTx[field] ?? null,
+          transferredValue: duplicateInTx[field],
+        };
       }
     }
-
-    const dupLists = sqlite
-      .prepare("SELECT listId FROM list_members WHERE contactId = ?")
-      .all(duplicateId) as { listId: string }[];
-    const insertMember = sqlite.prepare(
-      "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
-    );
-    for (const dl of dupLists) {
-      insertMember.run(dl.listId, primaryId);
-    }
-
+    let addedAtUpdated:
+      { oldAddedAt: string | null; newAddedAt: string | null } | undefined;
     if (
-      duplicate.addedAt &&
-      (!primary.addedAt || duplicate.addedAt < primary.addedAt)
+      duplicateInTx.addedAt &&
+      (!primaryInTx.addedAt || duplicateInTx.addedAt < primaryInTx.addedAt)
     ) {
-      updates.addedAt = duplicate.addedAt;
+      addedAtUpdated = {
+        oldAddedAt: primaryInTx.addedAt,
+        newAddedAt: duplicateInTx.addedAt,
+      };
+      updates.addedAt = duplicateInTx.addedAt;
     }
 
     db.update(schema.contacts)
@@ -407,59 +578,99 @@ export function mergeContacts(
       )
       .run();
 
-    // vec0 tables don't support FK cascading — clean up before hard delete.
-    // Both are partitioned by owner, and `contactId` is their primary key, so
-    // one id names one row inside the partition the owner check already
-    // settled. sqlite-vec refuses an UPDATE of a partition column, which is
-    // why deleting the row is the only way to retire it.
-    try {
-      sqlite
-        .prepare(
-          // tenant-lint: allow owner-checked by caller
-          "DELETE FROM search_embeddings WHERE contactId = ?",
-        )
-        .run(duplicateId);
-    } catch {
-      /* vec0 row may not exist */
-    }
-    try {
-      sqlite
-        .prepare(
-          // tenant-lint: allow owner-checked by caller
-          "DELETE FROM contact_embeddings WHERE contactId = ?",
-        )
-        .run(duplicateId);
-    } catch {
-      /* vec0 row may not exist */
-    }
-    // Keep dedupe embedding metadata in sync (not FK-linked to contacts).
+    // 3. Tombstone the duplicate contact
     sqlite
-      .prepare("DELETE FROM dedupe_embedding_meta WHERE contactId = ?")
-      .run(duplicateId);
+      .prepare(
+        "UPDATE contacts SET canonicalId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND ownerId = ?",
+      )
+      .run(primaryId, duplicateId, scope.ownerId);
 
-    sqlite
-      .prepare("DELETE FROM contacts WHERE id = ? AND ownerId = ?")
-      .run(duplicateId, scope.ownerId);
+    // 4. Assemble and record snapshot in dedupe_merge_log
+    const snapshotData: MergeSnapshotData = {
+      version: 1,
+      primaryId,
+      duplicateId,
+      primary: {
+        contact: primaryInTx as Record<string, unknown>,
+        listIds: primaryListRows.map((l) => l.listId),
+        emails: primaryEmails,
+        phones: primaryPhones,
+        addresses: primaryAddresses,
+        attributes: primaryAttributes,
+      },
+      duplicate: {
+        contact: duplicateInTx as Record<string, unknown>,
+        listIds: dupeListRows.map((l) => l.listId),
+        emails: dupeEmails,
+        phones: dupePhones,
+        addresses: dupeAddresses,
+        socialLinks: dupeSocialLinks,
+        education: dupeEducation,
+        experience: dupeExperience,
+        sources: dupeSources,
+        tags: dupeTags,
+        interests: dupeInterests,
+        attributes: dupeAttributes,
+        interactions: dupeInteractions,
+        actionItems: dupeActionItems,
+        mentions: dupeMentions,
+      },
+      changes: {
+        movedRecords: {
+          interactions: movedInteractionIds,
+          actionItems: movedActionItemIds,
+          emails: movedEmailIds,
+          phones: movedPhoneIds,
+          socialLinks: movedSocialLinkIds,
+          education: movedEducationIds,
+          experience: movedExperienceIds,
+          sources: movedSourceIds,
+          tags: movedTagIds,
+          interests: movedInterestIds,
+          attributes: movedAttributeIds,
+          addresses: movedAddressIds,
+        },
+        movedMentions: movedMentionInteractionIds,
+        deletedMentions: deletedMentionInteractionIds,
+        scalarUpdates,
+        addedListIds,
+        addedAtUpdated,
+      },
+    };
 
-    // Audit log is part of the SAME transaction. If recordMerge throws (e.g.
-    // an unexpected FK problem in dedupe_merge_log), the entire merge rolls
-    // back. Previously this ran AFTER mergeTxn() committed, which meant a
-    // crash between commit and recordMerge would orphan the merge without
-    // an audit row — making `undoSoftMerge` impossible.
     recordMergeUnsafe(
       scope,
       primaryId,
       duplicateId,
-      1.0,
-      "User-initiated merge",
-      "user",
-      "hard",
+      confidence,
+      reasoning,
+      mergedBy,
+      "soft",
+      JSON.stringify(snapshotData),
     );
   });
 
   mergeTxn();
   scheduleSearchIndex(primaryId);
+  log.info(
+    "DedupeService",
+    `[${rid}] Merged ${duplicateId} → ${primaryId} (by ${mergedBy}, confidence: ${(confidence * 100).toFixed(0)}%)`,
+  );
   return contactRepo.hydrate(contactRepo.findOwned(scope, primaryId));
+}
+
+export function mergeContacts(
+  scope: Scope,
+  primaryId: string,
+  duplicateId: string,
+  rid: string,
+) {
+  return executeMerge(scope, primaryId, duplicateId, {
+    mergedBy: "user",
+    confidence: 1.0,
+    reasoning: "User-initiated merge",
+    rid,
+  });
 }
 
 export function softMergeContacts(
@@ -470,340 +681,10 @@ export function softMergeContacts(
   reasoning: string,
   rid: string,
 ) {
-  const { primary, duplicate } = loadMergePair(scope, primaryId, duplicateId);
-
-  if (!primary) {
-    throw new NotFoundError("Primary contact", primaryId);
-  }
-  if (!duplicate) {
-    log.warn(
-      "DedupeService",
-      `[${rid}] Duplicate ${duplicateId} not found — skipping soft merge`,
-    );
-    return;
-  }
-  if (duplicate.canonicalId) {
-    log.warn(
-      "DedupeService",
-      `[${rid}] Duplicate ${duplicateId} already soft-merged — skipping`,
-    );
-    return;
-  }
-
-  const softTxn = sqlite.transaction(() => {
-    // Re-validate inside the transaction. If a concurrent soft-merge set
-    // canonicalId between the outer SELECT and BEGIN, bail out atomically.
-    const dupInTx = sqlite
-      .prepare(
-        "SELECT id, canonicalId FROM contacts WHERE id = ? AND ownerId = ?",
-      )
-      .get(duplicateId, scope.ownerId) as
-      { id: string; canonicalId: string | null } | undefined;
-    if (!dupInTx) {
-      log.warn(
-        "DedupeService",
-        `[${rid}] Duplicate ${duplicateId} vanished mid soft-merge — aborting txn`,
-      );
-      return;
-    }
-    if (dupInTx.canonicalId) {
-      log.warn(
-        "DedupeService",
-        `[${rid}] Duplicate ${duplicateId} was soft-merged concurrently — aborting txn`,
-      );
-      return;
-    }
-
-    // 1:1 same as mergeContacts, minus the hard DELETE
-    // Both contacts share the owner, proven by `loadMergePair` above, so the
-    // row keeps its `ownerId` and the Phase 1 mismatch trigger accepts the
-    // move to a different contact.
-    sqlite
-      .prepare(
-        // tenant-lint: allow owner-checked by caller
-        "UPDATE interactions SET contactId = ? WHERE contactId = ?",
-      )
-      .run(primaryId, duplicateId);
-
-    sqlite
-      .prepare(
-        `
-      UPDATE interaction_mentions SET contactId = ?
-      WHERE contactId = ? AND interactionId NOT IN (
-        SELECT interactionId FROM interaction_mentions WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-    sqlite
-      .prepare("DELETE FROM interaction_mentions WHERE contactId = ?")
-      .run(duplicateId);
-
-    // A tombstone is a contact nobody can open, so a task left on it is a
-    // task nobody can act on. Moved here for the same reason the interactions
-    // above are.
-    const movedTasks = transferActionItems(scope, primaryId, duplicateId);
-    if (movedTasks > 0) {
-      log.info(
-        "DedupeService",
-        `[${rid}] Moved ${movedTasks} follow-up task(s) from ${duplicateId} to ${primaryId}`,
-      );
-    }
-
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_emails SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(email)) NOT IN (
-        SELECT LOWER(TRIM(email)) FROM contact_emails WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    const primaryPhones = sqlite
-      .prepare("SELECT phone FROM contact_phones WHERE contactId = ?")
-      .all(primaryId) as Pick<ContactPhoneRow, "phone">[];
-    const primaryPhoneNorms = new Set(
-      primaryPhones.map((p) => normalizePhone(p.phone)),
-    );
-    const dupePhones = sqlite
-      .prepare("SELECT id, phone FROM contact_phones WHERE contactId = ?")
-      .all(duplicateId) as Pick<ContactPhoneRow, "id" | "phone">[];
-    for (const dp of dupePhones) {
-      if (!primaryPhoneNorms.has(normalizePhone(dp.phone))) {
-        sqlite
-          .prepare("UPDATE contact_phones SET contactId = ? WHERE id = ?")
-          .run(primaryId, dp.id);
-      }
-    }
-
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_social_links SET contactId = ?
-      WHERE contactId = ? AND (platform || '::' || LOWER(TRIM(url))) NOT IN (
-        SELECT platform || '::' || LOWER(TRIM(url)) FROM contact_social_links WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    const primaryEdu = sqlite
-      .prepare(
-        "SELECT school, degree FROM contact_education WHERE contactId = ?",
-      )
-      .all(primaryId) as Pick<ContactEducationRow, "school" | "degree">[];
-    const primaryEduKeys = new Set(
-      primaryEdu.map(
-        (e) =>
-          `${(e.school || "").toLowerCase().trim()}::${(e.degree || "").toLowerCase().trim()}`,
-      ),
-    );
-    const dupeEdu = sqlite
-      .prepare(
-        "SELECT id, school, degree FROM contact_education WHERE contactId = ?",
-      )
-      .all(duplicateId) as Pick<
-      ContactEducationRow,
-      "id" | "school" | "degree"
-    >[];
-    for (const edu of dupeEdu) {
-      const key = `${(edu.school || "").toLowerCase().trim()}::${(edu.degree || "").toLowerCase().trim()}`;
-      if (!primaryEduKeys.has(key)) {
-        sqlite
-          .prepare("UPDATE contact_education SET contactId = ? WHERE id = ?")
-          .run(primaryId, edu.id);
-      }
-    }
-
-    const primaryExp = sqlite
-      .prepare(
-        "SELECT company, role FROM contact_experience WHERE contactId = ?",
-      )
-      .all(primaryId) as Pick<ContactExperienceRow, "company" | "role">[];
-    const primaryExpKeys = new Set(
-      primaryExp.map(
-        (e) =>
-          `${(e.company || "").toLowerCase().trim()}::${(e.role || "").toLowerCase().trim()}`,
-      ),
-    );
-    const dupeExp = sqlite
-      .prepare(
-        "SELECT id, company, role FROM contact_experience WHERE contactId = ?",
-      )
-      .all(duplicateId) as Pick<
-      ContactExperienceRow,
-      "id" | "company" | "role"
-    >[];
-    for (const exp of dupeExp) {
-      const key = `${(exp.company || "").toLowerCase().trim()}::${(exp.role || "").toLowerCase().trim()}`;
-      if (!primaryExpKeys.has(key)) {
-        sqlite
-          .prepare("UPDATE contact_experience SET contactId = ? WHERE id = ?")
-          .run(primaryId, exp.id);
-      }
-    }
-
-    const primarySrc = sqlite
-      .prepare(
-        "SELECT platform, externalId FROM contact_sources WHERE contactId = ?",
-      )
-      .all(primaryId) as Pick<ContactSourceRow, "platform" | "externalId">[];
-    const primarySrcKeys = new Set(
-      primarySrc.map(
-        (s) =>
-          `${(s.platform || "").toLowerCase().trim()}::${(s.externalId || "").toLowerCase().trim()}`,
-      ),
-    );
-    const dupeSrc = sqlite
-      .prepare(
-        "SELECT id, platform, externalId FROM contact_sources WHERE contactId = ?",
-      )
-      .all(duplicateId) as Pick<
-      ContactSourceRow,
-      "id" | "platform" | "externalId"
-    >[];
-    for (const src of dupeSrc) {
-      const key = `${(src.platform || "").toLowerCase().trim()}::${(src.externalId || "").toLowerCase().trim()}`;
-      if (!primarySrcKeys.has(key)) {
-        sqlite
-          .prepare("UPDATE contact_sources SET contactId = ? WHERE id = ?")
-          .run(primaryId, src.id);
-      }
-    }
-
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_tags SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(tag)) NOT IN (
-        SELECT LOWER(TRIM(tag)) FROM contact_tags WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_interests SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(interest)) NOT IN (
-        SELECT LOWER(TRIM(interest)) FROM contact_interests WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_attributes SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(name)) NOT IN (
-        SELECT LOWER(TRIM(name)) FROM contact_attributes WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    sqlite
-      .prepare(
-        `
-      UPDATE contact_addresses SET contactId = ?
-      WHERE contactId = ? AND LOWER(TRIM(address)) NOT IN (
-        SELECT LOWER(TRIM(address)) FROM contact_addresses WHERE contactId = ?
-      )
-    `,
-      )
-      .run(primaryId, duplicateId, primaryId);
-
-    const scalarFields = [
-      "firstName",
-      "lastName",
-      "headline",
-      "role",
-      "company",
-      "location",
-      "birthday",
-      "preferences",
-      "avatarUrl",
-      "about",
-      "pronouns",
-      "industry",
-      "website",
-      "lat",
-      "lng",
-      "aiHydratedAt",
-      "aiBriefing",
-      "aiBackground",
-      "aiSummary",
-      "aiBriefingAt",
-    ] as const;
-    // Uniform value union (all scalar columns are TEXT or REAL) so the
-    // union-keyed writes below type-check; narrowed back to per-column
-    // types at the `.set()` call site.
-    const updates: Partial<
-      Record<
-        (typeof scalarFields)[number] | "updatedAt" | "addedAt",
-        string | number | null
-      >
-    > = {
-      updatedAt: new Date().toISOString(),
-    };
-    for (const field of scalarFields) {
-      if (!primary[field] && duplicate[field]) {
-        updates[field] = duplicate[field];
-      }
-    }
-
-    const dupLists = sqlite
-      .prepare("SELECT listId FROM list_members WHERE contactId = ?")
-      .all(duplicateId) as { listId: string }[];
-    const insertMember = sqlite.prepare(
-      "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
-    );
-    for (const dl of dupLists) {
-      insertMember.run(dl.listId, primaryId);
-    }
-
-    if (
-      duplicate.addedAt &&
-      (!primary.addedAt || duplicate.addedAt < primary.addedAt)
-    ) {
-      updates.addedAt = duplicate.addedAt;
-    }
-
-    db.update(schema.contacts)
-      .set(updates as Partial<ContactRow>)
-      .where(
-        and(
-          eq(schema.contacts.id, primaryId),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
-
-    sqlite
-      .prepare(
-        "UPDATE contacts SET canonicalId = ? WHERE id = ? AND ownerId = ?",
-      )
-      .run(primaryId, duplicateId, scope.ownerId);
-
-    // Audit log is part of the SAME transaction — see comment in mergeContacts().
-    recordMergeUnsafe(
-      scope,
-      primaryId,
-      duplicateId,
-      confidence,
-      reasoning,
-      "auto",
-      "soft",
-    );
+  executeMerge(scope, primaryId, duplicateId, {
+    mergedBy: "auto",
+    confidence,
+    reasoning,
+    rid,
   });
-
-  softTxn();
-  log.info(
-    "DedupeService",
-    `[${rid}] Soft-merged ${duplicateId} → ${primaryId} (confidence: ${(confidence * 100).toFixed(0)}%)`,
-  );
 }

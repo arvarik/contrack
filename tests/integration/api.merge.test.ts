@@ -70,13 +70,23 @@ describe("merge → audit log → undo", () => {
     ).toContain("+1 555 0100");
   });
 
-  it("hard merges are logged and explicitly NOT undoable (409 contract)", async () => {
-    const primaryId = await createContact({ name: "Hard Primary" });
-    const duplicateId = await createContact({ name: "Hard Duplicate" });
+  it("manual merges are logged and undoable, fully restoring duplicate and transferred child records", async () => {
+    const primaryId = await createContact({
+      name: "Manual Primary",
+      headline: "Lead Engineer",
+      emails: ["manual.p@test.com"],
+    });
+    const duplicateId = await createContact({
+      name: "Manual Duplicate",
+      headline: "Senior Engineer",
+      emails: ["manual.d@test.com"],
+      phones: ["+1 555 9999"],
+    });
 
-    await request(app)
+    const mergeRes = await request(app)
       .post("/api/contacts/merge")
       .send({ primaryId, duplicateId });
+    expect(mergeRes.status).toBe(200);
 
     const logRes = await request(app).get("/api/dedupe/merge-log");
     const entry = logRes.body.entries.find(
@@ -84,10 +94,155 @@ describe("merge → audit log → undo", () => {
         e.primaryId === primaryId && e.duplicateId === duplicateId,
     );
     expect(entry).toBeTruthy();
-    expect(entry.mergeType).toBe("hard");
+    expect(entry.mergeType).toBe("soft");
 
+    // Primary has both emails and the transferred phone; duplicate is hidden
+    let primary = await request(app).get(`/api/contacts/${primaryId}`);
+    expect(
+      primary.body.emails.map((e: { email: string }) => e.email),
+    ).toContain("manual.d@test.com");
+    expect(
+      primary.body.phones.map((p: { phone: string }) => p.phone),
+    ).toContain("+1 555 9999");
+    let slim = await slimContacts();
+    expect(slim.some((c) => c.id === duplicateId)).toBe(false);
+
+    // Undo the manual merge
     const undo = await request(app).post(
       `/api/dedupe/merge-log/${entry.id}/undo`,
+    );
+    expect(undo.status).toBe(200);
+    expect(undo.body.success).toBe(true);
+    expect(undo.body.restoredContactId).toBe(duplicateId);
+    expect(undo.body.conflicts).toHaveLength(0);
+
+    // Duplicate is restored to the active list
+    slim = await slimContacts();
+    expect(slim.some((c) => c.id === duplicateId)).toBe(true);
+
+    // Duplicate has its email and phone back
+    const duplicate = await request(app).get(`/api/contacts/${duplicateId}`);
+    expect(
+      duplicate.body.emails.map((e: { email: string }) => e.email),
+    ).toContain("manual.d@test.com");
+    expect(
+      duplicate.body.phones.map((p: { phone: string }) => p.phone),
+    ).toContain("+1 555 9999");
+    expect(
+      duplicate.body.emails.map((e: { email: string }) => e.email),
+    ).not.toContain("manual.p@test.com");
+
+    // Primary only has its original email and does not have duplicate's phone
+    primary = await request(app).get(`/api/contacts/${primaryId}`);
+    expect(primary.body.emails.map((e: { email: string }) => e.email)).toEqual([
+      "manual.p@test.com",
+    ]);
+    expect(primary.body.phones).toHaveLength(0);
+  });
+
+  it("preserves post-merge survivor edits on undo and reports conflicts", async () => {
+    const primaryId = await createContact({
+      name: "Conflict Primary",
+      emails: ["conflict.p@test.com"],
+    });
+    const duplicateId = await createContact({
+      name: "Conflict Duplicate",
+      emails: ["conflict.d@test.com"],
+    });
+    const taskId = await createTask(
+      duplicateId,
+      "Task to complete on survivor",
+      "2027-09-01T10:00:00.000Z",
+    );
+
+    // Merge
+    await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId, duplicateId });
+
+    // Survivor completes the transferred task
+    await completeTask(taskId);
+
+    // Find merge log entry
+    const logRes = await request(app).get("/api/dedupe/merge-log");
+    const entry = logRes.body.entries.find(
+      (e: { primaryId: string; duplicateId: string }) =>
+        e.primaryId === primaryId && e.duplicateId === duplicateId,
+    );
+    expect(entry).toBeTruthy();
+
+    // Undo the merge
+    const undo = await request(app).post(
+      `/api/dedupe/merge-log/${entry.id}/undo`,
+    );
+    expect(undo.status).toBe(200);
+    expect(undo.body.conflicts.length).toBeGreaterThanOrEqual(1);
+    const taskConflict = undo.body.conflicts.find(
+      (c: { type: string }) => c.type === "task_completed",
+    );
+    expect(taskConflict).toBeTruthy();
+
+    // Survivor keeps the completed task
+    const survivorTasks = allTasks().filter((t) => t.contactId === primaryId);
+    expect(
+      survivorTasks.some((t) => t.id === taskId && t.completedAt !== null),
+    ).toBe(true);
+
+    // Duplicate gets a restored copy of the task in pending state
+    const duplicateTasks = allTasks().filter(
+      (t) => t.contactId === duplicateId,
+    );
+    expect(duplicateTasks.length).toBe(1);
+    expect(duplicateTasks[0].title).toBe("Task to complete on survivor");
+    expect(duplicateTasks[0].completedAt).toBeNull();
+  });
+
+  it("recomputes follow-up task caches on both survivor and duplicate upon undo", async () => {
+    const primaryId = await createContact({ name: "Cache Primary" });
+    const duplicateId = await createContact({ name: "Cache Duplicate" });
+
+    await createTask(primaryId, "Later task", "2027-08-01T00:00:00.000Z");
+    await createTask(duplicateId, "Earlier task", "2027-04-01T00:00:00.000Z");
+
+    expect(nextFollowUpOf(primaryId)).toBe("2027-08-01T00:00:00.000Z");
+    expect(nextFollowUpOf(duplicateId)).toBe("2027-04-01T00:00:00.000Z");
+
+    // Merge duplicate into primary
+    await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId, duplicateId });
+
+    expect(nextFollowUpOf(primaryId)).toBe("2027-04-01T00:00:00.000Z");
+    expect(nextFollowUpOf(duplicateId)).toBeNull();
+
+    const logRes = await request(app).get("/api/dedupe/merge-log");
+    const entry = logRes.body.entries.find(
+      (e: { primaryId: string; duplicateId: string }) =>
+        e.primaryId === primaryId && e.duplicateId === duplicateId,
+    );
+
+    // Undo merge
+    const undo = await request(app).post(
+      `/api/dedupe/merge-log/${entry.id}/undo`,
+    );
+    expect(undo.status).toBe(200);
+
+    // Caches are restored on both contacts!
+    expect(nextFollowUpOf(primaryId)).toBe("2027-08-01T00:00:00.000Z");
+    expect(nextFollowUpOf(duplicateId)).toBe("2027-04-01T00:00:00.000Z");
+  });
+
+  it("legacy hard merges without snapshot return 409 HARD_MERGE_IRREVERSIBLE", async () => {
+    const fakeId = "legacy-test-entry-" + Date.now();
+    sqlite
+      .prepare(
+        `INSERT INTO dedupe_merge_log (id, ownerId, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, duplicateSnapshot, mergedAt)
+         VALUES (?, ?, 'fake-p', 'fake-d', 'user', 'hard', 1.0, 'Legacy test', NULL, CURRENT_TIMESTAMP)`,
+      )
+      .run(fakeId, localOwnerId());
+
+    const undo = await request(app).post(
+      `/api/dedupe/merge-log/${fakeId}/undo`,
     );
     expect(undo.status).toBe(409);
     expect(undo.body.error.code).toBe("HARD_MERGE_IRREVERSIBLE");

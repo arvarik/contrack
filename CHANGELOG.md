@@ -249,6 +249,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Make merge undo restore the actual records.** Merges now record complete
+  pre-merge snapshots of both primary and duplicate contacts, list memberships,
+  and 12 child tables in `dedupe_merge_log.duplicateSnapshot`. Manual merges now
+  soft-merge with full snapshot tracking and are completely undoable rather than
+  permanently deleting the duplicate. Undoing a merge reverses unchanged child
+  record transfers back to the duplicate, preserves post-merge edits on the
+  survivor while restoring the original records to the duplicate, and recomputes
+  follow-up task caches (`nextFollowUpAt`) on both contacts. Conflicts (such as
+  post-merge task completions or field modifications) are tracked and surfaced.
+  Conflicting field values are also previewed before merge confirmation across
+  the dedupe review view, swipe card, and contact detail duplicate banner.
 - Ask Contrack runs the same question again. The page refused a question
   that matched the previous one, and Clear did not reset that memory, so a
   question once asked could not be asked again until a different one had been
