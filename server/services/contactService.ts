@@ -25,7 +25,10 @@ import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
 import { buildContactUpdate } from "../utils/helpers.ts";
 import { buildAvatarUrl } from "./avatarService.ts";
 import { generateAndStoreEmbedding } from "./dedupe/embeddings.ts";
-import { scheduleSearchIndex } from "./search/indexQueue.ts";
+import {
+  scheduleSearchIndex,
+  removeFromIndexQueue,
+} from "./search/indexQueue.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { dedupeService } from "./dedupe/index.ts";
@@ -154,6 +157,7 @@ function invalidateOwnerCaches(scope: Scope) {
  * FK cascading, so this must run on every soft delete and hard delete.
  */
 function purgeContactSearchArtifacts(id: string): void {
+  removeFromIndexQueue(id);
   try {
     sqlite
       // tenant-lint: allow owner-checked by caller

@@ -129,6 +129,7 @@ const COVERED = [
   "GET /api/lists/:id/contacts",
   "GET /api/query/contacts",
   "GET /api/search",
+  "GET /api/search/coverage",
   "GET /api/tags",
   "GET /api/timeline",
   "GET /api/trash",
@@ -162,6 +163,7 @@ const COVERED = [
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
+  "POST /api/search/refresh-index",
   "POST /api/search/semantic",
   "POST /api/search/synthesize",
   "POST /api/trash/:id/restore",
@@ -1650,6 +1652,50 @@ describe("POST /api/search/synthesize", () => {
   });
 });
 
+describe("GET /api/search/coverage", () => {
+  it("scopes coverage metrics strictly to the requesting account", async () => {
+    // Empty account C sees 0 total contacts
+    const resC = await asUser(C)(request(app).get("/api/search/coverage"));
+    expect(resC.status).toBe(200);
+    expect(resC.body.total).toBe(0);
+    expect(resC.body.coverage).toBe(100);
+
+    // Account A sees only A's contacts
+    const resA = await asUser(A)(request(app).get("/api/search/coverage"));
+    expect(resA.status).toBe(200);
+    expect(resA.body.total).toBeGreaterThan(0);
+
+    // Account B sees only B's contacts
+    const resB = await asUser(B)(request(app).get("/api/search/coverage"));
+    expect(resB.status).toBe(200);
+    expect(resB.body.total).toBeGreaterThan(0);
+    expect(resB.body.total).not.toBe(resA.body.total + resB.body.total);
+  });
+});
+
+describe("POST /api/search/refresh-index", () => {
+  it("queues only the caller's missing contacts", async () => {
+    // Calling refresh-index as account C (who has 0 contacts) queues 0 contacts
+    const resC = await asUser(C)(
+      request(app)
+        .post("/api/search/refresh-index")
+        .send({ allowProvider: false }),
+    );
+    expect(resC.status).toBe(200);
+    expect(resC.body.ok).toBe(true);
+    expect(resC.body.queued).toBe(0);
+
+    // Calling refresh-index as account B queues at most B's contacts
+    const resB = await asUser(B)(
+      request(app)
+        .post("/api/search/refresh-index")
+        .send({ allowProvider: false }),
+    );
+    expect(resB.status).toBe(200);
+    expect(resB.body.ok).toBe(true);
+  });
+});
+
 // =============================================================================
 // AI Search
 // =============================================================================
@@ -2977,7 +3023,7 @@ describe("no scoped route is waiting for its sub-phase", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(32);
+    expect(collections).toHaveLength(33);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

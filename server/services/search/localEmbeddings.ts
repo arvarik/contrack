@@ -247,6 +247,11 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
   // table without its partition key, which would make every scoped KNN in
   // Phase 2 return nothing. A unit test pins the two call sites equal.
   sqlite.exec(vecTableDdl("search_embeddings", dimension));
+  try {
+    sqlite.exec("DELETE FROM search_index_queue");
+  } catch {
+    /* table may not exist yet */
+  }
   log.info(
     "LocalEmbeddings",
     `Rebuilt search_embeddings at ${dimension} dimensions (re-embed required)`,
@@ -466,6 +471,9 @@ function backfillStatements() {
       // tenant-lint: allow owner-checked by caller
       "DELETE FROM search_embeddings WHERE contactId = ?",
     ),
+    queueRemove: sqlite.prepare(
+      "DELETE FROM search_index_queue WHERE contactId = ?",
+    ),
     insert: sqlite.prepare(
       `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
      SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ? FROM contacts c WHERE c.id = ?`,
@@ -523,6 +531,7 @@ async function embedSearchRound(
         // One bind for the vector and one for the contact the owner and the
         // status columns are read from.
         stmts.insert.run(buf, batch[j].id);
+        stmts.queueRemove.run(batch[j].id);
         embedded++;
       }
     });
@@ -593,12 +602,21 @@ export async function backfillSearchEmbeddings(): Promise<number> {
   return embedded;
 }
 
+export interface EmbedContactResult {
+  status: "indexed" | "outdated" | "skipped";
+  reason?: string;
+}
+
 /**
  * Generate and store a search embedding for a single contact.
- * Called on contact create/update.
+ * Called on contact create/update or from indexQueue.
  */
-export async function embedContact(contactId: string): Promise<void> {
-  if (!isSearchEmbeddingReady()) return;
+export async function embedContact(
+  contactId: string,
+): Promise<EmbedContactResult> {
+  if (!isSearchEmbeddingReady()) {
+    return { status: "skipped", reason: "not_ready" };
+  }
 
   const row = sqlite
     .prepare(
@@ -610,7 +628,9 @@ export async function embedContact(contactId: string): Promise<void> {
     )
     .get(contactId) as SearchTextRow | undefined;
 
-  if (!row) return;
+  if (!row) {
+    return { status: "skipped", reason: "inactive_or_deleted" };
+  }
 
   const tags = (
     sqlite
@@ -626,14 +646,22 @@ export async function embedContact(contactId: string): Promise<void> {
   const text = contactToSearchText(row, tags, interests);
   const signature = resolveEmbeddings().signature;
   const vec = await embedText(text);
-  if (!vec) return;
+  if (!vec) {
+    throw new Error(
+      `Failed to generate embedding vector for contact ${contactId}`,
+    );
+  }
 
-  if (
-    signature !== resolveEmbeddings().signature ||
-    text !== currentSearchText(contactId)
-  )
-    return;
+  if (signature !== resolveEmbeddings().signature) {
+    return { status: "outdated", reason: "signature_changed" };
+  }
+
+  if (text !== currentSearchText(contactId)) {
+    return { status: "outdated", reason: "contact_edited" };
+  }
+
   upsertSearchEmbedding(contactId, vec);
+  return { status: "indexed" };
 }
 
 // =============================================================================

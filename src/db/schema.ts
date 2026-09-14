@@ -734,6 +734,31 @@ export const aiInvocations = sqliteTable("ai_invocations", {
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
+/**
+ * search_index_queue — Durable queue for semantic search vector indexing.
+ *
+ * Persists pending and failed indexing tasks across server restarts and edits.
+ * When contacts are edited, outdated vectors are removed and the contact is queued
+ * here. Background drain processes local models automatically with retry, while
+ * provider-backed refreshes remain pending until explicitly triggered by the user.
+ */
+export const searchIndexQueue = sqliteTable("search_index_queue", {
+  contactId: text("contactId").primaryKey(),
+  ownerId: text("ownerId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("lastError"),
+  queuedAt: text("queuedAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  nextAttemptAt: text("nextAttemptAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  contactUpdatedAt: text("contactUpdatedAt"),
+});
+
 // =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================

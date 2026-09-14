@@ -80,6 +80,10 @@ export interface EmbeddingProgress {
   contacts: number;
   /** How many of them have a search vector. */
   embedded: number;
+  /** How many are pending in the indexing queue. */
+  pending?: number;
+  /** How many failed to index in the queue. */
+  failed?: number;
 }
 
 export interface CacheTierHealth {
@@ -185,12 +189,32 @@ function schemaVersions(): SchemaVersions {
 function embeddingProgress(
   accounts: Map<string, Account>,
 ): EmbeddingProgress[] {
+  let queueAvailable = false;
+  try {
+    queueAvailable =
+      (
+        sqlite
+          .prepare(
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'search_index_queue'",
+          )
+          .get() as { n: number }
+      ).n > 0;
+  } catch {
+    queueAvailable = false;
+  }
+
+  const queueSql = queueAvailable
+    ? `, COALESCE((SELECT COUNT(*) FROM search_index_queue q WHERE q.ownerId = c.ownerId AND q.status = 'pending'), 0) AS pending,
+       COALESCE((SELECT COUNT(*) FROM search_index_queue q WHERE q.ownerId = c.ownerId AND q.status = 'failed'), 0) AS failed`
+    : `, 0 AS pending, 0 AS failed`;
+
   const rows = sqlite
     .prepare(
       // tenant-lint: allow instance sweep
       `SELECT c.ownerId AS ownerId,
               COUNT(*) AS contacts,
               SUM(CASE WHEN e.contactId IS NULL THEN 0 ELSE 1 END) AS embedded
+              ${queueSql}
          FROM contacts c
          LEFT JOIN search_embeddings e ON e.contactId = c.id
         WHERE c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
@@ -198,13 +222,21 @@ function embeddingProgress(
           AND c.ownerId IS NOT NULL
         GROUP BY c.ownerId`,
     )
-    .all() as { ownerId: string; contacts: number; embedded: number }[];
+    .all() as {
+    ownerId: string;
+    contacts: number;
+    embedded: number;
+    pending: number;
+    failed: number;
+  }[];
 
   return rows
     .map((row) => ({
       user: name(row.ownerId, accounts)!,
       contacts: row.contacts,
       embedded: row.embedded,
+      pending: row.pending,
+      failed: row.failed,
     }))
     .sort((a, b) => b.contacts - a.contacts);
 }

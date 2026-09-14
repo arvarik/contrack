@@ -236,17 +236,46 @@ export const SEARCH_VECTOR_COLUMNS =
 
 /** Remove outdated vectors in the same transaction as the contact change. */
 export function installSearchVectorTriggers(sqlite: Database.Database): void {
-  // Both bodies delete the vector of the one contact row the trigger fired
-  // for. search_embeddings is derived from contacts and holds no other key.
+  // search_index_queue records pending indexing work durably across edits and restarts.
+  // Both bodies delete the vector of the contact row that changed, and enqueue
+  // active contacts to be re-indexed.
   // tenant-lint: allow derived table
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS search_index_queue (
+      contactId TEXT PRIMARY KEY,
+      ownerId TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastError TEXT,
+      queuedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      nextAttemptAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      contactUpdatedAt TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_search_index_queue_status_next
+      ON search_index_queue (status, nextAttemptAt);
+    CREATE INDEX IF NOT EXISTS idx_search_index_queue_owner
+      ON search_index_queue (ownerId, status);
+
     DROP TRIGGER IF EXISTS search_vector_update;
     CREATE TRIGGER search_vector_update AFTER UPDATE OF ${SEARCH_VECTOR_COLUMNS} ON contacts BEGIN
       DELETE FROM search_embeddings WHERE contactId = old.id;
+      DELETE FROM search_index_queue WHERE contactId = old.id AND NOT (${ACTIVE_CONTACT_SQL.replace(/c\./g, "new.")});
+      INSERT INTO search_index_queue (contactId, ownerId, status, attempts, queuedAt, nextAttemptAt, contactUpdatedAt)
+      SELECT new.id, new.ownerId, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, new.updatedAt
+      WHERE new.ownerId IS NOT NULL AND ${ACTIVE_CONTACT_SQL.replace(/c\./g, "new.")}
+      ON CONFLICT(contactId) DO UPDATE SET
+        status = 'pending',
+        ownerId = excluded.ownerId,
+        attempts = 0,
+        lastError = NULL,
+        queuedAt = CURRENT_TIMESTAMP,
+        nextAttemptAt = CURRENT_TIMESTAMP,
+        contactUpdatedAt = excluded.contactUpdatedAt;
     END;
     DROP TRIGGER IF EXISTS search_vector_delete;
     CREATE TRIGGER search_vector_delete AFTER DELETE ON contacts BEGIN
       DELETE FROM search_embeddings WHERE contactId = old.id;
+      DELETE FROM search_index_queue WHERE contactId = old.id;
     END;
   `);
 }

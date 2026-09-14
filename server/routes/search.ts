@@ -12,6 +12,12 @@ import { asyncHandler } from "../utils/asyncHandler.ts";
 import { synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { scopeOf } from "../tenancy/scope.ts";
+import { resolveEmbeddings } from "../ai/embeddings.ts";
+import {
+  getSearchCoverage,
+  enqueueMissingContactsForOwner,
+  drainIndexQueue,
+} from "../services/search/indexQueue.ts";
 
 const router = Router();
 
@@ -249,6 +255,64 @@ router.post(
 
     res.off("close", onClose);
     if (!res.destroyed) res.end();
+  }),
+);
+
+/**
+ * GET /api/search/coverage — Report semantic search indexing coverage for the caller's account.
+ */
+router.get(
+  "/coverage",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const coverage = getSearchCoverage(scope);
+    res.json(coverage);
+  }),
+);
+
+/**
+ * POST /api/search/refresh-index — Explicitly trigger indexing for missing or all contacts.
+ *
+ * For paid providers, requires explicit confirmation ({ allowProvider: true }) to prevent
+ * unapproved API charges.
+ */
+router.post(
+  "/refresh-index",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const { allowProvider, forceAll } = z
+      .object({
+        allowProvider: z.boolean().optional(),
+        forceAll: z.boolean().optional(),
+      })
+      .parse(req.body ?? {});
+
+    const resolved = resolveEmbeddings();
+    if (resolved.kind === "provider" && !allowProvider) {
+      const coverage = getSearchCoverage(scope);
+      return res.status(400).json({
+        error: "Paid provider refreshes must be explicitly confirmed.",
+        requiresExplicitConfirmation: true,
+        provider: resolved.providerId,
+        model: resolved.model,
+        missingCount: coverage.missing + coverage.pending,
+      });
+    }
+
+    const queued = enqueueMissingContactsForOwner(
+      scope.ownerId,
+      forceAll ?? false,
+    );
+    void drainIndexQueue({ allowProvider: allowProvider === true });
+
+    res.json({
+      ok: true,
+      queued,
+      message:
+        queued > 0
+          ? `Queued ${queued} contact(s) for indexing`
+          : "All contacts already indexed",
+    });
   }),
 );
 
