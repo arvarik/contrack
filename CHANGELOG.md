@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An import can be reconnected to and retried. The browser makes an id for
+  each file it imports, sends it as `X-Import-Id`, and remembers it per
+  account. A stream that ends without the server's `done` frame no longer
+  shows "Import Complete": the modal polls `GET /api/imports/:id` until the
+  server says `complete` or `failed`, and shows the summary the server
+  confirmed. A dead connection, a 409 for an import already running, and a
+  reload part way through all lead to the same record, and "Try again" sends
+  the same contacts under the same id, which the server treats as one import.
+  Rows the server could not write are listed on the summary with the reason
+  and retried through `POST /api/imports/:id/retry` without the file.
 - **Phase 3.** An administrator can manage the accounts on the instance.
   `GET`, `POST`, `PATCH` and `DELETE /api/admin/users` list, create, change
   and remove accounts, `POST /api/admin/users/:id/disable` and `/enable` turn
