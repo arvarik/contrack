@@ -23,11 +23,31 @@ router.get(
   "/dashboard/insight",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.on("close", onClose);
 
-    const insight = await dashboardService.getInsight(scopeOf(req));
-    log.debug("API", `[${rid}] GET /api/dashboard/insight`);
+    try {
+      const insight = await dashboardService.getInsight(
+        scopeOf(req),
+        controller.signal,
+      );
+      log.debug("API", `[${rid}] GET /api/dashboard/insight`);
 
-    res.json(insight); // returns null correctly if key missing or not enough data
+      if (!res.destroyed) res.json(insight);
+    } catch (err: unknown) {
+      if (
+        controller.signal.aborted ||
+        (err instanceof Error && err.name === "AbortError")
+      ) {
+        return;
+      }
+      throw err;
+    } finally {
+      res.off("close", onClose);
+    }
   }),
 );
 

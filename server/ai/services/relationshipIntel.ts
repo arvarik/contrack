@@ -155,14 +155,17 @@ export interface DailyInsight {
  * Generates a single actionable insight about the user's CRM network.
  * Falls back gracefully to null if no API key is provided.
  */
-export async function generateDailyInsight(stats: {
-  totalContacts: number;
-  industryDistribution: Record<string, number>;
-  atRiskNames: string[];
-  newContactsCount: number;
-  topRelationships: string[];
-  bottomRelationships: string[];
-}): Promise<DailyInsight | null> {
+export async function generateDailyInsight(
+  stats: {
+    totalContacts: number;
+    industryDistribution: Record<string, number>;
+    atRiskNames: string[];
+    newContactsCount: number;
+    topRelationships: string[];
+    bottomRelationships: string[];
+  },
+  options?: { signal?: AbortSignal },
+): Promise<DailyInsight | null> {
   if (isMockMode()) {
     log.warn(
       "AIService",
@@ -200,6 +203,7 @@ export async function generateDailyInsight(stats: {
         },
         required: ["text", "category"],
       },
+      signal: options?.signal,
     });
 
     const parsed = safeParseJson<{ text: string; category: string }>(

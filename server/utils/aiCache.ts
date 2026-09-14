@@ -200,7 +200,7 @@ function formatMs(ms: number): string {
 }
 
 /** Normalise a raw query string into a cache key (same as former searchCache). */
-function normalizeKey(query: string): string {
+export function normalizeKey(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
