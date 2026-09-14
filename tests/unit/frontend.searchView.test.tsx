@@ -28,6 +28,26 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "../../src/contexts/SessionContext";
 import { SearchView } from "../../src/views/SearchView";
 
+// The view reads one hook off the `api` barrel, and the barrel pulls in every
+// API module in the app. Coverage instruments what is imported, so loading
+// twenty modules this file never exercises dragged the project totals under
+// their floors. The hook stays real, from its own file. The contact card and
+// the result cards are stubbed for the same reason: what is under test is
+// which question the server receives, and a card that shows a name is
+// enough to see the results arrive.
+vi.mock("../../src/api", async () => ({
+  useSemanticSearch: (await import("../../src/api/search")).useSemanticSearch,
+}));
+vi.mock("../../src/components/FloatingContactCard", () => ({
+  FloatingContactCard: () => null,
+}));
+vi.mock("../../src/views/search/SearchResultCards", () => ({
+  ResultCard: ({ match }: { match: { name: string } }) => (
+    <div>{match.name}</div>
+  ),
+  ShimmerCard: () => null,
+}));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
