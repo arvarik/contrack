@@ -175,6 +175,9 @@ export interface Contact {
   relationshipScore?: number;
   /** Computed by API — number of social links (available in slim view) */
   socialLinkCount?: number;
+  /** True when returned via approximate/fuzzy matching rather than exact FTS5 match */
+  approximate?: boolean;
+  matchType?: "exact" | "approximate";
 }
 
 /**

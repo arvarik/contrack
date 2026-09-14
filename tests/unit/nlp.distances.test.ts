@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   levenshteinDistance,
+  damerauLevenshtein,
   jaroWinkler,
 } from "../../server/utils/nlp/distances.ts";
 
@@ -24,6 +25,36 @@ describe("NLP Distances", () => {
       expect(levenshteinDistance("", "test")).toBe(4);
       expect(levenshteinDistance("test", "")).toBe(4);
       expect(levenshteinDistance("", "")).toBe(0);
+    });
+  });
+
+  describe("damerauLevenshtein", () => {
+    it("returns 0 for identical strings", () => {
+      expect(damerauLevenshtein("test", "test")).toBe(0);
+    });
+
+    it("counts single adjacent transposition as 1 edit", () => {
+      expect(damerauLevenshtein("ca", "ac")).toBe(1);
+      expect(damerauLevenshtein("smith", "smtih")).toBe(1);
+      // Levenshtein would count transpositions as 2 edits
+      expect(levenshteinDistance("ca", "ac")).toBe(2);
+      expect(levenshteinDistance("smith", "smtih")).toBe(2);
+    });
+
+    it("calculates correct distance for insertions and deletions", () => {
+      expect(damerauLevenshtein("test", "tests")).toBe(1);
+      expect(damerauLevenshtein("tests", "test")).toBe(1);
+    });
+
+    it("calculates correct distance for substitutions", () => {
+      expect(damerauLevenshtein("jonathan", "jonathon")).toBe(1);
+      expect(damerauLevenshtein("kitten", "sitting")).toBe(3);
+    });
+
+    it("handles empty strings", () => {
+      expect(damerauLevenshtein("", "test")).toBe(4);
+      expect(damerauLevenshtein("test", "")).toBe(4);
+      expect(damerauLevenshtein("", "")).toBe(0);
     });
   });
 

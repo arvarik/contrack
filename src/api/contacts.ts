@@ -102,6 +102,8 @@ export interface SlimSearchContact {
   lastContactedAt: string | null;
   relationshipScore: number | null;
   tags: { tag: string }[];
+  approximate?: boolean;
+  matchType?: "exact" | "approximate";
 }
 
 export const useSlimContactsForSearch = () => {

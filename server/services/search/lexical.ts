@@ -1,11 +1,19 @@
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { ownerToken, type Scope } from "../../tenancy/scope.ts";
+import { findApproximateNameMatches } from "./approximateName.ts";
 
 // The first FTS column is the unindexed contactId. It still consumes a weight.
 // bm25() reads weights by column position, so one weight per column in COLUMNS.
 // The last is ownerTok, which is a scoping filter and must not affect ranking.
 export const WEIGHTS = "0, 10, 5, 3, 2, 2, 1, 1, 1, 0.5, 0";
+
+export interface LexicalMatch {
+  contactId: string;
+  approximate?: boolean;
+  matchType?: "exact" | "approximate";
+  score?: number;
+}
 
 /** Treat user text as literal Unicode tokens, never as FTS operators. */
 export function searchTokens(query: string): string[] {
@@ -36,12 +44,17 @@ export function lexicalSearch(
   limit = 20,
   allowedIds?: Set<string> | null,
   broad = false,
-): { contactId: string }[] {
+): LexicalMatch[] {
   const tokens = searchTokens(query);
   if (!tokens.length || allowedIds?.size === 0) return [];
   const clauses = tokens.map((token) => `"${token}"*`);
   const strategies = [clauses.join(" AND ")];
-  if (broad && tokens.length > 1) strategies.push(clauses.join(" OR "));
+  if (broad && tokens.length > 1) {
+    const broadClauses = tokens.map((token) =>
+      token.length > 1 ? `"${token}"*` : `"${token}"`,
+    );
+    strategies.push(broadClauses.join(" OR "));
+  }
   const allowedClause = allowedIds
     ? "AND c.id IN (SELECT value FROM json_each(?))"
     : "";
@@ -56,6 +69,8 @@ export function lexicalSearch(
       AND ${ACTIVE_CONTACT_SQL} ${allowedClause}
     ORDER BY bm25(contacts_fts, ${WEIGHTS}), c.id LIMIT ?
   `);
+
+  let exactRows: LexicalMatch[] = [];
   for (const strategy of strategies) {
     const params = allowedIds
       ? [
@@ -66,7 +81,34 @@ export function lexicalSearch(
         ]
       : [scopedMatch(scope, strategy), scope.ownerId, limit];
     const rows = stmt.all(...params) as { contactId: string }[];
-    if (rows.length) return rows;
+    if (rows.length) {
+      exactRows = rows.map((r) => ({
+        contactId: r.contactId,
+      }));
+      break;
+    }
   }
-  return [];
+
+  // Exact matches always stay strictly first.
+  if (exactRows.length >= limit) {
+    return exactRows;
+  }
+
+  // When exact matches are insufficient (fewer than limit, or 0), append
+  // bounded approximate name matches up to the limit.
+  const excludeIds = new Set(exactRows.map((r) => r.contactId));
+  const needed = limit - exactRows.length;
+  const approxMatches = findApproximateNameMatches(
+    scope,
+    query,
+    needed,
+    allowedIds,
+    excludeIds,
+  );
+
+  if (approxMatches.length > 0) {
+    return [...exactRows, ...approxMatches];
+  }
+
+  return exactRows;
 }

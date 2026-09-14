@@ -55,6 +55,8 @@ export type HydratedMatch = Record<string, unknown> & {
   id: string;
   name: string;
   aiReason?: string | null;
+  approximate?: boolean;
+  matchType?: "exact" | "approximate";
 };
 
 // =============================================================================
@@ -339,10 +341,22 @@ export const searchService = {
           .map((row) => row.id),
       );
     }
-    const ids = lexicalSearch(scope, q, 20, allowed).map(
-      (row) => row.contactId,
-    );
-    return [...hydrateCandidates(scope, ids, 20).values()];
+    const matches = lexicalSearch(scope, q, 20, allowed);
+    const ids = matches.map((row) => row.contactId);
+    const hydratedMap = hydrateCandidates(scope, ids, 20);
+    return matches.flatMap((m) => {
+      const contact = hydratedMap.get(m.contactId);
+      if (!contact) return [];
+      return [
+        {
+          ...contact,
+          approximate: Boolean(m.approximate),
+          matchType: m.approximate
+            ? ("approximate" as const)
+            : ("exact" as const),
+        },
+      ];
+    });
   },
 
   /**
