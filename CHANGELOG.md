@@ -224,6 +224,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A merge keeps the duplicate's follow-up tasks. `action_items` was the one
+  child table the merge never re-parented, so the hard merge's final `DELETE`
+  took every task the duplicate carried through `ON DELETE CASCADE`, and a
+  soft merge left them on a contact the list no longer shows. Both paths now
+  move every task, completed ones included, inside the merge transaction, and
+  recompute `nextFollowUpAt` on the survivor and on the duplicate. The
+  `action_items_sync_update` trigger also settles the contact a task moved
+  away from, which it did not before.
 - **Story 10.** The hourly relationship-score sweep recomputes only what
   changed. It scored every contact of every account every hour — 989 ms on
   50,000 contacts to change almost nothing — and now reads a partial index of

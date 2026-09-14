@@ -318,6 +318,49 @@ describe("dedupeService.runImportScan, what it finds", () => {
     }
   });
 
+  it("carries a follow-up task through an automatic merge, whichever side survives", async () => {
+    const [existing] = await seed([
+      { name: "Margaret Ellington", emails: ["peggy@example.com"] },
+    ]);
+    sqlite
+      .prepare(
+        `INSERT INTO action_items (id, contactId, ownerId, title, dueAt)
+         VALUES ('task-peggy', ?, ?, 'Send the contract', '2027-02-01')`,
+      )
+      .run(existing, scope.ownerId);
+    const [imported] = await seed([
+      // Richer than the existing row, so the primary-score picks the imported
+      // contact as the survivor and the task has to cross to it.
+      {
+        name: "Peggy Ellington",
+        emails: ["peggy@example.com"],
+        phones: ["+1 555 0100"],
+        company: "Ellington Ltd",
+        role: "Director",
+      },
+    ]);
+
+    const result = await dedupeService.runImportScan(scope, [imported], "test");
+    expect(result.autoMerged).toBe(1);
+
+    const survivor = [existing, imported].find((id) => !canonicalIdOf(id));
+    expect(survivor).toBe(imported);
+    const task = sqlite
+      .prepare("SELECT contactId FROM action_items WHERE id = 'task-peggy'")
+      .get() as { contactId: string } | undefined;
+    expect(task?.contactId).toBe(survivor);
+    const caches = sqlite
+      .prepare("SELECT id, nextFollowUpAt FROM contacts WHERE id IN (?, ?)")
+      .all(existing, imported) as {
+      id: string;
+      nextFollowUpAt: string | null;
+    }[];
+    expect(caches.find((c) => c.id === survivor)?.nextFollowUpAt).toBe(
+      "2027-02-01",
+    );
+    expect(caches.find((c) => c.id !== survivor)?.nextFollowUpAt).toBeNull();
+  });
+
   it("never suggests a contact that was merged away earlier in the same import", async () => {
     await seed([{ name: "Elena Vasquez", emails: ["elena@example.com"] }]);
     // The first imported row merges with the existing one on the shared
