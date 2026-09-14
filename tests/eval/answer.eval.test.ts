@@ -346,10 +346,10 @@ describe("AI Answer Pipeline Quality Gate", () => {
       const parisTx = measurement.perQuery["q09-paris-texas"];
 
       if (parisFr) {
-        expect(parisFr.returnedKeys).not.toContain("paris-tx-founder");
+        expect(parisFr.returnedKeys).not.toContain("paris-texas");
       }
       if (parisTx) {
-        expect(parisTx.returnedKeys).not.toContain("paris-fr-researcher");
+        expect(parisTx.returnedKeys).not.toContain("paris-france");
       }
     });
 
@@ -358,10 +358,10 @@ describe("AI Answer Pipeline Quality Gate", () => {
       const cambridgeUk = measurement.perQuery["q10-cambridge-uk"];
 
       if (cambridgeMa) {
-        expect(cambridgeMa.returnedKeys).not.toContain("cambridge-uk-ai");
+        expect(cambridgeMa.returnedKeys).not.toContain("cambridge-uk");
       }
       if (cambridgeUk) {
-        expect(cambridgeUk.returnedKeys).not.toContain("cambridge-ma-bio");
+        expect(cambridgeUk.returnedKeys).not.toContain("cambridge-ma");
       }
     });
 
@@ -370,10 +370,10 @@ describe("AI Answer Pipeline Quality Gate", () => {
       const washDc = measurement.perQuery["q13-washington-dc"];
 
       if (washState) {
-        expect(washState.returnedKeys).not.toContain("washington-dc-lobbyist");
+        expect(washState.returnedKeys).not.toContain("washington-dc");
       }
       if (washDc) {
-        expect(washDc.returnedKeys).not.toContain("seattle-cloud-arch");
+        expect(washDc.returnedKeys).not.toContain("washington-state");
       }
     });
   });

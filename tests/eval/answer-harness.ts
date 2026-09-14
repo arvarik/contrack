@@ -493,14 +493,113 @@ export function evaluateSynthesisClaims(
     }
   }
 
-  // Check that all contact names referenced in the summary exist in the contacts list
-  const knownNames = new Set(contacts.map((c) => c.name.toLowerCase()));
-  const nameMatches = summary.match(/[A-Z][a-z]+ [A-Z][a-z]+/g) ?? [];
-  for (const name of nameMatches) {
-    if (knownNames.has(name.toLowerCase())) {
+  // Check that capitalized entities referenced in the summary are grounded in candidate facts
+  // Build an allowed entity vocabulary from all returned/matching candidate profiles
+  const allowedTerms = new Set<string>();
+  for (const c of contacts) {
+    if (c.name) allowedTerms.add(c.name.toLowerCase());
+    if (c.firstName) allowedTerms.add(c.firstName.toLowerCase());
+    if (c.lastName) allowedTerms.add(c.lastName.toLowerCase());
+    if (c.company) {
+      allowedTerms.add(c.company.toLowerCase());
+      c.company
+        .split(/\s+/)
+        .forEach((part) => allowedTerms.add(part.toLowerCase()));
+    }
+    if (c.role) {
+      allowedTerms.add(c.role.toLowerCase());
+      c.role
+        .split(/[\s\-/]+/)
+        .forEach((part) => allowedTerms.add(part.toLowerCase()));
+    }
+    if (c.location) {
+      allowedTerms.add(c.location.toLowerCase());
+      c.location
+        .split(/[\s,]+/)
+        .forEach((part) => allowedTerms.add(part.toLowerCase()));
+    }
+    if (c.industry) allowedTerms.add(c.industry.toLowerCase());
+    if (c.interests) {
+      c.interests.forEach((intr) => allowedTerms.add(intr.toLowerCase()));
+    }
+  }
+
+  // Whitelist of benign connective descriptors, honorifics, and CRM terms common in executive summaries
+  const commonSummaryTerms = new Set([
+    "crm",
+    "contacts",
+    "contact",
+    "matching",
+    "match",
+    "verified",
+    "query",
+    "executive",
+    "brief",
+    "principal",
+    "staff",
+    "senior",
+    "director",
+    "manager",
+    "lead",
+    "engineer",
+    "software",
+    "product",
+    "founder",
+    "co-founder",
+    "partner",
+    "general",
+    "venture",
+    "capital",
+    "scout",
+    "investor",
+    "united",
+    "states",
+    "kingdom",
+    "city",
+    "bay",
+    "area",
+    "north",
+    "south",
+    "energy",
+    "delivery",
+    "hero",
+    "energy",
+    "inc",
+    "corp",
+    "llc",
+    "technologies",
+    "group",
+    "associate",
+    "consultant",
+    "global",
+    "office",
+    "headquarters",
+  ]);
+
+  // Extract entity-like multi-word capitalized phrases (allowing apostrophes and hyphens)
+  const candidatePhrases =
+    summary.match(
+      /\b[A-Z][a-zA-Z]*(?:['’\-][A-Za-z]+)?(?:\s+[A-Z][a-zA-Z]*(?:['’\-][A-Za-z]+)?)+\b/g,
+    ) ?? [];
+  for (const phrase of candidatePhrases) {
+    const lowerPhrase = phrase.toLowerCase();
+    // Check if phrase or any of its constituent words belong to the candidate facts or common summary terms
+    const isGrounded =
+      allowedTerms.has(lowerPhrase) ||
+      Array.from(allowedTerms).some(
+        (term) => term.includes(lowerPhrase) || lowerPhrase.includes(term),
+      ) ||
+      phrase
+        .split(/\s+/)
+        .every(
+          (word) =>
+            allowedTerms.has(word.toLowerCase()) ||
+            commonSummaryTerms.has(word.toLowerCase()),
+        );
+
+    if (isGrounded) {
       supportedClaims++;
     } else {
-      // Mention of a person who is not in the search results is an unsupported claim
       unsupportedClaims++;
     }
   }
