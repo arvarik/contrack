@@ -34,6 +34,7 @@ import { jobQueue as aiSearchQueue } from "./aiSearch/jobQueue.ts";
 import { dedupeQueue } from "./dedupe/jobQueue.ts";
 import { listBackups, type BackupInfo } from "./backupService.ts";
 import { writeHealth, type WriteHealth } from "./walHealth.ts";
+import { getAIQueueSnapshot } from "../ai/gateway.ts";
 
 /** An account named by something other than its id. */
 interface Account {
@@ -71,6 +72,18 @@ export interface QueueHealth {
     running: Account | null;
     activeBatches: number;
     contactsRemaining: number;
+  };
+  aiGateway?: {
+    active: number;
+    concurrency: number;
+    waiting: number;
+    capacity: number;
+    accounts: {
+      account: Account | null;
+      interactive: number;
+      background: number;
+      active: number;
+    }[];
   };
 }
 
@@ -137,6 +150,7 @@ function name(
   accounts: Map<string, Account>,
 ): Account | null {
   if (!id) return null;
+  if (id === "default") return { id: "default", username: "system" };
   return accounts.get(id) ?? { id, username: "(deleted account)" };
 }
 
@@ -307,6 +321,25 @@ export function instanceHealth(): InstanceHealth {
         activeBatches: search.activeBatches,
         contactsRemaining: search.contactsRemaining,
       },
+      aiGateway: (() => {
+        try {
+          const snap = getAIQueueSnapshot();
+          return {
+            active: snap.active,
+            concurrency: snap.concurrency,
+            waiting: snap.waiting,
+            capacity: snap.capacity,
+            accounts: snap.accounts.map((acc) => ({
+              account: name(acc.accountId, accounts),
+              interactive: acc.interactive,
+              background: acc.background,
+              active: acc.active,
+            })),
+          };
+        } catch {
+          return undefined;
+        }
+      })(),
     },
     embeddings: {
       available: ai.isConfigured || hasSearchVectors(),

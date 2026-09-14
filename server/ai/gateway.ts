@@ -15,13 +15,22 @@ import type { AICapability } from "./capabilities.ts";
 import { resolveCapability } from "./capabilities.ts";
 import { getProviderConfigs } from "./providerRegistry.ts";
 import { AppError } from "../utils/AppError.ts";
-import { GenerationQueue } from "./workQueue.ts";
+import {
+  GenerationQueue,
+  type JobPriority,
+  type QueueSnapshot,
+} from "./workQueue.ts";
 import { withTimeout } from "./resilience.ts";
 
 const generations = new GenerationQueue();
 
 /** Options accepted by the gateway (model/routing are filled in for you). */
-export type GatewayOptions = Omit<AIGenerateOptions, "routing">;
+export type GatewayOptions = Omit<AIGenerateOptions, "routing"> & {
+  /** Explicit account ID for multitenant fair scheduling. */
+  accountId?: string;
+  /** Explicit priority class. Defaults to context-inferred priority. */
+  priority?: JobPriority;
+};
 
 /** True when at least one provider has usable credentials. */
 export function isAnyProviderConfigured(): boolean {
@@ -61,7 +70,11 @@ export async function generateFor(
             model: options.model ?? resolved.model,
             routing: { prefer: resolved.modelClass },
           }),
-        signal,
+        {
+          signal,
+          accountId: options.accountId,
+          priority: options.priority,
+        },
       ),
     timeoutMs,
     options.signal,
@@ -73,4 +86,14 @@ export function providerIdFor(
   capability: Exclude<AICapability, "embeddings">,
 ): string | null {
   return resolveCapability(capability)?.providerId ?? null;
+}
+
+/** Snapshot of AI generation queue status for health monitoring and diagnostics. */
+export function getAIQueueSnapshot(): QueueSnapshot {
+  return generations.getSnapshot();
+}
+
+/** For tests: inspect or reset queue instance. */
+export function __getGenerationQueueForTests(): GenerationQueue {
+  return generations;
 }

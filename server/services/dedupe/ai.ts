@@ -71,6 +71,7 @@ export async function evaluateBatchWithAI(
 
   try {
     const result = await generateFor("deep", {
+      priority: "background",
       systemPrompt: AI_SYSTEM_PROMPT,
       prompt: `For each pair below, determine if they represent the SAME real-world person.
 
