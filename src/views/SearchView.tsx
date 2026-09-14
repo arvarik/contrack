@@ -18,6 +18,7 @@ import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
+import { SearchCoverageBar } from "./search";
 import { useSession } from "../contexts/SessionContext";
 
 // =============================================================================
@@ -186,16 +187,24 @@ export const SearchView = () => {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface">
       {/* Header */}
-      <header className={cn(SECTION_BG, "px-4 sm:px-6 py-5 sm:py-6 shrink-0")}>
-        <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
-          <div className="p-2 bg-primary/10 rounded-xl shrink-0">
-            <Sparkles className="w-6 h-6 text-primary" />
-          </div>
-          Ask Contrack
-        </h1>
-        <p className="text-sm text-on-surface-variant mt-0.5">
-          Semantic AI search across your network
-        </p>
+      <header
+        className={cn(
+          SECTION_BG,
+          "px-4 sm:px-6 py-5 sm:py-6 shrink-0 flex flex-wrap items-center justify-between gap-4",
+        )}
+      >
+        <div>
+          <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
+            <div className="p-2 bg-primary/10 rounded-xl shrink-0">
+              <Sparkles className="w-6 h-6 text-primary" />
+            </div>
+            Ask Contrack
+          </h1>
+          <p className="text-sm text-on-surface-variant mt-0.5">
+            Semantic AI search across your network
+          </p>
+        </div>
+        <SearchCoverageBar compact />
       </header>
 
       {/* Body */}
@@ -369,17 +378,22 @@ export const SearchView = () => {
             hasSearched &&
             results.length === 0 &&
             !semanticSearch.isError && (
-              <div className="tile-enter flex flex-col items-center justify-center py-16 text-center">
-                <div className="p-4 bg-surface-container-low rounded-2xl mb-4">
+              <div className="tile-enter flex flex-col items-center justify-center py-12 text-center space-y-4">
+                <div className="p-4 bg-surface-container-low rounded-2xl">
                   <Search className="w-10 h-10 text-on-surface-variant/30" />
                 </div>
-                <p className="font-bold text-on-surface mb-1">
-                  No matches found
-                </p>
-                <p className="text-sm text-on-surface-variant">
-                  Try rephrasing your query, or check if your contacts have
-                  relevant details filled in.
-                </p>
+                <div>
+                  <p className="font-bold text-on-surface mb-1">
+                    No matches found
+                  </p>
+                  <p className="text-sm text-on-surface-variant max-w-md mx-auto">
+                    Try rephrasing your query, or check if your contacts have
+                    relevant details filled in.
+                  </p>
+                </div>
+                <div className="w-full max-w-md pt-2 text-left">
+                  <SearchCoverageBar />
+                </div>
               </div>
             )}
 

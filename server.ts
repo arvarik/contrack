@@ -32,6 +32,7 @@ import {
   backfillSearchEmbeddings,
   ensureEmbeddingStore,
 } from "./server/services/search/localEmbeddings.ts";
+import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 
 // ── AI posture at boot ───────────────────────────────────────────────────────
 // This used to check only the key matching AI_PROVIDER (default gemini), so
@@ -242,6 +243,9 @@ async function startServer() {
   setInterval(runSweep("stale"), 60 * 60 * 1000);
   setInterval(runSweep("all"), 24 * 60 * 60 * 1000);
 
+  // Initialize search index queue to recover any ungracefully interrupted jobs
+  initSearchIndexQueue();
+
   // ── Local embedding model for Ask Contrack v3 ───────────────────────────
   // Load the Transformers.js model, then backfill search embeddings.
   // Non-blocking — the server is fully usable while this runs.
@@ -261,6 +265,7 @@ async function startServer() {
           "Server",
           `Search embedding backfill complete: ${count} contacts embedded locally`,
         );
+      initSearchIndexQueue();
       // Dedupe shares the embeddings capability, so it can only run once a
       // backend is ready. Reconcile it (rebuilding if the model changed) and
       // fill any gaps — previously this only ran when the store was entirely

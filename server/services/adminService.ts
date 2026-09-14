@@ -42,6 +42,7 @@ import {
   type User,
 } from "./authService.ts";
 import { hashPassword } from "./passwords.ts";
+import { purgeOwnerFromIndexQueue } from "./search/indexQueue.ts";
 
 /** Who is acting, and from where. Every function takes this first. */
 export interface AdminContext {
@@ -623,6 +624,7 @@ export function purgeOwner(ownerId: string): void {
     sqlite
       .prepare(`DELETE FROM search_embeddings WHERE ownerId = ?`)
       .run(ownerId);
+    purgeOwnerFromIndexQueue(ownerId);
     sqlite
       .prepare(`DELETE FROM contact_embeddings WHERE ownerId = ?`)
       .run(ownerId);

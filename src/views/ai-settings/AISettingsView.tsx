@@ -20,6 +20,7 @@ import {
 } from "../../api/aiSettings";
 import { Modal } from "../../components/ui/Modal";
 import { CapabilitiesCard } from "./CapabilitiesCard";
+import { SearchCoverageBar } from "../search";
 import { CARD, SECTION_HEADING, ICON_BTN } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
@@ -338,6 +339,9 @@ export const AISettingsView = ({
 
       {/* ── Capabilities ──────────────────────────────────────────────── */}
       <CapabilitiesCard settings={settings} />
+
+      {/* ── Semantic Search Index Coverage ────────────────────────────── */}
+      <SearchCoverageBar />
 
       {/* ── SearXNG ───────────────────────────────────────────────────── */}
       {/* Its own card rather than a footnote inside Capabilities: it is a

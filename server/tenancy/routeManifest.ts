@@ -699,6 +699,18 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   { method: "GET", path: "/api/search", class: "scoped", isolated: true },
   {
+    method: "GET",
+    path: "/api/search/coverage",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "POST",
+    path: "/api/search/refresh-index",
+    class: "scoped",
+    isolated: true,
+  },
+  {
     method: "POST",
     path: "/api/search/semantic",
     class: "scoped",

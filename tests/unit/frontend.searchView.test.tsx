@@ -35,9 +35,25 @@ import { SearchView } from "../../src/views/SearchView";
 // the result cards are stubbed for the same reason: what is under test is
 // which question the server receives, and a card that shows a name is
 // enough to see the results arrive.
-vi.mock("../../src/api", async () => ({
-  useSemanticSearch: (await import("../../src/api/search")).useSemanticSearch,
+vi.mock("../../src/api", async () => {
+  const search = await import("../../src/api/search");
+  return {
+    useSemanticSearch: search.useSemanticSearch,
+    useSearchCoverage: search.useSearchCoverage,
+    useRefreshSearchIndex: search.useRefreshSearchIndex,
+  };
+});
+vi.mock("../../src/views/search/SearchCoverageBar", () => ({
+  SearchCoverageBar: () => null,
 }));
+vi.mock("../../src/views/search", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/views/search")>();
+  return {
+    ...actual,
+    SearchCoverageBar: () => null,
+  };
+});
 vi.mock("../../src/components/FloatingContactCard", () => ({
   FloatingContactCard: () => null,
 }));

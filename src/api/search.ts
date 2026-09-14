@@ -3,7 +3,12 @@ import { readNdjson } from "./ndjson";
 import type { FacetFilter } from "../../shared/searchFacets";
 import { apiFetch } from "./client";
 /** Search hooks validate streamed results and cancel obsolete requests. */
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import {
   useState,
   useCallback,
@@ -186,3 +191,88 @@ const searchChunkSchema = z.discriminatedUnion("phase", [
   }),
   z.object({ phase: z.literal("error"), error: z.string() }),
 ]);
+
+export interface FailedIndexItem {
+  contactId: string;
+  name: string;
+  error: string;
+  attempts: number;
+  queuedAt: string;
+}
+
+export interface SearchCoverage {
+  total: number;
+  indexed: number;
+  missing: number;
+  pending: number;
+  failed: number;
+  coverage: number;
+  isIndexing: boolean;
+  provider: {
+    kind: "builtin" | "provider";
+    providerId: string | null;
+    model: string | null;
+    isPaid: boolean;
+  };
+  failedItems: FailedIndexItem[];
+}
+
+export interface RefreshIndexResponse {
+  ok: boolean;
+  queued: number;
+  message: string;
+  requiresExplicitConfirmation?: boolean;
+  provider?: string | null;
+  model?: string | null;
+  missingCount?: number;
+}
+
+/**
+ * Hook to inspect account-level semantic indexing coverage and queue status.
+ */
+export const useSearchCoverage = () => {
+  return useQuery<SearchCoverage>({
+    queryKey: ["search", "coverage"],
+    queryFn: async (): Promise<SearchCoverage> => {
+      const res = await apiFetch("/search/coverage");
+      if (!res.ok) throw new Error("Failed to fetch search coverage");
+      return res.json();
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && (data.isIndexing || data.pending > 0)) return 2000;
+      return 15000;
+    },
+  });
+};
+
+/**
+ * Hook to explicitly trigger indexing for missing or all contacts.
+ */
+export const useRefreshSearchIndex = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params?: {
+      allowProvider?: boolean;
+      forceAll?: boolean;
+    }): Promise<RefreshIndexResponse> => {
+      const res = await apiFetch("/search/refresh-index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params ?? {}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const error = new Error(
+          data.error || "Failed to refresh search index",
+        ) as Error & { data: RefreshIndexResponse };
+        error.data = data;
+        throw error;
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["search", "coverage"] });
+    },
+  });
+};
