@@ -16,10 +16,9 @@ import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import "dotenv/config";
-import type {
-  RecordedResponses,
-  AnswerBaseline,
-} from "../tests/eval/answer-harness.ts";
+import { installAnswerRecorder } from "./answer-eval/recording.ts";
+import { validateAnswerFixture } from "./answer-eval/fixtureValidation.ts";
+import type { AnswerBaseline } from "../tests/eval/answer-harness.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..");
@@ -27,10 +26,10 @@ const FIXTURE_DIR = path.join(REPO, "tests/fixtures/answer-eval");
 const BASELINE_PATH = path.join(REPO, "tests/eval/answer.baseline.json");
 
 // Ensure throwaway database directory for evaluation
-process.env.DATA_DIR = fs.mkdtempSync(
-  path.join(os.tmpdir(), "contrack-answer-eval-"),
-);
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "contrack-answer-eval-"));
+process.env.DATA_DIR = dataDir;
 process.env.DISABLE_BACKGROUND_JOBS = "true";
+let closeDatabase: (() => void) | undefined;
 process.env.AUTH_REQUIRED = "";
 process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? "warn";
 process.env.AI_GATEWAY_TIMEOUT_OVERRIDE = "90000";
@@ -44,11 +43,7 @@ function write(file: string, value: unknown): void {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function writeVectors(
-  file: string,
-  rows: Float32Array[],
-  dimension: number,
-): void {
+function encodeVectors(rows: Float32Array[], dimension: number): Buffer {
   const buf = Buffer.allocUnsafe(rows.length * dimension * 4);
   rows.forEach((row, i) => {
     if (row.length !== dimension) {
@@ -61,7 +56,7 @@ function writeVectors(
       i * dimension * 4,
     );
   });
-  fs.writeFileSync(file, buf);
+  return buf;
 }
 
 function toFloat32(buf: Buffer): Float32Array {
@@ -72,7 +67,10 @@ function toFloat32(buf: Buffer): Float32Array {
 
 async function main(): Promise<void> {
   const isRecord = process.argv.includes("--record");
-  const isLive = process.argv.includes("--live") || !isRecord;
+  if (isRecord && process.argv.includes("--live")) {
+    throw new Error("Choose either --record or --live, not both.");
+  }
+  const isLive = !isRecord;
 
   console.log(
     "===============================================================",
@@ -86,14 +84,33 @@ async function main(): Promise<void> {
 
   const { buildAnswerCorpus } = await import("./answer-eval/corpus.ts");
   const { ensureLocalOwner, sqlite } = await import("../server/db.ts");
+  closeDatabase = () => sqlite.close();
+  const { buildSearchEmbeddingInput } =
+    await import("../server/services/search/hybridRetrieval.ts");
   const { scopeForOwnerId } = await import("../server/tenancy/scope.ts");
   const localEmbeddings =
     await import("../server/services/search/localEmbeddings.ts");
-  const { seedAnswerCorpus, measureAnswerPipeline, EVAL_DIMENSION } =
-    await import("../tests/eval/answer-harness.ts");
+  const {
+    seedAnswerCorpus,
+    measureAnswerPipeline,
+    EVAL_DIMENSION,
+    ANSWER_SCORING_VERSION,
+  } = await import("../tests/eval/answer-harness.ts");
   const { resolveCapability } = await import("../server/ai/capabilities.ts");
 
+  const { resolveEmbeddings } = await import("../server/ai/embeddings.ts");
+  if (resolveEmbeddings().kind !== "builtin") {
+    throw new Error(
+      "Answer evaluation requires the built-in embedding model. Unset AI_EMBEDDINGS_MODEL before running it.",
+    );
+  }
+
   const activeCapability = resolveCapability("quick");
+  if (!activeCapability) {
+    throw new Error(
+      "Configure an AI provider for the quick capability before live evaluation or recording.",
+    );
+  }
   console.log(
     `AI Provider: ${activeCapability?.providerId ?? "none"} (${activeCapability?.model ?? "default"})`,
   );
@@ -134,132 +151,36 @@ async function main(): Promise<void> {
     queryVectors.push(v);
   }
 
-  // If recording, pre-load existing model completions for offline replay
-  const recordedResponsesPath = path.join(
-    FIXTURE_DIR,
-    "recorded-responses.json",
-  );
-  const recordedResponses: RecordedResponses = {
-    queryParse: {},
-    rerank: {},
-    synthesis: {},
-  };
-
-  if (fs.existsSync(recordedResponsesPath)) {
-    try {
-      const existing = JSON.parse(
-        fs.readFileSync(recordedResponsesPath, "utf8"),
-      ) as RecordedResponses;
-      Object.assign(recordedResponses.queryParse, existing.queryParse ?? {});
-      Object.assign(recordedResponses.rerank, existing.rerank ?? {});
-      Object.assign(recordedResponses.synthesis, existing.synthesis ?? {});
-      console.log(
-        `Loaded existing recorded responses: ` +
-          `${Object.keys(recordedResponses.queryParse).length} queryParse, ` +
-          `${Object.keys(recordedResponses.rerank).length} rerank, ` +
-          `${Object.keys(recordedResponses.synthesis).length} synthesis`,
-      );
-    } catch {
-      // ignore
-    }
-  }
-
   const allContactsByKey = new Map(contacts.map((c) => [c.key, c]));
-
-  if (isRecord) {
-    console.log("\nRecording live LLM responses for offline CI fixture...");
-    fs.mkdirSync(FIXTURE_DIR, { recursive: true });
-
-    if (activeCapability) {
-      const origGenerate = activeCapability.provider.generate.bind(
-        activeCapability.provider,
-      );
-
-      activeCapability.provider.generate = async (options) => {
-        const prompt = options.prompt ?? "";
-        const system = options.systemPrompt ?? "";
-
-        let op: "queryParse" | "rerank" | "synthesis" | null = null;
-        let queryKey = "";
-
-        if (system.includes("query planner") || prompt.startsWith("Query: ")) {
-          op = "queryParse";
-          const qMatch = prompt.match(/Query:\s*"([^"]+)"/i);
-          if (qMatch) queryKey = qMatch[1].toLowerCase().trim();
-        } else if (
-          system.includes("data analyst") ||
-          prompt.includes("CANDIDATES (")
-        ) {
-          op = "rerank";
-          const qMatch = prompt.match(/QUERY:\s*"([^"]+)"/i);
-          if (qMatch) queryKey = qMatch[1].toLowerCase().trim();
-        } else if (
-          system.includes("executive brief") ||
-          prompt.includes("MATCHING CONTACTS (")
-        ) {
-          op = "synthesis";
-          const qMatch = prompt.match(/QUERY:\s*"([^"]+)"/i);
-          if (qMatch) queryKey = qMatch[1].toLowerCase().trim();
-        }
-
-        // If we already recorded this response, replay it directly to avoid rate limits
-        if (op && queryKey && recordedResponses[op][queryKey]) {
-          return {
-            text: recordedResponses[op][queryKey],
-            model: "recorded-replay",
-            latencyMs: 5,
-          };
-        }
-
-        // Call live model with exponential backoff on 429 / quota errors
-        let attempts = 0;
-        let lastErr: unknown;
-        while (attempts < 5) {
-          attempts++;
-          try {
-            const res = await origGenerate(options);
-            if (op && queryKey && res.text) {
-              recordedResponses[op][queryKey] = res.text;
-              write(recordedResponsesPath, recordedResponses);
-            }
-            // Pacing to stay comfortably under API rate limits
-            await new Promise((resolve) => setTimeout(resolve, 2500));
-            return res;
-          } catch (err) {
-            lastErr = err;
-            const msg = String(err);
-            if (
-              msg.includes("429") ||
-              msg.includes("quota") ||
-              msg.includes("RESOURCE_EXHAUSTED") ||
-              msg.includes("circuit breaker") ||
-              msg.includes("retries")
-            ) {
-              const waitSec = attempts * 15;
-              console.log(
-                `Rate limit encountered. Backing off for ${waitSec}s (attempt ${attempts}/5)...`,
-              );
-              await new Promise((resolve) =>
-                setTimeout(resolve, waitSec * 1000),
-              );
-            } else {
-              throw err;
-            }
-          }
-        }
-        throw lastErr;
-      };
-    }
-  }
-
-  console.log("\nRunning Answer Pipeline Measurement...");
-  const measurement = await measureAnswerPipeline(
-    scope,
-    queries,
-    idByKey,
-    keyById,
-    allContactsByKey,
+  const recorder = installAnswerRecorder(activeCapability.provider);
+  const embeddingVectors = new Map(
+    queries.map((query, index) => [query.q, queryVectors[index]]),
   );
+  const embeddingInputs = new Set<string>();
+  let measurement;
+  try {
+    console.log("\nRunning Answer Pipeline Measurement...");
+    measurement = await measureAnswerPipeline(
+      scope,
+      queries,
+      idByKey,
+      keyById,
+      allContactsByKey,
+      (query, plan) => {
+        embeddingInputs.add(buildSearchEmbeddingInput(query.q, plan));
+      },
+    );
+    recorder.assertComplete();
+  } finally {
+    recorder.restore();
+  }
+  const recordedResponses = recorder.responses;
+  for (const input of embeddingInputs) {
+    if (embeddingVectors.has(input)) continue;
+    const vector = await localEmbeddings.embedText(input);
+    if (!vector) throw new Error(`Failed to embed pipeline query "${input}"`);
+    embeddingVectors.set(input, vector);
+  }
 
   console.log(
     "\n===============================================================",
@@ -292,29 +213,39 @@ async function main(): Promise<void> {
   }
 
   if (isRecord) {
-    console.log(`\nWriting fixtures to ${FIXTURE_DIR}...`);
-    write(path.join(FIXTURE_DIR, "contacts.json"), contacts);
-    write(path.join(FIXTURE_DIR, "queries.json"), queries);
-    write(path.join(FIXTURE_DIR, "recorded-responses.json"), recordedResponses);
-
-    const allVectors = [...contactVectors, ...queryVectors];
-    writeVectors(
-      path.join(FIXTURE_DIR, "vectors.bin"),
-      allVectors,
+    const vectors = encodeVectors(
+      [...contactVectors, ...embeddingVectors.values()],
       EVAL_DIMENSION,
     );
-    write(path.join(FIXTURE_DIR, "vectors.json"), {
+    const manifest = {
       model: "Xenova/all-MiniLM-L6-v2",
       dimension: EVAL_DIMENSION,
       contacts: contacts.length,
       queries: queries.length,
+      queryInputs: [...embeddingVectors.keys()],
       recordedAt: new Date().toISOString(),
-    });
+    };
+    validateAnswerFixture(
+      { contacts, queries },
+      manifest,
+      vectors,
+      EVAL_DIMENSION,
+    );
+    console.log(`\nWriting fixtures to ${FIXTURE_DIR}...`);
+    fs.mkdirSync(FIXTURE_DIR, { recursive: true });
+    write(path.join(FIXTURE_DIR, "contacts.json"), contacts);
+    write(path.join(FIXTURE_DIR, "queries.json"), queries);
+    write(path.join(FIXTURE_DIR, "recorded-responses.json"), recordedResponses);
+    fs.writeFileSync(path.join(FIXTURE_DIR, "vectors.bin"), vectors);
+    write(path.join(FIXTURE_DIR, "vectors.json"), manifest);
 
     const baseline: AnswerBaseline = {
+      scoringVersion: ANSWER_SCORING_VERSION,
+      measurementSource: "provider-recording",
+      measuredAt: new Date().toISOString(),
       recordedAt: new Date().toISOString(),
-      provider: activeCapability?.providerId ?? "gemini",
-      model: activeCapability?.model ?? "default",
+      provider: activeCapability.providerId,
+      model: [...recorder.models].sort().join(", "),
       corpus: {
         contacts: contacts.length,
         queries: queries.length,
@@ -336,6 +267,13 @@ async function main(): Promise<void> {
 }
 
 main()
+  .finally(() => {
+    try {
+      closeDatabase?.();
+    } finally {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  })
   .then(() => process.exit(0))
   .catch((err) => {
     console.error("Evaluation failed:", err);

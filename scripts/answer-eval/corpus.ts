@@ -65,6 +65,8 @@ export interface AnswerEvalQuery {
   expectedFilter?: ExpectedFilterCriteria;
   /** Keys of contacts that must be returned in final verified matches */
   expectedMatches: string[];
+  /** False only for exploratory queries without complete relevance labels. */
+  evaluateResults?: boolean;
   /** Keys of contacts that must be excluded (e.g. distractors, near-misses, adversarial) */
   forbiddenMatches?: string[];
   /** True when the query should honestly return zero contacts and a refusal summary */
@@ -816,6 +818,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
       },
       // Low confidence must not enforce hard filters
       expectedMatches: [],
+      evaluateResults: false,
     },
     {
       id: "q07-name-lookup",

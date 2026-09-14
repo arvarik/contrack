@@ -126,7 +126,7 @@ A contact that fails any hard constraint MUST be excluded, regardless of how wel
       : ""
   }`;
 
-  const prompt = `QUERY: "${query.replace(/"/g, "'")}"
+  const prompt = `${wrapUntrusted("query", query)}
 ${plan?.rationale ? `\nPLANNER RATIONALE: ${plan.rationale}` : ""}
 
 CANDIDATES (${candidates.length}):
@@ -477,29 +477,27 @@ export async function synthesizeSearchResults(
     })
     .join("\n");
 
-  // Build a grounding statement from the plan so the LLM understands what
-  // filter actually applies — and is held accountable to it. Without this
-  // the synthesis says things like "30 contacts in America" without
-  // verifying each contact's location.
+  // A cached plan describes query intent. It does not prove that these
+  // contacts passed its filters. The model must check the supplied fields.
   const grounding: string[] = [];
   if (plan?.must.locationMatchers?.length) {
     grounding.push(
-      `Every contact in the list has been verified to mention one of these location strings: ${plan.must.locationMatchers.slice(0, 20).join(", ")}${plan.must.locationMatchers.length > 20 ? "..." : ""}.`,
+      `Requested location strings: ${plan.must.locationMatchers.slice(0, 20).join(", ")}${plan.must.locationMatchers.length > 20 ? "..." : ""}.`,
     );
   }
   if (plan?.must.companyMatchers?.length) {
     grounding.push(
-      `Each contact's company matches one of: ${plan.must.companyMatchers.join(", ")}.`,
+      `Requested company strings: ${plan.must.companyMatchers.join(", ")}.`,
     );
   }
   if (plan?.must.roleMatchers?.length) {
     grounding.push(
-      `Each contact's role matches one of: ${plan.must.roleMatchers.join(", ")}.`,
+      `Requested role strings: ${plan.must.roleMatchers.join(", ")}.`,
     );
   }
   if (plan?.must.industryMatchers?.length) {
     grounding.push(
-      `Each contact's industry matches one of: ${plan.must.industryMatchers.join(", ")}.`,
+      `Requested industry strings: ${plan.must.industryMatchers.join(", ")}.`,
     );
   }
 
@@ -521,8 +519,8 @@ BAD example (hallucination):
 GOOD example (grounded):
   ✓ "You have 2 contacts: Alice in LA and Bob in Sydney. Despite the query, one is outside the US."`;
 
-  const prompt = `QUERY: "${query}"
-${grounding.length ? `\nVERIFIED FILTER:\n${grounding.join("\n")}` : ""}
+  const prompt = `${wrapUntrusted("query", query)}
+${grounding.length ? `\nREQUESTED FILTERS (intent only, not verification):\n${wrapUntrusted("requested filters", grounding.join("\n"))}` : ""}
 
 MATCHING CONTACTS (${contacts.length} total):
 ${wrapUntrusted("contact summaries", contactSummaries, 24_000)}
@@ -561,7 +559,7 @@ Write a 2-3 sentence executive brief. Every claim must be true for the contacts 
       cached: false,
       description: `Synthesis: ${query.slice(0, 40)}`,
     });
-    return text;
+    return sanitized;
   } catch (error: unknown) {
     log.error("AIService", "Synthesis failed", {
       error: getErrorMessage(error),

@@ -73,7 +73,8 @@
     "expectedFilter": {
       "confidence": "low"
     },
-    "expectedMatches": []
+    "expectedMatches": [],
+    "evaluateResults": false
   },
   {
     "id": "q07-name-lookup",

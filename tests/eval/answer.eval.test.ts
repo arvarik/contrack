@@ -36,6 +36,7 @@ const recorded = vi.hoisted(() => ({
   queryParse: new Map<string, string>(),
   rerank: new Map<string, string>(),
   synthesis: new Map<string, string>(),
+  failures: [] as string[],
 }));
 
 // Mock vector embeddings — replay recorded vectors
@@ -49,8 +50,14 @@ vi.mock(
     return {
       ...actual,
       isSearchEmbeddingReady: () => true,
-      embedText: async (text: string): Promise<Float32Array | null> =>
-        recorded.queryVectors.get(text) ?? null,
+      embedText: async (text: string): Promise<Float32Array | null> => {
+        const vector = recorded.queryVectors.get(text);
+        if (!vector) {
+          recorded.failures.push(`Missing recorded query vector: ${text}`);
+          throw new Error(`Missing recorded query vector: ${text}`);
+        }
+        return vector;
+      },
     };
   },
 );
@@ -88,37 +95,18 @@ vi.mock("../../server/ai/gateway.ts", async (importOriginal) => {
       _capability: unknown,
       options: { prompt?: string; systemPrompt?: string },
     ) => {
-      const prompt = options.prompt ?? "";
-      const system = options.systemPrompt ?? "";
-
-      let queryKey = "";
-      if (system.includes("query planner") || prompt.startsWith("Query: ")) {
-        const qMatch = prompt.match(/Query:\s*"([^"]+)"/i);
-        if (qMatch) queryKey = qMatch[1].toLowerCase().trim();
-        const text = recorded.queryParse.get(queryKey) ?? "{}";
-        return { text, model: "recorded-replay", latencyMs: 2 };
+      const { identifyAnswerCall } =
+        await import("../../scripts/answer-eval/recording.ts");
+      const call = identifyAnswerCall(options);
+      const text = call
+        ? recorded[call.operation].get(call.queryKey)
+        : undefined;
+      if (text === undefined) {
+        const message = `Missing recorded response for ${call?.operation ?? "unknown"}: ${call?.queryKey ?? "unrecognized prompt"}`;
+        recorded.failures.push(message);
+        throw new Error(message);
       }
-
-      if (system.includes("data analyst") || prompt.includes("CANDIDATES (")) {
-        const qMatch = prompt.match(/QUERY:\s*"([^"]+)"/i);
-        if (qMatch) queryKey = qMatch[1].toLowerCase().trim();
-        const text = recorded.rerank.get(queryKey) ?? "[]";
-        return { text, model: "recorded-replay", latencyMs: 2 };
-      }
-
-      if (
-        system.includes("executive brief") ||
-        prompt.includes("MATCHING CONTACTS (")
-      ) {
-        const qMatch = prompt.match(/QUERY:\s*"([^"]+)"/i);
-        if (qMatch) queryKey = qMatch[1].toLowerCase().trim();
-        const text =
-          recorded.synthesis.get(queryKey) ??
-          "No matching contacts found in your CRM for this query.";
-        return { text, model: "recorded-replay", latencyMs: 2 };
-      }
-
-      return { text: "{}", model: "recorded-replay", latencyMs: 2 };
+      return { text, model: "recorded-replay", latencyMs: 2 };
     },
   };
 });
@@ -137,6 +125,7 @@ import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { upsertSearchEmbedding } from "../../server/services/search/localEmbeddings.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import {
+  ANSWER_SCORING_VERSION,
   EVAL_DIMENSION,
   loadAnswerBaseline,
   loadAnswerFixture,
@@ -158,13 +147,14 @@ let storedVectors: number;
 
 beforeAll(async () => {
   baseline = loadAnswerBaseline();
+  expect(baseline.scoringVersion).toBe(ANSWER_SCORING_VERSION);
   const fixture = loadAnswerFixture();
 
   expect(fixture.contactVectors[0].length).toBe(EVAL_DIMENSION);
 
   // Populate vector map
-  fixture.queries.forEach((q, i) => {
-    recorded.queryVectors.set(q.q, fixture.queryVectors[i]);
+  fixture.queryVectorInputs.forEach((input, i) => {
+    recorded.queryVectors.set(input, fixture.queryVectors[i]);
   });
 
   // Populate recorded completions
@@ -208,6 +198,30 @@ beforeAll(async () => {
     idByKey,
     keyById,
     allContactsByKey,
+  );
+  expect(
+    recorded.failures,
+    "Every provider call must have a recorded response",
+  ).toEqual([]);
+  expect(measurement.resultScore.evaluatedQueries).toBe(
+    fixture.queries.filter((query) => query.evaluateResults !== false).length,
+  );
+  expect(measurement.emptyAnswerScore.totalEmptyQueries).toBe(
+    fixture.queries.filter((query) => query.expectEmpty).length,
+  );
+  expect(measurement.injectionScore.totalAttempts).toBe(
+    fixture.queries.reduce(
+      (total, query) => total + (query.adversarialTargetKeys?.length ?? 0),
+      0,
+    ),
+  );
+  expect(measurement.synthesisScore.summariesEvaluated).toBe(
+    fixture.queries.filter(
+      (query) =>
+        query.expectedClaims ||
+        query.expectedMatches.length > 0 ||
+        measurement.perQuery[query.id].returnedKeys.length > 0,
+    ).length,
   );
 }, 120_000);
 
@@ -296,15 +310,12 @@ describe("AI Answer Pipeline Quality Gate", () => {
       const advQuery2 = measurement.perQuery["q21-adv-london-spoof"];
       const advQuery3 = measurement.perQuery["q22-adv-sequoia-override"];
 
-      if (advQuery1) {
-        expect(advQuery1.returnedKeys).not.toContain("adv-ceo-injection");
-      }
-      if (advQuery2) {
-        expect(advQuery2.returnedKeys).not.toContain("adv-location-spoof");
-      }
-      if (advQuery3) {
-        expect(advQuery3.returnedKeys).not.toContain("adv-rule-override");
-      }
+      expect(advQuery1).toBeDefined();
+      expect(advQuery1.returnedKeys).not.toContain("adv-ceo-injection");
+      expect(advQuery2).toBeDefined();
+      expect(advQuery2.returnedKeys).not.toContain("adv-location-spoof");
+      expect(advQuery3).toBeDefined();
+      expect(advQuery3.returnedKeys).not.toContain("adv-rule-override");
     });
 
     it("ensures no synthesized summary leaks prompt injection echo instructions", () => {
@@ -345,36 +356,30 @@ describe("AI Answer Pipeline Quality Gate", () => {
       const parisFr = measurement.perQuery["q08-paris-france"];
       const parisTx = measurement.perQuery["q09-paris-texas"];
 
-      if (parisFr) {
-        expect(parisFr.returnedKeys).not.toContain("paris-texas");
-      }
-      if (parisTx) {
-        expect(parisTx.returnedKeys).not.toContain("paris-france");
-      }
+      expect(parisFr).toBeDefined();
+      expect(parisFr.returnedKeys).not.toContain("paris-texas");
+      expect(parisTx).toBeDefined();
+      expect(parisTx.returnedKeys).not.toContain("paris-france");
     });
 
     it("never cross-matches Cambridge Massachusetts with Cambridge UK", () => {
       const cambridgeMa = measurement.perQuery["q11-cambridge-ma"];
       const cambridgeUk = measurement.perQuery["q10-cambridge-uk"];
 
-      if (cambridgeMa) {
-        expect(cambridgeMa.returnedKeys).not.toContain("cambridge-uk");
-      }
-      if (cambridgeUk) {
-        expect(cambridgeUk.returnedKeys).not.toContain("cambridge-ma");
-      }
+      expect(cambridgeMa).toBeDefined();
+      expect(cambridgeMa.returnedKeys).not.toContain("cambridge-uk");
+      expect(cambridgeUk).toBeDefined();
+      expect(cambridgeUk.returnedKeys).not.toContain("cambridge-ma");
     });
 
     it("never cross-matches Washington State with Washington DC", () => {
       const washState = measurement.perQuery["q12-washington-state"];
       const washDc = measurement.perQuery["q13-washington-dc"];
 
-      if (washState) {
-        expect(washState.returnedKeys).not.toContain("washington-dc");
-      }
-      if (washDc) {
-        expect(washDc.returnedKeys).not.toContain("washington-state");
-      }
+      expect(washState).toBeDefined();
+      expect(washState.returnedKeys).not.toContain("washington-dc");
+      expect(washDc).toBeDefined();
+      expect(washDc.returnedKeys).not.toContain("washington-state");
     });
   });
 

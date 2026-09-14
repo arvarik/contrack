@@ -425,7 +425,7 @@ export async function hybridRetrieval(
     }
   }
 
-  const embedInput = [query, ...(plan?.should.traits ?? [])].join(". ");
+  const embedInput = buildSearchEmbeddingInput(query, plan);
 
   // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
   const [ftsResults, vectorResults] = await Promise.all([
@@ -467,4 +467,12 @@ export async function hybridRetrieval(
     preFilterSummary: hardFilterSummary,
     plan,
   };
+}
+
+/** Use the same query expansion for retrieval and recorded evaluation vectors. */
+export function buildSearchEmbeddingInput(
+  query: string,
+  plan?: QueryPlan | null,
+): string {
+  return [query, ...(plan?.should.traits ?? [])].join(". ");
 }
