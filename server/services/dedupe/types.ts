@@ -36,6 +36,23 @@ export interface RawPair {
   matchedField?: string;
 }
 
+/**
+ * How many active contacts in one account carry each value.
+ *
+ * Built once per scan or per import from the normalized corpus, by
+ * `countValues` in policy.ts. A match on a value three contacts carry is
+ * weaker evidence than a match on a value two carry, and this is where the
+ * matchers read the count.
+ */
+export interface ValueFrequency {
+  /** Lowercased email address → contacts carrying it. */
+  emails: Map<string, number>;
+  /** Normalized phone number → contacts carrying it. */
+  phones: Map<string, number>;
+  /** Normalized full name → contacts carrying it. */
+  names: Map<string, number>;
+}
+
 export interface PassContext {
   /**
    * The one account this scan runs for.
@@ -53,6 +70,8 @@ export interface PassContext {
   seenPairs: Set<string>;
   distinctPairs: Set<string>;
   socialUrlsByContact: Map<string, string[]>;
+  /** How widely each address, number and name is shared in the account. */
+  frequency: ValueFrequency;
   embeddingSimCache: Map<string, number>;
   rid: string;
 }
@@ -82,6 +101,22 @@ export interface MatchSignals {
   isCrossSource: boolean;
   isKnownDistinct: boolean;
   embeddingSimilarity: number;
+  /**
+   * The two names say two different people: first names that are not the
+   * same, not a nickname, not an initial, not a near spelling and not the
+   * same sound, or two different generational suffixes. A shared identifier
+   * between two such names is a household or an office, and the pair is
+   * capped below every auto-merge preset.
+   */
+  namesContradict: boolean;
+  /**
+   * How many contacts in the account carry the shared value. Two when the
+   * value is shared by the pair alone or the count is unknown. Each carrier
+   * beyond two weakens the match.
+   */
+  emailCarriers: number;
+  phoneCarriers: number;
+  nameCarriers: number;
 }
 
 export type DedupeScanMode =

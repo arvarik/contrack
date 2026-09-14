@@ -255,6 +255,9 @@ const DEDUPE_PRESET_COPY = {
   aggressive:
     "Auto-merges pairs at 88%+ confidence. Fewer to review; more misfires to undo.",
 } as const;
+// A pair whose names disagree never merges under any preset. The server
+// caps it at 85%, so "Eager" is eager about spelling and sources, not about
+// two people on one phone line.
 
 export const SettingsHome = () => {
   const { preferences, setPreference, mode } = usePreferences();
@@ -568,15 +571,15 @@ export const SettingsHome = () => {
                 <>
                   <span className="block">{DEDUPE_PRESET_COPY[preset]}</span>
                   <span className="block mt-1.5">
-                    Runs only during scans you start from{" "}
+                    Applies to scans you start from{" "}
                     <Link
                       to="/settings/dedupe"
                       className="font-bold text-primary hover:underline"
                     >
                       Duplicates
-                    </Link>{" "}
-                    — never in the background. Every auto-merge is undoable
-                    there.
+                    </Link>
+                    , to imports, and to the check that runs after you add a
+                    contact. Every auto-merge is undoable there.
                   </span>
                 </>
               }

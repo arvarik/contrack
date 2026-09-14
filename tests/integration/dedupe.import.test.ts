@@ -191,7 +191,9 @@ describe("dedupeService.runImportScan, what it finds", () => {
     const rows = suggestions();
     expect(rows).toHaveLength(1);
     expect(rows[0].matchType).toBe("email");
-    expect(rows[0].confidence).toBeCloseTo(0.99, 5);
+    // The scan's number. This path scored 0.99 until the policy became one
+    // table for both.
+    expect(rows[0].confidence).toBeCloseTo(0.98, 5);
     expect(rows[0].status).toBe("auto_merged");
 
     // One of the two now points at the other. Which one is whichever carries
@@ -211,7 +213,9 @@ describe("dedupeService.runImportScan, what it finds", () => {
     expect(result.autoMerged).toBe(1);
     const rows = suggestions();
     expect(rows[0].matchType).toBe("phone");
-    expect(rows[0].confidence).toBeCloseTo(0.99, 5);
+    // 0.95, the scan's number, and not the 0.99 this path used to claim: a
+    // shared number is the weaker of the two anchors on both paths now.
+    expect(rows[0].confidence).toBeCloseTo(0.95, 5);
   });
 
   it("suggests an exact name match rather than merging it", async () => {
@@ -222,13 +226,15 @@ describe("dedupeService.runImportScan, what it finds", () => {
 
     const result = await dedupeService.runImportScan(scope, [imported], "test");
 
-    // 0.92 is under the 0.93 auto-merge threshold on purpose: two people can
-    // share a name, and merging them would lose one of them.
+    // 0.90 is under every auto-merge preset on purpose: two people can
+    // share a name, and merging them would lose one of them. The scan has
+    // always scored a bare name match 0.90, and this path now reads the same
+    // table rather than its own 0.92.
     expect(result.autoMerged).toBe(0);
     expect(result.pending).toBe(1);
     const rows = suggestions();
     expect(rows[0].matchType).toBe("name");
-    expect(rows[0].confidence).toBeCloseTo(0.92, 5);
+    expect(rows[0].confidence).toBeCloseTo(0.9, 5);
     expect(rows[0].status).toBe("pending");
     expect(canonicalIdOf(imported)).toBeNull();
   });
@@ -462,12 +468,12 @@ describe("POST /api/contacts/bulk with a stream", () => {
     // A DELIBERATE CHANGE. The matching this branch used to carry scored an
     // exact name match at 0.95 and merged it, on the reasoning that a name
     // that already exists is "almost certainly a duplicate". Two people can
-    // share a name, and a merge is how one of them stops existing. The other
-    // import path has always scored it 0.92 and asked, and now both do.
+    // share a name, and a merge is how one of them stops existing. Every
+    // path now scores a bare name match 0.90, the scan's number, and asks.
     expect(summary.autoMerged).toBe(0);
     expect(summary.needsReview).toBe(1);
     expect(canonicalIdOf(existing)).toBeNull();
-    expect(suggestions()[0].confidence).toBeCloseTo(0.92, 5);
+    expect(suggestions()[0].confidence).toBeCloseTo(0.9, 5);
   });
 });
 

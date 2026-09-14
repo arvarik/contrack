@@ -650,6 +650,11 @@ Trigger a full deduplication scan. Streams progress via SSE.
 
 Supported modes: `deterministic`, `ai`, `both`, `quick`, `deep`, `full`.
 
+The scan merges pairs at or above the account's sensitivity preset
+(`dedupePreset` in `GET /api/auth/preferences`), which is the same threshold
+an import uses. An optional `autoMergeThreshold` between `0.85` and `0.99`
+overrides it for this one scan.
+
 ```bash
 curl -X POST http://localhost:3210/api/dedupe/scan \
   -H "Content-Type: application/json" \

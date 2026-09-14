@@ -36,7 +36,6 @@ import {
   ActivityFeed,
 } from "./components";
 import { useDedupe } from "../../contexts/DedupeContext";
-import { useDedupeSettings } from "../../hooks/useDedupeSettings";
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
@@ -62,7 +61,6 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     isQueued,
   } = useDedupe();
   const mergeCluster = useMergeCluster();
-  const { autoMergeThreshold } = useDedupeSettings();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -211,9 +209,11 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     currentCluster,
   ]);
 
-  // Start scan handler
+  // Start scan handler. The server reads the account's sensitivity preset
+  // itself, the same way it does for an import, so nothing about the
+  // threshold travels with the request.
   const handleStartScan = () => {
-    startScan(selectedMode, autoMergeThreshold);
+    startScan(selectedMode);
   };
 
   const handleNewScan = () => {

@@ -11,6 +11,7 @@ import {
 import { scopeOf, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { autoMergeThresholdFor } from "../../services/dedupe/policy.ts";
 
 /**
  * Start one scan, now or when the run lock frees up.
@@ -65,8 +66,15 @@ export function registerScanRoutes(router: Router) {
         );
       }
 
-      // Validate and clamp auto-merge threshold
-      let threshold = 0.93;
+      // The account's preset, unless the request names a number.
+      //
+      // The browser used to send its own copy of the preset table with every
+      // scan, and the fixed 0.93 here was what every other caller got. The
+      // preset lives on the account now, so the server reads it and the
+      // request field is an override for a client that wants one scan at a
+      // different sensitivity.
+      let threshold = autoMergeThresholdFor(scope);
+      let thresholdSource = "account preset";
       if (autoMergeThreshold !== undefined) {
         threshold = Number(autoMergeThreshold);
         if (isNaN(threshold) || threshold < 0.85 || threshold > 0.99) {
@@ -75,6 +83,7 @@ export function registerScanRoutes(router: Router) {
             400,
           );
         }
+        thresholdSource = "request";
       }
 
       const check = dedupeQueue.canStartScan(scope);
@@ -102,7 +111,7 @@ export function registerScanRoutes(router: Router) {
       const scan = dedupeQueue.createScan(scope, mode);
       log.info(
         "API",
-        `[${rid}] POST /api/dedupe/scan → scanId=${scan.scanId}, mode=${mode}, threshold=${threshold}`,
+        `[${rid}] POST /api/dedupe/scan → scanId=${scan.scanId}, mode=${mode}, threshold=${threshold} (${thresholdSource})`,
       );
 
       startScan(scope, scan.scanId, mode, rid, threshold);

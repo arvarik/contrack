@@ -3,6 +3,7 @@ import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
 import { normalizeContacts } from "./normalization.ts";
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
+import { countValues } from "./policy.ts";
 import { distanceToSimilarity } from "./scoring.ts";
 import type { ContactRow, NormalizedContact, PassContext } from "./types.ts";
 
@@ -66,6 +67,10 @@ export function buildPassContext(scope: Scope, rid: string): PassContext {
     seenPairs: new Set(),
     distinctPairs,
     socialUrlsByContact,
+    // 5. Count carriers per value, once. The passes read this rather than
+    //    counting for themselves, so a scan and an import weigh a shared
+    //    number the same way.
+    frequency: countValues(normalized),
     embeddingSimCache: new Map(),
     rid,
   };

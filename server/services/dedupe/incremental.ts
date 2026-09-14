@@ -14,10 +14,13 @@
 // uses it once; an import of four hundred builds it once and uses it four
 // hundred times.
 //
-// The matchers below are the ones that were inside the per-contact check, at
-// the confidences they had. This is a rearrangement of the work, not a change
-// to what counts as a duplicate, and `tests/integration/dedupe.import.test.ts`
-// is what holds that true.
+// The matchers below are the ones that were inside the per-contact check.
+// Their confidences come from policy.ts, the same table the scan reads, so
+// the two paths agree on what a shared number or an exact name is worth.
+// They did not: this path scored a shared phone 0.99 where the scan scored
+// it 0.95, and an exact name across two sources 0.95 where the scan scored
+// it 0.92, so an import merged pairs a scan would have asked about.
+// `tests/integration/dedupe.import.test.ts` holds the numbers.
 // =============================================================================
 
 import { sqlite } from "../../db.ts";
@@ -37,6 +40,14 @@ import {
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
 import { normalizeContactById, normalizeContacts } from "./normalization.ts";
 import {
+  countValues,
+  generationsContradict,
+  NAME_CONFIDENCE,
+  weighAnchor,
+  weighName,
+  withCaveat,
+} from "./policy.ts";
+import {
   classifyPair,
   computeCompositeScore,
   computeMatchSignals,
@@ -44,7 +55,12 @@ import {
 } from "./scoring.ts";
 import { buildScoringReasoning } from "./passes.ts";
 import type { Scope } from "../../tenancy/scope.ts";
-import type { ContactRow, NormalizedContact, RawPair } from "./types.ts";
+import type {
+  ContactRow,
+  NormalizedContact,
+  RawPair,
+  ValueFrequency,
+} from "./types.ts";
 
 /** How many vector neighbours one new contact is compared with. */
 const KNN_LIMIT = 5;
@@ -66,6 +82,8 @@ export interface IncrementalCorpus {
   /** Lowercased email to the contacts that carry it. */
   contactsByEmail: Map<string, string[]>;
   socialUrlsByContact: Map<string, string[]>;
+  /** How widely each address, number and name is shared in the account. */
+  frequency: ValueFrequency;
   /** True while the vector store can answer, checked once. */
   embeddingsAvailable: boolean;
   /**
@@ -135,6 +153,7 @@ export function buildIncrementalCorpus(
     contactsByPhone,
     contactsByEmail,
     socialUrlsByContact,
+    frequency: countValues(normalized),
     embeddingsAvailable: isEmbeddingAvailable(),
     retired: new Set(),
   };
@@ -210,28 +229,50 @@ export function findIncrementalPairs(
   // A shared mailbox is skipped here for the same reason the scan's
   // exact-email rule skips it: two contacts on `team.northwind@` are
   // colleagues and two on `haddad.family@` are a household, and claiming the
-  // pair at 0.99 merges one of them away during an import. The fuzzy matcher
-  // below still sees the pair.
+  // pair as an identity merges one of them away during an import. The fuzzy
+  // matcher below still sees the pair.
+  //
+  // Weighed, not claimed outright. An address three contacts carry is worth
+  // a little less, and an address between two different first names is
+  // capped below every preset. Same rule as the scan's D1.
   for (const email of target.emailsNorm) {
     if (isSharedMailbox(email)) continue;
     for (const otherId of corpus.contactsByEmail.get(email) ?? []) {
       if (!isCandidate(corpus, otherId, contactId, seen)) continue;
+      const other = corpus.normalizedById.get(otherId);
+      if (!other) continue;
+      const weighed = weighAnchor(
+        "email",
+        target,
+        other,
+        corpus.frequency.emails.get(email) ?? 2,
+      );
       claim(otherId, {
         matchType: "email",
-        confidence: 0.99,
-        reasoning: "Shared email address",
+        confidence: weighed.confidence,
+        reasoning: withCaveat("Shared email address", weighed),
       });
     }
   }
 
-  // 2. A shared phone number.
+  // 2. A shared phone number. Same weighing, same rule as the scan's D2. A
+  //    household on one landline is the case this exists for: "Ada Twin" and
+  //    "Ben Twin" on one number reach a person rather than becoming one.
   for (const phone of target.phonesNorm) {
     for (const otherId of corpus.contactsByPhone.get(phone) ?? []) {
       if (!isCandidate(corpus, otherId, contactId, seen)) continue;
+      const other = corpus.normalizedById.get(otherId);
+      if (!other) continue;
+      const weighed = weighAnchor(
+        "phone",
+        target,
+        other,
+        corpus.frequency.phones.get(phone) ?? 2,
+      );
       claim(otherId, {
         matchType: "phone",
-        confidence: 0.99,
-        reasoning: "Shared phone number",
+        confidence: weighed.confidence,
+        reasoning: withCaveat("Shared phone number", weighed),
       });
     }
   }
@@ -244,17 +285,56 @@ export function findIncrementalPairs(
       if (!isCandidate(corpus, other.id, contactId, seen)) continue;
       if (!other.blockKeys.some((key) => targetBlockKeys.has(key))) continue;
 
-      if (target.nameNorm === other.nameNorm) {
+      if (
+        target.nameNorm === other.nameNorm &&
+        !generationsContradict(target, other)
+      ) {
+        // Not "Hale Sr." beside "Hale Jr.", which normalize alike and are two
+        // people. The scan's D3 keys on the raw name and never sees that
+        // pair as exact, and this path used to claim it at 0.92.
+        //
+        // The scan's D3, rule for rule: the same name at the same company
+        // outranks the same name from two sources, which outranks the same
+        // name alone. The import path used to know only the last two, at
+        // numbers of its own, so "Jonathan Smith at Northwind" twice was
+        // 0.92 here and 0.95 in a scan.
+        //
+        // A suffix on one side only, "Arthur Pemberton" beside "Arthur
+        // Pemberton III", is not two people by definition and not one
+        // either. The scan's D3 keys on the raw name and never claims it as
+        // exact. Here it keeps the plain name confidence, which asks.
+        const sameGeneration = target.generation === other.generation;
+        const sameCompany =
+          sameGeneration &&
+          target.companyNorm.length > 1 &&
+          other.companyNorm.length > 1 &&
+          target.companyNorm === other.companyNorm;
         const isCrossSource =
+          sameGeneration &&
           target.sources.length > 0 &&
           other.sources.length > 0 &&
           !target.sources.some((s) => other.sources.includes(s));
+        const carriers = corpus.frequency.names.get(target.nameNorm) ?? 2;
+        const weighed = sameCompany
+          ? weighName(NAME_CONFIDENCE.nameCompany, carriers)
+          : isCrossSource
+            ? weighName(NAME_CONFIDENCE.crossSource, carriers)
+            : weighName(NAME_CONFIDENCE.name, carriers);
         claim(other.id, {
-          matchType: isCrossSource ? "cross_source" : "name",
-          confidence: isCrossSource ? 0.95 : 0.92,
-          reasoning: isCrossSource
-            ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
-            : "Exact name match",
+          matchType: sameCompany
+            ? "name_company"
+            : isCrossSource
+              ? "cross_source"
+              : "name",
+          confidence: weighed.confidence,
+          reasoning: withCaveat(
+            sameCompany
+              ? "Exact name match with same company"
+              : isCrossSource
+                ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
+                : "Exact name match",
+            weighed,
+          ),
         });
         continue;
       }
@@ -268,7 +348,7 @@ export function findIncrementalPairs(
       ) {
         claim(other.id, {
           matchType: "nickname",
-          confidence: 0.88,
+          confidence: NAME_CONFIDENCE.nickname,
           reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
         });
         continue;
@@ -280,7 +360,7 @@ export function findIncrementalPairs(
       if (isMiddleNameExtension(target.nameTokens, other.nameTokens)) {
         claim(other.id, {
           matchType: "middle_name",
-          confidence: 0.88,
+          confidence: NAME_CONFIDENCE.middleName,
           reasoning: `Same name with a middle name added ("${target.nameNorm}" ↔ "${other.nameNorm}")`,
         });
       }
@@ -318,6 +398,7 @@ export function findIncrementalPairs(
           false,
           corpus.socialUrlsByContact.get(target.id) ?? [],
           corpus.socialUrlsByContact.get(other.id) ?? [],
+          corpus.frequency,
         );
         const score = computeCompositeScore(signals);
         if (classifyPair(score) === "discard") continue;

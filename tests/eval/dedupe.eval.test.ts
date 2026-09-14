@@ -184,7 +184,18 @@ describe("precision and recall per pass", () => {
       const then = baseline.passes[pass].negativesMatchedByKind;
 
       // An exact count, not a tolerance. One more father-and-son pair matched
-      // is one more household merged into one person.
+      // is one more household offered as a duplicate.
+      expect(now).toEqual(then);
+    });
+
+    it(`${pass} keeps its count of hard negatives at auto-merge`, () => {
+      const now = measurement[pass].autoNegativesByKind;
+      const then = baseline.passes[pass].autoNegativesByKind;
+
+      // The subset of the line above that loses data. A matched negative is
+      // a wrong suggestion, and one of these is a wrong merge with nobody
+      // asked. Exact, per kind, so a regression names the household it
+      // would have merged.
       expect(now).toEqual(then);
     });
   }
@@ -274,6 +285,55 @@ describe("floors that a re-recorded baseline cannot lower", () => {
     // first name. While it did, 13 pairs were two records of one person and no
     // engine change could have separated them.
     expect(measurement.combined.negativesMatchedByKind["siblings"]).toBe(0);
+  });
+
+  it("never merges a household on one phone line with nobody asked", () => {
+    // Two people on one number, with two different first names. The policy
+    // caps a contradicted anchor at 0.85, below every preset, on every path.
+    // Before that, all 16 merged at 0.95 in a scan and at 0.99 in an import.
+    // The pair is still produced, so a person sees it.
+    for (const pass of PASSES) {
+      expect(
+        measurement[pass].autoNegativesByKind["shared-landline"],
+        pass,
+      ).toBe(0);
+    }
+    expect(
+      measurement.combined.negativesMatchedByKind["shared-landline"],
+    ).toBeGreaterThan(0);
+  });
+
+  it("never merges a father and a son with nobody asked", () => {
+    // "Sr." beside "Jr." is two people by definition. The scan's exact-name
+    // rule keys on the raw name and never claimed them, and the import path
+    // now reads the suffix rather than the stripped tokens.
+    for (const pass of PASSES) {
+      expect(
+        measurement[pass].autoNegativesByKind["father-and-son"],
+        pass,
+      ).toBe(0);
+    }
+  });
+
+  it("never merges two strangers who share a common name with nobody asked", () => {
+    // One name, two lives, two sources. The import path scored this 0.95 as
+    // a cross-source match and merged it; the scan always asked at 0.92, and
+    // now both do.
+    for (const pass of PASSES) {
+      expect(
+        measurement[pass].autoNegativesByKind["same-common-name"],
+        pass,
+      ).toBe(0);
+    }
+  });
+
+  it("merges the same pairs with nobody asked whichever path finds them", () => {
+    // The point of one policy. A pair the import path would merge is a pair
+    // a scan would merge, and the other way round. Namesakes are the one
+    // kind still at auto on both, because nothing separates them.
+    expect(measurement.incremental.autoNegativesByKind).toEqual(
+      measurement.combined.autoNegativesByKind,
+    );
   });
 
   it("produces something at all, on every pass", () => {

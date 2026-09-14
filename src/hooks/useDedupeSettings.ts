@@ -1,15 +1,21 @@
 /**
- * useDedupeSettings — the confidence a pair needs before Contrack merges it
- * without asking.
+ * useDedupeSettings — the sensitivity preset this account has chosen.
  *
  * Presets:
- *   - "aggressive"   → 0.88 — more auto-merges, fewer manual reviews
- *   - "default"      → 0.93 — balanced (high confidence only)
- *   - "conservative" → 0.97 — only near-certain matches auto-merge
+ *   - "aggressive"   → more auto-merges, fewer manual reviews
+ *   - "default"      → balanced (high confidence only)
+ *   - "conservative" → only near-certain matches auto-merge
  *
- * Stored on the account. The migration out of localStorage understands the old
- * raw-threshold shape as well as the preset one, so somebody who last touched
- * this when it was a slider keeps their choice — see lib/localPreferenceMigration.
+ * Stored on the account. The number each preset stands for lives on the
+ * server, in `server/services/dedupe/policy.ts`, and the server reads it
+ * for every scan, every import and every single-contact check. This hook
+ * used to carry a copy of that table and send the number with each scan
+ * request, which meant the import path and the scan could disagree about
+ * what the preset meant. The browser now names the preset and nothing else.
+ *
+ * The migration out of localStorage understands the old raw-threshold shape
+ * as well as the preset one, so somebody who last touched this when it was a
+ * slider keeps their choice — see lib/localPreferenceMigration.
  *
  * @module hooks/useDedupeSettings
  */
@@ -18,13 +24,6 @@ import { usePreferences } from "../contexts/PreferencesContext";
 import type { MergePreset } from "../api/preferences";
 
 export type { MergePreset };
-
-/** Maps each preset to its numeric confidence threshold. */
-export const PRESET_THRESHOLDS: Record<MergePreset, number> = {
-  aggressive: 0.88,
-  default: 0.93,
-  conservative: 0.97,
-};
 
 export function useDedupeSettings() {
   const { preferences, setPreference } = usePreferences();
@@ -35,9 +34,5 @@ export function useDedupeSettings() {
     [setPreference],
   );
 
-  return {
-    preset,
-    autoMergeThreshold: PRESET_THRESHOLDS[preset],
-    setPreset,
-  };
+  return { preset, setPreset };
 }

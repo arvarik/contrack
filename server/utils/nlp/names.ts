@@ -76,6 +76,44 @@ export function tokenizeName(name: string): string[] {
     );
 }
 
+/**
+ * Generational suffixes, each spelling mapped to one canonical form.
+ *
+ * `tokenizeName` strips these, which is right for matching "Robert Hale Jr."
+ * against "Robert Hale". It is wrong for "Robert Hale Sr." against "Robert
+ * Hale Jr.", which the stripped tokens make identical and which are two
+ * people by definition. This reads the suffix before it is stripped.
+ */
+const GENERATIONS: Record<string, string> = {
+  jr: "jr",
+  junior: "jr",
+  sr: "sr",
+  senior: "sr",
+  ii: "ii",
+  "2nd": "ii",
+  iii: "iii",
+  "3rd": "iii",
+  iv: "iv",
+  "4th": "iv",
+};
+
+/**
+ * The generational suffix a raw name carries, or null.
+ *
+ * "Robert Hale Jr." → "jr", "Robert Hale III" → "iii", "Robert Hale" → null.
+ * Only a trailing token counts, so a surname that happens to spell one of
+ * these is not read as a suffix.
+ */
+export function generationOf(name: string): string | null {
+  const tokens = name
+    .toLowerCase()
+    .replace(/[,.]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  if (tokens.length < 2) return null;
+  return GENERATIONS[tokens[tokens.length - 1]] ?? null;
+}
+
 function asInitial(token: string): string | null {
   if (token.length === 1 && /[a-z]/.test(token)) return token;
   if (token.length === 2 && token[1] === "." && /[a-z]/.test(token[0]))

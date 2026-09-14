@@ -18,6 +18,7 @@ import {
   normalizePhone,
   normalizeCompany,
   doubleMetaphone,
+  generationOf,
   tokenizeName,
 } from "../../utils/nlp/index.ts";
 
@@ -55,6 +56,12 @@ export interface NormalizedContact {
   nameTokens: string[]; // tokenized name parts (via NLP tokenizer)
   firstNameNorm: string; // first token (or empty string)
   lastNameNorm: string; // last token (or empty string)
+  /**
+   * The generational suffix the raw name carried, or null. The tokens above
+   * have it stripped, so "Hale Sr." and "Hale Jr." tokenize alike. Two
+   * different suffixes are two people, and the policy reads this to say so.
+   */
+  generation: string | null;
   phoneticHash: string; // Double Metaphone of full normalized name
   firstNamePhonetic: string; // Double Metaphone of first name only
   lastNamePhonetic: string; // Double Metaphone of last name only
@@ -245,6 +252,7 @@ export function normalizeContact(
     nameTokens,
     firstNameNorm,
     lastNameNorm,
+    generation: generationOf(raw.name),
     phoneticHash,
     firstNamePhonetic,
     lastNamePhonetic,

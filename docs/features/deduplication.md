@@ -83,15 +83,39 @@ The scan streams progress via SSE through these phases:
 
 ## Sensitivity Presets
 
-Configure auto-merge behavior in **Settings → Dedupe Engine**:
+Configure auto-merge behavior in **Settings → Preferences → Auto-merge sensitivity**:
 
 | Preset           | Auto-merge threshold | Behavior                                      |
 | ---------------- | -------------------- | --------------------------------------------- |
-| **Conservative** | ≥99% confidence      | Only near-certain matches merge automatically |
-| **Default**      | ≥95% confidence      | High-confidence matches auto-merge            |
-| **Aggressive**   | ≥90% confidence      | More auto-merges, fewer manual reviews        |
+| **Conservative** | ≥97% confidence      | Only near-certain matches merge automatically |
+| **Default**      | ≥93% confidence      | High-confidence matches auto-merge            |
+| **Aggressive**   | ≥88% confidence      | More auto-merges, fewer manual reviews        |
 
 Matches below the auto-merge threshold are sent to the manual review queue.
+
+The preset is stored on the account and the server reads it for every path
+that can merge: a scan you start, the check every import runs, and the check
+that runs a few seconds after you add a contact by hand. All three score a
+pair from the same table, so a shared phone number is worth 95% in an import
+exactly as it is in a scan.
+
+### What weakens a match
+
+Two rules lower a confidence below the table, whichever path produced it.
+
+- **A value many contacts carry.** A phone number on three contacts is a
+  household line as often as one person recorded three times, and a name on
+  three contacts is a common name. Each contact beyond the pair costs the
+  match three points, so a shared number drops from 95% to 92% at three
+  carriers and asks under the default preset. A personal email address drops
+  from 98% to 95% and still merges, because three records of one address are
+  usually one person exported three times.
+- **Names that disagree.** A shared number between "Ada Twin" and "Ben Twin"
+  is a family, and "Robert Hale Sr." beside "Robert Hale Jr." is two people by
+  definition. Either pair is capped at 85%, below every preset, and reaches
+  the review queue with the reason written on it. A nickname, an initial, a
+  near spelling or the same sound does not count as a disagreement, and a
+  married name changes nothing: only the first names are compared.
 
 ---
 
