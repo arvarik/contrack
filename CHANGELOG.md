@@ -224,6 +224,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The interaction composer keeps a note until the save that keeps it. It
+  cleared its editor the moment a save started, on the button and on
+  Mod-Enter alike, so a request that failed took the note with it. On
+  success only the submitted content is removed, and a sentence finished
+  while the request was out stays in the editor. A second Save while one is
+  pending starts no second request. What is in the composer is written to a
+  draft in `localStorage` a moment after each keystroke and flushed when the
+  page is hidden, unloaded, or the composer leaves the tree, so a session
+  that expires mid-save, or a navigation away, does not lose the note. Drafts
+  are keyed by account and by contact, so two people in one browser never
+  open each other's. Mod-Enter also sent a "note" with no follow-up whatever
+  the screen showed, because the shortcut kept the first render's closures.
+  It sends what is there now.
 - A merge keeps the duplicate's follow-up tasks. `action_items` was the one
   child table the merge never re-parented, so the hard merge's final `DELETE`
   took every task the duplicate carried through `ON DELETE CASCADE`, and a

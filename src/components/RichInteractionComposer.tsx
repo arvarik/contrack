@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
@@ -14,6 +14,14 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { COMPOSER, TAG_PILL, iconToggle } from "../lib/styles";
 import { cn } from "../lib/utils";
+import { useAuth } from "./auth/AuthGate";
+import {
+  draftKey,
+  readDraft,
+  writeDraft,
+  type DraftKind,
+} from "../lib/composerDrafts";
+import { markSubmission, removeSubmitted } from "../lib/composerSubmission";
 
 /** Placeholder copy per interaction type — see the Placeholder config below. */
 const PLACEHOLDERS = {
@@ -23,100 +31,228 @@ const PLACEHOLDERS = {
   email: "Log an email interaction...",
 } as const;
 
-type InteractionKind = keyof typeof PLACEHOLDERS;
+type InteractionKind = DraftKind;
+
+/** How long after the last keystroke the draft is written to storage. */
+const DRAFT_WRITE_DELAY_MS = 300;
+
+/**
+ * The follow-up task in a "next action" line, or null when it names no date.
+ *
+ * The date is what chrono found. The title is the rest of the line with the
+ * date and the small words around it removed, so "Send slides next Tuesday"
+ * becomes "Send slides", and a line that is only a date becomes "Follow up".
+ */
+function followUpFromText(
+  text: string,
+): { title: string; dueAt: string } | null {
+  const parsedDate = chrono.parseDate(text);
+  if (!parsedDate) return null;
+  const chronoResult = chrono.parse(text)[0];
+  let actionItemTitle = "Follow up";
+
+  if (chronoResult && chronoResult.text) {
+    let titleText = text.replace(chronoResult.text, "").trim();
+
+    let previous;
+    do {
+      previous = titleText;
+      titleText = titleText
+        .replace(/^(on|at|by|in|for|with|the|to)\s+/i, "")
+        .trim();
+      titleText = titleText
+        .replace(/\s+(on|at|by|in|for|with|the|to)$/i, "")
+        .trim();
+    } while (titleText !== previous);
+
+    if (titleText.length > 0) {
+      // Capitalize first letter
+      actionItemTitle = titleText.charAt(0).toUpperCase() + titleText.slice(1);
+    }
+  }
+
+  return { title: actionItemTitle, dueAt: parsedDate.toISOString() };
+}
+
+/**
+ * What is left of the follow-up line once the submitted part is removed.
+ *
+ * The same rule the editor follows. A line that was not touched while the
+ * save was out is cleared. A line the person kept typing into keeps only what
+ * they added. A line rewritten from scratch is theirs and stays whole.
+ */
+function followUpRemainder(current: string, submitted: string): string {
+  if (current === submitted) return "";
+  if (current.startsWith(submitted)) {
+    return current.slice(submitted.length).trimStart();
+  }
+  return current;
+}
 
 export const RichInteractionComposer = ({
   contactId,
 }: {
   contactId: string;
 }) => {
-  const [type, setType] = useState<InteractionKind>("note");
+  const { user } = useAuth();
+  const storageKey = draftKey(user?.id, contactId);
+  // Keyed on the draft, so a change of contact or of account replaces the
+  // editor rather than carrying one person's half-written note onto another
+  // page. The unmount flushes the old draft, the mount reads the new one.
+  return (
+    <Composer key={storageKey} contactId={contactId} storageKey={storageKey} />
+  );
+};
+
+const Composer = ({
+  contactId,
+  storageKey,
+}: {
+  contactId: string;
+  storageKey: string;
+}) => {
+  const [draft] = useState(() => readDraft(storageKey));
+  const [type, setType] = useState<InteractionKind>(draft?.type ?? "note");
   /**
-   * Mirrors `type` for the Placeholder callback, which is invoked by
-   * ProseMirror outside React's render cycle and so cannot close over state.
+   * Mirrors `type` for the Placeholder callback and for the submit path, both
+   * of which run outside React's render cycle and so cannot close over state.
    */
-  const typeRef = React.useRef<InteractionKind>("note");
+  const typeRef = useRef<InteractionKind>(type);
   const { data: allContacts = [] } = useContactNames();
   const addInteraction = useAddInteraction();
-  const [followUpText, setFollowUpText] = useState("");
-  const [hasContent, setHasContent] = useState(false);
+  const [followUpText, setFollowUpText] = useState(draft?.followUpText ?? "");
+  const followUpRef = useRef(followUpText);
+  const [hasContent, setHasContent] = useState(
+    !!draft && draft.html.trim() !== "" && draft.html.trim() !== "<p></p>",
+  );
+  const [isSaving, setIsSaving] = useState(false);
   const parsedDate = chrono.parseDate(followUpText);
 
-  const handleSave = async (htmlContent: string) => {
-    const isEditorEmpty = !htmlContent.trim() || htmlContent === "<p></p>";
-    if (isEditorEmpty && !followUpText.trim()) return;
+  /**
+   * Refs for everything the submit path reads.
+   *
+   * The Mod-Enter shortcut is registered once, when the editor is created,
+   * with whatever closures the first render had. Read through state, it sent
+   * a "note" with no follow-up whatever the screen showed. Read through refs
+   * it sends what is there. `pendingRef` is the duplicate guard for the same
+   * reason: the button reads state, the shortcut cannot.
+   */
+  const editorRef = useRef<Editor | null>(null);
+  const pendingRef = useRef(false);
+  const submitRef = useRef<() => void>(() => {});
+  /** The editor's HTML as of its last update, readable after it is gone. */
+  const lastHtmlRef = useRef(draft?.html ?? "");
 
-    try {
-      const payload: Partial<Interaction> = {
-        type,
-        title:
-          type === "note"
-            ? isEditorEmpty
-              ? "Action Scheduled"
-              : "Quick Note"
-            : `Logged ${type}`,
-        content: isEditorEmpty ? null : htmlContent,
-        date: new Date().toISOString(),
-      };
-
-      if (parsedDate) {
-        const chronoResult = chrono.parse(followUpText)[0];
-        let actionItemTitle = "Follow up";
-
-        if (chronoResult && chronoResult.text) {
-          let titleText = followUpText.replace(chronoResult.text, "").trim();
-
-          let previous;
-          do {
-            previous = titleText;
-            titleText = titleText
-              .replace(/^(on|at|by|in|for|with|the|to)\s+/i, "")
-              .trim();
-            titleText = titleText
-              .replace(/\s+(on|at|by|in|for|with|the|to)$/i, "")
-              .trim();
-          } while (titleText !== previous);
-
-          if (titleText.length > 0) {
-            // Capitalize first letter
-            actionItemTitle =
-              titleText.charAt(0).toUpperCase() + titleText.slice(1);
-          }
-        }
-
-        payload.actionItem = {
-          title: actionItemTitle,
-          dueAt: parsedDate.toISOString(),
-        };
-      }
-
-      await addInteraction.mutateAsync({
-        contactId,
-        data: payload,
-      });
-
-      if (parsedDate) {
-        toast.success("Follow-up scheduled!");
-      }
-
-      setFollowUpText("");
-    } catch {
-      toast.error("Failed to log interaction");
+  // ── The draft ──────────────────────────────────────────────────────────
+  // Written a moment after the last keystroke, and at once when the page is
+  // hidden, unloaded, or this composer leaves the tree. A session that
+  // expires while a save is out ends with the gate replacing the whole app,
+  // and the unmount flush is what puts the note on disk before that.
+  const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistNow = useCallback(() => {
+    if (writeTimer.current) {
+      clearTimeout(writeTimer.current);
+      writeTimer.current = null;
     }
-  };
+    writeDraft(storageKey, {
+      html: lastHtmlRef.current,
+      followUpText: followUpRef.current,
+      type: typeRef.current,
+    });
+  }, [storageKey]);
+  const persistSoon = useCallback(() => {
+    if (writeTimer.current) clearTimeout(writeTimer.current);
+    writeTimer.current = setTimeout(persistNow, DRAFT_WRITE_DELAY_MS);
+  }, [persistNow]);
 
-  const SubmitExtension = Extension.create({
-    name: "submitShortcut",
-    addKeyboardShortcuts() {
-      return {
-        "Mod-Enter": ({ editor }) => {
-          handleSave(editor.getHTML());
-          editor.commands.clearContent();
-          return true; // prevent default behavior
-        },
-      };
-    },
-  });
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") persistNow();
+    };
+    window.addEventListener("pagehide", persistNow);
+    window.addEventListener("beforeunload", persistNow);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", persistNow);
+      window.removeEventListener("beforeunload", persistNow);
+      document.removeEventListener("visibilitychange", onHidden);
+      persistNow();
+    };
+  }, [persistNow]);
+
+  useEffect(() => {
+    followUpRef.current = followUpText;
+    persistSoon();
+  }, [followUpText, persistSoon]);
+
+  // ── The save ───────────────────────────────────────────────────────────
+  const submit = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor || editor.isDestroyed || pendingRef.current) return;
+
+    const kind = typeRef.current;
+    const followUp = followUpRef.current;
+    const isEditorEmpty = editor.isEmpty;
+    if (isEditorEmpty && !followUp.trim()) return;
+
+    const payload: Partial<Interaction> = {
+      type: kind,
+      title:
+        kind === "note"
+          ? isEditorEmpty
+            ? "Action Scheduled"
+            : "Quick Note"
+          : `Logged ${kind}`,
+      content: isEditorEmpty ? null : editor.getHTML(),
+      date: new Date().toISOString(),
+    };
+    const followUpItem = followUpFromText(followUp);
+    if (followUpItem) payload.actionItem = followUpItem;
+
+    // Nothing is cleared yet. The mark records where the submitted content
+    // ends and follows it through anything typed while the request is out.
+    const mark = markSubmission(editor);
+    pendingRef.current = true;
+    setIsSaving(true);
+    try {
+      await addInteraction.mutateAsync({ contactId, data: payload });
+
+      if (followUpItem) toast.success("Follow-up scheduled!");
+      // Only now, and only the submitted part.
+      removeSubmitted(editor, mark);
+      setFollowUpText((current) => followUpRemainder(current, followUp));
+      persistSoon();
+    } catch {
+      mark.stop();
+      // On disk before anything else happens. A 401 here is followed by the
+      // gate taking the screen, and the note must already be kept by then.
+      persistNow();
+      toast.error("Failed to log interaction");
+    } finally {
+      pendingRef.current = false;
+      setIsSaving(false);
+    }
+  }, [addInteraction, contactId, persistNow, persistSoon]);
+
+  useEffect(() => {
+    submitRef.current = submit;
+  }, [submit]);
+
+  // Created once. The shortcut reaches the current submit through the ref,
+  // so it does not matter that the editor keeps the first render's copy.
+  const [SubmitExtension] = useState(() =>
+    Extension.create({
+      name: "submitShortcut",
+      addKeyboardShortcuts() {
+        return {
+          "Mod-Enter": () => {
+            submitRef.current();
+            return true; // prevent default behavior
+          },
+        };
+      },
+    }),
+  );
 
   const editor = useEditor({
     extensions: [
@@ -138,9 +274,11 @@ export const RichInteractionComposer = ({
       }),
       LinkPreviewExtension,
     ],
-    content: "",
+    content: draft?.html ?? "",
     onUpdate: ({ editor }) => {
+      lastHtmlRef.current = editor.isEmpty ? "" : editor.getHTML();
       setHasContent(!editor.isEmpty);
+      persistSoon();
     },
     editorProps: {
       attributes: {
@@ -149,6 +287,10 @@ export const RichInteractionComposer = ({
       },
     },
   });
+
+  useEffect(() => {
+    editorRef.current = editor ?? null;
+  }, [editor]);
 
   /*
    * Refresh the placeholder when the interaction type changes.
@@ -163,12 +305,15 @@ export const RichInteractionComposer = ({
    * The placeholder is now a function (see Placeholder.configure above), so
    * all this has to do is ask ProseMirror to recompute decorations.
    */
-  React.useEffect(() => {
+  useEffect(() => {
     typeRef.current = type;
+    persistSoon();
     if (editor && !editor.isDestroyed && editor.view) {
       editor.view.dispatch(editor.state.tr);
     }
-  }, [type, editor]);
+  }, [type, editor, persistSoon]);
+
+  const canSave = (hasContent || followUpText.trim().length > 0) && !isSaving;
 
   return (
     <div
@@ -205,6 +350,7 @@ export const RichInteractionComposer = ({
           <button
             onClick={() => setType("note")}
             className={iconToggle(type === "note")}
+            aria-pressed={type === "note"}
             title="Note"
           >
             <FileText className="w-4 h-4" />
@@ -212,6 +358,7 @@ export const RichInteractionComposer = ({
           <button
             onClick={() => setType("call")}
             className={iconToggle(type === "call")}
+            aria-pressed={type === "call"}
             title="Call"
           >
             <Phone className="w-4 h-4" />
@@ -219,6 +366,7 @@ export const RichInteractionComposer = ({
           <button
             onClick={() => setType("meeting")}
             className={iconToggle(type === "meeting")}
+            aria-pressed={type === "meeting"}
             title="Meeting"
           >
             <Handshake className="w-4 h-4" />
@@ -226,6 +374,7 @@ export const RichInteractionComposer = ({
           <button
             onClick={() => setType("email")}
             className={iconToggle(type === "email")}
+            aria-pressed={type === "email"}
             title="Email"
           >
             <Mail className="w-4 h-4" />
@@ -233,19 +382,12 @@ export const RichInteractionComposer = ({
         </div>
 
         <button
-          onClick={() => {
-            if (editor) {
-              handleSave(editor.getHTML());
-              editor.commands.clearContent();
-              setHasContent(false);
-            }
-          }}
-          disabled={
-            (!hasContent && !followUpText.trim()) || addInteraction.isPending
-          }
+          onClick={() => submitRef.current()}
+          disabled={!canSave}
+          aria-busy={isSaving}
           className="bg-primary text-on-primary hover:bg-primary/90 font-bold rounded-full px-7 py-2.5 shadow-sm text-sm transition-all active:scale-95 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
         >
-          Save
+          {isSaving ? "Saving…" : "Save"}
         </button>
       </div>
     </div>
