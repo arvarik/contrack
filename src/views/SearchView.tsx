@@ -1,7 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { isTypingTarget } from "../lib/keyboard";
-import { Sparkles, Search, X, Loader2, AlertTriangle } from "lucide-react";
+import {
+  Sparkles,
+  Search,
+  X,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+  RotateCw,
+} from "lucide-react";
 import { useSemanticSearch } from "../api";
 import { PAGE_TITLE, SECTION_BG } from "../lib/styles";
 import { cn } from "../lib/utils";
@@ -47,6 +55,13 @@ export const SearchView = () => {
   } = useSession();
 
   const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * The editable input. `lastAISearchQuery` is what the input is restored
+   * to on the way back to this page, and it is written when a question is
+   * submitted, so the input comes back showing the question the results
+   * answer. It is not the question itself: that travels with the results,
+   * as `semanticSearch.data.query`, and the synthesis brief reads it there.
+   */
   const [query, setQuery] = useState(lastAISearchQuery);
 
   const semanticSearch = useSemanticSearch({
@@ -55,8 +70,8 @@ export const SearchView = () => {
     phase: lastAISearchPhase,
     setPhase: setLastAISearchPhase,
   });
+  const { submittedQuery, isPending, mutate, reset } = semanticSearch;
 
-  const prevQueryRef = useRef(lastAISearchQuery);
   const [floatingContactId, setFloatingContactId] = useState<string | null>(
     null,
   );
@@ -72,40 +87,58 @@ export const SearchView = () => {
     inputRef.current?.focus();
   }, []);
 
-  // Auto-fire search if ?q= param is present on mount
-  useEffect(() => {
-    if (initialQueryHandled.current) return;
-    const urlQuery = searchParams.get("q");
-    if (urlQuery && urlQuery.trim().length >= 3) {
-      initialQueryHandled.current = true;
-      setQuery(urlQuery.trim());
-      // Clear the param to avoid re-firing on back navigation
-      setSearchParams({}, { replace: true });
-      // Defer search to next tick so query state is set
-      queueMicrotask(() => {
-        prevQueryRef.current = urlQuery.trim();
-        semanticSearch.mutate(urlQuery.trim());
-      });
-    }
-  }, [searchParams, setSearchParams, semanticSearch]);
-
+  /**
+   * Ask a question.
+   *
+   * The only guard is against the same question while it is still being
+   * answered: Enter and the Search button both land here, and a second copy
+   * of a request in flight is a duplicate, not a retry. The guard reads the
+   * question the hook is answering, so it clears when the search does. This
+   * used to be a ref of the view's own, which Clear never reset, so a
+   * question once asked could not be asked again until a different one had
+   * been asked in between.
+   *
+   * The same question with its results already on screen runs again. That
+   * is what pressing Search means, and it is what the Refresh button beside
+   * the results does with one click fewer.
+   */
   const handleSearch = useCallback(
     (searchQuery?: string) => {
       const q = (searchQuery ?? query).trim();
-      if (q.length < 3 || q === prevQueryRef.current) return;
-      prevQueryRef.current = q;
+      if (q.length < 3) return;
+      if (isPending && q === submittedQuery) return;
       setLastAISearchQuery(q);
-      semanticSearch.mutate(q);
+      mutate(q);
     },
-    [query, semanticSearch, setLastAISearchQuery],
+    [query, isPending, submittedQuery, mutate, setLastAISearchQuery],
   );
+
+  /** Ask the question the current results or the failed search belong to. */
+  const handleRerun = useCallback(() => {
+    if (submittedQuery) handleSearch(submittedQuery);
+  }, [submittedQuery, handleSearch]);
+
+  // Auto-fire search if ?q= param is present on mount. Through handleSearch,
+  // so the bridge records the question the way a typed one is recorded and
+  // the input is restored to it on the way back.
+  useEffect(() => {
+    if (initialQueryHandled.current) return;
+    const urlQuery = searchParams.get("q")?.trim();
+    if (urlQuery && urlQuery.length >= 3) {
+      initialQueryHandled.current = true;
+      setQuery(urlQuery);
+      // Clear the param to avoid re-firing on back navigation
+      setSearchParams({}, { replace: true });
+      handleSearch(urlQuery);
+    }
+  }, [searchParams, setSearchParams, handleSearch]);
 
   const handleClear = useCallback(() => {
     setQuery("");
     setLastAISearchQuery("");
-    semanticSearch.reset();
+    reset();
     inputRef.current?.focus();
-  }, [semanticSearch, setLastAISearchQuery]);
+  }, [reset, setLastAISearchQuery]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -136,16 +169,16 @@ export const SearchView = () => {
   const handleExampleClick = useCallback(
     (exampleQuery: string) => {
       setQuery(exampleQuery);
-      prevQueryRef.current = "";
-      setLastAISearchQuery(exampleQuery);
-      semanticSearch.mutate(exampleQuery);
+      handleSearch(exampleQuery);
     },
-    [semanticSearch, setLastAISearchQuery],
+    [handleSearch],
   );
 
   const results = semanticSearch.data?.matches ?? [];
   const isFallback = semanticSearch.data?.fallback ?? false;
-  const isLoading = semanticSearch.isPending && results.length === 0;
+  /** The question the results on screen answer. Never the input. */
+  const answeredQuery = semanticSearch.data?.query ?? "";
+  const isLoading = isPending && results.length === 0;
   const isEnriching = semanticSearch.phase === "enriching";
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
@@ -194,12 +227,7 @@ export const SearchView = () => {
                 the button's opacity changes.
               */}
               <button
-                onClick={() => {
-                  setQuery("");
-                  setLastAISearchQuery("");
-                  semanticSearch.reset();
-                  inputRef.current?.focus();
-                }}
+                onClick={handleClear}
                 tabIndex={query.length > 0 ? 0 : -1}
                 aria-hidden={query.length === 0}
                 className={cn(
@@ -281,24 +309,41 @@ export const SearchView = () => {
                     {results.length} match{results.length !== 1 ? "es" : ""}
                   </span>
                 </div>
-                {isEnriching && (
-                  <div className="flex items-center gap-1.5 text-xs text-primary">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Enriching with AI…</span>
-                  </div>
-                )}
-                {isFallback && !isEnriching && (
-                  <div className="flex items-center gap-1.5 text-xs text-warning">
-                    <AlertTriangle className="w-3 h-3 shrink-0" />
-                    <span>AI unavailable — showing keyword matches</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {isEnriching && (
+                    <div className="flex items-center gap-1.5 text-xs text-primary">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Enriching with AI…</span>
+                    </div>
+                  )}
+                  {isFallback && !isEnriching && (
+                    <div className="flex items-center gap-1.5 text-xs text-warning">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>AI unavailable — showing keyword matches</span>
+                    </div>
+                  )}
+                  {/*
+                    Re-asks the question these results answer, whatever the
+                    input says by now. Disabled while an answer is streaming,
+                    which is the same rule the Search button follows.
+                  */}
+                  <button
+                    onClick={handleRerun}
+                    disabled={isPending || !answeredQuery}
+                    aria-label="Refresh results"
+                    title="Ask this question again"
+                    className="flex items-center gap-1 text-xs text-primary hover:underline disabled:text-on-surface-variant disabled:no-underline disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className="w-3 h-3 shrink-0" />
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {/* Synthesis executive brief (Feature 6) */}
               {!isFallback && (
                 <SynthesisBar
-                  query={query}
+                  query={answeredQuery}
                   contacts={results}
                   resultCount={results.length}
                 />
@@ -349,6 +394,20 @@ export const SearchView = () => {
                 {(semanticSearch.error as Error)?.message ||
                   "An unexpected error occurred."}
               </p>
+              {/*
+                The question that failed is kept by the hook, so this asks it
+                again without reading the input, which may have moved on.
+              */}
+              {submittedQuery && (
+                <button
+                  onClick={handleRerun}
+                  disabled={isPending}
+                  className="mt-4 px-4 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-shadow flex items-center gap-1.5 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                >
+                  <RotateCw className="w-4 h-4" />
+                  Retry
+                </button>
+              )}
             </div>
           )}
         </div>

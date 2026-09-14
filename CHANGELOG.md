@@ -249,6 +249,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ask Contrack runs the same question again. The page refused a question
+  that matched the previous one, and Clear did not reset that memory, so a
+  question once asked could not be asked again until a different one had been
+  asked in between. The guard now reads the question the search is answering,
+  and only refuses a duplicate while that answer is still streaming. A Retry
+  button sits in the error state and a Refresh button beside the results, and
+  both re-ask the question the results belong to rather than whatever the
+  input says by now.
+- The synthesis brief summarises the question that was asked. The results
+  carry their question as `query`, stamped by `useSemanticSearch`, and the
+  brief reads it there. Before this the bar was handed the editable input, so
+  typing question B over question A's results and pressing Synthesize
+  summarised A's contacts under B's words. The command palette had the same
+  wiring and is fixed the same way, and the `?q=` link from the palette now
+  records its question, so leaving the page and coming back restores it.
 - One merge policy, on every path that merges. The import path scored a
   shared phone number 0.99 where a scan scored it 0.95, scored an exact name
   across two sources 0.95 where a scan scored it 0.92, and ran at a fixed
