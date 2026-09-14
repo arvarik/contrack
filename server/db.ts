@@ -1425,6 +1425,13 @@ sqlite.exec(`
       SELECT MIN(dueAt) FROM action_items
       WHERE contactId = NEW.contactId AND completedAt IS NULL
     ) WHERE id = NEW.contactId;
+    -- A task that moved between contacts leaves the old one's cache behind.
+    -- A merge re-parents tasks, and without this the duplicate kept showing
+    -- a follow-up it no longer had. Same-contact updates match nothing here.
+    UPDATE contacts SET nextFollowUpAt = (
+      SELECT MIN(dueAt) FROM action_items
+      WHERE contactId = OLD.contactId AND completedAt IS NULL
+    ) WHERE id = OLD.contactId AND OLD.contactId != NEW.contactId;
   END;
 
   DROP TRIGGER IF EXISTS action_items_sync_delete;

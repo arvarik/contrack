@@ -275,3 +275,204 @@ describe("cluster merge from overlapping suggestions", () => {
     expect(stranded.n).toBe(0);
   });
 });
+
+// =============================================================================
+// Follow-up tasks survive a merge
+// =============================================================================
+// `action_items.contactId` references `contacts.id` with ON DELETE CASCADE.
+// A hard merge re-parented eleven kinds of child row and then deleted the
+// duplicate, and tasks were not one of the eleven, so the database removed
+// every follow-up the duplicate carried. One task became zero, silently. The
+// soft-merge path left the rows in place, on a contact nobody can open.
+//
+// The cache is checked beside the rows. `contacts.nextFollowUpAt` is
+// MIN(dueAt) of the pending tasks, kept by trigger, and a merge that moved the
+// rows without the survivor's cache following them would show the task on the
+// contact and never on the dashboard.
+
+interface TaskRow {
+  id: string;
+  contactId: string;
+  ownerId: string;
+  title: string;
+  dueAt: string;
+  completedAt: string | null;
+}
+
+/** Every task in the account, whichever contact it hangs off. */
+function allTasks(): TaskRow[] {
+  return sqlite
+    .prepare(
+      `SELECT id, contactId, ownerId, title, dueAt, completedAt
+         FROM action_items WHERE ownerId = ? ORDER BY dueAt, title`,
+    )
+    .all(localOwnerId()) as TaskRow[];
+}
+
+function nextFollowUpOf(contactId: string): string | null {
+  const row = sqlite
+    .prepare("SELECT nextFollowUpAt FROM contacts WHERE id = ?")
+    .get(contactId) as { nextFollowUpAt: string | null } | undefined;
+  return row?.nextFollowUpAt ?? null;
+}
+
+async function createTask(
+  contactId: string,
+  title: string,
+  dueAt: string,
+): Promise<string> {
+  const res = await request(app)
+    .post(`/api/contacts/${contactId}/action-items`)
+    .send({ title, dueAt });
+  expect(res.status).toBe(201);
+  return res.body.id as string;
+}
+
+async function completeTask(id: string): Promise<void> {
+  const res = await request(app).patch(`/api/action-items/${id}/complete`);
+  expect(res.status).toBe(200);
+}
+
+describe("a merge keeps the duplicate's follow-up tasks", () => {
+  it("moves a pending task onto the primary in a hard merge", async () => {
+    const primaryId = await createContact({ name: "Task Primary" });
+    const duplicateId = await createContact({ name: "Task Duplicate" });
+    const taskId = await createTask(
+      duplicateId,
+      "Send the proposal",
+      "2027-03-01T09:00:00.000Z",
+    );
+    expect(nextFollowUpOf(duplicateId)).toBe("2027-03-01T09:00:00.000Z");
+    expect(nextFollowUpOf(primaryId)).toBeNull();
+
+    const merged = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId, duplicateId });
+    expect(merged.status).toBe(200);
+
+    // The row is still there, and it hangs off the survivor now. Before this
+    // the count here was zero: the FOREIGN KEY cascade took it with the
+    // duplicate.
+    const tasks = allTasks().filter((t) => t.id === taskId);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].contactId).toBe(primaryId);
+    expect(tasks[0].completedAt).toBeNull();
+
+    // The survivor's cache followed the row, so the dashboard sees it.
+    expect(nextFollowUpOf(primaryId)).toBe("2027-03-01T09:00:00.000Z");
+    expect(merged.body.contact.nextFollowUpAt).toBe("2027-03-01T09:00:00.000Z");
+
+    // And the API agrees with the table.
+    const listed = await request(app).get(
+      `/api/contacts/${primaryId}/action-items`,
+    );
+    expect(listed.status).toBe(200);
+    expect(listed.body.map((t: TaskRow) => t.id)).toEqual([taskId]);
+  });
+
+  it("recomputes the survivor's next follow-up as the earliest pending task of both", async () => {
+    const primaryId = await createContact({ name: "Earliest Primary" });
+    const duplicateId = await createContact({ name: "Earliest Duplicate" });
+    const later = await createTask(
+      primaryId,
+      "Quarterly check-in",
+      "2027-06-01T09:00:00.000Z",
+    );
+    const sooner = await createTask(
+      duplicateId,
+      "Return the call",
+      "2027-04-01T09:00:00.000Z",
+    );
+    // A completed task moves too, and it does not count towards the cache.
+    const done = await createTask(
+      duplicateId,
+      "Already done",
+      "2027-01-01T09:00:00.000Z",
+    );
+    await completeTask(done);
+    expect(nextFollowUpOf(primaryId)).toBe("2027-06-01T09:00:00.000Z");
+
+    const merged = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId, duplicateId });
+    expect(merged.status).toBe(200);
+
+    const mine = allTasks().filter((t) => t.contactId === primaryId);
+    expect(mine.map((t) => t.id).sort()).toEqual([done, later, sooner].sort());
+    expect(mine.find((t) => t.id === done)?.completedAt).not.toBeNull();
+
+    // MIN over the pending rows of both contacts, which is the duplicate's.
+    expect(nextFollowUpOf(primaryId)).toBe("2027-04-01T09:00:00.000Z");
+    expect(nextFollowUpOf(duplicateId)).toBeNull();
+  });
+
+  it("moves the tasks in a soft merge too, and clears the tombstone's cache", async () => {
+    const primaryId = await createContact({ name: "Soft Task Primary" });
+    const duplicateId = await createContact({ name: "Soft Task Duplicate" });
+    const taskId = await createTask(
+      duplicateId,
+      "Book the venue",
+      "2027-05-01T09:00:00.000Z",
+    );
+
+    softMergeContacts(
+      scope(),
+      primaryId,
+      duplicateId,
+      0.95,
+      "test auto-merge with a task",
+      "test",
+    );
+
+    const task = allTasks().find((t) => t.id === taskId);
+    expect(task?.contactId).toBe(primaryId);
+    expect(nextFollowUpOf(primaryId)).toBe("2027-05-01T09:00:00.000Z");
+    // The tombstone keeps no pending tasks, so its cache says so. A stale
+    // date here would surface the moment the merge is undone.
+    expect(nextFollowUpOf(duplicateId)).toBeNull();
+
+    // The pending list shows the task once, under the survivor.
+    const pending = await request(app).get("/api/action-items");
+    expect(pending.status).toBe(200);
+    const rows = pending.body.filter((t: TaskRow) => t.id === taskId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].contactId).toBe(primaryId);
+    expect(rows[0].contactName).toBe("Soft Task Primary");
+  });
+
+  it("settles both caches when a task is re-parented by any path", async () => {
+    // The sync trigger recomputed the contact a task moved TO and forgot the
+    // one it moved FROM. The merge recomputes both itself, so this drives the
+    // trigger on its own with a bare UPDATE, the way any other writer would.
+    const fromId = await createContact({ name: "Trigger From" });
+    const toId = await createContact({ name: "Trigger To" });
+    const taskId = await createTask(fromId, "Moves by itself", "2027-07-01");
+    expect(nextFollowUpOf(fromId)).toBe("2027-07-01");
+
+    sqlite
+      .prepare("UPDATE action_items SET contactId = ? WHERE id = ?")
+      .run(toId, taskId);
+
+    expect(nextFollowUpOf(toId)).toBe("2027-07-01");
+    expect(nextFollowUpOf(fromId)).toBeNull();
+  });
+
+  it("keeps a task the primary already had, and never deletes one", async () => {
+    const primaryId = await createContact({ name: "Both Primary" });
+    const duplicateId = await createContact({ name: "Both Duplicate" });
+    // The same title and the same date on both sides. Two commitments that
+    // look alike are still two commitments: a merge moves rows, it does not
+    // decide which of somebody's tasks to keep.
+    const a = await createTask(primaryId, "Follow up", "2027-02-01");
+    const b = await createTask(duplicateId, "Follow up", "2027-02-01");
+
+    const merged = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId, duplicateId });
+    expect(merged.status).toBe(200);
+
+    const mine = allTasks().filter((t) => t.contactId === primaryId);
+    expect(mine.map((t) => t.id).sort()).toEqual([a, b].sort());
+    expect(nextFollowUpOf(primaryId)).toBe("2027-02-01");
+  });
+});

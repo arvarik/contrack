@@ -40,6 +40,7 @@ interface Twins {
   duplicateId: string;
   interactionId: string;
   listId: string;
+  taskId: string;
 }
 
 async function seedTwins(actor: Actor, label: string): Promise<Twins> {
@@ -84,11 +85,19 @@ async function seedTwins(actor: Actor, label: string): Promise<Twins> {
   );
   expect(member.status).toBeLessThan(300);
 
+  const task = await auth(
+    request(app)
+      .post(`/api/contacts/${duplicate.body.id}/action-items`)
+      .send({ title: `${label} follow-up`, dueAt: "2027-03-01" }),
+  );
+  expect(task.status).toBe(201);
+
   return {
     primaryId: primary.body.id,
     duplicateId: duplicate.body.id,
     interactionId: note.body.id,
     listId: list.body.id,
+    taskId: task.body.id,
   };
 }
 
@@ -148,6 +157,7 @@ describe("a merge moves one account's children and no other account's", () => {
       duplicate: snapshotRow("contacts", twinsB.duplicateId),
       emails: emailsOf(twinsB.primaryId),
       interaction: parentOf("interactions", twinsB.interactionId),
+      task: snapshotRow("action_items", twinsB.taskId),
     };
 
     const merged = await asUser(A)(
@@ -170,6 +180,13 @@ describe("a merge moves one account's children and no other account's", () => {
         .prepare("SELECT contactId FROM list_members WHERE listId = ?")
         .all(twinsA.listId),
     ).toContainEqual({ contactId: twinsA.primaryId });
+    // The follow-up task too, still owned by A, and the survivor's cache
+    // names its date.
+    expect(snapshotRow("action_items", twinsA.taskId)).toMatchObject({
+      contactId: twinsA.primaryId,
+      ownerId: A.user.id,
+    });
+    expect(merged.body.contact.nextFollowUpAt).toBe("2027-03-01");
 
     // B's rows are byte-identical. The child statements select by contact id
     // alone, so an owner check that did not run would have pulled these too:
@@ -181,6 +198,12 @@ describe("a merge moves one account's children and no other account's", () => {
     expect(emailsOf(twinsB.primaryId)).toEqual(beforeB.emails);
     expect(parentOf("interactions", twinsB.interactionId)).toBe(
       beforeB.interaction,
+    );
+    // B's task did not move either. The transfer statement names the owner
+    // as well as the contact, and B's duplicate still shows its own date.
+    expect(snapshotRow("action_items", twinsB.taskId)).toEqual(beforeB.task);
+    expect(snapshotRow("contacts", twinsB.duplicateId)?.nextFollowUpAt).toBe(
+      "2027-03-01",
     );
     expect(emailsOf(twinsA.primaryId)).not.toContain("casey.ben@example.com");
   });
@@ -207,6 +230,7 @@ describe("a merge moves one account's children and no other account's", () => {
     expect(parentOf("interactions", twinsB.interactionId)).toBe(
       twinsB.primaryId,
     );
+    expect(parentOf("action_items", twinsB.taskId)).toBe(twinsB.primaryId);
     // A's merge is still exactly what it was: merging is not a global sweep.
     expect(emailsOf(twinsA.primaryId)).not.toContain("casey.ben@example.com");
   });

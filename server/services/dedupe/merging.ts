@@ -46,6 +46,55 @@ function loadMergePair(
   };
 }
 
+/**
+ * Move the duplicate's follow-up tasks onto the primary and settle both
+ * caches.
+ *
+ * Tasks are the one child row a merge lost. Every other child table was
+ * re-parented below, and `action_items` was not, so the hard merge's final
+ * DELETE took every task the duplicate carried through ON DELETE CASCADE. A
+ * soft merge left the rows in place, on a contact the list no longer shows,
+ * which is the same loss with a longer fuse.
+ *
+ * Every row moves, completed ones included, and none is deleted. A task is a
+ * commitment somebody made, and two that look alike are still two: the
+ * merge is not the place to decide which of them to keep.
+ *
+ * `contacts.nextFollowUpAt` is MIN(dueAt) over the pending tasks, held by
+ * trigger. The UPDATE trigger recomputes both sides of a move, so the two
+ * statements after the transfer are the merge saying so itself rather than
+ * leaning on a trigger it cannot see: the survivor must show the earliest
+ * pending task of the pair, and the duplicate, whether it is about to be
+ * deleted or to become a tombstone, must show none.
+ *
+ * Runs inside the caller's transaction. The owner predicate is on the
+ * statement even though `loadMergePair` already proved both contacts belong
+ * to this account, because a row written by an older version could carry an
+ * owner that disagrees, and a row like that must not move.
+ */
+function transferActionItems(
+  scope: Scope,
+  primaryId: string,
+  duplicateId: string,
+): number {
+  const moved = sqlite
+    .prepare(
+      "UPDATE action_items SET contactId = ? WHERE contactId = ? AND ownerId = ?",
+    )
+    .run(primaryId, duplicateId, scope.ownerId).changes;
+
+  const recompute = sqlite.prepare(
+    `UPDATE contacts SET nextFollowUpAt = (
+       SELECT MIN(dueAt) FROM action_items
+        WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
+     ) WHERE id = ? AND ownerId = ?`,
+  );
+  recompute.run(primaryId, scope.ownerId, primaryId, scope.ownerId);
+  recompute.run(duplicateId, scope.ownerId, duplicateId, scope.ownerId);
+
+  return moved;
+}
+
 export function mergeContacts(
   scope: Scope,
   primaryId: string,
@@ -114,6 +163,16 @@ export function mergeContacts(
     sqlite
       .prepare("DELETE FROM interaction_mentions WHERE contactId = ?")
       .run(duplicateId);
+
+    // Before the DELETE at the end of this transaction, which cascades into
+    // `action_items` and would take every task the duplicate still holds.
+    const movedTasks = transferActionItems(scope, primaryId, duplicateId);
+    if (movedTasks > 0) {
+      log.info(
+        "DedupeService",
+        `[${rid}] Moved ${movedTasks} follow-up task(s) from ${duplicateId} to ${primaryId}`,
+      );
+    }
 
     sqlite
       .prepare(
@@ -479,6 +538,17 @@ export function softMergeContacts(
     sqlite
       .prepare("DELETE FROM interaction_mentions WHERE contactId = ?")
       .run(duplicateId);
+
+    // A tombstone is a contact nobody can open, so a task left on it is a
+    // task nobody can act on. Moved here for the same reason the interactions
+    // above are.
+    const movedTasks = transferActionItems(scope, primaryId, duplicateId);
+    if (movedTasks > 0) {
+      log.info(
+        "DedupeService",
+        `[${rid}] Moved ${movedTasks} follow-up task(s) from ${duplicateId} to ${primaryId}`,
+      );
+    }
 
     sqlite
       .prepare(
