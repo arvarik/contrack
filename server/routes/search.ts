@@ -116,6 +116,14 @@ router.post(
           res,
           controller.signal,
         );
+      } catch (err: unknown) {
+        if (
+          controller.signal.aborted ||
+          (err instanceof Error && err.name === "AbortError")
+        ) {
+          return;
+        }
+        throw err;
       } finally {
         res.off("close", onClose);
       }
@@ -134,6 +142,14 @@ router.post(
           controller.signal,
         );
         if (!res.destroyed) res.json(result);
+      } catch (err: unknown) {
+        if (
+          controller.signal.aborted ||
+          (err instanceof Error && err.name === "AbortError")
+        ) {
+          return;
+        }
+        throw err;
       } finally {
         res.off("close", onClose);
       }

@@ -9,12 +9,19 @@ import {
 } from "../repositories/contactRepository.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { rerankCandidates, type CompressedContact } from "../ai/aiService.ts";
-import { getCachedSearch, setCachedSearch } from "../utils/aiCache.ts";
+import {
+  getCachedSearch,
+  setCachedSearch,
+  normalizeKey,
+} from "../utils/aiCache.ts";
 import { hybridRetrieval } from "./search/hybridRetrieval.ts";
 import type { Response } from "express";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
 import { withTimeout } from "../ai/resilience.ts";
+import { RequestCoalescer } from "../utils/requestCoalescer.ts";
+
+export const searchCoalescer = new RequestCoalescer();
 
 // =============================================================================
 // Constants
@@ -145,12 +152,11 @@ function buildCompressedCandidates(
   return compressed;
 }
 
-function searchRevision(): number {
-  return (
-    sqlite.prepare("SELECT revision FROM search_revision WHERE id=1").get() as {
-      revision: number;
-    }
-  ).revision;
+export function searchRevision(scope: Scope): number {
+  const row = sqlite
+    .prepare("SELECT revision FROM search_revision WHERE ownerId = ?")
+    .get(scope.ownerId) as { revision: number } | undefined;
+  return row?.revision ?? 0;
 }
 
 interface SearchResult {
@@ -190,9 +196,10 @@ async function runSearch(
 ): Promise<SearchResult> {
   signal?.throwIfAborted();
   const start = Date.now();
-  const revision = searchRevision();
+  const revision = searchRevision(scope);
   const capability = resolveCapability("quick");
-  const cacheKey = `${revision}:${Math.floor(start / 300_000)}:${capability?.providerId}:${capability?.model}:${query.trim().toLowerCase()}`;
+  const normalizedQuery = normalizeKey(query);
+  const cacheKey = `${revision}:${Math.floor(start / 300_000)}:${capability?.providerId}:${capability?.model}:${normalizedQuery}`;
   const cached = getCachedSearch(scope, cacheKey);
   if (cached)
     return {
@@ -212,61 +219,86 @@ async function runSearch(
     fallback: true,
     latencyMs: Date.now() - start,
   });
-  let result: SearchResult;
-  try {
-    result = await withTimeout(
-      async (budget) => {
-        const retrieval = await hybridRetrieval(scope, query, rid, budget);
-        budget.throwIfAborted();
-        if (!retrieval.candidates.length)
-          return { matches: [], fallback: false };
-        const candidates = [
-          ...hydrateCandidates(
-            scope,
-            retrieval.candidates.map((c) => c.contactId),
-            PHASE1_LIMIT,
-          ).values(),
-        ];
-        const verified = await rerankCandidates(
-          query,
-          buildCompressedCandidates(candidates),
-          retrieval.plan,
-          budget,
-        );
-        budget.throwIfAborted();
-        const allowed = new Set(candidates.map((c) => c.id));
-        const fresh = hydrateCandidates(
-          scope,
-          verified
-            .filter((match) => allowed.has(match.contact_id))
-            .map((match) => match.contact_id),
-          PHASE1_LIMIT,
-        );
+
+  const coalesceKey = `${scope.ownerId}:search:${revision}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${normalizedQuery}`;
+
+  return searchCoalescer.coalesce(
+    coalesceKey,
+    async (sharedSignal) => {
+      // Double check cache in case a previous coalesced execution just populated it
+      const freshCached = getCachedSearch(scope, cacheKey);
+      if (freshCached) {
         return {
-          matches: verified.flatMap((match) => {
-            const contact = fresh.get(match.contact_id);
-            return contact ? [{ ...contact, aiReason: match.reason }] : [];
-          }),
-          fallback: false,
+          ...freshCached,
+          matches: freshCached.matches as HydratedMatch[],
+          cached: true,
         };
-      },
-      12_000,
-      signal,
-    );
-  } catch (error) {
-    signal?.throwIfAborted();
-    log.warn(
-      "SemanticSearch",
-      `[${rid}] AI refinement unavailable: ${getErrorMessage(error)}`,
-    );
-    result = { matches: searchService.searchFts(scope, query), fallback: true };
-  }
-  signal?.throwIfAborted();
-  // A concurrent edit invalidates all evidence gathered before that edit.
-  if (searchRevision() !== revision)
-    return { matches: searchService.searchFts(scope, query), fallback: true };
-  if (!result.fallback) setCachedSearch(scope, cacheKey, result);
-  return result;
+      }
+
+      let result: SearchResult;
+      try {
+        result = await withTimeout(
+          async (budget) => {
+            const retrieval = await hybridRetrieval(scope, query, rid, budget);
+            budget.throwIfAborted();
+            if (!retrieval.candidates.length)
+              return { matches: [], fallback: false };
+            const candidates = [
+              ...hydrateCandidates(
+                scope,
+                retrieval.candidates.map((c) => c.contactId),
+                PHASE1_LIMIT,
+              ).values(),
+            ];
+            const verified = await rerankCandidates(
+              query,
+              buildCompressedCandidates(candidates),
+              retrieval.plan,
+              budget,
+            );
+            budget.throwIfAborted();
+            const allowed = new Set(candidates.map((c) => c.id));
+            const fresh = hydrateCandidates(
+              scope,
+              verified
+                .filter((match) => allowed.has(match.contact_id))
+                .map((match) => match.contact_id),
+              PHASE1_LIMIT,
+            );
+            return {
+              matches: verified.flatMap((match) => {
+                const contact = fresh.get(match.contact_id);
+                return contact ? [{ ...contact, aiReason: match.reason }] : [];
+              }),
+              fallback: false,
+            };
+          },
+          12_000,
+          sharedSignal,
+        );
+      } catch (error) {
+        sharedSignal?.throwIfAborted();
+        log.warn(
+          "SemanticSearch",
+          `[${rid}] AI refinement unavailable: ${getErrorMessage(error)}`,
+        );
+        result = {
+          matches: searchService.searchFts(scope, query),
+          fallback: true,
+        };
+      }
+      sharedSignal?.throwIfAborted();
+      // A concurrent edit in this account invalidates evidence gathered before that edit.
+      if (searchRevision(scope) !== revision)
+        return {
+          matches: searchService.searchFts(scope, query),
+          fallback: true,
+        };
+      if (!result.fallback) setCachedSearch(scope, cacheKey, result);
+      return result;
+    },
+    signal,
+  );
 }
 
 // =============================================================================

@@ -120,18 +120,48 @@ export function installSearchIndex(sqlite: Database.Database): void {
         ownerTok,
         prefix='2 3 4'
       );
-      CREATE TABLE IF NOT EXISTS search_revision (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
-      INSERT OR IGNORE INTO search_revision VALUES (1, 0);
+    `);
+    const revCols = sqlite.pragma("table_info(search_revision)") as Array<{
+      name: string;
+    }>;
+    if (revCols.length > 0 && !revCols.some((c) => c.name === "ownerId")) {
+      sqlite.exec("DROP TABLE IF EXISTS search_revision");
+    }
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS search_revision (
+        ownerId TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL
+      );
       ${contactTriggerSql()}
     `);
     for (const event of ["INSERT", "UPDATE", "DELETE"]) {
-      sqlite.exec(`
-        DROP TRIGGER IF EXISTS search_revision_${event};
-        CREATE TRIGGER search_revision_${event} AFTER ${event} ON contacts BEGIN
-          UPDATE search_revision SET revision = revision + 1 WHERE id = 1;
-        END;
-      `);
+      sqlite.exec(`DROP TRIGGER IF EXISTS search_revision_${event};`);
     }
+    sqlite.exec(`
+      CREATE TRIGGER search_revision_INSERT AFTER INSERT ON contacts
+      WHEN new.ownerId IS NOT NULL
+      BEGIN
+        INSERT INTO search_revision (ownerId, revision) VALUES (new.ownerId, 1)
+          ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
+      END;
+
+      CREATE TRIGGER search_revision_DELETE AFTER DELETE ON contacts
+      WHEN old.ownerId IS NOT NULL
+      BEGIN
+        INSERT INTO search_revision (ownerId, revision) VALUES (old.ownerId, 1)
+          ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
+      END;
+
+      CREATE TRIGGER search_revision_UPDATE AFTER UPDATE OF ${SEARCH_COLUMNS}, ownerId ON contacts
+      BEGIN
+        INSERT INTO search_revision (ownerId, revision)
+          SELECT new.ownerId, 1 WHERE new.ownerId IS NOT NULL
+          ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
+        INSERT INTO search_revision (ownerId, revision)
+          SELECT old.ownerId, 1 WHERE old.ownerId IS NOT NULL AND (new.ownerId IS NULL OR old.ownerId != new.ownerId)
+          ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
+      END;
+    `);
     for (const table of ["tags", "interests", "emails", "phones"]) {
       for (const [suffix, event, ids] of [
         ["ai", "INSERT", "new.contactId"],

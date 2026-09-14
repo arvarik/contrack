@@ -7,6 +7,10 @@ import { aiCache, ownerKey } from "../utils/aiCache.ts";
 import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
 import type { ActionItem } from "../../src/types.ts";
 import type { Scope } from "../tenancy/scope.ts";
+import { searchRevision } from "./searchService.ts";
+import { RequestCoalescer } from "../utils/requestCoalescer.ts";
+
+export const insightCoalescer = new RequestCoalescer();
 
 // =============================================================================
 // Local row shapes for the raw SQL queries below (narrow — only the columns
@@ -241,16 +245,13 @@ export const dashboardService = {
    * invalidation that drops it are built by the same function and cannot
    * disagree.
    */
-  async getInsight(scope: Scope) {
-    const revision = (
-      sqlite
-        .prepare("SELECT revision FROM search_revision WHERE id = 1")
-        .get() as { revision: number }
-    ).revision;
+  async getInsight(scope: Scope, signal?: AbortSignal) {
+    const revision = searchRevision(scope);
     const model = resolveCapability("quick");
+    const dateBucket = new Date().toISOString().slice(0, 10);
     const cacheKey = ownerKey(
       scope,
-      `${revision}:${new Date().toISOString().slice(0, 10)}:${model?.providerId}:${model?.model}`,
+      `${revision}:${dateBucket}:${model?.providerId}:${model?.model}`,
     );
     // Check unified cache (24h TTL managed by aiCache)
     const cached = aiCache.get<DailyInsight>("dailyInsight", cacheKey);
@@ -266,103 +267,114 @@ export const dashboardService = {
       return cached;
     }
 
-    log.info(
-      "Dashboard",
-      "Cache miss for Daily Insight. Generating new insight...",
+    const coalesceKey = `${scope.ownerId}:insight:${revision}:${dateBucket}:${model?.providerId ?? "none"}:${model?.model ?? "none"}`;
+
+    return insightCoalescer.coalesce(
+      coalesceKey,
+      async (sharedSignal) => {
+        const freshCached = aiCache.get<DailyInsight>("dailyInsight", cacheKey);
+        if (freshCached) return freshCached;
+
+        sharedSignal.throwIfAborted();
+
+        log.info(
+          "Dashboard",
+          "Cache miss for Daily Insight. Generating new insight...",
+        );
+
+        const totalActive = (
+          sqlite
+            .prepare(
+              `SELECT COUNT(*) as count FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
+            )
+            .get(scope.ownerId) as { count: number }
+        ).count;
+
+        const industryRows = sqlite
+          .prepare(
+            `
+          SELECT industry, COUNT(*) as count
+          FROM contacts
+          WHERE ownerId = ? AND industry IS NOT NULL AND industry != '' AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+          GROUP BY industry
+        `,
+          )
+          .all(scope.ownerId) as { industry: string; count: number }[];
+        const industryDistribution: Record<string, number> = {};
+        for (const r of industryRows)
+          industryDistribution[r.industry] = r.count;
+
+        const notReached = sqlite
+          .prepare(
+            `
+          SELECT name FROM contacts
+          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+            AND lastContactedAt < date('now', '-60 days')
+          LIMIT 10
+        `,
+          )
+          .all(scope.ownerId) as { name: string }[];
+
+        const newContacts30d = (
+          sqlite
+            .prepare(
+              `
+          SELECT COUNT(*) as count FROM contacts
+          WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+        `,
+            )
+            .get(scope.ownerId) as { count: number }
+        ).count;
+
+        const topRel = sqlite
+          .prepare(
+            `
+          SELECT name FROM contacts
+          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+          ORDER BY relationshipScore DESC
+          LIMIT 3
+        `,
+          )
+          .all(scope.ownerId) as { name: string }[];
+
+        const bottomRel = sqlite
+          .prepare(
+            `
+          SELECT name FROM contacts
+          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
+          ORDER BY relationshipScore ASC
+          LIMIT 3
+        `,
+          )
+          .all(scope.ownerId) as { name: string }[];
+
+        const numContacts = totalActive;
+
+        // Check if we have enough data so the AI doesn't hallucinate weird stuff
+        if (numContacts === 0) return null;
+
+        const stats = {
+          totalContacts: numContacts,
+          industryDistribution,
+          atRiskNames: notReached.map((r) => r.name),
+          newContactsCount: newContacts30d,
+          topRelationships: topRel.map((r) => r.name),
+          bottomRelationships: bottomRel.map((r) => r.name),
+        };
+
+        const insight = await generateDailyInsight(stats, {
+          signal: sharedSignal,
+        });
+        sharedSignal.throwIfAborted();
+
+        if (searchRevision(scope) !== revision) return null;
+        if (insight) {
+          aiCache.set("dailyInsight", cacheKey, insight);
+        }
+
+        return insight;
+      },
+      signal,
     );
-
-    const totalActive = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
-
-    const industryRows = sqlite
-      .prepare(
-        `
-      SELECT industry, COUNT(*) as count
-      FROM contacts
-      WHERE ownerId = ? AND industry IS NOT NULL AND industry != '' AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-      GROUP BY industry
-    `,
-      )
-      .all(scope.ownerId) as { industry: string; count: number }[];
-    const industryDistribution: Record<string, number> = {};
-    for (const r of industryRows) industryDistribution[r.industry] = r.count;
-
-    const notReached = sqlite
-      .prepare(
-        `
-      SELECT name FROM contacts
-      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-        AND lastContactedAt < date('now', '-60 days')
-      LIMIT 10
-    `,
-      )
-      .all(scope.ownerId) as { name: string }[];
-
-    const newContacts30d = (
-      sqlite
-        .prepare(
-          `
-      SELECT COUNT(*) as count FROM contacts
-      WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-    `,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
-
-    const topRel = sqlite
-      .prepare(
-        `
-      SELECT name FROM contacts
-      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-      ORDER BY relationshipScore DESC
-      LIMIT 3
-    `,
-      )
-      .all(scope.ownerId) as { name: string }[];
-
-    const bottomRel = sqlite
-      .prepare(
-        `
-      SELECT name FROM contacts
-      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
-      ORDER BY relationshipScore ASC
-      LIMIT 3
-    `,
-      )
-      .all(scope.ownerId) as { name: string }[];
-
-    const numContacts = totalActive;
-
-    // Check if we have enough data so the AI doesn't hallucinate weird stuff
-    if (numContacts === 0) return null;
-
-    const stats = {
-      totalContacts: numContacts,
-      industryDistribution,
-      atRiskNames: notReached.map((r) => r.name),
-      newContactsCount: newContacts30d,
-      topRelationships: topRel.map((r) => r.name),
-      bottomRelationships: bottomRel.map((r) => r.name),
-    };
-
-    const insight = await generateDailyInsight(stats);
-    if (
-      (
-        sqlite
-          .prepare("SELECT revision FROM search_revision WHERE id = 1")
-          .get() as { revision: number }
-      ).revision !== revision
-    )
-      return null;
-    if (insight) {
-      aiCache.set("dailyInsight", cacheKey, insight);
-    }
-
-    return insight;
   },
 };
