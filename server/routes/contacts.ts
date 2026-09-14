@@ -6,7 +6,7 @@ import { withTimeout } from "../ai/resilience.ts";
 import { validateEnrichmentStrategy } from "../services/aiSearch/strategies/index.ts";
 import { requireContact } from "../services/contactGuard.ts";
 import { idsSchema } from "../utils/validators.ts";
-import { Router } from "express";
+import { Router, type Request } from "express";
 import multer from "multer";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
@@ -21,10 +21,14 @@ import {
   contactBulkCreateSchema,
 } from "../utils/validators.ts";
 import { z } from "zod";
-import { AppError, NotFoundError } from "../utils/AppError.ts";
+import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
+import { importService, type ImportRecord } from "../services/importService.ts";
+import { generateAndStoreBulkEmbeddings } from "../services/dedupe/embeddings.ts";
+import { importIdSchema } from "./imports.ts";
+import type { NewContactPayload } from "../repositories/types.ts";
 import { providerIdFor } from "../ai/gateway.ts";
 import { getStrategy } from "../services/aiSearch/strategies/index.ts";
 import {
@@ -32,11 +36,6 @@ import {
   type AISearchOutput,
 } from "../services/aiSearch/promptTemplate.ts";
 import { mergeSearchResult } from "../services/aiSearch/mergeEngine.ts";
-import {
-  generateAndStoreBulkEmbeddings,
-  isEmbeddingAvailable,
-} from "../services/dedupe/embeddings.ts";
-import { dedupeService } from "../services/dedupe/index.ts";
 import {
   contactRepo,
   RELATION_REGISTRY,
@@ -187,6 +186,37 @@ router.post(
   }),
 );
 
+/**
+ * The import id a request carries, or a fresh one.
+ *
+ * The browser makes the id when a file is chosen and sends it in
+ * `X-Import-Id`, so a second request for the same file is recognised as the
+ * same import. A caller that sends none gets one made here and returned, and
+ * its import is recorded the same way.
+ */
+function importIdOf(req: Request): string {
+  const header = req.get("x-import-id");
+  if (header === undefined || header === "") return importService.newId();
+  const parsed = importIdSchema.safeParse(header);
+  if (!parsed.success) {
+    throw new ValidationError("X-Import-Id must be a UUID");
+  }
+  return parsed.data;
+}
+
+/** The terminal frame of a streamed import. */
+function doneFrame(record: ImportRecord, repeated: boolean) {
+  return {
+    done: true,
+    importId: record.id,
+    repeated,
+    status: record.status,
+    count: record.imported,
+    failed: record.failed,
+    summary: record.summary,
+  };
+}
+
 router.post(
   "/contacts/bulk",
   validateBody(contactBulkCreateSchema),
@@ -197,6 +227,24 @@ router.post(
     // has been written is reading whatever async context it happens to be in.
     const scope = scopeOf(req);
     const wantsStream = req.headers.accept?.includes("text/event-stream");
+    const contacts = req.body as NewContactPayload[];
+    const importId = importIdOf(req);
+
+    // The record first. A known id is answered from the record and nothing
+    // is written again, which is what makes a retry after a dropped
+    // connection safe. A run this process is still on answers 409.
+    const { record, repeated } = importService.begin(
+      scope,
+      importId,
+      contacts.length,
+      "Importing contacts…",
+    );
+    if (repeated) {
+      log.info(
+        "API",
+        `[${rid}] POST /api/contacts/bulk → import ${importId} already ${record.status}, nothing written`,
+      );
+    }
 
     if (wantsStream) {
       // =====================================================================
@@ -216,154 +264,140 @@ router.post(
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      // The id, before anything else. A stream that dies after this frame
+      // still leaves the browser with what it needs to ask what happened.
+      send({ phase: "accepted", importId });
+
+      if (repeated) {
+        send(doneFrame(record, true));
+        res.end();
+        return;
+      }
+
       // Phase 1: Import
-      const { count, createdIds } = await contactService.bulkCreateContacts(
-        scope,
-        req.body,
-        (processed, total, phase) => {
-          send({ phase: "importing", processed, total, message: phase });
-        },
+      let written: { count: number; createdIds: string[]; failed: number };
+      try {
+        written = await contactService.bulkCreateContacts(
+          scope,
+          contacts,
+          (processed, total, phase) => {
+            send({ phase: "importing", processed, total, message: phase });
+            // The record keeps the same count, every fifty rows, so a
+            // browser that lost the stream reads progress by polling.
+            if (processed % 50 === 0 || processed === total) {
+              importService.progress(scope, importId, processed);
+            }
+          },
+          { importId },
+        );
+      } catch (err: unknown) {
+        // Nothing committed. The record says so, and the stream ends with
+        // no `done` frame, which is the browser's cue to ask the record.
+        importService.fail(scope, importId, getErrorMessage(err));
+        log.error(
+          "API",
+          `[${rid}] POST /api/contacts/bulk → import ${importId} failed before commit: ${getErrorMessage(err)}`,
+        );
+        res.end();
+        return;
+      }
+
+      log.info(
+        "API",
+        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
       );
 
-      log.info("API", `[${rid}] POST /api/contacts/bulk → ${count} imported`);
-
-      // Phase 2: Generate embeddings for imported contacts
-      if (createdIds.length > 0 && isEmbeddingAvailable()) {
-        send({
-          phase: "embedding",
-          message: "Generating contact fingerprints…",
-        });
-        try {
-          await generateAndStoreBulkEmbeddings(createdIds);
-          log.info(
-            "API",
-            `[${rid}] Bulk embeddings generated for ${createdIds.length} contacts`,
-          );
-        } catch (err: unknown) {
-          log.warn(
-            "API",
-            `[${rid}] Bulk embedding failed: ${getErrorMessage(err)}`,
-          );
-        }
-      }
-
-      // Phase 3: Dedupe scan against the imported contacts
-      //
-      // This used to be about two hundred and fifty lines of matching written
-      // out here, which found exact names, emails and phone numbers and
-      // nothing else. The JSON branch below ran a different and stronger
-      // check on the same contacts, so what counted as a duplicate depended
-      // on whether the client had asked for a stream. Both branches now call
-      // the same scan.
-      let autoMerged = 0;
-      let needsReview = 0;
-      let matchedImportIds = new Set<string>();
-
-      if (createdIds.length >= 1) {
-        send({ phase: "scanning", message: "Looking for duplicates…" });
-
-        try {
-          const result = await dedupeService.runImportScan(
-            scope,
-            createdIds,
-            rid,
-            {
-              onProgress: (checked, total) => {
-                if (checked % 50 === 0 && checked < total) {
-                  send({
-                    phase: "scanning",
-                    message: `Checked ${checked}/${total} contacts…`,
-                    autoMerged,
-                    needsReview,
-                  });
-                }
-              },
-            },
-          );
-          autoMerged = result.autoMerged;
-          needsReview = result.pending;
-          matchedImportIds = result.matchedIds;
-
-          log.info(
-            "API",
-            `[${rid}] Post-import dedupe: ${autoMerged} auto-merged, ${needsReview} pending, ${matchedImportIds.size}/${createdIds.length} contacts had matches`,
-          );
-        } catch (err: unknown) {
-          log.warn(
-            "API",
-            `[${rid}] Post-import dedupe failed: ${getErrorMessage(err)}`,
-          );
-        }
-      }
-
-      // Phase 4: Complete — send summary
-      // newUnique = imported contacts that had NO matches at all
-      const newUnique = count - matchedImportIds.size;
-      send({
-        done: true,
-        count,
-        summary: {
-          imported: count,
-          autoMerged,
-          needsReview,
-          newUnique: Math.max(0, newUnique),
-        },
-      });
+      // Phases 2 to 4: fingerprints, the duplicate check, the summary. One
+      // function, shared with the JSON path, a retry, and a resumed check.
+      const finished = await importService.finish(
+        scope,
+        importId,
+        written.createdIds,
+        rid,
+        send,
+      );
+      send(doneFrame(finished, false));
       res.end();
     } else {
       // Standard JSON mode — for small imports or non-streaming clients
-      const { count, createdIds } = await contactService.bulkCreateContacts(
-        scope,
-        req.body,
-      );
-      log.info("API", `[${rid}] POST /api/contacts/bulk → ${count} imported`);
+      if (repeated) {
+        res.status(200).json({
+          success: true,
+          repeated: true,
+          importId,
+          status: record.status,
+          count: record.imported,
+          failed: record.failed,
+        });
+        return;
+      }
 
-      // Generate embeddings + schedule incremental dedupe for each contact.
-      //
-      // Both outlive the response, and the second waits out the settle delay
+      let written: { count: number; createdIds: string[]; failed: number };
+      try {
+        written = await contactService.bulkCreateContacts(
+          scope,
+          contacts,
+          undefined,
+          { importId },
+        );
+      } catch (err: unknown) {
+        importService.fail(scope, importId, getErrorMessage(err));
+        throw err;
+      }
+      log.info(
+        "API",
+        `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
+      );
+
+      // The tail outlives the response, and waits out the settle delay
       // before it starts. AsyncLocalStorage does carry the request's scope
       // through a timer, so this ran attributed before the wrapper as well as
       // after it. The wrapper makes the owner an argument rather than an
       // inheritance: the day this work moves behind a queue, the context it
       // runs in belongs to whoever drained the queue.
-      if (createdIds.length > 0) {
-        runWithContext(
-          { requestId: `imp-${rid}`, principal: null, scope },
-          () => {
-            generateAndStoreBulkEmbeddings(createdIds).catch((err) =>
-              log.warn(
-                "API",
-                `Background bulk embedding failed: ${getErrorMessage(err)}`,
-              ),
+      //
+      // One scan for the whole import, not one check per contact. The loop
+      // that was here called `incrementalDedupeCheck` once per created
+      // contact, and every one of those normalized the account's whole
+      // corpus. `runImportScan`, inside `finish`, builds the corpus once.
+      runWithContext(
+        { requestId: `imp-${rid}`, principal: null, scope },
+        () => {
+          // The fingerprints start now, while the settle delay runs, as they
+          // always have on this path. `finish` is told not to run them again.
+          generateAndStoreBulkEmbeddings(written.createdIds).catch((err) =>
+            log.warn(
+              "API",
+              `Background bulk embedding failed: ${getErrorMessage(err)}`,
+            ),
+          );
+          void (async () => {
+            // Let bulk inserts and embedding tasks settle first.
+            await new Promise((resolve) =>
+              setTimeout(resolve, IMPORT_SETTLE_MS),
             );
-            // One scan for the whole import, not one check per contact.
-            //
-            // The loop that was here called `incrementalDedupeCheck` once per
-            // created contact, and every one of those normalized the account's
-            // whole corpus and built a pass context of its own. Importing `n`
-            // contacts into a corpus of `m` cost about `n × m`, nearly all of
-            // it the same work done again. `runImportScan` builds the corpus
-            // once and matches every new contact against that.
-            void (async () => {
-              // Let bulk inserts and embedding tasks settle first.
-              await new Promise((resolve) =>
-                setTimeout(resolve, IMPORT_SETTLE_MS),
-              );
-              await dedupeService.runImportScan(
-                scope,
-                createdIds,
-                `imp-${rid}`,
-              );
-            })().catch((err) =>
-              log.error(
-                "API",
-                `Bulk background dedupe scan crashed: ${getErrorMessage(err)}`,
-              ),
+            await importService.finish(
+              scope,
+              importId,
+              written.createdIds,
+              `imp-${rid}`,
+              undefined,
+              { skipEmbedding: true },
             );
-          },
-        );
-      }
-      res.status(201).json({ success: true, count });
+          })().catch((err) =>
+            log.error(
+              "API",
+              `Bulk background import tail crashed: ${getErrorMessage(err)}`,
+            ),
+          );
+        },
+      );
+      res.status(201).json({
+        success: true,
+        count: written.count,
+        failed: written.failed,
+        importId,
+      });
     }
   }),
 );

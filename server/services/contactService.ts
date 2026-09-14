@@ -29,6 +29,7 @@ import { scheduleSearchIndex } from "./search/indexQueue.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { dedupeService } from "./dedupe/index.ts";
+import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
 // ---------------------------------------------------------------------------
@@ -278,12 +279,28 @@ export const contactService = {
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
   },
 
+  /**
+   * Write a batch of contacts in one transaction.
+   *
+   * With an `importId`, every row is written under a savepoint of its own and
+   * a row that throws is recorded as failed, with its payload, while the rest
+   * of the batch commits. The import's status moves to `imported` inside the
+   * same transaction, so the record can never say the contacts are there
+   * when they are not. `rowIndexes` gives each row its line in the import,
+   * which a retry uses to land a row back where it was.
+   *
+   * Without an `importId` the batch is all or nothing, as it always was. The
+   * eval harness and the tests seed corpora through this path, and a partial
+   * corpus would be worse than a thrown one.
+   */
   async bulkCreateContacts(
     scope: Scope,
     validContacts: NewContactPayload[],
     onProgress?: (processed: number, total: number, phase: string) => void,
-  ): Promise<{ count: number; createdIds: string[] }> {
+    options: { importId?: string; rowIndexes?: number[] } = {},
+  ): Promise<{ count: number; createdIds: string[]; failed: number }> {
     const total = validContacts.length;
+    const { importId, rowIndexes } = options;
 
     // Phase 1: Process base64 data-URI avatars (from VCF imports) into optimized files
     // This runs before the SQLite transaction since sharp is async
@@ -302,26 +319,55 @@ export const contactService = {
     // for N contacts). With batch mode, exactly 1 flush after all inserts.
     aiCache.enterBatchMode();
     let count = 0;
+    let failed = 0;
     const createdIds: string[] = [];
     try {
+      /** One row. A savepoint when nested in the batch below. */
+      const insertOne = sqlite.transaction((c: NewContactPayload) => {
+        const id = crypto.randomUUID();
+        const values = buildInsertValues(scope, c, id);
+
+        // Smart avatar: gender-aware DiceBear URL if no avatar was provided
+        if (!values.avatarUrl && c.name) {
+          values.avatarUrl = buildAvatarUrl(c.name);
+        }
+
+        db.insert(schema.contacts)
+          .values({ ...values, ownerId: scope.ownerId })
+          .run();
+        contactRepo.insertChildRecords(id, c, c._sourcePlatform || "manual");
+        return id;
+      });
+
       const txn = sqlite.transaction(() => {
-        for (const c of validContacts) {
-          const id = crypto.randomUUID();
-          const values = buildInsertValues(scope, c, id);
-
-          // Smart avatar: gender-aware DiceBear URL if no avatar was provided
-          if (!values.avatarUrl && c.name) {
-            values.avatarUrl = buildAvatarUrl(c.name);
+        for (let i = 0; i < validContacts.length; i++) {
+          const c = validContacts[i];
+          const index = rowIndexes?.[i] ?? i;
+          let id: string;
+          try {
+            id = insertOne(c);
+          } catch (err: unknown) {
+            // No import record, no place to put a failed row: the batch is
+            // all or nothing, and this rethrow rolls it back.
+            if (!importId) throw err;
+            failed++;
+            const message = getErrorMessage(err);
+            importService.rowFailed(scope, importId, index, c.name, message, c);
+            log.warn(
+              "ContactService",
+              `Import ${importId} row ${index} ("${c.name}") failed: ${message}`,
+            );
+            continue;
           }
-
-          db.insert(schema.contacts)
-            .values({ ...values, ownerId: scope.ownerId })
-            .run();
-          contactRepo.insertChildRecords(id, c, c._sourcePlatform || "manual");
           if (c.location) queueGeocode(id, c.location);
           createdIds.push(id);
           count++;
+          if (importId)
+            importService.rowDone(scope, importId, index, id, c.name);
         }
+        // Inside the transaction on purpose. The status and the contacts
+        // commit together or not at all.
+        if (importId) importService.markImported(scope, importId);
       });
       txn();
       onProgress?.(total, total, "Complete");
@@ -330,7 +376,7 @@ export const contactService = {
     } finally {
       aiCache.exitBatchMode();
     }
-    return { count, createdIds };
+    return { count, createdIds, failed };
   },
 
   /**

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Every bulk import has an id and a record. The browser makes the id when a
+  file is chosen and sends it as `X-Import-Id`, and `imports` keeps a row per
+  import and `import_rows` a row per contact. A second request with the same
+  id writes nothing and answers from the record, so a dropped connection
+  followed by a retry never creates the contacts twice. `GET /api/imports/:id`
+  reads the record, and a browser that lost its stream polls it rather than
+  showing "Import Complete" over an import it knows nothing about. A record
+  whose server process died settles on the next read: one that never saved a
+  contact is reported failed, and one that saved its contacts but never
+  finished the duplicate check is finished then.
+- A row that fails no longer fails the import. The rest of the batch is
+  saved, the row is kept with its error and its payload, and
+  `GET /api/imports/:id/rows` lists it. `POST /api/imports/:id/retry` runs
+  the failed rows again from what the server kept, without the file being
+  sent a second time. Finished imports are swept after thirty days.
 - An import can be reconnected to and retried. The browser makes an id for
   each file it imports, sends it as `X-Import-Id`, and remembers it per
   account. A stream that ends without the server's `done` frame no longer

@@ -68,6 +68,9 @@ the route files:
 | POST | `/api/contacts/bulk` | scoped | 2a |
 | POST | `/api/parse-contact` | instance-read | |
 | POST | `/api/contacts/bulk-delete` | scoped | 2a |
+| GET | `/api/imports/:id` | scoped | 2.0 extra, recoverable imports |
+| GET | `/api/imports/:id/rows` | scoped | 2.0 extra, recoverable imports |
+| POST | `/api/imports/:id/retry` | scoped | 2.0 extra, recoverable imports |
 | PUT | `/api/contacts/bulk-update` | scoped | 2a |
 | PUT | `/api/contacts/:id` | scoped | 2a |
 | PATCH | `/api/contacts/:id` | scoped | 2a |

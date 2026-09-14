@@ -26,5 +26,6 @@ vi.mock("../server/db.ts", () => ({
     "dedupe_exclusions",
     "dedupe_merge_log",
     "ai_invocations",
+    "imports",
   ],
 }));

@@ -34,6 +34,7 @@ import {
   AUDIT_RETENTION_DAYS,
   REVOKED_TOKEN_RETENTION_DAYS,
   DEAD_INVITATION_RETENTION_DAYS,
+  IMPORT_RETENTION_DAYS,
 } from "../../server/services/maintenanceService.ts";
 
 /** A timestamp `days` in the past, in the format the columns store. */
@@ -61,7 +62,26 @@ function clearAll(): void {
     DELETE FROM api_tokens;
     DELETE FROM sessions;
     DELETE FROM ai_invocations;
+    DELETE FROM imports;
   `);
+}
+
+function insertImport(
+  id: string,
+  status: string,
+  updatedAt: string,
+  owner: string,
+): void {
+  sqlite
+    .prepare(
+      `INSERT INTO imports (id, ownerId, status, total, updatedAt) VALUES (?, ?, ?, 1, ?)`,
+    )
+    .run(id, owner, status, updatedAt);
+  sqlite
+    .prepare(
+      `INSERT INTO import_rows (importId, rowIndex, status, name) VALUES (?, 0, 'failed', 'x')`,
+    )
+    .run(id);
 }
 
 function insertAudit(id: string, createdAt: string): void {
@@ -165,6 +185,45 @@ afterAll(() => {
 });
 
 describe("the daily sweep", () => {
+  it("removes a finished import past its retention, with its rows, and keeps the rest", () => {
+    insertImport(
+      "old-complete",
+      "complete",
+      daysAgo(IMPORT_RETENTION_DAYS + 1),
+      owner,
+    );
+    insertImport(
+      "old-failed",
+      "failed",
+      daysAgo(IMPORT_RETENTION_DAYS + 1),
+      owner,
+    );
+    insertImport(
+      "recent",
+      "complete",
+      daysAgo(IMPORT_RETENTION_DAYS - 1),
+      owner,
+    );
+    // A running record is never swept, however old. The next read of it is
+    // what settles it, and a sweep that removed it would take the failed
+    // rows somebody may still want to retry.
+    insertImport(
+      "old-imported",
+      "imported",
+      daysAgo(IMPORT_RETENTION_DAYS + 1),
+      owner,
+    );
+
+    const counts = runDailyMaintenance();
+
+    expect(counts.oldImports).toBe(2);
+    expect(ids("imports")).toEqual(["old-imported", "recent"]);
+    const rows = sqlite
+      .prepare("SELECT importId FROM import_rows ORDER BY importId")
+      .all() as { importId: string }[];
+    expect(rows.map((r) => r.importId)).toEqual(["old-imported", "recent"]);
+  });
+
   it("removes an audit row past its retention and keeps the rest", () => {
     insertAudit("old", daysAgo(AUDIT_RETENTION_DAYS + 1));
     insertAudit("edge", daysAgo(AUDIT_RETENTION_DAYS - 1));
@@ -285,7 +344,7 @@ describe("the daily sweep", () => {
     expect(ids("ai_invocations")).toEqual(["recent"]);
   });
 
-  it("sweeps all five tables in one pass", () => {
+  it("sweeps all six tables in one pass", () => {
     insertAudit("a", daysAgo(AUDIT_RETENTION_DAYS + 1));
     insertSession("s", daysAgo(1), owner);
     insertToken("t", owner, {
@@ -297,6 +356,7 @@ describe("the daily sweep", () => {
       revokedAt: daysAgo(DEAD_INVITATION_RETENTION_DAYS + 1),
     });
     insertInvocation("v", daysAgo(31), owner);
+    insertImport("m", "complete", daysAgo(IMPORT_RETENTION_DAYS + 1), owner);
 
     expect(runDailyMaintenance()).toEqual({
       auditRows: 1,
@@ -304,6 +364,7 @@ describe("the daily sweep", () => {
       agedTokens: 1,
       deadInvitations: 1,
       oldInvocations: 1,
+      oldImports: 1,
       // The sweep also checkpoints the write-ahead log, and how many pages
       // that moves depends on everything written before this test ran.
       // `expect.any` keeps the shape exhaustive, so a field added later still
@@ -316,6 +377,7 @@ describe("the daily sweep", () => {
       "api_tokens",
       "invitations",
       "ai_invocations",
+      "imports",
     ]) {
       expect(ids(table), table).toEqual([]);
     }
@@ -329,6 +391,7 @@ describe("the daily sweep", () => {
       agedTokens: 0,
       deadInvitations: 0,
       oldInvocations: 0,
+      oldImports: 0,
       walPagesCheckpointed: expect.any(Number),
     });
     expect(ids("audit_log")).toEqual(["new"]);

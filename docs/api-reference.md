@@ -242,6 +242,123 @@ it runs before the `done` event, and the counts in the summary are its result.
 In standard mode the response returns first and the scan starts a few seconds
 later, so `GET /api/dedupe/suggestions` is where its result appears.
 
+**Every import has an id and a record.** Send one as `X-Import-Id`, a UUID
+the client makes when a file is chosen. A request without the header gets
+one made by the server. The id comes back in the first stream event and in
+the standard response, and `GET /api/imports/:id` reads the record it names.
+
+```bash
+curl -X POST http://localhost:3210/api/contacts/bulk \
+  -H "Content-Type: application/json" \
+  -H "X-Import-Id: 6f6a4c1e-0c1b-4a9c-9f61-2d8b1f3e7a10" \
+  -d '[{"name":"Alice Johnson"},{"name":"Bob Williams"}]'
+```
+
+The stream begins with `{"phase":"accepted","importId":"…"}` and ends with
+`{"done":true,"importId":"…","status":"complete","count":2,"failed":0,"summary":{…}}`.
+A stream that ends without a `done` event is a dropped connection, not a
+finished import. The record says what happened.
+
+**The same id twice imports once.** A second request with a known id writes
+nothing and answers from the record: the stream sends `accepted` and then a
+`done` event with `"repeated": true`, and the standard mode answers `200`
+with `"repeated": true`. While the server is still running the import the
+answer is `409 IMPORT_IN_PROGRESS`. An import that failed before any contact
+was saved runs again under the same id. An id another account used answers
+`409 IMPORT_ID_IN_USE`.
+
+**A row that fails does not fail the import.** The rest of the batch is
+saved, the row is recorded with its error, and `POST /api/imports/:id/retry`
+runs it again. Without an import id, as when the service is called directly,
+the batch is all or nothing.
+
+---
+
+### `GET /api/imports/:id`
+
+The record of one import.
+
+```json
+{
+  "id": "6f6a4c1e-0c1b-4a9c-9f61-2d8b1f3e7a10",
+  "status": "complete",
+  "phase": "done",
+  "message": null,
+  "total": 2,
+  "processed": 2,
+  "imported": 2,
+  "failed": 0,
+  "summary": {
+    "imported": 2,
+    "autoMerged": 0,
+    "needsReview": 0,
+    "newUnique": 2,
+    "failed": 0
+  },
+  "error": null,
+  "createdAt": "2026-09-14 16:40:02",
+  "updatedAt": "2026-09-14 16:40:03",
+  "completedAt": "2026-09-14 16:40:03"
+}
+```
+
+| `status`   | Meaning                                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| `running`  | The contacts are being written. Nothing is saved yet.                                                    |
+| `imported` | The contacts are saved. The duplicate check is running, and `summary` is null.                           |
+| `complete` | Everything finished. `error` carries a note if the duplicate check failed after the contacts were saved. |
+| `failed`   | Nothing was saved. `error` says why, and the same request can be sent again with the same id.            |
+
+The record settles itself. A `running` import whose server process died is
+answered as `failed` on the next read. An `imported` one whose process died
+is finished on the next read: the duplicate check runs again in the
+background and the record moves to `complete`.
+
+Answers `404` for an id this account did not use.
+
+---
+
+### `GET /api/imports/:id/rows`
+
+The rows of one import in one status. `status` is `failed` (the default) or
+`done`, and `limit` is 1 to 500 (default 200).
+
+```json
+{
+  "rows": [
+    {
+      "index": 3,
+      "status": "failed",
+      "name": "Broken Row",
+      "error": "…",
+      "contactId": null
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/imports/:id/retry`
+
+Run every failed row again, from the payload the server kept. The rows are
+written before the answer, and the duplicate check for the new contacts runs
+afterwards, so the record moves `imported` and then `complete`.
+
+```json
+{
+  "importId": "…",
+  "status": "imported",
+  "retried": 1,
+  "imported": 2,
+  "failed": 0
+}
+```
+
+Answers `400 NOTHING_TO_RETRY` when no row is failed, or when the import
+never saved anything, and `409 IMPORT_IN_PROGRESS` while the import or a
+retry is running.
+
 ---
 
 ### `POST /api/contacts/bulk-delete`

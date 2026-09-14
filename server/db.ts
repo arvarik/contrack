@@ -438,6 +438,60 @@ sqlite.exec(`
 `);
 
 // =============================================================================
+// 2z-3b. Imports — one durable record per bulk import
+// =============================================================================
+// A bulk import used to exist only for the life of its request. A connection
+// that dropped part way left the browser with no way to learn what happened,
+// and a second attempt created every contact again under fresh ids. The
+// record here is what the browser reconnects to, and what makes a second
+// request with the same id a question rather than a second import.
+//
+// `imports` carries an owner of its own and is in OWNED_TABLES: it hangs off
+// nothing, so the caller supplies the owner and the required-owner trigger
+// refuses a row without one. `import_rows` hangs off `imports` and reaches its
+// owner through that join, the way `list_members` reaches one through `lists`.
+// It keeps a row's payload only while the row is failed, so a retry can run it
+// again without the browser re-sending the file.
+//
+// Created here, before §2z-4, because the claim loop below walks every owned
+// table and the table has to exist for the statement to prepare.
+// =============================================================================
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS imports (
+    id TEXT PRIMARY KEY,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    status TEXT NOT NULL DEFAULT 'running',
+    phase TEXT,
+    message TEXT,
+    total INTEGER NOT NULL DEFAULT 0,
+    processed INTEGER NOT NULL DEFAULT 0,
+    imported INTEGER NOT NULL DEFAULT 0,
+    failed INTEGER NOT NULL DEFAULT 0,
+    autoMerged INTEGER,
+    needsReview INTEGER,
+    newUnique INTEGER,
+    error TEXT,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    completedAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_imports_owner_created ON imports(ownerId, createdAt DESC);
+
+  CREATE TABLE IF NOT EXISTS import_rows (
+    importId TEXT NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
+    rowIndex INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    contactId TEXT,
+    name TEXT,
+    error TEXT,
+    payload TEXT,
+    PRIMARY KEY (importId, rowIndex)
+  );
+  CREATE INDEX IF NOT EXISTS idx_import_rows_status ON import_rows(importId, status);
+`);
+
+// =============================================================================
 // 2z-4. Tenancy — ownership columns, the local owner, and the claim
 // =============================================================================
 // This block gives every row an owner. It has to run here, before §3, for two
@@ -469,6 +523,7 @@ export const OWNED_TABLES = [
   "dedupe_exclusions",
   "dedupe_merge_log",
   "ai_invocations",
+  "imports",
 ] as const;
 
 /** Owned tables with no parent contact. The caller must supply the owner. */
@@ -477,6 +532,7 @@ const OWNER_REQUIRED_TABLES = [
   "lists",
   "dedupe_merge_log",
   "ai_invocations",
+  "imports",
 ] as const;
 
 /**

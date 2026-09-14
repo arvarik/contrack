@@ -121,6 +121,8 @@ const COVERED = [
   "GET /api/export/csv",
   "GET /api/export/json",
   "GET /api/export/vcard",
+  "GET /api/imports/:id",
+  "GET /api/imports/:id/rows",
   "GET /api/industries",
   "GET /api/interactions/search",
   "GET /api/lists",
@@ -156,6 +158,7 @@ const COVERED = [
   "POST /api/dedupe/suggestions/:id/dismiss",
   "POST /api/dedupe/suggestions/:id/merge",
   "POST /api/dev/seed-duplicates",
+  "POST /api/imports/:id/retry",
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
@@ -618,6 +621,85 @@ describe("POST /api/contacts/bulk", () => {
     expect(snapshotRow("contacts", twin.body.id)).toEqual(beforeTwin);
     expect(rowsOwnedBy("contacts", A.user.id)).toBe(beforeCount);
     expect(rowsOwnedBy("dedupe_suggestions", A.user.id)).toBe(0);
+  });
+});
+
+describe("the record an import leaves", () => {
+  let importA: string;
+
+  beforeAll(async () => {
+    importA = crypto.randomUUID();
+    const res = await asUser(A)(
+      request(app)
+        .post("/api/contacts/bulk")
+        .set("X-Import-Id", importA)
+        .send([{ name: "Imported By A" }]),
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.importId).toBe(importA);
+  });
+
+  it("GET /api/imports/:id answers B 404 for A's import, and A its record", async () => {
+    const mine = await asUser(A)(request(app).get(`/api/imports/${importA}`));
+    expect(mine.status).toBe(200);
+    expect(mine.body.id).toBe(importA);
+
+    const theirs = await asUser(B)(request(app).get(`/api/imports/${importA}`));
+    expect(theirs.status).toBe(404);
+    // The same answer an id nobody used gets.
+    const nobody = await asUser(B)(
+      request(app).get(`/api/imports/${crypto.randomUUID()}`),
+    );
+    expect(nobody.status).toBe(404);
+    expect(theirs.body.error.code).toBe(nobody.body.error.code);
+  });
+
+  it("GET /api/imports/:id/rows answers B 404 for A's import", async () => {
+    const mine = await asUser(A)(
+      request(app).get(`/api/imports/${importA}/rows?status=done`),
+    );
+    expect(mine.status).toBe(200);
+    expect(mine.body.rows).toHaveLength(1);
+
+    const theirs = await asUser(B)(
+      request(app).get(`/api/imports/${importA}/rows?status=done`),
+    );
+    expect(theirs.status).toBe(404);
+  });
+
+  it("POST /api/imports/:id/retry answers B 404 for A's import and writes nothing", async () => {
+    const before = snapshotRow("imports", importA);
+    const beforeCount = rowsOwnedBy("contacts", A.user.id);
+
+    const theirs = await asUser(B)(
+      request(app).post(`/api/imports/${importA}/retry`),
+    );
+    expect(theirs.status).toBe(404);
+
+    expect(snapshotRow("imports", importA)).toEqual(before);
+    expect(rowsOwnedBy("contacts", A.user.id)).toBe(beforeCount);
+  });
+
+  it("POST /api/contacts/bulk refuses B an id A already used, and imports nothing for B", async () => {
+    // An id is a UUID and two accounts do not pick the same one by accident.
+    // Answering B from A's record would tell B what A imported, and running
+    // B's import under A's id would attach B's rows to A's record.
+    const before = snapshotRow("imports", importA);
+    const beforeB = rowsOwnedBy("contacts", B.user.id);
+    const beforeImportsB = rowsOwnedBy("imports", B.user.id);
+
+    const res = await asUser(B)(
+      request(app)
+        .post("/api/contacts/bulk")
+        .set("X-Import-Id", importA)
+        .send([{ name: "Imported By B" }]),
+    );
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("IMPORT_ID_IN_USE");
+
+    expect(snapshotRow("imports", importA)).toEqual(before);
+    expect(rowsOwnedBy("contacts", B.user.id)).toBe(beforeB);
+    expect(rowsOwnedBy("imports", B.user.id)).toBe(beforeImportsB);
   });
 });
 
