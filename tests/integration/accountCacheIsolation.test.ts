@@ -155,13 +155,11 @@ describe("Account cache isolation and shared pending requests", () => {
     it("prevents another account's import from invalidating cached search", async () => {
       // Seed Actor A with a contact
       await asUser(actorA)(
-        request(app)
-          .post("/api/contacts")
-          .send({
-            name: "Alice Johnson",
-            role: "Software Engineer",
-            about: "Builds distributed database systems",
-          }),
+        request(app).post("/api/contacts").send({
+          name: "Alice Johnson",
+          role: "Software Engineer",
+          about: "Builds distributed database systems",
+        }),
       );
 
       vi.mocked(rerankCandidates).mockResolvedValueOnce([
@@ -206,13 +204,11 @@ describe("Account cache isolation and shared pending requests", () => {
 
     it("does not discard Actor A's in-progress semantic search when Actor B imports", async () => {
       const resA = await asUser(actorA)(
-        request(app)
-          .post("/api/contacts")
-          .send({
-            name: "Alice Johnson",
-            role: "Software Engineer",
-            about: "Specializes in cloud infrastructure",
-          }),
+        request(app).post("/api/contacts").send({
+          name: "Alice Johnson",
+          role: "Software Engineer",
+          about: "Specializes in cloud infrastructure",
+        }),
       );
       const contactAId = resA.body.id;
 
@@ -331,13 +327,11 @@ describe("Account cache isolation and shared pending requests", () => {
   describe("shared pending requests (single-flight)", () => {
     it("coalesces concurrent identical search requests within the account", async () => {
       const resA = await asUser(actorA)(
-        request(app)
-          .post("/api/contacts")
-          .send({
-            name: "Alice Williams",
-            role: "Systems Specialist",
-            about: "Deep systems specialist",
-          }),
+        request(app).post("/api/contacts").send({
+          name: "Alice Williams",
+          role: "Systems Specialist",
+          about: "Deep systems specialist",
+        }),
       );
       const contactAId = resA.body.id;
 
@@ -369,13 +363,11 @@ describe("Account cache isolation and shared pending requests", () => {
 
     it("preserves cancellation: if caller 1 aborts, caller 2 receives search result", async () => {
       const resA = await asUser(actorA)(
-        request(app)
-          .post("/api/contacts")
-          .send({
-            name: "Alice Williams",
-            role: "Systems Specialist",
-            about: "Deep systems specialist",
-          }),
+        request(app).post("/api/contacts").send({
+          name: "Alice Williams",
+          role: "Systems Specialist",
+          about: "Deep systems specialist",
+        }),
       );
       const contactAId = resA.body.id;
 
@@ -485,22 +477,18 @@ describe("Account cache isolation and shared pending requests", () => {
 
     it("does not share in-flight requests across different accounts", async () => {
       await asUser(actorA)(
-        request(app)
-          .post("/api/contacts")
-          .send({
-            name: "Alice Jones",
-            role: "Staff Engineer",
-            about: "Staff engineer at Acme",
-          }),
+        request(app).post("/api/contacts").send({
+          name: "Alice Jones",
+          role: "Staff Engineer",
+          about: "Staff engineer at Acme",
+        }),
       );
       await asUser(actorB)(
-        request(app)
-          .post("/api/contacts")
-          .send({
-            name: "Bob Smith",
-            role: "Staff Engineer",
-            about: "Staff engineer at Beta",
-          }),
+        request(app).post("/api/contacts").send({
+          name: "Bob Smith",
+          role: "Staff Engineer",
+          about: "Staff engineer at Beta",
+        }),
       );
 
       let rerankInvocations = 0;
