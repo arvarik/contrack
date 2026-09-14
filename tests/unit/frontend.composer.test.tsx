@@ -32,6 +32,22 @@ vi.mock("../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({ user: account.current }),
 }));
 
+// The composer reads two hooks off the `api` barrel, and the barrel pulls in
+// every API module in the app. Coverage instruments what is imported, so
+// loading twenty modules this file never exercises lowered the project's
+// function coverage under its floor. The two hooks stay real, from their own
+// files.
+vi.mock("../../src/api", async () => {
+  const [interactions, contacts] = await Promise.all([
+    import("../../src/api/interactions"),
+    import("../../src/api/contacts"),
+  ]);
+  return {
+    useAddInteraction: interactions.useAddInteraction,
+    useContactNames: contacts.useContactNames,
+  };
+});
+
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
