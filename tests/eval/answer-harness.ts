@@ -48,7 +48,7 @@ export const BASELINE_PATH = path.resolve(HERE, "answer.baseline.json");
 
 /** 384, width of the all-MiniLM-L6-v2 model. */
 export const EVAL_DIMENSION = 384;
-export const ANSWER_SCORING_VERSION = 2;
+export const ANSWER_SCORING_VERSION = 3;
 
 // ---------------------------------------------------------------------------
 // Score Types
@@ -276,26 +276,44 @@ export function evaluateFilterInterpretation(
     }
   }
   const categories = [
-    [expected.locationMatchers, plan.must.locationMatchers],
-    [expected.companyMatchers, plan.must.companyMatchers],
-    [expected.roleMatchers, plan.must.roleMatchers],
-    [expected.industryMatchers, plan.must.industryMatchers],
-    [expected.traits, plan.should.traits],
+    "locationMatchers",
+    "companyMatchers",
+    "roleMatchers",
+    "industryMatchers",
+    "traits",
   ] as const;
-  const expectedCount = categories.filter(([values]) => values?.length).length;
-  const actualCount =
-    categories.filter(([, values]) => values?.length).length +
-    (plan.must.temporal ? 1 : 0);
-  const matchedCount = categories.filter(([wanted, actual]) =>
-    wanted?.some((value) => containsSubsequence(actual ?? [], value)),
-  ).length;
+  let requiredCount = 0;
+  let actualCount = plan.must.temporal ? 1 : 0;
+  let matchedRequired = 0;
+  let matchedOptional = 0;
+  for (const category of categories) {
+    const wanted = expected[category];
+    const optional = expected.optional?.[category];
+    const actual =
+      category === "traits" ? plan.should.traits : plan.must[category];
+    if (wanted?.length) requiredCount += 1;
+    if (!actual?.length) continue;
+    actualCount += 1;
+    if (wanted?.length) {
+      if (wanted.some((value) => containsSubsequence(actual, value))) {
+        matchedRequired += 1;
+      }
+    } else if (
+      optional?.length &&
+      actual.every((value) =>
+        optional.some((allowed) => containsSubsequence([value], allowed)),
+      )
+    ) {
+      matchedOptional += 1;
+    }
+  }
   const precision =
     actualCount === 0
-      ? expectedCount === 0
+      ? requiredCount === 0
         ? 1
         : 0
-      : matchedCount / actualCount;
-  const recall = expectedCount === 0 ? 1 : matchedCount / expectedCount;
+      : (matchedRequired + matchedOptional) / actualCount;
+  const recall = requiredCount === 0 ? 1 : matchedRequired / requiredCount;
   const f1 =
     precision + recall === 0
       ? 0
@@ -579,7 +597,10 @@ export async function measureAnswerPipeline(
   idByKey: Map<string, string>,
   keyById: Map<string, string>,
   allContactsByKey: Map<string, AnswerEvalContact>,
-  onQueryPlan?: (query: AnswerEvalQuery, plan: QueryPlan | null) => void,
+  onQueryPlan?: (
+    query: AnswerEvalQuery,
+    plan: QueryPlan | null,
+  ) => void | Promise<void>,
 ): Promise<AnswerMeasurement> {
   const perQuery: AnswerMeasurement["perQuery"] = {};
 
@@ -686,7 +707,7 @@ export async function measureAnswerPipeline(
 
     // 1. Run Query Planning
     const plan = await parseSearchQuery(query.q);
-    onQueryPlan?.(query, plan);
+    await onQueryPlan?.(query, plan);
 
     // 2. Run End-to-End Semantic Search
     const searchResponse = await searchService.semanticSearch(

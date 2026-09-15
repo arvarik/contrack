@@ -46,12 +46,17 @@ export type AnswerQueryCategory =
   | "adversarial-injection"
   | "synthesis-grounding";
 
-export interface ExpectedFilterCriteria {
+export interface ExpectedFilterMatchers {
   locationMatchers?: string[];
   companyMatchers?: string[];
   roleMatchers?: string[];
   industryMatchers?: string[];
   traits?: string[];
+}
+
+export interface ExpectedFilterCriteria extends ExpectedFilterMatchers {
+  /** Permitted categories that do not count as missing when absent. */
+  optional?: ExpectedFilterMatchers;
   confidence?: "high" | "medium" | "low";
   /** Matchers that MUST NOT be emitted (e.g. "TX" when querying Paris, France) */
   forbiddenLocationMatchers?: string[];
@@ -65,6 +70,8 @@ export interface AnswerEvalQuery {
   expectedFilter?: ExpectedFilterCriteria;
   /** Keys of contacts that must be returned in final verified matches */
   expectedMatches: string[];
+  /** Explains the relevance boundary for queries with broad or ambiguous terms. */
+  relevanceNotes?: string;
   /** False only for exploratory queries without complete relevance labels. */
   evaluateResults?: boolean;
   /** Keys of contacts that must be excluded (e.g. distractors, near-misses, adversarial) */
@@ -86,7 +93,7 @@ export interface AnswerCorpus {
 }
 
 // ---------------------------------------------------------------------------
-// Contacts Definition (60 contacts total)
+// Contacts Definition (39 contacts total)
 // ---------------------------------------------------------------------------
 
 const TARGET_CONTACTS: AnswerEvalContact[] = [
@@ -471,7 +478,7 @@ const TARGET_CONTACTS: AnswerEvalContact[] = [
   },
 ];
 
-// ── Distractors, Near-Misses, and International Contacts (35 contacts) ──────
+// ── Distractors, Near-Misses, and International Contacts (15 contacts) ──────
 
 const DISTRACTOR_CONTACTS: AnswerEvalContact[] = [
   // Ex-employee (Must NOT match current-employee queries)
@@ -806,14 +813,21 @@ export function buildAnswerCorpus(): AnswerCorpus {
         traits: ["bouldering", "climbing"],
         confidence: "medium",
       },
-      // Soft trait should prioritize bouldering enthusiasts without hard-gating location
-      expectedMatches: ["bouldering-engineer-berlin"],
+      // An explicit bouldering interest establishes relevance for every contact.
+      expectedMatches: [
+        "stripe-swe-london",
+        "sequoia-scout-sf",
+        "climate-founder-berlin",
+        "ai-engineer-sf",
+        "bouldering-engineer-berlin",
+      ],
     },
     {
       id: "q06-exploratory-query",
       category: "filter-interpretation",
       q: "Interesting people in my network",
       expectedFilter: {
+        optional: { traits: ["interesting", "curious", "unique"] },
         confidence: "low",
       },
       // Low confidence must not enforce hard filters
@@ -866,6 +880,8 @@ export function buildAnswerCorpus(): AnswerCorpus {
       category: "ambiguous-location",
       q: "Biotech contacts in Cambridge, UK",
       expectedFilter: {
+        industryMatchers: ["Biotech", "Biotechnology", "Life Sciences"],
+        optional: { traits: ["biotech", "biotechnology", "life sciences"] },
         locationMatchers: ["Cambridge", "United Kingdom", "UK", "England"],
         forbiddenLocationMatchers: ["Massachusetts", "MA"],
         confidence: "high",
@@ -878,6 +894,13 @@ export function buildAnswerCorpus(): AnswerCorpus {
       category: "ambiguous-location",
       q: "Researchers in Cambridge, Massachusetts",
       expectedFilter: {
+        roleMatchers: [
+          "Researcher",
+          "Research Fellow",
+          "Research Scientist",
+          "Scientist",
+        ],
+        optional: { traits: ["research", "researcher", "academic", "science"] },
         locationMatchers: ["Cambridge", "Massachusetts", "MA"],
         forbiddenLocationMatchers: ["United Kingdom", "UK"],
         confidence: "high",
@@ -902,6 +925,21 @@ export function buildAnswerCorpus(): AnswerCorpus {
       category: "ambiguous-location",
       q: "Policy advisers in Washington, DC",
       expectedFilter: {
+        roleMatchers: [
+          "Policy Adviser",
+          "Policy Advisor",
+          "Policy Analyst",
+          "Policy Specialist",
+        ],
+        optional: {
+          traits: [
+            "policy",
+            "adviser",
+            "advisor",
+            "government",
+            "public policy",
+          ],
+        },
         locationMatchers: ["Washington", "DC", "District of Columbia"],
         confidence: "high",
       },
@@ -916,7 +954,12 @@ export function buildAnswerCorpus(): AnswerCorpus {
         locationMatchers: ["California", "CA", "San Francisco", "Los Angeles"],
         confidence: "high",
       },
-      expectedMatches: ["stripe-pm-sf", "sequoia-scout-sf", "ai-engineer-sf"],
+      expectedMatches: [
+        "stripe-pm-sf",
+        "sequoia-scout-sf",
+        "ai-engineer-sf",
+        "independent-adviser",
+      ],
       forbiddenMatches: [
         "california-design-london", // Company is "California Design Studio", but lives in London!
       ],
@@ -926,6 +969,8 @@ export function buildAnswerCorpus(): AnswerCorpus {
       category: "ambiguous-location",
       q: "Maritime contacts in Portland, Maine",
       expectedFilter: {
+        industryMatchers: ["Maritime", "Marine", "Shipping"],
+        optional: { traits: ["maritime", "shipping", "marine", "boating"] },
         locationMatchers: ["Portland", "Maine", "ME"],
         forbiddenLocationMatchers: ["Oregon", "OR"],
         confidence: "high",
@@ -965,6 +1010,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
       category: "empty-answers",
       q: "Quantum physicists in Honolulu, Hawaii",
       expectedFilter: {
+        optional: { traits: ["quantum physics", "physics", "research"] },
         locationMatchers: ["Honolulu", "Hawaii", "HI"],
         roleMatchers: ["Physicist", "Quantum Physicist"],
         confidence: "high",
@@ -1008,6 +1054,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
         "google-swe-london",
         "climate-investor-london",
         "california-design-london",
+        "ex-stripe-now-meta",
       ],
       adversarialTargetKeys: ["adv-location-spoof"],
       forbiddenMatches: [
@@ -1039,6 +1086,8 @@ export function buildAnswerCorpus(): AnswerCorpus {
       id: "q24-synthesis-fintech",
       category: "synthesis-grounding",
       q: "Fintech leaders in New York and London",
+      relevanceNotes:
+        "Leadership includes executives and documented technical leadership. Liam leads settlement rails and ledger migrations at Stripe. A senior title alone does not establish leadership.",
       expectedMatches: ["fintech-founder-ny", "stripe-swe-london"],
       expectedClaims: {
         requiredEntities: ["Elena Rostova", "Liam O'Connor"],

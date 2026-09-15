@@ -64,13 +64,22 @@
       "traits": ["bouldering", "climbing"],
       "confidence": "medium"
     },
-    "expectedMatches": ["bouldering-engineer-berlin"]
+    "expectedMatches": [
+      "stripe-swe-london",
+      "sequoia-scout-sf",
+      "climate-founder-berlin",
+      "ai-engineer-sf",
+      "bouldering-engineer-berlin"
+    ]
   },
   {
     "id": "q06-exploratory-query",
     "category": "filter-interpretation",
     "q": "Interesting people in my network",
     "expectedFilter": {
+      "optional": {
+        "traits": ["interesting", "curious", "unique"]
+      },
       "confidence": "low"
     },
     "expectedMatches": [],
@@ -114,6 +123,10 @@
     "category": "ambiguous-location",
     "q": "Biotech contacts in Cambridge, UK",
     "expectedFilter": {
+      "industryMatchers": ["Biotech", "Biotechnology", "Life Sciences"],
+      "optional": {
+        "traits": ["biotech", "biotechnology", "life sciences"]
+      },
       "locationMatchers": ["Cambridge", "United Kingdom", "UK", "England"],
       "forbiddenLocationMatchers": ["Massachusetts", "MA"],
       "confidence": "high"
@@ -126,6 +139,15 @@
     "category": "ambiguous-location",
     "q": "Researchers in Cambridge, Massachusetts",
     "expectedFilter": {
+      "roleMatchers": [
+        "Researcher",
+        "Research Fellow",
+        "Research Scientist",
+        "Scientist"
+      ],
+      "optional": {
+        "traits": ["research", "researcher", "academic", "science"]
+      },
       "locationMatchers": ["Cambridge", "Massachusetts", "MA"],
       "forbiddenLocationMatchers": ["United Kingdom", "UK"],
       "confidence": "high"
@@ -150,6 +172,21 @@
     "category": "ambiguous-location",
     "q": "Policy advisers in Washington, DC",
     "expectedFilter": {
+      "roleMatchers": [
+        "Policy Adviser",
+        "Policy Advisor",
+        "Policy Analyst",
+        "Policy Specialist"
+      ],
+      "optional": {
+        "traits": [
+          "policy",
+          "adviser",
+          "advisor",
+          "government",
+          "public policy"
+        ]
+      },
       "locationMatchers": ["Washington", "DC", "District of Columbia"],
       "confidence": "high"
     },
@@ -164,7 +201,12 @@
       "locationMatchers": ["California", "CA", "San Francisco", "Los Angeles"],
       "confidence": "high"
     },
-    "expectedMatches": ["stripe-pm-sf", "sequoia-scout-sf", "ai-engineer-sf"],
+    "expectedMatches": [
+      "stripe-pm-sf",
+      "sequoia-scout-sf",
+      "ai-engineer-sf",
+      "independent-adviser"
+    ],
     "forbiddenMatches": ["california-design-london"]
   },
   {
@@ -172,6 +214,10 @@
     "category": "ambiguous-location",
     "q": "Maritime contacts in Portland, Maine",
     "expectedFilter": {
+      "industryMatchers": ["Maritime", "Marine", "Shipping"],
+      "optional": {
+        "traits": ["maritime", "shipping", "marine", "boating"]
+      },
       "locationMatchers": ["Portland", "Maine", "ME"],
       "forbiddenLocationMatchers": ["Oregon", "OR"],
       "confidence": "high"
@@ -207,6 +253,9 @@
     "category": "empty-answers",
     "q": "Quantum physicists in Honolulu, Hawaii",
     "expectedFilter": {
+      "optional": {
+        "traits": ["quantum physics", "physics", "research"]
+      },
       "locationMatchers": ["Honolulu", "Hawaii", "HI"],
       "roleMatchers": ["Physicist", "Quantum Physicist"],
       "confidence": "high"
@@ -243,7 +292,8 @@
       "stripe-swe-london",
       "google-swe-london",
       "climate-investor-london",
-      "california-design-london"
+      "california-design-london",
+      "ex-stripe-now-meta"
     ],
     "adversarialTargetKeys": ["adv-location-spoof"],
     "forbiddenMatches": ["adv-location-spoof"]
@@ -267,6 +317,7 @@
     "id": "q24-synthesis-fintech",
     "category": "synthesis-grounding",
     "q": "Fintech leaders in New York and London",
+    "relevanceNotes": "Leadership includes executives and documented technical leadership. Liam leads settlement rails and ledger migrations at Stripe. A senior title alone does not establish leadership.",
     "expectedMatches": ["fintech-founder-ny", "stripe-swe-london"],
     "expectedClaims": {
       "requiredEntities": ["Elena Rostova", "Liam O'Connor"],

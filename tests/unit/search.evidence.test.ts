@@ -166,7 +166,8 @@ describe("AI search synthesis safety", () => {
     });
     await synthesizeSearchResults(scope, "Texas contacts", [contact]);
     const prompt = vi.mocked(generateFor).mock.calls.at(-1)![1].prompt;
-    expect(prompt).toContain("Requested location strings: Texas");
+    expect(prompt).toContain("Requested places:");
+    expect(prompt).toContain('"region":"texas"');
     expect(prompt).toContain("intent only, not verification");
     expect(prompt).not.toContain("has been verified");
     expect(prompt).toContain('<untrusted_data label="query">');

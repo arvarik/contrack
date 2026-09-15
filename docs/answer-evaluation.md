@@ -62,3 +62,47 @@ The review keeps provider retries within the existing adapters. It adds no extra
 [Anthropic injection guidance](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/mitigate-jailbreaks) recommends separating third-party data from instructions, output screening, and adversarial workflow tests.
 
 [Anthropic prompt injection research](https://www.anthropic.com/news/prompt-injection-defenses) describes remaining limitations and the importance of adaptive attack testing.
+
+## Evidence-backed query constraints
+
+The planner supplies source phrases for hard filters. A deterministic compiler checks the query and rejects invented filters. It removes unsupported dates and keeps location words out of unrelated fields.
+
+Structured locations require each city, region, and country component together. Alternative places remain alternatives. This separates London from Cambridge, Washington State from Washington, D.C., and New York City from other New York cities.
+
+Reviewed role aliases include Research Fellow, Venture Scout, and senior technical leadership titles. The current role takes precedence over an old headline. The compiler rejects generic people words and industry-only terms as job titles. It preserves specific employer names. Paired tests check valid contacts and similar contacts that must not match.
+
+The compiler uses a local place dictionary and literal fallback. It does not resolve every place name. It prevents negative phrases from becoming positive filters, but it does not implement a complete negative-query language.
+
+These changes add no production model calls. A local microbenchmark over 1,000 contact locations measured median matching times near 6.3 ms. This measures local matching only, not provider latency.
+
+## Label audit and live recording
+
+The label audit added six valid expected matches across the bouldering, California, and London queries. It also added missing filter expectations and documented allowed optional traits. Scoring version 3 distinguishes required categories from allowed optional categories.
+
+The previous result F1 was 0.8276. Applying corrected labels to the same returned contacts gives 0.9375. This increase comes from label corrections, not better retrieval.
+
+Use a pinned model and query pacing when a provider has a low request quota:
+
+```sh
+AI_QUICK_MODEL=gemini:gemini-3.5-flash-lite npm run eval:record:answer -- --query-delay-ms 13000 --report /tmp/contrack-answer-report.json
+```
+
+The report includes per-query results and actual model identifiers. Pacing occurs outside the production search deadline. A failed capture cannot replace committed fixtures.
+
+The historical recording used an unspecified default model. A fresh recording therefore compares both changed code and changed model responses. The small, reviewed corpus does not establish accuracy on unseen queries.
+
+### Latest measured result
+
+The September 15, 2026 UTC capture used `gemini-3.5-flash-lite` with scoring version 3.
+
+| Measurement                                      | Result F1 | Correct matches | False positives | Misses |
+| ------------------------------------------------ | --------: | --------------: | --------------: | -----: |
+| Previous labels and historical answers           |    0.8276 |              24 |               7 |      3 |
+| Corrected labels and the same historical answers |    0.9375 |              30 |               1 |      3 |
+| Updated pipeline and fresh model answers         |    0.9846 |              32 |               0 |      1 |
+
+The final capture has result precision 1.0000, result recall 0.9697, and filter F1 0.9925. All five empty-answer cases and four declared adversarial cases pass. The synthesis text checker reports 0.9820 and flags two assertions.
+
+The remaining miss is the Staff Software Engineer in the fintech leadership query. Retrieval includes this contact, but the model omits it during reranking. An earlier live run included the contact. The fixture preserves the final run rather than selecting the best answer from several runs.
+
+Further accuracy work needs repeated runs and unseen queries. A deterministic acceptance path for fully verified structured queries needs separate evaluation before it replaces model reranking.

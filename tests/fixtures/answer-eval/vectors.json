@@ -3,7 +3,6 @@
   "dimension": 384,
   "contacts": 39,
   "queries": 24,
-  "recordedAt": "2026-09-14T23:03:43.938Z",
   "queryInputs": [
     "Who works at Stripe?",
     "Partners at Sequoia Capital",
@@ -29,15 +28,9 @@
     "Who is an investor at Sequoia?",
     "Who works in accounting?",
     "Fintech leaders in New York and London",
-    "Software engineers in London. London",
-    "Climate founders in Berlin. Berlin",
-    "People who love bouldering. bouldering. rock climbing. climbing. climber",
-    "Interesting people in my network. interesting. curious. unique",
-    "Researchers in Cambridge, Massachusetts. research. academic. science",
-    "Policy advisers in Washington, DC. policy. adviser. government. public policy",
-    "Maritime contacts in Portland, Maine. Maritime. Maritime industry. Shipping. Marine. Boating",
-    "Who is an investor at Sequoia?. investor",
-    "Who works in accounting?. accounting. finance"
+    "Climate founders in Berlin. Climate",
+    "People who love bouldering. bouldering",
+    "Interesting people in my network. interesting"
   ],
-  "expandedInputsRecordedAt": "2026-09-14T23:16:05.175Z"
+  "recordedAt": "2026-09-15T00:03:19.335Z"
 }

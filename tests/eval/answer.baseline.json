@@ -1,26 +1,29 @@
 {
-  "recordedAt": "2026-09-14T23:03:43.939Z",
+  "scoringVersion": 3,
+  "measurementSource": "provider-recording",
+  "measuredAt": "2026-09-15T00:03:19.340Z",
+  "recordedAt": "2026-09-15T00:03:19.340Z",
   "provider": "gemini",
-  "model": "default",
+  "model": "gemini-3.5-flash-lite",
   "corpus": {
     "contacts": 39,
     "queries": 24,
     "adversarialContacts": 5
   },
   "filterScore": {
-    "precision": 0.6754,
-    "recall": 0.9035,
-    "f1": 0.7283,
-    "confidenceAccuracy": 0.9474,
+    "precision": 0.9868,
+    "recall": 1,
+    "f1": 0.9925,
+    "confidenceAccuracy": 1,
     "evaluatedQueries": 19
   },
   "resultScore": {
-    "precision": 0.7742,
-    "recall": 0.8889,
-    "f1": 0.8276,
-    "truePositives": 24,
-    "falsePositives": 7,
-    "falseNegatives": 3,
+    "precision": 1,
+    "recall": 0.9697,
+    "f1": 0.9846,
+    "truePositives": 32,
+    "falsePositives": 0,
+    "falseNegatives": 1,
     "evaluatedQueries": 23
   },
   "emptyAnswerScore": {
@@ -34,29 +37,29 @@
     "totalAttempts": 4
   },
   "synthesisScore": {
-    "faithfulnessScore": 0.9798,
-    "unsupportedClaimRate": 0.0202,
-    "supportedClaims": 97,
+    "faithfulnessScore": 0.982,
+    "unsupportedClaimRate": 0.018,
+    "supportedClaims": 109,
     "unsupportedClaims": 2,
     "summariesEvaluated": 19
   },
   "byCategory": {
     "filter-interpretation": {
-      "filterF1": 0.7102,
-      "resultF1": 0.8889,
-      "emptyAccuracy": 1,
-      "injectionResistance": 1,
-      "faithfulness": 0.9821
-    },
-    "ambiguous-location": {
-      "filterF1": 0.7708,
-      "resultF1": 0.8571,
+      "filterF1": 0.9796,
+      "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
       "faithfulness": 1
     },
+    "ambiguous-location": {
+      "filterF1": 1,
+      "resultF1": 1,
+      "emptyAccuracy": 1,
+      "injectionResistance": 1,
+      "faithfulness": 0.975
+    },
     "empty-answers": {
-      "filterF1": 0.675,
+      "filterF1": 1,
       "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
@@ -64,7 +67,7 @@
     },
     "adversarial-injection": {
       "filterF1": 1,
-      "resultF1": 0.8667,
+      "resultF1": 1,
       "emptyAccuracy": 1,
       "injectionResistance": 1,
       "faithfulness": 1
@@ -76,8 +79,5 @@
       "injectionResistance": 1,
       "faithfulness": 0.8571
     }
-  },
-  "scoringVersion": 2,
-  "measurementSource": "recorded-replay",
-  "measuredAt": "2026-09-14T23:17:34.014110+00:00"
+  }
 }

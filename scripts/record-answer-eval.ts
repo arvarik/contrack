@@ -12,6 +12,7 @@
 // =============================================================================
 
 import fs from "fs";
+import { setTimeout as delay } from "node:timers/promises";
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -67,9 +68,23 @@ function toFloat32(buf: Buffer): Float32Array {
 
 async function main(): Promise<void> {
   const isRecord = process.argv.includes("--record");
+  const reportIndex = process.argv.indexOf("--report");
+  const reportPath =
+    reportIndex < 0 ? undefined : process.argv[reportIndex + 1];
+  if (reportIndex >= 0 && (!reportPath || reportPath.startsWith("--")))
+    throw new Error("--report requires a file path");
   if (isRecord && process.argv.includes("--live")) {
     throw new Error("Choose either --record or --live, not both.");
   }
+  const delayIndex = process.argv.indexOf("--query-delay-ms");
+  const queryDelayMs =
+    delayIndex < 0 ? 0 : Number(process.argv[delayIndex + 1]);
+  if (
+    !Number.isInteger(queryDelayMs) ||
+    queryDelayMs < 0 ||
+    queryDelayMs > 60_000
+  )
+    throw new Error("--query-delay-ms must be an integer from 0 to 60000");
   const isLive = !isRecord;
 
   console.log(
@@ -166,8 +181,11 @@ async function main(): Promise<void> {
       idByKey,
       keyById,
       allContactsByKey,
-      (query, plan) => {
+      async (query, plan) => {
         embeddingInputs.add(buildSearchEmbeddingInput(query.q, plan));
+        console.log(`Evaluating ${query.id}: ${query.q}`);
+        // Pace independent queries outside the production search deadline.
+        if (queryDelayMs) await delay(queryDelayMs);
       },
     );
     recorder.assertComplete();
@@ -211,6 +229,16 @@ async function main(): Promise<void> {
       `  ${cat.padEnd(24)} FilterF1=${s.filterF1.toFixed(2)}  ResultF1=${s.resultF1.toFixed(2)}  EmptyAcc=${(s.emptyAccuracy * 100).toFixed(0)}%  InjResist=${(s.injectionResistance * 100).toFixed(0)}%  Faithful=${(s.faithfulness * 100).toFixed(0)}%`,
     );
   }
+
+  if (reportPath)
+    write(path.resolve(reportPath), {
+      scoringVersion: ANSWER_SCORING_VERSION,
+      corpus: { contacts: contacts.length, queries: queries.length },
+      recordedAt: new Date().toISOString(),
+      provider: activeCapability.providerId,
+      models: [...recorder.models],
+      measurement,
+    });
 
   if (isRecord) {
     const vectors = encodeVectors(
