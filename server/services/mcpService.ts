@@ -16,11 +16,10 @@ export const mcpService = {
   /**
    * The caller's contacts, filtered and paged.
    *
-   * The active-row filters are new in sub-phase 2g. This query used to answer
-   * with trashed contacts, ghosts and the losing side of a merge, so an MCP
-   * client saw people the user had deleted, stubs the app never shows, and
-   * duplicates the app had already retired. `softMergeContacts` sets
-   * `canonicalId` and nothing else, so that third filter is what excludes a
+   * Filters active rows: excludes trashed contacts, ghosts, and the losing side
+   * of a merge, so an MCP client never sees people the user had deleted, stubs
+   * the app never shows, or duplicates the app had already retired. `softMergeContacts`
+   * sets `canonicalId` and nothing else, so that third filter is what excludes a
    * merged row. Archived contacts stay: the app shows those on their own page.
    */
   queryContacts(

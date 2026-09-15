@@ -10,10 +10,6 @@ import type { Request, Response, NextFunction } from "express";
  * The owner and the id are in one statement, so a foreign id is a miss rather
  * than a row that is read and then rejected. The 404 carries no id and no
  * reason: "not yours" and "does not exist" must look the same from outside.
- *
- * Sub-phase 2a added this beside an unscoped `assertContactExists`, which the
- * interaction, action item, and list services still called. 2b converted those
- * three, so the unscoped form has no callers left and is gone.
  */
 export function assertOwnedContact(scope: Scope, id: string): void {
   if (

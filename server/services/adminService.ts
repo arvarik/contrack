@@ -9,7 +9,7 @@
 //
 //   • An admin never reads another account's rows. `exportUserData` is the
 //     single exception, it exists for offboarding, and it writes an audit row
-//     naming the account it read. Decision D10 in the plan. The account list
+//     naming the account it read. The account list
 //     reports how many contacts each account holds, which is a number rather
 //     than a row, and it is the only cross-account read besides that one.
 //   • Three guards stand between an admin and an instance nobody can
@@ -612,7 +612,7 @@ export function deleteUser(
  * statement above it already emptied.
  *
  * Measured between 147ms and 160ms for 10,000 contacts and 10,000 emails,
- * against a budget of two seconds. The fallback the plan describes, if a much larger account
+ * against a budget of two seconds. The recommended fallback, if a much larger account
  * ever exceeds that, is to chunk the contacts delete at 1,000 rows per
  * transaction: a crash between chunks leaves a partly deleted but consistent
  * account that the next call finishes.
@@ -657,19 +657,14 @@ export function purgeOwner(ownerId: string): void {
     // 3. Contacts, which cascade the ten child tables and list membership.
     //    The search index needs no statement of its own: `contacts_ad` fires
     //    per row here and deletes the FTS row by rowid, which FTS5 pushes
-    //    down (PR #18). The plan proposed one
-    //    `DELETE FROM contacts_fts ... MATCH 'ownerTok:...'` instead, and
-    //    measured on 10,000 contacts it saved 4ms of 153ms, which is inside
-    //    the run-to-run spread, so a second mechanism doing the same work was
-    //    not worth having.
+    //    down (PR #18).
     sqlite.prepare(`DELETE FROM contacts WHERE ownerId = ?`).run(ownerId);
 
     // 4. The account. Cascades sessions, tokens, per-user settings and every
     //    invitation it issued, accepted ones included. `invitations.invitedBy`
     //    is NOT NULL with ON DELETE CASCADE, so an accepted invitation cannot
     //    keep its row with the inviter set to NULL the way an audit row does.
-    //    The plan says otherwise in two places and the schema is what decides
-    //    it. What survives is the `user.invitation.accepted` audit row, which
+    //    What survives is the `user.invitation.accepted` audit row, which
     //    names the account that joined, so how somebody joined is still on
     //    record after the person who invited them is gone.
     //

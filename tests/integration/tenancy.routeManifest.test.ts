@@ -92,9 +92,7 @@ describe("route manifest", () => {
   });
 
   it("isolates every scoped route", () => {
-    // Phase 2 converted one domain per PR, and this test used to hold the
-    // list each PR had proven. Sub-phase 2i closed the phase, so the list is
-    // gone and the rule is the assertion: a scoped route that is not isolated
+    // Every scoped route must be isolated: a scoped route that is not isolated
     // is a route with no matrix test behind it.
     const waiting = ROUTE_MANIFEST.filter(
       (r) => r.class === "scoped" && !r.isolated,
@@ -115,8 +113,7 @@ describe("route manifest", () => {
   });
 
   it("guards every admin route with requireAdmin, and nothing else", () => {
-    // Phase 2 classified these routes and left them open. Phase 3 mounts the
-    // guard on each route rather than on the router, so the check is a two-way
+    // Mounts the guard on each route rather than on the router, so the check is a two-way
     // one: an `admin` row with no guard is an open operator endpoint, and a
     // guarded route with another class is a manifest that lies about who can
     // reach it. Both directions fail here.

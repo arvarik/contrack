@@ -79,9 +79,8 @@ export interface MergeLogEntry {
 const _stmts = {
   // --- Suggestions ---
   // A suggestion, an exclusion and a merge log row all name their owner on
-  // insert. The Phase 1 fill trigger would derive it from `contactIdA`, but a
-  // derived owner is a guess that happens to be right: the pair check that
-  // makes it right lives in the service, so the service writes it.
+  // insert. The fill trigger would derive it from `contactIdA`, but the pair
+  // check that makes it right lives in the service, so the service writes it explicitly.
   insertSuggestion: sqlite.prepare(`
     INSERT OR IGNORE INTO dedupe_suggestions
       (id, contactIdA, contactIdB, matchType, confidence, reasoning, matchedField, status, ownerId)

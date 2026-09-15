@@ -1,14 +1,10 @@
 // =============================================================================
 // bench-tenancy — the before picture
 // =============================================================================
-// Phase 5 has to show that scoping every query did not make the app slower.
-// That claim needs a number from before the work started, measured the same
-// way, so this script is written in Phase 0 and run again at the end.
+// Benchmarks tenant-scoped query and mutation latency.
 //
-// The 10-owner run is the one that matters. Nothing is scoped yet, so every
-// list endpoint hands all 20,000 contacts to each of the ten owners. Phase 2
-// should make those endpoints faster, not slower, because each owner then
-// reads a tenth of the rows.
+// The 10-owner run is the one that matters: each owner reads and writes only
+// their own data across list endpoints, search, timeline, and dedupe scans.
 //
 //   npx tsx scripts/bench-tenancy.ts                 # 1 owner, 5000 contacts
 //   OWNERS=10 CONTACTS_PER_OWNER=2000 npx tsx scripts/bench-tenancy.ts
@@ -173,8 +169,7 @@ async function main(): Promise<void> {
       password: creds.password,
     });
 
-    // Every insert runs inside that owner's scope, which is what task 0.5
-    // reads. This is how production will write once Phase 1 lands.
+    // Every insert runs inside that owner's scope.
     const scope = scopeForOwnerId(user.id);
     runWithContext(
       {
@@ -221,9 +216,7 @@ async function main(): Promise<void> {
   }
   const auth = (r: import("supertest").Test): import("supertest").Test =>
     r.set("Cookie", cookie);
-  // Owner 0's own contact. The Phase 0 version took the first row in the
-  // table, which belonged to whichever owner seeded first and answered 404
-  // once GET /api/contacts/:id started checking.
+  // Owner 0's own contact for scoped retrieval verification.
   const sampleId = (
     sqlite
       .prepare("SELECT id FROM contacts WHERE ownerId = ? LIMIT 1")
@@ -298,8 +291,7 @@ async function main(): Promise<void> {
       async () => {
         // The route answers as soon as the scan is queued, so timing the
         // request alone measures the enqueue. Poll the status endpoint until
-        // the scan reaches a terminal phase, which is the number the Phase 0
-        // baseline recorded when the scan still blocked the event loop.
+        // the scan reaches a terminal phase.
         const started = await auth(
           request(server).post("/api/dedupe/scan").send({}),
         );
@@ -320,9 +312,8 @@ async function main(): Promise<void> {
   );
 
   // ── Isolation spot check ──────────────────────────────────────────────
-  // Phase 2's acceptance asks for latency and for proof that the latency is
-  // the latency of one account's rows. A fast endpoint that answers with
-  // everybody's data is not the thing being measured.
+  // Verify that latency is measured strictly over one account's rows.
+  // A fast endpoint that answers with everybody's data is not the thing being measured.
   const ownerOf = sqlite.prepare("SELECT ownerId FROM contacts WHERE id = ?");
   const checks: { label: string; rows: number; verdict: string }[] = [];
   const spotCheck = async (

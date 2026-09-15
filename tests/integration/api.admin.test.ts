@@ -913,9 +913,8 @@ describe("invitations", () => {
   it("takes every invitation an admin issued with them, accepted ones too", async () => {
     // `invitations.invitedBy` is NOT NULL with ON DELETE CASCADE, so an
     // accepted invitation cannot keep its row with the inviter set to NULL
-    // the way an audit row does. The plan says otherwise in two places, and
-    // the schema is what decides it. The `user.invitation.accepted` audit row
-    // is what survives, so how somebody joined stays on record.
+    // the way an audit row does: the schema cascades it. The `user.invitation.accepted`
+    // audit row is what survives, so how somebody joined stays on record.
     const inviter = await createAndActivate(admin, "leavinginviter", "admin");
     const created = await as(inviter)(
       request(app).post("/api/admin/invitations").send({}),

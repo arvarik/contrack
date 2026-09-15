@@ -27,9 +27,7 @@ const router = Router();
 
 // ─── Trash ───────────────────────────────────────────────────────────────────
 
-// The trash routes were scoped in 2a through `contactService`. Sub-phase 2g
-// added their matrix tests and flipped `isolated`, so the four routes below
-// are proven rather than only intended.
+// The trash routes are scoped through `contactService` and enforced by isolation tests.
 router.get(
   "/trash",
   asyncHandler(async (req, res) => {

@@ -1,24 +1,18 @@
 // =============================================================================
 // Route manifest — every route this app registers, and what guards it
 // =============================================================================
-// The manifest is the checklist Phase 2 works through. Every route is
-// classified, and tenancy.routeManifest.test.ts fails if a route is added,
-// removed, or renamed without updating this file. A new route cannot reach
-// production unclassified, which is the point.
+// The route manifest tracks every route this app registers, and what guards it.
+// Every route is classified, and tenancy.routeManifest.test.ts fails if a route is
+// added, removed, or renamed without updating this file. A new route cannot reach
+// production unclassified.
 //
-// `isolated` starts false for every route and flips as Phase 2 converts each
-// one and its isolation test goes green. The manifest test used to name the
-// routes that had flipped, so a sub-phase could not claim one it did not
-// prove. Sub-phase 2i closed the phase and replaced that list with the rule
-// it was standing in for: every `scoped` route is isolated, and
-// tenancy.routeManifest.test.ts fails if one is not.
+// `isolated: true` indicates that the route enforces multi-tenant scoping and its
+// isolation test verifies this behavior. Every `scoped` route must be isolated,
+// and tenancy.routeManifest.test.ts verifies this invariant.
 //
-// The `admin` rows are enforced from Phase 3: each of those routes mounts
-// `requireAdmin` on the route itself, and the manifest test reads every admin
-// row's handler stack and fails when the guard is missing. Adding an admin
-// route without the guard is therefore a red test rather than a review miss.
-//
-// Seeded from docs/multi-tenant-plan/appendix-b-route-manifest.md.
+// The `admin` rows enforce that each admin route mounts `requireAdmin` on the route
+// itself; the manifest test inspects every admin row's handler stack and fails if
+// the guard is missing. Adding an admin route without the guard is therefore a test failure.
 // =============================================================================
 
 export type RouteClass =
@@ -48,7 +42,7 @@ export interface RouteEntry {
   /** Full path as a client sends it, including the mount prefix. */
   path: string;
   class: RouteClass;
-  /** Phase 2 flips this when the isolation test for the route is green. */
+  /** True when the isolation test for the route confirms tenant scoping. */
   isolated: boolean;
   /** Only registered when NODE_ENV !== "production". */
   devOnly?: boolean;
@@ -91,7 +85,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "scoped",
     isolated: true,
   },
-  // ── Instance administration (Phase 3) ──────────────────────────────────
+  // ── Instance administration ───────────────────────────────────────────
   // Every row below carries `requireAdmin` on the route itself. The manifest
   // test reads each route's stack and fails when one does not.
   {

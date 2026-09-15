@@ -1,16 +1,15 @@
 // =============================================================================
 // Integration Tests — the owner predicate has to be an index seek
 // =============================================================================
-// Every read in Phase 2 gained `WHERE ownerId = ?`. A predicate SQLite has to
-// evaluate row by row is correct and slow: on a ten-account instance it reads
+// Every tenant read carries `WHERE ownerId = ?`. A predicate SQLite has to
+// evaluate row by row is slow: on a ten-account instance it reads
 // ten times the rows it returns, and the cost grows with the number of people
 // using the instance rather than with the size of one person's data.
 //
-// So for each statement the phase document names, this file runs
-// EXPLAIN QUERY PLAN and asserts two things: the owner-led index appears, and
-// no full scan of the table does. The database is seeded with two accounts and
-// 500 contacts each and then ANALYZE'd, because the planner prefers a scan on
-// a small table and would make every assertion here pass for the wrong reason.
+// For each core statement, this file runs EXPLAIN QUERY PLAN and asserts two things:
+// the owner-led index appears, and no full scan of the table does. The database is
+// seeded with multiple accounts and contacts and then ANALYZE'd, because the planner
+// prefers a scan on an empty/small table and would make assertions pass for the wrong reason.
 //
 // The SQL below is copied from the statement each row names. When a statement
 // changes shape, this file has to be updated with it, which is the point: the
@@ -29,7 +28,7 @@ const CONTACTS_PER_OWNER = 500;
 /**
  * How many accounts the instance holds.
  *
- * The phase document asks for two accounts of 500 contacts, and two is enough
+ * Two accounts of 500 contacts is enough
  * for every statement that carries a second predicate or a sort the composite
  * answers. It is not enough for `lists`, whose only owner-selectivity is the
  * owner column itself: with two accounts an owner seek returns half the table,
@@ -190,12 +189,12 @@ function planOf(sql: string, params: unknown[]): string {
 }
 
 /**
- * Every statement the phase document names, with the plan it must produce.
+ * Core query statements with the query plan each must produce.
  *
  * `index` is the index that must appear. No step may be a `SCAN` at all, and
  * that is checked without naming tables: SQLite prints the alias when a
  * statement declares one, so an assertion written against table names would
- * pass for four of these cases whatever the plan said. `source` is where the
+ * pass for four of these cases whatever the query plan produced. `source` is where the
  * statement lives, so a reader can check this copy against the original.
  */
 interface PlanCase {
@@ -204,7 +203,7 @@ interface PlanCase {
   sql: string;
   params: () => unknown[];
   index: RegExp;
-  /** Set when SQLite picks a different index than the phase document guessed. */
+  /** Optional rationale or planner note. */
   note?: string;
 }
 

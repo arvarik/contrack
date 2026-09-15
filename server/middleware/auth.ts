@@ -17,11 +17,9 @@
 // binding below). API_TOKEN also implies enforcement, because a token is only
 // meaningful on an instance that is gated.
 //
-// Every request carries a Principal describing who is asking. As of Phase 0 of
-// the 2.0 work, attachRequestContext turns that Principal into a Scope and
-// every insert into an owned table stamps ownership from it. Reads are still
-// unscoped: Phase 2 adds the owner predicate to each query. See
-// docs/multi-tenant-plan/ and server/tenancy/scope.ts.
+// Every request carries a Principal describing who is asking. attachRequestContext
+// turns that Principal into a Scope and queries/mutations on owned tables
+// enforce ownership from it. See server/tenancy/scope.ts.
 //
 // Note on defaults: auth is off out of the box, including in Docker, because
 // the common case is a container reached only from its host. The server logs a
@@ -346,7 +344,7 @@ export function attachPrincipal(
 /**
  * The local owner account, read fresh on every request.
  *
- * The plan called for caching this row in memory. It is not cached, on
+ * This row is not cached in memory, on
  * purpose. `users` holds a handful of rows on a self-hosted personal CRM, so
  * the scan is a single page and costs less than the session lookup above it.
  * A cache would need invalidating the moment setup converts this account into

@@ -11,16 +11,9 @@
 // things and it only becomes visible once it is a problem. `walHealth.ts` has
 // the reasoning.
 //
-// Before Phase 3 there was nothing to attach this to. `cleanupOldInvocations`
-// ran once at boot and the session sweep was boot-only, so an instance left
-// running for a year swept twice.
-//
-// The plan puts the `setInterval` in `server.ts`. It is here instead, with
-// `server.ts` calling `startDailyMaintenance()`, for one reason: a test can
-// call this and cannot call `server.ts`, which boots an HTTP server and a
-// Vite instance. The gate and the schedule are what a reader wants to see in
-// one place anyway, and `server.ts` keeps its own early return for the same
-// environment variable.
+// The `setInterval` is managed here rather than in `server.ts`, with `server.ts`
+// calling `startDailyMaintenance()`, so integration tests can test maintenance
+// without booting the full HTTP server or Vite instance.
 // =============================================================================
 
 import { sqlite } from "../db.ts";

@@ -1,7 +1,7 @@
 // =============================================================================
 // Integration Tests — upgrading a 1.5.5 database
 // =============================================================================
-// The riskiest thing this phase does is run against a database that already
+// The riskiest thing a tenancy migration does is run against a database that already
 // has someone's contacts in it. Every other test in the suite starts from an
 // empty file, which proves the new schema is buildable and nothing about
 // whether the upgrade is safe.
@@ -190,8 +190,8 @@ describe("upgrading a 1.5.5 database", () => {
     const owner = (
       sqlite.prepare("SELECT id FROM users LIMIT 1").get() as { id: string }
     ).id;
-    // A KNN restricted to the partition returns the same answer, which is what
-    // Phase 2c will rely on.
+    // A KNN restricted to the partition returns the same answer, which scoped
+    // search relies on.
     const scoped = sqlite
       .prepare(
         "SELECT contactId FROM search_embeddings WHERE embedding MATCH ? AND k = 1 AND ownerId = ?",
@@ -250,11 +250,11 @@ describe("upgrading a 1.5.5 database", () => {
 
   it("builds no single-column owner index for any owned table", () => {
     // The version-1 ownership loop used to create idx_<table>_owner for all
-    // eight owned tables, and sub-phase 2i removed that line. A fresh upgrade
+    // eight owned tables, and composite indexing replaced that line. A fresh upgrade
     // must therefore end with none of the eight, not only without the four
     // the version-2 step drops. Putting the CREATE back fails here.
     // The eight the loop built, by name. A LIKE pattern would also catch
-    // idx_dedupe_excl_owner, which is a composite the phase keeps: that table
+    // idx_dedupe_excl_owner, which is a composite that is kept: that table
     // has nothing to order by, so one column is the whole index.
     const loopBuilt = [
       "idx_contacts_owner",
@@ -468,10 +468,10 @@ describe("booting the migrated database again", () => {
 // Upgrading a database the previous release already migrated
 // =============================================================================
 // v1 added the ownership columns and, with them, one single-column index per
-// owned table. Sub-phase 2i proved the composites answer every owner-first
-// read, so v2 drops the four the plan names and the ownership loop stops
-// creating them. A database that already reads 1 must take that step on its
-// next boot and nothing else.
+// owned table. Since the composites answer every owner-first read, v2 drops
+// the single-column prefix indexes and the ownership loop stops creating them.
+// A database that already reads 1 must take that step on its next boot and
+// nothing else.
 // =============================================================================
 
 describe("upgrading a database that already reads tenancy version 1", () => {

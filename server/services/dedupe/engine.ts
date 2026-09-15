@@ -505,9 +505,9 @@ export const dedupeService = {
    * contacts that were both already there, which is what a full scan is for
    * and what `POST /api/dedupe/scan` still does.
    *
-   * It is NOT `runScan` with another mode, though the plan describes it that
-   * way. `runScan` takes the instance-wide run lock and clears every pending
-   * suggestion the account has before it writes its own. An import may do
+   * It is NOT `runScan` with another mode: `runScan` takes the instance-wide
+   * run lock and clears every pending suggestion the account has before it
+   * writes its own. An import may do neither: it must not empty somebody's
    * neither: it must not empty somebody's review queue, and it must not block
    * or be blocked by a scan somebody asked for. What `runScan` and this share
    * is the matching, not the lifecycle.

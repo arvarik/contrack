@@ -277,10 +277,7 @@ export const AIStatsView = () => {
                 No AI activity recorded yet.
               </p>
               {/*
-                Was `text-on-surface-variant/30`, which measures 1.57:1 and
-                is the only text in the app the contrast audit fails on. It
-                predates this phase; the audit gates the phase, and an empty
-                state nobody can read is not an empty state.
+                Set to `text-on-surface-variant` to satisfy contrast accessibility.
               */}
               <p className="text-xs text-on-surface-variant mt-1">
                 Trigger a Catch-Me-Up briefing or AI Search to see invocations

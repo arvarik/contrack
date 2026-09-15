@@ -201,9 +201,8 @@ export const listService = {
   /**
    * Remove one contact from one list.
    *
-   * Both sides are checked. Before sub-phase 2b this checked nothing at all
-   * and ran the DELETE on whatever pair of ids arrived, so any caller could
-   * empty a list they had never seen.
+   * Both sides are checked: validates that both contact and list belong to
+   * the active owner before running the DELETE.
    */
   removeMember(scope: Scope, listId: string, contactId: string) {
     requireOwnedList(scope, listId);

@@ -17,14 +17,12 @@
 // it, because nothing in the product cancels a running job and an untested
 // path is worse than an absent one.
 //
-// One job kind. A second one for the dedupe passes was written and measured
-// and then removed: after the quadratic self-joins came out of the
-// deterministic pass and the futile KNN came out of the funnel, a scan of
-// 50,000 contacts spends about 500 ms in those passes, and shipping the
-// corpus across the thread boundary and back costs about 180 ms of it in
-// structured clone on the main thread. The work was better removed than
-// moved. `docs/multi-tenant-plan/15-additional-v2-features.md` has the
-// numbers.
+// One job kind. A second one for the dedupe passes was measured and then
+// removed: after the quadratic self-joins came out of the deterministic pass
+// and the futile KNN came out of the funnel, a scan of 50,000 contacts spends
+// about 500 ms in those passes, and shipping the corpus across the thread
+// boundary and back costs about 180 ms in structured clone on the main thread.
+// The work was better removed than moved.
 // =============================================================================
 
 /** What a job asks the worker to do. */

@@ -816,10 +816,6 @@ requestId, details } }` with code `RATE_LIMITED`, instead of a bare
   into `v2.0`, and pushes to it, run the `build-and-test` job. The container
   image job and the release job still run only for `main` and for version
   tags, so `v2.0` publishes nothing.
-- **Phase 0.** The multi-tenant plan in `docs/multi-tenant-plan/` is now
-  tracked on `v2.0`. A reviewer can follow the references that each 2.0 pull
-  request makes. Prettier and ESLint skip that folder, so the design
-  documents and their benchmark scripts stay exactly as written.
 
 ### Added
 
@@ -858,18 +854,16 @@ requestId, details } }` with code `RATE_LIMITED`, instead of a bare
   an `@mention`, an AI invocation and a merge log row are all stamped with the
   signed-in user's id as they are written. This starts working without a
   restart. Anonymous instances still write no owner and are unaffected.
-- **Phase 0.** A benchmark script, `scripts/bench-tenancy.ts`, and the Phase 0
-  baseline under `bench/baseline-phase-0.md`. Phase 5 re-runs it to show that
-  scoping every query did not cost performance.
+- **Phase 0.** A benchmark script, `scripts/bench-tenancy.ts`, to measure
+  query and mutation latency under multi-tenant scoping.
 - **Phase 0.** A route manifest at `server/tenancy/routeManifest.ts` names
   every route and what guards it. A test compares it against the routes the
   app really registers, so a new route cannot ship unclassified. The route
   list is recorded while the app builds, because Express 5 keeps no mount
   path strings.
 - **Phase 0.** `scripts/tenant-lint.mjs` reports SQL over owned tables that
-  carries no owner predicate. `npm run lint` runs it in report mode, so it
-  cannot fail a build yet. The Phase 0 baseline is 240 statements across 35
-  files, committed under `bench/` so later phases can watch it reach zero.
+  carries no owner predicate. `npm run lint` runs it in strict mode
+  to ensure all queries touching owned tables carry an owner predicate.
 - **Phase 0.** The request context, `server/tenancy/scope.ts` and
   `server/tenancy/requestContext.ts`. A request now carries who is asking
   through the async call tree, which later phases use to stamp ownership.
@@ -896,7 +890,7 @@ requestId, details } }` with code `RATE_LIMITED`, instead of a bare
 
 - **Phase 2i.** `tenant-lint --strict "server/**/*.ts"` covers files that sit
   directly in `server/`. `**` matched one or more directories, so
-  `server/db.ts` fell outside every strict glob the phase used, and the
+  `server/db.ts` fell outside every strict glob used, and the
   fourteen boot statements in it were never checked.
 
 - **Phase 2a.** The migration test's second-boot check no longer depends on
