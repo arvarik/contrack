@@ -19,7 +19,8 @@ import { HealthRingAvatar } from "../components/HealthRingAvatar";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { toastUndoableDelete } from "../lib/undoToast";
-import { CARD, SECTION_HEADING, EMPTY_STATE, ICON_BTN } from "../lib/styles";
+import { CARD, SECTION_HEADING, ICON_BTN } from "../lib/styles";
+import { EmptyState } from "../components/ui/EmptyState";
 import { cn } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 
@@ -143,6 +144,7 @@ export const ArchivedContactsView = () => {
               isSelectMode && "text-primary bg-primary/10",
             )}
             title={isSelectMode ? "Exit Select Mode" : "Multi-Select"}
+            aria-label={isSelectMode ? "Exit Select Mode" : "Multi-Select"}
           >
             {isSelectMode ? (
               <CheckSquare className="w-5 h-5" />
@@ -160,7 +162,7 @@ export const ArchivedContactsView = () => {
                 ? () => setSelectedIds(new Set())
                 : selectAll
             }
-            className="text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
+            className="hit-area text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
           >
             {selectedCount === contacts.length ? "Deselect All" : "Select All"}
           </button>
@@ -174,14 +176,11 @@ export const ArchivedContactsView = () => {
       )}
 
       {!isLoading && contacts.length === 0 && (
-        <div className={cn(EMPTY_STATE, "flex flex-col items-center py-16")}>
-          <Archive className="w-10 h-10 text-on-surface-variant/30 mb-4" />
-          <p className="font-semibold text-sm">No archived contacts</p>
-          <p className="text-xs mt-1 text-on-surface-variant">
-            Archive contacts from their detail page to hide them from your
-            Network.
-          </p>
-        </div>
+        <EmptyState
+          icon={Archive}
+          title="No archived contacts"
+          body="Archive contacts from their detail page to hide them from your Network."
+        />
       )}
 
       {!isLoading && contacts.length > 0 && (
@@ -266,7 +265,7 @@ export const ArchivedContactsView = () => {
                   </div>
 
                   {/* Archived date */}
-                  <span className="text-[10px] text-on-surface-variant opacity-50 hidden sm:block shrink-0">
+                  <span className="text-[11px] text-on-surface-variant opacity-50 hidden sm:block shrink-0">
                     {contact.updatedAt
                       ? new Date(contact.updatedAt).toLocaleDateString(
                           undefined,
@@ -284,7 +283,7 @@ export const ArchivedContactsView = () => {
                       }}
                       disabled={unarchive.isPending}
                       title="Restore to Network"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-warning bg-amber-500/10 hover:bg-amber-500/20 transition-colors opacity-0 group-hover:opacity-100 shrink-0 disabled:opacity-50"
+                      className="hit-area flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-warning bg-amber-500/10 hover:bg-amber-500/20 transition-colors sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 shrink-0 disabled:opacity-50"
                     >
                       <ArchiveRestore className="w-3.5 h-3.5" />
                       Restore
@@ -322,7 +321,7 @@ export const ArchivedContactsView = () => {
                 className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-warning hover:bg-amber-500/10 transition-colors disabled:opacity-40 shrink-0"
               >
                 <ArchiveRestore className="w-4 h-4" />
-                <span className="text-[9px] font-bold uppercase tracking-widest opacity-80">
+                <span className="text-[11px] font-bold uppercase tracking-widest opacity-80">
                   {bulkUpdate.isPending ? "Restoring…" : "Restore"}
                 </span>
               </button>
@@ -336,7 +335,7 @@ export const ArchivedContactsView = () => {
                 className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-error hover:bg-rose-500/10 transition-colors disabled:opacity-40 shrink-0"
               >
                 <Trash2 className="w-4 h-4" />
-                <span className="text-[9px] font-bold uppercase tracking-widest opacity-80">
+                <span className="text-[11px] font-bold uppercase tracking-widest opacity-80">
                   Delete
                 </span>
               </button>

@@ -280,7 +280,7 @@ export const ContactProfile = ({
                   <button
                     onClick={() => setActiveTab("timeline")}
                     className={cn(
-                      "px-6 py-2 rounded-lg font-bold text-sm transition-all",
+                      "min-h-[44px] sm:min-h-0 px-6 py-2 rounded-lg font-bold text-sm transition-all",
                       activeTab === "timeline"
                         ? "bg-surface shadow-sm text-primary"
                         : "text-on-surface-variant hover:text-on-surface",
@@ -291,7 +291,7 @@ export const ContactProfile = ({
                   <button
                     onClick={() => setActiveTab("dossier")}
                     className={cn(
-                      "px-6 py-2 rounded-lg font-bold text-sm transition-all",
+                      "min-h-[44px] sm:min-h-0 px-6 py-2 rounded-lg font-bold text-sm transition-all",
                       activeTab === "dossier"
                         ? "bg-surface shadow-sm text-primary"
                         : "text-on-surface-variant hover:text-on-surface",

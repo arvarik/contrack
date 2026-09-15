@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useMergeLog, useUndoMerge } from "../../../api";
 import { cn } from "../../../lib/utils";
 import type { MergeLogEntry } from "../../../types";
+import { EmptyState } from "../../../components/ui/EmptyState";
 
 // =============================================================================
 // ActivityFeed — Merge audit log with undo capability
@@ -105,16 +106,14 @@ export const ActivityFeed = () => {
   }
 
   if (entries.length === 0) {
+    // Level 3: the feed sits under the "Merge Activity" panel's h2.
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Clock className="w-10 h-10 text-on-surface-variant/30 mb-3" />
-        <p className="text-sm text-on-surface-variant">
-          No merge activity yet.
-        </p>
-        <p className="text-xs text-on-surface-variant mt-1">
-          Merged contacts will appear here.
-        </p>
-      </div>
+      <EmptyState
+        level={3}
+        icon={Clock}
+        title="No merge activity yet"
+        body="Merged contacts will appear here."
+      />
     );
   }
 
@@ -122,7 +121,7 @@ export const ActivityFeed = () => {
     <div className="space-y-6">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1 mb-2">
+          <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant px-1 mb-2">
             {group.label}
           </div>
           <div className="space-y-1.5">
@@ -215,7 +214,7 @@ export const ActivityFeed = () => {
                     <button
                       onClick={() => handleUndo(entry.id, entry.duplicateName)}
                       disabled={undoMerge.isPending}
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      className="hit-area shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <Undo2 className="w-3 h-3" />
                       Undo

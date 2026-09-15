@@ -95,13 +95,17 @@ export const AccentPicker = ({
     buttons?.[ACCENT_PRESETS.indexOf(next)]?.focus();
   };
 
+  // Swatches are 36 px with a 44 px tap box (`hit-area`). Nine of them do not
+  // fit one row of a phone card, so below `sm` the presets sit in two rows of
+  // four with the colour well beside them. The 8 px gap keeps the tap boxes
+  // from overlapping.
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-end gap-2 sm:items-center">
       <div
         ref={group}
         role="radiogroup"
         aria-label="Accent colour"
-        className="flex items-center gap-1.5"
+        className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:gap-1.5"
       >
         {ACCENT_PRESETS.map((preset) => {
           const selected = normalized === preset.value;
@@ -123,7 +127,7 @@ export const AccentPicker = ({
                 backgroundColor: swatchTokens(preset.value, mode).primary,
               }}
               className={cn(
-                "w-7 h-7 rounded-full flex items-center justify-center transition-transform",
+                "hit-area w-9 h-9 rounded-full flex items-center justify-center transition-transform",
                 "hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2",
                 selected &&
                   "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest",
@@ -143,23 +147,33 @@ export const AccentPicker = ({
         })}
       </div>
 
+      {/*
+        The label is the 44 px tap box and the input fills it, invisible. A
+        colour input draws no `::after`, so `hit-area` cannot grow it, and an
+        `overflow-hidden` label would clip its own box back to the circle. The
+        circle is a child span instead.
+      */}
       <label
         htmlFor={wellId}
-        className={cn(
-          "w-7 h-7 rounded-full overflow-hidden cursor-pointer transition-transform hover:scale-110",
-          "bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)]",
-          !isPreset &&
-            "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest",
-        )}
+        className="group/well relative w-11 h-11 -m-1 flex items-center justify-center cursor-pointer"
         title="Any other colour"
       >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "w-9 h-9 rounded-full transition-transform group-hover/well:scale-110",
+            "bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)]",
+            !isPreset &&
+              "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest",
+          )}
+        />
         <span className="sr-only">Any other colour</span>
         <input
           id={wellId}
           type="color"
           value={normalized}
           onChange={(e) => onChange(e.target.value.toLowerCase())}
-          className="opacity-0 w-full h-full cursor-pointer"
+          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
         />
       </label>
     </div>

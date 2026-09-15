@@ -37,7 +37,7 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
   if (filters.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap px-4 pt-2 pb-0">
+    <div className="flex items-center gap-1.5 flex-wrap px-4 pt-3 sm:pt-2 pb-0">
       <AnimatePresence>
         {filters.map((filter, i) => (
           <motion.button
@@ -48,7 +48,7 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
             transition={{ duration: 0.12 }}
             onClick={() => onRemove(i)}
             className={`
-              inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold
+              hit-area inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold
               ring-1 ring-inset cursor-pointer transition-all
               hover:ring-2 group
               ${FIELD_COLORS[filter.field] || "bg-surface-container-high text-on-surface-variant ring-surface-container-highest"}

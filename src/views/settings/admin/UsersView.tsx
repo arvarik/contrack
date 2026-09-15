@@ -76,6 +76,12 @@ const COLUMNS =
 // Row menu
 // ---------------------------------------------------------------------------
 
+/**
+ * One menu item. 44 px tall on a phone, the touch floor, so the five items
+ * need the menu's height cap lifted there.
+ */
+const ITEM = "w-full gap-2.5 rounded-lg min-h-[44px] sm:min-h-0";
+
 interface RowActions {
   onEdit: () => void;
   onReset: () => void;
@@ -127,13 +133,19 @@ const RowMenu = ({
         <MoreVertical className="w-5 h-5" />
       </button>
       {open && (
-        <ul role="menu" className={cn(DROPDOWN_MENU, "right-0 w-56 mt-1 p-1")}>
+        <ul
+          role="menu"
+          className={cn(
+            DROPDOWN_MENU,
+            "right-0 w-56 mt-1 p-1 max-h-none sm:max-h-56",
+          )}
+        >
           <li>
             <button
               type="button"
               role="menuitem"
               onClick={run(actions.onEdit)}
-              className={cn(DROPDOWN_ITEM, "w-full gap-2.5 rounded-lg")}
+              className={cn(DROPDOWN_ITEM, ITEM)}
             >
               <Pencil className="w-4 h-4" />
               Edit
@@ -153,7 +165,7 @@ const RowMenu = ({
                 type="button"
                 role="menuitem"
                 onClick={run(actions.onReset)}
-                className={cn(DROPDOWN_ITEM, "w-full gap-2.5 rounded-lg")}
+                className={cn(DROPDOWN_ITEM, ITEM)}
               >
                 <KeyRound className="w-4 h-4" />
                 Reset password
@@ -165,7 +177,7 @@ const RowMenu = ({
               type="button"
               role="menuitem"
               onClick={run(actions.onExport)}
-              className={cn(DROPDOWN_ITEM, "w-full gap-2.5 rounded-lg")}
+              className={cn(DROPDOWN_ITEM, ITEM)}
             >
               <Download className="w-4 h-4" />
               Export data
@@ -178,7 +190,7 @@ const RowMenu = ({
                   type="button"
                   role="menuitem"
                   onClick={run(actions.onToggleEnabled)}
-                  className={cn(DROPDOWN_ITEM, "w-full gap-2.5 rounded-lg")}
+                  className={cn(DROPDOWN_ITEM, ITEM)}
                 >
                   {user.status === "disabled" ? (
                     <>
@@ -200,7 +212,8 @@ const RowMenu = ({
                   onClick={run(actions.onDelete)}
                   className={cn(
                     DROPDOWN_ITEM,
-                    "w-full gap-2.5 rounded-lg text-error hover:bg-error/10 hover:text-error",
+                    ITEM,
+                    "text-error hover:bg-error/10 hover:text-error",
                   )}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -644,12 +657,13 @@ const DeleteUserDialog = ({
         >
           Export their data first
         </AdminButton>
-        <label className="flex items-start gap-2.5 cursor-pointer">
+        {/* The label is the tap box for the 20 px checkbox, so it holds 44 px. */}
+        <label className="flex items-center gap-2.5 min-h-[44px] cursor-pointer">
           <input
             type="checkbox"
             checked={understood}
             onChange={(e) => setUnderstood(e.target.checked)}
-            className="mt-0.5 w-5 h-5 shrink-0 rounded accent-[var(--color-error)]"
+            className="w-5 h-5 shrink-0 rounded accent-[var(--color-error)]"
           />
           <span className="text-sm text-on-surface text-pretty">
             I understand this cannot be undone.

@@ -104,6 +104,21 @@ export const RichInteractionComposer = ({
   );
 };
 
+/**
+ * The type toggle's look: `iconToggle` with a neutral selected state.
+ *
+ * The shared active state is a solid primary fill, and the primary is the
+ * contact's colour, so under a violet contact the selected type read as the
+ * AI colour. Choosing a type is a selection, not AI, so it wears a neutral
+ * fill. `hit-area` gives each 32 px toggle a 44 px tap box.
+ */
+const typeToggle = (active: boolean) =>
+  cn(
+    iconToggle(active),
+    "hit-area",
+    active && "bg-surface-container-high text-on-surface",
+  );
+
 const Composer = ({
   contactId,
   storageKey,
@@ -375,7 +390,7 @@ const Composer = ({
         >
           <button
             onClick={() => setType("note")}
-            className={iconToggle(type === "note")}
+            className={typeToggle(type === "note")}
             aria-pressed={type === "note"}
             aria-label="Note"
           >
@@ -383,7 +398,7 @@ const Composer = ({
           </button>
           <button
             onClick={() => setType("call")}
-            className={iconToggle(type === "call")}
+            className={typeToggle(type === "call")}
             aria-pressed={type === "call"}
             aria-label="Call"
           >
@@ -391,7 +406,7 @@ const Composer = ({
           </button>
           <button
             onClick={() => setType("meeting")}
-            className={iconToggle(type === "meeting")}
+            className={typeToggle(type === "meeting")}
             aria-pressed={type === "meeting"}
             aria-label="Meeting"
           >
@@ -399,7 +414,7 @@ const Composer = ({
           </button>
           <button
             onClick={() => setType("email")}
-            className={iconToggle(type === "email")}
+            className={typeToggle(type === "email")}
             aria-pressed={type === "email"}
             aria-label="Email"
           >
@@ -411,7 +426,7 @@ const Composer = ({
           onClick={() => submitRef.current()}
           disabled={!canSave}
           aria-busy={isSaving}
-          className="bg-primary text-on-primary hover:bg-primary/90 font-bold rounded-full px-7 py-2.5 shadow-sm text-sm transition-all active:scale-95 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+          className="btn-primary px-7"
         >
           {isSaving ? "Saving…" : "Save"}
         </button>

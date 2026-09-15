@@ -218,7 +218,10 @@ export const AlphabetRail = ({
           aria-label={letter === OTHER_BUCKET ? "# (other characters)" : letter}
           onClick={() => jumpTo(letter)}
           onKeyDown={handleKeyDown}
-          className="flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full"
+          // 24 px on screen. The tap box is 44 px on each side, so letters
+          // closer than that share the gap. A thumb drag reads the nearest
+          // letter anyway (jumpToPointer), so an overlap costs nothing.
+          className="hit-area flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full"
         >
           {/*
             The active letter wears a filled circle.
@@ -233,7 +236,7 @@ export const AlphabetRail = ({
           <span
             aria-hidden="true"
             className={cn(
-              "flex items-center justify-center rounded-full text-[9px] font-bold leading-none transition-colors",
+              "flex items-center justify-center rounded-full text-[11px] font-bold leading-none transition-colors",
               letter === activeBucket
                 ? "w-4 h-4 bg-primary text-on-primary"
                 : "text-on-surface-variant",

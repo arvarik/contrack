@@ -37,6 +37,7 @@ import {
 } from "./components";
 import { useDedupe } from "../../contexts/DedupeContext";
 import { NAMES } from "../../lib/names";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
@@ -269,7 +270,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
         {embedded && (
           <Link
             to="/settings"
-            className="p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
+            className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
             aria-label="Back to Settings"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -280,7 +281,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
             onClick={() => setActiveTab("auto")}
             className={cn(
               tabItem(activeTab === "auto"),
-              "flex items-center gap-2",
+              "flex items-center gap-2 min-h-[44px] sm:min-h-0",
             )}
           >
             <Zap className="w-4 h-4" />
@@ -291,7 +292,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
             onClick={() => setActiveTab("manual")}
             className={cn(
               tabItem(activeTab === "manual"),
-              "flex items-center gap-2",
+              "flex items-center gap-2 min-h-[44px] sm:min-h-0",
             )}
           >
             <HandMetal className="w-4 h-4" />
@@ -303,7 +304,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
         <div className="flex-1" />
         <button
           onClick={() => setShowActivity(true)}
-          className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
+          className="hit-area flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
         >
           <History className="w-4 h-4" />
           Merge Activity
@@ -350,7 +351,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     {dismissHistory.length > 0 && (
                       <button
                         onClick={handleUndoDismiss}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-low hover:bg-primary/10 rounded-full transition-all"
+                        className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-low hover:bg-primary/10 rounded-full transition-all"
                         title="Undo last dismiss (⌘Z)"
                       >
                         <Undo2 className="w-3.5 h-3.5" />
@@ -360,14 +361,16 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     <button
                       onClick={goPrev}
                       disabled={currentIndex === 0}
-                      className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      aria-label="Previous group"
+                      className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
                       onClick={goNext}
                       disabled={currentIndex >= totalActive - 1}
-                      className="p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      aria-label="Next group"
+                      className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
@@ -396,7 +399,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     onClick={() => setResultView("swipe")}
                     className={cn(
                       tabItem(resultView === "swipe"),
-                      "flex items-center gap-1.5 text-xs",
+                      "flex items-center gap-1.5 text-xs min-h-[44px] sm:min-h-0",
                     )}
                   >
                     <Layers className="w-3.5 h-3.5" />
@@ -406,7 +409,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     onClick={() => setResultView("list")}
                     className={cn(
                       tabItem(resultView === "list"),
-                      "flex items-center gap-1.5 text-xs",
+                      "flex items-center gap-1.5 text-xs min-h-[44px] sm:min-h-0",
                     )}
                   >
                     <List className="w-3.5 h-3.5" />
@@ -416,7 +419,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleNewScan}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
+                    className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
                   >
                     <ScanSearch className="w-3.5 h-3.5" />
                     New Scan
@@ -499,7 +502,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                   <button
                     onClick={handleStartScan}
                     disabled={isStarting}
-                    className="btn-primary flex items-center gap-2 px-8 py-3 disabled:opacity-50"
+                    className="btn-primary px-8"
                   >
                     {isStarting ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -715,33 +718,18 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center justify-center h-full text-center"
+                  className="flex flex-col items-center justify-center h-full"
                 >
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 15,
-                      delay: 0.1,
+                  <EmptyState
+                    icon={CheckCircle2}
+                    title="No duplicates found"
+                    body="Run a scan after an import to check again."
+                    action={{
+                      label: "Scan again",
+                      icon: ScanSearch,
+                      onClick: handleNewScan,
                     }}
-                    className="p-6 bg-emerald-500/10 rounded-3xl mb-6"
-                  >
-                    <CheckCircle2 className="w-16 h-16 text-success" />
-                  </motion.div>
-                  <h2 className="text-xl font-headline font-bold mb-2">
-                    All clean!
-                  </h2>
-                  <p className="text-on-surface-variant text-sm mb-4">
-                    No duplicate contacts detected. Your network is pristine.
-                  </p>
-                  <button
-                    onClick={handleNewScan}
-                    className="px-6 py-2.5 bg-primary/10 text-on-primary-wash font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
-                  >
-                    Scan Again
-                  </button>
+                  />
                 </motion.div>
               )}
 
@@ -753,44 +741,30 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="flex flex-col items-center justify-center h-full text-center"
+                      className="flex flex-col items-center justify-center h-full"
                     >
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 15,
-                          delay: 0.1,
+                      <EmptyState
+                        icon={CheckCircle2}
+                        title="All reviewed"
+                        body={
+                          <>
+                            {mergedIds.size > 0
+                              ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine.`
+                              : "All clusters have been reviewed."}
+                            {dismissed.size > 0 && (
+                              <span className="block text-xs mt-1">
+                                ({dismissed.size} cluster
+                                {dismissed.size > 1 ? "s" : ""} kept separate)
+                              </span>
+                            )}
+                          </>
+                        }
+                        action={{
+                          label: "New scan",
+                          icon: ScanSearch,
+                          onClick: handleNewScan,
                         }}
-                        className="p-6 bg-emerald-500/10 rounded-3xl mb-6"
-                      >
-                        <CheckCircle2 className="w-16 h-16 text-success" />
-                      </motion.div>
-                      <h2 className="text-xl font-headline font-bold mb-2">
-                        All reviewed!
-                      </h2>
-                      <p className="text-on-surface-variant text-sm mb-2">
-                        {mergedIds.size > 0
-                          ? `Merged ${mergedIds.size} cluster${mergedIds.size > 1 ? "s" : ""}. Your network is pristine.`
-                          : "All clusters have been reviewed."}
-                      </p>
-                      {dismissed.size > 0 && (
-                        <p className="text-xs text-on-surface-variant mb-4">
-                          ({dismissed.size} cluster
-                          {dismissed.size > 1 ? "s" : ""} kept separate)
-                        </p>
-                      )}
-
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={handleNewScan}
-                          className="px-6 py-2.5 bg-primary/10 text-on-primary-wash font-bold rounded-full hover:bg-primary/15 transition-colors text-sm"
-                        >
-                          New Scan
-                        </button>
-                      </div>
+                      />
                     </motion.div>
                   )}
 
@@ -863,7 +837,8 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                 </div>
                 <button
                   onClick={() => setShowActivity(false)}
-                  className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors"
+                  aria-label="Close merge activity"
+                  className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>

@@ -65,7 +65,9 @@ test.describe("people", () => {
     await expect(status(page)).toHaveText(
       "No matches for “who collects stamps”.",
     );
-    await expect(page.getByText("No matches found")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "No one matches" }),
+    ).toBeVisible();
   });
 
   test("says that AI was unavailable and the matches are by keyword", async ({

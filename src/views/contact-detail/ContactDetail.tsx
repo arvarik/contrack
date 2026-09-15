@@ -24,7 +24,7 @@ export const ContactDetail = () => {
       {isOverlayActive && (
         <button
           onClick={handleClose}
-          className="hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-[100] shadow-sm transition-colors"
+          className="hit-area hidden md:flex absolute top-2 right-2 md:top-4 md:right-4 p-2.5 bg-surface hover:bg-surface-container-high rounded-full z-[100] shadow-sm transition-colors"
           title="Close Details"
           aria-label="Close contact details"
         >

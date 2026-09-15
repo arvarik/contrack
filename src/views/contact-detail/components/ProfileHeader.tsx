@@ -108,7 +108,7 @@ const SocialLinkPill: React.FC<{
         href={safeHref(sl.url)}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high pl-3 pr-1.5 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
+        className="hit-area flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high pl-3 pr-1.5 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
       >
         <PlatformIcon
           platform={sl.platform}
@@ -119,11 +119,15 @@ const SocialLinkPill: React.FC<{
         <span className="text-on-surface-variant group-hover/pill:text-on-surface transition-colors">
           {displayName}
         </span>
-        {/* Spacer for the action button that appears on hover */}
-        <span className="w-0 group-hover/pill:w-5 transition-all duration-200 overflow-hidden shrink-0" />
+        {/* Spacer for the action button, which shows at rest on a phone */}
+        <span className="w-5 sm:w-0 sm:group-hover/pill:w-5 transition-all duration-200 overflow-hidden shrink-0" />
       </a>
 
-      {/* Action trigger — fades in on hover */}
+      {/*
+        Action trigger. It fades in on hover from `sm`. A phone has no hover,
+        and an invisible button with a 44 px tap box would swallow taps on the
+        link, so below `sm` it shows at rest.
+      */}
       <button
         onClick={(e) => {
           e.preventDefault();
@@ -131,9 +135,11 @@ const SocialLinkPill: React.FC<{
           setMenuOpen((v) => !v);
         }}
         className={cn(
-          "absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-lg transition-all duration-200",
+          "hit-area absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-lg transition-all duration-200",
           "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest",
-          menuOpen ? "opacity-100" : "opacity-0 group-hover/pill:opacity-100",
+          menuOpen
+            ? "opacity-100"
+            : "opacity-100 sm:opacity-0 sm:group-hover/pill:opacity-100 focus-visible:opacity-100",
         )}
         aria-label="Link actions"
       >
@@ -150,7 +156,7 @@ const SocialLinkPill: React.FC<{
               toast.success("Link copied");
               setMenuOpen(false);
             }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+            className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
           >
             <Copy className="w-3.5 h-3.5 text-primary" />
             Copy link
@@ -161,7 +167,7 @@ const SocialLinkPill: React.FC<{
               onDelete();
               setMenuOpen(false);
             }}
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-rose-500/8 transition-colors text-left"
+            className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2 text-sm text-error hover:bg-rose-500/8 transition-colors text-left"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete link
@@ -235,7 +241,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center shrink-0">
           <button
             onClick={onClose}
-            className="flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
+            className="hit-area flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
@@ -291,7 +297,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </div>
             </button>
             {!!contact.isArchived && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap z-20">
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap z-20">
                 <Archive className="w-2.5 h-2.5" />
                 Archived
               </div>
@@ -352,7 +358,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     });
                   }}
                   disabled={promoteGhost.isPending}
-                  className="px-3 py-1.5 rounded-xl bg-primary text-white font-bold text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-1.5 ml-2"
+                  className="btn-primary ml-2"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   {promoteGhost.isPending
@@ -394,7 +400,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 }
                 aria-pressed={!!contact.isArchived}
                 className={cn(
-                  "p-2 rounded-xl transition-all flex items-center justify-center",
+                  "hit-area p-2 rounded-xl transition-all flex items-center justify-center",
                   contact.isArchived
                     ? "text-warning bg-amber-500/15 hover:bg-amber-500/25"
                     : "text-on-surface-variant hover:bg-surface-container hover:text-warning",
@@ -566,7 +572,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                       href={safeHref(contact.website)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
+                      className="hit-area group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
                     >
                       <PlatformIcon
                         platform="website"
@@ -594,12 +600,14 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             {contact.tags && contact.tags.length > 0 && (
               <div className="flex items-center gap-2 mt-2 flex-wrap">
                 {contact.tags.map((t) => (
+                  // The AI colour: tags come from enrichment. No overflow
+                  // clip, which would clip the remove button's tap box.
                   <div
                     key={t.id}
-                    className="group/pill flex items-center gap-1 text-xs font-bold py-1 px-2.5 rounded-full bg-primary/10 text-primary border border-primary/20 transition-all overflow-hidden"
+                    className="group/pill max-w-full flex items-center gap-1 text-xs font-bold py-1 px-2.5 rounded-full bg-ai/10 text-on-ai-wash border border-ai/20 transition-all"
                   >
                     <Sparkles className="w-2.5 h-2.5 opacity-60 shrink-0" />
-                    <span className="whitespace-normal break-words">
+                    <span className="min-w-0 whitespace-normal break-words">
                       {t.tag}
                     </span>
                     <button
@@ -626,7 +634,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                           },
                         });
                       }}
-                      className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-primary hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
+                      className="hit-area w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-ai-wash hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                       aria-label={`Remove tag ${t.tag}`}
                     >
                       <X className="w-2.5 h-2.5" />
@@ -645,7 +653,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     if (onClose) onClose();
                     navigate(`/contact/${contact.id}`);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-on-primary-wash rounded-xl font-bold hover:bg-primary/20 transition-colors text-sm"
+                  className="flex items-center gap-2 min-h-[44px] sm:min-h-0 px-4 py-2 bg-primary/10 text-on-primary-wash rounded-xl font-bold hover:bg-primary/20 transition-colors text-sm"
                 >
                   <ArrowUpRight className="w-4 h-4" />
                   Open in Network

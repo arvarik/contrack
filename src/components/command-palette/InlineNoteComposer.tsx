@@ -100,7 +100,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className="p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+          className="hit-area p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
           aria-label="Back to actions"
         >
           <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -135,7 +135,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
         <button
           onClick={onBack}
-          className="text-xs text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1"
+          className="hit-area text-xs text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1"
         >
           <kbd className={`${KBD_SM} hidden sm:inline-flex`}>ESC</kbd>
           <span className="hidden sm:inline">back</span>
@@ -145,7 +145,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
         <button
           onClick={handleSave}
           disabled={!content.trim() || addInteraction.isPending}
-          className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="btn-primary sm:min-h-0 sm:px-3 sm:py-1.5 sm:text-xs"
         >
           {addInteraction.isPending ? (
             <Loader2 className="w-3 h-3 animate-spin" />

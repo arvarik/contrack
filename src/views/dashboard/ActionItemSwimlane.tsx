@@ -58,24 +58,24 @@ const SnoozeDropdown = ({
         )}
         style={{ top, left: Math.max(10, left) }}
       >
-        <div className="px-3 py-1.5 bg-surface-container-high text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <div className="px-3 py-1.5 bg-surface-container-high text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
           Snooze
         </div>
         <button
           onClick={() => handleSnooze(1)}
-          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
+          className="w-full justify-start flex items-center px-3 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
         >
           <Clock className="w-3 h-3 mr-2 opacity-80" /> Tomorrow
         </button>
         <button
           onClick={() => handleSnooze(3)}
-          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
+          className="w-full justify-start flex items-center px-3 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
         >
           <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> In 3 days
         </button>
         <button
           onClick={() => handleSnooze(7)}
-          className="w-full justify-start flex items-center px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
+          className="w-full justify-start flex items-center px-3 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
         >
           <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> Next week
         </button>
@@ -141,7 +141,7 @@ const ActionCard = ({
         onClick={handleComplete}
         disabled={isCompleting || complete.isPending}
         className={cn(
-          "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200",
+          "hit-area w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-200",
           checkColors[theme as keyof typeof checkColors],
           isCompleting &&
             "bg-emerald-500 border-emerald-500 text-white scale-110",
@@ -172,7 +172,7 @@ const ActionCard = ({
           <span className="w-1 h-1 rounded-full bg-surface-container-high" />
           <span
             className={cn(
-              "text-[10px] font-bold uppercase tracking-wider",
+              "text-[11px] font-bold uppercase tracking-wider",
               theme === "urgent" && "text-error font-extrabold",
             )}
           >
@@ -182,13 +182,14 @@ const ActionCard = ({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+      <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity pr-1">
         <button
           onClick={(e) => {
             setTriggerRect(e.currentTarget.getBoundingClientRect());
             setShowSnooze(true);
           }}
-          className="p-1 rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors"
+          aria-label="Snooze"
+          className="hit-area p-1 rounded-lg text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors"
         >
           <MoreVertical className="w-4 h-4" />
         </button>
@@ -224,13 +225,13 @@ export const ActionItemSwimlane = ({
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <span className={cn(SECTION_HEADING, "mb-0")}>{title}</span>
-          <span className="text-[10px] bg-surface-container px-2 py-0.5 rounded font-mono text-on-surface-variant font-bold">
+          <span className="text-[11px] bg-surface-container px-2 py-0.5 rounded font-mono text-on-surface-variant font-bold">
             {items.length}
           </span>
         </div>
         {hasActiveItem && (
           <div className="hidden md:flex items-center gap-2 text-on-surface-variant group/hint cursor-help relative">
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover/hint:opacity-100 transition-opacity translate-x-2 group-hover/hint:translate-x-0">
+            <span className="text-[11px] font-bold uppercase tracking-widest opacity-0 group-hover/hint:opacity-100 transition-opacity translate-x-2 group-hover/hint:translate-x-0">
               Press{" "}
               <kbd className="bg-surface-container rounded px-1 font-mono">
                 D

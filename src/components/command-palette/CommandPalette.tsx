@@ -663,7 +663,7 @@ export const CommandPalette = () => {
             <FacetPills filters={parsed.filters} onRemove={removeFilter} />
 
             {/* ── Search input row ── */}
-            <div className="flex items-center px-4 py-4 bg-surface-container-low gap-3">
+            <div className="flex items-center px-4 py-2 sm:py-4 bg-surface-container-low gap-3">
               <AnimatePresence mode="wait">
                 {mode === "ai" ? (
                   <motion.div
@@ -712,7 +712,7 @@ export const CommandPalette = () => {
                     ? "Add more filters or search..."
                     : "Search contacts, ? to ask AI, > for actions..."
                 }
-                className="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant outline-none text-lg"
+                className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant outline-none text-lg"
               />
               <div className="flex items-center gap-1.5 opacity-50">
                 <kbd className={KBD}>ESC</kbd>
@@ -821,7 +821,7 @@ export const CommandPalette = () => {
                               e.preventDefault();
                               setSearch(`? ${q}`);
                             }}
-                            className="w-full text-left text-xs px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary transition-colors"
+                            className="w-full min-h-[44px] sm:min-h-0 text-left text-xs px-3 py-2 rounded-lg bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary transition-colors"
                           >
                             ? {q}
                           </button>
@@ -843,7 +843,7 @@ export const CommandPalette = () => {
                     isAiLoading &&
                     aiResults.length === 0 && (
                       <div className="px-1 py-2 space-y-1">
-                        <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
+                        <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-1.5">
                           <Sparkles className="w-3 h-3 animate-pulse" /> Asking
                           AI…
                         </div>
@@ -918,7 +918,7 @@ export const CommandPalette = () => {
                             );
                             handleClose();
                           }}
-                          className="text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
+                          className="hit-area text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
                         >
                           Search notes
                           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -930,7 +930,7 @@ export const CommandPalette = () => {
                             );
                             handleClose();
                           }}
-                          className="text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
+                          className="hit-area text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
                         >
                           Open in full-page search
                           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -1035,12 +1035,12 @@ export const CommandPalette = () => {
                         <span className="flex items-center gap-1.5">
                           Contacts
                           {instantSearch.isInstant && (
-                            <span className="text-warning text-[9px] font-bold uppercase tracking-widest animate-pulse">
+                            <span className="text-warning text-[11px] font-bold uppercase tracking-widest animate-pulse">
                               ⚡ instant
                             </span>
                           )}
                           {hasFilters && (
-                            <span className="text-primary text-[9px] font-bold uppercase tracking-widest">
+                            <span className="text-primary text-[11px] font-bold uppercase tracking-widest">
                               filtered
                             </span>
                           )}
@@ -1074,7 +1074,7 @@ export const CommandPalette = () => {
                                 score={contact.relationshipScore ?? null}
                               />
                               {contact.approximate && (
-                                <span className="text-[9px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+                                <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
                                   Approximate
                                 </span>
                               )}
@@ -1118,7 +1118,7 @@ export const CommandPalette = () => {
                               setSubMenuContactAvatar(contact.avatarUrl);
                             }}
                             onMouseDown={(e) => e.preventDefault()}
-                            className="shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 active:opacity-80 transition-opacity text-[10px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0 active:bg-surface-container-high sm:active:bg-transparent"
+                            className="hit-area shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0 active:bg-surface-container-high sm:active:bg-transparent"
                             aria-label={`Actions for ${contact.name}`}
                           >
                             <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />

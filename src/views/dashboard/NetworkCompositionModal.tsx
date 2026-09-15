@@ -44,7 +44,7 @@ const CompositionColumn = ({
           </span>
           <span className="text-on-surface-variant font-medium shrink-0">
             {item.count}{" "}
-            <span className="opacity-50 text-[10px]">
+            <span className="opacity-50 text-[11px]">
               ({Math.round((item.count / totalCount) * 100)}%)
             </span>
           </span>
@@ -98,7 +98,8 @@ export const NetworkCompositionModal = ({
         </div>
         <button
           onClick={onClose}
-          className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+          aria-label="Close"
+          className="hit-area p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
         >
           <X className="w-5 h-5" />
         </button>

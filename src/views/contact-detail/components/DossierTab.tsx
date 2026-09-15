@@ -60,10 +60,7 @@ const EmptyDossier = ({ name }: { name: string }) => (
         Enrichment researches that from the web and fills it in.
       </p>
     </div>
-    <Link
-      to="/settings/ai-search"
-      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-opacity"
-    >
+    <Link to="/settings/ai-search" className="btn-primary">
       <Sparkles className="w-4 h-4" />
       Enrich contacts
     </Link>
@@ -95,7 +92,7 @@ const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
       {contact.about && <AboutSection about={contact.about} />}
       {contact.aiBackground && (
         <details className={cn(CARD, "min-w-0")}>
-          <summary className="cursor-pointer font-semibold text-sm text-primary">
+          <summary className="hit-area cursor-pointer font-semibold text-sm text-primary">
             Research notes and sources
           </summary>
           <div className="mt-3 max-h-80 overflow-y-auto prose prose-sm max-w-none break-words text-on-surface-variant">
@@ -140,7 +137,7 @@ const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
                   key={attr.id}
                   className="bg-surface-container-lowest rounded-xl p-4 shadow-sm"
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-primary block mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-primary block mb-1">
                     {displayName}
                   </span>
                   <span className="text-sm text-on-surface leading-relaxed font-medium block">
@@ -277,7 +274,7 @@ function AboutSection({ about }: { about: string }) {
       {needsTruncation && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-2 text-[11px] uppercase font-bold text-primary flex items-center gap-1 hover:underline transition-colors"
+          className="hit-area mt-2 text-[11px] uppercase font-bold text-primary flex items-center gap-1 hover:underline transition-colors"
         >
           {expanded ? "Show less" : "Show more"}
           <ChevronDown

@@ -75,10 +75,10 @@ const ColorSwatch = ({
       className="w-16 h-16 rounded-xl shadow-sm ring-1 ring-black/5"
       style={{ backgroundColor: `var(${variable})` }}
     />
-    <span className="text-[10px] font-bold text-on-surface-variant text-center leading-tight">
+    <span className="text-[11px] font-bold text-on-surface-variant text-center leading-tight">
       {name}
     </span>
-    <span className="text-[9px] font-mono text-on-surface-variant">
+    <span className="text-[11px] font-mono text-on-surface-variant">
       {variable}
     </span>
   </div>
@@ -131,19 +131,19 @@ export const ComponentShowcase = () => {
           <div className="space-y-4">
             <div>
               <span className={LABEL}>LABEL token</span>
-              <span className="ml-4 text-[10px] font-mono text-on-surface-variant">
+              <span className="ml-4 text-[11px] font-mono text-on-surface-variant">
                 LABEL
               </span>
             </div>
             <div>
               <span className={LABEL_PRIMARY}>LABEL_PRIMARY token</span>
-              <span className="ml-4 text-[10px] font-mono text-on-surface-variant">
+              <span className="ml-4 text-[11px] font-mono text-on-surface-variant">
                 LABEL_PRIMARY
               </span>
             </div>
             <div>
               <span className={SECTION_HEADING}>SECTION_HEADING token</span>
-              <span className="ml-4 text-[10px] font-mono text-on-surface-variant">
+              <span className="ml-4 text-[11px] font-mono text-on-surface-variant">
                 SECTION_HEADING
               </span>
             </div>
@@ -151,13 +151,13 @@ export const ComponentShowcase = () => {
               <h3 className={SECTION_HEADING_SPACED}>
                 <Sparkles className="w-4 h-4" /> Section Heading Spaced
               </h3>
-              <span className="text-[10px] font-mono text-on-surface-variant">
+              <span className="text-[11px] font-mono text-on-surface-variant">
                 SECTION_HEADING_SPACED
               </span>
             </div>
             <div>
               <h1 className={PAGE_TITLE}>Page Title</h1>
-              <span className="text-[10px] font-mono text-on-surface-variant">
+              <span className="text-[11px] font-mono text-on-surface-variant">
                 PAGE_TITLE (font-headline = Manrope)
               </span>
             </div>
@@ -265,14 +265,10 @@ export const ComponentShowcase = () => {
         <Section title="Buttons">
           <div className="flex flex-wrap items-center gap-4">
             <button className="btn-primary">Primary CTA</button>
-            <button className="btn-primary text-sm px-4 py-2">
-              Primary Small
-            </button>
+            <button className="btn-primary px-4">Primary Narrow</button>
             <button className="btn-secondary">Secondary</button>
-            <button
-              className={cn("btn-primary opacity-50 cursor-not-allowed")}
-              disabled
-            >
+            {/* The one disabled look comes from the class. No opacity. */}
+            <button className="btn-primary" disabled>
               Disabled
             </button>
           </div>
@@ -595,7 +591,7 @@ export const ComponentShowcase = () => {
                 <span className="text-sm font-bold text-on-surface">
                   {desc}
                 </span>
-                <span className="text-[10px] font-mono text-on-surface-variant">
+                <span className="text-[11px] font-mono text-on-surface-variant">
                   bg-{token}
                 </span>
               </div>

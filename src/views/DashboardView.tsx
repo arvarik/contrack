@@ -18,12 +18,15 @@ import { NetworkHealthPanel } from "./dashboard/NetworkHealthPanel";
 import { NetworkCompositionModal } from "./dashboard/NetworkCompositionModal";
 import { InteractionVelocityModal } from "./dashboard/InteractionVelocityModal";
 import { NetworkGrowthModal } from "./dashboard/NetworkGrowthModal";
+import { QuickInteractionModal } from "../components/QuickInteractionModal";
+import { EmptyState } from "../components/ui/EmptyState";
 import {
   Users,
   HeartPulse,
   ActivitySquare,
   UserPlus,
-  PartyPopper,
+  CalendarCheck,
+  PenLine,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -33,7 +36,6 @@ import {
 import {
   PAGE_TITLE,
   EMPTY_STATE,
-  EMPTY_HERO,
   CARD_COMPACT,
   TAB_CONTAINER,
   tabItem,
@@ -65,7 +67,7 @@ const CompletedActionsBar = () => {
           <span className="text-sm font-bold text-on-surface-variant group-hover:text-primary transition-colors">
             Completed Follow-ups
           </span>
-          <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-[10px] items-center flex font-mono text-on-surface-variant font-bold leading-none h-5">
+          <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-[11px] items-center flex font-mono text-on-surface-variant font-bold leading-none h-5">
             {completedItems.length}
           </span>
         </div>
@@ -102,7 +104,7 @@ const CompletedActionsBar = () => {
                     </span>
                   </div>
                 </div>
-                <div className="shrink-0 text-[10px] uppercase font-bold text-on-surface-variant tracking-widest pl-1 sm:pl-0">
+                <div className="shrink-0 text-[11px] uppercase font-bold text-on-surface-variant tracking-widest pl-1 sm:pl-0">
                   {item.completedAt
                     ? format(new Date(item.completedAt), "MMM d, yyyy")
                     : ""}
@@ -147,6 +149,7 @@ export const DashboardView = () => {
   const [isCompositionOpen, setIsCompositionOpen] = useState(false);
   const [isVelocityOpen, setIsVelocityOpen] = useState(false);
   const [isGrowthOpen, setIsGrowthOpen] = useState(false);
+  const [isQuickNoteOpen, setIsQuickNoteOpen] = useState(false);
 
   const completeAction = useCompleteActionItem();
   const updateAction = useUpdateActionItem();
@@ -243,7 +246,7 @@ export const DashboardView = () => {
               onClick={() => setActiveTab("pulse")}
               className={cn(
                 tabItem(activeTab === "pulse"),
-                "flex flex-1 sm:flex-none items-center justify-center gap-2",
+                "flex flex-1 sm:flex-none items-center justify-center gap-2 min-h-[44px] sm:min-h-0",
               )}
             >
               <LayoutDashboard className="w-4 h-4" />
@@ -253,7 +256,7 @@ export const DashboardView = () => {
               onClick={() => setActiveTab("suggestions")}
               className={cn(
                 tabItem(activeTab === "suggestions"),
-                "flex flex-1 sm:flex-none items-center justify-center gap-2 relative",
+                "flex flex-1 sm:flex-none items-center justify-center gap-2 relative min-h-[44px] sm:min-h-0",
               )}
             >
               <Inbox className="w-4 h-4" />
@@ -311,14 +314,18 @@ export const DashboardView = () => {
               {!hasActionItems ? (
                 <div
                   style={{ animationDelay: tileDelay(4) }}
-                  className={cn(EMPTY_HERO, "tile-enter py-10")}
+                  className="tile-enter"
                 >
-                  <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-6">
-                    <PartyPopper className="w-10 h-10 text-primary" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-on-surface">
-                    No Followups
-                  </h2>
+                  <EmptyState
+                    icon={CalendarCheck}
+                    title="Nothing due"
+                    body="Follow-ups you add from a note or a contact land here."
+                    action={{
+                      label: "Log an interaction",
+                      icon: PenLine,
+                      onClick: () => setIsQuickNoteOpen(true),
+                    }}
+                  />
                 </div>
               ) : (
                 <div className="flex flex-col gap-6">
@@ -378,6 +385,12 @@ export const DashboardView = () => {
           </div>
         ) : null}
       </div>
+
+      {/* The same quick flow Cmd+Shift+I opens, started from the empty state. */}
+      <QuickInteractionModal
+        isOpen={isQuickNoteOpen}
+        onClose={() => setIsQuickNoteOpen(false)}
+      />
 
       {dashboard && (
         <>

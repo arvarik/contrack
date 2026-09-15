@@ -113,7 +113,9 @@ export const ContextMenu = ({
                   item.onClick?.();
                 }}
                 className={[
-                  "w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors text-left",
+                  // A long press opens this on a phone, so rows are 44 px
+                  // tall there and 36 px under a pointer.
+                  "w-full flex items-center gap-2.5 px-3.5 py-3 sm:py-2 text-sm transition-colors text-left",
                   item.danger
                     ? "text-error hover:bg-rose-500/10 disabled:opacity-40"
                     : "text-on-surface hover:bg-surface-container-low disabled:text-on-surface-variant disabled:cursor-not-allowed",

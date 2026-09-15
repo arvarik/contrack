@@ -78,7 +78,7 @@ const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
           )}
           <div className="flex items-center gap-1 mt-auto">
             <ExternalLink className="w-3 h-3 text-primary" />
-            <span className="text-[10px] text-primary font-bold uppercase tracking-wide truncate">
+            <span className="text-[11px] text-primary font-bold uppercase tracking-wide truncate">
               {new URL(url).hostname}
             </span>
           </div>
@@ -139,7 +139,7 @@ export const LinkPreviewExtension = Node.create({
                 "span",
                 {
                   class:
-                    "text-[10px] uppercase font-bold text-on-surface-variant",
+                    "text-[11px] uppercase font-bold text-on-surface-variant",
                 },
                 "LINK",
               ],
@@ -164,7 +164,7 @@ export const LinkPreviewExtension = Node.create({
             "div",
             {
               class:
-                "text-[10px] text-primary font-bold uppercase tracking-wide truncate mt-auto",
+                "text-[11px] text-primary font-bold uppercase tracking-wide truncate mt-auto",
             },
             (HTMLAttributes.url || "").split("/")[2] || HTMLAttributes.url,
           ],

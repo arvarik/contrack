@@ -45,7 +45,7 @@ export const SelectStage = ({
         <button
           onClick={onNext}
           disabled={selected.length < 2}
-          className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-40"
+          className="btn-primary w-full"
         >
           <Merge className="w-5 h-5" />
           Compare {selected.length > 0 ? `${selected.length} Contacts` : ""}

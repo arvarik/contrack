@@ -41,7 +41,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
           }
         }}
         disabled={generateBriefing.isPending}
-        className="p-1.5 rounded-lg bg-primary/10 text-on-primary-wash hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center shrink-0"
+        className="hit-area p-1.5 rounded-lg bg-primary/10 text-on-primary-wash hover:bg-primary/20 active:scale-95 transition-all flex items-center justify-center shrink-0"
         title="Catch Me Up"
         aria-label="Generate AI briefing"
       >
@@ -66,7 +66,7 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
             >
               <button
                 onClick={() => setIsOpen(false)}
-                className="absolute top-5 right-5 p-2 rounded-full hover:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+                className="hit-area absolute top-5 right-5 p-2 rounded-full hover:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
                 aria-label="Close briefing"
               >
                 <X className="w-5 h-5" />
@@ -105,13 +105,13 @@ export const CatchMeUpFab: React.FC<CatchMeUpFabProps> = ({
                     )}
                   </ul>
                   <div className="flex items-center justify-between mt-8 pt-4 bg-surface-container-low -mx-6 md:-mx-8 px-6 md:px-8 -mb-6 md:-mb-8 pb-6 md:pb-8 rounded-b-[2rem]">
-                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
+                    <p className="text-[11px] uppercase tracking-widest text-on-surface-variant font-bold">
                       {contact.aiBriefingAt &&
                         `Generated ${formatDistanceToNow(new Date(contact.aiBriefingAt), { addSuffix: true })}`}
                     </p>
                     <button
                       onClick={() => generateBriefing.mutate(contact.id)}
-                      className="text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                      className="hit-area text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                       aria-label="Regenerate briefing"
                     >
                       Regenerate

@@ -232,7 +232,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
       <div className="px-5 py-4 space-y-4">
         {/* Contact Picker */}
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block">
             Who?
           </span>
 
@@ -321,7 +321,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
         <div>
           <span
             id="quick-note-type-label"
-            className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block"
+            className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block"
           >
             Type
           </span>
@@ -352,7 +352,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
         <div>
           <label
             htmlFor="quick-note-content"
-            className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block"
+            className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block"
           >
             What happened?
           </label>
@@ -376,11 +376,11 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
       {/* Footer */}
       <div className="px-5 py-3.5 bg-surface-container-low flex items-center justify-between sticky bottom-0 sm:static">
         <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-on-surface-variant">
-          <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-surface-container-high text-[10px] font-bold">
+          <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-surface-container-high text-[11px] font-bold">
             ⌘
           </kbd>
           {" + "}
-          <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-surface-container-high text-[10px] font-bold">
+          <kbd className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-surface-container-high text-[11px] font-bold">
             ⏎
           </kbd>
           {" to save"}
@@ -388,8 +388,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
-          // min-h-[44px] keeps the primary CTA touch-safe.
-          className="ml-auto min-h-[44px] flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary font-bold text-sm rounded-xl hover:bg-primary/90 active:bg-primary transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+          className="btn-primary ml-auto"
         >
           {addInteraction.isPending ? (
             <Loader2 className="w-4 h-4 animate-spin" />

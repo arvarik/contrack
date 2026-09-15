@@ -13,13 +13,9 @@ import { useContacts } from "../../api";
 import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
 import { AISearchConfirmModal } from "./components/AISearchConfirmModal";
-import {
-  CARD,
-  SECTION_HEADING,
-  SEARCH_INPUT,
-  EMPTY_STATE,
-} from "../../lib/styles";
+import { CARD, SECTION_HEADING, SEARCH_INPUT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 type DataFilter = "all" | "has_links" | "has_email" | "no_data";
 
@@ -133,13 +129,11 @@ export function AISearchView() {
         filteredContacts.length === 0 &&
         !searchQuery &&
         dataFilter === "all" && (
-          <div className={cn(EMPTY_STATE, "flex flex-col items-center py-12")}>
-            <Sparkles className="w-10 h-10 text-on-surface-variant/30 mb-4" />
-            <p className="font-semibold text-sm">No contacts available</p>
-            <p className="text-xs mt-1 text-on-surface-variant">
-              Add contacts to your network to start using contact enrichment.
-            </p>
-          </div>
+          <EmptyState
+            icon={Sparkles}
+            title="No contacts available"
+            body="Add contacts to your network to start using contact enrichment."
+          />
         )}
 
       {/* Contact list */}
@@ -173,7 +167,7 @@ export function AISearchView() {
                         setSelectedIds(new Set());
                       }}
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all",
+                        "hit-area flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all",
                         dataFilter === f.id
                           ? "bg-primary text-on-primary shadow-sm"
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
@@ -197,7 +191,7 @@ export function AISearchView() {
                 </span>
                 <button
                   onClick={toggleSelectAll}
-                  className="text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
+                  className="hit-area text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
                 >
                   {selectedIds.size === filteredContacts.length &&
                   filteredContacts.length > 0
@@ -251,12 +245,7 @@ export function AISearchView() {
                 setShowConfirm(true);
               }}
               disabled={selectedIds.size === 0 || isStarting}
-              className={cn(
-                "w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all",
-                selectedIds.size > 0
-                  ? "btn-primary shadow-lg hover:shadow-xl"
-                  : "bg-surface-container-high text-on-surface-variant cursor-not-allowed",
-              )}
+              className="btn-primary w-full"
             >
               <Sparkles className="w-4 h-4" />
               {selectedIds.size > 0

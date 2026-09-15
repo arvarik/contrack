@@ -563,7 +563,10 @@ export const ImportModal = ({
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={tabItem(activeTab === tab)}
+              className={cn(
+                tabItem(activeTab === tab),
+                "min-h-[44px] sm:min-h-0",
+              )}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
@@ -804,7 +807,7 @@ export const ImportModal = ({
                 <button
                   onClick={handleRetryFailedRows}
                   disabled={isRetrying}
-                  className="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary font-bold rounded-xl px-5 py-3 transition-all hover:brightness-110 active:scale-[0.98] disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                  className="btn-primary flex-1"
                 >
                   <RotateCw
                     className={cn("w-4 h-4", isRetrying && "animate-spin")}
@@ -816,10 +819,8 @@ export const ImportModal = ({
                 <button
                   onClick={handleReviewSuggestions}
                   className={cn(
-                    "flex-1 flex items-center justify-center gap-2 font-bold rounded-xl px-5 py-3 transition-all active:scale-[0.98]",
-                    summary.failed > 0
-                      ? "bg-surface-container-low text-on-surface hover:brightness-95"
-                      : "bg-primary text-on-primary hover:brightness-110",
+                    "flex-1",
+                    summary.failed > 0 ? "btn-secondary" : "btn-primary",
                   )}
                 >
                   Review {summary.needsReview} Suggestions
@@ -828,12 +829,11 @@ export const ImportModal = ({
               )}
               <button
                 onClick={handleDone}
-                className={cn(
-                  "flex items-center justify-center gap-2 font-bold rounded-xl px-5 py-3 transition-all hover:brightness-95 active:scale-[0.98]",
+                className={
                   summary.needsReview > 0 || summary.failed > 0
-                    ? "bg-surface-container-low text-on-surface"
-                    : "flex-1 bg-primary text-on-primary hover:brightness-110",
-                )}
+                    ? "btn-secondary"
+                    : "btn-primary flex-1"
+                }
               >
                 Done
               </button>
@@ -981,10 +981,7 @@ export const ImportModal = ({
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
               {canTryAgain ? (
-                <button
-                  onClick={handleTryAgain}
-                  className="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary font-bold rounded-xl px-5 py-3 transition-all hover:brightness-110 active:scale-[0.98]"
-                >
+                <button onClick={handleTryAgain} className="btn-primary flex-1">
                   <RotateCw className="w-4 h-4" />
                   Try again
                 </button>
@@ -993,10 +990,7 @@ export const ImportModal = ({
                   The file is no longer in memory. Choose it again to import.
                 </p>
               )}
-              <button
-                onClick={dismiss}
-                className="flex items-center justify-center gap-2 bg-surface-container-low text-on-surface font-bold rounded-xl px-5 py-3 transition-all hover:brightness-95 active:scale-[0.98]"
-              >
+              <button onClick={dismiss} className="btn-secondary">
                 Dismiss
               </button>
             </div>
@@ -1024,17 +1018,11 @@ export const ImportModal = ({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                onClick={handleCheckAgain}
-                className="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary font-bold rounded-xl px-5 py-3 transition-all hover:brightness-110 active:scale-[0.98]"
-              >
+              <button onClick={handleCheckAgain} className="btn-primary flex-1">
                 <RotateCw className="w-4 h-4" />
                 Check again
               </button>
-              <button
-                onClick={dismiss}
-                className="flex items-center justify-center gap-2 bg-surface-container-low text-on-surface font-bold rounded-xl px-5 py-3 transition-all hover:brightness-95 active:scale-[0.98]"
-              >
+              <button onClick={dismiss} className="btn-secondary">
                 Dismiss
               </button>
             </div>

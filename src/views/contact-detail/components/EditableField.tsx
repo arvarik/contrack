@@ -96,7 +96,7 @@ export function EditableField({
                 setError(false);
               }
             }}
-            className={cn(EDITABLE_INPUT, className)}
+            className={cn(EDITABLE_INPUT, "min-h-[44px] sm:min-h-0", className)}
             placeholder={placeholder}
           />
           {saving && (
@@ -115,7 +115,9 @@ export function EditableField({
       type="button"
       onClick={begin}
       className={cn(
-        "relative cursor-text text-left inline-flex items-center gap-1.5 rounded hover:bg-surface-container-high transition-colors",
+        // hit-area: a role or company in 20 px type is 28 px tall, and the
+        // tap box is 44.
+        "hit-area relative cursor-text text-left inline-flex items-center gap-1.5 rounded hover:bg-surface-container-high transition-colors",
         !value && "text-on-surface-variant italic",
         className,
       )}

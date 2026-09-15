@@ -121,19 +121,7 @@ const SaveButton = ({
   disabled: boolean;
   children: React.ReactNode;
 }) => (
-  <button
-    type="submit"
-    disabled={disabled || busy}
-    className={cn(
-      "px-5 rounded-xl bg-primary text-on-primary font-bold text-sm",
-      // 44 px on a phone, 40 from sm. `py-2.5` alone computes to exactly 40,
-      // which is under the floor STYLE.md marks REQUIRED.
-      "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
-      "flex items-center justify-center gap-2 transition-opacity hover:opacity-90",
-      "disabled:bg-surface-container-high disabled:text-on-surface-variant",
-      "disabled:cursor-not-allowed disabled:hover:opacity-100",
-    )}
-  >
+  <button type="submit" disabled={disabled || busy} className="btn-primary">
     {busy && <Loader2 className="w-4 h-4 animate-spin" />}
     {children}
   </button>
@@ -329,7 +317,7 @@ const SessionRow = ({ session }: { session: SessionSummary }) => (
       <p className="text-sm font-bold text-on-surface">
         {describeDevice(session.userAgent)}
         {session.current && (
-          <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-primary">
+          <span className="ml-2 text-[11px] font-bold uppercase tracking-wide text-primary">
             This device
           </span>
         )}
@@ -552,15 +540,7 @@ const CreateTokenModal = ({
           </p>
           <SecretReveal value={created.token} label="Token" />
           <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={close}
-              className={cn(
-                "px-5 rounded-xl bg-primary text-on-primary font-bold text-sm",
-                "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
-                "hover:opacity-90 transition-opacity",
-              )}
-            >
+            <button type="button" onClick={close} className="btn-primary">
               I've copied it
             </button>
           </div>
@@ -670,12 +650,7 @@ const ApiTokensCard = () => {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className={cn(
-              "shrink-0 px-4 rounded-xl bg-primary text-on-primary",
-              "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
-              "font-bold text-sm flex items-center gap-2",
-              "hover:opacity-90 transition-opacity",
-            )}
+            className="btn-primary shrink-0 px-4"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Create token</span>
@@ -821,12 +796,7 @@ export const AccountSettings = () => {
             </p>
             <Link
               to="/settings/admin/instance"
-              className={cn(
-                "shrink-0 inline-flex items-center justify-center gap-2",
-                "px-5 min-h-[44px] sm:min-h-0 sm:py-2.5 rounded-xl font-bold text-sm",
-                "bg-surface-container-high text-on-surface",
-                "hover:bg-surface-container-highest transition-colors",
-              )}
+              className="btn-secondary shrink-0"
             >
               <ServerCog className="w-4 h-4" />
               Instance settings
@@ -849,12 +819,7 @@ export const AccountSettings = () => {
           <button
             type="button"
             onClick={() => void signOut()}
-            className={cn(
-              "shrink-0 px-5 rounded-xl font-bold text-sm",
-              "min-h-[44px] sm:min-h-0 py-3 sm:py-2.5",
-              "bg-surface-container-high text-on-surface",
-              "flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors",
-            )}
+            className="btn-secondary shrink-0"
           >
             <LogOut className="w-4 h-4" />
             Sign out

@@ -166,7 +166,7 @@ export const SidebarIdentity = () => {
               name is the half that is the same on both.
             */}
             {instanceName && (
-              <p className="text-[10px] font-bold uppercase tracking-widest text-primary truncate mb-1">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-primary truncate mb-1">
                 {instanceName}
               </p>
             )}

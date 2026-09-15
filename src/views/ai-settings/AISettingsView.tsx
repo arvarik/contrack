@@ -157,7 +157,7 @@ export const AISettingsView = ({
                 <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
                   {provider.label}
                   {provider.source === "env" && (
-                    <span className="text-[9px] uppercase tracking-wider bg-surface-container-highest px-1.5 py-0.5 rounded font-bold text-on-surface-variant">
+                    <span className="text-[11px] uppercase tracking-wider bg-surface-container-highest px-1.5 py-0.5 rounded font-bold text-on-surface-variant">
                       from .env
                     </span>
                   )}
@@ -165,7 +165,7 @@ export const AISettingsView = ({
                       providers, and it decides whether this one can appear in
                       the web-research list at all. */}
                   {provider.supportsGrounding && (
-                    <span className="text-[9px] uppercase tracking-wider bg-sky-500/10 text-info px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                    <span className="text-[11px] uppercase tracking-wider bg-sky-500/10 text-info px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                       <Globe className="w-2.5 h-2.5" />
                       web search
                     </span>
@@ -239,7 +239,7 @@ export const AISettingsView = ({
                 setKeyModalProvider(provider);
                 setKeyInput("");
               }}
-              className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
+              className="w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
             >
               <Plus className="w-4 h-4 text-on-surface-variant shrink-0" />
               <span className="text-sm text-on-surface-variant">
@@ -251,7 +251,7 @@ export const AISettingsView = ({
 
         {/* Custom endpoints */}
         <div className="pt-2 space-y-2">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
             Custom endpoints (Ollama, vLLM, LM Studio, xAI…)
           </div>
           {settings.customEndpoints.map((endpoint) => {
@@ -327,7 +327,7 @@ export const AISettingsView = ({
           })}
           <button
             onClick={() => setEndpointModalOpen(true)}
-            className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
+            className="w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
           >
             <Plus className="w-4 h-4 text-on-surface-variant shrink-0" />
             <span className="text-sm text-on-surface-variant">
@@ -370,7 +370,7 @@ export const AISettingsView = ({
               value={searxngInput ?? settings.searxngUrl ?? ""}
               onChange={(e) => setSearxngInput(e.target.value)}
               placeholder="http://searxng.local:8080"
-              className="w-full px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
             />
           </label>
           <button
@@ -384,7 +384,7 @@ export const AISettingsView = ({
                 .catch((e) => toast.error(String(e.message ?? e)))
             }
             disabled={searxngInput === null}
-            className="px-4 py-2.5 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors shrink-0 disabled:text-on-surface-variant disabled:cursor-not-allowed"
+            className="btn-secondary shrink-0"
           >
             Save
           </button>
@@ -416,14 +416,14 @@ export const AISettingsView = ({
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setKeyModalProvider(null)}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors"
+              className="btn-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveKey}
               disabled={!keyInput.trim() || setKey.isPending}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+              className="btn-primary"
             >
               {setKey.isPending ? "Verifying…" : "Connect"}
             </button>
@@ -489,14 +489,14 @@ export const AISettingsView = ({
                   }))
                 }
                 placeholder={field.placeholder}
-                className="w-full mt-1 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full mt-1 min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
               />
             </label>
           ))}
           <div className="flex justify-end gap-3 pt-1">
             <button
               onClick={() => setEndpointModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors"
+              className="btn-secondary"
             >
               Cancel
             </button>
@@ -507,7 +507,7 @@ export const AISettingsView = ({
                 !endpointForm.baseUrl.trim() ||
                 saveEndpoint.isPending
               }
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+              className="btn-primary"
             >
               {saveEndpoint.isPending ? "Connecting…" : "Connect"}
             </button>

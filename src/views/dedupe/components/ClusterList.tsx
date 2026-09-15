@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useMergeCluster, useMergeClusters } from "../../../api";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { activateOnKey } from "../../../lib/a11y";
+import { EmptyState } from "../../../components/ui/EmptyState";
 
 // =============================================================================
 // ClusterList — Expandable list of duplicate clusters with bulk merge
@@ -137,13 +138,12 @@ export const ClusterList = ({
 
   if (clusters.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center py-16">
-        <CheckCircle2 className="w-12 h-12 text-success mb-4" />
-        <h3 className="text-lg font-headline font-bold mb-2">All clean!</h3>
-        <p className="text-sm text-on-surface-variant">
-          No duplicate clusters remaining.
-        </p>
-      </div>
+      <EmptyState
+        icon={CheckCircle2}
+        title="All clean"
+        body="No duplicate clusters remaining."
+        className="h-full justify-center"
+      />
     );
   }
 
@@ -158,7 +158,7 @@ export const ClusterList = ({
               allSelected ? "Deselect all clusters" : "Select all clusters"
             }
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+              "hit-area flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
               allSelected
                 ? "bg-primary/15 text-on-primary-wash"
                 : "bg-surface-container-low text-on-surface-variant hover:text-on-surface",
@@ -192,7 +192,7 @@ export const ClusterList = ({
           <button
             onClick={handleBulkMerge}
             disabled={mergeClusters.isPending}
-            className="flex items-center gap-2 px-5 py-2 bg-primary text-on-primary rounded-full text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+            className="btn-primary"
           >
             {mergeClusters.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -249,7 +249,7 @@ export const ClusterList = ({
                     }
                     aria-pressed={isSelected}
                     className={cn(
-                      "w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all",
+                      "hit-area w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all",
                       isSelected
                         ? "bg-primary text-white"
                         : "bg-surface-container-high group-hover:bg-surface-container-highest",
@@ -272,7 +272,7 @@ export const ClusterList = ({
                       />
                     ))}
                     {cluster.size > 4 && (
-                      <div className="w-8 h-8 rounded-full bg-surface-container-high ring-2 ring-surface-container-lowest flex items-center justify-center text-[10px] font-bold text-on-surface-variant">
+                      <div className="w-8 h-8 rounded-full bg-surface-container-high ring-2 ring-surface-container-lowest flex items-center justify-center text-[11px] font-bold text-on-surface-variant">
                         +{cluster.size - 4}
                       </div>
                     )}
@@ -325,7 +325,7 @@ export const ClusterList = ({
                       });
                     }}
                     aria-label={`Skip cluster ${primary.name}`}
-                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-full transition-colors"
+                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-full transition-colors"
                   >
                     Skip
                   </button>
@@ -338,7 +338,7 @@ export const ClusterList = ({
                     }}
                     disabled={mergeCluster.isPending}
                     aria-label={`Merge ${cluster.size} contacts in this cluster`}
-                    className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
                   >
                     Merge
                   </button>
@@ -401,7 +401,7 @@ export const ClusterList = ({
                           role="radiogroup"
                           aria-label="Select primary contact"
                         >
-                          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
                             Select Primary
                           </div>
                           <div className="flex gap-2 overflow-x-auto pb-1 nice-scrollbar">
@@ -415,7 +415,7 @@ export const ClusterList = ({
                                 aria-checked={contact.id === primaryId}
                                 aria-label={`Set ${contact.name} as primary`}
                                 className={cn(
-                                  "shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl transition-all text-xs",
+                                  "shrink-0 flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl transition-all text-xs",
                                   contact.id === primaryId
                                     ? "bg-emerald-500/10 ring-2 ring-emerald-500/50 font-bold"
                                     : "bg-surface-container-low hover:bg-surface-container-high",
@@ -467,7 +467,7 @@ export const ClusterList = ({
                         {/* Evidence panel */}
                         {cluster.pairs.length > 0 && (
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
                               <Link2 className="w-3 h-3" />
                               Evidence ({cluster.pairs.length} link
                               {cluster.pairs.length !== 1 ? "s" : ""})

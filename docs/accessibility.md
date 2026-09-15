@@ -13,15 +13,16 @@ CSP on), and drives it in headless Chromium with Playwright. Every worker gets
 a server of its own on a free port with a throwaway `DATA_DIR`, so a run never
 touches a developer's database and two workers never share state.
 
-| Spec                                     | What it walks                                                                                                                                        |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too, and the landmark and heading rules on six screens    |
-| `tests/e2e/keyboard.spec.ts`             | The skip link, the sidebar in Tab order with a visible focus ring in both palettes, `/` for search, arrow keys through the list, the mode radiogroup |
-| `tests/e2e/contact.spec.ts`              | Opening a contact puts focus on its name, the list's arrow keys and type-ahead, and Back on a phone returns focus to the row                         |
-| `tests/e2e/dialogs.spec.ts`              | Shortcuts, new contact, contact card and command palette: focus in, Tab trapped, Escape closes, focus returns, each scanned while open               |
-| `tests/e2e/search-announcements.spec.ts` | The status region says the search started and what it found; a failure is an alert and the status stays quiet; results restored on Back stay silent  |
-| `tests/e2e/mobile-forms.spec.ts`         | A Pixel 7: the tab bar's targets and `aria-current`, the new contact bottom sheet, 16-pixel fields, setup and sign-in with field-attached errors     |
-| `tests/e2e/account-transitions.spec.ts`  | A gated instance: setup, sign out, wrong password, sign in, an expired session, and the forced password change                                       |
+| Spec                                     | What it walks                                                                                                                                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too, and the landmark and heading rules on six screens                  |
+| `tests/e2e/keyboard.spec.ts`             | The skip link, the sidebar in Tab order with a visible focus ring in both palettes, `/` for search, arrow keys through the list, the mode radiogroup               |
+| `tests/e2e/contact.spec.ts`              | Opening a contact puts focus on its name, the list's arrow keys and type-ahead, and Back on a phone returns focus to the row                                       |
+| `tests/e2e/dialogs.spec.ts`              | Shortcuts, new contact, contact card and command palette: focus in, Tab trapped, Escape closes, focus returns, each scanned while open                             |
+| `tests/e2e/search-announcements.spec.ts` | The status region says the search started and what it found; a failure is an alert and the status stays quiet; results restored on Back stay silent                |
+| `tests/e2e/mobile-forms.spec.ts`         | A Pixel 7: the tab bar's targets and `aria-current`, the new contact bottom sheet, 16-pixel fields, setup and sign-in with field-attached errors                   |
+| `tests/e2e/metrics.spec.ts`              | A 390 px phone: every visible control has a 44 by 44 pixel hit box and no visible text is under 11 pixels, on Network, a contact, Pulse, Ask Contrack and Settings |
+| `tests/e2e/account-transitions.spec.ts`  | A gated instance: setup, sign out, wrong password, sign in, an expired session, and the forced password change                                                     |
 
 The fixtures under `tests/e2e/fixtures/` are the vocabulary the specs share:
 `test` for the worker's open, seeded instance, `gatedTest` for a fresh gated
@@ -154,8 +155,15 @@ expected one.
 ### Phones
 
 Fields render at 16 pixels or more below the `sm` breakpoint, because iOS
-Safari zooms the viewport when a smaller field takes focus. Tab bar targets
-are at least 44 pixels tall. Dialogs become bottom sheets.
+Safari zooms the viewport when a smaller field takes focus. Dialogs become
+bottom sheets.
+
+Every control has a hit box of at least 44 by 44 pixels, and no text is under
+11 pixels. A control that looks smaller carries the `hit-area` utility, which
+grows its tap box without changing how it looks. `metrics.spec.ts` measures
+both floors on five screens, and `tests/unit/styles.floor.test.ts` fails on
+`text-[9px]` and `text-[10px]` anywhere in `src/`. See `.agent/STYLE.md` for
+the rules.
 
 ## What a person still checks
 

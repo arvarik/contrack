@@ -68,7 +68,9 @@ export const ContactPicker = ({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="flex flex-wrap gap-2 mb-4 overflow-hidden"
+            // The padding sits inside the clip the height animation needs,
+            // so the remove buttons' 44px tap boxes are not cut off.
+            className="flex flex-wrap gap-2 -mx-2 -mt-2 mb-2 p-2 overflow-hidden"
           >
             {selected.map((c) => (
               <motion.div
@@ -87,7 +89,8 @@ export const ContactPicker = ({
                 <span className="text-xs font-bold text-primary">{c.name}</span>
                 <button
                   onClick={() => removeContact(c.id)}
-                  className="p-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                  aria-label={`Remove ${c.name}`}
+                  className="hit-area p-0.5 rounded-full hover:bg-primary/20 transition-colors"
                 >
                   {/* On a primary/20 wash while hovered, so the wash token. */}
                   <X className="w-3 h-3 text-on-primary-wash" />
@@ -115,7 +118,8 @@ export const ContactPicker = ({
         {query && (
           <button
             onClick={() => setQuery("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-container-high transition-colors"
+            aria-label="Clear search"
+            className="hit-area absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-container-high transition-colors"
           >
             <X className="w-3.5 h-3.5 text-on-surface-variant" />
           </button>
@@ -124,13 +128,13 @@ export const ContactPicker = ({
 
       {/* Selection status */}
       <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-1.5">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-1.5">
           <Users className="w-3.5 h-3.5" />
           {filteredContacts.length} contacts
         </span>
         <span
           className={cn(
-            "text-[10px] font-bold uppercase tracking-widest",
+            "text-[11px] font-bold uppercase tracking-widest",
             atMax ? "text-warning" : "text-on-surface-variant",
           )}
         >

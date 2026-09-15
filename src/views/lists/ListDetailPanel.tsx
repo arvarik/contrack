@@ -180,7 +180,7 @@ export const ListDetailPanel = ({
           </div>
           <button
             onClick={onViewInNetwork}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
+            className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
             title="View filtered in Network page"
           >
             <ExternalLink className="w-3.5 h-3.5" />
@@ -203,7 +203,7 @@ export const ListDetailPanel = ({
           </div>
           <button
             onClick={onViewInNetwork}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
+            className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 rounded-xl hover:bg-primary/15 transition-colors shrink-0"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Network
@@ -229,7 +229,7 @@ export const ListDetailPanel = ({
                   type="button"
                   onClick={() => handleIconChange(key)}
                   className={cn(
-                    "p-2 rounded-xl transition-all flex items-center justify-center",
+                    "hit-area p-2 rounded-xl transition-all flex items-center justify-center",
                     active
                       ? "bg-primary/15 text-on-primary-wash ring-2 ring-primary/30 shadow-sm scale-110"
                       : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
@@ -252,7 +252,7 @@ export const ListDetailPanel = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSave();
               }}
-              className="flex-1 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none font-bold"
+              className="flex-1 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none font-bold"
               placeholder="List name"
             />
             <AnimatePresence>
@@ -263,7 +263,7 @@ export const ListDetailPanel = ({
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={handleSave}
                   disabled={!editName.trim() || updateList.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-on-primary text-xs font-bold rounded-xl hover:opacity-90 transition-opacity shrink-0 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                  className="btn-primary shrink-0 px-4"
                 >
                   <Check className="w-3.5 h-3.5" />
                   Save
@@ -335,7 +335,8 @@ export const ListDetailPanel = ({
                   <button
                     onClick={() => handleRemoveMember(contact.id)}
                     disabled={removingId === contact.id}
-                    className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                    aria-label={`Remove ${contact.name} from list`}
+                    className="hit-area p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-all disabled:opacity-50"
                     title="Remove from list"
                   >
                     {removingId === contact.id ? (
@@ -368,7 +369,7 @@ export const ListDetailPanel = ({
                   </span>
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-error bg-rose-500/10 hover:bg-rose-500/20 transition-colors shrink-0"
+                    className="hit-area px-2.5 py-1 rounded-lg text-xs font-bold text-error bg-rose-500/10 hover:bg-rose-500/20 transition-colors shrink-0"
                   >
                     Delete
                   </button>
@@ -391,14 +392,14 @@ export const ListDetailPanel = ({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => setShowDeleteConfirm(false)}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                      className="hit-area px-2.5 py-1 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleDelete}
                       disabled={deleteList.isPending}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
+                      className="hit-area px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors disabled:opacity-50"
                     >
                       {deleteList.isPending ? "…" : "Delete"}
                     </button>

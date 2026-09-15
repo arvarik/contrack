@@ -17,6 +17,7 @@ import { cn } from "../../lib/utils";
 import { SECTION_HEADING } from "../../lib/styles";
 import { toast } from "sonner";
 import { activateOnKey } from "../../lib/a11y";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 export const ListManagerView = () => {
   const { data: lists = [], isLoading } = useLists();
@@ -95,7 +96,7 @@ export const ListManagerView = () => {
         </div>
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-surface-container text-primary rounded-xl text-xs font-bold hover:bg-surface-container-high transition-colors shrink-0"
+          className="btn-secondary shrink-0 px-3"
         >
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New List</span>
@@ -115,23 +116,18 @@ export const ListManagerView = () => {
             ))}
           </div>
         ) : lists.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center text-on-surface-variant gap-3 p-6">
-            <div className="w-14 h-14 rounded-2xl bg-surface-container-low flex items-center justify-center">
-              <List className="w-7 h-7 opacity-30" />
-            </div>
-            <div>
-              <p className="font-bold text-sm">No lists yet</p>
-              <p className="text-xs mt-1 text-on-surface-variant">
-                Create a list to group your contacts
-              </p>
-            </div>
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              className="mt-1 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:opacity-90 transition-opacity"
-            >
-              Create your first list
-            </button>
-          </div>
+          // Level 3: the panel's own title, "Your Lists", is the h2.
+          <EmptyState
+            level={3}
+            icon={List}
+            title="No lists yet"
+            body="A list groups people for a reason: a project, a city, a dinner."
+            action={{
+              label: "New list",
+              icon: Plus,
+              onClick: () => setIsCreateOpen(true),
+            }}
+          />
         ) : (
           lists.map((list, idx) => {
             const isDragging = dragIdx === idx;
@@ -298,7 +294,7 @@ export const ListManagerView = () => {
               <div className="flex items-center gap-2 px-3 pt-3 pb-0 bg-surface-container-low shrink-0">
                 <button
                   onClick={() => setSelectedListId(null)}
-                  className="flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+                  className="hit-area flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   All Lists

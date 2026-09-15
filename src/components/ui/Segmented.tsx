@@ -59,12 +59,14 @@ export const Segmented = <T extends string>({
   };
 
   return (
+    // Below `sm` each option is 44 px tall, the touch floor, so the trough
+    // grows around them. From `sm` the pointer look returns: a 36 px trough.
     <div
       ref={container}
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "flex bg-surface-container rounded-full p-1 shadow-inner h-9 w-full sm:w-auto",
+        "flex bg-surface-container rounded-full p-1 shadow-inner h-auto sm:h-9 w-full sm:w-auto",
         className,
       )}
     >
@@ -80,7 +82,7 @@ export const Segmented = <T extends string>({
           onKeyDown={onKeyDown}
           onClick={() => onChange(option.value)}
           className={cn(
-            "flex-1 sm:flex-none px-3 sm:px-4 h-full rounded-full text-xs font-bold",
+            "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:min-h-0 sm:h-full rounded-full text-xs font-bold",
             "flex items-center justify-center whitespace-nowrap transition-colors",
             value === option.value
               ? "bg-surface shadow-sm text-primary"

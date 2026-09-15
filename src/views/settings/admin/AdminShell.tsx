@@ -181,7 +181,7 @@ export const AdminCell = ({
       <span
         className={cn(
           SECTION_HEADING,
-          "sm:hidden shrink-0 text-[10px] w-24 text-right",
+          "sm:hidden shrink-0 text-[11px] w-24 text-right",
         )}
       >
         {label}
@@ -205,23 +205,15 @@ export const AdminButton = ({
   children: ReactNode;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
   const tones = {
-    primary: "bg-primary text-on-primary hover:opacity-90",
-    secondary:
-      "bg-surface-container-high text-on-surface hover:bg-surface-container-highest",
-    danger: "bg-red-500/10 text-error hover:bg-red-500/20",
+    primary: "btn-primary",
+    secondary: "btn-secondary",
+    // A red wash on the shared shape. The wash is a utility, so it outranks
+    // the class's disabled look, which is restated here.
+    danger:
+      "btn-secondary bg-red-500/10 text-error hover:bg-red-500/20 disabled:bg-surface-container-high disabled:text-on-surface-variant",
   } as const;
   return (
-    <button
-      type="button"
-      {...rest}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-xl",
-        "px-4 min-h-[44px] sm:min-h-0 sm:py-2.5 font-bold text-sm transition-colors",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        tones[tone],
-        rest.className,
-      )}
-    >
+    <button type="button" {...rest} className={cn(tones[tone], rest.className)}>
       {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
       {children}
     </button>

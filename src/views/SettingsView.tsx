@@ -260,10 +260,9 @@ export const SettingsView = () => {
         <div className="flex items-center gap-3 sm:gap-4">
           <button
             onClick={() => navigate(subpage ? "/settings" : "/")}
-            // `ICON_BTN` alone is `p-2`, which is 36 px with a 20 px icon —
-            // under the 44 px floor, on the one control every page in this
-            // area shares. The floor is added here rather than to `ICON_BTN`
-            // itself, which the dense toolbars it was written for still want.
+            // `ICON_BTN` is 36 px on screen with a 44 px `hit-area`. This one
+            // control every page in this area shares is 44 px on screen too,
+            // so its hover circle matches the box a thumb takes.
             className={cn(
               ICON_BTN,
               "inline-flex items-center justify-center min-w-[44px] min-h-[44px]",

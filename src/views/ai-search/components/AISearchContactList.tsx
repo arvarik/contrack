@@ -93,7 +93,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   if (hasError) {
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-error bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
+      <span className="flex items-center gap-1 text-[11px] font-bold text-error bg-rose-500/10 px-2 py-0.5 rounded-full shrink-0">
         <AlertCircle className="w-3 h-3" />
         Error
       </span>
@@ -107,7 +107,7 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
       day: "numeric",
     });
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+      <span className="flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
         <Sparkles className="w-3 h-3" />
         {label}
       </span>
@@ -115,7 +115,7 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   }
 
   return (
-    <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full shrink-0">
+    <span className="text-[11px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full shrink-0">
       NEW
     </span>
   );

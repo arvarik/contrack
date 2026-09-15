@@ -75,18 +75,18 @@ export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
               <Link
                 key={g.id}
                 to={`/contact/${g.id}`}
-                className="flex items-center gap-2 bg-surface-container-lowest pr-4 pl-1.5 py-1.5 rounded-full hover:bg-surface hover:ring-1 hover:ring-primary/20 transition-all group shadow-sm"
+                className="hit-area flex items-center gap-2 bg-surface-container-lowest pr-4 pl-1.5 py-1.5 rounded-full hover:bg-surface hover:ring-1 hover:ring-primary/20 transition-all group shadow-sm"
               >
                 <Avatar
                   url={g.avatarUrl}
                   name={g.name}
-                  size="w-6 h-6 text-[10px]"
+                  size="w-6 h-6 text-[11px]"
                 />
                 <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
                   {g.name}
                 </span>
                 {g.mentionCount > 1 && (
-                  <span className="text-[9px] font-mono font-bold text-on-surface-variant opacity-60">
+                  <span className="text-[11px] font-mono font-bold text-on-surface-variant opacity-60">
                     {g.mentionCount} mentions
                   </span>
                 )}
@@ -123,7 +123,7 @@ export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
                     <span className="text-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">
                       {c.name}
                     </span>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-error opacity-80">
+                    <span className="text-[11px] uppercase font-bold tracking-wider text-error opacity-80">
                       {c.daysSinceContact} days silent
                     </span>
                   </div>
@@ -133,14 +133,15 @@ export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
                 </Link>
 
                 {/* Sits on the avatar's bottom-right: 8px row padding + 36px
-                    avatar − half the 16px badge. */}
+                    avatar − half the 20px badge. 20px so two digits fit at
+                    the 11px floor. */}
                 <ScoreBreakdown
                   contactId={c.id}
                   score={Math.round(c.relationshipScore)}
                   className="absolute left-[34px] top-[34px]"
                 >
-                  <span className="w-4 h-4 bg-error rounded-full border-2 border-surface flex items-center justify-center">
-                    <span className="text-[7px] font-bold text-white leading-none">
+                  <span className="min-w-5 h-5 px-0.5 bg-error rounded-full border-2 border-surface flex items-center justify-center">
+                    <span className="text-[11px] font-bold text-white leading-none">
                       {Math.round(c.relationshipScore)}
                     </span>
                   </span>
@@ -158,14 +159,16 @@ export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
             <Clock className="w-4 h-4 text-on-surface-variant" />
             <span className={SECTION_HEADING}>Recently Added</span>
           </div>
-          <div className="flex -space-x-3 overflow-hidden ml-1 py-1">
+          {/* `px-1` and not `ml-1`: the padding sits inside the clip, so the
+              end avatars' 44px tap boxes are not cut off. */}
+          <div className="flex -space-x-3 overflow-hidden px-1 py-1">
             {payload.recentlyAdded.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setFloatingContactId(c.id)}
                 title={c.name}
                 aria-label={c.name}
-                className="relative z-10 hover:z-20 transform hover:scale-110 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full"
+                className="hit-area relative z-10 hover:z-20 transform hover:scale-110 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full"
               >
                 <img
                   src={c.avatarUrl || fallbackAvatarUrl(c.name)}

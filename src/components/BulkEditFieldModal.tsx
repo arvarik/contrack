@@ -219,17 +219,13 @@ export const BulkEditFieldModal = ({
 
         {/* Actions — stack on mobile, side-by-side on tablet+. */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
-          <button
-            onClick={handleClose}
-            // min-h-[44px] + py-3 keeps the secondary action touch-safe.
-            className="flex-1 min-h-[44px] py-3 rounded-xl bg-surface-container-low font-bold text-sm text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest transition-colors"
-          >
+          <button onClick={handleClose} className="btn-secondary flex-1">
             Cancel
           </button>
           <button
             onClick={handleApply}
             disabled={!value.trim() || isPending}
-            className="flex-1 min-h-[44px] py-3 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 active:opacity-100 transition-opacity flex items-center justify-center gap-2 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+            className="btn-primary flex-1"
           >
             <Pencil className="w-4 h-4" />
             {isPending ? "Applying…" : "Apply to All"}

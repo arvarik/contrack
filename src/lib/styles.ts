@@ -21,17 +21,43 @@ import { cn } from "./utils";
 
 // ─── Typography ──────────────────────────────────────────────────────────────
 
+/*
+ * The type floor is 11 px. Nothing a person reads is smaller, and
+ * tests/unit/styles.floor.test.ts fails on `text-[11px]` and `text-[11px]`
+ * anywhere in src/. Uppercase labels keep their tracking, a little tighter
+ * than `tracking-widest`, so the larger size does not widen every chip.
+ */
+
 /** Micro label — field labels inside detail cards (e.g. "LOCATION", "EMAIL") */
 export const LABEL =
-  "text-[10px] font-bold uppercase tracking-widest text-on-surface-variant";
+  "text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant";
 
 /** Primary micro label — highlighted labels (e.g. "NEXT FOLLOW UP") */
 export const LABEL_PRIMARY =
-  "text-[10px] font-bold uppercase tracking-widest text-primary";
+  "text-[11px] font-bold uppercase tracking-[0.08em] text-primary";
 
-/** Section heading — card titles (e.g. "DETAILS", "About", "Experience") */
+/**
+ * Section heading — card titles (e.g. "DETAILS", "About", "Experience").
+ * One step below body text, so a card title reads as a heading by case and
+ * weight and not by size.
+ */
 export const SECTION_HEADING =
-  "text-xs font-bold uppercase tracking-widest text-on-surface-variant";
+  "text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant";
+
+/**
+ * Field label — the name above one value in a card ("Location", "Email").
+ * Sentence case at 12 px, so it sits below an uppercase section heading
+ * instead of competing with it.
+ */
+export const FIELD_LABEL = "text-xs font-medium text-on-surface-variant";
+
+/**
+ * Meta line — facts under a name, separated by a middle dot ("Sydney ·
+ * 2:45 AM · 13°C"). Plain text: a fact is not a control, so it does not
+ * wear a pill.
+ */
+export const META_LINE =
+  "flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant";
 
 /** Section heading with bottom spacing — preformatted for card headers */
 export const SECTION_HEADING_SPACED = cn(
@@ -75,9 +101,13 @@ export const navLink = (active: boolean, extra?: string) =>
 /**
  * Icon button — small clickable icon (toolbar, header actions).
  * Use CSS `.btn-primary` / `.btn-secondary` for full CTA buttons.
+ *
+ * About 32 px on screen with a 16 px icon, and a 44 px tap box from
+ * `hit-area` (see index.css). Give neighbours 12 px of gap so the boxes do
+ * not overlap.
  */
 export const ICON_BTN =
-  "p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors";
+  "hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors";
 
 /** Icon button, active/selected variant */
 export const ICON_BTN_ACTIVE =
@@ -102,25 +132,25 @@ export const DANGER_BTN =
 
 /** Tag pill — used in contact tags, filter indicators */
 export const TAG_PILL =
-  "text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full";
+  "text-[11px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full";
 
 /** Micro badge — tiny inline status labels (e.g. "Current", "work", "personal") */
 export const MICRO_BADGE =
-  "text-[9px] uppercase tracking-widest opacity-50 bg-surface-container px-1 rounded";
+  "text-[11px] uppercase tracking-[0.08em] opacity-50 bg-surface-container px-1 rounded";
 
 /** Status badge — success variant (e.g. "Current" on experience) */
 export const STATUS_BADGE_SUCCESS =
-  "text-[9px] uppercase tracking-widest bg-emerald-500/10 text-success px-1.5 py-0.5 rounded font-bold";
+  "text-[11px] uppercase tracking-[0.08em] bg-emerald-500/10 text-success px-1.5 py-0.5 rounded font-bold";
 
 /** Source badge */
 export const SOURCE_BADGE =
-  "text-[10px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full";
+  "text-[11px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full";
 
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
-/** Search input — the list-header search box */
+/** Search input — the list-header search box. 44 px tall on a phone, 40 from `sm`. */
 export const SEARCH_INPUT =
-  "w-full bg-surface-container-low rounded-xl pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all";
+  "w-full bg-surface-container-low rounded-xl pl-9 pr-4 py-3 sm:py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all";
 
 /** Inline editable field input — appears on click-to-edit */
 export const EDITABLE_INPUT =
@@ -134,7 +164,7 @@ export const KBD =
 
 /** Keyboard shortcut badge — smaller variant */
 export const KBD_SM =
-  "bg-surface-container-high px-1.5 rounded font-mono text-[9px] shadow-sm";
+  "bg-surface-container-high px-1.5 rounded font-mono text-[11px] shadow-sm";
 
 // ─── Filter Tabs ─────────────────────────────────────────────────────────────
 
@@ -203,11 +233,11 @@ export const EMPTY_HERO =
 
 /** Dropdown container — floats above other elements, scrollable, glass-panel styled */
 export const DROPDOWN_MENU =
-  "absolute z-50 mt-1 max-h-56 w-max min-w-full overflow-y-auto rounded-xl glass-panel py-1.5 shadow-xl outline-none nice-scrollbar";
+  "absolute z-50 mt-1 max-h-72 sm:max-h-56 w-max min-w-full overflow-y-auto rounded-xl glass-panel py-1.5 shadow-xl outline-none nice-scrollbar";
 
-/** Dropdown standard item */
+/** Dropdown standard item. 44 px tall on a phone, 36 px from `sm`. */
 export const DROPDOWN_ITEM =
-  "cursor-pointer px-4 py-2 text-sm font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors flex items-center";
+  "min-h-[44px] sm:min-h-0 cursor-pointer px-4 py-2 text-sm font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors flex items-center";
 
 // ─── Form Inputs ─────────────────────────────────────────────────────────────
 

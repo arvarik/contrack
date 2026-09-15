@@ -35,7 +35,7 @@ export const VibePickerPopover = ({
     <div className="relative shrink-0" ref={ref}>
       <button
         onClick={() => setShowVibePicker(!showVibePicker)}
-        className={`p-2 rounded-xl transition-all ${showVibePicker ? "bg-primary/20 text-on-primary-wash" : "text-on-surface-variant hover:bg-surface-container hover:text-on-primary-wash"}`}
+        className={`hit-area p-2 rounded-xl transition-all ${showVibePicker ? "bg-primary/20 text-on-primary-wash" : "text-on-surface-variant hover:bg-surface-container hover:text-on-primary-wash"}`}
         title="Change Theme Vibe"
         aria-label="Change theme color"
         aria-pressed={showVibePicker}
@@ -58,7 +58,9 @@ export const VibePickerPopover = ({
                 key={vibe.id}
                 onClick={() => onSelect(vibe.id)}
                 style={{ backgroundColor: vibeTokens(vibe.id, mode).primary }}
-                className={`w-7 h-7 rounded-full transition-transform hover:scale-110 shadow-sm ${currentVibeId === vibe.id ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest scale-110" : "hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest"}`}
+                // 28 px swatches, 44 px tap boxes. Neighbours share the
+                // gap: the panel is too narrow for 44 px apart.
+                className={`hit-area w-7 h-7 rounded-full transition-transform hover:scale-110 shadow-sm ${currentVibeId === vibe.id ? "ring-2 ring-primary ring-offset-2 ring-offset-surface-container-lowest scale-110" : "hover:ring-2 hover:ring-on-surface-variant hover:ring-offset-2 hover:ring-offset-surface-container-lowest"}`}
                 aria-label={`Set theme to ${vibe.label}`}
                 role="radio"
                 aria-checked={currentVibeId === vibe.id}

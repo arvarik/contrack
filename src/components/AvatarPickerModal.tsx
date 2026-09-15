@@ -175,7 +175,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "flex-1 py-1.5 rounded-lg text-sm font-bold transition-all capitalize",
+                "flex-1 min-h-[44px] sm:min-h-0 py-1.5 rounded-lg text-sm font-bold transition-all capitalize",
                 tab === t
                   ? "bg-surface-container-high text-on-surface shadow-sm"
                   : "text-on-surface-variant hover:text-on-surface",
@@ -206,7 +206,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                       setSelectedUrl(null);
                     }}
                     className={cn(
-                      "flex-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
+                      "flex-1 min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
                       style === s.id
                         ? "bg-primary text-on-primary"
                         : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
@@ -254,7 +254,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
               </div>
 
               {/* Randomize hint */}
-              <p className="text-[10px] text-on-surface-variant opacity-60 text-center">
+              <p className="text-[11px] text-on-surface-variant opacity-60 text-center">
                 Select any cartoon above, then click Apply
               </p>
             </motion.div>
@@ -287,7 +287,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                       URL.revokeObjectURL(uploadPreview.url);
                       setUploadPreview(null);
                     }}
-                    className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                    className="hit-area flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Choose different image
@@ -336,16 +336,13 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
 
         {/* Apply button */}
         <div className="flex gap-3 pt-1">
-          <button
-            onClick={handleClose}
-            className="flex-1 py-2.5 rounded-xl bg-surface-container font-bold text-sm text-on-surface hover:bg-surface-container-high transition-colors"
-          >
+          <button onClick={handleClose} className="btn-secondary flex-1">
             Cancel
           </button>
           <button
             onClick={handleApply}
             disabled={!canApply || isPending}
-            className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:opacity-90 transition-opacity disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+            className="btn-primary flex-1"
           >
             {isPending ? "Applying…" : "Apply"}
           </button>

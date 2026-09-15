@@ -76,7 +76,7 @@ const SidebarTooltip = ({
             <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
               {label}
               {shortcut && (
-                <span className="block text-[9px] font-mono font-normal text-on-surface-variant mt-0.5">
+                <span className="block text-[11px] font-mono font-normal text-on-surface-variant mt-0.5">
                   {shortcut}
                 </span>
               )}
@@ -151,7 +151,7 @@ export const Sidebar = () => {
       */}
       <div className="flex items-center justify-center mb-1" aria-hidden="true">
         <span
-          className="text-[9px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
+          className="text-[11px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
           style={{
             writingMode: "vertical-rl",
             transform: "rotate(180deg)",
@@ -210,7 +210,7 @@ export const Sidebar = () => {
               className={cn(
                 "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1",
                 "flex items-center justify-center rounded-full",
-                "bg-primary text-on-primary text-[10px] font-bold leading-none",
+                "bg-primary text-on-primary text-[11px] font-bold leading-none",
                 "tabular-nums ring-2 ring-surface-container",
               )}
               aria-hidden="true"

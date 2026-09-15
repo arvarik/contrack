@@ -1,7 +1,14 @@
 import { ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-/** Native selection supports touch, keyboard arrows, and Escape inside dialogs. */
+/**
+ * Native selection supports touch, keyboard arrows, and Escape inside dialogs.
+ *
+ * `className` styles the `<select>` itself, the element that takes the tap.
+ * Below `sm` that element is at least 44 px tall. `hit-area` cannot do this
+ * job here: a native select draws no `::after`, so the box would never take
+ * a tap. A caller can still pass its own `min-h-*` to override the floor.
+ */
 export function CustomSelect({
   value,
   onChange,
@@ -21,7 +28,11 @@ export function CustomSelect({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={cn(className, "appearance-none cursor-pointer pr-5")}
+        className={cn(
+          "min-h-[44px] sm:min-h-0",
+          className,
+          "appearance-none cursor-pointer pr-5",
+        )}
       >
         {options.map((option) => (
           <option key={option} value={option}>

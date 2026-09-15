@@ -96,22 +96,26 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
   return (
     <div className="max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10 mt-2 mb-4">
       {/* Collapsed banner */}
-      <div className="flex items-center gap-3 bg-primary/5 rounded-xl px-4 py-3">
+      {/*
+        Wraps on a phone: two 44 px buttons beside the sentence would leave it
+        a word per line, so they drop under it.
+      */}
+      <div className="flex flex-wrap items-center gap-3 bg-primary/5 rounded-xl px-4 py-3">
         <span className="text-primary text-base">✨</span>
-        <p className="flex-1 text-sm text-on-surface">
+        <p className="flex-1 min-w-[12rem] text-sm text-on-surface">
           We found another contact that looks like{" "}
           <span className="font-bold">{otherContact.name || "someone"}</span>.
         </p>
         <button
           onClick={() => setShowReview((v) => !v)}
-          className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-full hover:shadow-md hover:shadow-primary/20 transition-all"
+          className="btn-primary shrink-0 px-3"
         >
           {showReview ? "Hide" : "Review Match"}
         </button>
         <button
           onClick={handleDismiss}
           disabled={dismiss.isPending}
-          className="shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+          className="btn-secondary shrink-0 px-3"
         >
           Not the same
         </button>
@@ -151,7 +155,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                 </div>
                 <button
                   onClick={() => setSwapped((s) => !s)}
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center"
+                  className="hit-area absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center"
                   title="Swap primary / duplicate"
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-on-surface-variant hover:text-primary transition-colors" />
@@ -170,7 +174,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
               {/* Mobile swap button */}
               <button
                 onClick={() => setSwapped((s) => !s)}
-                className="lg:hidden w-full flex items-center justify-center gap-2 py-2 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
+                className="btn-secondary w-full lg:hidden"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
                 Swap Primary / Duplicate
@@ -203,7 +207,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                 <button
                   onClick={handleDismiss}
                   disabled={dismiss.isPending}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-surface-container-low hover:bg-rose-500/8 rounded-xl text-sm font-bold text-on-surface-variant hover:text-error transition-all disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                  className="btn-secondary"
                 >
                   <X className="w-4 h-4" />
                   Keep Separate
@@ -211,7 +215,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                 <button
                   onClick={handleMerge}
                   disabled={merge.isPending}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-primary/20 transition-all disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                  className="btn-primary"
                 >
                   {merge.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
