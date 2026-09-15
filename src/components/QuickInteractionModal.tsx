@@ -199,7 +199,14 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
     !!selectedContact && content.trim().length > 0 && !addInteraction.isPending;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="md">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      // The header below is the modal's own, so the primitive needs telling
+      // what to call the dialog. "Dialog" is what it was called before.
+      ariaLabel="Log an interaction"
+    >
       {/* Custom header — uses headless mode so the icon-prefixed title
           can use the brand color halo */}
       <div className="flex items-center justify-between px-5 py-4 bg-surface-container-low">

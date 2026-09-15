@@ -21,6 +21,8 @@ import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
 import { SearchCoverageBar } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
 import { Segmented } from "../components/ui/Segmented";
+import { LiveStatus } from "../components/ui/LiveStatus";
+import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useSession } from "../contexts/SessionContext";
 
 // =============================================================================
@@ -209,6 +211,21 @@ export const SearchView = () => {
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
 
+  /**
+   * The one sentence a screen reader hears about this search. The spinner,
+   * the "Searching..." line and the count pill below are what a sighted
+   * person sees; none of them is announced. See lib/searchAnnouncements.
+   */
+  const status = peopleSearchStatus({
+    isLoading,
+    isEnriching,
+    isError: semanticSearch.isError,
+    hasSearched,
+    count: results.length,
+    query: answeredQuery || submittedQuery,
+    fallback: isFallback,
+  });
+
   return (
     <div className="h-full flex flex-col overflow-hidden bg-surface">
       {/* Header */}
@@ -249,6 +266,8 @@ export const SearchView = () => {
             <InteractionSearchPanel />
           ) : (
             <>
+              <LiveStatus message={status} label="Search status" />
+
               {/* Search Input — the button drops below the field on phones */}
               <div className="relative">
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-3.5 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
@@ -436,9 +455,16 @@ export const SearchView = () => {
                   </div>
                 )}
 
-              {/* Error state */}
+              {/*
+                Error state. `role="alert"` so the failure is announced the
+                moment it appears (WCAG 4.1.3, technique ARIA19). The status
+                region above says nothing for an error, so it is spoken once.
+              */}
               {semanticSearch.isError && (
-                <div className="tile-enter flex flex-col items-center justify-center py-16 text-center">
+                <div
+                  role="alert"
+                  className="tile-enter flex flex-col items-center justify-center py-16 text-center"
+                >
                   <div className="p-4 bg-rose-500/10 rounded-2xl mb-4">
                     <AlertTriangle className="w-10 h-10 text-error" />
                   </div>

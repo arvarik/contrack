@@ -645,10 +645,24 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* The staggered tiles wait their turn at opacity 0. With the motion gone
+       the wait is the only thing left of the effect, so it goes too. */
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * Leaflet's attribution strip tells its links apart from the text beside
+ * them by colour alone: #0078a8 on #333, 2.55:1 against the 3:1 WCAG 1.4.1
+ * asks of a link in running text. An underline is the distinction that does
+ * not depend on colour, and it holds in both palettes. Unlayered, because
+ * Leaflet's own stylesheet is.
+ */
+.leaflet-control-attribution a {
+  text-decoration: underline;
 }
 
 /* Tiptap Customizations */

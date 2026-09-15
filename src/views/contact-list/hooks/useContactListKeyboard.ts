@@ -19,7 +19,7 @@
  * @param params.onSmartPaste - Callback to open the smart paste modal.
  */
 import { useEffect } from "react";
-import { isTypingTarget } from "../../../lib/keyboard";
+import { isActivationTarget, isTypingTarget } from "../../../lib/keyboard";
 import type { Contact } from "../../../types";
 
 interface UseContactListKeyboardParams {
@@ -52,6 +52,10 @@ export function useContactListKeyboard({
         return;
       }
       if (e.key === "Enter") {
+        // Enter on a focused link or button is that control's own press.
+        // Only an Enter that would otherwise do nothing jumps to the
+        // composer, which is what the shortcut was for.
+        if (isActivationTarget()) return;
         e.preventDefault();
         const editor = document.querySelector(".ProseMirror") as HTMLElement;
         if (editor) editor.focus();

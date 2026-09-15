@@ -5,16 +5,33 @@ and GitHub releases.
 
 ## What runs when
 
-| Event                    | Tests | Container image   | GitHub release |
-| ------------------------ | ----- | ----------------- | -------------- |
-| Pull request into `main` | ✅    | —                 | —              |
-| Push to `main`           | ✅    | `latest`, `<sha>` | —              |
-| Push of a `v*` tag       | ✅    | `X.Y.Z`, `X.Y`    | ✅             |
-| Manual dispatch          | ✅    | —                 | —              |
+| Event                    | Tests | Browser journeys | Container image   | GitHub release |
+| ------------------------ | ----- | ---------------- | ----------------- | -------------- |
+| Pull request into `main` | ✅    | ✅               | —                 | —              |
+| Push to `main`           | ✅    | ✅               | `latest`, `<sha>` | —              |
+| Push of a `v*` tag       | ✅    | ✅               | `X.Y.Z`, `X.Y`    | ✅             |
+| Manual dispatch          | ✅    | ✅               | —                 | —              |
 
 `build-and-test` runs lint (ESLint + `tsc --noEmit` under strict), a Prettier
 check, the full test suite with coverage, and a production build on Node 22 —
 the version the Docker image ships.
+
+`browser-a11y` runs beside it, not after it, so a lint failure and a focus
+regression are reported separately. It builds the production bundle, boots
+it the way a release runs, and drives it in headless Chromium with
+Playwright: axe scans of every screen in both palettes, and the keyboard,
+dialog, search-announcement, phone-form and account journeys. Both jobs gate
+the container image and the release. What it checks, how to run it locally,
+and the manual pass that supplements it are in
+[accessibility.md](accessibility.md).
+
+Chromium is cached under `~/.cache/ms-playwright`, keyed by the Playwright
+version, so a cache hit installs only the apt libraries. The Playwright HTML
+report is uploaded on every run, green or red, and keeps each axe scan as an
+attachment, the trace of any retried test, and the screenshot of any
+failure. It is always the hosted runner: installing Chromium's system
+libraries needs `sudo`, which the self-hosted runner deliberately does not
+have.
 
 ## Container images
 

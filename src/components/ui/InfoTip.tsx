@@ -72,7 +72,9 @@ export const InfoTip = ({
         onFocus={reveal}
         onBlur={() => setOpen(false)}
         className={cn(
-          "inline-flex items-center justify-center rounded-full",
+          // 24px is the WCAG 2.5.8 floor for a target. The icon stays 14px;
+          // the hit area around it is what grew.
+          "inline-flex items-center justify-center rounded-full min-w-6 min-h-6",
           "text-on-surface-variant hover:text-on-surface transition-colors",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         )}

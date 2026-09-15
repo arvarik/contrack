@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Browser accessibility checks in CI.** A `browser-a11y` job builds the
+  production bundle, boots it the way a release runs, and drives it in
+  headless Chromium with Playwright: axe scans of every screen against WCAG
+  2.2 AA in both palettes, and journeys for the keyboard, dialogs, search
+  announcements, forms on a phone, and the account transitions on a gated
+  instance. Each worker boots its own server on a throwaway data directory.
+  `npm run test:e2e` runs it locally. See `docs/accessibility.md`, which
+  also carries the manual keyboard and screen-reader pass that supplements
+  the automated one.
+- **The search page announces itself.** One polite status region says that
+  a search started and what it found, for People and for Notes, and a failed
+  search is an alert. Results restored on the way back to the page are not
+  read again.
+- **A skip link.** The first Tab stop on every page is "Skip to main
+  content", which moves focus past the sidebar or the tab bar.
+
+### Fixed
+
+- The keyboard shortcuts overlay is a dialog now: it has the role and the
+  name, traps Tab, and returns focus to the button that opened it. It was a
+  bare overlay with an Escape handler.
+- The contact card that opens over search results has the same: role, name,
+  focus moved in, Tab kept inside, focus returned to the result on close.
+- The quick interaction dialog is named "Log an interaction" rather than
+  "Dialog".
+- Form fields render at 16 pixels on a phone, so iOS Safari no longer zooms
+  the page when one takes focus.
+- On the Network page, Enter on a focused link or button activates it
+  again. The list's Enter-to-compose shortcut swallowed every Enter outside a
+  field, so a keyboard user who tabbed to a sidebar link and pressed Enter
+  went nowhere.
+- The open contact's row is marked current again, with its ring and
+  `aria-current`, and the j/k keys step from it. The list is mounted on the
+  catch-all route, so the route parameter it read was always empty and
+  every ArrowDown went to the first contact.
+- Switching to Notes with the arrow keys keeps focus on the People / Notes
+  switch, as a radiogroup promises, rather than jumping into the field.
+- The inline help and score-breakdown buttons are at least 24 pixels, the
+  WCAG 2.5.8 floor for a target. The icons are the size they were.
+- The timeline's drop target and the avatar picker's file input have names.
+- Leaflet's attribution links are underlined, so they are told apart from
+  the text beside them by more than colour.
+- With "reduce motion" on, staggered tiles no longer wait their turn at
+  opacity zero before appearing at once.
+
 - **Note search.** Ask "Who discussed hiring last month?" and get the notes
   that say so, each with the person it is about, the date, and the passage
   that matched. A new FTS5 table, `interactions_fts`, indexes note titles and

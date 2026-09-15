@@ -304,7 +304,10 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                       : "border-surface-container-high hover:border-primary/40 hover:bg-surface-container-low",
                   )}
                 >
-                  <input {...getInputProps()} />
+                  <input
+                    {...getInputProps()}
+                    aria-label="Choose an image file"
+                  />
                   <div
                     className={cn(
                       "p-4 rounded-2xl transition-colors",

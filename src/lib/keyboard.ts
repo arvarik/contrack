@@ -32,3 +32,39 @@ export function isTypingTarget(e?: KeyboardEvent): boolean {
 
   return false;
 }
+
+/**
+ * Returns `true` when the element with focus is a control that Enter or
+ * Space activates on its own — a link, a button, a menu item, a radio — so
+ * a page-level Enter shortcut must leave the key alone.
+ *
+ * `isTypingTarget` answers the question for letters: do not fire `n` while
+ * somebody types an n. This answers it for Enter: do not swallow the press
+ * that would have followed a link or pressed a button. Before this, the
+ * contact list's Enter-to-compose shortcut called `preventDefault()` on
+ * every Enter outside a field, so a keyboard user who tabbed to a sidebar
+ * link on the Network page and pressed Enter went nowhere.
+ */
+export function isActivationTarget(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el || el === document.body) return false;
+  return (
+    el.closest(
+      [
+        "a[href]",
+        "button",
+        "summary",
+        '[role="button"]',
+        '[role="link"]',
+        '[role="menuitem"]',
+        '[role="menuitemcheckbox"]',
+        '[role="menuitemradio"]',
+        '[role="option"]',
+        '[role="radio"]',
+        '[role="checkbox"]',
+        '[role="switch"]',
+        '[role="tab"]',
+      ].join(", "),
+    ) !== null
+  );
+}

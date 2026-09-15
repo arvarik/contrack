@@ -22,7 +22,16 @@ export default tseslint.config(
     // benchmark scripts behind them. The scripts are CommonJS and run under
     // `node` by hand, not through the app build, so they read as undefined
     // globals here. They are reference material, not source.
-    ignores: ["dist/", "node_modules/", "drizzle/", "docs/multi-tenant-plan/"],
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "drizzle/",
+      "docs/multi-tenant-plan/",
+      // Playwright's own output: the HTML report ships bundled JavaScript.
+      "playwright-report/",
+      "test-results/",
+      "blob-report/",
+    ],
   },
   // Standalone Node tooling (audit scripts, codegen). These run under `node`
   // directly rather than through the app's TS build, so they need Node globals

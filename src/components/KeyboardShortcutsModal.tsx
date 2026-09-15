@@ -1,13 +1,18 @@
 /**
  * KeyboardShortcutsModal — Global `?` key overlay showing all keyboard shortcuts.
  *
- * Mounted once in App.tsx. Listens for `?` globally (ignoring inputs/textareas).
- * Categorised by context: Network, Contact Detail, Dedupe Engine, Global.
+ * Mounted once in App.tsx, which listens for `?` globally (ignoring inputs
+ * and textareas). Categorised by context: Navigation, Global, Network,
+ * Dedupe Engine.
+ *
+ * Built on the shared `Modal` primitive. It used to be a hand-rolled overlay:
+ * two motion divs, a window keydown for Escape, and nothing else. That gave a
+ * keyboard user a panel with no `role="dialog"`, no focus trap, and no way
+ * back to where they were when it closed — in the one dialog whose entire
+ * purpose is to help keyboard users. The primitive supplies all three.
  */
-import React, { useEffect } from "react";
-import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "motion/react";
-import { X, Keyboard } from "lucide-react";
+import React from "react";
+import { Modal } from "./ui/Modal";
 
 interface Shortcut {
   keys: string[];
@@ -23,7 +28,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     context: "Navigation",
     shortcuts: [
-      { keys: ["⌘", "⇧", "N"], description: "Go to Network" },
+      { keys: ["⌘", "⇧", "H"], description: "Go to Network" },
       { keys: ["⌘", "⇧", "P"], description: "Go to Pulse" },
       { keys: ["⌘", "⇧", "M"], description: "Go to Map" },
       { keys: ["⌘", "⇧", "S"], description: "Go to AI Search" },
@@ -72,94 +77,57 @@ interface Props {
   onClose: () => void;
 }
 
-export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => {
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
-
-  const content = (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-on-surface/20 backdrop-blur-sm z-[200]"
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 16 }}
-            transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md glass-panel rounded-2xl shadow-2xl z-[201] overflow-hidden"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-surface-container-low">
-              <div className="flex items-center gap-2.5">
-                <Keyboard className="w-4 h-4 text-primary" />
-                <h2 className="font-headline font-bold text-base">
-                  Keyboard Shortcuts
-                </h2>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-1.5 hover:bg-surface-container-high rounded-lg transition-colors text-on-surface-variant hover:text-on-surface"
+export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => (
+  <Modal isOpen={isOpen} onClose={onClose} title="Keyboard Shortcuts" size="sm">
+    {/*
+      A tab stop of its own. The list is longer than a short viewport and
+      holds nothing interactive, so without one the scrolling region would
+      be reachable by pointer only (WCAG 2.1.1). Focus here, and the arrow
+      keys scroll it.
+    */}
+    <div
+      role="region"
+      aria-label="Shortcut list"
+      tabIndex={0}
+      className="space-y-5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      {SHORTCUT_GROUPS.map((group) => (
+        <section key={group.context} aria-label={group.context}>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2.5">
+            {group.context}
+          </p>
+          <dl className="space-y-1">
+            {group.shortcuts.map((s) => (
+              <div
+                key={s.description}
+                className="flex items-center justify-between gap-3 py-1.5 px-3 rounded-xl hover:bg-surface-container-low transition-colors"
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Groups */}
-            <div className="p-5 space-y-5 max-h-[65vh] overflow-y-auto nice-scrollbar">
-              {SHORTCUT_GROUPS.map((group) => (
-                <div key={group.context}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2.5">
-                    {group.context}
-                  </p>
-                  <div className="space-y-1">
-                    {group.shortcuts.map((s) => (
-                      <div
-                        key={s.description}
-                        className="flex items-center justify-between py-1.5 px-3 rounded-xl hover:bg-surface-container-low transition-colors"
-                      >
-                        <span className="text-sm text-on-surface">
-                          {s.description}
+                <dt className="text-sm text-on-surface">{s.description}</dt>
+                <dd className="flex items-center gap-1">
+                  {s.keys.map((k, i) => (
+                    <React.Fragment key={i}>
+                      <Kbd>{k}</Kbd>
+                      {i < s.keys.length - 1 && (
+                        <span
+                          className="text-[10px] text-on-surface-variant mx-0.5"
+                          aria-hidden="true"
+                        >
+                          +
                         </span>
-                        <div className="flex items-center gap-1">
-                          {s.keys.map((k, i) => (
-                            <React.Fragment key={i}>
-                              <Kbd>{k}</Kbd>
-                              {i < s.keys.length - 1 && (
-                                <span className="text-[10px] text-on-surface-variant mx-0.5">
-                                  +
-                                </span>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                      )}
+                    </React.Fragment>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
 
-              {/* Footer hint */}
-              <p className="text-center text-[11px] text-on-surface-variant pt-1">
-                Press <Kbd>?</Kbd> anytime to open this
-              </p>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-
-  return createPortal(content, document.body);
-};
+      {/* Footer hint */}
+      <p className="text-center text-[11px] text-on-surface-variant pt-1">
+        Press <Kbd>?</Kbd> anytime to open this
+      </p>
+    </div>
+  </Modal>
+);
