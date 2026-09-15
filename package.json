@@ -50,7 +50,9 @@
     "tenancy:verify": "tsx scripts/tenancy-verify.ts",
     "eval:record": "tsx scripts/record-search-eval.ts",
     "test:eval": "vitest run --project eval",
-    "eval:record:dedupe": "tsx scripts/record-dedupe-eval.ts"
+    "eval:record:dedupe": "tsx scripts/record-dedupe-eval.ts",
+    "eval:record:answer": "tsx scripts/record-answer-eval.ts --record",
+    "eval:answer:live": "tsx scripts/record-answer-eval.ts --live"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

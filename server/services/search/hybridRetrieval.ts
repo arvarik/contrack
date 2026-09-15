@@ -1,3 +1,4 @@
+import { matchesQueryLocations } from "../../ai/searchLocations.ts";
 // Hybrid retrieval applies a bounded AI query plan, then combines local
 // keyword and vector rankings. SearchService sends local results before this
 // stage starts. Every semantic result still requires verified field evidence.
@@ -134,7 +135,14 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
   const indRe = buildMatcherRegex(plan.must.industryMatchers ?? []);
   const temporal = plan.must.temporal;
 
-  if (!locRe && !coRe && !roleRe && !indRe && !temporal) {
+  if (
+    !plan.must.locations?.length &&
+    !locRe &&
+    !coRe &&
+    !roleRe &&
+    !indRe &&
+    !temporal
+  ) {
     return { allowedIds: null, summary: "no hard filters" };
   }
 
@@ -183,12 +191,15 @@ function applyHardFilters(scope: Scope, plan: QueryPlan): HardFilterResult {
 
   const allowed = new Set<string>();
   for (const r of rows) {
-    if (locRe && !(r.location && locRe.test(r.location))) continue;
+    if (plan.must.locations?.length) {
+      if (!matchesQueryLocations(r.location ?? "", plan.must.locations))
+        continue;
+    } else if (locRe && !(r.location && locRe.test(r.location))) continue;
     if (coRe && !(r.company && coRe.test(r.company))) continue;
     if (roleRe) {
-      const inRole = r.role && roleRe.test(r.role);
-      const inHeadline = r.headline && roleRe.test(r.headline);
-      if (!inRole && !inHeadline) continue;
+      // The current role takes precedence over a headline about prior work.
+      const currentRole = r.role?.trim() || r.headline;
+      if (!currentRole || !roleRe.test(currentRole)) continue;
     }
     if (indRe) {
       const inIndustry = r.industry && indRe.test(r.industry);
@@ -425,7 +436,7 @@ export async function hybridRetrieval(
     }
   }
 
-  const embedInput = [query, ...(plan?.should.traits ?? [])].join(". ");
+  const embedInput = buildSearchEmbeddingInput(query, plan);
 
   // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
   const [ftsResults, vectorResults] = await Promise.all([
@@ -467,4 +478,12 @@ export async function hybridRetrieval(
     preFilterSummary: hardFilterSummary,
     plan,
   };
+}
+
+/** Use the same query expansion for retrieval and recorded evaluation vectors. */
+export function buildSearchEmbeddingInput(
+  query: string,
+  plan?: QueryPlan | null,
+): string {
+  return [query, ...(plan?.should.traits ?? [])].join(". ");
 }

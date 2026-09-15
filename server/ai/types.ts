@@ -298,6 +298,15 @@ export interface SemanticMatchResult {
   reason: string;
 }
 
+/** A grounded place. Fields within a constraint use AND. Separate constraints use OR. */
+export interface QueryLocationConstraint {
+  city?: string;
+  region?: string;
+  country?: string;
+  literal?: string;
+  sourcePhrase: string;
+}
+
 /**
  * Structured query plan produced by `parseSearchQuery` (Plan-Filter-Rank-Verify
  * architecture, v5).
@@ -333,6 +342,9 @@ export interface SemanticMatchResult {
  * means "no structured intent extracted — run pure hybrid search."
  */
 export interface QueryPlan {
+  evidence?: Partial<
+    Record<"location" | "company" | "role" | "industry" | "temporal", string>
+  >;
   /**
    * HARD filters — a contact MUST satisfy every populated *Matchers list.
    * Each list is OR-internally (any matcher hit passes that dimension);
@@ -340,15 +352,15 @@ export interface QueryPlan {
    */
   must: {
     /**
-     * Word-boundary substrings to match against `contact.location`.
-     * Includes synonyms, regions, states, abbreviations, and major cities.
-     * Example for "America": ["United States","USA","America","U.S.",
-     *   "California","CA","New York","NY",...,"San Francisco",...]
+     * Legacy display and matching values. Structured locations take precedence
+     * when present, so city and country parts do not become OR alternatives.
      */
     locationMatchers?: string[];
+    /** Explicit city, region, and country constraints from the query. */
+    locations?: QueryLocationConstraint[];
     /** Word-boundary substrings to match against `contact.company`. */
     companyMatchers?: string[];
-    /** Word-boundary substrings to match against `contact.role` or `contact.headline`. */
+    /** Word-boundary phrases for the current role, or headline only if role is empty. */
     roleMatchers?: string[];
     /** Word-boundary substrings to match against `contact.industry` and tags/interests. */
     industryMatchers?: string[];
