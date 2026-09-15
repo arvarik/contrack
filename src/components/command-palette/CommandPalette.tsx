@@ -910,7 +910,19 @@ export const CommandPalette = () => {
                   {aiQuery.length >= 3 &&
                     !isAiLoading &&
                     aiResults.length > 0 && (
-                      <div className="px-3 py-2 flex justify-end">
+                      <div className="px-3 py-2 flex flex-wrap justify-end gap-x-4 gap-y-1">
+                        <button
+                          onClick={() => {
+                            navigate(
+                              `/search?mode=notes&q=${encodeURIComponent(aiQuery)}`,
+                            );
+                            handleClose();
+                          }}
+                          className="text-xs text-primary hover:text-primary flex items-center gap-1 transition-colors group"
+                        >
+                          Search notes
+                          <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        </button>
                         <button
                           onClick={() => {
                             navigate(

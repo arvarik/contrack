@@ -129,6 +129,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 - **Batch Enrichment** — AI-powered web research to hydrate contact profiles
 - **Custom Lists** — Unlimited groups with icons, drag-to-reorder, bulk membership
 - **Doc2Query** — Write-time search expansion via AI for better recall
+- **Note Search** — "Who discussed hiring last month?" answered from your own notes, locally: the person, the date and the passage, with date phrases read in your time zone
 - **Ghost Detection** — Passive entity extraction from notes creates ghost contacts
 - **@Mentions** — Bi-directional relationship graph via Tiptap rich text
 - **AI Cache Telemetry** — Multi-tiered LRU caching with full transparency dashboard
@@ -228,6 +229,7 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | Contact Management | [docs/features/contact-management.md](docs/features/contact-management.md) |
 | Command Palette    | [docs/features/command-palette.md](docs/features/command-palette.md)       |
 | AI Search          | [docs/features/ai-search.md](docs/features/ai-search.md)                   |
+| Note Search        | [docs/features/interaction-search.md](docs/features/interaction-search.md) |
 | Deduplication      | [docs/features/deduplication.md](docs/features/deduplication.md)           |
 | Pulse Dashboard    | [docs/features/dashboard-pulse.md](docs/features/dashboard-pulse.md)       |
 | Map View           | [docs/features/map-view.md](docs/features/map-view.md)                     |

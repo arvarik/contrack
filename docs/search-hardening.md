@@ -20,9 +20,22 @@ This reduces AI work and prevents inferred keywords from becoming search evidenc
 Pinned provider embeddings remain available through the embedding-store backfill path.
 Automatic local refreshes skip provider embeddings. Until a backfill runs, keyword search covers those edited contacts.
 
+## The note index
+
+`interactions_fts` mirrors `interactions` by rowid, the way `contacts_fts` mirrors `contacts`.
+Three triggers keep it in step inside the note's own transaction. A contact's deletion cascades to its notes, and the cascade fires the delete trigger.
+The body is indexed as plain text. The triggers call a SQL function the server registers, so every write path is covered and no HTML tag or mention id becomes a searchable word.
+The tokenizer stems and folds diacritics. The contact index does not stem, because names are not prose.
+Every search statement carries the owner three times: in the FTS5 match expression, on the interaction row, and on the contact row.
+Notes on archived, trashed, merged and ghost contacts are hidden at query time, so restoring a contact needs no index change.
+The date filter normalises every stored date shape with `strftime` before it compares, because a space sorts before a `T`.
+The date phrase parser is deterministic and works in the caller's zone. It calls no model.
+Both FTS tables live under one version gate, `PRAGMA user_version`, now 4. See [Note Search](features/interaction-search.md).
+
 ## Verification
 
 Run `npm test` for keyword syntax, visibility, child updates, migration, filtered retrieval, and asynchronous write regressions.
+`tests/integration/search.interactions.test.ts` covers the note index: every write path, hidden contacts, HTML stripping, stemming, every stored date shape, date phrases by zone, paging, validation, and the MCP route.
 Run `npx tsx scripts/benchmark-search.ts` for a temporary database with 10,000 synthetic contacts.
 The benchmark measures 100 contact edits and 100 keyword searches. It never opens the user's database.
 

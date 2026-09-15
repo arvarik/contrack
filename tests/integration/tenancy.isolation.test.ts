@@ -130,6 +130,7 @@ const COVERED = [
   "GET /api/query/contacts",
   "GET /api/search",
   "GET /api/search/coverage",
+  "GET /api/search/interactions",
   "GET /api/tags",
   "GET /api/timeline",
   "GET /api/trash",
@@ -2924,6 +2925,29 @@ describe("the MCP surface answers for the caller's own account", () => {
     );
   });
 
+  it("GET /api/search/interactions: finds nothing of another account's", async () => {
+    const forB = await asUser(B)(
+      request(app).get("/api/search/interactions").query({ q: "Zebulonian" }),
+    );
+    const forA = await asUser(A)(
+      request(app).get("/api/search/interactions").query({ q: "Zebulonian" }),
+    );
+
+    expect(forB.status).toBe(200);
+    expect(forB.body.total).toBe(0);
+    expect(forB.body.hits).toEqual([]);
+    expect(forA.body.total).toBeGreaterThan(0);
+    expect(
+      (forA.body.hits as { title: string; contact: { id: string } }[]).map(
+        (hit) => hit.title,
+      ),
+    ).toContain(RARE_NOTE);
+    // The one note with that word is on A's own contact.
+    for (const hit of forA.body.hits as { contact: { id: string } }[]) {
+      expect(hit.contact.id).toBe(dueA);
+    }
+  });
+
   it("GET /api/timeline: returns only the caller's interactions", async () => {
     const forB = await asUser(B)(
       request(app).get("/api/timeline").query({ limit: 200 }),
@@ -3023,7 +3047,7 @@ describe("no scoped route is waiting for its sub-phase", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(33);
+    expect(collections).toHaveLength(34);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

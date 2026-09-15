@@ -1,7 +1,7 @@
 // =============================================================================
 // MCP Service — the read-only surface an MCP client or a personal token asks
 // =============================================================================
-// Six queries, one account. Every one of them names the caller's owner, so an
+// Five queries, one account. Every one of them names the caller's owner, so an
 // MCP client signed in with one account's personal token reads that account's
 // contacts and nothing else. The principal a token produces is an ordinary
 // user principal, so `scopeOf(req)` answers for a token exactly as it answers
@@ -121,26 +121,6 @@ export const mcpService = {
           ORDER BY industry ASC`,
       )
       .all(scope.ownerId) as { industry: string }[];
-  },
-
-  /** The caller's interactions whose title or body contains `q`. */
-  searchInteractions(scope: Scope, q: string, type?: string) {
-    const safeQ = `%${q}%`;
-    let sqlQuery = `
-      SELECT i.*, c.name as contactName
-      FROM interactions i
-      JOIN contacts c ON i.contactId = c.id
-      WHERE i.ownerId = ? AND (i.title LIKE ? OR i.content LIKE ?)
-    `;
-    const params: string[] = [scope.ownerId, safeQ, safeQ];
-
-    if (type) {
-      sqlQuery += " AND i.type = ?";
-      params.push(type);
-    }
-
-    sqlQuery += " ORDER BY i.date DESC LIMIT 50";
-    return sqlite.prepare(sqlQuery).all(...params);
   },
 
   /**

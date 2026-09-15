@@ -43,6 +43,7 @@ export const OWNED_TABLES = [
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */
 export const VIRTUAL_TABLES = [
   "contacts_fts",
+  "interactions_fts",
   "search_embeddings",
   "contact_embeddings",
 ];

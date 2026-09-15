@@ -7,6 +7,8 @@ import { ValidationError } from "../utils/AppError.ts";
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { searchService } from "../services/searchService.ts";
+import { searchInteractions } from "../services/interactionSearchService.ts";
+import { parseInteractionSearchQuery } from "../utils/validators.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { synthesizeSearchResults } from "../ai/index.ts";
@@ -69,6 +71,31 @@ router.get(
       `[${rid}] GET /api/search?q="${q.replace(/["']/g, "")}" → ${results.length}`,
     );
     res.json(results);
+  }),
+);
+
+/**
+ * GET /api/search/interactions — notes, with the date and an excerpt.
+ *
+ * "Who discussed hiring last month?" → the notes that mention hiring, dated
+ * last month in the caller's zone, each with the person it is about and the
+ * passage that matched. Local FTS5 only; no model is called. Query
+ * parameters: `q`, `from`, `to`, `type`, `contactId`, `sort`, `mode`,
+ * `limit`, `offset` and `tz`. See docs/api-reference.md.
+ */
+router.get(
+  "/interactions",
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+    const scope = scopeOf(req);
+    const params = parseInteractionSearchQuery(req.query);
+    const result = searchInteractions(scope, params);
+    log.debug(
+      "API",
+      `[${rid}] GET /api/search/interactions q="${(params.q ?? "").replace(/["']/g, "")}" ` +
+        `mode=${result.query.mode} range=${result.query.range ? result.query.range.source : "none"} → ${result.hits.length} of ${result.total}`,
+    );
+    res.json(result);
   }),
 );
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { ValidationError } from "./AppError.ts";
+import { isValidTimeZone } from "../services/search/datePhrases.ts";
 
 // ============================================================================
 // Foundation / Base Values
@@ -399,3 +400,57 @@ export const validateBody = (schema: z.ZodTypeAny) => {
     next();
   };
 };
+
+// ============================================================================
+// Interaction search — GET /api/search/interactions and /api/interactions/search
+// ============================================================================
+
+/** A calendar date, or an instant with its zone. */
+const dayOrInstantSchema = z.union([
+  z.iso.date(),
+  z.iso.datetime({ offset: true }),
+]);
+
+/**
+ * The query string of a note search.
+ *
+ * Every field is optional: a question alone, a period alone, or one contact's
+ * notes of one kind are all valid searches. `tz` is the caller's IANA zone,
+ * which is what makes "last month" the caller's month. `limit` and `offset`
+ * arrive as strings and are coerced; a repeated key arrives as an array and is
+ * refused.
+ */
+export const interactionSearchQuerySchema = z.object({
+  q: z.string().max(500).optional(),
+  from: dayOrInstantSchema.optional(),
+  to: dayOrInstantSchema.optional(),
+  type: z.string().trim().min(1).max(40).optional(),
+  contactId: z.string().trim().min(1).max(100).optional(),
+  sort: z.enum(["relevance", "date"]).optional(),
+  mode: z.enum(["auto", "all", "any"]).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  offset: z.coerce.number().int().min(0).max(5000).optional(),
+  tz: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .refine(isValidTimeZone, "Unknown time zone")
+    .optional(),
+});
+
+export type InteractionSearchQuery = z.infer<
+  typeof interactionSearchQuerySchema
+>;
+
+/** Read and validate the query string of a note search. Throws 400 on a bad one. */
+export function parseInteractionSearchQuery(
+  raw: unknown,
+): Omit<InteractionSearchQuery, "tz"> & { timeZone?: string } {
+  const { tz, ...rest } = runOrThrow<InteractionSearchQuery>(
+    interactionSearchQuerySchema,
+    raw,
+    "query",
+  );
+  return { ...rest, timeZone: tz };
+}

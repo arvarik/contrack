@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Note search.** Ask "Who discussed hiring last month?" and get the notes
+  that say so, each with the person it is about, the date, and the passage
+  that matched. A new FTS5 table, `interactions_fts`, indexes note titles and
+  bodies as plain text, with stemming and diacritic folding, and three
+  triggers keep it in step with every write in the note's own transaction. A
+  date phrase in the question (`last month`, `since March`, `in 2025`, `the
+last 30 days`, …) is read locally, in the caller's time zone, and applied
+  as a filter; nothing here calls a model. `GET /api/search/interactions`
+  answers with the hits, highlight offsets, the total, and what it understood.
+  The search page has a Notes mode beside People, with period presets, a kind
+  filter, and paging, and a result opens the note on its contact's timeline.
+  Notes on archived, trashed, merged and ghost contacts are hidden. See
+  `docs/features/interaction-search.md`.
 - Every bulk import has an id and a record. The browser makes the id when a
   file is chosen and sends it as `X-Import-Id`, and `imports` keeps a row per
   import and `import_rows` a row per contact. A second request with the same
@@ -491,6 +504,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `GET /api/interactions/search`, the MCP note search, runs on the note index.
+  It matched `q` as a substring of the title or body and returned raw rows; it
+  now matches by word and stem, reads date phrases, accepts the same filters
+  as `GET /api/search/interactions`, answers with a plain-text `excerpt` in
+  place of the HTML `content`, and hides notes on contacts the app hides. The
+  response is still an array, and each hit still carries `title` and
+  `contactName`.
 - **Extra F2.** CI enforces a coverage floor instead of only reporting one.
   `vitest.config.ts` carries thresholds set two points under what was measured
   when they landed, with a second, independent floor on `server/**`. The

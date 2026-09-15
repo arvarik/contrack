@@ -1,20 +1,23 @@
 import type Database from "better-sqlite3";
 import { log } from "../../utils/logger.ts";
+import { installInteractionSearchIndex } from "./interactionFtsIndex.ts";
 
 /** The active contact predicate shared by every search channel. */
 export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
   AND c.canonicalId IS NULL AND c.deletedAt IS NULL`;
 
-// Version 3 adds `ownerTok`. The gate below drops and rebuilds the table when
-// the stored user_version differs, so the first boot after upgrade re-indexes
-// every active contact. Measured at 233 ms for 50,000 contacts.
+// Version 3 adds `ownerTok`. Version 4 adds interactions_fts, the note index
+// in interactionFtsIndex.ts, which lives under the same gate. The gate below
+// drops and rebuilds both tables when the stored user_version differs, so the
+// first boot after upgrade re-indexes every active contact and every note.
+// Measured at 233 ms for 50,000 contacts.
 /**
  * The FTS schema version, kept in `PRAGMA user_version`.
  *
  * Exported so the admin health panel can report what this database is on
  * without opening it, which is the whole point of the panel.
  */
-export const FTS_SCHEMA_VERSION = 3;
+export const FTS_SCHEMA_VERSION = 4;
 const VERSION = FTS_SCHEMA_VERSION;
 
 /**
@@ -106,10 +109,18 @@ export function contactTriggerSql(): string {
       END;`;
 }
 
-/** Install or migrate FTS atomically. FTS rowids match contact rowids for indexed deletes. */
+/**
+ * Install or migrate both FTS tables atomically.
+ *
+ * FTS rowids match the rowids of the rows they mirror, for indexed deletes.
+ * The note index is installed here as well, inside the same transaction and
+ * under the same version gate, so the two can never disagree about which
+ * schema version this database is on.
+ */
 export function installSearchIndex(sqlite: Database.Database): void {
   const started = performance.now();
   let rebuilt = false;
+  let noteRows = 0;
   sqlite.transaction(() => {
     const version = sqlite.pragma("user_version", { simple: true });
     rebuilt = version !== VERSION;
@@ -194,6 +205,7 @@ export function installSearchIndex(sqlite: Database.Database): void {
     const insertMissingRows = ftsInsert(`${ACTIVE_CONTACT_SQL}
       AND NOT EXISTS (SELECT 1 FROM contacts_fts f WHERE f.rowid = c.rowid)`);
     sqlite.exec(`${insertMissingRows};`);
+    noteRows = installInteractionSearchIndex(sqlite, rebuilt);
     sqlite.pragma(`user_version = ${VERSION}`);
   })();
 
@@ -207,7 +219,13 @@ export function installSearchIndex(sqlite: Database.Database): void {
     };
     log.info(
       "Database",
-      `contacts_fts rebuilt at v${VERSION} with ownerTok: ${rows.n} rows in ${(performance.now() - started).toFixed(0)}ms`,
+      `contacts_fts rebuilt at v${VERSION} with ownerTok: ${rows.n} rows, ` +
+        `interactions_fts: ${noteRows} rows, in ${(performance.now() - started).toFixed(0)}ms`,
+    );
+  } else if (noteRows > 0) {
+    log.info(
+      "Database",
+      `interactions_fts caught up: ${noteRows} note(s) indexed in ${(performance.now() - started).toFixed(0)}ms`,
     );
   }
 }

@@ -5,8 +5,8 @@
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { Suspense, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Mail,
   Phone,
@@ -197,6 +197,33 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
     useState<Interaction | null>(null);
   const completeActionItem = useCompleteActionItem();
 
+  // A note search lands here with `?interaction=<id>`: open that note and
+  // scroll to it, then drop the parameter so Back and a reload show the plain
+  // timeline. Waits for the timeline to load, and does nothing if the note
+  // is not on it, which is what happens after the note is deleted.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantedInteraction = searchParams.get("interaction");
+  useEffect(() => {
+    if (!wantedInteraction || timelineLoading) return;
+    const item = timeline.find((entry) => entry.id === wantedInteraction);
+    if (item) {
+      setSelectedInteraction(item);
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`interaction-${item.id}`)
+          ?.scrollIntoView({ block: "center" });
+      });
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("interaction");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [wantedInteraction, timeline, timelineLoading, setSearchParams]);
+
   const handleDeleteInteraction = (interactionId: string) => {
     deleteInteraction.mutate(
       { id: interactionId, contactId },
@@ -261,6 +288,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
           return (
             <div
               key={item.id}
+              id={`interaction-${item.id}`}
               className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active timeline-entry"
               style={{ animationDelay: `${Math.min(index, 6) * 25}ms` }}
             >

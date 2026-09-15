@@ -38,6 +38,14 @@ describe("tenant-lint: flagging", () => {
     expect(out[0].kind).toBe("sql:search_embeddings");
   });
 
+  it("flags the note index, which is partitioned by owner token", () => {
+    const out = findings(
+      `const q = "SELECT rowid FROM interactions_fts WHERE interactions_fts MATCH ?";`,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe("sql:interactions_fts");
+  });
+
   it("flags a Drizzle builder chain on an owned table", () => {
     const out = findings(`const rows = db.select().from(schema.contacts);`);
     expect(out).toHaveLength(1);
