@@ -1,6 +1,6 @@
-# AI Search & Batch Enrichment
+# Ask Contrack and contact enrichment
 
-Contrack's AI search system combines local-first hybrid retrieval with AI-powered enrichment to find, understand, and enrich contacts in your network.
+Ask Contrack finds people in your network from a question in plain words. Contact enrichment researches contacts on the web and fills in their profiles. Both combine local-first retrieval with AI.
 
 ## Ask Contrack v3 (Semantic Search)
 
@@ -78,15 +78,15 @@ These terms are stored in a `searchExpansion` column indexed by FTS5, dramatical
 
 ---
 
-## Batch Enrichment (AI Search)
+## Contact enrichment
 
-The AI Search feature (Settings → AI Search) enriches contact profiles with internet-sourced data in bulk.
+Contact enrichment (Settings → Contact enrichment) fills in contact profiles with data from the web, in bulk. The API routes keep their `ai-search` path.
 
 ### How to Use
 
-1. Navigate to **Settings → AI Search**
+1. Navigate to **Settings → Contact enrichment**
 2. Select contacts to enrich (individually or "Select All")
-3. Click **Start Enrichment**
+3. Click **Start enrichment**
 4. Watch real-time progress via the SSE-powered progress overlay
 
 <!-- Screenshot: batch-enrichment.png -->

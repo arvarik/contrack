@@ -574,7 +574,7 @@ export const ImportModal = ({
       {/* Instructions — hidden during processing/results */}
       {showUploadChrome && (
         <div className="bg-surface-container-low p-6 rounded-xl mb-6 text-sm text-on-surface-variant">
-          <h4 className="font-bold text-on-surface mb-2 flex items-center gap-2">
+          <h3 className="font-bold text-on-surface mb-2 flex items-center gap-2">
             <FileText className="w-4 h-4" />
             How to export from{" "}
             {activeTab === "apple"
@@ -584,7 +584,7 @@ export const ImportModal = ({
                 : activeTab === "google"
                   ? "Google Contacts"
                   : "Facebook"}
-          </h4>
+          </h3>
           {activeTab === "apple" && (
             <ol className="list-decimal list-inside space-y-1 ml-1">
               <li>

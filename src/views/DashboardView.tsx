@@ -43,6 +43,7 @@ import { tileDelay } from "../lib/motion";
 import { motion, AnimatePresence } from "motion/react";
 import { format, addDays } from "date-fns";
 import { usePageTitle } from "../hooks/usePageTitle";
+import { NAMES } from "../lib/names";
 import { SuggestionReviewQueue } from "./dedupe/components";
 
 type PulseTab = "pulse" | "suggestions";
@@ -151,7 +152,7 @@ export const DashboardView = () => {
   const updateAction = useUpdateActionItem();
   const navigate = useNavigate();
 
-  usePageTitle("Relationship Pulse");
+  usePageTitle(NAMES.pulse.title);
 
   const { data: dedupeCount } = useDedupeCount();
   const pendingSuggestions = dedupeCount?.count ?? 0;
@@ -235,7 +236,7 @@ export const DashboardView = () => {
       <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
         {/* Header — stacks under 640px so the tab bar never squeezes the title */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <h1 className={PAGE_TITLE}>Pulse</h1>
+          <h1 className={PAGE_TITLE}>{NAMES.pulse.label}</h1>
           {/* Tabs */}
           <div className={cn(TAB_CONTAINER, "w-full sm:w-fit")}>
             <button

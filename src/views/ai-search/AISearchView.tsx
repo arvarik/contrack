@@ -3,7 +3,9 @@
  *
  * Displays a selectable list of non-archived contacts with status badges
  * (✨ previously searched, NEW never searched, 🔴 last search errored).
- * Users select contacts, then click "Start AI Search" to begin a batch.
+ * Users select contacts, then click "Start enrichment" to begin a batch. The
+ * page is named "Contact enrichment" in the UI (`lib/names`). The code keeps
+ * the `aiSearch` name of the subsystem behind it.
  */
 import React, { useState, useCallback, useMemo } from "react";
 import { Sparkles, Search, User, Link, Mail, Hourglass } from "lucide-react";
@@ -110,7 +112,7 @@ export function AISearchView() {
       {/*
         No title block here. This view is only ever mounted inside the
         Settings shell, which already renders the icon and "Contact
-        Enrichment" heading — repeating it stacked two near-identical headers
+        enrichment" heading — repeating it stacked two near-identical headers
         on top of each other and pushed the actual content off a phone screen.
         Only the description that the shell does not carry survives.
       */}
@@ -135,7 +137,7 @@ export function AISearchView() {
             <Sparkles className="w-10 h-10 text-on-surface-variant/30 mb-4" />
             <p className="font-semibold text-sm">No contacts available</p>
             <p className="text-xs mt-1 text-on-surface-variant">
-              Add contacts to your network to start using AI Search.
+              Add contacts to your network to start using contact enrichment.
             </p>
           </div>
         )}
@@ -258,7 +260,7 @@ export function AISearchView() {
             >
               <Sparkles className="w-4 h-4" />
               {selectedIds.size > 0
-                ? `Start AI Search (${selectedIds.size} selected)`
+                ? `Start enrichment (${selectedIds.size} selected)`
                 : "Select contacts to search"}
             </button>
           </>

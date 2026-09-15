@@ -169,9 +169,9 @@ export function SearchCoverageBar({
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-on-surface">
+              <h2 className="text-sm font-bold text-on-surface">
                 Semantic Search Coverage
-              </h3>
+              </h2>
               <span
                 className={cn(
                   "text-xs font-semibold px-2 py-0.5 rounded-full",

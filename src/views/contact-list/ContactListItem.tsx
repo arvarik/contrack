@@ -24,6 +24,7 @@ import { listRow } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { Contact } from "../../types";
 import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
+import { ROVING_INDEX_ATTR, type RovingItemProps } from "./useRovingList";
 import { MapPin } from "lucide-react";
 
 import { isPast, isToday, formatDistanceToNowStrict } from "date-fns";
@@ -69,6 +70,15 @@ interface ContactListItemProps {
   isSelected: boolean;
   /** `extend` is true for a shift-click: select the range, don't toggle. */
   onToggleSelect: (id: string, extend: boolean) => void;
+  /**
+   * The row's place in the list's roving Tab order (see useRovingList).
+   * Passed as separate props rather than one object so the memo comparison
+   * still skips rows whose Tab stop did not move.
+   */
+  rovingIndex?: number;
+  tabIndex?: RovingItemProps["tabIndex"];
+  onRowKeyDown?: RovingItemProps["onKeyDown"];
+  onRowFocus?: RovingItemProps["onFocus"];
 }
 
 const ContactListItemInner = ({
@@ -79,6 +89,10 @@ const ContactListItemInner = ({
   isSelectMode,
   isSelected,
   onToggleSelect,
+  rovingIndex,
+  tabIndex,
+  onRowKeyDown,
+  onRowFocus,
 }: ContactListItemProps) => {
   const primaryEmail = contact.emails?.[0]?.email || null;
   const logoInfo = useCompanyLogo(primaryEmail, contact.company);
@@ -153,6 +167,10 @@ const ContactListItemInner = ({
       aria-current={active && !isSelectMode ? "page" : undefined}
       to={isSelectMode ? "#" : `/contact/${contact.id}${location.search}`}
       onClick={handleClick}
+      tabIndex={tabIndex}
+      {...(rovingIndex !== undefined && { [ROVING_INDEX_ATTR]: rovingIndex })}
+      onKeyDown={onRowKeyDown}
+      onFocus={onRowFocus}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       className={cn(
@@ -194,11 +212,17 @@ const ContactListItemInner = ({
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 min-w-0">
-            <h3
-              className={`text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}
+            {/*
+              Not a heading. The list sits under an h1 on the Network page and
+              an h2 beside an open contact, so a fixed level was wrong on one
+              of them, and a heading per row is thirty headings to skip past.
+              The row is a link, and its name is already the link's name.
+            */}
+            <span
+              className={`block text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}
             >
               {contact.name}
-            </h3>
+            </span>
             {contact.isGhost ? (
               <span title="Ghost Contact" className="shrink-0 flex">
                 <Sparkles className="w-3.5 h-3.5 text-primary opacity-80" />

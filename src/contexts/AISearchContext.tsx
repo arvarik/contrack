@@ -101,7 +101,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
           setIsVisible(true);
           setLimitMessage(null);
           toast.success(
-            `AI Search started for ${result.jobCount} contact${result.jobCount !== 1 ? "s" : ""}`,
+            `Enrichment started for ${result.jobCount} contact${result.jobCount !== 1 ? "s" : ""}`,
           );
         },
         onError: (err) => {

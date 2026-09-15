@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The contact list is one Tab stop.** Up and Down move through the list,
+  Home and End jump to the ends, a letter jumps to the next name that starts
+  with it, and Enter opens the contact. The letter rail is one stop too, with
+  the arrow keys inside it, and it draws only the letters that have contacts.
+  From the top of a contact page the contact's name is now at most 16 Tab
+  presses away. It was 42. `keyboard.spec.ts` holds that budget.
+- **Focus follows navigation.** Opening a contact puts focus on its name, and
+  Back on a phone puts focus on the row it was opened from. The skip link
+  follows the route: the contact's name on a contact page, the list on the
+  Network page.
+- **Landmarks and headings on every route.** Each route renders inside a
+  named `main`. On a wide screen the list is a "Contacts" landmark beside the
+  contact. On a phone the list is the main. Network, a contact and the map
+  each have an `h1`, and the contact's name is that `h1`. The axe suite now
+  checks `landmark-one-main`, `page-has-heading-one`, `region` and
+  `heading-order` on six screens, and on a phone for the list and a contact.
+- **One name per destination.** `src/lib/names.ts` holds the names, and the
+  sidebar, the tab bar, the command palette, the shortcuts dialog and the
+  document titles read them. "Relationship Pulse" is now "Pulse". "AI Search"
+  and "Ask AI" are now "Ask Contrack". "Network Dedupe Engine" is now
+  "Duplicates". The batch research page is "Contact enrichment", and its button
+  says "Start enrichment".
+- **A shortcut registry.** `src/lib/shortcuts.ts` lists every shortcut with
+  its group, keys, description and a `bareLetter` flag. The shortcuts dialog
+  renders from it, and a unit test fails when two shortcuts in one group
+  claim the same keys. The dialog now lists the contact list's keys.
+
 - **Browser accessibility checks in CI.** A `browser-a11y` job builds the
   production bundle, boots it the way a release runs, and drives it in
   headless Chromium with Playwright: axe scans of every screen against WCAG
@@ -27,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Controls that had only a `title` now have an accessible name: the Select
+  button on Network, each "Remove" button on a contact's details (it names the
+  value), the Note, Call, Meeting and Email type buttons in the composer, and
+  the back link on the Duplicates page. The sidebar wordmark is hidden from
+  screen readers.
+- The note editor has a name, "Note", and its placeholder as a description.
+- The Instance health page's definition lists hold only terms and
+  definitions, which clears the axe `definition-list` failure.
+- The shortcut chips in the command palette meet contrast at 11 pixels.
+- Heading levels no longer skip: the Import dialog's sub-heading is an `h3`,
+  the Ask Contrack coverage card is an `h2`, a contact's Details card is an
+  `h2`, and the timeline entries are `h3`.
 - The keyboard shortcuts overlay is a dialog now: it has the role and the
   name, traps Tab, and returns focus to the button that opened it. It was a
   bare overlay with an Escape handler.

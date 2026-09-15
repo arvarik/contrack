@@ -33,7 +33,7 @@ export function AISearchConfirmModal({
   ).length;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Start AI Search">
+    <Modal isOpen={isOpen} onClose={onClose} title="Start enrichment">
       <div className="space-y-5 pt-2">
         {/* Description */}
         <p className="text-sm text-on-surface-variant leading-relaxed">
@@ -45,7 +45,7 @@ export function AISearchConfirmModal({
         {/* Info bullets */}
         <div className="space-y-2.5">
           <InfoRow
-            text={`Uses approximately ${total} AI search credit${total !== 1 ? "s" : ""}`}
+            text={`Uses approximately ${total} enrichment credit${total !== 1 ? "s" : ""}`}
           />
           <InfoRow
             text={

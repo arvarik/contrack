@@ -60,12 +60,11 @@ test.describe("open instance", () => {
       "page",
     );
 
-    await nav.getByRole("link", { name: "Ask AI" }).click();
+    await nav.getByRole("link", { name: "Ask Contrack" }).click();
     await expect(page).toHaveURL(/\/search/);
-    await expect(nav.getByRole("link", { name: "Ask AI" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(
+      nav.getByRole("link", { name: "Ask Contrack" }),
+    ).toHaveAttribute("aria-current", "page");
     await expect(
       nav.getByRole("link", { name: "Network" }),
     ).not.toHaveAttribute("aria-current", "page");

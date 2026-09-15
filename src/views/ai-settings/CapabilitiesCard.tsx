@@ -137,7 +137,8 @@ const GROUPS: CapabilityGroup[] = [
         key: "research",
         label: "Research model",
         icon: <Globe className="w-4 h-4 text-info" />,
-        summary: "Powers Contact Enrichment — researching people on the web.",
+        summary:
+          "Powers contact enrichment, which researches people on the web.",
         detail:
           "Only models with a first-party web-search tool are listed. Custom OpenAI-compatible endpoints never appear here: the compat API has no search standard.",
         specialMode: { mode: "disabled", label: "Off — never research online" },

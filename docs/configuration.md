@@ -63,7 +63,7 @@ suitable model. Everything is configurable in the app under
 | **Quick tasks**  | Magic Paste parsing, @mention extraction, search understanding & verification, daily insights | Auto             |
 | **Deep tasks**   | Email (.eml) summaries, duplicate adjudication, research extraction                           | Auto             |
 | **Embeddings**   | Semantic search ranking, duplicate similarity                                                 | Built-in (local) |
-| **Web research** | AI Search enrichment against the live web                                                     | Auto             |
+| **Web research** | Contact enrichment against the live web                                                       | Auto             |
 
 **Auto** picks the first available provider, preferring `AI_PROVIDER` — so an
 existing single-key deployment behaves exactly as it did before. Set one API key

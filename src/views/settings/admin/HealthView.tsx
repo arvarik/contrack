@@ -26,7 +26,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import {
   useInstanceHealth,
   type HealthAccount,
@@ -41,16 +41,27 @@ import { AdminPage } from "./AdminShell";
 // The card, and the one row inside it
 // ---------------------------------------------------------------------------
 
+/**
+ * A card with a list of rows and an optional line of text under them.
+ *
+ * `children` is rows and nothing else, because it goes inside the `dl`. A
+ * `dl` may hold only `dt` and `dd` pairs, bare or wrapped in a `div`, and a
+ * `p` in there made axe report the list as broken to a screen reader. Text
+ * that is not a row, such as an empty state or a problem, goes in `note`,
+ * which renders after the list. A card with no rows renders no list.
+ */
 const Card = ({
   title,
   icon,
   badge,
+  note,
   children,
 }: {
   title: string;
   icon: ReactNode;
   badge?: ReactNode;
-  children: ReactNode;
+  note?: ReactNode;
+  children?: ReactNode;
 }) => (
   <section className="bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-3">
     <header className="flex items-center gap-2.5">
@@ -62,7 +73,10 @@ const Card = ({
       </h2>
       {badge}
     </header>
-    <dl className="space-y-2">{children}</dl>
+    {Children.toArray(children).length > 0 && (
+      <dl className="space-y-2">{children}</dl>
+    )}
+    {note}
   </section>
 );
 
@@ -220,8 +234,20 @@ const BackupCard = ({ health }: { health: InstanceHealth }) => {
           <Badge>Not checked</Badge>
         )
       }
+      note={
+        !backup ? (
+          <p className="text-xs text-on-surface-variant text-pretty">
+            No snapshot has been taken. Check that scheduled backups are
+            switched on, or take one from the Backups page.
+          </p>
+        ) : verification?.problem ? (
+          <p className="text-xs text-error text-pretty">
+            {verification.problem}
+          </p>
+        ) : undefined
+      }
     >
-      {backup ? (
+      {backup && (
         <>
           <Row label="Taken">
             <span title={formatWhen(backup.createdAt)}>
@@ -234,17 +260,7 @@ const BackupCard = ({ health }: { health: InstanceHealth }) => {
               ? formatRelative(verification.checkedAt, "Unknown")
               : "Never"}
           </Row>
-          {verification?.problem && (
-            <p className="text-xs text-error text-pretty pt-1">
-              {verification.problem}
-            </p>
-          )}
         </>
-      ) : (
-        <p className="text-xs text-on-surface-variant text-pretty">
-          No snapshot has been taken. Check that scheduled backups are switched
-          on, or take one from the Backups page.
-        </p>
       )}
     </Card>
   );
@@ -286,12 +302,14 @@ const EmbeddingsCard = ({ health }: { health: InstanceHealth }) => {
           </Badge>
         )
       }
+      note={
+        byUser.length === 0 ? (
+          <p className="text-xs text-on-surface-variant">
+            No account owns a contact yet.
+          </p>
+        ) : undefined
+      }
     >
-      {byUser.length === 0 && (
-        <p className="text-xs text-on-surface-variant">
-          No account owns a contact yet.
-        </p>
-      )}
       {byUser.map((row) => (
         <Row
           key={row.user.id}
@@ -341,12 +359,17 @@ const CacheCard = ({ health }: { health: InstanceHealth }) => {
     ([, stats]) => stats.hits + stats.misses > 0,
   );
   return (
-    <Card title="AI cache" icon={<Activity className="w-4 h-4" />}>
-      {tiers.length === 0 && (
-        <p className="text-xs text-on-surface-variant">
-          Nothing has been cached since this process started.
-        </p>
-      )}
+    <Card
+      title="AI cache"
+      icon={<Activity className="w-4 h-4" />}
+      note={
+        tiers.length === 0 ? (
+          <p className="text-xs text-on-surface-variant">
+            Nothing has been cached since this process started.
+          </p>
+        ) : undefined
+      }
+    >
       {tiers.map(([tier, stats]) => (
         <Row key={tier} label={tier}>
           {Math.round(stats.hitRate * 100)}% of {stats.hits + stats.misses}

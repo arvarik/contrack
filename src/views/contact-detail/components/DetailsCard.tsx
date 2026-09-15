@@ -91,7 +91,8 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
 
   return (
     <div className={cn(CARD, "space-y-4")}>
-      <h3 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h3>
+      {/* h2: the first section under the contact's name, which is the h1. */}
+      <h2 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h2>
 
       {/* Location */}
       <div className="flex items-start gap-4 group">

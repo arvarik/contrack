@@ -34,6 +34,8 @@ import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactListsSection } from "./ContactListsSection";
 import { CatchMeUpFab } from "./CatchMeUpFab";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
+import { hasUserInteracted } from "../../../lib/userInteraction";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -190,6 +192,37 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const navigate = useNavigate();
   const [showVibePicker, setShowVibePicker] = useState(false);
 
+  /**
+   * Opening a contact puts focus on its name.
+   *
+   * Clicking a row used to leave focus on the row while the contact rendered
+   * beside it, and on a phone, where the list leaves the screen, focus fell to
+   * the document. Either way the next Tab started somewhere unrelated to what
+   * just opened. The name is the page's h1, so a screen reader also announces
+   * which contact this is.
+   *
+   * Three cases keep focus where it is: a page that has just loaded (the
+   * first Tab there belongs to the skip link), someone typing (a quick note, a
+   * search field) and a contact shown inside a dialog, which manages its own
+   * focus. The header mounts once per contact, because the profile is keyed
+   * by id.
+   */
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const heading = headingRef.current;
+    if (!heading || !hasUserInteracted()) return;
+    if (heading.closest('[role="dialog"]')) return;
+    const active = document.activeElement as HTMLElement | null;
+    if (
+      active?.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(active?.tagName ?? "") ||
+      active?.closest('[role="dialog"]')
+    ) {
+      return;
+    }
+    heading.focus({ preventScroll: true });
+  }, []);
+
   const handleVibeSelect = (vibeId: string) => {
     updateContact.mutate({ id: contact.id, data: { themeColor: vibeId } });
     setShowVibePicker(false);
@@ -279,7 +312,18 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
           {/* Identity */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
-              <div className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 pt-1">
+              {/*
+                The page's h1. `tabIndex={-1}` lets focus land here on
+                navigation and from the skip link without adding a Tab stop.
+                No ring: it is a place, not a control, and the name inside it
+                is the control and shows its own.
+              */}
+              <h1
+                id={CONTACT_HEADING_ID}
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 pt-1 outline-none"
+              >
                 <EditableField
                   value={contact.name}
                   onSave={(val) => onUpdate("name", val)}
@@ -290,7 +334,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     ({contact.pronouns})
                   </span>
                 )}
-              </div>
+              </h1>
 
               <VibePickerPopover
                 showVibePicker={showVibePicker}

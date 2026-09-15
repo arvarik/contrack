@@ -112,7 +112,7 @@ checkpoints before exit.
 | `Cmd+Shift+H`      | Navigate to Network                 |
 | `Cmd+Shift+P`      | Navigate to Pulse                   |
 | `Cmd+Shift+M`      | Navigate to Map                     |
-| `Cmd+Shift+S`      | Navigate to AI Search               |
+| `Cmd+Shift+S`      | Navigate to Ask Contrack            |
 | `Cmd+Shift+,`      | Navigate to Settings                |
 | `Cmd+[` / `Cmd+]`  | Browser back / forward              |
 | `/`                | Focus active search bar             |

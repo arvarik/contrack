@@ -21,6 +21,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RichInteractionComposer } from "../../src/components/RichInteractionComposer";
@@ -120,6 +121,12 @@ async function type(pm: HTMLElement, text: string): Promise<void> {
 }
 
 const saveButton = () => screen.getByRole("button", { name: /save|saving/i });
+/** One of the four interaction type buttons, by its accessible name. */
+const typeButton = (name: "Note" | "Call" | "Meeting" | "Email") =>
+  within(screen.getByRole("group", { name: "Interaction type" })).getByRole(
+    "button",
+    { name },
+  );
 const followUpInput = () =>
   screen.getByLabelText("Next action") as HTMLInputElement;
 
@@ -135,13 +142,36 @@ afterEach(() => {
   localStorage.clear();
 });
 
+describe("names", () => {
+  it("names the editor and describes it with the placeholder for the type", async () => {
+    stubServer();
+    mount();
+    const pm = await editorElement();
+
+    const editor = screen.getByRole("textbox", { name: "Note" });
+    expect(editor).toBe(pm);
+    expect(editor.getAttribute("aria-multiline")).toBe("true");
+    const description = () =>
+      document.getElementById(editor.getAttribute("aria-describedby") ?? "")
+        ?.textContent;
+    expect(description()).toBe("Write a quick note...");
+
+    // The id is fixed when the editor is created, and the text behind it
+    // follows the type.
+    fireEvent.click(typeButton("Call"));
+    expect(description()).toBe("Summarize the call...");
+    expect(typeButton("Call").getAttribute("aria-pressed")).toBe("true");
+    expect(typeButton("Note").getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
 describe("a save that fails", () => {
   it("keeps the note, the type and the follow-up when the server answers 500", async () => {
     const saves = stubServer();
     mount();
     const pm = await editorElement();
     await type(pm, "Met at the conference");
-    fireEvent.click(screen.getByTitle("Call"));
+    fireEvent.click(typeButton("Call"));
     fireEvent.change(followUpInput(), {
       target: { value: "Send slides next Tuesday" },
     });
@@ -157,7 +187,7 @@ describe("a save that fails", () => {
 
     await waitFor(() => expect(saveButton().textContent).toBe("Save"));
     expect(pm.textContent).toBe("Met at the conference");
-    expect(screen.getByTitle("Call").getAttribute("aria-pressed")).toBe("true");
+    expect(typeButton("Call").getAttribute("aria-pressed")).toBe("true");
     expect(followUpInput().value).toBe("Send slides next Tuesday");
   });
 
@@ -301,7 +331,7 @@ describe("a save that succeeds", () => {
     mount();
     const pm = await editorElement();
     await type(pm, "Spoke on the phone");
-    fireEvent.click(screen.getByTitle("Call"));
+    fireEvent.click(typeButton("Call"));
     fireEvent.change(followUpInput(), {
       target: { value: "Call again next Monday" },
     });
@@ -346,9 +376,7 @@ describe("drafts", () => {
 
     await waitFor(() => expect(pm.textContent).toBe("saved earlier"));
     expect(followUpInput().value).toBe("Ping next week");
-    expect(screen.getByTitle("Meeting").getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(typeButton("Meeting").getAttribute("aria-pressed")).toBe("true");
     expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -377,7 +405,7 @@ describe("drafts", () => {
     const pm = await editorElement();
     await type(pm, "Draft in progress");
     fireEvent.change(followUpInput(), { target: { value: "Follow up" } });
-    fireEvent.click(screen.getByTitle("Email"));
+    fireEvent.click(typeButton("Email"));
 
     // The debounced write, on its own clock.
     const key = draftKey("user-a", "contact-3");

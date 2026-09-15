@@ -46,6 +46,9 @@ export function useContactListKeyboard({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
+      // A row or the letter rail already answered this key: the arrows
+      // move focus inside the list, and a letter is type-ahead there.
+      if (e.defaultPrevented) return;
 
       if (e.key === "Escape" && isSelectMode) {
         exitSelectMode();

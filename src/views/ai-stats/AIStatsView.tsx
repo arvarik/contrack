@@ -280,8 +280,8 @@ export const AIStatsView = () => {
                 Set to `text-on-surface-variant` to satisfy contrast accessibility.
               */}
               <p className="text-xs text-on-surface-variant mt-1">
-                Trigger a Catch-Me-Up briefing or AI Search to see invocations
-                here.
+                Run a Catch-Me-Up briefing or contact enrichment to see
+                invocations here.
               </p>
             </div>
           )}

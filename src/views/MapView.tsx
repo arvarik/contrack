@@ -28,6 +28,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import { escapeHtml } from "../lib/utils";
 import { usePageTitle } from "../hooks/usePageTitle";
+import { NAMES } from "../lib/names";
 import { buttonLike } from "../lib/a11y";
 import { usePreferences } from "../contexts/PreferencesContext";
 
@@ -209,7 +210,7 @@ export const MapView = () => {
   }, []);
   const navigate = useNavigate();
 
-  usePageTitle("Map");
+  usePageTitle(NAMES.map.title);
 
   // Memoize marker icons per avatar URL so a fresh L.divIcon isn't minted
   // for every contact on every render.
@@ -229,6 +230,9 @@ export const MapView = () => {
       ref={wrapperRef}
       className="w-full h-full relative bg-surface-container-lowest z-0"
     >
+      {/* The page has no visible title, since the map is the page, but a
+          screen reader user navigating by heading still needs to land here. */}
+      <h1 className="sr-only">{NAMES.map.label}</h1>
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center z-[1000] bg-surface/50 backdrop-blur-sm">
           <span className="text-primary font-bold animate-pulse">
