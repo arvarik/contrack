@@ -15,8 +15,9 @@ touches a developer's database and two workers never share state.
 
 | Spec                                     | What it walks                                                                                                                                        |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too                                                       |
+| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too, and the landmark and heading rules on six screens    |
 | `tests/e2e/keyboard.spec.ts`             | The skip link, the sidebar in Tab order with a visible focus ring in both palettes, `/` for search, arrow keys through the list, the mode radiogroup |
+| `tests/e2e/contact.spec.ts`              | Opening a contact puts focus on its name, the list's arrow keys and type-ahead, and Back on a phone returns focus to the row                         |
 | `tests/e2e/dialogs.spec.ts`              | Shortcuts, new contact, contact card and command palette: focus in, Tab trapped, Escape closes, focus returns, each scanned while open               |
 | `tests/e2e/search-announcements.spec.ts` | The status region says the search started and what it found; a failure is an alert and the status stays quiet; results restored on Back stay silent  |
 | `tests/e2e/mobile-forms.spec.ts`         | A Pixel 7: the tab bar's targets and `aria-current`, the new contact bottom sheet, 16-pixel fields, setup and sign-in with field-attached errors     |
@@ -24,7 +25,7 @@ touches a developer's database and two workers never share state.
 
 The fixtures under `tests/e2e/fixtures/` are the vocabulary the specs share:
 `test` for the worker's open, seeded instance, `gatedTest` for a fresh gated
-one per test, `expectPageAccessible`, `expectVisibleFocus`,
+one per test, `expectPageAccessible`, `expectPageStructured`, `expectVisibleFocus`,
 `expectFocusStaysWithin`, and `answerPeopleSearch` for a scripted People
 search.
 
@@ -79,6 +80,33 @@ that reason, and the contact card that opens over search results carries the
 same five by hand because it fills the viewport rather than sitting in a
 card.
 
+### Landmarks and headings
+
+A screen reader user moves through a page by its landmarks and its headings,
+so both follow rules, and `expectPageStructured` scans them with axe's
+`landmark-one-main`, `page-has-heading-one`, `region` and `heading-order` on
+Network, a contact, Pulse, Map, Ask Contrack and Settings (the map answers
+for the first two only, until the MapLibre plan rebuilds it).
+
+- **One `main` per route, with a name.** The full-page views (Pulse, Ask
+  Contrack, Settings) render inside `<main aria-label="…">`. On a wide screen
+  the contact list is a complementary landmark named "Contacts" beside the
+  contact's main. Below `lg` the list and the contact take turns on screen,
+  so whichever is showing is the main. The list pane changes its `role`
+  rather than its element, because swapping the element would remount the
+  list and lose its search and scroll. The map is the main on `/map`, and a
+  contact opened over it is a region named "Contact".
+- **One `h1` per route.** "Network" on the Network page, the contact's name on
+  a contact page, "Map" (visually hidden), "Pulse", "Ask Contrack" and the
+  Settings page title. Beside an open contact the list's title steps down to
+  an `h2`. Inside a page, sections are `h2` and cards inside them `h3`.
+- **Every destination has one name**, in `src/lib/names.ts`. The sidebar, the
+  tab bar, the command palette, the shortcuts dialog, document titles and the
+  page headings read it, so a place is never "Ask AI" in one spot and "AI
+  Search" in the next.
+- **A control is named by `aria-label` or its text, not by `title`.** A
+  `title` gives a pointer a tooltip and a touch screen nothing.
+
 ### Focus
 
 One `:focus-visible` rule in `src/index.css` draws the ring for every
@@ -87,8 +115,41 @@ button. A handful of fields draw a ring of their own. The suite asserts an
 indicator is present after a real Tab press, in both palettes, and never
 asserts one after a click, because a pointer user is not meant to see it.
 
-The first Tab stop on every page is "Skip to main content", which moves
-focus past the sidebar or the tab bar to the page's own content (WCAG 2.4.1).
+The first Tab stop on every page is "Skip to main content" (WCAG 2.4.1). Its
+target follows the route: the contact's name on a contact page, the list's
+current row on the Network page, and the main landmark everywhere else.
+
+- **The contact list is one Tab stop.** A roving `tabindex`
+  (`src/views/contact-list/useRovingList.ts`) keeps one row in the Tab order.
+  Up and Down move between rows, Home and End jump to the ends, a letter jumps
+  to the next name that starts with it, and Enter opens the row. The letter
+  rail beside a long list is one Tab stop too, with the arrow keys inside it,
+  and draws only the letters that have contacts.
+- **Opening a contact moves focus to its name**, the `h1`, which takes focus
+  with `tabIndex={-1}` and wears no ring. It does not on a fresh page load,
+  where the first Tab belongs to the skip link, nor while someone is typing
+  or inside a dialog.
+- **Back on a phone returns focus to the row the contact was opened from.**
+  The list leaves the screen while a contact is open, so the element that had
+  focus is gone when it comes back. The list focuses the last opened contact's
+  row instead of letting focus fall to the document.
+
+### The Tab budget
+
+A new control in front of the content costs every keyboard user a Tab press
+on every page. `keyboard.spec.ts` holds the count, from the top of the page on
+a desktop:
+
+| Page          | Reaches                   | Within | Made of                                                                     |
+| ------------- | ------------------------- | ------ | --------------------------------------------------------------------------- |
+| A contact     | the contact's name (`h1`) | 16     | skip link, 6 sidebar stops, 6 list controls, the list, the avatar, the name |
+| Network (`/`) | the first row of the list | 14     | skip link, 6 sidebar stops, 6 list controls, the list                       |
+
+The list and the letter rail are one stop each however many people they hold.
+Before this rule the first control in a contact was stop 42. A change that
+needs a new stop in front of the content raises the budget in the spec and
+says why in the pull request. The corvid plan's sidebar button is the next
+expected one.
 
 ### Phones
 
@@ -110,7 +171,9 @@ pass below. Record the date and the pair used in the release notes.
 Unplug the mouse, or do not touch it.
 
 1. Load `/`. Press Tab once. "Skip to main content" appears in the top-left.
-   Press Enter, then Tab: focus is in the contact list, not the sidebar.
+   Press Enter: focus is on the first contact in the list, not the sidebar.
+   Press Down and Up, then a letter: focus moves through the list without
+   opening anyone. Press Enter: the contact opens and focus is on its name.
 2. Tab through the sidebar. Every stop shows a ring you can see at arm's
    length, in light and in dark.
 3. Press `/`, type a name, press Escape. The list filters and then clears.
@@ -138,9 +201,12 @@ Firefox or Chrome on Windows. Do the search page on both.
    announced.
 5. Open the keyboard shortcuts overlay. The reader says "Keyboard Shortcuts,
    dialog". Escape, and the reader says where focus landed.
-6. On the sign-in screen, submit a wrong password. The reader interrupts with
+6. Open a contact from the list. The reader announces the name as heading
+   level 1. The landmarks list shows "Contacts" and "Contact" on a wide
+   screen, and one main on a phone.
+7. On the sign-in screen, submit a wrong password. The reader interrupts with
    "Incorrect username or password".
-7. On the setup screen, leave the email invalid and Tab away. The field is
+8. On the setup screen, leave the email invalid and Tab away. The field is
    announced as invalid, with the message.
 
 ### Zoom and motion
@@ -160,6 +226,8 @@ On a real phone or the browser's device mode at 412 pixels wide:
    keyboard.
 3. The account row at the top of Settings shows who is signed in and signs
    out.
+4. Open a contact from the list, then tap Back. With VoiceOver on, focus is
+   on the row you opened, not at the top of the page.
 
 ## Adding a journey
 
@@ -168,7 +236,8 @@ that works on an open instance, and against `gatedTest` when the journey
 starts before sign-in. Navigate with `page.goto("/…")`; `baseURL` is set per
 worker. Locate by role and name, never by class. Assert what the next screen
 says, not the URL, unless the URL is the point. Scan every screen the journey
-reaches with `expectPageAccessible`, and scan an open dialog with
+reaches with `expectPageAccessible`, a new page with `expectPageStructured`
+as well, and scan an open dialog with
 `b.include('[role="dialog"]')` so the scan covers the dialog and not the
 page behind it. When a People search is on the path, script it with
 `answerPeopleSearch`, which answers at the network edge and leaves everything

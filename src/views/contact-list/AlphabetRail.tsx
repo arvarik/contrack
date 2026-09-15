@@ -20,8 +20,16 @@
  * Dragging works as well as tapping — on a phone the natural gesture is to
  * run a thumb down the strip, and a control that only responds to discrete
  * taps feels broken under that gesture.
+ *
+ * It is one control with one Tab stop. It used to be an `aria-hidden` strip
+ * plus a visually hidden list of thirteen buttons for keyboards, which gave a
+ * sighted keyboard user thirteen Tab presses with nothing on screen moving.
+ * Now the visible letters are the buttons: Tab reaches the rail once, the
+ * arrow keys move between letters and jump the list as they go, and a letter
+ * key jumps straight to it. Letters with no contacts are not rendered, so
+ * every stop the arrows reach does something.
  */
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 
 /** Non-alphabetic names (numbers, symbols, other scripts) bucket under "#". */
@@ -53,32 +61,63 @@ export const AlphabetRail = ({
   onJump,
 }: AlphabetRailProps) => {
   const railRef = useRef<HTMLDivElement>(null);
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
   const lastJumped = useRef<string | null>(null);
+
+  /** Only the letters that have contacts, in rail order. */
+  const letters = useMemo(
+    () => LETTERS.filter((letter) => index.has(letter)),
+    [index],
+  );
+
+  /**
+   * The letter that owns the Tab stop.
+   *
+   * While the keyboard is moving through the rail it is the letter last moved
+   * to. Otherwise it follows the list, so Tab into the rail starts at the
+   * letter already on screen.
+   */
+  const [keyboardLetter, setKeyboardLetter] = useState<string | null>(null);
+  const tabStop =
+    (keyboardLetter && letters.includes(keyboardLetter) && keyboardLetter) ||
+    (activeBucket && letters.includes(activeBucket) && activeBucket) ||
+    letters[0];
+
+  const jumpTo = useCallback(
+    (letter: string) => {
+      const target = index.get(letter);
+      if (target !== undefined) onJump(target);
+    },
+    [index, onJump],
+  );
 
   /**
    * Resolve a pointer position to a letter.
    *
-   * Reads the letter under the finger rather than tracking which element
+   * Reads the letter nearest the finger rather than tracking which element
    * received the event, because a touch that starts on "M" and slides to "R"
    * never fires events on "R" — the browser keeps delivering them to "M".
    */
   const jumpToPointer = useCallback(
     (clientY: number) => {
-      const rail = railRef.current;
-      if (!rail) return;
-      const { top, height } = rail.getBoundingClientRect();
-      const ratio = (clientY - top) / height;
-      const position = Math.floor(ratio * LETTERS.length);
-      const letter =
-        LETTERS[Math.min(Math.max(position, 0), LETTERS.length - 1)];
+      // The nearest rendered letter, measured, not computed from slots: only
+      // letters with contacts are drawn, so the rail no longer has 27 evenly
+      // spaced positions to divide by.
+      let letter: string | null = null;
+      let nearest = Infinity;
+      for (const [candidate, element] of buttons.current) {
+        const { top, height } = element.getBoundingClientRect();
+        const distance = Math.abs(clientY - (top + height / 2));
+        if (distance < nearest) {
+          nearest = distance;
+          letter = candidate;
+        }
+      }
       if (!letter || letter === lastJumped.current) return;
-
-      const target = index.get(letter);
-      if (target === undefined) return; // empty bucket — ignore rather than jump somewhere arbitrary
       lastJumped.current = letter;
-      onJump(target);
+      jumpTo(letter);
     },
-    [index, onJump],
+    [jumpTo],
   );
 
   const handlePointerDown = (event: React.PointerEvent) => {
@@ -103,12 +142,59 @@ export const AlphabetRail = ({
     jumpToPointer(event.clientY);
   };
 
+  /** Move the Tab stop to a letter, focus it, and jump the list there. */
+  const moveTo = (letter: string) => {
+    setKeyboardLetter(letter);
+    buttons.current.get(letter)?.focus();
+    jumpTo(letter);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const current = letters.indexOf(event.currentTarget.dataset.letter ?? "");
+    if (current === -1) return;
+    let next: string | undefined;
+    switch (event.key) {
+      case "ArrowDown":
+      case "ArrowRight":
+        next = letters[Math.min(current + 1, letters.length - 1)];
+        break;
+      case "ArrowUp":
+      case "ArrowLeft":
+        next = letters[Math.max(current - 1, 0)];
+        break;
+      case "Home":
+        next = letters[0];
+        break;
+      case "End":
+        next = letters[letters.length - 1];
+        break;
+      default: {
+        const typed = event.key.length === 1 ? event.key.toUpperCase() : "";
+        if (typed && letters.includes(typed)) next = typed;
+      }
+    }
+    if (!next) return;
+    event.preventDefault();
+    moveTo(next);
+  };
+
+  if (letters.length === 0) return null;
+
   return (
     <div
       ref={railRef}
+      role="group"
+      aria-label="Jump to letter"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={() => (lastJumped.current = null)}
+      onBlur={(event) => {
+        // Leaving the rail hands the Tab stop back to the list's position.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setKeyboardLetter(null);
+        }
+      }}
       // `touch-none` stops the browser treating a vertical drag on the rail as
       // a page scroll, which would fight the jump.
       //
@@ -117,76 +203,46 @@ export const AlphabetRail = ({
       // so without it the last few letters are rendered where they cannot be
       // tapped.
       className="absolute right-0 top-0 bottom-0 z-20 flex w-6 select-none touch-none flex-col items-center justify-center pt-2 pb-24 md:pb-2"
-      aria-hidden="true"
     >
-      {LETTERS.map((letter) => {
-        const present = index.has(letter);
-        return (
-          <span
-            key={letter}
-            className="flex-1 min-h-0 flex items-center justify-center"
-          >
-            {/*
-              The active letter wears a filled circle.
+      {letters.map((letter) => (
+        <button
+          key={letter}
+          type="button"
+          ref={(element) => {
+            if (element) buttons.current.set(letter, element);
+            else buttons.current.delete(letter);
+          }}
+          data-letter={letter}
+          tabIndex={letter === tabStop ? 0 : -1}
+          aria-current={letter === activeBucket ? "true" : undefined}
+          aria-label={letter === OTHER_BUCKET ? "# (other characters)" : letter}
+          onClick={() => jumpTo(letter)}
+          onKeyDown={handleKeyDown}
+          className="flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full"
+        >
+          {/*
+            The active letter wears a filled circle.
 
-              A colour change alone is easy to miss at 9px on a strip this
-              narrow, which is why a floating letter marker was tried over the
-              list first. That marker covered contact names and the "Recent"
-              heading, so the indicator belongs on the rail itself, where it
-              blocks nothing. The circle is 16px, larger than the glyph, so the
-              current position reads at a glance without the letters moving.
-            */}
-            <span
-              className={cn(
-                "flex items-center justify-center rounded-full text-[9px] font-bold leading-none transition-colors",
-                letter === activeBucket
-                  ? "w-4 h-4 bg-primary text-on-primary"
-                  : "text-on-surface-variant",
-              )}
-            >
-              {/*
-              Letters with no contacts render as a dot rather than dimmed text.
-              Faded-out text was the obvious first move and measured 1.57:1 —
-              invisible, and flagged by `npm run audit:contrast`. A dot is a
-              graphic rather than text, so it carries no legibility burden, it
-              keeps the 27 evenly-spaced slots the pointer maths depends on,
-              and it is what a phone address book does anyway.
-            */}
-              {present ? (
-                letter
-              ) : (
-                <span className="h-[3px] w-[3px] rounded-full bg-on-surface-variant/40" />
-              )}
-            </span>
+            A colour change alone is easy to miss at 9px on a strip this
+            narrow, which is why a floating letter marker was tried over the
+            list first. That marker covered contact names and the "Recent"
+            heading, so the indicator belongs on the rail itself, where it
+            blocks nothing. The circle is 16px, larger than the glyph, so the
+            current position reads at a glance without the letters moving.
+          */}
+          <span
+            aria-hidden="true"
+            className={cn(
+              "flex items-center justify-center rounded-full text-[9px] font-bold leading-none transition-colors",
+              letter === activeBucket
+                ? "w-4 h-4 bg-primary text-on-primary"
+                : "text-on-surface-variant",
+            )}
+          >
+            {letter}
           </span>
-        );
-      })}
+        </button>
+      ))}
     </div>
   );
 };
-
-/**
- * Keyboard-accessible equivalent of the rail.
- *
- * The rail itself is `aria-hidden` and pointer-driven: 27 tab stops in front
- * of the contact list would be a worse experience for a keyboard user than
- * the list's existing arrow-key navigation. This renders the same jumps as
- * real buttons for assistive tech, visually hidden.
- */
-export const AlphabetJumpButtons = ({
-  index,
-  onJump,
-}: Pick<AlphabetRailProps, "index" | "onJump">) => (
-  <div className="sr-only">
-    <h2>Jump to letter</h2>
-    {LETTERS.filter((letter) => index.has(letter)).map((letter) => (
-      <button
-        key={letter}
-        type="button"
-        onClick={() => onJump(index.get(letter)!)}
-      >
-        {letter === OTHER_BUCKET ? "Other" : letter}
-      </button>
-    ))}
-  </div>
-);

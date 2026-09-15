@@ -731,7 +731,10 @@ curl -X POST http://localhost:3210/api/search/synthesize \
 
 ---
 
-## AI Search (Batch Enrichment)
+## Contact enrichment (batch)
+
+These routes power the Contact enrichment page in Settings. The routes keep
+their `ai-search` path.
 
 ### `POST /api/ai-search`
 
@@ -1038,7 +1041,7 @@ curl -X DELETE http://localhost:3210/api/action-items/ai123
 
 ### `GET /api/dashboard`
 
-Fetch Relationship Pulse Dashboard metrics.
+Fetch the metrics for the Pulse page.
 
 ```bash
 curl http://localhost:3210/api/dashboard
@@ -1383,7 +1386,7 @@ curl http://localhost:3210/api/ai/diagnostics
 
 ### `GET /api/ai/grounding-capacity`
 
-Check AI Search grounding RPD quota (Gemini only).
+Check the grounding RPD quota for contact enrichment (Gemini only).
 
 ```bash
 curl http://localhost:3210/api/ai/grounding-capacity

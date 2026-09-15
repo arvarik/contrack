@@ -46,6 +46,18 @@ const showUndoToast = (label: string, onUndo: () => void) => {
   });
 };
 
+/**
+ * An address as far as its first two parts, "1 Main St, Springfield", which
+ * is enough to tell two addresses apart without reading out a postcode.
+ */
+const shortAddress = (value: string): string =>
+  value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(", ") || value;
+
 // ---------------------------------------------------------------------------
 // Sortable Row — individual draggable item
 // ---------------------------------------------------------------------------
@@ -108,7 +120,9 @@ const SortableRow = ({
           <button
             onClick={() => onRemove(idx)}
             className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-error p-0.5 rounded transition-opacity shrink-0"
-            title="Remove"
+            // Four of these can sit in one card, and "Remove" alone does not
+            // say which value goes. A title named it for a pointer only.
+            aria-label={`Remove ${isAddress ? shortAddress(item.value) : item.value}`}
           >
             <X className="w-3 h-3" />
           </button>

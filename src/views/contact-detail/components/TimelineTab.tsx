@@ -307,7 +307,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
               {/* Content Box */}
               <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer">
                 <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-extrabold text-on-surface">
+                  <h3 className="font-extrabold text-on-surface">
                     <button
                       type="button"
                       className="text-left hover:underline"
@@ -315,7 +315,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                     >
                       {item.title}
                     </button>
-                  </h4>
+                  </h3>
                   <div className="flex items-center gap-2 shrink-0">
                     <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
                       {new Date(item.date).toLocaleDateString()}

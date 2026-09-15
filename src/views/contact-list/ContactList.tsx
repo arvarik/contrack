@@ -5,6 +5,7 @@
  * - {@link useContactListFilters} — Search, filter, sort logic
  * - {@link useMultiSelect} — Multi-select state and bulk actions
  * - {@link useContactListKeyboard} — Keyboard navigation (j/k/↑/↓)
+ * - {@link useRovingList} — The list as one Tab stop, arrows inside it
  * - {@link ContactListModals} — All modal dialogs (create, import, bulk ops)
  *
  * The component itself handles only layout rendering and UX hooks
@@ -48,7 +49,7 @@ import {
 } from "../../api";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
-import { AlphabetJumpButtons, AlphabetRail, bucketFor } from "./AlphabetRail";
+import { AlphabetRail, bucketFor } from "./AlphabetRail";
 import type { Contact, ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { motion, AnimatePresence } from "motion/react";
@@ -77,6 +78,9 @@ import { ContactListModals } from "./ContactListModals";
 import { useContactListFilters } from "./hooks/useContactListFilters";
 import { useMultiSelect } from "./hooks/useMultiSelect";
 import { useContactListKeyboard } from "./hooks/useContactListKeyboard";
+import { useRovingList, type RovingItemProps } from "./useRovingList";
+import { useRecent } from "../../contexts/SessionContext";
+import { NAMES } from "../../lib/names";
 
 // ---------------------------------------------------------------------------
 // FilterButton — Pill-style filter tab for the contact list header
@@ -127,6 +131,10 @@ interface ContactRowWrapperProps {
   recordVisit: (id: string) => void;
   archiveContact: (contact: { id: string; name: string }) => Promise<void>;
   navigate: (path: string) => void;
+  rovingIndex: number;
+  tabIndex: RovingItemProps["tabIndex"];
+  onRowKeyDown: RovingItemProps["onKeyDown"];
+  onRowFocus: RovingItemProps["onFocus"];
 }
 
 const ContactRowWrapper = React.memo(
@@ -142,6 +150,10 @@ const ContactRowWrapper = React.memo(
     recordVisit,
     archiveContact,
     navigate,
+    rovingIndex,
+    tabIndex,
+    onRowKeyDown,
+    onRowFocus,
   }: ContactRowWrapperProps) => {
     const contextItems = useMemo(
       () => [
@@ -204,6 +216,10 @@ const ContactRowWrapper = React.memo(
           isSelectMode={isSelectMode}
           isSelected={isSelected}
           onToggleSelect={onToggleSelect}
+          rovingIndex={rovingIndex}
+          tabIndex={tabIndex}
+          onRowKeyDown={onRowKeyDown}
+          onRowFocus={onRowFocus}
         />
       </div>
     );
@@ -236,7 +252,7 @@ export const ContactList = () => {
   const bulkUpdate = useBulkUpdateContacts();
 
   // ── UX hooks ────────────────────────────────────────────────────────
-  usePageTitle("Network");
+  usePageTitle(NAMES.network.title);
   const scrollRef = useScrollRestoration<HTMLDivElement>(
     `contact-list:${filters.filterMode}:${filters.searchQuery}`,
     !isLoading,
@@ -503,12 +519,78 @@ export const ContactList = () => {
     [rowVirtualizer],
   );
 
+  // ── Roving Tab stop ─────────────────────────────────────────────────
+  // The Recent rows and the full list are one list to the keyboard: Recent
+  // first, then everyone. Arrow Down from the last recent contact carries on
+  // into the list rather than stopping at an invisible seam.
+  const recentCount =
+    !isLoading && !searchQuery && filterMode === "all"
+      ? recentContacts.length
+      : 0;
+  const rowAt = (index: number) =>
+    index < recentCount
+      ? { contact: recentContacts[index], elementId: "recent-contact" }
+      : {
+          contact: filteredContacts[index - recentCount],
+          elementId: "contact-row",
+        };
+  const openIndex = id ? filteredContacts.findIndex((c) => c.id === id) : -1;
+  const roving = useRovingList({
+    count: recentCount + filteredContacts.length,
+    selectedIndex: openIndex >= 0 ? recentCount + openIndex : -1,
+    getLabel: (index) => rowAt(index).contact?.name ?? "",
+    getElement: (index) => {
+      const { contact, elementId } = rowAt(index);
+      return contact
+        ? document.getElementById(`${elementId}-${contact.id}`)
+        : null;
+    },
+    scrollToIndex: (index) => {
+      if (index < recentCount) {
+        document
+          .getElementById(`recent-contact-${recentContacts[index].id}`)
+          ?.scrollIntoView({ block: "nearest" });
+      } else {
+        rowVirtualizer.scrollToIndex(index - recentCount, { align: "auto" });
+      }
+    },
+    isRendered: (index) =>
+      index < recentCount ||
+      virtualItems.some((item) => item.index === index - recentCount),
+  });
+
+  /**
+   * Back from a contact puts focus on the row it was opened from.
+   *
+   * On a phone, and on a tablet in portrait, the list and the contact take
+   * turns on screen. Leaving the contact removes the element that had focus,
+   * so focus fell to the document and the next Tab started from the top of
+   * the page. Only when focus really was lost: a sidebar link that navigated
+   * here keeps its own focus.
+   */
+  const { lastContactId } = useRecent();
+  const previousId = useRef(id);
+  const { focusIndex } = roving;
+  useEffect(() => {
+    const wasOpen = previousId.current;
+    previousId.current = id;
+    if (!wasOpen || id) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const index = filteredContacts.findIndex((c) => c.id === lastContactId);
+    if (index >= 0) focusIndex(recentCount + index);
+  }, [id, lastContactId, filteredContacts, recentCount, focusIndex]);
+
+  // One h1 per page: the list's title is the page heading on the Network
+  // page, and a section heading beside an open contact, whose name is the h1.
+  const TitleTag = id ? "h2" : "h1";
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {" "}
       <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
         <div className="flex justify-between items-center">
-          <h2 className={PAGE_TITLE}>Network</h2>
+          <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
           <div className="flex items-center gap-1.5">
             {/* Multi-select toggle */}
             <button
@@ -517,7 +599,11 @@ export const ContactList = () => {
                 ICON_BTN,
                 isSelectMode && "text-primary bg-primary/10",
               )}
-              title={isSelectMode ? "Exit Select Mode" : "Multi-Select"}
+              // A name that stays put, with the state in aria-pressed. The
+              // title alone named it for a pointer and for nobody else.
+              aria-label="Select"
+              aria-pressed={isSelectMode}
+              title="Select"
             >
               {isSelectMode ? (
                 <CheckSquare className="w-5 h-5" />
@@ -727,7 +813,9 @@ export const ContactList = () => {
       <div className="relative flex-1 min-h-0">
         <div
           ref={listScrollRef}
-          className="h-full overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 overscroll-contain"
+          id="contact-list"
+          {...roving.containerProps}
+          className="h-full overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 overscroll-contain outline-none"
         >
           {/* Pull-to-refresh indicator — mobile only */}
           <PullIndicator
@@ -833,7 +921,7 @@ export const ContactList = () => {
                   </p>
                   {searchQuery && (
                     <p className="text-xs text-on-surface-variant mt-1">
-                      Try the AI search for deeper results
+                      Try {NAMES.ask.label} for deeper results
                     </p>
                   )}
                 </div>
@@ -845,7 +933,7 @@ export const ContactList = () => {
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/20 transition-colors"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    Search with AI
+                    {NAMES.ask.label}
                   </button>
                 )}
               </div>
@@ -864,18 +952,25 @@ export const ContactList = () => {
                   </span>
                 </div>
                 <div className="space-y-1">
-                  {recentContacts.map((contact) => (
-                    <ContactListItem
-                      key={`recent-${contact.id}`}
-                      idPrefix="recent-contact"
-                      contact={contact}
-                      density={density}
-                      active={id === contact.id}
-                      isSelectMode={isSelectMode}
-                      isSelected={selectedIds.has(contact.id)}
-                      onToggleSelect={toggleSelect}
-                    />
-                  ))}
+                  {recentContacts.map((contact, index) => {
+                    const item = roving.getItemProps(index);
+                    return (
+                      <ContactListItem
+                        key={`recent-${contact.id}`}
+                        idPrefix="recent-contact"
+                        contact={contact}
+                        density={density}
+                        active={id === contact.id}
+                        isSelectMode={isSelectMode}
+                        isSelected={selectedIds.has(contact.id)}
+                        onToggleSelect={toggleSelect}
+                        rovingIndex={index}
+                        tabIndex={item.tabIndex}
+                        onRowKeyDown={item.onKeyDown}
+                        onRowFocus={item.onFocus}
+                      />
+                    );
+                  })}
                 </div>
                 <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
               </div>
@@ -894,6 +989,7 @@ export const ContactList = () => {
           >
             {virtualItems.map((virtualItem) => {
               const contact = filteredContacts[virtualItem.index];
+              const item = roving.getItemProps(recentCount + virtualItem.index);
               return (
                 <div
                   key={virtualItem.key}
@@ -920,6 +1016,10 @@ export const ContactList = () => {
                     recordVisit={recordVisit}
                     archiveContact={handleArchiveContact}
                     navigate={navigate}
+                    rovingIndex={recentCount + virtualItem.index}
+                    tabIndex={item.tabIndex}
+                    onRowKeyDown={item.onKeyDown}
+                    onRowFocus={item.onFocus}
                   />
                 </div>
               );
@@ -931,14 +1031,11 @@ export const ContactList = () => {
         </div>
 
         {showAlphabetRail && (
-          <>
-            <AlphabetRail
-              index={bucketIndex}
-              activeBucket={activeBucket}
-              onJump={jumpToIndex}
-            />
-            <AlphabetJumpButtons index={bucketIndex} onJump={jumpToIndex} />
-          </>
+          <AlphabetRail
+            index={bucketIndex}
+            activeBucket={activeBucket}
+            onJump={jumpToIndex}
+          />
         )}
       </div>
       <AnimatePresence>

@@ -42,7 +42,7 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
   mentions:
     "Finding the people named inside a note you wrote. A hit means that exact note text was already parsed.",
   dailyInsight:
-    "The daily observation shown on the Relationship Pulse page. A hit means today's insight was already generated.",
+    "The daily observation shown on the Pulse page. A hit means today's insight was already generated.",
   queryParse:
     "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. A hit means this question was read before.",
   hyde: "An expanded version of your question, used to search by meaning instead of by keyword. A hit means the same question was expanded before.",

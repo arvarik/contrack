@@ -19,6 +19,7 @@ import { motion } from "motion/react";
 import type { AISearchBatch, AISearchJob } from "../../../types";
 import { cn } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
+import { NAMES } from "../../../lib/names";
 
 interface Props {
   batch: AISearchBatch;
@@ -128,7 +129,7 @@ export function AISearchProgressOverlay({
         <div className="px-4 py-3 bg-surface-container-low flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="font-bold text-sm text-on-surface flex-1">
-            AI Search
+            {NAMES.enrichment.label}
           </span>
           <span className="text-xs text-on-surface-variant tabular-nums">
             {completed}/{total}

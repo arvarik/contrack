@@ -26,6 +26,8 @@ import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { QuickInteractionModal } from "./components/QuickInteractionModal";
 import { cn } from "./lib/utils";
 import { OPEN_SHORTCUTS_EVENT } from "./lib/appEvents";
+import { NAMES } from "./lib/names";
+import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 
 // Route-level code splitting: secondary views load on demand so the initial
 // bundle only carries the ContactList/ContactDetail critical path.
@@ -90,6 +92,16 @@ const ResponsiveLayout = () => {
   const isNetwork = !isMapActive && !isPulse && !isCleanup && !isSearch;
 
   /**
+   * Whether the contact list and the open contact sit side by side.
+   *
+   * Landmarks are the map a screen reader user navigates by, and on this
+   * layout the map changes with the width. Side by side, the list is a
+   * complementary "Contacts" landmark beside the contact's main. Below `lg`
+   * the two take turns on screen, so whichever is showing is the page's main.
+   */
+  const isWide = useMediaQuery(WIDE_QUERY);
+
+  /**
    * Mobile tab bar.
    *
    * Two things it did not do before: reserve room for the iOS home indicator
@@ -111,29 +123,35 @@ const ResponsiveLayout = () => {
               ? `/contact/${lastContactId}`
               : "/",
           icon: LayoutDashboard,
-          label: "Network",
+          label: NAMES.network.label,
           active: isNetwork,
           badge: 0,
         },
         {
           to: "/pulse",
           icon: Activity,
-          label: "Pulse",
+          label: NAMES.pulse.label,
           active: isPulse,
           badge: urgentCount,
         },
-        { to: "/map", icon: Map, label: "Map", active: isMapActive, badge: 0 },
+        {
+          to: "/map",
+          icon: Map,
+          label: NAMES.map.label,
+          active: isMapActive,
+          badge: 0,
+        },
         {
           to: "/search",
           icon: Sparkles,
-          label: "Ask AI",
+          label: NAMES.ask.label,
           active: isSearch,
           badge: 0,
         },
         {
           to: "/settings",
           icon: SettingsIcon,
-          label: "Settings",
+          label: NAMES.settings.label,
           active: isCleanup,
           badge: 0,
         },
@@ -160,7 +178,9 @@ const ResponsiveLayout = () => {
           >
             <Icon className="w-5 h-5" />
           </span>
-          <span className="text-[9px] font-bold tracking-wide">{label}</span>
+          <span className="text-[9px] font-bold tracking-wide whitespace-nowrap">
+            {label}
+          </span>
           {badge > 0 && (
             <span className="absolute top-0.5 right-[22%] flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75" />
@@ -176,6 +196,13 @@ const ResponsiveLayout = () => {
 
   // Full-page views (cleanup, search, pulse, dev) take the full main area
   if (isCleanup || isSearch || isPulse || isDev) {
+    const pageName = isCleanup
+      ? NAMES.settings.label
+      : isSearch
+        ? NAMES.ask.label
+        : isPulse
+          ? NAMES.pulse.label
+          : "Component showcase";
     return (
       <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
         <SkipLink />
@@ -185,6 +212,7 @@ const ResponsiveLayout = () => {
         <main
           id={MAIN_CONTENT_ID}
           tabIndex={-1}
+          aria-label={pageName}
           className="flex-1 min-w-0 h-full overflow-hidden relative flex outline-none"
         >
           <div className="flex-1 min-w-0 h-full overflow-hidden">
@@ -259,12 +287,30 @@ const ResponsiveLayout = () => {
       </div>
 
       {/*
-        Dynamic Middle/Main Panel mapping to either the List or the Map. The
-        skip link lands here: on the list it is the content, and on the map
-        it is the map. A contact open beside the list is one Tab further on.
+        Dynamic Middle/Main Panel mapping to either the List or the Map.
+
+        On the map this pane is the main landmark. On the list it is the main
+        landmark below `lg`, where it has the screen to itself, and a
+        "Contacts" complementary landmark beside the open contact above it.
+        The role changes rather than the element, because swapping <main> for
+        <aside> would remount the list and lose its search, scroll and
+        selection. The skip link picks its own target per route (SkipLink).
       */}
       <section
-        id={MAIN_CONTENT_ID}
+        id={
+          isMapActive || (!isWide && !isContactSelected)
+            ? MAIN_CONTENT_ID
+            : undefined
+        }
+        data-pane="list"
+        role={isMapActive || !isWide ? "main" : "complementary"}
+        aria-label={
+          isMapActive
+            ? NAMES.map.label
+            : isWide
+              ? "Contacts"
+              : NAMES.network.label
+        }
         tabIndex={-1}
         className={`
         ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
@@ -307,9 +353,12 @@ const ResponsiveLayout = () => {
       {/* Right Pane: Standard Detail View */}
       {!isMapActive && (
         <main
+          id={isWide || isContactSelected ? MAIN_CONTENT_ID : undefined}
+          tabIndex={-1}
+          aria-label="Contact"
           className={`
           ${isContactSelected ? "flex" : "hidden lg:flex"}
-          flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col
+          flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col outline-none
         `}
         >
           <Routes location={location}>
@@ -330,7 +379,10 @@ const ResponsiveLayout = () => {
       {isMapActive && (
         <AnimatePresence>
           {isContactSelected && (
-            <motion.main
+            // A region inside the page rather than a second main: the map
+            // stays the page's main content while a contact is open over it.
+            <motion.section
+              aria-label="Contact"
               initial={{ x: "100%", opacity: 0.5 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "100%", opacity: 0 }}
@@ -347,7 +399,7 @@ const ResponsiveLayout = () => {
                   }
                 />
               </Routes>
-            </motion.main>
+            </motion.section>
           )}
         </AnimatePresence>
       )}
@@ -355,7 +407,7 @@ const ResponsiveLayout = () => {
       {/*
         Mobile Nav — always mounted. It used to unmount on the detail view, so
         on a phone the screen users spend the most time on was also the one
-        with no way to reach Pulse, Map, Ask AI, or Settings. The detail view
+        with no way to reach Pulse, Map, Ask Contrack, or Settings. The detail view
         already reserves `pb-32` at this width, so the bar has room to sit.
       */}
       {mobileNav}

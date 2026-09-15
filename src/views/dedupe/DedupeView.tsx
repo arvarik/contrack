@@ -36,6 +36,7 @@ import {
   ActivityFeed,
 } from "./components";
 import { useDedupe } from "../../contexts/DedupeContext";
+import { NAMES } from "../../lib/names";
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
@@ -261,11 +262,15 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
     >
       {/* Tab Bar */}
       <div className="shrink-0 p-4 pb-0 bg-surface flex items-center gap-3">
+        {/*
+          An icon-only link. A `title` gave it a name for a mouse and a screen
+          reader but nothing on touch, so the name lives in `aria-label`.
+        */}
         {embedded && (
           <Link
             to="/settings"
             className="p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
-            title="Back to Settings"
+            aria-label="Back to Settings"
           >
             <ChevronLeft className="w-5 h-5" />
           </Link>
@@ -434,7 +439,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
                     <Brain className="w-16 h-16 text-primary" />
                   </motion.div>
                   <h2 className="text-xl font-headline font-bold mb-3">
-                    Network Dedupe Engine
+                    {NAMES.duplicates.label}
                   </h2>
                   <p className="text-on-surface-variant text-sm leading-relaxed mb-6">
                     Clean your network by merging duplicate contacts

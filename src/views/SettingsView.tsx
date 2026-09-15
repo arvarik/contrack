@@ -51,6 +51,7 @@ import { useAuth } from "../components/auth/AuthGate";
 import { ICON_BTN, PAGE_TITLE } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { usePageTitle } from "../hooks/usePageTitle";
+import { NAMES } from "../lib/names";
 
 // ---------------------------------------------------------------------------
 // The administration area, loaded only for the people who can open it
@@ -131,13 +132,18 @@ const SUBPAGES: SubpageMeta[] = [
   },
   {
     segment: "ai-search",
-    title: "Contact Enrichment",
+    title: NAMES.enrichment.title,
     icon: Sparkles,
     tone: "text-primary",
   },
   { segment: "ai-stats", title: "AI Usage", icon: Gauge, tone: "text-primary" },
   { segment: "lists", title: "Lists", icon: List, tone: "text-primary" },
-  { segment: "dedupe", title: "Duplicates", icon: Copy, tone: "text-primary" },
+  {
+    segment: "dedupe",
+    title: NAMES.duplicates.title,
+    icon: Copy,
+    tone: "text-primary",
+  },
   {
     segment: "archived",
     title: "Archived Contacts",
@@ -237,7 +243,7 @@ export const SettingsView = () => {
     );
   const segment = subpage?.segment ?? "";
 
-  const title = subpage?.title ?? "Settings";
+  const title = subpage?.title ?? NAMES.settings.title;
   const Icon = subpage?.icon ?? SettingsIcon;
 
   // The tab title tracks the subpage, so a settings tab left open is

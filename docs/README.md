@@ -15,15 +15,15 @@ Welcome to the Contrack documentation. These guides cover everything from gettin
 
 ## Feature Guides
 
-| Feature                                              | Description                                               |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| [Contact Management](features/contact-management.md) | CRUD, import, Magic Paste, timeline, @mentions, ghosts    |
-| [Command Palette](features/command-palette.md)       | Cmd+K deep-dive: search, facets, actions, peek, synthesis |
-| [AI Search](features/ai-search.md)                   | Ask Contrack v3, semantic search, batch enrichment        |
-| [Deduplication](features/deduplication.md)           | Dedupe engine, merge, undo, threshold presets             |
-| [Pulse Dashboard](features/dashboard-pulse.md)       | Relationship scoring, action items, daily AI insights     |
-| [Map View](features/map-view.md)                     | Geospatial clustering, geocoding providers                |
-| [Lists](features/lists.md)                           | Custom lists, reorder, bulk membership                    |
+| Feature                                                      | Description                                               |
+| ------------------------------------------------------------ | --------------------------------------------------------- |
+| [Contact Management](features/contact-management.md)         | CRUD, import, Magic Paste, timeline, @mentions, ghosts    |
+| [Command Palette](features/command-palette.md)               | Cmd+K deep-dive: search, facets, actions, peek, synthesis |
+| [Ask Contrack and contact enrichment](features/ai-search.md) | Semantic search, answers, batch enrichment                |
+| [Deduplication](features/deduplication.md)                   | Duplicates page, merge, undo, threshold presets           |
+| [Pulse](features/dashboard-pulse.md)                         | Relationship scoring, action items, daily AI insights     |
+| [Map View](features/map-view.md)                             | Geospatial clustering, geocoding providers                |
+| [Lists](features/lists.md)                                   | Custom lists, reorder, bulk membership                    |
 
 ## Project Links
 

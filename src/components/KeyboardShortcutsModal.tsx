@@ -2,8 +2,9 @@
  * KeyboardShortcutsModal — Global `?` key overlay showing all keyboard shortcuts.
  *
  * Mounted once in App.tsx, which listens for `?` globally (ignoring inputs
- * and textareas). Categorised by context: Navigation, Global, Network,
- * Dedupe Engine.
+ * and textareas). The shortcuts come from `lib/shortcuts`, the one table
+ * every plan registers its keys in, grouped as Navigation, Global, Network
+ * and Duplicates.
  *
  * Built on the shared `Modal` primitive. It used to be a hand-rolled overlay:
  * two motion divs, a window keydown for Escape, and nothing else. That gave a
@@ -12,59 +13,8 @@
  * purpose is to help keyboard users. The primitive supplies all three.
  */
 import React from "react";
+import { groupedShortcuts, isCombination } from "../lib/shortcuts";
 import { Modal } from "./ui/Modal";
-
-interface Shortcut {
-  keys: string[];
-  description: string;
-}
-
-interface ShortcutGroup {
-  context: string;
-  shortcuts: Shortcut[];
-}
-
-const SHORTCUT_GROUPS: ShortcutGroup[] = [
-  {
-    context: "Navigation",
-    shortcuts: [
-      { keys: ["⌘", "⇧", "H"], description: "Go to Network" },
-      { keys: ["⌘", "⇧", "P"], description: "Go to Pulse" },
-      { keys: ["⌘", "⇧", "M"], description: "Go to Map" },
-      { keys: ["⌘", "⇧", "S"], description: "Go to AI Search" },
-      { keys: ["⌘", "⇧", ","], description: "Go to Settings" },
-      { keys: ["⌘", "["], description: "Back" },
-      { keys: ["⌘", "]"], description: "Forward" },
-    ],
-  },
-  {
-    context: "Global",
-    shortcuts: [
-      { keys: ["?"], description: "Show keyboard shortcuts" },
-      { keys: ["⌘", "K"], description: "Open command palette" },
-      { keys: ["⌘", "⇧", "I"], description: "Quick interaction" },
-    ],
-  },
-  {
-    context: "Network — Contact List",
-    shortcuts: [
-      { keys: ["/"], description: "Focus search" },
-      { keys: ["N"], description: "New contact" },
-      { keys: ["V"], description: "Smart paste (AI parse)" },
-      { keys: ["Esc"], description: "Exit selection mode" },
-    ],
-  },
-  {
-    context: "Dedupe Engine",
-    shortcuts: [
-      { keys: ["→", "L"], description: "Merge into primary" },
-      { keys: ["←", "H"], description: "Keep separate (skip)" },
-      { keys: ["↓", "J"], description: "Next suggestion" },
-      { keys: ["↑", "K"], description: "Previous suggestion" },
-      { keys: ["⌘", "Z"], description: "Undo last dismiss" },
-    ],
-  },
-];
 
 const Kbd = ({ children }: { children: React.ReactNode }) => (
   <kbd className="inline-flex items-center justify-center min-w-[26px] h-[22px] px-1.5 bg-surface-container-high rounded-md text-[11px] font-mono font-bold text-on-surface shadow-[0_1px_0_0_rgba(0,0,0,0.12)] border border-black/8">
@@ -91,15 +41,15 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => (
       tabIndex={0}
       className="space-y-5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      {SHORTCUT_GROUPS.map((group) => (
-        <section key={group.context} aria-label={group.context}>
+      {groupedShortcuts().map((group) => (
+        <section key={group.group} aria-label={group.group}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2.5">
-            {group.context}
+            {group.group}
           </p>
           <dl className="space-y-1">
             {group.shortcuts.map((s) => (
               <div
-                key={s.description}
+                key={s.keys.join("+")}
                 className="flex items-center justify-between gap-3 py-1.5 px-3 rounded-xl hover:bg-surface-container-low transition-colors"
               >
                 <dt className="text-sm text-on-surface">{s.description}</dt>
@@ -107,14 +57,24 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => (
                   {s.keys.map((k, i) => (
                     <React.Fragment key={i}>
                       <Kbd>{k}</Kbd>
-                      {i < s.keys.length - 1 && (
-                        <span
-                          className="text-[10px] text-on-surface-variant mx-0.5"
-                          aria-hidden="true"
-                        >
-                          +
-                        </span>
-                      )}
+                      {/*
+                        Keys with a modifier are pressed together. Keys
+                        without one are alternatives, and "or" is read out,
+                        because "right arrow L" does not say which it is.
+                      */}
+                      {i < s.keys.length - 1 &&
+                        (isCombination(s.keys) ? (
+                          <span
+                            className="text-[10px] text-on-surface-variant mx-0.5"
+                            aria-hidden="true"
+                          >
+                            +
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-on-surface-variant mx-0.5">
+                            or
+                          </span>
+                        ))}
                     </React.Fragment>
                   ))}
                 </dd>

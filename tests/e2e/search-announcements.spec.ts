@@ -130,9 +130,9 @@ test.describe("people", () => {
       "2 matches for “who likes espresso”.",
     );
 
-    await page.getByRole("link", { name: /^Relationship Pulse/ }).click();
+    await page.getByRole("link", { name: /^Pulse/ }).click();
     await expect(page.getByRole("heading", { name: "Pulse" })).toBeVisible();
-    await page.getByRole("link", { name: "AI Search" }).click();
+    await page.getByRole("link", { name: "Ask Contrack" }).click();
 
     // The results are back on screen, and the region says nothing about
     // them: the reader is where they left off, not hearing a new answer.

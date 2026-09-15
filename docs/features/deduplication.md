@@ -31,7 +31,7 @@ Contacts
 
 ### From the UI
 
-Navigate to **Settings → Dedupe Engine** and click **Scan for Duplicates**.
+Open **Settings → Duplicates**, choose a scan mode, and click **Begin Scan**.
 
 ### From the API
 

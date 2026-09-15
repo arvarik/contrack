@@ -127,6 +127,7 @@ const Composer = ({
   );
   const [isSaving, setIsSaving] = useState(false);
   const parsedDate = chrono.parseDate(followUpText);
+  const placeholderId = React.useId();
 
   /**
    * Refs for everything the submit path reads.
@@ -281,7 +282,19 @@ const Composer = ({
       persistSoon();
     },
     editorProps: {
+      /**
+       * A name and a description for the contenteditable.
+       *
+       * Without them a screen reader lands on an unnamed, empty region. The
+       * placeholder is a CSS decoration, so it is not read either, and the
+       * description points at a hidden copy of it. These attributes are set
+       * once, when the editor is created, so the id must not change.
+       */
       attributes: {
+        role: "textbox",
+        "aria-label": "Note",
+        "aria-multiline": "true",
+        "aria-describedby": placeholderId,
         class:
           "prose prose-sm max-w-none focus:outline-none min-h-[80px] text-on-surface break-words prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1",
       },
@@ -322,6 +335,10 @@ const Composer = ({
       {/* Editor area */}
       <div className="p-5 flex-1 relative">
         <EditorContent editor={editor} className="w-full custom-tiptap" />
+        {/* The placeholder as text, for the editor's aria-describedby. */}
+        <span id={placeholderId} className="sr-only">
+          {PLACEHOLDERS[type]}
+        </span>
 
         {/* Next action field smoothly integrated into the editor card */}
         <div className="mt-4 group flex items-center relative">
@@ -346,12 +363,21 @@ const Composer = ({
 
       {/* Action Bar */}
       <div className="bg-surface-container-low/40 px-5 py-3 flex items-center justify-between">
-        <div className="flex gap-1.5 bg-surface-container-lowest p-1 rounded-xl shadow-sm">
+        {/*
+          Icon buttons named by `aria-label`. They used to carry a `title`
+          alone, which names a control for a pointer on hover and for nobody
+          on touch.
+        */}
+        <div
+          role="group"
+          aria-label="Interaction type"
+          className="flex gap-1.5 bg-surface-container-lowest p-1 rounded-xl shadow-sm"
+        >
           <button
             onClick={() => setType("note")}
             className={iconToggle(type === "note")}
             aria-pressed={type === "note"}
-            title="Note"
+            aria-label="Note"
           >
             <FileText className="w-4 h-4" />
           </button>
@@ -359,7 +385,7 @@ const Composer = ({
             onClick={() => setType("call")}
             className={iconToggle(type === "call")}
             aria-pressed={type === "call"}
-            title="Call"
+            aria-label="Call"
           >
             <Phone className="w-4 h-4" />
           </button>
@@ -367,7 +393,7 @@ const Composer = ({
             onClick={() => setType("meeting")}
             className={iconToggle(type === "meeting")}
             aria-pressed={type === "meeting"}
-            title="Meeting"
+            aria-label="Meeting"
           >
             <Handshake className="w-4 h-4" />
           </button>
@@ -375,7 +401,7 @@ const Composer = ({
             onClick={() => setType("email")}
             className={iconToggle(type === "email")}
             aria-pressed={type === "email"}
-            title="Email"
+            aria-label="Email"
           >
             <Mail className="w-4 h-4" />
           </button>

@@ -101,6 +101,36 @@ export async function expectPageAccessible(
   await expectNoViolations(results, testInfo, label);
 }
 
+/**
+ * The page-structure rules from axe's `best-practice` set.
+ *
+ * `WCAG_TAGS` leaves best-practice out because most of it flags patterns
+ * rather than failures. These four are the exception this app holds itself
+ * to: they are what a screen reader user navigates by. One main landmark to
+ * jump to, an h1 that says where you are, no content stranded outside every
+ * landmark, and heading levels that do not skip.
+ */
+export const STRUCTURE_RULES = [
+  "landmark-one-main",
+  "page-has-heading-one",
+  "region",
+  "heading-order",
+] as const;
+
+/** Scan the page with only the named structure rules and fail on any violation. */
+export async function expectPageStructured(
+  page: Page,
+  testInfo: TestInfo,
+  label = "page",
+  rules: readonly string[] = STRUCTURE_RULES,
+): Promise<void> {
+  await settleAnimations(page);
+  const results = await new AxeBuilder({ page })
+    .withRules([...rules])
+    .analyze();
+  await expectNoViolations(results, testInfo, `${label}-structure`);
+}
+
 interface FocusStyle {
   outlineStyle: string;
   outlineWidth: string;

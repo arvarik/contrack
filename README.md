@@ -58,7 +58,7 @@ A GitHub-style command center featuring faceted filters (`role:`, `company:`, `t
 <tr>
 <td width="30%" valign="top">
 
-### 💓 Relationship Pulse
+### 💓 Pulse
 
 Never let an important connection slip through the cracks again. This proactive dashboard automatically tracks your network health and suggests who you should reach out to next.
 
@@ -67,7 +67,7 @@ Runs on an automated scoring engine (frequency × recency × depth) to power act
 </td>
 <td width="70%">
 
-<img src="docs/screenshots/pulse-dashboard.png" alt="Relationship Pulse Dashboard" width="100%" />
+<img src="docs/screenshots/pulse-dashboard.png" alt="Pulse" width="100%" />
 
 </td>
 </tr>
@@ -90,7 +90,7 @@ Interactive cluster map powered by React Leaflet, utilizing Mapbox and Nominatim
 <tr>
 <td width="30%" valign="top">
 
-### 🔍 Ask Contrack (AI Search)
+### 🔍 Ask Contrack
 
 Query your CRM using natural language just like you're talking to an assistant. Ask complex questions like "Who do I know in San Francisco that works in tech?" and get precise answers.
 
@@ -99,7 +99,7 @@ Driven by a Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal
 </td>
 <td width="70%">
 
-<img src="docs/screenshots/search.png" alt="Ask Contrack AI Search" width="100%" />
+<img src="docs/screenshots/search.png" alt="Ask Contrack" width="100%" />
 
 </td>
 </tr>
@@ -224,16 +224,16 @@ Full documentation lives in the [`docs/`](docs/) directory:
 
 ### Feature Guides
 
-| Feature            | Guide                                                                      |
-| ------------------ | -------------------------------------------------------------------------- |
-| Contact Management | [docs/features/contact-management.md](docs/features/contact-management.md) |
-| Command Palette    | [docs/features/command-palette.md](docs/features/command-palette.md)       |
-| AI Search          | [docs/features/ai-search.md](docs/features/ai-search.md)                   |
-| Note Search        | [docs/features/interaction-search.md](docs/features/interaction-search.md) |
-| Deduplication      | [docs/features/deduplication.md](docs/features/deduplication.md)           |
-| Pulse Dashboard    | [docs/features/dashboard-pulse.md](docs/features/dashboard-pulse.md)       |
-| Map View           | [docs/features/map-view.md](docs/features/map-view.md)                     |
-| Lists              | [docs/features/lists.md](docs/features/lists.md)                           |
+| Feature                             | Guide                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| Contact Management                  | [docs/features/contact-management.md](docs/features/contact-management.md) |
+| Command Palette                     | [docs/features/command-palette.md](docs/features/command-palette.md)       |
+| Ask Contrack and contact enrichment | [docs/features/ai-search.md](docs/features/ai-search.md)                   |
+| Note Search                         | [docs/features/interaction-search.md](docs/features/interaction-search.md) |
+| Deduplication                       | [docs/features/deduplication.md](docs/features/deduplication.md)           |
+| Pulse                               | [docs/features/dashboard-pulse.md](docs/features/dashboard-pulse.md)       |
+| Map View                            | [docs/features/map-view.md](docs/features/map-view.md)                     |
+| Lists                               | [docs/features/lists.md](docs/features/lists.md)                           |
 
 ---
 

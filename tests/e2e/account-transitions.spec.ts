@@ -71,7 +71,7 @@ test("an expired session returns to sign-in and says why", async ({
   // looks like from the browser. The next request is refused, and the gate
   // explains rather than showing a blank "Welcome back".
   await context.clearCookies();
-  await page.getByRole("link", { name: /^Relationship Pulse/ }).click();
+  await page.getByRole("link", { name: /^Pulse/ }).click();
 
   await expect(page.getByRole("heading", { name: "Signed out" })).toBeVisible();
   await expect(page.getByText(/Your session expired/)).toBeVisible();

@@ -8,7 +8,8 @@
  * That tooltip is a hover-rendered <div>, so it is worth nothing to a screen
  * reader or to a keyboard user tabbing through: every link here is an icon
  * with no text. Each one therefore carries its own `aria-label`, duplicating
- * the tooltip's label. Keep the two in sync when adding a destination.
+ * the tooltip's label. Both read the destination's name from `lib/names`, so
+ * the sidebar says what the tab bar, the palette and the page heading say.
  */
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -27,6 +28,7 @@ import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
 import { openKeyboardShortcuts } from "../../lib/appEvents";
 import { SidebarIdentity } from "../auth/AccountIdentity";
+import { NAMES } from "../../lib/names";
 
 // ---------------------------------------------------------------------------
 // SidebarTooltip — styled right-side tooltip with delay
@@ -118,7 +120,8 @@ export const Sidebar = () => {
   /**
    * The badges are `aria-hidden` graphics, so whatever they convey has to be
    * said in the link's accessible name instead — otherwise a screen-reader
-   * user gets "Relationship Pulse" and no hint that anything is waiting.
+   * user gets "Pulse" and no hint that anything is waiting. The name and the
+   * counts join with a comma, which a screen reader reads as a short pause.
    */
   const pulseBadges = [
     urgentCount > 0 &&
@@ -128,11 +131,11 @@ export const Sidebar = () => {
   ].filter(Boolean) as string[];
 
   const pulseLabel = pulseBadges.length
-    ? `Relationship Pulse — ${pulseBadges.join(", ")}`
-    : "Relationship Pulse";
+    ? `${NAMES.pulse.label}, ${pulseBadges.join(", ")}`
+    : NAMES.pulse.label;
   const pulseTooltip = pulseBadges.length
-    ? `Relationship Pulse · ${pulseBadges.join(" · ")}`
-    : "Relationship Pulse";
+    ? `${NAMES.pulse.label} · ${pulseBadges.join(" · ")}`
+    : NAMES.pulse.label;
 
   return (
     <aside
@@ -141,8 +144,12 @@ export const Sidebar = () => {
         "w-16 h-screen hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
-      {/* Contrack wordmark — rotated vertical */}
-      <div className="flex items-center justify-center mb-1" title="Contrack">
+      {/*
+        Contrack wordmark, rotated vertical. It is decoration: the page title
+        already names the app, and a `title` alone named it only for a mouse.
+        Hidden from assistive tech until the corvid mark replaces it.
+      */}
+      <div className="flex items-center justify-center mb-1" aria-hidden="true">
         <span
           className="text-[9px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
           style={{
@@ -155,11 +162,11 @@ export const Sidebar = () => {
         </span>
       </div>
 
-      <SidebarTooltip label="Network" shortcut="⌘⇧H">
+      <SidebarTooltip label={NAMES.network.label} shortcut="⌘⇧H">
         <Link
           to={lastContactId && !isHome ? `/contact/${lastContactId}` : "/"}
           className={navLink(isHome)}
-          aria-label="Network"
+          aria-label={NAMES.network.label}
         >
           <LayoutDashboard className="w-6 h-6" />
         </Link>
@@ -214,14 +221,18 @@ export const Sidebar = () => {
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label="Map" shortcut="⌘⇧M">
-        <Link to="/map" className={navLink(isMap)} aria-label="Map">
+      <SidebarTooltip label={NAMES.map.label} shortcut="⌘⇧M">
+        <Link to="/map" className={navLink(isMap)} aria-label={NAMES.map.label}>
           <Map className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label="AI Search" shortcut="⌘⇧S">
-        <Link to="/search" className={navLink(isSearch)} aria-label="AI Search">
+      <SidebarTooltip label={NAMES.ask.label} shortcut="⌘⇧S">
+        <Link
+          to="/search"
+          className={navLink(isSearch)}
+          aria-label={NAMES.ask.label}
+        >
           <Sparkles className="w-6 h-6" />
         </Link>
       </SidebarTooltip>
@@ -253,11 +264,11 @@ export const Sidebar = () => {
           </button>
         </SidebarTooltip>
 
-        <SidebarTooltip label="Settings" shortcut="⌘⇧,">
+        <SidebarTooltip label={NAMES.settings.label} shortcut="⌘⇧,">
           <Link
             to="/settings"
             className={navLink(isCleanup)}
-            aria-label="Settings"
+            aria-label={NAMES.settings.label}
           >
             <SettingsIcon className="w-6 h-6" />
           </Link>

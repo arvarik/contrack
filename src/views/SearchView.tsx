@@ -17,6 +17,7 @@ import { tileDelay } from "../lib/motion";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { usePageTitle } from "../hooks/usePageTitle";
+import { NAMES } from "../lib/names";
 import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
 import { SearchCoverageBar } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
@@ -107,7 +108,7 @@ export const SearchView = () => {
     [setSearchParams],
   );
 
-  usePageTitle(mode === "notes" ? "Search Notes" : "AI Search");
+  usePageTitle(mode === "notes" ? "Search Notes" : NAMES.ask.title);
 
   // Focus input on mount
   useEffect(() => {
@@ -240,12 +241,12 @@ export const SearchView = () => {
             <div className="p-2 bg-primary/10 rounded-xl shrink-0">
               <Sparkles className="w-6 h-6 text-primary" />
             </div>
-            Ask Contrack
+            {NAMES.ask.label}
           </h1>
           <p className="text-sm text-on-surface-variant mt-0.5">
             {mode === "notes"
               ? "Find what was said, and when"
-              : "Semantic AI search across your network"}
+              : NAMES.ask.description}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">

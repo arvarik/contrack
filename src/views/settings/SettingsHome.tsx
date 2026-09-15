@@ -57,6 +57,7 @@ import {
 } from "../../hooks/useRecentContacts";
 import { useDedupeSettings } from "../../hooks/useDedupeSettings";
 import { useListDensity } from "../../hooks/useListDensity";
+import { NAMES } from "../../lib/names";
 
 // ---------------------------------------------------------------------------
 // Building blocks
@@ -559,7 +560,7 @@ export const SettingsHome = () => {
             </PreferenceRow>
 
             {/*
-            This slider used to be bolted to the bottom of the Dedupe Engine
+            This slider used to be bolted to the bottom of the Duplicates
             navigation card, where it read as part of the link. It is a
             preference, so it lives with the preferences; the engine itself is
             a destination under Organize.
@@ -576,7 +577,7 @@ export const SettingsHome = () => {
                       to="/settings/dedupe"
                       className="font-bold text-primary hover:underline"
                     >
-                      Duplicates
+                      {NAMES.duplicates.label}
                     </Link>
                     , to imports, and to the check that runs after you add a
                     contact. Every auto-merge is undoable there.
@@ -622,7 +623,7 @@ export const SettingsHome = () => {
               show={show.aiSearch}
               to="/settings/ai-search"
               icon={Sparkles}
-              title="Contact Enrichment"
+              title={NAMES.enrichment.label}
               description="Research and fill in contact profiles from the live web."
             />
             <SettingsLink
@@ -655,7 +656,7 @@ export const SettingsHome = () => {
               show={show.dedupe}
               to="/settings/dedupe"
               icon={Copy}
-              title="Duplicates"
+              title={NAMES.duplicates.label}
               description="Find and merge duplicate contacts, automatically or by hand."
             />
             <SettingsLink

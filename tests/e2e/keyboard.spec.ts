@@ -17,12 +17,35 @@ async function startFromBody(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Press Tab until focus is inside `selector`, and say how many presses it
+ * took, or Infinity if the budget ran out first.
+ */
+async function tabsToReach(
+  page: Page,
+  selector: string,
+  budget: number,
+): Promise<number> {
+  for (let presses = 1; presses <= budget; presses++) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(
+      (target) => Boolean(document.activeElement?.closest(target)),
+      selector,
+    );
+    if (inside) return presses;
+  }
+  return Infinity;
+}
+
+/** The Network list's rows, the only elements that carry a roving index. */
+const LIST_ROW = "#contact-list [data-roving-index]";
+
 /** The sidebar, in Tab order, after the skip link. */
 const SIDEBAR_STOPS = [
   { role: "link", name: "Network" },
-  { role: "link", name: /^Relationship Pulse/ },
+  { role: "link", name: /^Pulse/ },
   { role: "link", name: "Map" },
-  { role: "link", name: "AI Search" },
+  { role: "link", name: "Ask Contrack" },
   { role: "button", name: "Keyboard shortcuts" },
   { role: "link", name: "Settings" },
 ] as const;
@@ -31,7 +54,7 @@ for (const scheme of ["light", "dark"] as const) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
 
-    test("the first Tab stop is a skip link that lands focus in the content", async ({
+    test("the first Tab stop is a skip link that lands on the list's current row", async ({
       page,
     }) => {
       await page.goto("/");
@@ -43,18 +66,15 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(skip).toBeVisible();
       await expectVisibleFocus(skip);
 
+      // On the Network page the content is the list, not the "no contact
+      // selected" pane beside it, so the link lands on the row that owns the
+      // list's Tab stop, ready for the arrow keys.
       await page.keyboard.press("Enter");
-      const content = page.locator("#main-content");
-      await expect(content).toBeFocused();
-      // Nothing visible should ring a whole pane.
-      await expect(content).toHaveCSS("outline-style", "none");
-
-      // The next stop is inside the content, past the whole sidebar.
-      await page.keyboard.press("Tab");
-      const inside = await content.evaluate((el) =>
-        el.contains(document.activeElement),
+      await expectVisibleFocus(
+        page
+          .locator("#contact-list")
+          .getByRole("link", { name: /^Ada Lovelace/ }),
       );
-      expect(inside).toBe(true);
     });
 
     test("every sidebar stop is reachable in order and shows its focus", async ({
@@ -110,7 +130,7 @@ test("arrow keys walk the contact list and mark the current row", async ({
 
   // Scoped to the list: the phone tab bar is in the DOM at every width and
   // marks its own current tab.
-  const current = page.locator('#main-content [aria-current="page"]');
+  const current = page.locator('#contact-list [aria-current="page"]');
   const ada = seed.byName("Ada Lovelace");
   const edsger = seed.byName("Edsger Dijkstra");
 
@@ -154,4 +174,73 @@ test("the search mode is a radiogroup the arrow keys switch", async ({
   await page.keyboard.press("ArrowLeft");
   await expect(people).toBeChecked();
   await expect(page).not.toHaveURL(/mode=notes/);
+});
+
+test("on a contact page the skip link lands on the contact's name", async ({
+  page,
+  seed,
+}) => {
+  await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+  const heading = page.getByRole("heading", { level: 1, name: /Ada Lovelace/ });
+  await expect(heading).toBeVisible();
+  await startFromBody(page);
+
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(heading).toBeFocused();
+  // A heading is a place, not a control, so it wears no ring of its own.
+  await expect(heading).toHaveCSS("outline-style", "none");
+
+  // One more Tab is the name itself, which edits in place.
+  await page.keyboard.press("Tab");
+  await expectVisibleFocus(heading.getByRole("button"));
+});
+
+/**
+ * The Tab budget.
+ *
+ * Before the list became one Tab stop, the first control in a contact was
+ * stop 42: the skip link, six sidebar links, six list controls, fifteen rows
+ * and thirteen letter buttons. The budget is what the page costs now, and a
+ * change that adds stops in front of the content fails here rather than in a
+ * keyboard user's afternoon.
+ */
+test.describe("Tab budget", () => {
+  test("a contact's name is within 16 Tabs of the top of the page", async ({
+    page,
+    seed,
+  }) => {
+    await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
+    ).toBeVisible();
+    await startFromBody(page);
+
+    const presses = await tabsToReach(page, "#contact-heading", 16);
+    expect(presses).toBeLessThanOrEqual(16);
+  });
+
+  test("the first row on Network is within 14 Tabs, and the list is one stop", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    await startFromBody(page);
+
+    const presses = await tabsToReach(page, LIST_ROW, 14);
+    expect(presses).toBeLessThanOrEqual(14);
+    await expect(
+      page
+        .locator("#contact-list")
+        .getByRole("link", { name: /^Ada Lovelace/ }),
+    ).toBeFocused();
+
+    // One more Tab leaves the list, however many people are in it.
+    await page.keyboard.press("Tab");
+    const stillInList = await page.evaluate(
+      (row) => Boolean(document.activeElement?.closest(row)),
+      LIST_ROW,
+    );
+    expect(stillInList).toBe(false);
+  });
 });

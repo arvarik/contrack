@@ -33,8 +33,8 @@ import {
   stripModePrefix,
 } from "./utils";
 import { fallbackAvatarUrl } from "../../lib/avatar";
-import { KBD_SM } from "../../lib/styles";
 import { NAV_SHORTCUTS } from "../../hooks/useGlobalNavShortcuts";
+import { NAMES } from "../../lib/names";
 import type { SearchHistoryEntry } from "../../hooks/useSearchHistory";
 import type { ZeroStateInsight } from "../../types";
 
@@ -97,33 +97,38 @@ const insightBg = (type: string) => {
   }
 };
 
-const NAV_ITEMS = [
+/**
+ * The "Go To" group. Labels come from `lib/names` so a destination reads the
+ * same here as in the sidebar and on the page. Exported for the unit test that
+ * holds those surfaces to one name.
+ */
+export const NAV_ITEMS = [
   {
-    label: "Network",
+    label: NAMES.network.label,
     icon: LayoutDashboard,
     path: "/",
     shortcut: NAV_SHORTCUTS["/"]?.keys,
   },
   {
-    label: "Relationship Pulse",
+    label: NAMES.pulse.label,
     icon: Activity,
     path: "/pulse",
     shortcut: NAV_SHORTCUTS["/pulse"]?.keys,
   },
   {
-    label: "Map",
+    label: NAMES.map.label,
     icon: Map,
     path: "/map",
     shortcut: NAV_SHORTCUTS["/map"]?.keys,
   },
   {
-    label: "AI Search",
+    label: NAMES.ask.label,
     icon: Sparkles,
     path: "/search",
     shortcut: NAV_SHORTCUTS["/search"]?.keys,
   },
   {
-    label: "Settings",
+    label: NAMES.settings.label,
     icon: Settings,
     path: "/settings",
     shortcut: NAV_SHORTCUTS["/settings"]?.keys,
@@ -231,10 +236,13 @@ export const ZeroStateView = ({
           >
             <item.icon className="w-4 h-4 shrink-0" />
             <span className="text-sm flex-1">{item.label}</span>
+            {/*
+              The chip spells out its classes instead of using KBD_SM. At
+              9px it failed axe colour contrast, and 11px is the smallest
+              type the style guide allows.
+            */}
             {item.shortcut && (
-              <kbd
-                className={`${KBD_SM} text-on-surface-variant hidden sm:inline-flex`}
-              >
+              <kbd className="bg-surface-container-high text-on-surface-variant px-1.5 rounded font-mono text-[11px] shadow-sm hidden sm:inline-flex">
                 {item.shortcut}
               </kbd>
             )}

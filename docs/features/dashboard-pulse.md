@@ -1,6 +1,6 @@
-# Pulse Dashboard
+# Pulse
 
-The Pulse Dashboard is Contrack's proactive intelligence center — surfacing relationship health, action items, and AI-driven insights about your network.
+Pulse is Contrack's proactive intelligence center. It shows relationship health, action items, and AI-driven insights about your network.
 
 Access via the **Pulse** tab in the navigation or `Cmd+Shift+P`.
 
