@@ -60,6 +60,72 @@ jobs:
       - name: Production Build
         run: npm run build
 
+  # ── Browser journeys ───────────────────────────────────────────────────────
+  # What the unit suite cannot see: real focus, real dialogs, real live
+  # regions, a real phone viewport. Playwright drives the PRODUCTION build
+  # (the same dist/ a release ships, with the CSP on) in headless Chromium,
+  # walks the keyboard, dialog, search, phone-form and account journeys, and
+  # scans every screen with axe. See docs/accessibility.md.
+  #
+  # Its own job rather than a step in build-and-test, so a lint failure and a
+  # focus regression are reported separately and neither hides the other.
+  # Always the hosted runner: Playwright installs Chromium's system libraries
+  # with apt, which needs the sudo the self-hosted runner deliberately lacks.
+  browser-a11y:
+    name: Browser accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Production Build
+        run: npm run build
+
+      # Chromium is cached by Playwright version, so a cache hit skips the
+      # download and only the apt libraries are installed.
+      - name: Read Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Chromium
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium system libraries
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run browser journeys
+        run: npx playwright test
+
+      # The HTML report carries every axe result, the trace of any retried
+      # test and the screenshot of any failure. Uploaded on failure and on
+      # success alike, so a green run can still be inspected.
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
   # ── Container image ────────────────────────────────────────────────────────
   # Each architecture builds on a runner of that architecture. Emulating arm64
   # through QEMU works but compiles this project's native modules
@@ -70,7 +136,7 @@ jobs:
   # digests into one multi-arch tag. This is the pattern docker/build-push-action
   # documents for splitting a build across runners.
   build-image:
-    needs: build-and-test
+    needs: [build-and-test, browser-a11y]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -197,7 +263,7 @@ jobs:
   # already exist for the tag — publishing via `gh release create` first (to
   # attach hand-written notes) makes this a no-op rather than a conflict.
   release:
-    needs: build-and-test
+    needs: [build-and-test, browser-a11y]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 10

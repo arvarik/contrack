@@ -90,7 +90,17 @@ Run the full test suite:
 npm test              # Unit + integration (500+ tests, no API keys needed)
 npm run test:coverage # ...with a coverage report
 npm run lint          # ESLint + tsc --noEmit (strict)
+npm run build && npm run test:e2e   # Browser journeys in headless Chromium
 ```
+
+The browser suite (`tests/e2e/`) drives the production build with Playwright:
+axe scans of every screen, and the keyboard, dialog, search-announcement,
+phone-form and account journeys. It boots its own server per worker on a
+throwaway data directory, so it never touches your database. The first run
+needs `npx playwright install chromium`. A change to a dialog, a live region,
+a form or the auth screens should add or extend a journey there, and
+[docs/accessibility.md](docs/accessibility.md) says how, and what a person
+still checks by hand.
 
 **You never need an API key to develop Contrack.** `npm test` mocks every AI
 call, and the integration suite blanks provider keys so a stray request can't
@@ -143,8 +153,9 @@ docs: update API reference in README
 ## Pull Request Process
 
 1. Ensure your branch is up to date with `main`
-2. Run `npm run lint` and `npm test` — both must pass. If you changed an
-   AI adapter, run `npm run test:contract` with whatever key you have.
+2. Run `npm run lint`, `npm test`, and `npm run build && npm run test:e2e`.
+   All three must pass. If you changed an AI adapter, run
+   `npm run test:contract` with whatever key you have.
 3. Describe **what** changed and **why** in the PR description
 4. If your change modifies the API surface, update [`docs/api-reference.md`](docs/api-reference.md)
 5. If your change modifies the database schema, include the migration file

@@ -18,7 +18,7 @@ import React, {
   useEffect,
 } from "react";
 import { useClickOutside } from "../../hooks/useClickOutside";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -218,7 +218,15 @@ export const ContactList = () => {
   const { data: contacts = [], isLoading, isError, refetch } = useContacts();
 
   const { data: lists = [] } = useLists();
-  const { id } = useParams();
+  /**
+   * The open contact, read from the address.
+   *
+   * The list is mounted on the catch-all route (`path="*"`), so `useParams`
+   * had no `:id` to give it and this was always undefined. That meant no row
+   * was ever marked current — no ring, no `aria-current` — and the j/k keys,
+   * which step from the current row, went to the first contact every time.
+   */
+  const id = useMatch("/contact/:id")?.params.id;
   const navigate = useNavigate();
   const location = useLocation();
 

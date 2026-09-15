@@ -9,3 +9,8 @@ docs/multi-tenant-plan/
 # it out of step with the generator on the next recording, and the file is
 # data rather than something anybody edits by hand.
 tests/fixtures/search-eval/
+
+# Playwright writes these. Nothing in them is hand-edited.
+playwright-report/
+test-results/
+blob-report/

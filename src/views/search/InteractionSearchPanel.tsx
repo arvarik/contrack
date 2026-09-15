@@ -41,7 +41,9 @@ import { isTypingTarget } from "../../lib/keyboard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
 import { CARD, filterPill } from "../../lib/styles";
+import { noteSearchStatus } from "../../lib/searchAnnouncements";
 import { cn } from "../../lib/utils";
+import { LiveStatus } from "../../components/ui/LiveStatus";
 import type { HighlightRange, InteractionSearchHit } from "../../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -310,7 +312,15 @@ export const InteractionSearchPanel = () => {
     setOffset(0);
   }, [q, from, to, type, mode, sort]);
 
+  /**
+   * Focus the question on arrival, unless the reader arrived by arrow key on
+   * the People / Notes switch. A radiogroup promises that the arrows move
+   * focus between its options; a field that takes focus the moment an
+   * option is chosen breaks that promise, and the next arrow press would
+   * type into the field instead of moving on.
+   */
   useEffect(() => {
+    if (document.activeElement?.getAttribute("role") === "radio") return;
     inputRef.current?.focus();
   }, []);
 
@@ -370,8 +380,24 @@ export const InteractionSearchPanel = () => {
   const first = total === 0 ? 0 : offset + 1;
   const last = Math.min(offset + hits.length, total);
 
+  /**
+   * The one sentence a screen reader hears about this search. The spinner
+   * and the count over the results are what a sighted person sees. See
+   * lib/searchAnnouncements for the wording.
+   */
+  const status = noteSearchStatus({
+    isFetching: search.isFetching,
+    isSuccess: search.isSuccess,
+    isError: search.isError,
+    hasSearch,
+    total,
+    query: q,
+  });
+
   return (
     <div className="space-y-6">
+      <LiveStatus message={status} label="Search status" />
+
       {/* Question */}
       <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-3.5 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
         {search.isFetching ? (
@@ -645,9 +671,15 @@ export const InteractionSearchPanel = () => {
         </div>
       )}
 
-      {/* Failure */}
+      {/*
+        Failure. `role="alert"` so it is announced when it appears; the status
+        region says nothing for an error, so the failure is spoken once.
+      */}
       {search.isError && (
-        <div className="tile-enter flex flex-col items-center justify-center py-12 text-center">
+        <div
+          role="alert"
+          className="tile-enter flex flex-col items-center justify-center py-12 text-center"
+        >
           <div className="p-4 bg-rose-500/10 rounded-2xl mb-3">
             <AlertTriangle className="w-10 h-10 text-error" />
           </div>

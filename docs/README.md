@@ -11,6 +11,7 @@ Welcome to the Contrack documentation. These guides cover everything from gettin
 | [Architecture](architecture.md)       | System overview, data flow, AI routing, database schema     |
 | [API Reference](api-reference.md)     | Complete REST API with curl and JavaScript examples         |
 | [CI & Release](ci-and-release.md)     | Pipeline, multi-arch images, publishing, self-hosted runner |
+| [Accessibility](accessibility.md)     | What CI checks in a real browser, and the manual pass       |
 
 ## Feature Guides
 

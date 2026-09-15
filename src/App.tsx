@@ -43,6 +43,7 @@ const DashboardView = React.lazy(() =>
 );
 
 import { Sidebar } from "./components/layout/Sidebar";
+import { SkipLink, MAIN_CONTENT_ID } from "./components/layout/SkipLink";
 import { RouteFallback } from "./components/layout/RouteFallback";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
 import { EmptyState } from "./components/layout/EmptyState";
@@ -177,10 +178,15 @@ const ResponsiveLayout = () => {
   if (isCleanup || isSearch || isPulse || isDev) {
     return (
       <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
+        <SkipLink />
         <div className="hidden md:flex shrink-0">
           <Sidebar />
         </div>
-        <main className="flex-1 min-w-0 h-full overflow-hidden relative flex">
+        <main
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="flex-1 min-w-0 h-full overflow-hidden relative flex outline-none"
+        >
           <div className="flex-1 min-w-0 h-full overflow-hidden">
             <Routes>
               <Route
@@ -247,16 +253,23 @@ const ResponsiveLayout = () => {
         The only way out was the in-page Back link. Navigation chrome is not
         something to reclaim space from; it stays mounted at every width.
       */}
+      <SkipLink />
       <div className="hidden md:flex shrink-0">
         <Sidebar />
       </div>
 
-      {/* Dynamic Middle/Main Panel mapping to either the List or the Map */}
+      {/*
+        Dynamic Middle/Main Panel mapping to either the List or the Map. The
+        skip link lands here: on the list it is the content, and on the map
+        it is the map. A contact open beside the list is one Tab further on.
+      */}
       <section
+        id={MAIN_CONTENT_ID}
+        tabIndex={-1}
         className={`
         ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
         ${isMapActive ? "flex-1 z-0" : "w-full lg:w-[350px] shrink-0 bg-surface-container-lowest z-10"}
-        h-full flex-col relative
+        h-full flex-col relative outline-none
       `}
       >
         <Routes>

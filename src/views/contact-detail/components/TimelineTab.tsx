@@ -242,7 +242,12 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
       className="flex flex-col gap-6 relative timeline-enter"
       {...getRootProps()}
     >
-      <input {...getInputProps()} />
+      {/*
+        The drop target's own file input. react-dropzone renders it without a
+        name, and it is the one form control on the timeline a screen reader
+        would otherwise reach as "edit, file".
+      */}
+      <input {...getInputProps()} aria-label="Attach files to this timeline" />
 
       {/* Drop Zone Overlay */}
       <AnimatePresence>

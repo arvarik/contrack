@@ -197,7 +197,9 @@ export const ScoreBreakdown = ({
           }
           setOpen((v) => !v);
         }}
-        className="inline-flex items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        // 24px minimum, the WCAG 2.5.8 floor, for the bare-icon form. A
+        // badge passed as children is already larger than that.
+        className="inline-flex items-center justify-center rounded-full min-w-6 min-h-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         {children ?? <Info className="w-3.5 h-3.5" />}
       </button>

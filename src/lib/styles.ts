@@ -216,8 +216,14 @@ export const FORM_LABEL =
   "block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5";
 
 /** Standard modal form input */
+/**
+ * 16px on a phone, 14px from `sm`. iOS Safari zooms the whole viewport when
+ * a field under 16px takes focus, which on a bottom-sheet form means the
+ * submit button leaves the screen mid-entry. The auth fields already follow
+ * this rule; the app's other forms now do too.
+ */
 export const FORM_INPUT =
-  "w-full rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none bg-surface-container text-on-surface transition-shadow";
+  "w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none bg-surface-container text-on-surface transition-shadow";
 
 /** AI pre-fill glow — returns additional classes when a field was auto-populated */
 export const formInputHighlight = (hasValue: boolean) =>
