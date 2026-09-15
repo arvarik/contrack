@@ -79,18 +79,18 @@ Each contact has a comprehensive profile with two tabs: **Dossier** (details) an
 
 ### Detail Fields
 
-| Field             | Type | Notes                                      |
-| ----------------- | ---- | ------------------------------------------ |
-| Name, First, Last | Text | Auto-split on creation                     |
-| Headline          | Text | One-line professional summary              |
-| Role              | Text | Job title                                  |
-| Company           | Text | Auto-fetches company logo via local proxy  |
-| Location          | Text | Auto-geocoded for map view                 |
-| Birthday          | Date | With age calculation display               |
-| Pronouns          | Text |                                            |
-| Industry          | Text | With autocomplete from existing industries |
-| Website           | URL  |                                            |
-| About             | Text | Free-form biography                        |
+| Field             | Type | Notes                                                  |
+| ----------------- | ---- | ------------------------------------------------------ |
+| Name, First, Last | Text | Auto-split on creation                                 |
+| Headline          | Text | One-line professional summary                          |
+| Role              | Text | Job title                                              |
+| Company           | Text | Auto-fetches company logo via local proxy              |
+| Location          | Text | Auto-geocoded, and places the contact's pin on the map |
+| Birthday          | Date | With age calculation display                           |
+| Pronouns          | Text |                                                        |
+| Industry          | Text | With autocomplete from existing industries             |
+| Website           | URL  |                                                        |
+| About             | Text | Free-form biography                                    |
 
 ### Multi-Value Fields
 
@@ -98,7 +98,7 @@ These fields support multiple entries with labels:
 
 - **Emails** — Work, Personal, Other
 - **Phones** — Mobile, Work, Home, Other
-- **Addresses** — With geocoding for map integration
+- **Addresses** — Geocoded too. One of them places the pin, and the map's hover card names which one
 - **Social Links** — LinkedIn, GitHub, Twitter, etc. (with platform icons)
 - **Education** — School, degree, field, dates
 - **Experience** — Company, role, dates, location
@@ -157,7 +157,7 @@ When the AI detects names in interactions that don't match any existing contact,
 - Ghosts appear in the zero-state intelligence as "mentioned N times but not in contacts"
 - Ghosts can be **promoted** to full contacts via the profile UI
 - When promoted, their profile is pre-hydrated with all historical mentions
-- Ghosts are excluded from the main contact list, map, and dedupe engine
+- Ghosts are excluded from the main contact list, map, and dedupe engine. `GET /api/contacts/map` enforces the map exclusion
 
 **API:** `POST /api/contacts/:id/promote`
 
@@ -194,7 +194,7 @@ Uploaded avatars are processed by Sharp (resized, optimized) and stored in `uplo
 
 ## Archived Contacts
 
-Archive contacts to hide them from the Network and Map views without deleting them:
+Archive contacts to hide them from the Network and Map views without deleting them. `GET /api/contacts/map` leaves out archived contacts, and it leaves out trashed contacts and ghosts as well:
 
 - Archive via the contact actions menu or bulk selection toolbar
 - View archived contacts in **Settings → Archived Contacts**
@@ -215,6 +215,7 @@ Deleting a contact is never instantly permanent:
   deleted and when it will auto-purge
 - **Restore** brings a contact back fully searchable, or **Delete forever**
   purges it immediately (with confirmation)
+- A contact in the Trash leaves the map, and Restore puts its pin back
 - The trash empties itself after `TRASH_RETENTION_DAYS` (default 30 days)
 
 Combined with automatic database backups (`DATA_DIR/backups`, every 24h) and

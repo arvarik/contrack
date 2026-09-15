@@ -45,8 +45,9 @@ export interface Metrics {
 export interface MetricsOptions {
   /**
    * Selectors whose subtree is not measured. Each entry needs a reason where
-   * it is passed. The one the suite uses today is Leaflet's attribution
-   * strip, which Leaflet draws and the MapLibre plan replaces.
+   * it is passed. The one the suite uses today is the map's attribution
+   * strip, which MapLibre draws at its own size and the basemap's terms
+   * require.
    */
   allow?: readonly string[];
 }

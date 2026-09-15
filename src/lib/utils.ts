@@ -42,7 +42,7 @@ export function cn(...inputs: ClassValue[]): string {
  *
  * Escapes the five characters with special meaning in HTML markup and
  * attribute values: `&`, `<`, `>`, `"`, `'`. Use whenever untrusted data is
- * concatenated into raw HTML (e.g. Leaflet divIcon templates).
+ * concatenated into raw HTML.
  */
 export function escapeHtml(value: string): string {
   return value

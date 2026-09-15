@@ -13,22 +13,23 @@ CSP on), and drives it in headless Chromium with Playwright. Every worker gets
 a server of its own on a free port with a throwaway `DATA_DIR`, so a run never
 touches a developer's database and two workers never share state.
 
-| Spec                                     | What it walks                                                                                                                                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too, and the landmark and heading rules on six screens                  |
-| `tests/e2e/keyboard.spec.ts`             | The skip link, the sidebar in Tab order with a visible focus ring in both palettes, `/` for search, arrow keys through the list, the mode radiogroup               |
-| `tests/e2e/contact.spec.ts`              | Opening a contact puts focus on its name, the list's arrow keys and type-ahead, and Back on a phone returns focus to the row                                       |
-| `tests/e2e/dialogs.spec.ts`              | Shortcuts, new contact, contact card and command palette: focus in, Tab trapped, Escape closes, focus returns, each scanned while open                             |
-| `tests/e2e/search-announcements.spec.ts` | The status region says the search started and what it found; a failure is an alert and the status stays quiet; results restored on Back stay silent                |
-| `tests/e2e/mobile-forms.spec.ts`         | A Pixel 7: the tab bar's targets and `aria-current`, the new contact bottom sheet, 16-pixel fields, setup and sign-in with field-attached errors                   |
-| `tests/e2e/metrics.spec.ts`              | A 390 px phone: every visible control has a 44 by 44 pixel hit box and no visible text is under 11 pixels, on Network, a contact, Pulse, Ask Contrack and Settings |
-| `tests/e2e/account-transitions.spec.ts`  | A gated instance: setup, sign out, wrong password, sign in, an expired session, and the forced password change                                                     |
+| Spec                                     | What it walks                                                                                                                                                               |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/e2e/axe.spec.ts`                  | Every screen scanned with axe against WCAG 2.2 AA, the text-heavy ones in the dark palette too, and the landmark and heading rules on six screens                           |
+| `tests/e2e/keyboard.spec.ts`             | The skip link, the sidebar in Tab order with a visible focus ring in both palettes, `/` for search, arrow keys through the list, the mode radiogroup                        |
+| `tests/e2e/contact.spec.ts`              | Opening a contact puts focus on its name, the list's arrow keys and type-ahead, and Back on a phone returns focus to the row                                                |
+| `tests/e2e/dialogs.spec.ts`              | Shortcuts, new contact, contact card and command palette: focus in, Tab trapped, Escape closes, focus returns, each scanned while open                                      |
+| `tests/e2e/search-announcements.spec.ts` | The status region says the search started and what it found; a failure is an alert and the status stays quiet; results restored on Back stay silent                         |
+| `tests/e2e/mobile-forms.spec.ts`         | A Pixel 7: the tab bar's targets and `aria-current`, the new contact bottom sheet, 16-pixel fields, setup and sign-in with field-attached errors                            |
+| `tests/e2e/metrics.spec.ts`              | A 390 px phone: every visible control has a 44 by 44 pixel hit box and no visible text is under 11 pixels, on Network, a contact, Pulse, Ask Contrack, Settings and the map |
+| `tests/e2e/account-transitions.spec.ts`  | A gated instance: setup, sign out, wrong password, sign in, an expired session, and the forced password change                                                              |
 
 The fixtures under `tests/e2e/fixtures/` are the vocabulary the specs share:
 `test` for the worker's open, seeded instance, `gatedTest` for a fresh gated
 one per test, `expectPageAccessible`, `expectPageStructured`, `expectVisibleFocus`,
 `expectFocusStaysWithin`, and `answerPeopleSearch` for a scripted People
-search.
+search. `map.ts` answers every OpenFreeMap request with an empty style, so a
+map scan draws no tiles and needs no network.
 
 ### Running it locally
 
@@ -86,8 +87,10 @@ card.
 A screen reader user moves through a page by its landmarks and its headings,
 so both follow rules, and `expectPageStructured` scans them with axe's
 `landmark-one-main`, `page-has-heading-one`, `region` and `heading-order` on
-Network, a contact, Pulse, Map, Ask Contrack and Settings (the map answers
-for the first two only, until the MapLibre plan rebuilds it).
+Network, a contact, Pulse, Map, Ask Contrack and Settings. The map answers for
+all four rules now that MapLibre draws it. The scan waits for the "Contact
+map" region and a named pin first, so it reads the map that is on screen and
+not an empty container.
 
 - **One `main` per route, with a name.** The full-page views (Pulse, Ask
   Contrack, Settings) render inside `<main aria-label="…">`. On a wide screen
@@ -97,6 +100,13 @@ for the first two only, until the MapLibre plan rebuilds it).
   rather than its element, because swapping the element would remount the
   list and lose its search and scroll. The map is the main on `/map`, and a
   contact opened over it is a region named "Contact".
+- **The map is a region named "Contact map"**, and everything on it is a real
+  button. A pin is named `"<name>, <company>"` and a cluster is named
+  `"<n> contacts, zoom in"`, so a screen reader user hears who is there and what
+  a click does. Focus on a pin opens the same card that hover opens. A cluster
+  that zooming cannot split opens a list of its people, each one a button, so
+  a pin under another pin is still reachable. Escape closes a contact opened
+  over the map, unless a field being edited or a dialog answers the key first.
 - **One `h1` per route.** "Network" on the Network page, the contact's name on
   a contact page, "Map" (visually hidden), "Pulse", "Ask Contrack" and the
   Settings page title. Beside an open contact the list's title steps down to
@@ -161,7 +171,8 @@ bottom sheets.
 Every control has a hit box of at least 44 by 44 pixels, and no text is under
 11 pixels. A control that looks smaller carries the `hit-area` utility, which
 grows its tap box without changing how it looks. `metrics.spec.ts` measures
-both floors on five screens, and `tests/unit/styles.floor.test.ts` fails on
+both floors on six screens, the map among them, and its pins and clusters are
+48 pixels across. `tests/unit/styles.floor.test.ts` fails on
 `text-[9px]` and `text-[10px]` anywhere in `src/`. See `.agent/STYLE.md` for
 the rules.
 

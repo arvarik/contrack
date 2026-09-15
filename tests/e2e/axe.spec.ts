@@ -15,17 +15,20 @@ import {
   STRUCTURE_RULES,
 } from "./fixtures/a11y";
 import type { Seed } from "./fixtures/seed";
+import { stubBasemap } from "./fixtures/map";
+
+// The map screen loads its basemap from OpenFreeMap. Every test here answers
+// that host locally, so no scan waits on, or changes with, a public service.
+test.beforeEach(async ({ page }) => {
+  await stubBasemap(page);
+});
 
 interface Screen {
   name: string;
   path: (seed: Seed) => string;
   /** Resolves once the screen has its data, so the scan sees the real page. */
   ready: (page: Page, seed: Seed) => Promise<void>;
-  /**
-   * The best-practice structure rules this screen is held to. Omitted means
-   * all four. The map has no visible heading structure of its own until the
-   * MapLibre plan rebuilds it, so it answers for a main and an h1 only.
-   */
+  /** The best-practice structure rules this screen is held to. Omitted means all four. */
   structure?: readonly string[];
 }
 
@@ -57,9 +60,15 @@ const SCREENS: Screen[] = [
     name: "map",
     path: () => "/map",
     ready: async (page) => {
-      await expect(page.locator(".leaflet-container")).toBeVisible();
+      const map = page.getByRole("region", { name: "Contact map" });
+      await expect(map).toBeVisible();
+      // Pins exist only once the map has loaded and clustered the contacts,
+      // so one named pin is the proof the map is drawn. London has nobody
+      // near it at world zoom, so Ada is a pin and not part of a cluster.
+      await expect(
+        map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+      ).toBeVisible();
     },
-    structure: ["landmark-one-main", "page-has-heading-one"],
   },
   {
     name: "ask contrack",

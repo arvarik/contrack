@@ -17,6 +17,11 @@ export default defineConfig({
     // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
     hmr: process.env.DISABLE_HMR !== "true",
   },
+  // MapLibre's worker is an ES module (`maplibreWorker.ts` bundles it with
+  // `?worker&url`), and MapLibre starts it as a module worker.
+  worker: {
+    format: "es",
+  },
   build: {
     rollupOptions: {
       output: {
@@ -25,8 +30,12 @@ export default defineConfig({
             if (id.includes("@tiptap") || id.includes("prosemirror")) {
               return "vendor-tiptap";
             }
-            if (id.includes("leaflet") || id.includes("react-leaflet")) {
-              return "vendor-leaflet";
+            if (
+              id.includes("maplibre") ||
+              id.includes("react-map-gl") ||
+              id.includes("pmtiles")
+            ) {
+              return "vendor-maplibre";
             }
             if (id.includes("chrono-node")) {
               return "vendor-chrono";

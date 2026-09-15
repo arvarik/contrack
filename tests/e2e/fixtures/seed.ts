@@ -24,6 +24,13 @@ export interface SeedPerson {
   role: string;
   company: string;
   location: string;
+  /**
+   * Where the map pins them. Set here because the suite runs with background
+   * jobs off, so the geocoder never fills these in, and it must not reach a
+   * public geocoder from CI anyway.
+   */
+  lat: number;
+  lng: number;
   email: string;
   notes: SeedNote[];
 }
@@ -34,6 +41,8 @@ export const PEOPLE: readonly SeedPerson[] = [
     role: "Analytical Engineer",
     company: "Babbage & Co",
     location: "London, UK",
+    lat: 51.5074,
+    lng: -0.1278,
     email: "ada@example.com",
     notes: [
       {
@@ -50,6 +59,8 @@ export const PEOPLE: readonly SeedPerson[] = [
     role: "Rear Admiral",
     company: "US Navy",
     location: "Arlington, VA",
+    lat: 38.8816,
+    lng: -77.091,
     email: "grace@example.com",
     notes: [
       {
@@ -66,6 +77,8 @@ export const PEOPLE: readonly SeedPerson[] = [
     role: "Professor",
     company: "UT Austin",
     location: "Austin, TX",
+    lat: 30.2672,
+    lng: -97.7431,
     email: "edsger@example.com",
     notes: [
       {
@@ -82,6 +95,8 @@ export const PEOPLE: readonly SeedPerson[] = [
     role: "Mathematician",
     company: "NASA",
     location: "Hampton, VA",
+    lat: 37.0299,
+    lng: -76.3452,
     email: "katherine@example.com",
     notes: [
       {
@@ -97,6 +112,8 @@ export const PEOPLE: readonly SeedPerson[] = [
     role: "Fellow",
     company: "Linux Foundation",
     location: "Portland, OR",
+    lat: 45.5152,
+    lng: -122.6784,
     email: "linus@example.com",
     notes: [],
   },
@@ -105,6 +122,8 @@ export const PEOPLE: readonly SeedPerson[] = [
     role: "CEO",
     company: "Hamilton Technologies",
     location: "Cambridge, MA",
+    lat: 42.3736,
+    lng: -71.1097,
     email: "margaret@example.com",
     notes: [
       {
@@ -147,6 +166,8 @@ export async function seedInstance(instance: ContrackInstance): Promise<Seed> {
         role: person.role,
         company: person.company,
         location: person.location,
+        lat: person.lat,
+        lng: person.lng,
         emails: [{ email: person.email, label: "work", isPrimary: true }],
       },
     );

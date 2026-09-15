@@ -48,7 +48,8 @@ Integration suites cover: contact CRUD + validation envelopes, FTS
 create/rename/child-table triggers, bulk create/delete, interactions +
 @mention linking (`interaction_mentions`), action items + the
 `nextFollowUpAt` triggers, lists + membership, hard-merge (409 undo
-contract) and soft-merge → audit log → undo, dashboard/zero-state/MCP.
+contract) and soft-merge → audit log → undo, dashboard/zero-state/MCP, and
+the map route with the basemap config it reports.
 
 ### Tenancy tests (2.0)
 
@@ -115,6 +116,21 @@ beside it rather than instead of it.
 | `tests/integration/search.interactions.test.ts`  | The route on a real database: a note written through the API is found with the person, the date and the passage; edit, delete, cascade, archive, trash, merge and ghost are followed; the owner-fill path; the rebuild under the version gate; markup never matches; stems, accents, title weight, question words, every-word and any-word; all three stored date shapes by calendar range, by zone, by instant, by phrase, by explicit override; browse, order, kind, contact, paging, validation, and the MCP array shape. |
 | `tests/integration/tenancy.isolation.test.ts`    | `GET /api/search/interactions` returns nothing of another account's, and every hit is on the caller's own contact.                                                                                                                                                                                                                                                                                                                                                                                                           |
 
+### Map (2.0)
+
+| File                                      | Asserts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/map.geometry.test.ts`         | `minZoomFor` fills the container at every size, rounds up between two zooms, and falls back before the container is measured. `WORLD_BOUNDS` stops at the Mercator limit and a hair inside the meridian. `isValidLatLng` refuses anything the map cannot draw. `toFeatureCollection` orders a position longitude first, keeps the id, drops an unplaceable row and leaves an empty field out. `toVisibleFeatures` draws a feature on two tiles once, and `sameFeatures` sees a feature move, arrive or leave. |
+| `tests/unit/map.styles.test.ts`           | `styleFor` returns the palette the server named, and the OpenFreeMap default per palette when the status has not answered. `registerPmtilesProtocol` registers `pmtiles://` once however often it is called.                                                                                                                                                                                                                                                                                                  |
+| `tests/unit/mapConfig.test.ts`            | `parseStyleUrl` accepts an https URL and a root-relative path and refuses everything else. An empty value is unset, an unreadable value warns once rather than once per request and keeps the default. `styleOrigins` names a shared origin once, names two hosts separately, and adds nothing for a self-hosted style.                                                                                                                                                                                       |
+| `tests/unit/frontend.contactMap.test.tsx` | The map is a region with a name. One named button per visible contact, and none for a feature whose contact is gone. A cluster is a count button that says what a click does. A pin opens its contact. The card shows the pin under the pointer. The map says it is still loading while the contacts load.                                                                                                                                                                                                    |
+| `tests/integration/api.map.test.ts`       | `GET /api/contacts/map` returns a placed contact with the fields a pin needs, and excludes a trashed contact, a ghost and an archived one. `GET /api/auth/status` names the basemap style for each palette. `buildProductionCsp` allows MapLibre's worker from this origin and from a blob, allows the style origin in `connect-src` once, adds nothing there for a self-hosted style, and keeps the rest of the policy.                                                                                      |
+| `tests/e2e/fixtures/map.ts`               | Not a spec. It answers every OpenFreeMap request with an empty style, so a browser test draws a map with no tiles and no network.                                                                                                                                                                                                                                                                                                                                                                             |
+
+`tests/e2e/axe.spec.ts` waits for the "Contact map" region and a named pin
+before it scans `/map`, and `tests/e2e/metrics.spec.ts` measures the tap-target
+and text-size floors on `/map` on a 390 pixel phone.
+
 ### Test Setup Mock Pattern (`tests/setup.ts`)
 
 The global setup file mocks the database module to prevent any test from accidentally writing to `curator.db`:
@@ -156,10 +172,11 @@ vi.mock("../server/db.ts", () => ({
 
 #### Integration Tests (`tests/integration/`)
 
-| File                | Lines | Purpose                                                              |
-| ------------------- | ----- | -------------------------------------------------------------------- |
-| `dedupe.test.ts`    | 15    | Deduplication engine: blocking pass output, merge conflict detection |
-| `geocoding.test.ts` | 16    | Geocoding service: Mapbox/Nominatim fallback, coordinate validation  |
+| File                | Lines | Purpose                                                                                                   |
+| ------------------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| `dedupe.test.ts`    | 15    | Deduplication engine: blocking pass output, merge conflict detection                                      |
+| `geocoding.test.ts` | 16    | Geocoding service: Mapbox/Nominatim fallback, coordinate validation                                       |
+| `api.map.test.ts`   | 135   | Map route row shape and filters, the `map` field on auth status, the map directives in the production CSP |
 
 **Current count**: 180 tests across 12 files, full suite <600ms.
 
@@ -322,7 +339,7 @@ _Populated by the SDET during the Trap phase. Every interactive component must b
 | `ContactDetail` (contact-detail view) |       |         |         |       |         |
 | `SearchView`                          |       |         |         |       |         |
 | `DashboardView`                       |       |         |         |       |         |
-| `MapView`                             |       |         |         |       |         |
+| `ContactMap` (map view)               |       |         |         |       |         |
 | `SettingsView`                        |       |         |         |       |         |
 | `ArchivedContactsView`                |       |         |         |       |         |
 | `AISearchView` (ai-search view)       |       |         |         |       |         |

@@ -9,7 +9,7 @@ graph TD
     subgraph Frontend ["UI Layer — React 19 / Vite"]
         RQ["React Query v5"] --> TW["Tailwind v4 'No-Line' UI"]
         TW --> TT["Tiptap Editor + Cheerio Previews"]
-        TT --> Map["React Leaflet Geospatial"]
+        TT --> Map["MapLibre GL Geospatial"]
     end
 
     subgraph Backend ["Node.js Express Server"]
@@ -42,15 +42,16 @@ graph TD
 
 ## Frontend Architecture
 
-| Layer              | Technology              | Role                                                            |
-| ------------------ | ----------------------- | --------------------------------------------------------------- |
-| **Framework**      | React 19 + Vite 6       | Concurrent rendering, instant HMR                               |
-| **Data Fetching**  | React Query v5          | Declarative cache invalidation, query deduplication             |
-| **Styling**        | Tailwind CSS v4         | "No-Line" design system — no borders, surface shift containment |
-| **Rich Text**      | Tiptap + ProseMirror    | Block-based editor with @mention extension                      |
-| **Animation**      | Motion (Framer)         | Micro-interactions, layout transitions, staggered entry         |
-| **Routing**        | React Router v7         | Nested routes with animated transitions                         |
-| **Virtualization** | @tanstack/react-virtual | <20ms page transitions for 100K+ contacts                       |
+| Layer              | Technology                 | Role                                                            |
+| ------------------ | -------------------------- | --------------------------------------------------------------- |
+| **Framework**      | React 19 + Vite 6          | Concurrent rendering, instant HMR                               |
+| **Data Fetching**  | React Query v5             | Declarative cache invalidation, query deduplication             |
+| **Styling**        | Tailwind CSS v4            | "No-Line" design system — no borders, surface shift containment |
+| **Rich Text**      | Tiptap + ProseMirror       | Block-based editor with @mention extension                      |
+| **Animation**      | Motion (Framer)            | Micro-interactions, layout transitions, staggered entry         |
+| **Routing**        | React Router v7            | Nested routes with animated transitions                         |
+| **Virtualization** | @tanstack/react-virtual    | <20ms page transitions for 100K+ contacts                       |
+| **Mapping**        | MapLibre GL + react-map-gl | Vector basemap from OpenFreeMap, clustering done by the map     |
 
 ### Design System: "No-Line" Hierarchy
 

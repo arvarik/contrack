@@ -45,6 +45,7 @@ import React, {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchAuthStatus, signOut, type AccountUser } from "../../api/auth";
+import type { MapStyleUrls } from "../../../shared/geo";
 import { fetchContactsSlim } from "../../api/contacts";
 import {
   AUTH_EXPIRED_EVENT,
@@ -81,6 +82,11 @@ interface AuthContextValue {
    * it — sign in and join — are the two a person sees without a credential.
    */
   instanceName: string;
+  /**
+   * The basemap style URL for each palette, or null until `/status` answers.
+   * The server owns these because it also owns the CSP that must allow them.
+   */
+  mapStyles: MapStyleUrls | null;
   /** This instance has never been secured. */
   localOwnerPresent: boolean;
   /**
@@ -107,6 +113,7 @@ const AuthContext = createContext<AuthContextValue>({
   legacyTokenConfigured: false,
   localOwnerPresent: false,
   instanceName: "",
+  mapStyles: null,
   isResolved: false,
   refresh: async () => {},
   signOut: async () => {},
@@ -161,6 +168,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [legacyTokenConfigured, setLegacyTokenConfigured] = useState(false);
   const [instanceName, setInstanceName] = useState("");
+  const [mapStyles, setMapStyles] = useState<MapStyleUrls | null>(null);
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
   // Why the sign-in screen is showing. Null when the user asked for it
   // (sign-out) or simply arrived signed-out; "expired" when a credential we
@@ -210,6 +218,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setRegistrationOpen(status.registrationOpen ?? false);
     setLegacyTokenConfigured(status.legacyTokenConfigured ?? false);
     setInstanceName(status.instanceName ?? "");
+    setMapStyles(status.map ?? null);
     setLocalOwnerPresent(status.localOwnerPresent ?? false);
 
     // Order matters, and each rung rules out the ones below it.
@@ -365,6 +374,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     legacyTokenConfigured,
     localOwnerPresent,
     instanceName,
+    mapStyles,
     isResolved: state !== "checking" && state !== "unreachable",
     refresh: check,
     signOut: handleSignOut,
