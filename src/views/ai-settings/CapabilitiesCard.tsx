@@ -242,7 +242,7 @@ const CapabilityRow = ({
           </>
         )}
         {saved.mode === "auto" && (
-          <span className="ml-1.5 align-[1px] text-[9px] font-bold uppercase tracking-widest bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded whitespace-nowrap">
+          <span className="ml-1.5 align-[1px] text-[11px] font-bold uppercase tracking-widest bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded whitespace-nowrap">
             Automatic
           </span>
         )}
@@ -270,7 +270,7 @@ const CapabilityRow = ({
               {meta.label}
             </span>
             {isDirty && (
-              <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/15 text-warning px-1.5 py-0.5 rounded">
+              <span className="text-[11px] font-bold uppercase tracking-widest bg-amber-500/15 text-warning px-1.5 py-0.5 rounded">
                 Unsaved
               </span>
             )}
@@ -282,7 +282,7 @@ const CapabilityRow = ({
               type="button"
               onClick={() => setShowDetail((v) => !v)}
               aria-expanded={showDetail}
-              className="inline-flex items-center gap-1 text-primary hover:underline font-semibold align-baseline"
+              className="hit-area inline-flex items-center gap-1 text-primary hover:underline font-semibold align-baseline"
             >
               <Info className="w-3 h-3" />
               {showDetail ? "Less" : "What uses this?"}
@@ -304,7 +304,7 @@ const CapabilityRow = ({
             id={`capability-${meta.key}`}
             value={value}
             onChange={(e) => setDraft(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            className="w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm outline-none focus:ring-2 focus:ring-primary/40"
           >
             {/* The concrete model lives on the status line below, not in
                 here — repeating it in both made the row read twice. */}
@@ -337,7 +337,7 @@ const CapabilityRow = ({
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="flex-1 sm:flex-none px-3 py-2.5 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors"
+              className="btn-secondary flex-1 sm:flex-none"
             >
               Cancel
             </button>
@@ -345,7 +345,7 @@ const CapabilityRow = ({
               type="button"
               onClick={handleSave}
               disabled={setCapability.isPending}
-              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-on-primary hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+              className="btn-primary flex-1 sm:flex-none"
             >
               {setCapability.isPending && (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

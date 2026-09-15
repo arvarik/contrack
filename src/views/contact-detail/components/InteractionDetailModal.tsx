@@ -101,7 +101,7 @@ export const InteractionDetailModal = ({
                         aria-label="Interaction title"
                         value={editingTitle}
                         onChange={(e) => setEditingTitle(e.target.value)}
-                        className="text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded outline-none focus:ring-2 focus:ring-primary/20"
+                        className="min-h-[44px] sm:min-h-0 text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded outline-none focus:ring-2 focus:ring-primary/20"
                         placeholder="Interaction Title"
                       />
                     ) : (
@@ -128,21 +128,22 @@ export const InteractionDetailModal = ({
                         });
                         setIsEditing(false);
                       }}
-                      className="p-2 rounded-xl bg-primary text-white hover:bg-primary/90 transition-colors flex items-center gap-1.5 text-xs font-bold shadow-sm"
+                      className="btn-primary px-3"
                     >
                       <Save className="w-4 h-4" /> Save
                     </button>
                   ) : (
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+                      className="hit-area p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
                     >
                       <Edit2 className="w-4 h-4" /> Edit
                     </button>
                   )}
                   <button
                     onClick={onClose}
-                    className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface ml-2"
+                    aria-label="Close"
+                    className="hit-area p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface ml-2"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -218,7 +219,7 @@ export const InteractionDetailModal = ({
                             <div className="flex items-start gap-3">
                               <button
                                 className={cn(
-                                  "mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                                  "hit-area mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
                                   action.completedAt
                                     ? "bg-primary border-primary text-white"
                                     : "border-on-surface-variant/40 bg-surface-container-low group-hover:border-primary/50",
@@ -242,7 +243,7 @@ export const InteractionDetailModal = ({
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span
                                     className={cn(
-                                      "text-[10px] uppercase font-bold tracking-wider",
+                                      "text-[11px] uppercase font-bold tracking-wider",
                                       action.completedAt
                                         ? "text-on-surface-variant"
                                         : "text-error opacity-80",

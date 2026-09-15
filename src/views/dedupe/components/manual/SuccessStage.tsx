@@ -36,7 +36,7 @@ export const SuccessStage = ({
         merged into "{primary?.name}". All timeline entries, emails, and data
         have been consolidated.
       </p>
-      <button onClick={onReset} className="btn-primary px-8 py-3">
+      <button onClick={onReset} className="btn-primary px-8">
         Merge More Contacts
       </button>
     </motion.div>

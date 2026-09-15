@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Phone,
   Search,
+  SearchX,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -44,6 +45,7 @@ import { CARD, filterPill } from "../../lib/styles";
 import { noteSearchStatus } from "../../lib/searchAnnouncements";
 import { cn } from "../../lib/utils";
 import { LiveStatus } from "../../components/ui/LiveStatus";
+import { EmptyState } from "../../components/ui/EmptyState";
 import type { HighlightRange, InteractionSearchHit } from "../../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -417,7 +419,7 @@ export const InteractionSearchPanel = () => {
           }}
           placeholder="Search your notes…"
           aria-label="Search your notes"
-          className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+          className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
         />
         <button
           type="button"
@@ -445,7 +447,10 @@ export const InteractionSearchPanel = () => {
             key={p.value}
             type="button"
             onClick={() => choosePeriod(p.value)}
-            className={cn(filterPill(period === p.value), "min-h-[36px]")}
+            className={cn(
+              filterPill(period === p.value),
+              "min-h-[44px] sm:min-h-[36px]",
+            )}
             aria-pressed={period === p.value}
           >
             {p.label}
@@ -454,7 +459,10 @@ export const InteractionSearchPanel = () => {
         <button
           type="button"
           onClick={() => choosePeriod("custom")}
-          className={cn(filterPill(period === "custom"), "min-h-[36px]")}
+          className={cn(
+            filterPill(period === "custom"),
+            "min-h-[44px] sm:min-h-[36px]",
+          )}
           aria-pressed={period === "custom"}
         >
           Custom
@@ -465,7 +473,7 @@ export const InteractionSearchPanel = () => {
             value={type}
             onChange={(e) => update({ type: e.target.value })}
             aria-label="Kind of note"
-            className="bg-surface-container-low rounded-xl px-3 py-2 text-xs font-bold text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[36px]"
+            className="bg-surface-container-low rounded-xl px-3 py-2 text-xs font-bold text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[44px] sm:min-h-[36px]"
           >
             {TYPES.map((t) => (
               <option key={t.value} value={t.value}>
@@ -485,7 +493,7 @@ export const InteractionSearchPanel = () => {
               value={from}
               max={to || undefined}
               onChange={(e) => update({ from: e.target.value })}
-              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[36px]"
+              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[44px] sm:min-h-[36px]"
             />
           </label>
           <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
@@ -495,7 +503,7 @@ export const InteractionSearchPanel = () => {
               value={to}
               min={from || undefined}
               onChange={(e) => update({ to: e.target.value })}
-              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[36px]"
+              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[44px] sm:min-h-[36px]"
             />
           </label>
         </div>
@@ -563,7 +571,7 @@ export const InteractionSearchPanel = () => {
                 onClick={() => setMode(mode === "all" ? "auto" : "all")}
                 className={cn(
                   filterPill(result.query.mode === "all"),
-                  "min-h-[36px]",
+                  "min-h-[44px] sm:min-h-[36px]",
                 )}
                 aria-pressed={result.query.mode === "all"}
               >
@@ -574,7 +582,7 @@ export const InteractionSearchPanel = () => {
                 onClick={() => setMode(mode === "any" ? "auto" : "any")}
                 className={cn(
                   filterPill(result.query.mode === "any"),
-                  "min-h-[36px]",
+                  "min-h-[44px] sm:min-h-[36px]",
                 )}
                 aria-pressed={result.query.mode === "any"}
               >
@@ -594,7 +602,10 @@ export const InteractionSearchPanel = () => {
               <button
                 type="button"
                 onClick={() => setSort("relevance")}
-                className={cn(filterPill(sort === "relevance"), "min-h-[36px]")}
+                className={cn(
+                  filterPill(sort === "relevance"),
+                  "min-h-[44px] sm:min-h-[36px]",
+                )}
                 aria-pressed={sort === "relevance"}
               >
                 Best match
@@ -602,7 +613,10 @@ export const InteractionSearchPanel = () => {
               <button
                 type="button"
                 onClick={() => setSort("date")}
-                className={cn(filterPill(sort === "date"), "min-h-[36px]")}
+                className={cn(
+                  filterPill(sort === "date"),
+                  "min-h-[44px] sm:min-h-[36px]",
+                )}
                 aria-pressed={sort === "date"}
               >
                 Newest
@@ -658,17 +672,16 @@ export const InteractionSearchPanel = () => {
 
       {/* Nothing */}
       {hasSearch && search.isSuccess && total === 0 && (
-        <div className="tile-enter flex flex-col items-center justify-center py-12 text-center space-y-3">
-          <div className="p-4 bg-surface-container-low rounded-2xl">
-            <Search className="w-10 h-10 text-on-surface-variant/30" />
-          </div>
-          <p className="font-bold text-on-surface">No notes match</p>
-          <p className="text-sm text-on-surface-variant max-w-md">
-            {result?.query.range
+        <EmptyState
+          icon={SearchX}
+          title="No notes match"
+          body={
+            result?.query.range
               ? "Try a wider period, or fewer words."
-              : "Try fewer words, or a stem such as hire for hiring."}
-          </p>
-        </div>
+              : "Try fewer words, or a stem such as hire for hiring."
+          }
+          className="tile-enter"
+        />
       )}
 
       {/*

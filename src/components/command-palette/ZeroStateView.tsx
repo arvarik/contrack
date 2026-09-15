@@ -164,7 +164,7 @@ export const ZeroStateView = ({
                 key={`recent_${c.id}`}
                 value={`recent_${c.id}_${c.name}`}
                 onSelect={() => onSelectContact(c.id)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface shrink-0"
+                className="flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-primary transition-colors text-on-surface shrink-0"
               >
                 <img
                   src={c.avatarUrl || fallbackAvatarUrl(c.name)}
@@ -191,7 +191,7 @@ export const ZeroStateView = ({
               key={`history_${i}_${entry.timestamp}`}
               value={`history_${entry.query}`}
               onSelect={() => onSelectHistory(entry.query)}
-              className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-default select-none aria-selected:bg-primary/10 transition-colors text-on-surface"
+              className="flex items-center gap-3 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 transition-colors text-on-surface"
             >
               <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">
                 {modeIcon(entry.mode)}
@@ -232,7 +232,7 @@ export const ZeroStateView = ({
             key={`nav_${item.path}`}
             value={`nav_${item.label}`}
             onSelect={() => onNavigate(item.path)}
-            className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-default select-none aria-selected:bg-primary/10 transition-colors text-on-surface-variant aria-selected:text-primary"
+            className="flex items-center gap-3 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 transition-colors text-on-surface-variant aria-selected:text-primary"
           >
             <item.icon className="w-4 h-4 shrink-0" />
             <span className="text-sm flex-1">{item.label}</span>

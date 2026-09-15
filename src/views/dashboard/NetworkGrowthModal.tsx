@@ -52,7 +52,8 @@ export const NetworkGrowthModal = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+            aria-label="Close"
+            className="hit-area p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
           >
             <X className="w-5 h-5" />
           </button>
@@ -92,7 +93,7 @@ export const NetworkGrowthModal = ({
                     <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary ring-4 ring-surface-container-lowest" />
 
                     <div className="mb-2">
-                      <span className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant">
+                      <span className="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant">
                         {relativeTime} • {format(addedDate, "MMM d, yyyy")}
                       </span>
                     </div>

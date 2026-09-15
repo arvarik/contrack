@@ -233,11 +233,13 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                 .map((s: string) => s.trim())
                 .filter(Boolean)
                 .map((pref: string, idx: number) => (
+                  // No overflow clip: it would clip the remove button's tap
+                  // box. `max-w-full` and `min-w-0` keep a long word inside.
                   <div
                     key={idx}
-                    className="group/pill w-fit flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full bg-surface-container text-on-surface-variant transition-all overflow-hidden"
+                    className="group/pill w-fit max-w-full flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full bg-surface-container text-on-surface-variant transition-all"
                   >
-                    <span className="whitespace-normal break-words">
+                    <span className="min-w-0 whitespace-normal break-words">
                       {pref}
                     </span>
                     <button
@@ -250,7 +252,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                         newPrefs.splice(idx, 1);
                         onUpdate("preferences", newPrefs.join(", "));
                       }}
-                      className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
+                      className="hit-area w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
@@ -282,7 +284,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
               }
             }}
             placeholder="Add Preference"
-            className="mt-2 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
+            className="mt-2 min-h-[44px] sm:min-h-0 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
           />
         </div>
       </div>
@@ -303,22 +305,24 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
                   <div
                     key={interest.id}
                     className={cn(
-                      "group/pill w-fit flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full transition-all overflow-hidden",
+                      "group/pill w-fit max-w-full flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full transition-all",
+                      // The AI colour marks what enrichment found, and
+                      // nothing else.
                       interest.isAiGenerated
-                        ? "bg-primary/10 text-primary border border-primary/20"
+                        ? "bg-ai/10 text-on-ai-wash border border-ai/20"
                         : "bg-surface-container text-on-surface-variant border border-transparent",
                     )}
                   >
                     {!!interest.isAiGenerated && (
                       <Sparkles className="w-3 h-3 opacity-70 shrink-0" />
                     )}
-                    <span className="whitespace-normal break-words">
+                    <span className="min-w-0 whitespace-normal break-words">
                       {interest.interest}
                     </span>
                     <button
                       aria-label={`Remove interest ${interest.interest}`}
                       onClick={() => handleRemoveInterest(interest.id)}
-                      className="w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
+                      className="hit-area w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
@@ -338,7 +342,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
             onChange={(e) => setNewInterest(e.target.value)}
             onKeyDown={handleAddInterest}
             placeholder="Add Interest"
-            className="mt-2 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
+            className="mt-2 min-h-[44px] sm:min-h-0 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
           />
         </div>
       </div>

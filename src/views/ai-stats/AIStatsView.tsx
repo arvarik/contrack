@@ -22,6 +22,7 @@ import { CacheTiersAccordion } from "./components/CacheTiersAccordion";
 import { InstanceUsageTable } from "./components/InstanceUsageTable";
 import { Segmented } from "../../components/ui/Segmented";
 import { useAuth } from "../../components/auth/AuthGate";
+import { EmptyState } from "../../components/ui/EmptyState";
 
 // =============================================================================
 // Number formatting
@@ -215,7 +216,7 @@ export const AIStatsView = () => {
             <Loader2 className="w-3 h-3 animate-spin text-primary" />
           )}
           {!feedLoading && (
-            <span className="text-[10px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
+            <span className="text-[11px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
               {feedItems.length < totalCount
                 ? `${feedItems.length} of ${totalCount}`
                 : totalCount}
@@ -259,11 +260,7 @@ export const AIStatsView = () => {
                   <button
                     onClick={() => void fetchNextPage()}
                     disabled={isFetchingNextPage}
-                    className={cn(
-                      "px-4 py-2 rounded-full text-xs font-bold transition-all",
-                      "bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
-                      "disabled:opacity-50",
-                    )}
+                    className="btn-secondary"
                   >
                     {isFetchingNextPage ? "Loading..." : "Load older activity"}
                   </button>
@@ -271,19 +268,11 @@ export const AIStatsView = () => {
               )}
             </>
           ) : (
-            <div className="py-10 text-center">
-              <Activity className="w-8 h-8 mx-auto mb-2 text-on-surface-variant/20" />
-              <p className="text-sm text-on-surface-variant">
-                No AI activity recorded yet.
-              </p>
-              {/*
-                Set to `text-on-surface-variant` to satisfy contrast accessibility.
-              */}
-              <p className="text-xs text-on-surface-variant mt-1">
-                Run a Catch-Me-Up briefing or contact enrichment to see
-                invocations here.
-              </p>
-            </div>
+            <EmptyState
+              icon={Activity}
+              title="No AI activity yet"
+              body="Briefings, searches and scans show up here."
+            />
           )}
         </div>
       </div>

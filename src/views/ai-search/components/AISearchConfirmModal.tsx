@@ -72,14 +72,14 @@ export function AISearchConfirmModal({
           <button
             onClick={onClose}
             disabled={isStarting}
-            className="flex-1 py-2.5 rounded-xl bg-surface-container font-bold text-sm text-on-surface hover:bg-surface-container-high transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+            className="btn-secondary flex-1"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isStarting}
-            className="flex-1 py-2.5 rounded-xl btn-primary font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            className="btn-primary flex-1"
           >
             <Sparkles className="w-4 h-4" />
             {isStarting
@@ -89,7 +89,7 @@ export function AISearchConfirmModal({
         </div>
 
         {/* Safety note */}
-        <p className="text-[10px] text-on-surface-variant text-center leading-relaxed">
+        <p className="text-[11px] text-on-surface-variant text-center leading-relaxed">
           New data fills empty fields. Your existing data is never overwritten.
         </p>
       </div>

@@ -43,7 +43,7 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => (
     >
       {groupedShortcuts().map((group) => (
         <section key={group.group} aria-label={group.group}>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2.5">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2.5">
             {group.group}
           </p>
           <dl className="space-y-1">
@@ -65,13 +65,13 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => (
                       {i < s.keys.length - 1 &&
                         (isCombination(s.keys) ? (
                           <span
-                            className="text-[10px] text-on-surface-variant mx-0.5"
+                            className="text-[11px] text-on-surface-variant mx-0.5"
                             aria-hidden="true"
                           >
                             +
                           </span>
                         ) : (
-                          <span className="text-[10px] text-on-surface-variant mx-0.5">
+                          <span className="text-[11px] text-on-surface-variant mx-0.5">
                             or
                           </span>
                         ))}

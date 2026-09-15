@@ -98,11 +98,11 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
 
           {/* Model badge or CACHED pill */}
           {item.cached ? (
-            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/10 text-success ring-1 ring-emerald-500/20">
+            <span className="text-[11px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/10 text-success ring-1 ring-emerald-500/20">
               Cached
             </span>
           ) : item.model ? (
-            <span className="text-[10px] font-mono text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded">
+            <span className="text-[11px] font-mono text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded">
               {item.model
                 .replace("gemini-", "")
                 .replace("gpt-", "")
@@ -112,7 +112,7 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
           ) : null}
 
           {/* Token + latency stats */}
-          <span className="text-[10px] text-on-surface-variant ml-auto shrink-0 tabular-nums">
+          <span className="text-[11px] text-on-surface-variant ml-auto shrink-0 tabular-nums">
             {!item.cached && item.tokenCount
               ? `${formatTokens(item.tokenCount)} tok · `
               : ""}
@@ -129,7 +129,7 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
       </div>
 
       {/* Timestamp */}
-      <span className="text-[10px] text-on-surface-variant shrink-0 mt-0.5 tabular-nums">
+      <span className="text-[11px] text-on-surface-variant shrink-0 mt-0.5 tabular-nums">
         {formatRelativeTime(item.createdAt)}
       </span>
     </motion.div>

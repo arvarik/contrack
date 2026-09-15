@@ -101,6 +101,14 @@ export interface Palette {
    * that sits on a wash, which is the only place the number was wrong.
    */
   "on-primary-wash": string;
+  /**
+   * AI-derived data only: the chips an enrichment run added and the note
+   * glyph. Not replaced by an accent, so a contact's colour never makes its
+   * own data read as a model's.
+   */
+  ai: string;
+  /** Text and icons on a 10, 15 or 20 percent wash of `ai`. */
+  "on-ai-wash": string;
   secondary: string;
   "secondary-container": string;
   "on-secondary-container": string;
@@ -130,6 +138,10 @@ export const LIGHT: Palette = {
   // Four lightness steps below the primary, which is what `deriveWashText`
   // returns for it. 4.66:1 at worst, against 4.21:1 for the primary itself.
   "on-primary-wash": "#005e81",
+  // 4.92:1 at worst on a surface, 4.75:1 on its own 10 percent wash. The wash
+  // text is what `deriveWashText` returns for it.
+  ai: "#6f3fd0",
+  "on-ai-wash": "#6734c6",
   secondary: "#4d626c",
   "secondary-container": "#cfe6f2",
   "on-secondary-container": "#40555f",
@@ -173,6 +185,9 @@ export const DARK: Palette = {
   // wash, so `deriveWashText` returns it at step zero and the dark pills look
   // exactly as they shipped.
   "on-primary-wash": "#6ec6ee",
+  // Reads at 6.16:1 on its own heaviest wash, so the wash text is unchanged.
+  ai: "#bfa3f9",
+  "on-ai-wash": "#bfa3f9",
   secondary: "#b0c2ca",
   "secondary-container": "#2d4049",
   "on-secondary-container": "#cfe6f2",

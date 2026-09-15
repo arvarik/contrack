@@ -29,8 +29,8 @@ import { toast } from "sonner";
 import type { Interaction } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
 import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
-import { EMPTY_STATE } from "../../../lib/styles";
 import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
+import { EmptyState } from "../../../components/ui/EmptyState";
 
 /**
  * The composer carries TipTap + ProseMirror, which together are the bulk of
@@ -110,8 +110,9 @@ function getInteractionStyle(type: string) {
     textClass = "text-success";
   }
   if (type === "note") {
-    bgClass = "bg-primary/10";
-    textClass = "text-primary";
+    // The AI colour, as a glyph on its own 10 percent wash.
+    bgClass = "bg-ai/10";
+    textClass = "text-ai";
   }
   if (type === "message" || type === "sms") {
     Icon = MessageSquare;
@@ -274,9 +275,11 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
 
       {/* Empty State */}
       {!timelineLoading && timeline.length === 0 && (
-        <div className={EMPTY_STATE}>
-          <p className="font-medium text-sm">No interactions logged yet.</p>
-        </div>
+        <EmptyState
+          icon={MessageSquare}
+          title="No interactions yet"
+          body="Log a note, a call, a meeting or an email above."
+        />
       )}
 
       {/* Timeline */}
@@ -310,14 +313,14 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                   <h3 className="font-extrabold text-on-surface">
                     <button
                       type="button"
-                      className="text-left hover:underline"
+                      className="hit-area text-left hover:underline"
                       onClick={() => setSelectedInteraction(item)}
                     >
                       {item.title}
                     </button>
                   </h3>
                   <div className="flex items-center gap-2 shrink-0">
-                    <time className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+                    <time className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
                       {new Date(item.date).toLocaleDateString()}
                     </time>
                     <button
@@ -325,7 +328,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                         e.stopPropagation();
                         handleDeleteInteraction(item.id);
                       }}
-                      className="opacity-70 hover:opacity-100 text-error min-w-9 min-h-9 flex items-center justify-center rounded transition-opacity"
+                      className="hit-area opacity-70 hover:opacity-100 text-error min-w-9 min-h-9 flex items-center justify-center rounded transition-opacity"
                       disabled={deleteInteraction.isPending}
                       title="Delete interaction"
                       aria-label="Delete interaction"
@@ -340,7 +343,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                   <div
                     tabIndex={0}
                     role="button"
-                    className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
+                    className="hit-area mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`/contact/${item.isViaId}`);
@@ -365,7 +368,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                   if (!mentions) return null;
                   return (
                     <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
-                      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
+                      <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
                         <Sparkles className="w-3 h-3 text-primary opacity-60" />{" "}
                         Mentioned:
                       </span>
@@ -390,9 +393,9 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                                   });
                                 }}
                                 title={`Promote ${mention.name} to Contact`}
-                                className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
+                                className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
                               >
-                                <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
+                                <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
                                   {mention.name.charAt(0)}
                                 </div>
                                 <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
@@ -406,9 +409,9 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                               key={idx}
                               to={`/contact/${mention.contactId}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                              className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
                             >
-                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-on-primary-wash">
+                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-on-primary-wash">
                                 {mention.name.charAt(0)}
                               </div>
                               <span className="text-xs font-semibold text-on-surface line-clamp-1">
@@ -455,7 +458,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
                 {/* Follow-up */}
                 {item.actionItems && item.actionItems.length > 0 && (
                   <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center border-t border-surface-container/50">
-                    <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
                       Follow Up:
                     </span>
                     {item.actionItems.map(

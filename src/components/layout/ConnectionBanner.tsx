@@ -50,7 +50,7 @@ export const ConnectionBanner = () => {
               type="button"
               onClick={retry}
               disabled={isRetrying}
-              className="shrink-0 flex items-center gap-1.5 rounded-xl bg-surface-container-high px-3 py-1.5 text-xs font-bold text-on-surface transition-colors hover:bg-surface-container-highest disabled:text-on-surface-variant disabled:cursor-not-allowed"
+              className="hit-area shrink-0 flex items-center gap-1.5 rounded-xl bg-surface-container-high px-3 py-1.5 text-xs font-bold text-on-surface transition-colors hover:bg-surface-container-highest disabled:text-on-surface-variant disabled:cursor-not-allowed"
             >
               {isRetrying ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

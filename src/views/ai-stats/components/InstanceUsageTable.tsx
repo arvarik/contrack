@@ -40,7 +40,7 @@ export const InstanceUsageTable = ({
       <div
         className={cn(
           SECTION_HEADING,
-          "grid gap-2 px-3 py-1.5 text-[10px]",
+          "grid gap-2 px-3 py-1.5 text-[11px]",
           COLUMNS,
         )}
       >

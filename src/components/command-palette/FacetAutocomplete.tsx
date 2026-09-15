@@ -183,7 +183,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
         transition={{ duration: 0.1 }}
         className="mx-4 mb-1 rounded-xl bg-surface-container-lowest shadow-lg ring-1 ring-black/5 overflow-hidden"
       >
-        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant bg-surface-container-low/50">
+        <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant bg-surface-container-low/50">
           {field} values
         </div>
         <div className="py-1 max-h-[200px] overflow-y-auto">
@@ -193,7 +193,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
               onClick={() => onSelect(s.filter)}
               onMouseDown={(e) => e.preventDefault()}
               className={`
-                w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2
+                w-full min-h-[44px] sm:min-h-0 text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2
                 ${
                   i === selectedIndex
                     ? "bg-primary/10 text-primary"
@@ -201,7 +201,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
                 }
               `}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant w-16 shrink-0">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant w-16 shrink-0">
                 {field}:
               </span>
               <span className="truncate font-medium">{s.label}</span>

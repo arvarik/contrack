@@ -117,7 +117,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
             )}
             <button
               onClick={isChunk ? this.handleReload : this.handleRetry}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary font-bold rounded-xl text-sm hover:opacity-90 transition-opacity shadow-sm"
+              className="btn-primary"
             >
               <RotateCcw className="w-4 h-4" />
               {isChunk ? "Reload" : "Retry"}

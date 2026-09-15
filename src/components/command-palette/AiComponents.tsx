@@ -73,11 +73,11 @@ export const AIResultCard = ({
           <span className="font-bold text-sm truncate">{match.name}</span>
           <ScoreDot score={match.relationshipScore ?? null} />
           {match.approximate ? (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
               Approximate
             </span>
           ) : isFallback ? (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
               Fallback
             </span>
           ) : null}

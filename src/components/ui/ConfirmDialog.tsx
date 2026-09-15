@@ -59,12 +59,7 @@ export const ConfirmDialog = ({
           type="button"
           onClick={onClose}
           disabled={busy}
-          className={cn(
-            "px-5 py-3 sm:py-2.5 rounded-xl font-bold text-sm",
-            "bg-surface-container-high text-on-surface",
-            "hover:bg-surface-container-highest transition-colors",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          )}
+          className="btn-secondary"
         >
           Cancel
         </button>
@@ -73,13 +68,12 @@ export const ConfirmDialog = ({
           onClick={onConfirm}
           disabled={busy || disabled}
           className={cn(
-            "px-5 py-3 sm:py-2.5 rounded-xl font-bold text-sm",
-            "flex items-center justify-center gap-2 transition-opacity hover:opacity-90",
-            tone === "danger"
-              ? "bg-error text-on-error"
-              : "bg-primary text-on-primary",
-            "disabled:bg-surface-container-high disabled:text-on-surface-variant",
-            "disabled:cursor-not-allowed disabled:hover:opacity-100",
+            "btn-primary",
+            // The danger fill is a utility, so it outranks the class's
+            // disabled look. Restate that look, and drop the primary-tinted
+            // hover shadow for a red button.
+            tone === "danger" &&
+              "bg-error text-on-error hover:shadow-none hover:opacity-90 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:hover:opacity-100",
           )}
         >
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}

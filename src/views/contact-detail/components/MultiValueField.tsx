@@ -33,6 +33,17 @@ export const PHONE_LABELS = ["mobile", "work", "home", "other"] as const;
 export const ADDR_LABELS = ["home", "work", "other"] as const;
 
 /**
+ * A 44 px tap box for the label select on a phone, around a 32 px chip.
+ *
+ * `hit-area` cannot do this: browsers draw no `::after` on a `<select>`, and
+ * a tap beside the select does not open it. So the select itself is 44 px
+ * tall, and 6 px of transparent border above and below, with the fill
+ * clipped to the padding box, leave 32 px of visible chip.
+ */
+const LABEL_SELECT_TAP_BOX =
+  "min-h-[44px] border-y-[6px] border-transparent bg-clip-padding rounded-lg sm:min-h-0 sm:border-y-0 sm:rounded";
+
+/**
  * Shows an undo toast for 7 seconds with a shrinking timer bar.
  * If user clicks Undo, the callback is called to restore the data.
  */
@@ -104,22 +115,29 @@ const SortableRow = ({
       )}
     >
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <div className="flex items-center gap-1.5">
+        {/* gap-3 on a phone keeps the remove button's tap box off the select. */}
+        <div className="flex items-center gap-3 sm:gap-1.5">
           <CustomSelect
             value={item.label}
             onChange={(newLabel) => onLabelChange(idx, newLabel)}
             options={labelOptions}
-            className="text-[10px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer flex items-center gap-1"
+            className={cn(
+              "text-[11px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none focus:ring-1 focus:ring-primary/30 shrink-0 cursor-pointer flex items-center gap-1",
+              LABEL_SELECT_TAP_BOX,
+            )}
           />
           {/* Primary indicator for first address */}
           {isAddress && idx === 0 && (
-            <span className="flex items-center gap-0.5 text-[9px] uppercase tracking-widest text-primary font-bold">
+            <span className="flex items-center gap-0.5 text-[11px] uppercase tracking-widest text-primary font-bold">
               <MapPinIcon className="w-2.5 h-2.5" /> map pin
             </span>
           )}
           <button
             onClick={() => onRemove(idx)}
-            className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 text-error p-0.5 rounded transition-opacity shrink-0"
+            // A phone has no hover, so below `sm` the button shows at rest.
+            // An invisible 44 px tap box beside the label would remove a
+            // value by surprise.
+            className="hit-area opacity-60 sm:opacity-0 sm:group-hover/item:opacity-60 hover:!opacity-100 focus-visible:opacity-100 text-error p-0.5 rounded transition-opacity shrink-0"
             // Four of these can sit in one card, and "Remove" alone does not
             // say which value goes. A title named it for a pointer only.
             aria-label={`Remove ${isAddress ? shortAddress(item.value) : item.value}`}
@@ -140,7 +158,7 @@ const SortableRow = ({
       {totalCount > 1 && (
         <button
           className={cn(
-            "mt-1 p-0.5 rounded text-on-surface-variant/30 hover:text-on-surface-variant cursor-grab active:cursor-grabbing shrink-0 touch-none",
+            "hit-area mt-1 p-0.5 rounded text-on-surface-variant/30 hover:text-on-surface-variant cursor-grab active:cursor-grabbing shrink-0 touch-none",
             "opacity-0 group-hover/item:opacity-100 transition-opacity",
             "lg:opacity-40 lg:group-hover/item:opacity-100",
           )}
@@ -320,7 +338,10 @@ export const MultiValueField = ({
             value={inputLabel}
             onChange={setInputLabel}
             options={labelOptions}
-            className="text-[10px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none shrink-0 w-fit cursor-pointer flex items-center gap-1 relative z-10"
+            className={cn(
+              "text-[11px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 rounded font-bold text-on-surface-variant focus:outline-none shrink-0 w-fit cursor-pointer flex items-center gap-1 relative z-10",
+              LABEL_SELECT_TAP_BOX,
+            )}
           />
           <input
             aria-label={inputPlaceholder}
@@ -341,13 +362,13 @@ export const MultiValueField = ({
             }}
             onBlur={handleAdd}
             placeholder={inputPlaceholder}
-            className="w-full text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
+            className="w-full min-h-[44px] sm:min-h-0 text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
           />
         </div>
       ) : (
         <button
           onClick={() => setIsAdding(true)}
-          className="flex items-center gap-1 text-sm text-on-surface-variant italic text-left hover:text-primary transition-colors py-0.5 group/add"
+          className="flex items-center gap-1 min-h-[44px] sm:min-h-0 text-sm text-on-surface-variant italic text-left hover:text-primary transition-colors py-0.5 group/add"
         >
           {items.length === 0 ? (
             <span>{emptyPlaceholder}</span>

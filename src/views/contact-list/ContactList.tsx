@@ -30,7 +30,7 @@ import {
   CheckSquare,
   Square,
   FileText,
-  Sparkles,
+  SearchX,
   ArrowDownAZ,
   ArrowUpAZ,
   CalendarArrowDown,
@@ -65,6 +65,7 @@ import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullIndicator } from "../../components/ui/PullIndicator";
+import { EmptyState } from "../../components/ui/EmptyState";
 import {
   useRecentContacts,
   useRecentContactsLimit,
@@ -101,14 +102,16 @@ const FilterButton = ({
 }) => (
   <button
     onClick={onClick}
-    className={filterPill(active)}
+    // 28 px on screen, a 44 px tap box from hit-area. The row it sits in
+    // scrolls sideways, so the row carries the padding the box needs.
+    className={cn(filterPill(active), "hit-area")}
     aria-label={`Filter: ${label} (${count})`}
     aria-pressed={active}
   >
     {icon}
     {label}
     <span
-      className={`ml-0.5 text-[10px] ${active ? "text-primary" : "opacity-50"}`}
+      className={`ml-0.5 text-[11px] ${active ? "text-primary" : "opacity-50"}`}
     >
       {count}
     </span>
@@ -591,7 +594,7 @@ export const ContactList = () => {
       <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
         <div className="flex justify-between items-center">
           <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
             {/* Multi-select toggle */}
             <button
               onClick={isSelectMode ? exitSelectMode : enterSelectMode}
@@ -625,7 +628,7 @@ export const ContactList = () => {
                 <div className="relative" ref={addMenuRef}>
                   <button
                     onClick={() => setShowAddMenu(!showAddMenu)}
-                    className="p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
+                    className="hit-area p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
                     title="Add New..."
                     aria-label="Add new contact or list"
                     aria-expanded={showAddMenu}
@@ -645,7 +648,7 @@ export const ContactList = () => {
                             setIsModalOpen(true);
                             setShowAddMenu(false);
                           }}
-                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                          className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <UserPlus className="w-4 h-4 text-primary shrink-0" />
                           Add Contact
@@ -655,11 +658,11 @@ export const ContactList = () => {
                             setIsSmartPasteOpen(true);
                             setShowAddMenu(false);
                           }}
-                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                          className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <FileText className="w-4 h-4 text-primary shrink-0" />
                           Add from Text
-                          <span className="ml-auto text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                          <span className="ml-auto text-[11px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                             AI
                           </span>
                         </button>
@@ -668,7 +671,7 @@ export const ContactList = () => {
                             setIsCreateListOpen(true);
                             setShowAddMenu(false);
                           }}
-                          className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                          className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                         >
                           <ListPlus className="w-4 h-4 text-primary shrink-0" />
                           Create List
@@ -688,7 +691,7 @@ export const ContactList = () => {
                     ? clearSelection
                     : selectAll
                 }
-                className="text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
+                className="hit-area text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
               >
                 {selectedCount === filteredContacts.length
                   ? "Deselect All"
@@ -723,7 +726,7 @@ export const ContactList = () => {
             {inputValue && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+                className="hit-area absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
                 aria-label="Clear search"
               >
                 ×
@@ -734,7 +737,7 @@ export const ContactList = () => {
           <button
             onClick={cycleSortMode}
             className={cn(
-              "p-2 rounded-xl transition-all shrink-0 flex items-center justify-center group relative",
+              "hit-area p-2 rounded-xl transition-all shrink-0 flex items-center justify-center group relative",
               "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
             )}
             title={`Sort: ${sortBy === "name" ? "Name" : "Date Added"} ${sortDir === "asc" ? "↑" : "↓"}`}
@@ -760,7 +763,10 @@ export const ContactList = () => {
             <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
             <div
               id="filter-pills-row"
-              className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5"
+              // A scroller clips what sits outside its padding box, so the
+              // 8 px above and below give each pill's 44 px tap box room.
+              // The negative margins keep the row where it was.
+              className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5"
             >
               <FilterButton
                 label="All"
@@ -851,93 +857,48 @@ export const ContactList = () => {
           merely went away is the most alarming thing this app could say. The
           ConnectionBanner explains that case instead.
         */}
+          {/*
+            Import leads. Nobody builds a personal CRM by typing four hundred
+            people in by hand: they arrive with an export from Apple, Google
+            or LinkedIn. Adding one by hand stays on the header's + button.
+          */}
           {!isLoading && !isError && activeContactCount === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-center gap-4 p-6">
-              <div className="w-16 h-16 rounded-2xl bg-primary/8 flex items-center justify-center">
-                <Users className="w-8 h-8 text-primary" />
-              </div>
-              <div>
-                <p className="font-bold text-base">Your network is empty</p>
-                <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-[240px] mx-auto text-pretty">
-                  Bring in the contacts you already have, or start one at a
-                  time.
-                </p>
-              </div>
-              {/*
-                Import leads. Nobody builds a personal CRM by typing four
-                hundred people in by hand — they arrive with an export from
-                Apple, Google or LinkedIn, and the first screen either meets
-                that or wastes their time. "Add contact" was the primary
-                action here, which quietly framed the product as a place to
-                do data entry.
-              */}
-              <div className="flex flex-col gap-2 w-full max-w-[220px]">
-                <button
-                  onClick={() => setIsImportOpen(true)}
-                  className="btn-primary flex items-center justify-center gap-2 text-sm py-2.5"
-                >
-                  <Upload className="w-4 h-4" />
-                  Import contacts
-                </button>
-                <button
-                  onClick={() => setIsSmartPasteOpen(true)}
-                  className="btn-secondary flex items-center justify-center gap-2 text-sm py-2.5"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Smart Paste{" "}
-                  <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">
-                    V
-                  </kbd>
-                </button>
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center justify-center gap-2 text-sm py-2 text-on-surface-variant hover:text-on-surface transition-colors font-bold"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Add one by hand{" "}
-                  <kbd className="hidden sm:inline text-[10px] bg-surface-container-high px-1.5 py-0.5 rounded-md font-mono">
-                    N
-                  </kbd>
-                </button>
-              </div>
-              <p className="text-[11px] text-on-surface-variant max-w-[240px] text-pretty">
-                Apple, Google and LinkedIn exports all work — Contrack merges
-                duplicates across them for you.
-              </p>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="Your network is empty"
+              body="Bring in the people you already have, or add one by hand."
+              action={{
+                label: "Import",
+                icon: Upload,
+                onClick: () => setIsImportOpen(true),
+              }}
+              level={id ? 3 : 2}
+            />
           )}
 
           {/* Empty state: search/filter has no results */}
           {!isLoading &&
             activeContactCount > 0 &&
-            filteredContacts.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-48 text-center gap-3 p-6">
-                <Search className="w-8 h-8 text-on-surface-variant/30" />
-                <div>
-                  <p className="font-bold text-sm">
-                    {searchQuery
-                      ? `No results for "${searchQuery}"`
-                      : "No contacts in this list"}
-                  </p>
-                  {searchQuery && (
-                    <p className="text-xs text-on-surface-variant mt-1">
-                      Try {NAMES.ask.label} for deeper results
-                    </p>
-                  )}
-                </div>
-                {searchQuery && (
-                  <button
-                    onClick={() =>
-                      navigate(`/search?q=${encodeURIComponent(searchQuery)}`)
-                    }
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/20 transition-colors"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    {NAMES.ask.label}
-                  </button>
-                )}
-              </div>
-            )}
+            filteredContacts.length === 0 &&
+            (searchQuery ? (
+              <EmptyState
+                icon={SearchX}
+                title={`Nobody matches "${searchQuery}"`}
+                body="Try fewer letters, or search a company or a tag."
+                action={{
+                  label: "Clear search",
+                  onClick: () => setSearchQuery(""),
+                }}
+                level={id ? 3 : 2}
+              />
+            ) : (
+              <EmptyState
+                icon={ListPlus}
+                title="No contacts in this list"
+                body="Add people from their contact page, or select several and choose List."
+                level={id ? 3 : 2}
+              />
+            ))}
 
           {/* ── Recent contacts strip ─────────────────────────────────────── */}
           {!isLoading &&
@@ -947,7 +908,7 @@ export const ContactList = () => {
               <div className="mb-3">
                 <div className="flex items-center gap-1.5 px-1 mb-1.5">
                   <Clock className="w-3 h-3 text-on-surface-variant" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
                     Recent
                   </span>
                 </div>

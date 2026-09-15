@@ -37,16 +37,7 @@ const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
       This setting did not load, so its current value is unknown. Nothing has
       changed.
     </p>
-    <button
-      type="button"
-      onClick={onRetry}
-      className={cn(
-        "inline-flex items-center justify-center px-4 rounded-xl",
-        "min-h-[44px] sm:min-h-0 sm:py-2.5 font-bold text-sm",
-        "bg-surface-container-high text-on-surface",
-        "hover:bg-surface-container-highest transition-colors",
-      )}
-    >
+    <button type="button" onClick={onRetry} className="btn-secondary">
       Try again
     </button>
   </div>
@@ -334,12 +325,7 @@ const InstanceNameCard = () => {
         <button
           type="submit"
           disabled={!dirty || save.isPending}
-          className={cn(
-            "inline-flex items-center gap-2 px-5 rounded-full",
-            "min-h-[44px] sm:min-h-0 sm:py-2.5 font-bold text-sm",
-            "bg-primary text-on-primary hover:bg-primary/90 transition-colors",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          )}
+          className="btn-primary"
         >
           <Tag className="w-4 h-4" />
           {save.isPending ? "Saving…" : "Save"}

@@ -16,7 +16,7 @@ _This document enforces the visual identity and coding patterns of the project. 
 
 | Token               | Value     | Usage                                                  |
 | ------------------- | --------- | ------------------------------------------------------ |
-| `primary`           | `#009EDB` | Primary actions, active states, interactive highlights |
+| `primary`           | `#006a91` | Primary actions, active states, interactive highlights |
 | `primary-dim`       | `#00628a` | Signature gradient dark end, dimmed primary states     |
 | `primary-container` | `#47befd` | Signature gradient light end, primary containers       |
 | `on-primary`        | `#ffffff` | Text/icons on primary-colored backgrounds              |
@@ -47,9 +47,34 @@ _This document enforces the visual identity and coding patterns of the project. 
 | `rose-500`    | Error, overdue, destructive actions, rejection |
 | `blue-500`    | Informational (phone match badge)              |
 
+#### AI-derived data (`--color-ai`)
+
+| Token        | Light     | Dark      | Usage                                                  |
+| ------------ | --------- | --------- | ------------------------------------------------------ |
+| `ai`         | `#6f3fd0` | `#bfa3f9` | A glyph or icon on a surface or on `bg-ai/10`          |
+| `on-ai-wash` | `#6734c6` | `#bfa3f9` | Text on a `bg-ai/10`, `/15` or `/20` wash (an AI chip) |
+
+The second accent, and it means one thing: **a model wrote this, not the
+person**. The interests and tags an enrichment run added wear it
+(`bg-ai/10 text-on-ai-wash` with a sparkle), and so does the note glyph on the
+timeline (`bg-ai/10 text-ai`).
+
+- ✅ AI-derived data only.
+- ❌ Not for AI features. The Ask Contrack button, the briefing button and the
+  enrichment page are controls, and controls use `primary`.
+- ❌ Not for a selection. The composer's selected type is a selection, so it
+  uses `primary`.
+- The token is not part of an accent. A contact's colour replaces `primary` on
+  its page and leaves `ai` alone, so a violet contact never makes its own notes
+  read as AI.
+- Defined in three places in `src/index.css` (`@theme` and both dark blocks)
+  and in `LIGHT` and `DARK` in `src/lib/theme.ts`.
+  `tests/unit/theme.contrast.test.ts` checks that they agree and clear AA.
+
 #### Off-Palette Colors (FORBIDDEN)
 
-- ❌ `violet-*`, `fuchsia-*`, `purple-*` — replaced by `primary` tokens
+- ❌ `violet-*`, `fuchsia-*`, `purple-*` — replaced by `primary` tokens, or by
+  `ai` for AI-derived data
 - ❌ `indigo-*` — replaced by `primary-dim`
 
 ### Surface Hierarchy ("No-Line" Principle)
@@ -68,36 +93,76 @@ _This document enforces the visual identity and coding patterns of the project. 
 
 ### Typography
 
-| Role      | Tailwind Class                                                            | Font    | Weights            |
-| --------- | ------------------------------------------------------------------------- | ------- | ------------------ |
-| Headlines | `font-headline`                                                           | Manrope | 400, 600, 700, 800 |
-| Body      | `font-body`                                                               | Inter   | 300, 400, 500, 600 |
-| Labels    | `text-[10px] font-bold uppercase tracking-widest text-on-surface-variant` | Inter   | —                  |
+| Role      | Tailwind Class                                                                       | Font    | Weights            |
+| --------- | ------------------------------------------------------------------------------------ | ------- | ------------------ |
+| Headlines | `font-headline`                                                                      | Manrope | 400, 600, 700, 800 |
+| Body      | `font-body`                                                                          | Inter   | 300, 400, 500, 600 |
+| Labels    | `LABEL`: `text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant` | Inter   | —                  |
+
+#### 11 px type floor (REQUIRED)
+
+No text a person reads is smaller than 11 px, anywhere. Body text is 14 px,
+values are 12 px or more, and 11 px is for uppercase labels, badges and
+keyboard chips.
+
+- ❌ `text-[9px]` and `text-[10px]` (or any arbitrary size under 11 px).
+  `tests/unit/styles.floor.test.ts` fails on them in `src/`.
+- ✅ Use the tokens below. They already sit on the floor.
+- `tests/e2e/metrics.spec.ts` measures the rendered size of every visible text
+  node on a 390 px phone.
+
+#### Shared class tokens (`src/lib/styles.ts`)
+
+| Token                                           | Size          | Use                                                         |
+| ----------------------------------------------- | ------------- | ----------------------------------------------------------- |
+| `LABEL`, `LABEL_PRIMARY`                        | 11 px, caps   | Micro labels, tracking 0.08em                               |
+| `SECTION_HEADING`                               | 11 px, caps   | Card titles ("DETAILS"), one step below body                |
+| `FIELD_LABEL`                                   | 12 px         | The name above one value ("Location"), sentence case        |
+| `META_LINE`                                     | 14 px         | Facts under a name, joined by a middle dot                  |
+| `KBD_SM`, `MICRO_BADGE`, `STATUS_BADGE_SUCCESS` | 11 px         | Keyboard chips, inline badges                               |
+| `TAG_PILL`, `SOURCE_BADGE`                      | 11 px         | Pills                                                       |
+| `ICON_BTN`                                      | 32 px visual  | Dense toolbar icon buttons, with `hit-area` (44 px target)  |
+| `SEARCH_INPUT`                                  | 44 px / 40 px | The list search box: 44 px tall on a phone, 40 px from `sm` |
 
 ### Radius System
 
-| Token                       | Value           | Usage                                       |
-| --------------------------- | --------------- | ------------------------------------------- |
-| Default                     | `1rem` (16px)   | Standard rounding                           |
-| `lg`                        | `1.5rem` (24px) | Cards, large containers                     |
-| `xl`                        | `2rem` (32px)   | Prominent containers                        |
-| Buttons (primary/secondary) | `9999px` (pill) | CSS `.btn-primary` / `.btn-secondary` class |
+| Token                       | Value                    | Usage                                       |
+| --------------------------- | ------------------------ | ------------------------------------------- |
+| Default                     | `1rem` (16px)            | Standard rounding                           |
+| `lg`                        | `1.5rem` (24px)          | Cards, large containers                     |
+| `xl`                        | `2rem` (32px)            | Prominent containers                        |
+| Buttons (primary/secondary) | `0.75rem` (`rounded-xl`) | CSS `.btn-primary` / `.btn-secondary` class |
+| Pills                       | `9999px`                 | Chips, filter pills and `Segmented` only    |
 
 ## 2. Component CSS Classes (defined in `src/index.css`)
 
 These reusable atomic classes are the blessed patterns. Use them instead of ad-hoc utilities.
 
-| Class                | Pattern                                                                              | Usage                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                              | Modals, dropdowns, Command Palette, floating nav                        |
-| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                           | **Branding ONLY** (sidebar logo text). ⚠️ NEVER use for buttons or CTAs |
-| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                              | Standard card container                                                 |
-| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                 | Elevated card with more shadow                                          |
-| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40` | Text inputs                                                             |
-| `btn-primary`        | Solid `bg-primary text-on-primary` pill with hover scale                             | Primary CTAs                                                            |
-| `btn-secondary`      | `bg-surface-container-low text-on-surface` pill                                      | Secondary/ghost actions                                                 |
-| `section-divider`    | `h-px bg-surface-container-high my-4`                                                | Visual section break (background shift, NOT a border)                   |
-| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                             | Icon wrapper                                                            |
+| Class                | Pattern                                                                                 | Usage                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, dropdowns, Command Palette, floating nav                        |
+| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (sidebar logo text). ⚠️ NEVER use for buttons or CTAs |
+| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                 |
+| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                          |
+| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                             |
+| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                               |
+| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                        |
+| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                     |
+| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                   |
+| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                            |
+
+### Buttons
+
+- ✅ `.btn-primary` for the main action, `.btn-secondary` for the others. The
+  call site adds layout only (`w-full`, `flex-1`, a margin). The class sets the
+  fill, the shape, the type, the 44 px height and the disabled look.
+- ✅ One disabled look for both: a `surface-container-high` fill with an
+  `on-surface-variant` label. No `disabled:opacity-*` at the call site, because
+  fading a filled button fades its label into its own fill.
+- ❌ `rounded-full` on a filled `bg-primary` button. Pills are chips, filter
+  pills and `Segmented`. `tests/unit/styles.floor.test.ts` fails on a class
+  string with a solid `bg-primary`, `rounded-full` and `px-2` or more outside
+  its allow-list.
 
 ## 3. Component Patterns
 
@@ -140,11 +205,50 @@ missable.
   the icon halo, never the hit area.
 - ✅ For a control that is not an `IconButton`, write the floor yourself:
   `inline-flex items-center justify-center min-w-[44px] min-h-[44px]`.
-- ❌ Do not reach for `ICON_BTN` from `src/lib/styles.ts` on a new touch
-  control. It is `p-2`, which is about 32 px with a 16 px icon. It stays for
-  the existing dense toolbars it was written for.
+- ✅ When a control must look smaller than 44 px (a chip's remove button, a
+  colour swatch, a letter in the rail, a label select, an inline link), add
+  `hit-area`. Its `::after` box is centred on the control and is at least
+  44 px on each side, and a tap on it is a tap on the control. `ICON_BTN`
+  already carries it.
+- ✅ A full-width row, a tab, a `Segmented` option or a text input gets a real
+  height below `sm`: `min-h-[44px] sm:min-h-0`, or `py-3 sm:py-2`.
+- ❌ `hit-area` on a `<select>`, `<input>` or `<textarea>`. Browsers draw no
+  `::after` on them. Give the field a 44 px height below `sm` instead.
+- ❌ `hit-area` inside an `overflow-hidden` ancestor. The ancestor clips the
+  box. Remove the `overflow-hidden` or grow the control.
+- Two controls closer than 44 px share the gap, and the later one in the
+  document wins the tap there. Keep 12 px between icon buttons that use
+  `hit-area`.
 - The visible padding grows the icon's halo. The hit area is the full square.
   The two are tuned independently and only one of them is negotiable.
+- `tests/e2e/metrics.spec.ts` measures every visible control on a 390 px
+  phone on Network, a contact, Pulse, Ask Contrack and Settings. The hit box
+  is the largest of the control's box, its `::after` box and a wrapping
+  `<label>`.
+
+#### Empty states (REQUIRED)
+
+A screen with nothing to show renders `<EmptyState>`
+(`src/components/ui/EmptyState.tsx`). There is one style.
+
+```tsx
+<EmptyState
+  icon={Users}
+  title="Your network is empty"
+  body="Bring in the people you already have, or add one by hand."
+  action={{ label: "Import", onClick: openImport, icon: Upload }}
+/>
+```
+
+- A 48 px icon tile on a `bg-primary/10` wash, a 16 px bold title, one
+  sentence at 14 px, and at most one action drawn as `.btn-primary`. `action`
+  is one object, so a second button cannot be passed.
+- The title is an `h2`. Inside a card that has its own `h2`, pass `level={3}`.
+- `illustration` replaces the icon tile. The corvid mark goes there.
+- The copy says what happened and what to do next, in one sentence each. The
+  table in `docs/v2/ui-ux-review.md` section 6 holds the copy for each screen.
+- ❌ A hand-rolled empty block (a tinted square, a big faint icon, a grey card
+  with a sentence).
 
 #### Modals are bottom sheets on mobile (REQUIRED)
 

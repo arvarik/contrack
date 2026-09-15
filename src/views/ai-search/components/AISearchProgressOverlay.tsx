@@ -87,7 +87,7 @@ export function AISearchProgressOverlay({
         <button
           onClick={() => setIsMinimized(false)}
           className={cn(
-            "flex items-center gap-2 px-4 py-2.5 rounded-full shadow-xl",
+            "hit-area flex items-center gap-2 px-4 py-2.5 rounded-full shadow-xl",
             "bg-surface-container-lowest ring-1 ring-surface-container-highest/30",
             "hover:shadow-2xl transition-all cursor-pointer",
             "text-sm font-semibold",
@@ -137,7 +137,7 @@ export function AISearchProgressOverlay({
           <button
             aria-label="Minimize research progress"
             onClick={() => setIsMinimized(true)}
-            className="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+            className="hit-area p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
           >
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
@@ -148,7 +148,7 @@ export function AISearchProgressOverlay({
                 : "Minimize research progress"
             }
             onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
-            className="p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 transition-colors"
+            className="hit-area p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 transition-colors"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -174,7 +174,7 @@ export function AISearchProgressOverlay({
             <button
               onClick={onCancel}
               disabled={isCancelling}
-              className="shrink-0 px-2 py-1 rounded text-error hover:bg-error/10 disabled:opacity-50"
+              className="hit-area shrink-0 px-2 py-1 rounded text-error hover:bg-error/10 disabled:opacity-50"
             >
               {isCancelling ? "Stopping…" : "Stop research"}
             </button>
@@ -218,7 +218,7 @@ export function AISearchProgressOverlay({
                   : "Minimize research progress"
               }
               onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
-              className="text-xs font-bold text-on-surface-variant hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container-high transition-colors"
+              className="hit-area text-xs font-bold text-on-surface-variant hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container-high transition-colors"
             >
               Dismiss
             </button>
@@ -251,7 +251,7 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
         {job.contactName}
       </span>
       {/* Right side: latency or status text */}
-      <span className="text-[10px] text-on-surface-variant shrink-0 tabular-nums">
+      <span className="text-[11px] text-on-surface-variant shrink-0 tabular-nums">
         {job.status === "success" && job.latencyMs != null && (
           <span className="text-success">
             {(job.latencyMs / 1000).toFixed(1)}s

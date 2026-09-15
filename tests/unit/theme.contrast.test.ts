@@ -83,6 +83,7 @@ const TEXT_TOKENS = [
   "warning",
   "info",
   "error",
+  "ai",
 ] as const;
 
 /**
@@ -96,6 +97,8 @@ const ENFORCED_WASH_ALPHAS: Partial<
   Record<(typeof TEXT_TOKENS)[number], number[]>
 > = {
   primary: [0.1],
+  // The note glyph and the AI chip icon sit on `bg-ai/10`.
+  ai: [0.1],
   error: [0.1],
   warning: [0.1],
 };
@@ -482,6 +485,28 @@ describe("the heavier primary washes", () => {
       });
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("carries AI chip text on every AI wash with its own wash token", () => {
+    // The AI chips are `bg-ai/10 text-on-ai-wash`. The same guarantee the
+    // primary wash token gives, for the second accent.
+    for (const mode of ["light", "dark"] as const) {
+      const palette = PALETTES[mode];
+      for (const alpha of WASH_ALPHAS) {
+        const worst = Math.min(
+          ...PILL_SURFACES.map((surface) =>
+            contrast(
+              hexToRgb(palette["on-ai-wash"]),
+              over(hexToRgb(palette.ai), alpha, hexToRgb(palette[surface])),
+            ),
+          ),
+        );
+        expect(
+          worst,
+          `${mode} on-ai-wash over ai/${alpha * 100}`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    }
   });
 
   it("clears every one of them for a derived accent", () => {

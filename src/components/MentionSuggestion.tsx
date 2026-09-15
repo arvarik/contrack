@@ -57,7 +57,7 @@ export const MentionList = forwardRef<
       {props.items.length ? (
         props.items.map((item: ContactSlim, index: number) => (
           <button
-            className={`flex items-center gap-3 px-3 py-2 text-sm transition-colors text-left w-full
+            className={`flex items-center gap-3 min-h-[44px] sm:min-h-0 px-3 py-2 text-sm transition-colors text-left w-full
             ${index === selectedIndex ? "bg-surface-container-low text-primary" : "bg-transparent text-on-surface hover:bg-surface-container"}`}
             key={item.id}
             onClick={() => {
@@ -69,7 +69,7 @@ export const MentionList = forwardRef<
             </div>
             <span className="font-semibold truncate">{item.name}</span>
             {item.isGhost && (
-              <span className="ml-auto text-[10px] uppercase font-bold text-on-surface-variant">
+              <span className="ml-auto text-[11px] uppercase font-bold text-on-surface-variant">
                 Ghost
               </span>
             )}

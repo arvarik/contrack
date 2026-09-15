@@ -182,13 +182,13 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
               <div key={i} className="pt-2 first:pt-0 space-y-1">
                 <div className="font-bold text-on-surface flex items-center justify-between">
                   <span>{c.label}</span>
-                  <span className="text-[10px] text-on-surface-variant font-normal">
+                  <span className="text-[11px] text-on-surface-variant font-normal">
                     from {c.duplicateName}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <div className="flex items-center gap-1.5 p-1.5 rounded bg-emerald-500/10 text-success">
-                    <span className="text-[10px] uppercase font-bold px-1 py-0.5 rounded bg-emerald-500/20">
+                    <span className="text-[11px] uppercase font-bold px-1 py-0.5 rounded bg-emerald-500/20">
                       Kept
                     </span>
                     <span className="font-medium truncate">
@@ -196,7 +196,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 p-1.5 rounded bg-amber-500/10 text-on-surface-variant line-through">
-                    <span className="text-[10px] uppercase font-bold px-1 py-0.5 rounded bg-amber-500/20 text-warning not-line-through">
+                    <span className="text-[11px] uppercase font-bold px-1 py-0.5 rounded bg-amber-500/20 text-warning not-line-through">
                       Discarded
                     </span>
                     <span className="truncate">{c.duplicateValue}</span>
@@ -210,7 +210,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
 
       {/* Preview card */}
       <div className={cn(CARD, "space-y-5 ring-2 ring-primary/20")}>
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-primary">
           <Shield className="w-3.5 h-3.5" />
           Merge Preview — Final Result
         </div>
@@ -267,7 +267,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
         {/* Combined emails */}
         {preview.emails?.length > 0 && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               <Mail className="w-3.5 h-3.5" />
               Emails ({preview.emails.length})
             </div>
@@ -278,7 +278,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
                     {e.email}
                   </span>
                   {e._from && (
-                    <span className="text-[9px] bg-amber-500/10 text-warning px-1.5 py-0.5 rounded font-bold">
+                    <span className="text-[11px] bg-amber-500/10 text-warning px-1.5 py-0.5 rounded font-bold">
                       from {e._from}
                     </span>
                   )}
@@ -291,7 +291,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
         {/* Combined phones */}
         {preview.phones?.length > 0 && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               <Phone className="w-3.5 h-3.5" />
               Phones ({preview.phones.length})
             </div>
@@ -302,7 +302,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
                     {p.phone}
                   </span>
                   {p._from && (
-                    <span className="text-[9px] bg-amber-500/10 text-warning px-1.5 py-0.5 rounded font-bold">
+                    <span className="text-[11px] bg-amber-500/10 text-warning px-1.5 py-0.5 rounded font-bold">
                       from {p._from}
                     </span>
                   )}
@@ -315,7 +315,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
         {/* Combined tags */}
         {preview.tags?.length > 0 && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               <Tag className="w-3.5 h-3.5" />
               Tags ({preview.tags.length})
             </div>

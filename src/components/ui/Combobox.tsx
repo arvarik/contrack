@@ -65,7 +65,7 @@ export const Combobox = ({
                 setIsOpen(false);
                 setTimeout(() => onSave(), 10);
               })}
-              className={DROPDOWN_ITEM}
+              className={cn(DROPDOWN_ITEM, "min-h-[44px] sm:min-h-0")}
               onMouseDown={(e) => {
                 // Prevent input blur so we can process the click securely
                 e.preventDefault();

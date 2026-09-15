@@ -110,7 +110,7 @@ export const CreateListModal = ({
                   type="button"
                   onClick={() => setIcon(key)}
                   className={cn(
-                    "p-2.5 rounded-xl transition-all flex items-center justify-center",
+                    "hit-area p-2.5 rounded-xl transition-all flex items-center justify-center",
                     active
                       ? "bg-primary/15 text-on-primary-wash ring-2 ring-primary/30 shadow-sm scale-110"
                       : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
@@ -156,7 +156,7 @@ export const CreateListModal = ({
           <button
             type="submit"
             disabled={!name.trim() || isPending}
-            className="ml-auto bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity text-sm disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+            className="btn-primary ml-auto px-6"
           >
             {isPending ? "Creating..." : "Create List"}
           </button>

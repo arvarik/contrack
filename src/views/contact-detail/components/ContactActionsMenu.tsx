@@ -11,6 +11,9 @@ import type {
 } from "../../../types";
 import { activateOnKey } from "../../../lib/a11y";
 
+/** Menu rows are 36 px from `sm` and 44 px on a phone, where a thumb taps them. */
+const ITEM_TAP_HEIGHT = "min-h-[44px] sm:min-h-0";
+
 export const ContactActionsMenu = ({
   contact,
   onDelete,
@@ -79,7 +82,7 @@ export const ContactActionsMenu = ({
     <div className="relative inline-block ml-1" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center justify-center"
+        className="hit-area p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center justify-center"
         aria-label="Contact actions"
         aria-expanded={isOpen}
       >
@@ -90,7 +93,7 @@ export const ContactActionsMenu = ({
           <li
             role="menuitem"
             tabIndex={0}
-            className={DROPDOWN_ITEM}
+            className={cn(DROPDOWN_ITEM, ITEM_TAP_HEIGHT)}
             onClick={copyBasic}
             onKeyDown={activateOnKey(copyBasic)}
           >
@@ -100,7 +103,7 @@ export const ContactActionsMenu = ({
           <li
             role="menuitem"
             tabIndex={0}
-            className={DROPDOWN_ITEM}
+            className={cn(DROPDOWN_ITEM, ITEM_TAP_HEIGHT)}
             onClick={copyAdvanced}
             onKeyDown={activateOnKey(copyAdvanced)}
           >
@@ -113,6 +116,7 @@ export const ContactActionsMenu = ({
             role="menuitem"
             className={cn(
               DROPDOWN_ITEM,
+              ITEM_TAP_HEIGHT,
               "text-error hover:text-error hover:bg-red-500/10",
             )}
             onClick={() => {

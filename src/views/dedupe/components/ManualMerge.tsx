@@ -101,7 +101,7 @@ export const ManualMerge = () => {
                 }
               }}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap",
                 stage === s
                   ? "bg-primary/10 text-primary"
                   : "text-on-surface-variant hover:text-on-surface",
@@ -109,7 +109,7 @@ export const ManualMerge = () => {
             >
               <span
                 className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold",
+                  "w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold",
                   stage === s
                     ? "bg-primary text-white"
                     : "bg-surface-container-high text-on-surface-variant",

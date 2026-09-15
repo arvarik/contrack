@@ -229,7 +229,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className="p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+          className="hit-area p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
           aria-label="Back to results"
         >
           <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -243,7 +243,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           <p className="text-sm font-bold text-on-surface truncate">
             {contactName}
           </p>
-          <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">
+          <p className="text-[11px] text-on-surface-variant uppercase tracking-widest">
             Actions
           </p>
         </div>
@@ -286,7 +286,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
       </div>
 
       {/* Footer hint */}
-      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[10px] text-on-surface-variant">
+      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
         <kbd className={KBD_SM}>↑↓</kbd> navigate
         <span>·</span>
         <kbd className={KBD_SM}>←</kbd> back

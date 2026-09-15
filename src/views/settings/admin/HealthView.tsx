@@ -398,7 +398,7 @@ export const HealthView = () => {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="text-sm font-bold text-primary min-h-[44px]"
+            className="btn-secondary"
           >
             Try again
           </button>

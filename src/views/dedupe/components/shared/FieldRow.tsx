@@ -37,7 +37,7 @@ export const FieldRow = ({
     <span className="text-on-surface flex-1 min-w-0">{children}</span>
     {conflictLabel && (
       <span
-        className={`shrink-0 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+        className={`shrink-0 text-[11px] uppercase font-bold px-1.5 py-0.5 rounded ${
           conflictLabel.toLowerCase().includes("kept")
             ? "bg-emerald-500/20 text-success"
             : "bg-amber-500/20 text-warning"

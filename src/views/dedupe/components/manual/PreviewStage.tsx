@@ -32,7 +32,7 @@ export const PreviewStage = ({
       <div className="mb-4 flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+          className="hit-area flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
           Back
@@ -42,17 +42,14 @@ export const PreviewStage = ({
       <MergePreview primary={primary} duplicates={duplicates} />
 
       <div className="flex items-center gap-3 mt-8">
-        <button
-          onClick={onBack}
-          className="btn-secondary flex-1 flex items-center justify-center gap-2 py-3"
-        >
+        <button onClick={onBack} className="btn-secondary flex-1">
           <ChevronLeft className="w-4 h-4" />
           Back to Compare
         </button>
         <button
           onClick={onMerge}
           disabled={isMerging}
-          className="btn-primary flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-50"
+          className="btn-primary flex-1"
         >
           {isMerging ? (
             <>

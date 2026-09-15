@@ -309,7 +309,7 @@ export const ContactListModals = ({
             <button
               type="submit"
               disabled={createContact.isPending}
-              className="w-full bg-primary text-on-primary font-bold py-3 rounded-xl hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+              className="btn-primary w-full py-3"
             >
               {createContact.isPending ? "Saving..." : "Save Contact"}
             </button>
@@ -386,7 +386,7 @@ export const ContactListModals = ({
                 }
               }}
               disabled={!smartPasteText.trim() || parseContactText.isPending}
-              className="bg-primary text-on-primary font-bold py-2.5 px-6 rounded-lg hover:opacity-90 transition-opacity text-sm flex items-center gap-2 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+              className="btn-primary px-6"
             >
               <FileText className="w-4 h-4" />
               {parseContactText.isPending ? "Extracting…" : "Extract Contact"}

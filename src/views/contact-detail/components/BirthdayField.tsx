@@ -75,7 +75,7 @@ export const BirthdayField = ({
         defaultValue={toInputValue(value)}
         onChange={handleChange}
         onBlur={() => setIsEditing(false)}
-        className="text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none w-full"
+        className="min-h-[44px] sm:min-h-0 text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none w-full"
       />
     );
   }
@@ -88,7 +88,8 @@ export const BirthdayField = ({
       tabIndex={0}
       role="button"
       onClick={() => setIsEditing(true)}
-      className="flex items-center gap-2 cursor-text group/bday"
+      // 44 px tall on a phone: the whole row is the tap target.
+      className="flex items-center gap-2 min-h-[44px] sm:min-h-0 cursor-text group/bday"
     >
       <span
         className={`text-sm font-medium py-0.5 px-2 -ml-2 rounded transition-colors hover:bg-surface-container-high ${
@@ -102,7 +103,7 @@ export const BirthdayField = ({
         {display || "Add Birthday..."}
       </span>
       {upcomingDays !== null && (
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-warning shrink-0">
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-warning shrink-0">
           {upcomingDays === 0 ? "🎂 Today!" : `🎂 in ${upcomingDays}d`}
         </span>
       )}

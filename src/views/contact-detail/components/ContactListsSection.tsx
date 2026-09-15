@@ -110,8 +110,12 @@ export const ContactListsSection = ({
             onClick={() =>
               removeFromList.mutate({ listId: list.id, contactId })
             }
-            className="w-0 overflow-hidden opacity-0 group-hover/listpill:w-3 group-hover/listpill:ml-0.5 group-hover/listpill:opacity-100 hover:text-error transition-all duration-300 flex items-center"
+            // A phone has no hover, so below `sm` the X shows at rest with a
+            // 44 px tap box. From `sm` it slides in on hover or focus, and
+            // its overflow clip (which would clip the tap box) comes back.
+            className="hit-area w-3 ml-0.5 opacity-100 sm:w-0 sm:ml-0 sm:overflow-hidden sm:opacity-0 sm:group-hover/listpill:w-3 sm:group-hover/listpill:ml-0.5 sm:group-hover/listpill:opacity-100 sm:focus-visible:w-3 sm:focus-visible:opacity-100 hover:text-error transition-all duration-300 flex items-center"
             title="Remove from list"
+            aria-label={`Remove from ${list.name}`}
           >
             <X className="w-3 h-3 shrink-0" />
           </button>
@@ -123,8 +127,10 @@ export const ContactListsSection = ({
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-full hover:bg-primary/10 transition-colors"
+            className="hit-area flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-full hover:bg-primary/10 transition-colors"
             title="Add to a list"
+            aria-label="Add to a list"
+            aria-expanded={showAdd}
           >
             <ListPlus className="w-3.5 h-3.5" />
           </button>
@@ -143,7 +149,7 @@ export const ContactListsSection = ({
                       addToList.mutate({ listId: list.id, contactId });
                       setShowAdd(false);
                     }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
+                    className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
                   >
                     <DetailListIcon
                       icon={list.icon}

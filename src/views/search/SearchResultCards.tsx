@@ -62,11 +62,11 @@ export const ResultCard = ({
             {match.name}
           </span>
           {match.approximate ? (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
               Approximate
             </span>
           ) : isFallback ? (
-            <span className="text-[9px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
+            <span className="text-[11px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
               Keyword
             </span>
           ) : null}
@@ -119,7 +119,7 @@ export const ResultCard = ({
               </span>
             ))}
             {match.tags.length > 5 && (
-              <span className="text-[10px] text-on-surface-variant opacity-50">
+              <span className="text-[11px] text-on-surface-variant opacity-50">
                 +{match.tags.length - 5}
               </span>
             )}

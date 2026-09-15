@@ -177,7 +177,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           <button
             onClick={handleSynthesize}
             className={`
-              w-full ${px} rounded-xl flex items-center gap-2
+              w-full ${px} min-h-[44px] sm:min-h-0 rounded-xl flex items-center gap-2
               bg-primary/5 hover:bg-primary/10 transition-colors group
               ${textSize} text-primary hover:text-primary cursor-pointer
             `}
@@ -230,7 +230,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           </div>
           <button
             onClick={handleDismiss}
-            className="absolute top-2 right-2 p-1 rounded-lg sm:opacity-0 sm:group-hover:opacity-60 hover:!opacity-100 hover:bg-surface-container-high transition-all"
+            className="hit-area absolute top-2 right-2 p-1 rounded-lg sm:opacity-0 sm:group-hover:opacity-60 hover:!opacity-100 hover:bg-surface-container-high transition-all"
             aria-label="Dismiss synthesis"
           >
             <X className="w-3 h-3" />
@@ -250,13 +250,13 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
             </span>
             <button
               onClick={handleSynthesize}
-              className="ml-auto text-xs text-primary hover:underline"
+              className="hit-area ml-auto text-xs text-primary hover:underline"
             >
               Retry
             </button>
             <button
               onClick={handleDismiss}
-              className="p-1 rounded-lg hover:bg-surface-container-high transition-colors"
+              className="hit-area p-1 rounded-lg hover:bg-surface-container-high transition-colors"
               aria-label="Dismiss error"
             >
               <X className="w-3 h-3" />

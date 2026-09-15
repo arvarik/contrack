@@ -71,7 +71,8 @@ export const IndustryField = ({
         setTempVal(value || "");
       })}
       className={cn(
-        "cursor-pointer hover:bg-surface-container-high px-1 -mx-1 rounded transition-colors whitespace-pre-wrap max-w-full break-words outline-none text-sm font-medium",
+        // 12 px above and below make the row 44 px tall on a phone.
+        "cursor-pointer hover:bg-surface-container-high px-1 -mx-1 py-3 sm:py-0 rounded transition-colors whitespace-pre-wrap max-w-full break-words outline-none text-sm font-medium",
         // Italic and the muted token, NOT opacity. Half-opacity text is half
         // the contrast: this placeholder measured 2.86:1 on a white card, and
         // a prompt somebody is meant to read and click is content rather than

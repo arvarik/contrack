@@ -162,7 +162,7 @@ const ResponsiveLayout = () => {
           aria-current={active ? "page" : undefined}
           className={cn(
             "relative flex flex-1 flex-col items-center justify-center gap-0.5",
-            "min-h-[3rem] px-1 py-1 rounded-xl transition-colors",
+            "min-h-[3rem] px-0.5 py-1 rounded-xl transition-colors",
             active
               ? "text-primary"
               : "text-on-surface-variant active:bg-surface-container",
@@ -178,7 +178,10 @@ const ResponsiveLayout = () => {
           >
             <Icon className="w-5 h-5" />
           </span>
-          <span className="text-[9px] font-bold tracking-wide whitespace-nowrap">
+          {/* 11 px bold, tight. "Ask Contrack" is about 69 px wide at this
+              tracking, and a 390 px phone gives each of the five tabs 72 px
+              inside its padding, so the label stays on one line. */}
+          <span className="text-[11px] font-bold tracking-tight whitespace-nowrap">
             {label}
           </span>
           {badge > 0 && (

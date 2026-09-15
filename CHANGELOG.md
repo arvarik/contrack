@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Two floors: 44 px targets and 11 px text.** Every control a finger can
+  reach now has a tap box of at least 44 by 44 pixels on a phone, and no text
+  is smaller than 11 pixels. The new `hit-area` utility grows a small control's
+  tap box without changing how it looks. The phone tab bar labels, the label
+  and badge tokens, the shortcut chips and 138 other lines moved from 9 or 10
+  pixels to 11. `tests/unit/styles.floor.test.ts` fails on `text-[9px]` and
+  `text-[10px]`, and `tests/e2e/metrics.spec.ts` measures both floors on a
+  390 pixel phone on Network, a contact, Pulse, Ask Contrack and Settings.
+- **One empty state.** `src/components/ui/EmptyState.tsx` draws every empty
+  screen the same way: a 48 px icon tile, a title, one sentence and at most
+  one action. Network, Pulse, Possible duplicates, Trash, Lists, Ask Contrack,
+  Contact enrichment and AI usage use it, with new copy that says what to do
+  next. Its `illustration` slot is where the corvid mark goes.
+- **A colour for AI-derived data.** `--color-ai` marks what a model wrote: the
+  interests and tags an enrichment run added and the note glyph on the
+  timeline. It is defined in both palettes, clears WCAG AA on every surface,
+  and does not follow a contact's colour. The composer's selected type no
+  longer uses it.
+
 - **The contact list is one Tab stop.** Up and Down move through the list,
   Home and End jump to the ends, a letter jumps to the next name that starts
   with it, and Enter opens the contact. The letter rail is one stop too, with
@@ -51,6 +70,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read again.
 - **A skip link.** The first Tab stop on every page is "Skip to main
   content", which moves focus past the sidebar or the tab bar.
+
+### Changed
+
+- **One button shape.** `.btn-primary` and `.btn-secondary` are rounded
+  rectangles, 44 px tall on a phone and 40 px from `sm`, with one disabled
+  look. Every primary and secondary call-to-action uses them. Pills are for
+  chips, filter pills and `Segmented` only, and the floor test fails on a
+  filled primary pill anywhere else.
+- `Segmented` options are 44 px tall below `sm`. Accent swatches are 36 px
+  with a 44 px tap box.
 
 ### Fixed
 

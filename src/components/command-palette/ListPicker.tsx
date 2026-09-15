@@ -120,7 +120,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className="p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+          className="hit-area p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
           aria-label="Back to actions"
         >
           <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -129,7 +129,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
           <p className="text-sm font-bold text-on-surface truncate">
             Lists for {contactName}
           </p>
-          <p className="text-[10px] text-on-surface-variant">
+          <p className="text-[11px] text-on-surface-variant">
             Toggle membership
           </p>
         </div>
@@ -154,7 +154,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={isPending}
                 className={`
-                  w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all
+                  w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all
                   ${
                     i === selectedIndex
                       ? "bg-primary/10 text-primary"
@@ -188,7 +188,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
       )}
 
       {/* Footer hint */}
-      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[10px] text-on-surface-variant">
+      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
         <kbd className={KBD_SM}>↵</kbd> toggle
         <span>·</span>
         <kbd className={KBD_SM}>ESC</kbd> back

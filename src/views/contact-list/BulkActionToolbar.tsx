@@ -30,12 +30,12 @@ const BulkActionBtn = ({
     disabled={disabled}
     title={label}
     className={cn(
-      "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors disabled:opacity-40 shrink-0",
+      "flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors disabled:opacity-40 shrink-0",
       className,
     )}
   >
     {icon}
-    <span className="text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+    <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
       {label}
     </span>
   </button>
@@ -130,14 +130,14 @@ export const BulkActionToolbar = ({
             onClick={() => setShowBulkColorPicker((v) => !v)}
             title="Change Color"
             className={cn(
-              "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors shrink-0",
+              "flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors shrink-0",
               showBulkColorPicker
                 ? "text-primary bg-primary/10"
                 : "text-on-surface-variant hover:bg-surface-container-high",
             )}
           >
             <Palette className="w-4 h-4" />
-            <span className="text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
               Color
             </span>
           </button>
@@ -163,7 +163,7 @@ export const BulkActionToolbar = ({
                       backgroundColor: vibeTokens(vibe.id, mode).primary,
                     }}
                     title={vibe.label}
-                    className="w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm hover:ring-2 hover:ring-white/50 hover:ring-offset-1 hover:ring-offset-surface disabled:opacity-50"
+                    className="hit-area w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm hover:ring-2 hover:ring-white/50 hover:ring-offset-1 hover:ring-offset-surface disabled:opacity-50"
                   />
                 ))}
               </motion.div>

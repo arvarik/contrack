@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   RefreshCw,
   RotateCw,
+  SearchX,
 } from "lucide-react";
 import { useSemanticSearch } from "../api";
 import { PAGE_TITLE, SECTION_BG } from "../lib/styles";
@@ -23,6 +24,7 @@ import { SearchCoverageBar } from "./search";
 import { InteractionSearchPanel } from "./search/InteractionSearchPanel";
 import { Segmented } from "../components/ui/Segmented";
 import { LiveStatus } from "../components/ui/LiveStatus";
+import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useSession } from "../contexts/SessionContext";
 
@@ -271,7 +273,7 @@ export const SearchView = () => {
 
               {/* Search Input — the button drops below the field on phones */}
               <div className="relative">
-                <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-3.5 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-2 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
                   {isLoading ? (
                     <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
                   ) : (
@@ -286,7 +288,9 @@ export const SearchView = () => {
                     // placeholder being clipped mid-word.
                     placeholder="Ask about your network…"
                     aria-label="Ask anything about your network"
-                    className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+                    // 44px tall on a phone, the touch floor; the row's
+                    // padding shrinks there to make up for it.
+                    className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
                   />
                   {/*
                 Reserved slot, not an AnimatePresence exit. Mounting and
@@ -299,7 +303,7 @@ export const SearchView = () => {
                     tabIndex={query.length > 0 ? 0 : -1}
                     aria-hidden={query.length === 0}
                     className={cn(
-                      "p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
+                      "hit-area p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
                       query.length === 0 && "opacity-0 pointer-events-none",
                     )}
                     aria-label="Clear search"
@@ -309,7 +313,7 @@ export const SearchView = () => {
                   <button
                     onClick={() => handleSearch()}
                     disabled={query.trim().length < 3 || isLoading}
-                    className="w-full sm:w-auto px-4 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-shadow shrink-0 flex items-center justify-center gap-1.5 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                    className="btn-primary w-full sm:w-auto shrink-0"
                   >
                     <Search className="w-4 h-4" />
                     Search
@@ -320,6 +324,12 @@ export const SearchView = () => {
               {/* Example queries — only shown before first search */}
               {!hasSearched && !isLoading && (
                 <div className="space-y-4">
+                  <EmptyState
+                    icon={Sparkles}
+                    title="Ask anything"
+                    body="Semantic search reads names, roles, notes and interests."
+                    className="py-4"
+                  />
                   <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                     Try asking...
                   </p>
@@ -373,7 +383,7 @@ export const SearchView = () => {
                             : "Keyword results"
                           : "Search results"}
                       </span>
-                      <span className="text-[10px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
+                      <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
                         {results.length} match{results.length !== 1 ? "es" : ""}
                       </span>
                     </div>
@@ -400,7 +410,7 @@ export const SearchView = () => {
                         disabled={isPending || !answeredQuery}
                         aria-label="Refresh results"
                         title="Ask this question again"
-                        className="flex items-center gap-1 text-xs text-primary hover:underline disabled:text-on-surface-variant disabled:no-underline disabled:cursor-not-allowed"
+                        className="hit-area flex items-center gap-1 text-xs text-primary hover:underline disabled:text-on-surface-variant disabled:no-underline disabled:cursor-not-allowed"
                       >
                         <RefreshCw className="w-3 h-3 shrink-0" />
                         Refresh
@@ -437,23 +447,16 @@ export const SearchView = () => {
                 hasSearched &&
                 results.length === 0 &&
                 !semanticSearch.isError && (
-                  <div className="tile-enter flex flex-col items-center justify-center py-12 text-center space-y-4">
-                    <div className="p-4 bg-surface-container-low rounded-2xl">
-                      <Search className="w-10 h-10 text-on-surface-variant/30" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-on-surface mb-1">
-                        No matches found
-                      </p>
-                      <p className="text-sm text-on-surface-variant max-w-md mx-auto">
-                        Try rephrasing your query, or check if your contacts
-                        have relevant details filled in.
-                      </p>
-                    </div>
+                  <EmptyState
+                    icon={SearchX}
+                    title="No one matches"
+                    body="Try other words, or check the coverage below."
+                    className="tile-enter"
+                  >
                     <div className="w-full max-w-md pt-2 text-left">
                       <SearchCoverageBar />
                     </div>
-                  </div>
+                  </EmptyState>
                 )}
 
               {/*
@@ -484,7 +487,7 @@ export const SearchView = () => {
                     <button
                       onClick={handleRerun}
                       disabled={isPending}
-                      className="mt-4 px-4 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-primary/20 transition-shadow flex items-center gap-1.5 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                      className="btn-primary mt-4"
                     >
                       <RotateCw className="w-4 h-4" />
                       Retry

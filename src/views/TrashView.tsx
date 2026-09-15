@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useTrash, useRestoreContact, usePurgeTrashedContact } from "../api";
 import { Modal } from "../components/ui/Modal";
-import { CARD, EMPTY_STATE, ICON_BTN } from "../lib/styles";
+import { CARD, ICON_BTN } from "../lib/styles";
+import { EmptyState } from "../components/ui/EmptyState";
 import { cn } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import type { TrashedContact } from "../types";
@@ -69,14 +70,15 @@ export const TrashView = () => {
 
   if (items.length === 0) {
     return (
-      <div className={cn(EMPTY_STATE, "m-6")}>
-        <Trash2 className="w-10 h-10 text-on-surface-variant mx-auto mb-4" />
-        <p className="font-bold">Trash is empty</p>
-        <p className="text-sm text-on-surface-variant mt-1">
-          Deleted contacts stay here for {RETENTION_DAYS} days before being
-          removed forever.
-        </p>
-      </div>
+      /*
+        No number in the sentence. The server's window is TRASH_RETENTION_DAYS
+        (30 by default), and the client cannot read what an instance set.
+      */
+      <EmptyState
+        icon={Trash2}
+        title="Trash is empty"
+        body="You can restore a deleted contact from here until it is removed for good."
+      />
     );
   }
 
@@ -156,14 +158,14 @@ export const TrashView = () => {
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setPurgeTarget(null)}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-surface-container-high hover:bg-surface-container-highest transition-colors"
+              className="btn-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handlePurge}
               disabled={purge.isPending}
-              className="px-4 py-2 rounded-xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+              className="px-4 py-2 min-h-[44px] sm:min-h-[40px] rounded-xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
             >
               {purge.isPending ? "Deleting…" : "Delete forever"}
             </button>

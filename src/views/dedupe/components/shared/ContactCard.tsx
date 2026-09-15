@@ -87,7 +87,7 @@ export const ContactCard = ({
         </span>
         <div className="flex items-center gap-2">
           {(contact.interactionCount ?? 0) > 0 && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full">
               <MessageSquare className="w-3 h-3" />
               {contact.interactionCount}
             </span>
@@ -105,7 +105,7 @@ export const ContactCard = ({
         <button
           onClick={onSetPrimary}
           className={cn(
-            "w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all",
+            "w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 rounded-xl text-xs font-bold transition-all",
             isPrimary
               ? "bg-emerald-500/10 text-success"
               : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
@@ -138,7 +138,7 @@ export const ContactCard = ({
             </span>
             {isConflict("name") && (
               <span
-                className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                className={`text-[11px] uppercase font-bold px-1.5 py-0.5 rounded ${
                   isPrimary
                     ? "bg-emerald-500/20 text-success"
                     : "bg-amber-500/20 text-warning"
@@ -232,7 +232,7 @@ export const ContactCard = ({
           <FieldRow icon={<Mail className="w-4 h-4" />} label="Email">
             <span className="font-mono text-xs">{primaryEmail}</span>
             {contact.emails.length > 1 && (
-              <span className="text-[10px] text-on-surface-variant ml-1">
+              <span className="text-[11px] text-on-surface-variant ml-1">
                 +{contact.emails.length - 1}
               </span>
             )}

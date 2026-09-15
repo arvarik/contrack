@@ -72,7 +72,7 @@ export const CacheTiersAccordion = ({
       {/* Header — clickable */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 group"
+        className="hit-area w-full flex items-center gap-2 group"
       >
         <DatabaseZap className="w-4 h-4 text-primary" />
         <span className={cn(SECTION_HEADING, "mb-0")}>Cache Tiers</span>
@@ -96,14 +96,14 @@ export const CacheTiersAccordion = ({
             className="overflow-hidden"
           >
             {/*
-              Six numeric columns at a fixed 50px plus the tier name do not fit
-              a phone. Rather than shrink the numbers into illegibility or drop
+              Six numeric columns at a fixed 56px (wide enough for "ENTRIES"
+              at the 11px floor) plus the tier name do not fit a phone. Rather than shrink the numbers into illegibility or drop
               columns, the table scrolls sideways inside its own container; the
               card itself never causes the page to scroll horizontally.
             */}
             <div className="mt-4 space-y-0 overflow-x-auto -mx-2 px-2">
               {/* Header row */}
-              <div className="grid grid-cols-[minmax(120px,1fr)_50px_50px_50px_50px_50px_50px] gap-2 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant min-w-[420px]">
+              <div className="grid grid-cols-[minmax(120px,1fr)_56px_56px_56px_56px_56px_56px] gap-2 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant min-w-[504px]">
                 <span>Tier</span>
                 <span className="text-right">Entries</span>
                 <span className="text-right">Hits</span>
@@ -117,7 +117,7 @@ export const CacheTiersAccordion = ({
                 <div
                   key={name}
                   className={cn(
-                    "grid grid-cols-[minmax(120px,1fr)_50px_50px_50px_50px_50px_50px] gap-2 px-2 py-2 rounded-lg text-xs tabular-nums min-w-[420px]",
+                    "grid grid-cols-[minmax(120px,1fr)_56px_56px_56px_56px_56px_56px] gap-2 px-2 py-2 rounded-lg text-xs tabular-nums min-w-[504px]",
                     i % 2 === 0 ? "bg-surface-container-low/50" : "",
                   )}
                 >

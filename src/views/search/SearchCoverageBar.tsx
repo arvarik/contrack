@@ -72,7 +72,7 @@ export function SearchCoverageBar({
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending}
             title={`${coverage.pending} contact(s) pending indexing`}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary hover:opacity-80 transition-opacity"
+            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary hover:opacity-80 transition-opacity"
           >
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             <span>
@@ -82,7 +82,7 @@ export function SearchCoverageBar({
         ) : coverage.failed > 0 ? (
           <button
             onClick={() => setShowInspectModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
+            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
             title={`${coverage.failed} contact(s) failed indexing — click to inspect`}
           >
             <AlertCircle className="w-3.5 h-3.5 text-error" />
@@ -92,7 +92,7 @@ export function SearchCoverageBar({
           <button
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-warning hover:bg-amber-500/20 transition-colors"
+            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-warning hover:bg-amber-500/20 transition-colors"
             title={`${coverage.missing} contact(s) missing search vectors — click to index`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-warning" />
@@ -198,7 +198,7 @@ export function SearchCoverageBar({
             <button
               type="button"
               onClick={() => setShowInspectModal(true)}
-              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
+              className="btn-secondary"
             >
               Inspect {coverage.failed} Failed
             </button>
@@ -208,7 +208,7 @@ export function SearchCoverageBar({
             type="button"
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending || coverage.isIndexing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-primary text-on-primary hover:shadow-md hover:shadow-primary/20 transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary"
           >
             <RefreshCw
               className={cn(
@@ -317,7 +317,7 @@ function ProviderConfirmModal({
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="px-4 py-2 text-xs font-bold rounded-xl text-on-surface hover:bg-surface-container-high transition-colors"
+            className="btn-secondary"
           >
             Cancel
           </button>
@@ -325,7 +325,7 @@ function ProviderConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={isPending}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary text-on-primary hover:shadow-md transition-shadow disabled:opacity-50"
+            className="btn-primary"
           >
             {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             <span>Confirm & Refresh</span>
@@ -376,7 +376,7 @@ function FailedInspectModal({
               >
                 <div className="flex items-center justify-between font-bold text-on-surface">
                   <span>{item.name}</span>
-                  <span className="text-[10px] text-rose-500 font-mono bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="text-[11px] text-rose-500 font-mono bg-rose-500/10 px-2 py-0.5 rounded-full">
                     {item.attempts} attempts
                   </span>
                 </div>
@@ -393,11 +393,7 @@ function FailedInspectModal({
             Clicking Retry will re-enqueue these contacts for indexing.
           </p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-bold rounded-xl text-on-surface hover:bg-surface-container-high transition-colors"
-            >
+            <button type="button" onClick={onClose} className="btn-secondary">
               Close
             </button>
             <button
@@ -407,7 +403,7 @@ function FailedInspectModal({
                 onClose();
               }}
               disabled={isRetrying || failedItems.length === 0}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-primary text-on-primary hover:shadow-md transition-shadow disabled:opacity-50"
+              className="btn-primary"
             >
               {isRetrying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>Retry All Failed</span>

@@ -264,7 +264,7 @@ export const ClusterSwipeCard = ({
             role="radiogroup"
             aria-label="Select primary contact"
           >
-            <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-1">
+            <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant px-1">
               Select Primary Contact
             </div>
             <div className="flex gap-2 overflow-x-auto p-1 nice-scrollbar">
@@ -335,7 +335,7 @@ export const ClusterSwipeCard = ({
             onClick={() => setShowEvidence((s) => !s)}
             aria-expanded={showEvidence}
             aria-controls="cluster-evidence"
-            className="w-full flex items-center justify-center gap-2 py-2 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant transition-colors"
           >
             <Link2 className="w-3.5 h-3.5" />
             {showEvidence ? "Hide" : "Show"} Evidence ({cluster.pairs.length}{" "}
@@ -385,12 +385,12 @@ export const ClusterSwipeCard = ({
             <button
               onClick={handleButtonDismiss}
               aria-label="Keep contacts separate"
-              className="group flex items-center gap-3 px-6 py-3 bg-surface-container-low hover:bg-rose-500/8 rounded-2xl transition-all text-on-surface-variant hover:text-error w-full sm:w-auto justify-center"
+              className="group btn-secondary w-full sm:w-auto px-6"
             >
               <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <div className="text-left">
                 <div className="text-sm font-bold">Keep Separate</div>
-                <div className="text-[10px] uppercase tracking-wider opacity-60">
+                <div className="text-[11px] uppercase tracking-wider opacity-60">
                   Swipe left
                 </div>
               </div>
@@ -412,7 +412,7 @@ export const ClusterSwipeCard = ({
                     </p>
                   </div>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 min-h-[44px] sm:min-h-0 cursor-pointer select-none">
                   <input
                     aria-label="Confirm merging this large cluster"
                     type="checkbox"
@@ -434,13 +434,13 @@ export const ClusterSwipeCard = ({
                 (cluster.requiresConfirmation && !largeClusterConfirmed)
               }
               aria-label={`Merge ${cluster.size} contacts into one`}
-              className="group flex items-center gap-3 px-6 py-3 bg-primary text-on-primary rounded-2xl hover:shadow-lg hover:shadow-primary/20 transition-all w-full sm:w-auto justify-center disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+              className="group btn-primary w-full sm:w-auto px-6"
             >
               <div className="text-right">
                 <div className="text-sm font-bold">
                   {isMerging ? "Merging..." : "Merge"}
                 </div>
-                <div className="text-[10px] uppercase tracking-wider opacity-70">
+                <div className="text-[11px] uppercase tracking-wider opacity-70">
                   Swipe right →
                 </div>
               </div>

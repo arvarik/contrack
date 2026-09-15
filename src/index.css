@@ -59,6 +59,21 @@
      there and `text-primary` everywhere else. */
   --color-on-primary-wash: #005e81;
 
+  /* ── AI-derived data ────────────────────────────────────────────────
+   * The second accent, and the only one that means something. A chip, a
+   * glyph or a label in this colour says "a model wrote this, not you":
+   * the interests and tags an enrichment run added, the note glyph on the
+   * timeline. Nothing else wears it. A selected option is a selection, so
+   * it takes the primary.
+   *
+   * Not part of an accent or a contact colour: a violet contact must not
+   * make every one of its own notes read as AI. Worst measured 4.92:1 as
+   * text on a surface, 4.75:1 on its own 10 percent wash.
+   * `--color-on-ai-wash` carries text on a 10, 15 or 20 percent wash, the
+   * way `--color-on-primary-wash` does for the primary. */
+  --color-ai: #6f3fd0;
+  --color-on-ai-wash: #6734c6;
+
   /* ── Secondary / Neutral ────────────────────────────────────────── */
   --color-secondary: #4d626c;
   --color-secondary-container: #cfe6f2;
@@ -164,6 +179,9 @@
     --color-on-primary-container: #c2e7fb;
     /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
     --color-on-primary-wash: #6ec6ee;
+    --color-ai: #bfa3f9;
+    /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
+    --color-on-ai-wash: #bfa3f9;
     --color-secondary: #b0c2ca;
     --color-secondary-container: #2d4049;
     --color-on-secondary-container: #cfe6f2;
@@ -194,6 +212,9 @@
   --color-on-primary-container: #c2e7fb;
   /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
   --color-on-primary-wash: #6ec6ee;
+  --color-ai: #bfa3f9;
+  /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
+  --color-on-ai-wash: #bfa3f9;
   --color-secondary: #b0c2ca;
   --color-secondary-container: #2d4049;
   --color-on-secondary-container: #cfe6f2;
@@ -439,54 +460,71 @@
            focus:ring-2 focus:ring-primary/40 transition-all;
   }
 
-  /* ── Button — primary CTA with solid primary color ─────────────── */
+  /* ── Buttons — the two call-to-action shapes ─────────────────────
+   * One shape for every CTA in the app: a rounded rectangle, bold 14 px,
+   * 44 px tall on a phone and 40 px from `sm`. The review counted five
+   * primary shapes (pills, rounded-xl, two disabled looks). Pills are for
+   * chips, filter pills and `Segmented`, and nothing else.
+   *
+   * Written as plain CSS so a call site can still add `w-full`, `gap-3` or
+   * `px-8`: utilities sit in a later layer and win over these. */
+  .btn-primary,
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    transition:
+      background-color 0.2s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+    cursor: pointer;
+  }
+  @media (width >= 40rem) {
+    .btn-primary,
+    .btn-secondary {
+      min-height: 40px;
+    }
+  }
+
   .btn-primary {
     background-color: var(--color-primary);
     color: var(--color-on-primary);
-    font-weight: 700;
-    font-size: 0.875rem;
-    border-radius: 9999px;
-    padding: 0.625rem 1.5rem;
-    transition: all 0.2s ease;
-    cursor: pointer;
   }
-  .btn-primary:hover {
+  .btn-primary:hover:not(:disabled) {
     box-shadow: 0 10px 15px -3px rgba(0, 113, 156, 0.25);
-    transform: scale(1.02);
   }
-  .btn-primary:active {
+  .btn-primary:active:not(:disabled) {
     transform: scale(0.98);
   }
-  .btn-primary:disabled {
-    /* Not opacity: fading a filled button fades its label into its own fill.
-       Dim the chrome and keep the text readable. */
+
+  .btn-secondary {
+    background-color: var(--color-surface-container-high);
+    color: var(--color-on-surface);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--color-surface-container-highest);
+  }
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* The one disabled look, for both. Not opacity: fading a filled button
+     fades its label into its own fill. Dim the chrome and keep the label
+     readable. */
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
     background-color: var(--color-surface-container-high);
     color: var(--color-on-surface-variant);
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
-  }
-
-  /* ── Button — secondary / ghost ────────────────────────────────── */
-  .btn-secondary {
-    background-color: var(--color-surface-container-low);
-    color: var(--color-on-surface);
-    font-weight: 700;
-    font-size: 0.875rem;
-    border-radius: 9999px;
-    padding: 0.625rem 1.5rem;
-    transition: all 0.2s ease;
-    cursor: pointer;
-  }
-  .btn-secondary:hover {
-    background-color: var(--color-surface-container-high);
-  }
-  .btn-secondary:disabled {
-    /* Ghost button: the label only fades against a constant page background,
-       so it stays legible — but not at 50%. */
-    color: var(--color-on-surface-variant);
-    opacity: 0.75;
-    cursor: not-allowed;
   }
 
   /* ── Section divider — bg‑color shift, NEVER a 1px line ────────── */
@@ -526,6 +564,34 @@
  * ===================================================================== */
 
 @layer utilities {
+  /**
+   * hit-area: a 44 by 44 px tap box around a control that looks smaller.
+   *
+   * `.agent/STYLE.md` requires a 44 px hit box on every control. A 24 px
+   * chip remove button or a 28 px colour swatch can keep its size on
+   * screen and still take a thumb: the `::after` box is centred on the
+   * control, at least 44 px on each side, and a tap on it is a tap on the
+   * control. It draws nothing.
+   *
+   * `position: relative` sits inside `:where()`, so its specificity is zero
+   * and a control that is already `absolute` or `sticky` keeps that. Three
+   * limits: an ancestor with `overflow: hidden` clips the box; two controls
+   * closer than 44 px apart share the gap, where the later one in the
+   * document wins the tap; and a `<select>`, `<input>` or `<textarea>` draws
+   * no `::after` at all, so give the control itself a 44 px height.
+   */
+  :where(.hit-area) {
+    position: relative;
+  }
+  .hit-area::after {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;

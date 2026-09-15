@@ -169,8 +169,9 @@ const Stepper = ({
   max: number;
   label: string;
 }) => {
+  // 36 px on screen, with a 44 px tap box from `hit-area`.
   const button =
-    "w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold transition-colors bg-surface-container hover:bg-surface-container-high disabled:text-on-surface-variant disabled:cursor-not-allowed";
+    "hit-area w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold transition-colors bg-surface-container hover:bg-surface-container-high disabled:text-on-surface-variant disabled:cursor-not-allowed";
   return (
     <div className="flex items-center gap-2">
       <button
@@ -573,9 +574,11 @@ export const SettingsHome = () => {
                   <span className="block">{DEDUPE_PRESET_COPY[preset]}</span>
                   <span className="block mt-1.5">
                     Applies to scans you start from{" "}
+                    {/* An inline link in a sentence: `hit-area` gives it a
+                        44 px tap box without changing the line. */}
                     <Link
                       to="/settings/dedupe"
-                      className="font-bold text-primary hover:underline"
+                      className="hit-area inline-block font-bold text-primary hover:underline"
                     >
                       {NAMES.duplicates.label}
                     </Link>

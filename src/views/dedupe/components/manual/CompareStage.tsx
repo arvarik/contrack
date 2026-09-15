@@ -31,7 +31,7 @@ export const CompareStage = ({
       <div className="mb-4 flex items-center justify-between">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
+          className="hit-area flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
           Back
@@ -88,7 +88,7 @@ export const CompareStage = ({
       <button
         onClick={onNext}
         disabled={!primaryId}
-        className="btn-primary w-full flex items-center justify-center gap-2 py-3 disabled:opacity-40"
+        className="btn-primary w-full"
       >
         <Shield className="w-5 h-5" />
         Preview Merge Result

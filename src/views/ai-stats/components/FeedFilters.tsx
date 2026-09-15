@@ -27,14 +27,15 @@ export const FeedFilters = ({
 }: FeedFiltersProps) => {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Cache filter pills */}
-      <div className="flex bg-surface-container rounded-full p-1 shadow-inner h-8">
+      {/* Cache filter pills. Below `sm` each pill is 44 px tall, the touch
+          floor, and the trough grows around them, as in `Segmented`. */}
+      <div className="flex bg-surface-container rounded-full p-1 shadow-inner h-auto sm:h-8">
         {CACHE_PILLS.map((pill) => (
           <button
             key={pill.value}
             onClick={() => onCacheFilterChange(pill.value)}
             className={cn(
-              "px-3 h-full rounded-full text-xs font-bold transition-all flex items-center justify-center whitespace-nowrap",
+              "px-3 min-h-[44px] sm:min-h-0 sm:h-full rounded-full text-xs font-bold transition-all flex items-center justify-center whitespace-nowrap",
               cacheFilter === pill.value
                 ? "bg-surface shadow-sm text-primary"
                 : "text-on-surface-variant hover:text-on-surface",
@@ -49,7 +50,7 @@ export const FeedFilters = ({
       <button
         onClick={() => onSortChange(sort === "newest" ? "oldest" : "newest")}
         className={cn(
-          "ml-auto flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-bold",
+          "hit-area ml-auto flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-bold",
           "bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors",
         )}
       >

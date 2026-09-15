@@ -92,7 +92,7 @@ export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
         {tierInfo && (
           <span
             className={cn(
-              "text-[10px] ml-auto uppercase tracking-widest font-bold px-2 py-0.5 rounded-full ring-1",
+              "text-[11px] ml-auto uppercase tracking-widest font-bold px-2 py-0.5 rounded-full ring-1",
               tierInfo.color,
             )}
           >
