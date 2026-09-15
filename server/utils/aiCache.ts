@@ -14,7 +14,7 @@
  * - Each AI operation gets its own isolated tier (Map) with independent TTL,
  *   max-entry cap, and invalidation strategy.
  * - Operations never interfere: a flood of search queries can't evict briefings.
- * - Batch mode (Phase 4) defers invalidation during bulk operations, then
+ * - Batch mode defers invalidation during bulk operations, then
  *   consolidates into a single flush on exit.
  *
  * DIAGNOSTICS:
@@ -79,7 +79,7 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * TTL 12h: Increased from 5m to 12h for longer persistence.
    * Invalidation: Full flush on any contact mutation.
    *
-   * Since sub-phase 2c the key leads with the owner id (see `ownerKey`). The
+   * The key leads with the owner id (see `ownerKey`). The
    * cached value is a list of that owner's contacts, so one instance-wide key
    * per query text served the first searcher's matches to everybody who typed
    * the same words.
@@ -91,7 +91,7 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * TTL 12h: Increased from 10m to 12h for longer persistence.
    * Invalidation: Full flush on any contact mutation.
    *
-   * Owner-keyed since 2c, for the same reason as `rerank`: the cached text is
+   * Owner-keyed for the same reason as `rerank`: the cached text is
    * a paragraph about named contacts.
    */
   synthesis: { ttlMs: 12 * 60 * 60_000, maxEntries: 100, label: "Synthesis" },
@@ -103,8 +103,7 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * concern) while still providing near-permanent caching for the session.
    * Invalidation: Never (inputs are immutable).
    *
-   * Shared across owners, and 2c confirmed the condition the risks document
-   * sets in Q14: the extraction prompt is a fixed instruction plus the note
+   * Shared across owners: the extraction prompt is a fixed instruction plus the note
    * text, and the key is a content hash of that same text. Two owners share an
    * entry only when they wrote the same words, and the answer is a pure
    * function of those words, so sharing saves a paid call and tells neither
@@ -117,7 +116,7 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
    * TTL 24h: Regenerated once per day.
    * Invalidation: Full flush on any contact mutation.
    *
-   * Since sub-phase 2d the key leads with the owner id, so the tier holds one
+   * The key leads with the owner id, so the tier holds one
    * entry per owner rather than one entry for the instance. `maxEntries` is
    * 100 to match. A single slot would have made each owner's first dashboard
    * of the day evict the last owner's.
@@ -178,7 +177,7 @@ log.info(
 );
 
 // =============================================================================
-// Batch Mode (Phase 4)
+// Batch Mode
 // =============================================================================
 // Ref-counted batch mode. While active, invalidation calls are deferred and
 // recorded. On exit (refCount → 0), all pending invalidations are replayed
@@ -435,7 +434,7 @@ export const aiCache = {
   },
 
   // ===========================================================================
-  // Batch Mode (Phase 4)
+  // Batch Mode
   // ===========================================================================
 
   /**

@@ -21,7 +21,7 @@ import type { ContactRow, MergeSnapshotData } from "./types.ts";
  * existed, which is rule 4.
  *
  * It also makes the child re-parenting legal at the database level. Moving an
- * interaction between two contacts keeps its `ownerId`, and the Phase 1
+ * interaction between two contacts keeps its `ownerId`, and the owner
  * mismatch trigger accepts that only when both contacts share the owner. That
  * is precisely what this statement proves, so it has to run before any child
  * statement, not alongside them.

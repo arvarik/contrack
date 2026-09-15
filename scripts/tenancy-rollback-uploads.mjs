@@ -2,8 +2,7 @@
 // =============================================================================
 // tenancy-rollback-uploads — put uploads back where 1.x expects them
 // =============================================================================
-// Step 3 of the rollback in docs/multi-tenant-plan/04-data-model-and-migration.md
-// section 12. The full procedure is:
+// Rollback procedure for downgrading to 1.x:
 //
 //   1. Stop the server.
 //   2. Replace DATA_DIR/curator.db with backups/pre-tenancy-<stamp>.db, and

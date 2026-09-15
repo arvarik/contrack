@@ -17,10 +17,7 @@
 // Two modes:
 //   --report          print a table, exit 0.
 //   --strict <glob...>  exit 1 on any flag in a matching file. Several globs
-//                     may follow, because Phase 2 converted one domain at a
-//                     time and each sub-phase added its files. Sub-phase 2i
-//                     replaced the whole list with one glob, and
-//                     `npm run lint` now runs
+//                     may follow. `npm run lint` runs
 //                     `--strict "server/**/*.ts"` over the whole tree.
 // =============================================================================
 
@@ -306,10 +303,9 @@ export function scanProject(root = "server") {
 /** Turn a shell-style glob into a RegExp. Supports ** and *. */
 export function globToRegExp(glob) {
   // `**/` crosses path separators and may match none of them, so
-  // `server/**/*.ts` covers `server/db.ts` as well as `server/a/b.ts`. That
-  // is the whole point of the Phase 2i glob: a file sitting directly in
-  // `server/` must not fall outside strict mode. A lone `*` never crosses a
-  // separator. One pass over the three forms, longest first, so the
+  // `server/**/*.ts` covers `server/db.ts` as well as `server/a/b.ts`: a file
+  // sitting directly in `server/` must not fall outside strict mode. A lone `*`
+  // never crosses a separator. One pass over the three forms, longest first, so the
   // replacement text is never rewritten by a later rule.
   const escaped = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")

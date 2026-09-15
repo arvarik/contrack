@@ -2,7 +2,7 @@
 // The main thread's side of the CPU worker
 // =============================================================================
 // Spawns the worker when something first needs it, runs one job at a time,
-// and reports progress. The queue here is the run lock the plan describes:
+// and reports progress. The queue here acts as a run lock:
 // two accounts asking for an embedding backfill at once take turns on one
 // thread rather than fighting for the event loop on the main one.
 //
@@ -331,7 +331,7 @@ export function startJob(
 /**
  * The most jobs the host ever had on the worker at once. Tests only.
  *
- * The queue is the run lock the plan describes, and a run lock that does not
+ * The queue acts as a run lock, and a run lock that does not
  * lock is the kind of thing that passes every test and then corrupts an ONNX
  * session under two accounts backfilling at the same time.
  */

@@ -258,7 +258,7 @@ export const V1_TRIGGERS = [
   "action_items_sync_delete",
 ];
 
-/** What 1.5.5 called OWNED_TABLES. Four, against Phase 1's eight. */
+/** What 1.5.5 called OWNED_TABLES. */
 const V1_OWNED_TABLES = [
   "contacts",
   "lists",
@@ -353,7 +353,7 @@ export function makeV1Database(
 
   runDrizzleMigrations(db);
 
-  // §2z at v1.5.5: users and sessions, with none of the Phase 1 columns.
+  // §2z at v1.5.5: users and sessions, with none of the v2 columns.
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,

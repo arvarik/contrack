@@ -5,8 +5,7 @@ import { assertOwnedContact } from "./contactGuard.ts";
  * Action items are first-class entities linked to contacts. SQL triggers on
  * the `action_items` table automatically keep `contacts.nextFollowUpAt` in
  * sync as MIN(dueAt) of pending items — no manual cache management needed.
- *
- * Since sub-phase 2b every function takes the caller's scope first, and the
+ * Every function takes the caller's scope first, and the
  * owner predicate sits on `action_items` rather than on the joined contact.
  * The join stays for the payload columns and the archived filter, but the
  * index that answers the query is `idx_action_items_owner_due` (partial, on

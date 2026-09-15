@@ -18,15 +18,11 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    // docs/multi-tenant-plan/ holds the 2.0 design documents and the
-    // benchmark scripts behind them. The scripts are CommonJS and run under
-    // `node` by hand, not through the app build, so they read as undefined
-    // globals here. They are reference material, not source.
     ignores: [
       "dist/",
       "node_modules/",
       "drizzle/",
-      "docs/multi-tenant-plan/",
+      "docs/",
       // Playwright's own output: the HTML report ships bundled JavaScript.
       "playwright-report/",
       "test-results/",

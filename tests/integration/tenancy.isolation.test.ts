@@ -5,14 +5,11 @@
 // API. For every `scoped` route, user B tries to reach user A's data and must
 // fail, and A's rows must be unchanged afterwards. The third account writes
 // nothing, so every total it is shown must be zero.
-//
-// Phase 2 generated an `it.todo` here for each route it had not reached yet.
-// Sub-phase 2i closed the phase, so a new scoped route now fails the manifest
-// test instead: write its test here, add its key to `COVERED`, and flip
-// `isolated`. The `COVERED` list below is checked against the manifest in
-// both directions, so a route cannot be marked `isolated` without a test in
-// this file, and a test here cannot cover a route the manifest has not
-// flipped.
+// Every scoped route must be isolated: write its test here, add its key to `COVERED`,
+// and ensure `isolated: true` in the route manifest. The `COVERED` list below is
+// checked against the manifest in both directions, so a route cannot be marked `isolated`
+// without a test in this file, and a test here cannot cover a route the manifest has not
+// marked isolated.
 //
 // Auth is on for this file. Isolation between two accounts is only meaningful
 // when both had to sign in.
@@ -317,7 +314,7 @@ beforeAll(async () => {
   avatarUrlA = uploaded.body.avatarUrl;
   expect(avatarUrlA).toContain(`/uploads/u/${A.user.id}/avatars/`);
 
-  // A shared logo and a file in the pre-Phase-1 flat layout, so the guard is
+  // A shared logo and a file in the legacy flat layout, so the guard is
   // tested against files that exist rather than against a missing path.
   ensureDir(LOGOS_DIR);
   fs.writeFileSync(path.join(LOGOS_DIR, "acme.png"), PNG_1X1);
@@ -1986,7 +1983,7 @@ describe("AI stats count the caller's own work", () => {
     //
     // Every actor here is a member: the local owner account boot creates takes
     // the admin role, and `createUser` gives it to the first account only.
-    // Phase 3 brings role management, so this promotes and restores by hand.
+    // Promotes and restores role directly for this test case.
     expect(roleOf(A)).toBe("member");
     const asMember = await asUser(A)(request(app).get("/api/ai/stats/summary"));
     expect(asMember.body).not.toHaveProperty("cacheTiers");
@@ -2534,7 +2531,7 @@ describe("dedupe scans and merges stop at the account that asked", () => {
 // =============================================================================
 // Trash, export, and the MCP surface
 // =============================================================================
-// The three groups sub-phase 2g converted. The export is the widest read in
+// Trash, export, and MCP isolation. The export is the widest read in
 // the app: one request returns six tables at once, so it is the one place a
 // single missing predicate hands over somebody's whole account.
 // =============================================================================
@@ -2964,8 +2961,7 @@ describe("the MCP surface answers for the caller's own account", () => {
   });
 
   it("answers a personal token for that token's own account", async () => {
-    // Phase 3 adds the endpoint that mints one. The lookup already works, so
-    // the row goes in by hand, the way api.auth.test.ts does it.
+    // Inserts an api_token row directly, the way api.auth.test.ts does it.
     const secret = "ctk_" + "m".repeat(43);
     const hash = crypto.createHash("sha256").update(secret).digest("hex");
     sqlite
@@ -3022,20 +3018,14 @@ describe("matrix coverage", () => {
 });
 
 /**
- * Phase 2 generated one `it.todo` here per scoped route it had not reached,
- * so a route added mid-phase arrived as a todo rather than as nothing at all.
- * Sub-phase 2i closed the phase with none left, and the generator became the
- * assertion it had been standing in for.
- *
- * What this can check is that every `scoped` route is `isolated`, and
- * `isolated` flips only when a test for it is added to `COVERED` above. What
- * it cannot check is the kind of test: a collection needs a second proof
- * beyond "B cannot read A's row by id", because a per-id check says nothing
+ * Verifies that every `scoped` route is `isolated`, and `isolated` is set only
+ * when a test for it is added to `COVERED` above. A collection needs a second
+ * proof beyond "B cannot read A's row by id", because a per-id check says nothing
  * about whether A's rows appear in B's list. Nothing in the manifest can
  * express that difference, so it stays a review rule, and the collections are
  * listed here to name what the rule applies to.
  */
-describe("no scoped route is waiting for its sub-phase", () => {
+describe("all scoped routes are isolated", () => {
   it("has a matrix test for every scoped route", () => {
     const waiting = scoped.filter((r) => !r.isolated).map(key);
     expect(waiting, "scoped routes with no test in this file").toEqual([]);

@@ -63,7 +63,7 @@ export const users = sqliteTable("users", {
    * how the data comes along.
    */
   credentialState: text("credentialState").notNull().default("password"),
-  /** Set by an admin password reset. Phase 3 acts on it. */
+  /** Set by an admin password reset. Requires the user to change password on next login. */
   mustChangePassword: integer("mustChangePassword").notNull().default(0),
   passwordChangedAt: text("passwordChangedAt"),
   disabledAt: text("disabledAt"),
@@ -81,8 +81,7 @@ export const users = sqliteTable("users", {
  * `tokenPrefix` is the first 12 characters, which is what a list can show
  * without being a credential itself.
  *
- * Created in Phase 1 so attachPrincipal can resolve one. The endpoints that
- * mint them are Phase 3.
+ * Resolved by attachPrincipal and minted via API token management endpoints.
  */
 export const apiTokens = sqliteTable("api_tokens", {
   id: text("id").primaryKey(),
@@ -102,7 +101,7 @@ export const apiTokens = sqliteTable("api_tokens", {
   revokedAt: text("revokedAt"),
 });
 
-/** invitations — a signup link an admin hands out. Phase 3 uses these. */
+/** invitations — a signup link an admin hands out. */
 export const invitations = sqliteTable("invitations", {
   id: text("id").primaryKey(),
   /** Optional: an open invite has no address attached. */
@@ -238,7 +237,7 @@ export const contacts = sqliteTable("contacts", {
   isGhost: integer("isGhost").default(0),
   isArchived: integer("isArchived").default(0),
   relationshipScore: integer("relationshipScore").default(50),
-  // Dedupe infrastructure (Phase 1)
+  // Dedupe infrastructure
   canonicalId: text("canonicalId"), // Soft merge: points to primary contact's id. NULL = active contact.
   deletedAt: text("deletedAt"), // Trash: soft-delete timestamp. NULL = not deleted. Purged after TRASH_RETENTION_DAYS.
   phoneticHash: text("phoneticHash"), // Double Metaphone encoding for phonetic blocking.
@@ -252,9 +251,8 @@ export const contacts = sqliteTable("contacts", {
 // =============================================================================
 // OWNERSHIP
 // =============================================================================
-// Since Phase 1 of the 2.0 work, `ownerId` appears on eight tables: contacts,
-// lists, interactions, action_items, dedupe_suggestions, dedupe_exclusions,
-// dedupe_merge_log and ai_invocations.
+// `ownerId` appears on eight tables: contacts, lists, interactions, action_items,
+// dedupe_suggestions, dedupe_exclusions, dedupe_merge_log and ai_invocations.
 //
 // THE INVARIANT: after boot, `ownerId` is never NULL. SQLite cannot add a NOT
 // NULL column to an existing table, so triggers give the same guarantee.
@@ -280,12 +278,8 @@ export const contacts = sqliteTable("contacts", {
 // to guess at. Securing the instance converts that row in place, keeping its
 // id, which is how the data comes along without a claim.
 //
-// Reads do not filter on this column yet. Phase 2 adds the owner predicate to
-// every query, through a repository layer that takes the owner as a required
-// first argument — the failure mode of a forgotten `WHERE ownerId = ?` is a
-// silent data leak with no error and no failing test, which is not something
-// to defend with discipline across a hundred call sites. See
-// docs/multi-tenant-plan/.
+// All queries and mutations enforce tenant scoping via caller Scope across
+// all scoped routes.
 //
 // dedupe_merge_log is the interesting one: it deliberately has no foreign key
 // to contacts, because it stores snapshots of contacts that were hard-deleted
@@ -298,12 +292,6 @@ export const contacts = sqliteTable("contacts", {
 // them (see server/services/authService.ts → claimUnownedData), and a boot
 // reconcile re-claims anything written while signed out. So NULL is a valid,
 // meaningful state rather than a bug to be defended against.
-//
-// Nothing filters on this column yet. Doing so is the multi-tenancy project,
-// and it needs a repository layer that takes the owner as a required argument
-// — the failure mode of a forgotten `WHERE ownerId = ?` is a silent data leak
-// with no error and no failing test, which is not something to defend with
-// discipline across a hundred call sites.
 //
 // ON DELETE RESTRICT, not CASCADE. Cascade is what a mature multi-tenant app
 // wants — remove an account, remove its data — but it is the wrong default to

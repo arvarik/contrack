@@ -40,7 +40,7 @@ sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
 // =============================================================================
-// 1a. Performance PRAGMAs (Phase 0 — Caching Strategy)
+// 1a. Performance PRAGMAs (Caching Strategy)
 // =============================================================================
 // These PRAGMAs are CRITICAL for a local-first app with an embedded 9–15MB
 // database. They reduce cold-start query latency by ~3–5× and eliminate
@@ -155,8 +155,8 @@ log.info("Database", `sqlite-vec loaded (version ${vec_version})`);
  */
 export const VEC_VERSION = vec_version;
 
-// Before any migration runs. Partition keys arrived in 0.1.6 and every vector
-// query from Phase 2 on depends on them, so an instance that cannot have them
+// Before any migration runs. Partition keys arrived in 0.1.6 and vector
+// queries depend on them, so an instance that cannot have them
 // must refuse to start rather than migrate and then fail. `assertVecVersion`
 // is declared at §9k; a function declaration hoists, so it is callable here.
 assertVecVersion(vec_version);
@@ -229,7 +229,7 @@ if (sweptSessions.changes > 0) {
  *
  * v1 adds the ownership columns, claims the existing rows, installs the
  * invariant triggers and the composite indexes. v2 drops the four
- * single-column owner indexes v1 created, now that the Phase 2 query plans
+ * single-column owner indexes v1 created, now that the tenancy query plans
  * prove the composites serve every owner-first read.
  */
 export const TENANCY_SCHEMA_VERSION = 2;
@@ -328,10 +328,9 @@ for (const column of [
 // version in it. `PRAGMA user_version` already holds FTS_SCHEMA_VERSION and is
 // a single 32-bit field, so a second migration cannot share that slot.
 //
-// `api_tokens`, `invitations`, `user_settings` and `audit_log` are created now
-// and filled by Phase 3. They are here rather than in Phase 3 so that one
-// migration touches `users` once, and so `attachPrincipal` can look up a
-// personal token from this phase on.
+// `api_tokens`, `invitations`, `user_settings` and `audit_log` are created here
+// so that one migration touches `users` once, and so `attachPrincipal` can look up a
+// personal token.
 // =============================================================================
 
 sqlite.exec(`
@@ -495,7 +494,7 @@ sqlite.exec(`
 // 2z-4. Tenancy — ownership columns, the local owner, and the claim
 // =============================================================================
 // This block gives every row an owner. It has to run here, before §3, for two
-// independent reasons found while reviewing the plan against the engine:
+// independent architectural requirements:
 //
 //   • The FTS backfill selects `c.ownerId`. A SELECT inside `exec` is prepared
 //     before it runs, so a missing column fails the boot even on an empty
@@ -767,7 +766,7 @@ function ownerInvariantTriggerSql(): string {
   return out.join("\n");
 }
 
-/** Composite indexes for the owner-first reads Phase 2 writes. */
+/** Composite indexes for the owner-first reads in tenant-scoped queries. */
 const OWNER_COMPOSITE_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_contacts_owner_status    ON contacts(ownerId, isGhost, isArchived, canonicalId);
   CREATE INDEX IF NOT EXISTS idx_contacts_owner_deleted   ON contacts(ownerId, deletedAt);
@@ -793,11 +792,7 @@ const OWNER_COMPOSITE_INDEXES = `
  * Each one is the leading column of a composite above, so SQLite can answer
  * every query that used it from the composite instead. Leaving them costs a
  * second B-tree write on each insert, and gives the planner a narrower index
- * to prefer over the composite the Phase 2 plan tests pin.
- *
- * The other four owned tables also had one. Phase 2i drops the four the plan
- * names; docs/multi-tenant-plan/07-phase-2-scoping.md section 2i records why
- * the rest are still there.
+ * to prefer over the composite that query plan tests pin.
  */
 const OWNER_PREFIX_INDEXES = [
   "idx_contacts_owner",
@@ -956,7 +951,7 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
       });
     }
 
-    // v1 to v2: the prefix indexes go, now that the plan tests prove the
+    // v1 to v2: the prefix indexes go, now that the query plan tests prove the
     // composites answer every owner-first read. DROP INDEX is metadata
     // only, so this is fast on any size of database.
     if (tenancyVersion < 2) {
@@ -995,13 +990,10 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
 // stored URL is rewritten to match. Outside every transaction, because it
 // touches the filesystem: a rolled-back transaction cannot un-move a file.
 //
-// Position matters, and this is not where the plan put it. The plan ran the
-// relocation last, calling the trigger it fires harmless. It is not. Rewriting
-// `avatarUrl` fires `contacts_auto_updated_at`, which stamps `updatedAt`, and
-// `findStaleEmbeddings` re-embeds every contact whose `updatedAt` is newer
-// than its `embeddedAt`. Running it last meant every contact with an avatar
-// was re-embedded through the paid provider on the next deep dedupe scan. The
-// migration test caught it.
+// Position matters: running relocation after trigger installation would mean
+// rewriting `avatarUrl` fires `contacts_auto_updated_at`, which stamps `updatedAt`,
+// causing `findStaleEmbeddings` to re-embed every contact whose `updatedAt` is newer
+// than its `embeddedAt`.
 //
 // Here, on a migrating boot, §2z-4 has just dropped those triggers and §3 to
 // §6 have not yet put them back, so the rewrite stamps nothing. On any later
@@ -1013,8 +1005,7 @@ if (tenancyVersion < TENANCY_SCHEMA_VERSION) {
 // matches nothing. Nothing is ever deleted. A file no row references moves to
 // `uploads/orphaned/` so an operator can look at it before deciding.
 //
-// The `/uploads` ownership guard is Phase 2a. Until then the new path is
-// served to any authenticated caller, which is the exposure that exists today.
+// Access to `/uploads/u/<ownerId>/...` is guarded by tenant ownership middleware.
 // =============================================================================
 
 {
@@ -2066,7 +2057,7 @@ sqlite.exec(`
 // The columns themselves are added in §2z-4, which has to run before §3
 // because the FTS backfill selects `c.ownerId`. What stays here is the check
 // that used to be implied by doing the work: if any owned table reached the
-// end of boot without the column, every scoped query in Phase 2 would return
+// end of boot without the column, scoped queries would return
 // the wrong rows rather than fail, so this fails now instead.
 // =============================================================================
 
@@ -2108,7 +2099,7 @@ sqlite.exec(`
 
 // Give the query planner statistics for the new indexes.
 //
-// ANALYZE is new in Phase 1. `PRAGMA optimize` only re-analyzes tables that
+// `PRAGMA optimize` only re-analyzes tables that
 // already have sqlite_stat1 rows, and nothing had ever run ANALYZE, so the
 // owner-first composite indexes above would have been invisible to the
 // planner. This runs once per boot and is cheap on a database this size.

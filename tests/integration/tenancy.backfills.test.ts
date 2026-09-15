@@ -2,8 +2,8 @@
 // Integration Tests — the embedding backfills run one account at a time
 // =============================================================================
 // Both backfills are sweeps: they run at boot, with no request behind them and
-// no scope in the async context. Before sub-phase 2h each was one pass over
-// every contact on the instance, which had two consequences.
+// no scope in the async context. Rather than one single pass over every contact
+// on the instance, they run partitioned by owner with two consequences addressed:
 //
 //   • The provider bill landed on the primary admin. `recordInvocation` reads
 //     `currentOwnerId()`, which falls back to that account when there is no

@@ -1,15 +1,10 @@
 // =============================================================================
 // Integration Tests — request context across multer
 // =============================================================================
-// Open question T25: multer issue #1111 reports that the AsyncLocalStorage
-// context is lost in the route handler after upload.single() when the
-// multipart body ALSO carries a text field. The upload routes carry no text
-// fields today, so the plan could not reproduce it and left a fallback.
-//
-// This test settles it on the installed multer, with one text field and one
-// file, and records the answer for Phase 1. If the handler assertion ever
-// fails, the two upload handlers must read the scope from req.principal
-// instead of the context.
+// Tests that AsyncLocalStorage request context survives across multer's
+// upload.single() middleware when the multipart body carries both text fields
+// and files. If the handler assertion ever fails, upload handlers must read
+// the scope from req.principal instead of the context.
 // =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";

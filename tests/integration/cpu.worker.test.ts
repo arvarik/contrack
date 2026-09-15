@@ -141,7 +141,7 @@ describe("the worker thread", () => {
     // that does is how many were ever posted at once.
     expect(order).toEqual([1, 2, 3, 4, 5]);
 
-    // The queue is the run lock the plan describes: two accounts asking for a
+    // The queue acts as a run lock: two accounts asking for a
     // backfill at once take turns on one thread rather than both running
     // against one ONNX session.
     expect(__maxInFlight()).toBe(1);
