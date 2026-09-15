@@ -59,3 +59,6 @@ docs/explorations/
 docs/plans/
 docs/recommendations/
 docs/multi-tenant-plan/
+
+# 2.0 line-item plans: context, code references and agent prompts per item
+docs/v2/
