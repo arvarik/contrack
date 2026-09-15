@@ -10,6 +10,7 @@
 import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectFloors } from "./fixtures/metrics";
+import { stubBasemap } from "./fixtures/map";
 import type { Seed } from "./fixtures/seed";
 
 /**
@@ -19,11 +20,12 @@ import type { Seed } from "./fixtures/seed";
 const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
 
 /**
- * Leaflet draws its own attribution strip with its own type size. The
- * MapLibre plan replaces the map and its attribution, and this entry goes
- * with it.
+ * MapLibre draws the attribution strip itself, at its own type size and with
+ * inline links. WCAG 2.5.8 exempts a link inside a line of text from the
+ * target floor, and the strip is required by the basemap's terms, so it is
+ * measured by neither rule.
  */
-const ALLOW = [".leaflet-control-attribution"];
+const ALLOW = [".maplibregl-ctrl-attrib"];
 
 interface Screen {
   name: string;
@@ -62,6 +64,20 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    name: "map",
+    path: () => "/map",
+    ready: async (page) => {
+      // The zoom buttons and the pins are the map's own controls, and both
+      // have to clear the floor on a phone, over the tab bar.
+      await expect(
+        page.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Zoom in", exact: true }),
+      ).toBeVisible();
+    },
+  },
+  {
     name: "ask contrack",
     path: () => "/search",
     ready: async (page) => {
@@ -81,6 +97,12 @@ const SCREENS: Screen[] = [
 
 test.describe("phone", () => {
   test.use({ ...PHONE });
+
+  // The map screen loads its basemap from OpenFreeMap. The host is answered
+  // locally, so the scan never waits on a public service.
+  test.beforeEach(async ({ page }) => {
+    await stubBasemap(page);
+  });
 
   for (const screen of SCREENS) {
     test(`${screen.name} has 44 pixel targets and 11 pixel text`, async ({

@@ -11,6 +11,7 @@ import cors from "cors";
 import crypto from "crypto";
 import morgan from "morgan";
 import { log } from "./utils/logger.ts";
+import { styleOrigins } from "./utils/mapConfig.ts";
 import path from "path";
 
 import { linkPreviewRouter } from "./routes/linkPreview.ts";
@@ -100,21 +101,40 @@ const LARGE_JSON_PATHS = new Set(["/api/contacts/bulk"]);
  * HMR, so enforcing in dev would break the dev loop while protecting nobody.
  * The built index.html contains no inline script, which is what makes the
  * strict `script-src 'self'` possible. img-src stays open to https: because
- * imported contacts carry avatar URLs pointing at arbitrary hosts;
- * connect-src names the one external API the client calls (Open-Meteo).
+ * imported contacts carry avatar URLs pointing at arbitrary hosts.
+ *
+ * connect-src names the external hosts the client fetches from: Open-Meteo
+ * for the weather, and the origin of each basemap style. MapLibre loads a
+ * style, its tiles, its glyphs and its sprite through `fetch`, and the
+ * origins come from `mapConfig.ts`, the same module that tells the client
+ * which style to load. MapLibre runs its tile work in a web worker: the
+ * bundled worker file is same-origin, and `blob:` covers the worker MapLibre
+ * builds from a blob when a worker URL is cross-origin. `child-src blob:` is
+ * the fallback older browsers read in place of worker-src.
  */
-const CSP_PRODUCTION = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'", // Leaflet and React set style attributes
-  "img-src 'self' data: blob: https:",
-  "font-src 'self'",
-  "connect-src 'self' https://api.open-meteo.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
+export function buildProductionCsp(
+  origins: readonly string[] = styleOrigins(),
+): string {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'", // MapLibre and React set style attributes
+    "img-src 'self' data: blob: https:",
+    "font-src 'self'",
+    "worker-src 'self' blob:",
+    "child-src blob:",
+    [
+      "connect-src 'self' https://api.open-meteo.com",
+      // A Set, because both palettes usually share one host and a directive
+      // that names it twice says nothing the first mention did not.
+      ...new Set(origins),
+    ].join(" "),
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
 
 // Morgan's `:url` token is `req.originalUrl`, query string included, and both
 // formats this app uses carry it. An invitation link puts its secret in that
@@ -141,7 +161,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     if (process.env.NODE_ENV === "production") {
-      res.setHeader("Content-Security-Policy", CSP_PRODUCTION);
+      res.setHeader("Content-Security-Policy", buildProductionCsp());
     }
     next();
   });

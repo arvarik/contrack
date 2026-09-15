@@ -11,7 +11,7 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 ## 1. Tech Stack & Infrastructure
 
 - **Language / Runtime**: TypeScript ~5.8 / Node.js 22+
-- **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and Leaflet for interactive maps.
+- **Frontend**: React 19 via Vite 6, incorporating Tiptap for rich interaction composition, `cmdk` for the Command Palette, `react-router-dom` v7 for client-side routing, Framer Motion (`motion/react`) for layout animations, and MapLibre GL JS via `react-map-gl/maplibre` for interactive maps (OpenFreeMap vector tiles, `pmtiles` for a self-hosted archive).
 - **Backend / API**: Express 4 running natively via `tsx`. Vite dev server runs as middleware **inside** the Express process (not on a separate port).
 - **Database**: SQLite (WAL mode) via `better-sqlite3` + Drizzle ORM. Vector search via `sqlite-vec`. Full-text search via FTS5.
 - **AI Provider**: Capability-routed multi-provider — Google Gemini via `@google/genai`, OpenAI via `openai`, Anthropic via `@anthropic-ai/sdk`, plus a generic OpenAI-compatible adapter for self-hosted servers. Providers are resolved per capability at call time (see `capabilities.ts`), not fixed at startup; `AI_PROVIDER` is now only the Auto-mode preference. Local embeddings via `@huggingface/transformers` (Transformers.js).
@@ -246,7 +246,8 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/dashboard/` — Pulse dashboard (metrics, action items, insights)
   - `src/views/ai-search/` — AI-powered semantic search view
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
-  - `SearchView.tsx`, `DashboardView.tsx`, `MapView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`)
+  - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `ContactPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`
+  - `SearchView.tsx`, `DashboardView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`)
 - `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
 - `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`
 - `src/db/` — `schema.ts` (Drizzle ORM schema definitions)

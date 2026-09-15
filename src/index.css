@@ -245,8 +245,8 @@
  * =====================================================================
  * Three things paint a colour no `--color-*` token describes, because each
  * was written as a literal: the frosted panel and the two swipe overlays.
- * (The map is the fourth; its tiles come from a URL, so MapView swaps the
- * basemap instead.)
+ * (The map is the fourth. Its basemap is a style URL, so ContactMap swaps
+ * the style instead.)
  * ===================================================================== */
 
 @media (prefers-color-scheme: dark) {
@@ -277,31 +277,13 @@
     }
 
     /*
-     * Leaflet paints its own chrome — the attribution strip, the zoom buttons
-     * and the popup — from its stylesheet, in white with a blue link. On a dark
-     * basemap that is a white box in the corner, and the browser audit measured
-     * its link at 3.22:1. Leaflet's class names are the only handle there is.
+     * MapLibre draws its zoom and attribution icons as dark SVG backgrounds,
+     * which no colour token reaches. On the dark surfaces below they vanish,
+     * so they are inverted. See MAP CHROME for the rest of the map's chrome.
      */
-    .leaflet-control-attribution {
-      background: rgba(15, 19, 21, 0.85);
-      color: var(--color-on-surface-variant);
-    }
-    .leaflet-control-attribution a {
-      color: var(--color-primary);
-    }
-    .leaflet-bar a {
-      background-color: var(--color-surface-container-lowest);
-      color: var(--color-on-surface);
-      border-bottom-color: var(--color-outline-variant);
-    }
-    .leaflet-bar a:hover {
-      background-color: var(--color-surface-container-high);
-      color: var(--color-on-surface);
-    }
-    .leaflet-popup-content-wrapper,
-    .leaflet-popup-tip {
-      background: var(--color-surface-container-lowest);
-      color: var(--color-on-surface);
+    .contact-map .maplibregl-ctrl-icon,
+    .contact-map .maplibregl-ctrl-attrib-button {
+      filter: invert(1);
     }
   }
 }
@@ -333,31 +315,13 @@
   }
 
   /*
-   * Leaflet paints its own chrome — the attribution strip, the zoom buttons
-   * and the popup — from its stylesheet, in white with a blue link. On a dark
-   * basemap that is a white box in the corner, and the browser audit measured
-   * its link at 3.22:1. Leaflet's class names are the only handle there is.
+   * MapLibre draws its zoom and attribution icons as dark SVG backgrounds,
+   * which no colour token reaches. On the dark surfaces below they vanish,
+   * so they are inverted. See MAP CHROME for the rest of the map's chrome.
    */
-  .leaflet-control-attribution {
-    background: rgba(15, 19, 21, 0.85);
-    color: var(--color-on-surface-variant);
-  }
-  .leaflet-control-attribution a {
-    color: var(--color-primary);
-  }
-  .leaflet-bar a {
-    background-color: var(--color-surface-container-lowest);
-    color: var(--color-on-surface);
-    border-bottom-color: var(--color-outline-variant);
-  }
-  .leaflet-bar a:hover {
-    background-color: var(--color-surface-container-high);
-    color: var(--color-on-surface);
-  }
-  .leaflet-popup-content-wrapper,
-  .leaflet-popup-tip {
-    background: var(--color-surface-container-lowest);
-    color: var(--color-on-surface);
+  .contact-map .maplibregl-ctrl-icon,
+  .contact-map .maplibregl-ctrl-attrib-button {
+    filter: invert(1);
   }
 }
 
@@ -720,15 +684,104 @@
   }
 }
 
+/* =====================================================================
+ * MAP CHROME
+ * =====================================================================
+ * MapLibre paints its own chrome from its stylesheet: the attribution, the
+ * zoom buttons and the popup frame, in white with a thin grey ring and a
+ * blue focus glow. These rules put that chrome on the surface tokens, so it
+ * follows the palette like the rest of the app.
+ *
+ * Every rule is scoped under `.contact-map`, the map's wrapper. That scope is
+ * not decoration. `maplibre-gl.css` loads later, with the map's chunk, and at
+ * equal specificity the later stylesheet wins. Unlayered for the same reason:
+ * a Tailwind layer loses to any unlayered rule.
+ * ===================================================================== */
+
+.contact-map .maplibregl-ctrl-group,
+.contact-map .maplibregl-ctrl-group:not(:empty) {
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--color-surface-container-lowest);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+/* Two buttons in one group, told apart by space rather than a line. */
+.contact-map .maplibregl-ctrl-group button + button {
+  border-top: 0;
+}
+.contact-map .maplibregl-ctrl-group button:not(:disabled):hover {
+  background-color: var(--color-surface-container-high);
+}
+/* The app's focus colour, inset because the group clips anything outside. */
+.contact-map .maplibregl-ctrl-group button:focus:focus-visible,
+.contact-map .maplibregl-ctrl-attrib-button:focus:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+
+.contact-map .maplibregl-ctrl-attrib,
+.contact-map .maplibregl-ctrl-attrib.maplibregl-compact {
+  background-color: var(--color-surface-container-lowest);
+  color: var(--color-on-surface-variant);
+}
 /*
- * Leaflet's attribution strip tells its links apart from the text beside
- * them by colour alone: #0078a8 on #333, 2.55:1 against the 3:1 WCAG 1.4.1
- * asks of a link in running text. An underline is the distinction that does
- * not depend on colour, and it holds in both palettes. Unlayered, because
- * Leaflet's own stylesheet is.
+ * MapLibre tells the attribution links apart from the text beside them by
+ * colour alone, and only underlines them on hover. WCAG 1.4.1 asks for a
+ * distinction that does not depend on colour, and an underline holds in both
+ * palettes.
  */
-.leaflet-control-attribution a {
+.contact-map .maplibregl-ctrl-attrib a {
+  color: var(--color-primary);
   text-decoration: underline;
+}
+/* The compact attribution toggle is 24 px. The tap box is 44 px. */
+.contact-map .maplibregl-ctrl-attrib-button::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.contact-map .maplibregl-popup-content {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+}
+/* The tip is a border triangle, so its colour is the one border it draws. */
+.contact-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.contact-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.contact-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--color-surface-container-lowest);
+}
+.contact-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.contact-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.contact-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--color-surface-container-lowest);
+}
+.contact-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--color-surface-container-lowest);
+}
+.contact-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--color-surface-container-lowest);
+}
+
+/*
+ * On a phone the tab bar is fixed over the bottom of the map page. The zoom
+ * buttons and the attribution sit above it, and the zoom buttons grow to the
+ * 44 px tap floor.
+ */
+@media (width < 48rem) {
+  .map-page .maplibregl-ctrl-bottom-left,
+  .map-page .maplibregl-ctrl-bottom-right {
+    bottom: calc(env(safe-area-inset-bottom) + 88px);
+  }
+  .map-page .maplibregl-ctrl-group button {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 /* Tiptap Customizations */

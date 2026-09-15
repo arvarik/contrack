@@ -78,7 +78,7 @@ Runs on an automated scoring engine (frequency × recency × depth) to power act
 
 Visualize your network geographically to plan trips or coordinate local meetups. See exactly where your connections are clustered around the globe at a glance.
 
-Interactive cluster map powered by React Leaflet, utilizing Mapbox and Nominatim for accurate backend geocoding and detail overlays.
+Interactive cluster map powered by MapLibre GL JS on OpenFreeMap vector tiles, with no API key to obtain. Mapbox and Nominatim geocode the addresses on the backend, and a pin opens the contact as an overlay.
 
 </td>
 <td width="70%">
@@ -205,7 +205,7 @@ Open **http://localhost:3210**. The server auto-initializes the database, loads 
 | **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
 | **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
 | **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
-| **Mapping**  | React Leaflet + Leaflet Cluster, Mapbox/Nominatim geocoding           |
+| **Mapping**  | MapLibre GL JS + OpenFreeMap tiles, Mapbox/Nominatim geocoding        |
 | **Testing**  | Vitest — 1,695 unit, integration and eval tests, no API keys needed   |
 
 ---
@@ -266,7 +266,7 @@ graph TD
     subgraph Frontend ["UI Layer — React 19 / Vite"]
         RQ["React Query v5"] --> TW["Tailwind v4 'No-Line' UI"]
         TW --> TT["Tiptap Editor + Cheerio Previews"]
-        TT --> Map["React Leaflet Geospatial"]
+        TT --> Map["MapLibre GL Geospatial"]
     end
 
     subgraph Backend ["Node.js Express Server"]

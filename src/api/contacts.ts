@@ -16,6 +16,7 @@ import {
   ParsedContactData,
   TrashedContact,
 } from "../types";
+import type { MapContact } from "../../shared/geo";
 import { apiFetch } from "./client";
 
 /**
@@ -145,9 +146,7 @@ export const useContact = (id: string | undefined) => {
 export const useMapContacts = () => {
   return useQuery({
     queryKey: ["contacts", "map"],
-    queryFn: async ({
-      signal,
-    }): Promise<(Partial<Contact> & { lat: number; lng: number })[]> => {
+    queryFn: async ({ signal }): Promise<MapContact[]> => {
       const res = await apiFetch("/contacts/map", { signal });
       return res.json();
     },

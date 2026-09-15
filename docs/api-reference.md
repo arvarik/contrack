@@ -421,11 +421,16 @@ curl http://localhost:3210/api/contacts/archived
 
 ### `GET /api/contacts/map`
 
-Fetch geocoded contacts for the map view (only those with lat/lng coordinates).
+Fetch geocoded contacts for the map view (only those with lat/lng coordinates). Archived contacts, trashed contacts, ghost contacts and every other account's contacts are left out.
 
 ```bash
 curl http://localhost:3210/api/contacts/map
+# → [ { "id": "abc123", "name": "Jane Smith", "company": "Acme Corp",
+#       "avatarUrl": "/uploads/avatars/abc123.webp", "location": "Berlin",
+#       "lat": 52.52, "lng": 13.405 } ]
 ```
+
+The row shape is the seven fields above and nothing more. `shared/geo.ts` declares it as `MapContact`.
 
 ---
 
@@ -1531,7 +1536,9 @@ curl http://localhost:3210/api/auth/status
 # → { "authRequired": true, "authenticated": false, "setupRequired": true,
 #     "hasAccounts": false, "user": null, "registrationOpen": false,
 #     "localOwnerPresent": false, "legacyTokenConfigured": false,
-#     "deviceContacts": 0, "existingContacts": 0 }
+#     "deviceContacts": 0, "existingContacts": 0,
+#     "map": { "light": "https://tiles.openfreemap.org/styles/positron",
+#              "dark": "https://tiles.openfreemap.org/styles/dark" } }
 ```
 
 `setupRequired` is true only on a gated instance with no accounts.
@@ -1540,6 +1547,12 @@ account. `localOwnerPresent` is true while the instance has never been
 secured. `legacyTokenConfigured` is true while the deprecated environment
 `API_TOKEN` is set. `existingContacts` is the old name for `deviceContacts`
 and is removed in 3.0.
+
+`map` names the basemap style the map loads in each palette, from
+`MAP_STYLE_LIGHT` and `MAP_STYLE_DARK`. It rides on this endpoint because the
+map must know the style before anyone signs in, and because the production CSP
+allows the origin of each of these two URLs. One source answers both, so the
+style the browser asks for is always an origin the header allows.
 
 ---
 

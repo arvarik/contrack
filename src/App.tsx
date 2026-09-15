@@ -32,7 +32,7 @@ import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 // Route-level code splitting: secondary views load on demand so the initial
 // bundle only carries the ContactList/ContactDetail critical path.
 const MapView = React.lazy(() =>
-  import("./views/MapView").then((m) => ({ default: m.MapView })),
+  import("./views/map").then((m) => ({ default: m.MapView })),
 );
 const SettingsView = React.lazy(() =>
   import("./views/SettingsView").then((m) => ({ default: m.SettingsView })),

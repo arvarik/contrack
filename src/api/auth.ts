@@ -21,6 +21,7 @@
  * @module api/auth
  */
 
+import type { MapStyleUrls } from "../../shared/geo";
 import { ApiError, API_BASE, NetworkError, apiJson, jsonBody } from "./client";
 
 export interface AccountUser {
@@ -75,6 +76,11 @@ export interface AuthStatus {
    * their instance is choosing to show that name to anybody who can reach it.
    */
   instanceName: string;
+  /**
+   * The basemap style URL for each palette. Absent on a server older than
+   * this client, where the map uses its built-in defaults.
+   */
+  map?: MapStyleUrls;
 }
 
 /** One personal API token, as the account's own token list shows it. */

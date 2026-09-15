@@ -73,6 +73,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The map is MapLibre GL JS on OpenFreeMap vector tiles.** Leaflet, its
+  cluster plugin and the raster basemap are gone. The basemap is OpenFreeMap's
+  `positron` in the light palette and `dark` in the dark one. Neither needs an
+  API key or registration, and neither sets a request limit. MapLibre clusters
+  the pins itself, so a click on a cluster zooms to where it splits. A cluster
+  of people the geocoder placed on one point cannot split, and it opens a list
+  of those people instead, so a stacked pin stays reachable. Every pin is a
+  button named `"<name>, <company>"`, and every cluster a button named
+  `"<n> contacts, zoom in"`. The markers are React components now, not HTML
+  strings, and the map is a region named "Contact map". `MAP_STYLE_LIGHT` and
+  `MAP_STYLE_DARK` point either palette at another style, as an absolute https
+  URL or a root-relative path such as `/map/style.json`.
+  `GET /api/auth/status` reports the pair as `map`. The production CSP adds
+  `worker-src 'self' blob:`, `child-src blob:` and each style's origin in
+  `connect-src`. A root-relative style adds no origin, so a self-hosted
+  basemap is a config change and not a code change, and the registered
+  `pmtiles://` protocol lets such a style read one `.pmtiles` archive.
+  `GET /api/contacts/map` now also leaves out trashed contacts and ghosts. See
+  `docs/features/map-view.md`.
 - **One button shape.** `.btn-primary` and `.btn-secondary` are rounded
   rectangles, 44 px tall on a phone and 40 px from `sm`, with one disabled
   look. Every primary and secondary call-to-action uses them. Pills are for

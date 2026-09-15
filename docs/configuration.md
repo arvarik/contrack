@@ -8,31 +8,33 @@ cp .env.example .env
 
 ## Environment Variables
 
-| Variable                  | Description                                                                                                                                                                                    | Default      | Required |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------- |
-| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                                        | `gemini`     | No       |
-| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                                                                          | —            | No       |
-| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                                                                 | —            | No       |
-| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                                                              | —            | No       |
-| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                                           | `FREE`       | No       |
-| `PORT`                    | Express listening port                                                                                                                                                                         | `3210`       | No       |
-| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`  | No       |
-| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled) | No       |
-| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root | No       |
-| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                                     | —            | No       |
-| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                    | `false`      | No       |
-| `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token              | — (auth off) | No       |
-| `AUTH_TOKEN`              | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                          | —            | No       |
-| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                                 | `30`         | No       |
-| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                                                               | `24`         | No       |
-| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                                                       | `7`          | No       |
-| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                                        | — (auto)     | No       |
-| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                                                                       | — (auto)     | No       |
-| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                                                                     | — (auto)     | No       |
-| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                                         | — (built-in) | No       |
-| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                                        | `false`      | No       |
-| `DISABLE_CPU_WORKER`      | `true` runs the embedding model on the request thread instead of a worker thread. Slower for everybody else while an index is built, and there only for a Node build that cannot spawn threads | `false`      | No       |
-| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                              | — (dev)      | No       |
+| Variable                  | Description                                                                                                                                                                                    | Default                | Required |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------- |
+| `AI_PROVIDER`             | Preferred provider when a capability is set to Auto: `gemini`, `openai`, or `anthropic`                                                                                                        | `gemini`               | No       |
+| `GEMINI_API_KEY`          | Google Gemini API key                                                                                                                                                                          | —                      | No       |
+| `OPENAI_API_KEY`          | OpenAI API key                                                                                                                                                                                 | —                      | No       |
+| `ANTHROPIC_API_KEY`       | Anthropic API key                                                                                                                                                                              | —                      | No       |
+| `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                                           | `FREE`                 | No       |
+| `PORT`                    | Express listening port                                                                                                                                                                         | `3210`                 | No       |
+| `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`            | No       |
+| `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled)           | No       |
+| `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root           | No       |
+| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                                     | —                      | No       |
+| `MAP_STYLE_LIGHT`         | Basemap style the map loads in the light palette. An absolute `https://` URL or a root-relative path such as `/map/style.json`                                                                 | OpenFreeMap `positron` | No       |
+| `MAP_STYLE_DARK`          | Basemap style the map loads in the dark palette. Same rule as `MAP_STYLE_LIGHT`                                                                                                                | OpenFreeMap `dark`     | No       |
+| `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                    | `false`                | No       |
+| `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token              | — (auth off)           | No       |
+| `AUTH_TOKEN`              | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                          | —                      | No       |
+| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                                 | `30`                   | No       |
+| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                                                               | `24`                   | No       |
+| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                                                       | `7`                    | No       |
+| `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                                        | — (auto)               | No       |
+| `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                                                                       | — (auto)               | No       |
+| `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                                                                     | — (auto)               | No       |
+| `AI_EMBEDDINGS_MODEL`     | Pin the Embeddings model (governs search and dedupe vectors); defaults to a local model needing no key                                                                                         | — (built-in)           | No       |
+| `DISABLE_BACKGROUND_JOBS` | `true` skips startup model loading, backfills, scoring, and all scheduled work. Use this for CI and secondary instances                                                                        | `false`                | No       |
+| `DISABLE_CPU_WORKER`      | `true` runs the embedding model on the request thread instead of a worker thread. Slower for everybody else while an index is built, and there only for a Node build that cannot spawn threads | `false`                | No       |
+| `NODE_ENV`                | `production` serves the built `dist/` and enables the CSP; anything else runs Vite dev middleware and the debug cache-stats route                                                              | — (dev)                | No       |
 
 > **Rate limiting:** endpoints that trigger billable AI calls or outbound fetches
 > (semantic search, synthesis, parse-contact, enrich, briefing, AI search,
@@ -193,7 +195,39 @@ The `AI_TIER` variable controls rate limiting and model access:
 
 ---
 
-## Mapbox Geocoding
+## The Map
+
+### Basemap
+
+The map is MapLibre GL JS. The basemap is
+[OpenFreeMap](https://openfreemap.org/), which serves public vector tiles and
+styles with no API key, no registration and no request limit. Nothing has to
+be configured for the map to work.
+
+Two variables point each palette at a style of your own:
+
+```
+MAP_STYLE_LIGHT="https://tiles.openfreemap.org/styles/positron"
+MAP_STYLE_DARK="https://tiles.openfreemap.org/styles/dark"
+```
+
+Those two values are the defaults. A value is either an absolute `https://`
+URL or a root-relative path such as `/map/style.json`, which is a style this
+app serves from `public/`. A value the server cannot read writes one warning
+to the log, and the default style loads instead.
+
+`server/utils/mapConfig.ts` is the one place both answers come from.
+`GET /api/auth/status` reports them as `map`, and the production CSP allows
+the origin of each one, so the style the browser asks for and the origin the
+header allows never drift apart.
+
+A root-relative style adds no origin to the CSP, because it is same-origin.
+That is what makes a self-hosted basemap a configuration change rather than a
+code change. Contrack also registers the `pmtiles://` protocol, so a
+self-hosted style can read its tiles from a single `.pmtiles` archive with no
+tile server behind it.
+
+### Mapbox Geocoding
 
 By default, Contrack uses Nominatim (OpenStreetMap) for geocoding contact addresses. For higher accuracy:
 
@@ -203,7 +237,7 @@ By default, Contrack uses Nominatim (OpenStreetMap) for geocoding contact addres
    MAPBOX_API_KEY="your-key-here"
    ```
 
-Mapbox becomes the primary geocoder; Nominatim serves as the fallback.
+Mapbox becomes the primary geocoder, and Nominatim serves as the fallback.
 
 ---
 
@@ -257,7 +291,9 @@ needs to know:
 - **Security headers:** every response carries `nosniff`,
   `X-Frame-Options: DENY`, and a referrer policy. With `NODE_ENV=production`
   the app also serves a Content-Security-Policy with `script-src 'self'` and
-  `connect-src 'self' https://api.open-meteo.com`. If you front Contrack with
+  `connect-src 'self' https://api.open-meteo.com` plus the origin of each
+  basemap style. The map needs two more directives, `worker-src 'self' blob:`
+  and `child-src blob:`, because MapLibre parses tiles on a worker. If you front Contrack with
   something that injects scripts or widgets into pages, that injection will
   be blocked — serve such tooling from your proxy's own domain or drop the
   header there.

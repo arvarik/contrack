@@ -30,6 +30,7 @@ import {
   revokeToken,
 } from "../services/apiTokenService.ts";
 import { resolveApiToken } from "../middleware/auth.ts";
+import { getMapStyles } from "../utils/mapConfig.ts";
 import {
   getPreferences,
   preferencesPatchSchema,
@@ -181,6 +182,10 @@ router.get("/status", (req, res) => {
     // most. An operator who names their instance is choosing to put that name
     // in front of anybody who can reach the port.
     instanceName: getInstanceName(),
+    // The basemap style for each palette. Unauthenticated like the rest of
+    // this payload: the URLs are public and the CSP header already names
+    // their origins to anybody who loads a page.
+    map: getMapStyles(),
   });
 });
 

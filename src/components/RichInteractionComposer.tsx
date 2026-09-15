@@ -358,14 +358,16 @@ const Composer = ({
         {/* Next action field smoothly integrated into the editor card */}
         <div className="mt-4 group flex items-center relative">
           <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-surface-container to-transparent -top-3 opacity-50" />
-          <div className="flex flex-1 items-center px-3 py-2.5 bg-surface-container-lowest rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+          <div className="flex flex-1 items-center px-3 py-0 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
             <CalendarClock className="w-4 h-4 text-primary mr-2.5 shrink-0" />
             <input
               aria-label="Next action"
               value={followUpText}
               onChange={(e) => setFollowUpText(e.target.value)}
               placeholder="Next Action (e.g. Follow up next Tuesday at 2pm)..."
-              className="flex-1 bg-transparent border-none text-xs font-semibold text-on-surface focus:ring-0 p-0 focus:outline-none placeholder:text-on-surface-variant"
+              // A field draws no `::after`, so the 44 px tap floor on a phone
+              // has to be the field's own height.
+              className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none text-xs font-semibold text-on-surface focus:ring-0 p-0 focus:outline-none placeholder:text-on-surface-variant"
             />
             {parsedDate && (
               <span className={cn(TAG_PILL, "ml-2 shrink-0 shadow-sm")}>

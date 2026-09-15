@@ -735,7 +735,9 @@ export const contactService = {
       .prepare(
         `SELECT id, name, company, avatarUrl, location, lat, lng FROM contacts
           WHERE ownerId = ? AND lat IS NOT NULL AND lng IS NOT NULL
-            AND (isArchived = 0 OR isArchived IS NULL)`,
+            AND (isArchived = 0 OR isArchived IS NULL)
+            AND deletedAt IS NULL
+            AND (isGhost = 0 OR isGhost IS NULL)`,
       )
       .all(scope.ownerId);
   },
