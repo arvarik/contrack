@@ -24,6 +24,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { makeV1Database, V1_TRIGGERS } from "../fixtures/make-v1-database.ts";
+import { FTS_SCHEMA_VERSION } from "../../server/services/search/ftsIndex.ts";
 import { verify } from "../../scripts/tenancy-verify.ts";
 
 // Boot must not reach an embedding provider. The mock throws rather than
@@ -209,7 +210,9 @@ describe("upgrading a 1.5.5 database", () => {
     // The prefix index from the 1.5.x search work has to survive the rebuild,
     // or every as-you-type query gets slower.
     expect(ftsSql).toContain("prefix='2 3 4'");
-    expect(sqlite.pragma("user_version", { simple: true })).toBe(3);
+    expect(sqlite.pragma("user_version", { simple: true })).toBe(
+      FTS_SCHEMA_VERSION,
+    );
 
     const owner = (
       sqlite.prepare("SELECT id FROM users LIMIT 1").get() as { id: string }
@@ -221,6 +224,28 @@ describe("upgrading a 1.5.5 database", () => {
       )
       .get(`ownerTok:${token}`) as { n: number };
     expect(hits.n).toBe(fixture.contactIds.length);
+
+    // The note index is new in version 4 and is built on the same boot, one
+    // row per note the 1.5.5 database held, every one under the owner the
+    // claim assigned.
+    const notes = (
+      sqlite.prepare("SELECT COUNT(*) AS n FROM interactions").get() as {
+        n: number;
+      }
+    ).n;
+    const noteHits = sqlite
+      .prepare(
+        "SELECT COUNT(*) AS n FROM interactions_fts WHERE interactions_fts MATCH ?",
+      )
+      .get(`ownerTok:${token}`) as { n: number };
+    expect(noteHits.n).toBe(notes);
+    expect(
+      (
+        sqlite.prepare("SELECT COUNT(*) AS n FROM interactions_fts").get() as {
+          n: number;
+        }
+      ).n,
+    ).toBe(notes);
   });
 
   it("builds no single-column owner index for any owned table", () => {
@@ -412,7 +437,9 @@ describe("booting the migrated database again", () => {
     ).value;
     expect(versionAfter).toBe(versionBefore);
     expect(fs.readdirSync(backupDir)).toHaveLength(backupsBefore);
-    expect(secondSqlite.pragma("user_version", { simple: true })).toBe(3);
+    expect(secondSqlite.pragma("user_version", { simple: true })).toBe(
+      FTS_SCHEMA_VERSION,
+    );
   });
 
   it("leaves updatedAt alone a second time", () => {

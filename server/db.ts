@@ -583,6 +583,12 @@ const TRIGGERS_DROPPED_FOR_CLAIM = [
   "action_items_sync_delete",
   "search_vector_update",
   "search_vector_delete",
+  // The note index. Its update trigger fires on `ownerId`, which is exactly
+  // what the claim writes, and §3 reinstalls it and fills the rows the claim
+  // stamped.
+  "interactions_fts_ai",
+  "interactions_fts_au",
+  "interactions_fts_ad",
   // Story S10. The claim writes `ownerId` on every row, which is an edit as
   // far as these are concerned. §4 and §6 put them back on the same boot.
   "contacts_score_dirty",

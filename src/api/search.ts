@@ -17,7 +17,11 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { Contact, SemanticSearchResult } from "../types";
+import type {
+  Contact,
+  InteractionSearchResult,
+  SemanticSearchResult,
+} from "../types";
 
 export const useSearchContacts = (q: string, filters: FacetFilter[] = []) => {
   return useQuery({
@@ -274,5 +278,93 @@ export const useRefreshSearchIndex = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search", "coverage"] });
     },
+  });
+};
+
+// =============================================================================
+// Interaction search — notes with the date and the passage that matched
+// =============================================================================
+
+/** The query-key prefix every note search shares, for invalidation. */
+export const INTERACTION_SEARCH_KEY = ["interactions", "search"] as const;
+
+export interface InteractionSearchParams {
+  q: string;
+  /** A calendar date (`YYYY-MM-DD`, a whole day) or an ISO instant. */
+  from?: string;
+  to?: string;
+  type?: string;
+  contactId?: string;
+  sort?: "relevance" | "date";
+  mode?: "auto" | "all" | "any";
+  limit?: number;
+  offset?: number;
+}
+
+/** The browser's IANA zone, so "last month" is the reader's month. */
+export function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The query string for a note search, with empty fields left out. */
+export function interactionSearchQueryString(
+  params: InteractionSearchParams,
+): string {
+  const query = new URLSearchParams();
+  const entries: [string, string | number | undefined][] = [
+    ["q", params.q],
+    ["from", params.from],
+    ["to", params.to],
+    ["type", params.type],
+    ["contactId", params.contactId],
+    ["sort", params.sort],
+    ["mode", params.mode],
+    ["limit", params.limit],
+    ["offset", params.offset],
+    ["tz", browserTimeZone()],
+  ];
+  for (const [key, value] of entries) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+  return query.toString();
+}
+
+/**
+ * Search the notes.
+ *
+ * Enabled once there is something to search for: text, a period, a kind, or
+ * a contact. The previous page is kept on screen while the next one loads,
+ * for the same reason `useSearchContacts` keeps it: a list that empties and
+ * refills on every keystroke is a list that jumps.
+ */
+export const useInteractionSearch = (
+  params: InteractionSearchParams,
+  enabled = true,
+) => {
+  const active =
+    enabled &&
+    Boolean(
+      params.q.trim() ||
+      params.from ||
+      params.to ||
+      params.type ||
+      params.contactId,
+    );
+  return useQuery({
+    queryKey: [...INTERACTION_SEARCH_KEY, params],
+    queryFn: async ({ signal }): Promise<InteractionSearchResult> => {
+      const res = await apiFetch(
+        `/search/interactions?${interactionSearchQueryString(params)}`,
+        { signal },
+      );
+      if (!res.ok) throw new Error("Failed to search notes");
+      return res.json();
+    },
+    enabled: active,
+    placeholderData: keepPreviousData,
   });
 };

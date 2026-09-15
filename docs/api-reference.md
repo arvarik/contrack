@@ -642,6 +642,79 @@ Both JSON and streaming callers use the same pipeline.
 
 ---
 
+### `GET /api/search/interactions`
+
+Search your notes. Returns each matching interaction with the person it is
+about, the date, and the passage that matched. Local FTS5 only, no model is
+called. See [Note Search](features/interaction-search.md).
+
+```bash
+curl "http://localhost:3210/api/search/interactions?q=who+discussed+hiring+last+month&tz=America/Los_Angeles"
+```
+
+**Query parameters** (all optional):
+
+| Parameter   | Meaning                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `q`         | The question, up to 500 characters. A date phrase in it (`last month`, `since March`, `in 2025`, …) is lifted out and applied as a filter.             |
+| `from`/`to` | A calendar date (`2026-08-01`, a whole day in `tz`) or an ISO instant. `from` is inclusive, `to` is exclusive. An explicit range overrides the phrase. |
+| `type`      | Exact interaction type, for example `note` or `call`.                                                                                                  |
+| `contactId` | Notes on one contact only.                                                                                                                             |
+| `sort`      | `relevance` (default) or `date`.                                                                                                                       |
+| `mode`      | `auto` (default: every word, then any word when nothing has every word), `all`, or `any`.                                                              |
+| `limit`     | 1 to 50, default 20.                                                                                                                                   |
+| `offset`    | 0 to 5000.                                                                                                                                             |
+| `tz`        | Your IANA time zone, so `last month` is your month. Default `UTC`. An unknown zone is `400`.                                                           |
+
+**Response:**
+
+```json
+{
+  "query": {
+    "text": "hiring",
+    "tokens": ["hiring"],
+    "mode": "all",
+    "phrase": "last month",
+    "range": {
+      "from": "2026-08-01T07:00:00.000Z",
+      "to": "2026-09-01T07:00:00.000Z",
+      "source": "phrase"
+    },
+    "timeZone": "America/Los_Angeles"
+  },
+  "total": 1,
+  "limit": 20,
+  "offset": 0,
+  "hits": [
+    {
+      "id": "3f2c…",
+      "contactId": "9a84…",
+      "type": "meeting",
+      "title": "Coffee with Sam",
+      "date": "2026-08-12T10:00:00.000Z",
+      "excerpt": "We discussed hiring plans for the Berlin office.",
+      "highlights": { "title": [], "excerpt": [[13, 19]] },
+      "contact": {
+        "id": "9a84…",
+        "name": "Sam Rivera",
+        "avatarUrl": null,
+        "themeColor": "brand",
+        "company": "Acme",
+        "role": "CTO"
+      }
+    }
+  ]
+}
+```
+
+`query.mode` says how the words were combined, and `none` means the search
+was a period or a kind with no words. `highlights` holds `[start, end]`
+offsets into `title` and `excerpt`. Notes on archived, trashed, merged and
+ghost contacts are not returned. A search with no words and no filter
+answers with `total: 0`.
+
+---
+
 ### `POST /api/search/synthesize`
 
 Synthesize search results into an executive brief. Streams via NDJSON.
@@ -1417,11 +1490,18 @@ curl http://localhost:3210/api/industries
 
 ### `GET /api/interactions/search`
 
-Search interactions by content.
+Search your notes, for an MCP client or a personal token. The same engine and
+the same query parameters as [`GET /api/search/interactions`](#get-apisearchinteractions),
+answered as a plain array of hits. Each hit also carries `contactName`.
 
 ```bash
-curl "http://localhost:3210/api/interactions/search?q=proposal"
+curl "http://localhost:3210/api/interactions/search?q=proposal&from=2026-08-01&to=2026-08-31"
 ```
+
+In 1.x this route matched `q` as a substring of the title or body and returned
+raw rows. It now matches by word and stem, applies date phrases and filters,
+returns a plain-text `excerpt` rather than the HTML `content`, and hides notes
+on contacts the app hides.
 
 ---
 

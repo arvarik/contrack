@@ -1,5 +1,6 @@
 import { invalidateContactViews } from "./contactCache";
 import { apiFetch } from "./client";
+import { INTERACTION_SEARCH_KEY } from "./search";
 /**
  * Interaction API Hooks — React Query hooks for timeline and interaction operations.
  *
@@ -9,9 +10,25 @@ import { apiFetch } from "./client";
  *
  * @module api/interactions
  */
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { Interaction, Contact } from "../types";
+
+/**
+ * Refresh the note search after a note changes.
+ *
+ * The server index is updated in the same transaction as the note, so the
+ * only stale copy is the one React Query holds. Called from every mutation
+ * below that adds, edits or removes a note.
+ */
+function invalidateInteractionSearch(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: [...INTERACTION_SEARCH_KEY] });
+}
 
 export const useTimeline = (contactId: string | undefined) => {
   return useQuery({
@@ -47,6 +64,7 @@ export const useAddInteraction = () => {
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);
+      invalidateInteractionSearch(queryClient);
     },
   });
 };
@@ -69,6 +87,7 @@ export const useDeleteInteraction = () => {
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);
+      invalidateInteractionSearch(queryClient);
     },
   });
 };
@@ -95,6 +114,7 @@ export const useUpdateInteraction = () => {
     onSettled: (_data, _error, { contactId }) => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);
+      invalidateInteractionSearch(queryClient);
     },
   });
 };
@@ -123,6 +143,7 @@ export const useAddAttachment = () => {
       queryClient.invalidateQueries({ queryKey: ["timeline", contactId] });
       invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["contacts", contactId] });
+      invalidateInteractionSearch(queryClient);
     },
   });
 };
@@ -159,6 +180,7 @@ export const usePromoteGhost = () => {
     onSuccess: () => {
       invalidateContactViews(queryClient);
       queryClient.invalidateQueries({ queryKey: ["timeline"] });
+      invalidateInteractionSearch(queryClient);
     },
   });
 };

@@ -529,3 +529,61 @@ export interface ZeroStateInsight {
 export interface ZeroStatePayload {
   insights: ZeroStateInsight[];
 }
+
+// =============================================================================
+// Interaction Search Types — GET /api/search/interactions
+// =============================================================================
+
+/** Start and end offsets of a matched term, in UTF-16 code units. */
+export type HighlightRange = [number, number];
+
+/** One note that answered a search: the person, the date, and the passage. */
+export interface InteractionSearchHit {
+  /** The interaction id. */
+  id: string;
+  contactId: string;
+  type: string;
+  title: string;
+  /** The interaction date exactly as stored. */
+  date: string;
+  /** The best passage of the body, or its opening when the title matched. */
+  excerpt: string | null;
+  highlights: { title: HighlightRange[]; excerpt: HighlightRange[] };
+  contact: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    themeColor: string | null;
+    company: string | null;
+    role: string | null;
+  };
+}
+
+/** The period a search was limited to, and where it came from. */
+export interface InteractionSearchRange {
+  /** ISO instant, inclusive. Null when open at this end. */
+  from: string | null;
+  /** ISO instant, exclusive. Null when open at this end. */
+  to: string | null;
+  /** `filter` when the caller set it, `phrase` when the question named it. */
+  source: "filter" | "phrase";
+}
+
+/** Response envelope from GET /api/search/interactions. */
+export interface InteractionSearchResult {
+  query: {
+    /** The words that went to the index, after the date phrase came out. */
+    text: string;
+    tokens: string[];
+    /** `all` words, `any` word, or `none` when the search is a date browse. */
+    mode: "all" | "any" | "none";
+    /** The words read as a period, when the question named one. */
+    phrase: string | null;
+    range: InteractionSearchRange | null;
+    timeZone: string;
+  };
+  total: number;
+  limit: number;
+  offset: number;
+  hits: InteractionSearchHit[];
+}

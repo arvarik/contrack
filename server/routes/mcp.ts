@@ -9,8 +9,9 @@
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { mcpService } from "../services/mcpService.ts";
-import { AppError } from "../utils/AppError.ts";
+import { searchInteractions } from "../services/interactionSearchService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { parseInteractionSearchQuery } from "../utils/validators.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
@@ -70,21 +71,28 @@ router.get(
   }),
 );
 
+/**
+ * The note search, in the array shape this route has always answered with.
+ *
+ * Same engine as GET /api/search/interactions: ranked FTS5 over the note
+ * index, with the date phrase in the question applied as a filter. The
+ * envelope is flattened to the hits, and each hit carries `contactName`, so
+ * an MCP client that read `title` and `contactName` before still can.
+ */
 router.get(
   "/interactions/search",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const q = req.query.q as string;
-    if (!q) throw new AppError("q parameter is required", 400);
-
-    const type = req.query.type as string;
-    const rows = mcpService.searchInteractions(scopeOf(req), q, type);
+    const params = parseInteractionSearchQuery(req.query);
+    const result = searchInteractions(scopeOf(req), params);
 
     log.debug(
       "API",
-      `[${rid}] GET /api/interactions/search → ${rows.length} results`,
+      `[${rid}] GET /api/interactions/search → ${result.hits.length} of ${result.total}`,
     );
-    res.json(rows);
+    res.json(
+      result.hits.map((hit) => ({ ...hit, contactName: hit.contact.name })),
+    );
   }),
 );
 
