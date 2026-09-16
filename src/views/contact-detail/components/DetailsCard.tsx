@@ -31,6 +31,7 @@ import {
   SECTION_HEADING,
 } from "../../../lib/styles";
 
+import { LocationMiniMap } from "../../map/LocationMiniMap";
 import { IndustryField } from "./IndustryField";
 import { BirthdayField } from "./BirthdayField";
 import {
@@ -66,6 +67,23 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   const [newInterest, setNewInterest] = useState("");
   const [newPreference, setNewPreference] = useState("");
 
+  /**
+   * The addresses, from the address list or from the single legacy
+   * `location` field. The mini map below reads the same list, so a contact
+   * with no address at all gets no map block and no caption.
+   */
+  const addressItems =
+    contact.addresses && contact.addresses.length > 0
+      ? contact.addresses.map((a: ContactAddress) => ({
+          id: a.id,
+          value: a.address,
+          label: a.label || "home",
+        }))
+      : contact.location
+        ? [{ id: "legacy-init", value: contact.location, label: "home" }]
+        : [];
+  const isPlaced = contact.lat !== null && contact.lng !== null;
+
   const handleAddInterest = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && newInterest.trim()) {
       e.preventDefault();
@@ -100,23 +118,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
         <div className="flex-1 min-w-0 flex flex-col gap-1">
           <span className={LABEL}>Location</span>
           <MultiValueField
-            items={
-              contact.addresses && contact.addresses.length > 0
-                ? contact.addresses.map((a: ContactAddress) => ({
-                    id: a.id,
-                    value: a.address,
-                    label: a.label || "home",
-                  }))
-                : contact.location
-                  ? [
-                      {
-                        id: "legacy-init",
-                        value: contact.location,
-                        label: "home",
-                      },
-                    ]
-                  : []
-            }
+            items={addressItems}
             onSave={(updated) =>
               updateContact.mutate({
                 id: contactId,
@@ -133,6 +135,11 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
             emptyPlaceholder="Add Location..."
             inputPlaceholder="San Francisco, CA"
             isAddress
+            mapHref={isPlaced ? `/map/contact/${contactId}` : undefined}
+          />
+          <LocationMiniMap
+            contact={contact}
+            hasAddress={addressItems.length > 0}
           />
         </div>
       </div>

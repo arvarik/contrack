@@ -1,4 +1,5 @@
 import React, { useState, useId } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { X, GripVertical, MapPin as MapPinIcon } from "lucide-react";
 import {
@@ -80,6 +81,7 @@ const SortableRow = ({
   onLabelChange,
   onRemove,
   isAddress,
+  mapHref,
 }: {
   key?: React.Key;
   item: MultiValueItem & { _sortId: string };
@@ -89,6 +91,7 @@ const SortableRow = ({
   onLabelChange: (idx: number, label: string) => void;
   onRemove: (idx: number) => void;
   isAddress?: boolean;
+  mapHref?: string;
 }) => {
   const {
     attributes,
@@ -151,6 +154,16 @@ const SortableRow = ({
           <span className="text-sm font-medium text-on-surface break-all">
             {item.value}
           </span>
+        )}
+        {/* Every address row leads to the same pin, because the contact has
+            one. So every link says the same thing and does the same thing. */}
+        {isAddress && mapHref && (
+          <Link
+            to={mapHref}
+            className="inline-flex items-center w-fit min-h-[44px] sm:min-h-0 text-xs font-bold text-primary underline hover:text-on-surface transition-colors"
+          >
+            Show on map
+          </Link>
         )}
       </div>
 
@@ -218,6 +231,7 @@ export const MultiValueField = ({
   addMoreLabel = "Add another",
   inputPlaceholder,
   isAddress = false,
+  mapHref,
 }: {
   items: MultiValueItem[];
   onSave: (items: { value: string; label: string }[]) => void;
@@ -226,6 +240,11 @@ export const MultiValueField = ({
   addMoreLabel?: string;
   inputPlaceholder: string;
   isAddress?: boolean;
+  /**
+   * Where an address row's "Show on map" link goes. Left out when the
+   * contact has no coordinates, and the rows then show no link.
+   */
+  mapHref?: string;
 }) => {
   const [inputValue, setInputValue] = useState("");
   const [inputLabel, setInputLabel] = useState(labelOptions[0] || "work");
@@ -326,6 +345,7 @@ export const MultiValueField = ({
                 onLabelChange={handleChangeLabel}
                 onRemove={handleRemove}
                 isAddress={isAddress}
+                mapHref={mapHref}
               />
             ))}
           </SortableContext>

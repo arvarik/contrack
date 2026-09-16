@@ -71,6 +71,55 @@ When you click a contact on the map, their profile slides in from the right as a
 - Animated entry with spring physics
 - Responsive width (full on mobile, 760px on tablet, 860px on desktop)
 
+### Fly to the Open Contact
+
+`/map/contact/<id>` centres the map on that contact. The move takes 800 ms
+and stops at zoom 11, close enough to read the streets around the pin. A map
+already closer than that keeps its zoom, so opening a second contact in the
+same street does not pull the view back.
+
+The move waits for the map's load event. It never runs at mount, because the
+view a map is born with is a creation prop, and an animation started before
+the map has a style leaves every pin in the wrong place. See the header of
+`src/views/map/ContactMap.tsx`.
+
+A reader who set "reduce motion" in their system gets the same view with
+`jumpTo` and no animation (WCAG 2.3.3). `src/views/map/flyTo.ts` holds both
+paths and the one decision between them.
+
+---
+
+## The Map on a Contact
+
+A contact's Details card shows where that person is, under their addresses.
+
+| The contact has            | What the card shows                                                    |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Coordinates                | A 160 px still map with their pin, then "Open in map" and "Adjust pin" |
+| An address, no coordinates | The line "Not on the map yet", and "Set location"                      |
+| Neither                    | Nothing                                                                |
+
+"Adjust pin" and "Set location" are drawn but disabled. A later release wires
+them to the manual pin. Each one carries an InfoTip that says so.
+
+Each address row also shows a "Show on map" link when the contact has
+coordinates. Every link leads to `/map/contact/<id>`, because a contact has
+one pin however many addresses they have, and the first address is the one
+that places it.
+
+The mini map is `ContactMap` with `interactive={false}`, one pin, no hover
+card, and `label="Location map"`. It is a still picture: it answers "is this
+pin in the right place?" and hands every other question to the map page.
+
+Two rules keep it cheap and quiet:
+
+- **The map arrives only when there is a pin to draw.** `LocationMiniMap`
+  loads `ContactMap` with `React.lazy`, from the chunk the map page uses. A
+  contact with no coordinates loads no map code.
+- **It stands down on the map page.** On `/map/contact/<id>` the map behind
+  the panel already holds the pin, so a second canvas and a second pin with
+  the same name would be waste and noise.
+
 ---
 
 ## Where the Data Comes From
@@ -167,7 +216,8 @@ Without Mapbox, Nominatim (OpenStreetMap) is used. Nominatim is free but has rat
 
 ## Accessibility
 
-- The map container is a region named "Contact map"
+- The map container is a region named "Contact map", and the mini map on a
+  contact is a region named "Location map"
 - The page carries a visually hidden `h1`, "Map"
 - Every pin is a real `<button>` named `"<name>, <company>"`
 - Every cluster is a real `<button>` named `"<n> contacts, zoom in"`
@@ -178,7 +228,8 @@ The markers are React components, so an avatar URL never passes through
 `innerHTML` and no marker carries an inline event handler attribute.
 
 `tests/e2e/axe.spec.ts` waits for the "Contact map" region and a named pin,
-then scans the page. `tests/e2e/metrics.spec.ts` scans `/map` on a 390 pixel
+then scans the page. Its contact scan waits for the "Location map" region and
+its pin for the same reason. `tests/e2e/metrics.spec.ts` scans `/map` on a 390 pixel
 phone for the tap-target and text-size floors. See
 [Accessibility](../accessibility.md).
 
@@ -186,10 +237,11 @@ phone for the tap-target and text-size floors. See
 
 ## Not in the map yet
 
-Two things are planned and are deliberately absent today:
+One thing is planned and is deliberately absent today:
 
-- A mini map on the contact detail page
-- Manual pin adjustment, for a contact the geocoder placed wrongly
+- Manual pin adjustment, for a contact the geocoder placed wrongly. The
+  "Adjust pin" and "Set location" actions on a contact are drawn and
+  disabled until then.
 
 ---
 

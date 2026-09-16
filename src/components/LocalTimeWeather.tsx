@@ -180,7 +180,12 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
           ) : weather ? (
             <motion.div
               key="weather"
-              initial={{ opacity: 0, scale: 0.8 }}
+              // The temperature arrives at its full colour and grows into
+              // place. Text faded in from nothing is text below its
+              // contrast for as long as the fade lasts, which WCAG 1.4.3
+              // does not excuse and an accessibility scan catches whenever
+              // it starts mid-animation.
+              initial={{ opacity: 1, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               className="flex items-center gap-1.5"

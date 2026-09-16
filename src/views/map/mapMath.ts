@@ -44,6 +44,15 @@ export const FALLBACK_MIN_ZOOM = 2;
 export const MAX_MIN_ZOOM = 5;
 
 /**
+ * One person on their part of the map.
+ *
+ * Close enough to read the street grid around the pin, far enough to show
+ * the city it belongs to. The mini map on the contact page opens here, and
+ * the map page flies here when a contact opens.
+ */
+export const CONTACT_ZOOM = 11;
+
+/**
  * Smallest zoom whose world covers both container dimensions.
  *
  * MapLibre accepts a fractional zoom, so the result is the exact fit rounded
