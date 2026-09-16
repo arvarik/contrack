@@ -140,6 +140,48 @@ test.describe("map", () => {
     await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
   });
 
+  test("opens the map from a contact, on that contact", async ({
+    page,
+    seed,
+  }) => {
+    await stubBasemap(page);
+    const ada = seed.byName("Ada Lovelace");
+    await page.goto(`/contact/${ada.id}`);
+
+    // The mini map under the address list, with her pin on it.
+    const mini = page.getByRole("region", { name: "Location map" });
+    await expect(
+      mini.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Show on map" }).first(),
+    ).toHaveAttribute("href", `/map/contact/${ada.id}`);
+
+    await page.getByRole("link", { name: "Open in map" }).click();
+    await expect(page).toHaveURL(new RegExp(`/map/contact/${ada.id}$`));
+
+    // The map flies to her, so her pin ends at the middle of the map. A
+    // world view would leave it wherever London falls on the screen.
+    const map = page.getByRole("region", { name: "Contact map" });
+    const pin = map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" });
+    await expect(pin).toBeVisible();
+    await expect
+      .poll(
+        async () => {
+          const mapBox = await map.boundingBox();
+          const pinBox = await pin.boundingBox();
+          if (!mapBox || !pinBox) return Number.POSITIVE_INFINITY;
+          const dx =
+            pinBox.x + pinBox.width / 2 - (mapBox.x + mapBox.width / 2);
+          const dy =
+            pinBox.y + pinBox.height / 2 - (mapBox.y + mapBox.height / 2);
+          return Math.round(Math.hypot(dx, dy));
+        },
+        { message: "the map did not fly to the contact" },
+      )
+      .toBeLessThan(40);
+  });
+
   test("asks for the dark basemap in the dark palette", async ({
     browser,
     baseURL,

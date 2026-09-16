@@ -79,18 +79,18 @@ Each contact has a comprehensive profile with two tabs: **Dossier** (details) an
 
 ### Detail Fields
 
-| Field             | Type | Notes                                                  |
-| ----------------- | ---- | ------------------------------------------------------ |
-| Name, First, Last | Text | Auto-split on creation                                 |
-| Headline          | Text | One-line professional summary                          |
-| Role              | Text | Job title                                              |
-| Company           | Text | Auto-fetches company logo via local proxy              |
-| Location          | Text | Auto-geocoded, and places the contact's pin on the map |
-| Birthday          | Date | With age calculation display                           |
-| Pronouns          | Text |                                                        |
-| Industry          | Text | With autocomplete from existing industries             |
-| Website           | URL  |                                                        |
-| About             | Text | Free-form biography                                    |
+| Field             | Type | Notes                                                                                                                                      |
+| ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name, First, Last | Text | Auto-split on creation                                                                                                                     |
+| Headline          | Text | One-line professional summary                                                                                                              |
+| Role              | Text | Job title                                                                                                                                  |
+| Company           | Text | Auto-fetches company logo via local proxy                                                                                                  |
+| Location          | Text | Auto-geocoded, and places the contact's pin on the map. A placed contact shows a small map of that spot, and every address row links to it |
+| Birthday          | Date | With age calculation display                                                                                                               |
+| Pronouns          | Text |                                                                                                                                            |
+| Industry          | Text | With autocomplete from existing industries                                                                                                 |
+| Website           | URL  |                                                                                                                                            |
+| About             | Text | Free-form biography                                                                                                                        |
 
 ### Multi-Value Fields
 

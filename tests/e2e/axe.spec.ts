@@ -47,6 +47,14 @@ const SCREENS: Screen[] = [
       await expect(
         page.getByRole("button", { name: "Change avatar" }),
       ).toBeVisible();
+      // Ada has coordinates, so the page draws her mini map. Her pin exists
+      // only once that map has loaded, so it is the proof the scan sees the
+      // map chrome and not an empty box.
+      await expect(
+        page
+          .getByRole("region", { name: "Location map" })
+          .getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+      ).toBeVisible();
     },
   },
   {

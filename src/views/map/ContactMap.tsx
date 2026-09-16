@@ -53,6 +53,7 @@ import {
   StackPopup,
   type ContactStack,
 } from "./ContactPopup";
+import { prefersReducedMotion } from "./flyTo";
 import { WORLD_BOUNDS, minZoomFor } from "./mapMath";
 import { registerPmtilesProtocol, styleFor } from "./mapStyles";
 import { MAPLIBRE_WORKER_URL } from "./maplibreWorker";
@@ -105,9 +106,8 @@ const BLANK_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
  */
 const DEFAULT_VIEW = { longitude: -95, latitude: 20, zoom: 1 };
 
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+/** Where a pin reports its hover when the map draws no card. */
+const noPreview = () => {};
 
 export interface ContactMapProps {
   contacts: MapContact[];
@@ -121,6 +121,18 @@ export interface ContactMapProps {
   initialView?: { longitude: number; latitude: number; zoom?: number };
   /** Keep the minimum zoom where the world covers the container. */
   minZoomFromViewport?: boolean;
+  /**
+   * False draws pins with no hover card. A small map has no room to open one,
+   * and the page around it already names the person.
+   */
+  hoverCard?: boolean;
+  /**
+   * Names the region, so two maps on one page are two landmarks a reader can
+   * tell apart. The page map keeps the default.
+   */
+  label?: string;
+  /** The map, once it has loaded. The caller uses it to move the view. */
+  onMapReady?: (map: MapLibreMap) => void;
   /** The contacts are still loading. */
   loading?: boolean;
   className?: string;
@@ -134,6 +146,9 @@ export const ContactMap = ({
   interactive = true,
   initialView,
   minZoomFromViewport = true,
+  hoverCard = true,
+  label = "Contact map",
+  onMapReady,
   loading = false,
   className,
 }: ContactMapProps) => {
@@ -255,7 +270,7 @@ export const ContactMap = ({
     <div
       ref={wrapperRef}
       role="region"
-      aria-label="Contact map"
+      aria-label={label}
       className={cn(
         "contact-map relative w-full h-full overflow-hidden bg-surface-container-low",
         className,
@@ -276,16 +291,18 @@ export const ContactMap = ({
           The basemap did not load. Pins still work.
         </p>
       )}
-      <LiveStatus
-        label="Map card"
-        message={
-          preview
-            ? [preview.name, preview.company, preview.location]
-                .filter(Boolean)
-                .join(". ")
-            : ""
-        }
-      />
+      {hoverCard && (
+        <LiveStatus
+          label="Map card"
+          message={
+            preview
+              ? [preview.name, preview.company, preview.location]
+                  .filter(Boolean)
+                  .join(". ")
+              : ""
+          }
+        />
+      )}
       {/* Rendered only once the wrapper is measured. One frame without a
           map is invisible, and pins in the ocean were not. */}
       {initialMinZoom !== null && (
@@ -308,7 +325,10 @@ export const ContactMap = ({
           dragRotate={false}
           touchPitch={false}
           pitchWithRotate={false}
-          onLoad={(event) => setMap(event.target)}
+          onLoad={(event) => {
+            setMap(event.target);
+            onMapReady?.(event.target);
+          }}
           onError={handleError}
           onClick={handleClick}
           style={{ width: "100%", height: "100%" }}
@@ -344,7 +364,7 @@ export const ContactMap = ({
                 contact={contact}
                 selected={contact.id === selectedId}
                 onSelect={onSelect}
-                onPreview={setPreviewId}
+                onPreview={hoverCard ? setPreviewId : noPreview}
               />
             );
           })}

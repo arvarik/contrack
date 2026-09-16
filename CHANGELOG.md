@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A map on the contact page, and the map page opens on the person you
+  asked for.** A placed contact shows a 160 px still map of where they are,
+  under their addresses, with their pin on it. "Open in map" and a "Show on
+  map" link beside each address both lead to `/map/contact/<id>`, and the map
+  page now flies to that contact over 800 ms and stops at zoom 11, or stays
+  closer if it already was. A reader who asked their system for less motion
+  gets the same view without the animation. A contact with an address the
+  geocoder has not placed reads "Not on the map yet" and loads no map at all.
+  The mini map is a region named "Location map", so the two maps on
+  `/map/contact/<id>` stay two landmarks a reader can tell apart, and it
+  stands down there because the map behind the panel already holds the pin.
+  See `docs/features/map-view.md`.
 - **Two floors: 44 px targets and 11 px text.** Every control a finger can
   reach now has a tap box of at least 44 by 44 pixels on a phone, and no text
   is smaller than 11 pixels. The new `hit-area` utility grows a small control's
@@ -102,6 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The temperature on a contact arrives at its full colour. It used to fade in
+  from nothing, which is text below its contrast for as long as the fade
+  lasts, and an accessibility scan that started in that window read it as a
+  failure. It now grows into place at full opacity.
 - Controls that had only a `title` now have an accessible name: the Select
   button on Network, each "Remove" button on a contact's details (it names the
   value), the Note, Call, Meeting and Email type buttons in the composer, and

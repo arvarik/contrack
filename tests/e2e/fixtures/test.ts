@@ -13,6 +13,7 @@
 import { test as base, expect } from "@playwright/test";
 import { ContrackInstance } from "./instance";
 import { seedInstance, type Seed } from "./seed";
+import { stubWeather } from "./weather";
 
 interface OpenWorkerFixtures {
   /** The worker's open instance. Started once, seeded once, stopped at the end. */
@@ -24,6 +25,8 @@ interface OpenWorkerFixtures {
 interface OpenTestFixtures {
   /** Attaches the server log when the test fails. Automatic. */
   serverLog: void;
+  /** Answers the weather service locally. Automatic. See `weather.ts`. */
+  weather: void;
 }
 
 export const test = base.extend<OpenTestFixtures, OpenWorkerFixtures>({
@@ -49,6 +52,15 @@ export const test = base.extend<OpenTestFixtures, OpenWorkerFixtures>({
   baseURL: async ({ instance }, use) => {
     await use(instance.baseURL);
   },
+  weather: [
+    async ({ page }, use) => {
+      await stubWeather(page);
+      await use();
+    },
+    // Automatic: every contact with coordinates asks for its weather, so a
+    // spec that never mentions it still waits on the answer.
+    { auto: true },
+  ],
   serverLog: [
     async ({ instance }, use, testInfo) => {
       const mark = instance.mark();
