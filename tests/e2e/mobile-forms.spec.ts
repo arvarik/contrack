@@ -105,8 +105,9 @@ test.describe("open instance", () => {
     await expect(row).toBeVisible();
     await row.click();
     await expect(page).toHaveURL(/\/contact\//);
+    // A phone opens the contact on its Timeline tab.
     await expect(
-      page.getByRole("button", { name: "Log interaction" }),
+      page.getByRole("radiogroup", { name: "Contact sections" }),
     ).toBeVisible();
   });
 });

@@ -7,6 +7,7 @@ import React from "react";
 import { cn } from "../../../lib/utils";
 import { motion } from "motion/react";
 import type { AIStatsFeedItem } from "../../../api";
+import { formatDay } from "../../../lib/datetime";
 
 interface FeedItemProps {
   key?: React.Key;
@@ -53,7 +54,7 @@ function formatRelativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDay(iso);
 }
 
 function formatTokens(n: number | null): string {

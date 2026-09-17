@@ -378,7 +378,7 @@ _Populated by the SDET during the Trap phase. Every interactive component must b
 | `BulkEditFieldModal`                  |       |         |         |       |         |
 | `KeyboardShortcutsModal`              |       |         |         |       |         |
 | `FloatingContactCard`                 |       |         |         |       |         |
-| `HealthRingAvatar`                    |       |         |         |       |         |
+| `ScoreRingAvatar`                     |       |         |         |       |         |
 | `LocalTimeWeather`                    |       |         |         |       |         |
 | `Sidebar`                             |       |         |         |       |         |
 | `EmptyState`                          |       |         |         |       |         |

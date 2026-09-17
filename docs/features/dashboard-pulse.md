@@ -16,6 +16,20 @@ Every contact gets an automated relationship score (0–100) based on three weig
 | **Recency**   | High   | When the last interaction occurred                           |
 | **Depth**     | Medium | Quality signals — meetings and calls score higher than notes |
 
+### Score Bands
+
+A score falls in one of three bands. The bands give the number a word and a colour. They come from `shared/scoreBand.ts`, so the avatar ring, the contact list, the command palette and the at-risk counts on this page use the same cut points.
+
+| Band        | Score     | Where you see it                                                       |
+| ----------- | --------- | ---------------------------------------------------------------------- |
+| **Strong**  | 70 to 100 | A green ring                                                           |
+| **Fading**  | 40 to 69  | An amber ring                                                          |
+| **At risk** | under 40  | A red ring, the **At-Risk** count, and the at-risk list in the palette |
+
+The ring around every avatar is the score: the arc length is the score and the colour is the band. A contact with no logged interaction shows an empty ring and "No interactions yet". See [The Score Ring](contact-management.md#the-score-ring).
+
+The band words mean one thing each. Pulse uses other words for other facts: "slipping" for a contact past its follow-up cadence, and "rising" and "cooling" for a score that moves.
+
 ### Score Lifecycle
 
 - Scores are **fully recomputed on server startup**
@@ -32,7 +46,7 @@ The dashboard header displays key network metrics:
 | ------------------------ | ---------------------------------------------- |
 | **Total Contacts**       | Active (non-archived, non-ghost) contact count |
 | **Avg Score**            | Mean relationship score across all contacts    |
-| **At-Risk**              | Contacts below their interaction cadence       |
+| **At-Risk**              | Contacts in the At risk band (score under 40)  |
 | **Interaction Velocity** | Interactions per week (with trend)             |
 
 Click on any metric card to drill into a detailed modal with charts and breakdowns.

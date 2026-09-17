@@ -5,10 +5,24 @@
  * manages shared state (active tab, avatar picker), and delegates rendering
  * to four focused sub-components:
  *
- * - {@link ProfileHeader} — Avatar, name, social links, tags, AI briefing
+ * - {@link ProfileHeader} — Avatar, name, meta line, tags, the actions
  * - {@link DetailsCard}   — Location, email, phone, birthday, preferences
- * - {@link DossierTab}    — AI dossier, experience, education
+ * - {@link DossierTab}    — Briefing, AI dossier, experience, education
  * - {@link TimelineTab}   — Interaction composer, timeline entries
+ *
+ * The page has two layouts, chosen by the width of its own pane, not of the
+ * window:
+ *
+ * 1. Wide (768 px and up): the header, then two columns. Details is a
+ *    column on the left that stays in view while it fits. On the right, a
+ *    Timeline and Dossier control over the chosen section.
+ * 2. Narrow: a short header, then a control for Timeline, Details and
+ *    Dossier that sticks under the Back bar. The Timeline tab opens with a
+ *    one-line composer above the first entry.
+ *
+ * The pane, not the window: at 1024 px the sidebar and the 350 px list sit
+ * beside the contact, so its pane is about 600 px wide. Two columns there
+ * left the timeline about 160 px.
  */
 import React, { Suspense, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +49,14 @@ import {
 } from "../../../api";
 
 import { AvatarPickerModal } from "../../../components/AvatarPickerModal";
-import { ProfileHeader } from "./ProfileHeader";
+import {
+  Segmented,
+  type SegmentedOption,
+} from "../../../components/ui/Segmented";
+import { useElementWidth } from "../../../hooks/useElementWidth";
+import { useFitsHeight } from "../../../hooks/useFitsHeight";
+import { ContactIntro, ProfileHeader } from "./ProfileHeader";
+import { ContactTags } from "./ContactTags";
 import { DetailsCard } from "./DetailsCard";
 /**
  * Behind a tab the user has to click, so it has no business in the chunk that
@@ -72,8 +93,29 @@ import { DupeBanner } from "./DupeBanner";
 export interface ContactProfileProps {
   contactId: string;
   onClose?: () => void;
+  /** The name of the page Back goes to, for the Back button's text. */
+  backLabel?: string;
   showNetworkButton?: boolean;
 }
+
+/** The pane width, in px, from which Details is a column and not a tab. */
+export const WIDE_CONTACT_MIN_PX = 768;
+
+type Section = "timeline" | "details" | "dossier";
+
+/** The name of the section control in both layouts. */
+const SECTIONS_LABEL = "Contact sections";
+
+const WIDE_TABS: readonly SegmentedOption<Section>[] = [
+  { value: "timeline", label: "Timeline" },
+  { value: "dossier", label: "Dossier" },
+];
+
+const NARROW_TABS: readonly SegmentedOption<Section>[] = [
+  { value: "timeline", label: "Timeline" },
+  { value: "details", label: "Details" },
+  { value: "dossier", label: "Dossier" },
+];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
@@ -82,6 +124,7 @@ export interface ContactProfileProps {
 export const ContactProfile = ({
   contactId: id,
   onClose,
+  backLabel,
   showNetworkButton = false,
 }: ContactProfileProps) => {
   const navigate = useNavigate();
@@ -108,9 +151,23 @@ export const ContactProfile = ({
 
   // ── Local state ───────────────────────────────────────────────────────
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"timeline" | "dossier">(
-    "timeline",
-  );
+  const [activeTab, setActiveTab] = useState<Section>("timeline");
+
+  // ── Layout ────────────────────────────────────────────────────────────
+  // Elements from callback refs, so the hooks see them on the render that
+  // mounts them, after the loading state.
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const [details, setDetails] = useState<HTMLDivElement | null>(null);
+  const width = useElementWidth(root);
+  const wide = (width ?? 0) >= WIDE_CONTACT_MIN_PX;
+  // 16 px above the column and 32 px under it.
+  const detailsFit = useFitsHeight(details, scroller, 48);
+  /**
+   * The section beside Details. Wide, Details is always on screen, so a
+   * Details tab chosen on a phone shows the timeline once the pane widens.
+   */
+  const mainTab: Section = activeTab === "dossier" ? "dossier" : "timeline";
   /**
    * True from a "Log interaction" press until the composer has taken focus.
    *
@@ -253,13 +310,20 @@ export const ContactProfile = ({
   // Render
   // ═══════════════════════════════════════════════════════════════════════
 
+  const dossier = (
+    <Suspense fallback={<DossierFallback />}>
+      <DossierTab contact={contact} generateBriefing={generateBriefing} />
+    </Suspense>
+  );
+
   return (
     <>
       <div
+        ref={setRoot}
         className="h-full flex flex-col overflow-hidden w-full relative bg-surface md:bg-transparent"
         style={themeStyles}
       >
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div ref={setScroller} className="flex-1 min-h-0 overflow-y-auto">
           {/* ── Profile Header ──────────────────────────────────────────── */}
           <ProfileHeader
             contact={contact}
@@ -269,6 +333,8 @@ export const ContactProfile = ({
             onOpenAvatarPicker={() => setIsAvatarPickerOpen(true)}
             onLogInteraction={logInteraction}
             showNetworkButton={showNetworkButton}
+            layout={wide ? "wide" : "narrow"}
+            backLabel={backLabel}
             archiveContact={archiveContact}
             unarchiveContact={unarchiveContact}
             updateContact={updateContact}
@@ -278,72 +344,110 @@ export const ContactProfile = ({
           {/* ── Dupe Suggestion Banner ──────────────────────────────────── */}
           <DupeBanner contactId={id} />
 
-          {/* ── Two-Column Layout ───────────────────────────────────────── */}
-          <div className="max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10">
-            <div className="grid grid-cols-1 lg:grid-cols-24 gap-6 lg:gap-8 items-start pb-32 lg:pb-0 mt-8 lg:mt-0 relative">
-              {/* Left Column: Facts */}
-              <div className="lg:col-span-9 space-y-6 lg:sticky lg:top-8 lg:pb-8">
-                <DetailsCard
-                  contact={contact}
-                  contactId={id}
-                  onUpdate={handleUpdate}
-                  updateContact={updateContact}
-                />
-              </div>
+          {/* ── Narrow: the sections as tabs, stuck under the Back bar ──── */}
+          {!wide && (
+            <div
+              className={cn(
+                "sticky z-20 bg-surface px-4 py-2 shadow-[0_1px_0_var(--color-surface-container-high)]",
+                // The Back bar is 56 px and shows below `lg`.
+                onClose ? "top-14 lg:top-0" : "top-0",
+              )}
+            >
+              <Segmented
+                options={NARROW_TABS}
+                value={activeTab}
+                onChange={setActiveTab}
+                label={SECTIONS_LABEL}
+                className="w-full sm:w-full"
+              />
+            </div>
+          )}
 
-              {/* Right Column: Timeline / Dossier */}
-              <div className="lg:col-span-15 relative min-h-[300px] flex flex-col gap-6 lg:pb-32">
-                {/* Tab Switcher */}
-                <div className="flex items-center gap-2 p-1.5 bg-surface-container-low rounded-xl border border-surface-container-highest shadow-sm relative z-20 w-fit">
-                  <button
-                    onClick={() => setActiveTab("timeline")}
-                    className={cn(
-                      "min-h-[44px] sm:min-h-0 px-6 py-2 rounded-lg font-bold text-sm transition-all",
-                      activeTab === "timeline"
-                        ? "bg-surface shadow-sm text-primary"
-                        : "text-on-surface-variant hover:text-on-surface",
-                    )}
-                  >
-                    Timeline
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("dossier")}
-                    className={cn(
-                      "min-h-[44px] sm:min-h-0 px-6 py-2 rounded-lg font-bold text-sm transition-all",
-                      activeTab === "dossier"
-                        ? "bg-surface shadow-sm text-primary"
-                        : "text-on-surface-variant hover:text-on-surface",
-                    )}
-                  >
-                    Dossier
-                  </button>
-                </div>
-
-                {activeTab === "dossier" && (
-                  <Suspense fallback={<DossierFallback />}>
-                    <DossierTab
-                      contact={contact}
-                      generateBriefing={generateBriefing}
-                    />
-                  </Suspense>
-                )}
-
-                {activeTab === "timeline" && (
-                  <TimelineTab
+          {/*
+            One grid for both layouts, with the same two children in the same
+            places, so a width that crosses 768 px changes classes and does
+            not remount the timeline and its composer.
+          */}
+          <div
+            className={cn(
+              "max-w-6xl mx-auto w-full",
+              wide ? "px-8 lg:px-10" : "px-4 pt-4",
+            )}
+          >
+            <div
+              className={cn(
+                "grid items-start relative",
+                wide
+                  ? "grid-cols-[minmax(300px,2fr)_5fr] gap-8"
+                  : "grid-cols-1 gap-6",
+              )}
+            >
+              {/* Details: a column beside the timeline, or a tab */}
+              {(wide || activeTab === "details") && (
+                <div
+                  ref={setDetails}
+                  className={cn(
+                    "min-w-0 space-y-6",
+                    wide ? "pb-8" : "pb-32",
+                    // Sticky only while the column fits the view. A taller
+                    // column scrolls with the page, so its last field is in
+                    // reach.
+                    wide &&
+                      detailsFit &&
+                      (onClose ? "sticky top-18 lg:top-4" : "sticky top-4"),
+                  )}
+                >
+                  {!wide && (
+                    <>
+                      <ContactIntro contact={contact} onUpdate={handleUpdate} />
+                      <ContactTags
+                        contact={contact}
+                        updateContact={updateContact}
+                      />
+                    </>
+                  )}
+                  <DetailsCard
+                    contact={contact}
                     contactId={id}
-                    composerFocusRequested={composerFocusRequested}
-                    onComposerFocused={composerFocused}
-                    timeline={timeline}
-                    timelineLoading={timelineLoading}
-                    isDragActive={isDragActive}
-                    getRootProps={getRootProps}
-                    getInputProps={getInputProps}
-                    deleteInteraction={deleteInteraction}
-                    updateInteraction={updateInteraction}
-                    promoteGhost={promoteGhost}
+                    onUpdate={handleUpdate}
+                    updateContact={updateContact}
                   />
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Timeline or Dossier */}
+              {(wide || activeTab !== "details") && (
+                <div className="min-w-0 relative min-h-[300px] flex flex-col gap-6 pb-32">
+                  {wide && (
+                    <Segmented
+                      options={WIDE_TABS}
+                      value={mainTab}
+                      onChange={setActiveTab}
+                      label={SECTIONS_LABEL}
+                      className="w-auto self-start"
+                    />
+                  )}
+
+                  {mainTab === "dossier" ? (
+                    dossier
+                  ) : (
+                    <TimelineTab
+                      contactId={id}
+                      composerFocusRequested={composerFocusRequested}
+                      onComposerFocused={composerFocused}
+                      composerCollapsible={!wide}
+                      timeline={timeline}
+                      timelineLoading={timelineLoading}
+                      isDragActive={isDragActive}
+                      getRootProps={getRootProps}
+                      getInputProps={getInputProps}
+                      deleteInteraction={deleteInteraction}
+                      updateInteraction={updateInteraction}
+                      promoteGhost={promoteGhost}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

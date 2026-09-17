@@ -1,3 +1,4 @@
+import { FADING_MIN } from "../../shared/scoreBand.ts";
 import { resolveCapability } from "../ai/capabilities.ts";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
@@ -85,13 +86,19 @@ export const dashboardService = {
       .all(scope.ownerId) as (ContactCardRow & { mentionCount: number })[];
 
     // 3. Metrics
+    //
+    // "At risk" here and in step 4 is the band under FADING_MIN in
+    // shared/scoreBand, the same cut the avatar ring draws. The number goes
+    // into the SQL text and not in a bound parameter. It is a constant from
+    // code and never input, the six owner parameters keep their places, and
+    // the text is the same statement it was with the literal 40.
     const metrics = sqlite
       .prepare(
         `
       SELECT
         (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
         (SELECT ROUND(AVG(CAST(julianday('now') - julianday(lastContactedAt) AS REAL))) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL) as avgDaysSinceInteraction,
-        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND relationshipScore < 40 AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
+        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND relationshipScore < ${FADING_MIN} AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
         (SELECT COUNT(*) FROM interactions WHERE ownerId = ? AND date >= date('now', '-30 days') AND contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND COALESCE(isArchived, 0) = 0)) as totalInteractions30d,
         (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
     `,
@@ -119,7 +126,7 @@ export const dashboardService = {
       FROM contacts c
       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
-        AND c.relationshipScore < 40
+        AND c.relationshipScore < ${FADING_MIN}
         AND c.lastContactedAt IS NOT NULL
       ORDER BY c.relationshipScore ASC
       LIMIT 10

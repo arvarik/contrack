@@ -215,15 +215,22 @@ export const listRow = (active: boolean) =>
 
 // ─── Timeline ────────────────────────────────────────────────────────────────
 
-/** Timeline content box — the card next to the timeline marker */
+/**
+ * Timeline entry card: the full-width card right of the date column. No
+ * hover shadow, because the card itself is not a control. Its title button
+ * and its kebab are.
+ */
 export const TIMELINE_CARD =
-  "p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card";
+  "p-4 sm:p-5 rounded-2xl bg-surface-container-lowest shadow-sm";
 
 // ─── Composer ────────────────────────────────────────────────────────────────
 
-/** Rich text composer container */
+/**
+ * Rich text composer container. No outer margin: the timeline puts its own
+ * gap between the composer and the first group.
+ */
 export const COMPOSER =
-  "bg-surface-container-lowest rounded-2xl p-4 shadow-sm mb-8 z-20 transition-all focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md";
+  "bg-surface-container-lowest rounded-2xl p-4 shadow-sm z-20 transition-all focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md";
 
 /** NLP action input (follow-up detector) */
 export const NLP_INPUT_ROW =

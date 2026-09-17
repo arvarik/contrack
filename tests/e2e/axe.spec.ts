@@ -28,6 +28,12 @@ interface Screen {
   path: (seed: Seed) => string;
   /** Resolves once the screen has its data, so the scan sees the real page. */
   ready: (page: Page, seed: Seed) => Promise<void>;
+  /**
+   * The same promise on a phone, where it differs. The narrow contact page
+   * opens on its Timeline tab, with no Log interaction button and the mini
+   * map on the Details tab.
+   */
+  phoneReady?: (page: Page, seed: Seed) => Promise<void>;
   /** The best-practice structure rules this screen is held to. Omitted means all four. */
   structure?: readonly string[];
 }
@@ -54,6 +60,17 @@ const SCREENS: Screen[] = [
         page
           .getByRole("region", { name: "Location map" })
           .getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+      ).toBeVisible();
+    },
+    phoneReady: async (page) => {
+      await expect(
+        page.getByRole("radiogroup", { name: "Contact sections" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: "Coffee about the Berlin office",
+          exact: true,
+        }),
       ).toBeVisible();
     },
   },
@@ -173,7 +190,7 @@ test.describe("phone", () => {
       seed,
     }, testInfo) => {
       await page.goto(screen.path(seed));
-      await screen.ready(page, seed);
+      await (screen.phoneReady ?? screen.ready)(page, seed);
       await expectPageStructured(page, testInfo, `${screen.name}-phone`);
     });
   }

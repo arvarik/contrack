@@ -17,6 +17,12 @@ import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Activity, Tag, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import {
+  bandFor,
+  contactScore,
+  SCORE_BANDS,
+  type ScoreBand,
+} from "../../../shared/scoreBand";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -40,21 +46,22 @@ interface ResultPeekProps {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const scoreBarColor = (score: number): string => {
-  if (score >= 70) return "bg-emerald-500";
-  if (score >= 40) return "bg-amber-500";
-  return "bg-rose-500";
-};
-
-const scoreLabel = (score: number): string => {
-  if (score >= 70) return "Strong";
-  if (score >= 40) return "Moderate";
-  return "At risk";
+/**
+ * The bar colour for each band. The cut points and the words come from
+ * shared/scoreBand, so the peek and the avatar ring always agree.
+ */
+const SCORE_BAR_COLOR: Record<ScoreBand, string> = {
+  strong: "bg-emerald-500",
+  fading: "bg-amber-500",
+  "at-risk": "bg-rose-500",
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
+  // A contact with no logged interaction has no score to show, the same as
+  // on the ring. Its stored 50 is only the column's default.
+  const score = contact ? contactScore(contact) : null;
   return (
     <AnimatePresence>
       {visible && contact && (
@@ -90,29 +97,25 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
             </div>
 
             {/* Score Bar */}
-            {contact.relationshipScore != null &&
-              contact.relationshipScore > 0 && (
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-on-surface-variant flex items-center gap-1">
-                      <Activity className="w-3 h-3" />
-                      Relationship
-                    </span>
-                    <span className="font-bold text-on-surface">
-                      {contact.relationshipScore} —{" "}
-                      {scoreLabel(contact.relationshipScore)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${scoreBarColor(contact.relationshipScore)}`}
-                      style={{
-                        width: `${Math.min(100, contact.relationshipScore)}%`,
-                      }}
-                    />
-                  </div>
+            {score !== null && (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-on-surface-variant flex items-center gap-1">
+                    <Activity className="w-3 h-3" />
+                    Relationship
+                  </span>
+                  <span className="font-bold text-on-surface">
+                    {score}, {SCORE_BANDS[bandFor(score)].label}
+                  </span>
                 </div>
-              )}
+                <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${SCORE_BAR_COLOR[bandFor(score)]}`}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Last Contact */}
             {contact.lastContactedAt && (

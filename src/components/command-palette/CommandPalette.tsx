@@ -1072,6 +1072,7 @@ export const CommandPalette = () => {
                               </span>
                               <ScoreDot
                                 score={contact.relationshipScore ?? null}
+                                lastContactedAt={contact.lastContactedAt}
                               />
                               {contact.approximate && (
                                 <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">

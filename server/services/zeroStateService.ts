@@ -7,6 +7,7 @@
  *
  * @module server/services/zeroStateService
  */
+import { FADING_MIN } from "../../shared/scoreBand.ts";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import type { Scope } from "../tenancy/scope.ts";
@@ -36,6 +37,11 @@ export interface ZeroStatePayload {
 // dedupe count reads `dedupe_suggestions.ownerId` directly rather than joining
 // back to contacts, because a suggestion names two contacts and both share the
 // owner by the mismatch trigger.
+//
+// "At risk" is the band under FADING_MIN in shared/scoreBand, the same cut the
+// avatar ring draws. The number goes into the SQL text and not in a bound
+// parameter. It is a constant from code and never input, and the text is the
+// same statement it was with the literal 40, so the plan does not change.
 
 const stmts = {
   urgentCount: sqlite.prepare(`
@@ -55,7 +61,7 @@ const stmts = {
     WHERE c.ownerId = ?
       AND c.isGhost = 0
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
-      AND c.relationshipScore < 40
+      AND c.relationshipScore < ${FADING_MIN}
       AND c.lastContactedAt IS NOT NULL
       AND CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) > 30
     ORDER BY c.relationshipScore ASC

@@ -40,6 +40,7 @@ const toastMock = vi.hoisted(() =>
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 import {
+  ContactIntro,
   ProfileHeader,
   type ProfileHeaderProps,
 } from "../../src/views/contact-detail/components/ProfileHeader";
@@ -505,6 +506,102 @@ describe("the contact actions", () => {
     );
     const link = screen.getByRole("link", { name: /umbrella\.com/ });
     expect(link.getAttribute("target")).toBe("_blank");
+  });
+});
+
+describe("the narrow header", () => {
+  it("names where Back goes, and says Back when it does not know", () => {
+    const onClose = vi.fn();
+    mount(
+      <ProfileHeader
+        {...makeProps({ onClose, layout: "narrow", backLabel: "Network" })}
+      />,
+    );
+    const back = screen.getByRole("button", { name: "Back to Network" });
+    expect(back.textContent).toBe("Network");
+    fireEvent.click(back);
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    mount(<ProfileHeader {...makeProps({ onClose, layout: "narrow" })} />);
+    expect(screen.getByRole("button", { name: "Back" }).textContent).toBe(
+      "Back",
+    );
+  });
+
+  it("keeps the name, the role, the meta line and the kebab, and nothing else", async () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          layout: "narrow",
+          contact: makeContact({
+            headline: "Researching how teams plan",
+            aiSummary: "Runs the research guild.",
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByRole("heading", { level: 1 }).className).toContain(
+      "text-2xl",
+    );
+    expect(screen.getByText("Sydney")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Contact actions" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Log interaction" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add tag" })).toBeNull();
+    expect(screen.queryByText("Researching how teams plan")).toBeNull();
+    expect(screen.queryByText("Runs the research guild.")).toBeNull();
+    // No weather in the narrow header, so no request for it.
+    await act(async () => {});
+    expect(weatherRequests()).toHaveLength(0);
+  });
+
+  it("draws the avatar in a 56 px score ring", () => {
+    mount(<ProfileHeader {...makeProps({ layout: "narrow" })} />);
+    const ring = screen.getByRole("img", { name: "No interactions yet" });
+    expect(ring.style.width).toBe("56px");
+  });
+
+  it("puts a ghost's Promote button under the meta line", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          layout: "narrow",
+          contact: makeContact({ isGhost: true }),
+        })}
+      />,
+    );
+    const promote = screen.getByRole("button", { name: "Promote to contact" });
+    expect(promote.className).toContain("mt-3");
+  });
+});
+
+describe("the headline and the summary", () => {
+  it("shows a headline that says something new, and the summary", () => {
+    mount(
+      <ContactIntro
+        contact={makeContact({
+          headline: "Researching how teams plan",
+          aiSummary: "Runs the research guild.",
+        })}
+        onUpdate={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Researching how teams plan")).toBeTruthy();
+    expect(screen.getByText("Runs the research guild.")).toBeTruthy();
+  });
+
+  it("renders nothing when the headline repeats the role and there is no summary", () => {
+    const { container } = render(
+      <ContactIntro
+        contact={makeContact({ headline: "UX Researcher at Umbrella Corp" })}
+        onUpdate={vi.fn()}
+      />,
+    );
+    expect(container.textContent).toBe("");
   });
 });
 

@@ -51,6 +51,18 @@ export function fallbackAvatarUrl(name: string): string {
 }
 
 /**
+ * True when the avatar is drawn by the app and not a photo of the person.
+ *
+ * No URL at all draws the fallback. The app's own route draws the rest, and
+ * the boot migration in server/db.ts moved every stored DiceBear URL onto that
+ * route. The host test stays for a backup restored from before it.
+ */
+export function isGeneratedAvatar(url: string | null | undefined): boolean {
+  if (!url) return true;
+  return url.startsWith("/api/avatar/") || url.includes("api.dicebear.com/");
+}
+
+/**
  * The signed-in account's mark, in the sidebar and at the top of Settings.
  *
  * `initials` rather than the illustrated style contacts use, and seeded on the

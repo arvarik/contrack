@@ -14,10 +14,10 @@ import {
 } from "lucide-react";
 import { Interaction } from "../../../types";
 import type { LucideIcon } from "lucide-react";
-import { format } from "date-fns";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
+import { formatDay, formatWhen } from "../../../lib/datetime";
 
 interface InteractionDetailModalProps {
   isOpen: boolean;
@@ -25,6 +25,13 @@ interface InteractionDetailModalProps {
   interaction: Interaction | null;
   onCompleteActionItem: (id: string) => void;
   onUpdateInteraction: (id: string, data: Partial<Interaction>) => void;
+  /** Open in edit mode. The timeline kebab's Edit sets it. */
+  initialEditing?: boolean;
+  /**
+   * Shows a Delete button beside Edit. The modal closes first, then this
+   * runs, and the caller asks for confirmation.
+   */
+  onDelete?: () => void;
 }
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
@@ -35,7 +42,7 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   default: ActivitySquare,
 };
 
-import { Edit2, Save } from "lucide-react";
+import { Edit2, Save, Trash2 } from "lucide-react";
 import { activateOnKey } from "../../../lib/a11y";
 
 export const InteractionDetailModal = ({
@@ -44,6 +51,8 @@ export const InteractionDetailModal = ({
   interaction,
   onCompleteActionItem,
   onUpdateInteraction,
+  initialEditing = false,
+  onDelete,
 }: InteractionDetailModalProps) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editingTitle, setEditingTitle] = React.useState("");
@@ -53,9 +62,9 @@ export const InteractionDetailModal = ({
     if (isOpen && interaction) {
       setEditingTitle(interaction.title);
       setEditingContent(interaction.content || "");
-      setIsEditing(false);
+      setIsEditing(initialEditing);
     }
-  }, [isOpen, interaction]);
+  }, [isOpen, interaction, initialEditing]);
 
   // Sanitize once per content change instead of on every render.
   const sanitizedContent = React.useMemo(
@@ -111,10 +120,7 @@ export const InteractionDetailModal = ({
                     )}
                     <p className="text-xs text-on-surface-variant font-medium flex items-center gap-1.5 mt-0.5">
                       <Calendar className="w-3 h-3 opacity-70" />{" "}
-                      {format(
-                        new Date(interaction.date),
-                        "MMMM d, yyyy 'at' h:mm a",
-                      )}
+                      {formatWhen(interaction.date)}
                     </p>
                   </div>
                 </div>
@@ -133,12 +139,29 @@ export const InteractionDetailModal = ({
                       <Save className="w-4 h-4" /> Save
                     </button>
                   ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="hit-area p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
-                    >
-                      <Edit2 className="w-4 h-4" /> Edit
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="hit-area p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+                      >
+                        <Edit2 className="w-4 h-4" /> Edit
+                      </button>
+                      {onDelete && (
+                        // The same quiet look as Edit. Red shows only inside
+                        // the confirmation, where the choice is made.
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onDelete();
+                          }}
+                          className="hit-area p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+                        >
+                          <Trash2 aria-hidden="true" className="w-4 h-4" />{" "}
+                          Delete
+                        </button>
+                      )}
+                    </>
                   )}
                   <button
                     onClick={onClose}
@@ -249,8 +272,7 @@ export const InteractionDetailModal = ({
                                         : "text-error opacity-80",
                                     )}
                                   >
-                                    Due{" "}
-                                    {format(new Date(action.dueAt), "MMM d")}
+                                    Due {formatDay(action.dueAt)}
                                   </span>
                                 </div>
                               </div>

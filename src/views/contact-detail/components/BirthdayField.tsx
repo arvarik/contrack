@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "../../../lib/utils";
+import { formatDay } from "../../../lib/datetime";
 import { EditHint } from "./EditableField";
 
 export const BirthdayField = ({
@@ -37,22 +38,14 @@ export const BirthdayField = ({
     return "";
   };
 
+  // The same medium date as every other absolute date in the app. formatDay
+  // reads a bare YYYY-MM-DD as a local day, so a birthday does not show as
+  // the day before west of Greenwich. A value it cannot read shows as stored.
   const formatDisplay = (v: string | null): string | null => {
     if (!v) return null;
-    try {
-      const inputVal = toInputValue(v);
-      if (!inputVal) return v;
-      // Parse as local date (avoid UTC shift)
-      const [year, month, day] = inputVal.split("-").map(Number);
-      const d = new Date(year, month - 1, day);
-      return d.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return v;
-    }
+    const inputVal = toInputValue(v);
+    if (!inputVal) return v;
+    return formatDay(inputVal, v);
   };
 
   // Upcoming birthday badge (within 30 days)

@@ -1,56 +1,46 @@
 /**
- * TimelineTab — The "Timeline" tab content showing the Rich Interaction
- * Composer, file drop zone, and the chronological list of interactions
- * with inline editing, mentions display, and file attachments.
+ * TimelineTab: the "Timeline" tab of a contact. It holds the composer, the
+ * file drop zone, the empty state, and the timeline itself.
+ *
+ * The entries, their menus and the delete with undo live in `Timeline`. This
+ * file keeps what belongs to the tab: the drop target, the lazy composer, and
+ * the `?interaction=<id>` link that opens one entry.
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { Suspense, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Mail,
-  Phone,
-  FileText,
-  Handshake,
-  Sparkles,
-  UploadCloud,
-  Trash2,
-  MessageSquare,
-  ExternalLink,
-  Linkedin,
-  Facebook,
-  File,
-  CalendarCheck,
-} from "lucide-react";
-import DOMPurify from "dompurify";
+import React, { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { MessageSquare, UploadCloud } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { toast } from "sonner";
 
 import type { Interaction } from "../../../types";
-import { cn, safeHref } from "../../../lib/utils";
-import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { useHiddenInteractionIds } from "../../../lib/pendingDeletes";
+import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
+import {
+  Timeline,
+  type DeleteInteractionMutation,
+  type OpenedInteraction,
+  type PromoteGhostMutation,
+  type UpdateInteractionMutation,
+} from "./Timeline";
 
 /**
  * The composer carries TipTap + ProseMirror, which together are the bulk of
- * the contact detail bundle — and the user cannot type into it during the
+ * the contact detail bundle, and the user cannot type into it during the
  * first paint anyway. Splitting it here means the profile and the timeline
  * render from a much smaller chunk while the editor streams in beside them.
  *
- * The import fires on mount rather than on first click: it is a parallel
+ * The import fires on mount rather than on first click. It is a parallel
  * fetch, not a blocking one, so by the time anyone reaches for the keyboard
- * it has almost always landed — without making the first keystroke wait.
+ * it has almost always landed, without making the first keystroke wait.
  */
 const InteractionComposer = React.lazy(() =>
   import("../../../components/InteractionComposer").then((m) => ({
     default: m.InteractionComposer,
   })),
 );
-import { InteractionDetailModal } from "./InteractionDetailModal";
-import { useCompleteActionItem } from "../../../api";
-import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
-import { activateOnKey } from "../../../lib/a11y";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -61,6 +51,11 @@ export interface TimelineTabProps {
   /** True after "Log interaction", until the composer has taken focus. */
   composerFocusRequested?: boolean;
   onComposerFocused?: () => void;
+  /**
+   * True in the narrow contact layout. The composer shows one line until it
+   * takes focus.
+   */
+  composerCollapsible?: boolean;
   timeline: Interaction[];
   timelineLoading: boolean;
   isDragActive: boolean;
@@ -68,118 +63,10 @@ export interface TimelineTabProps {
   getInputProps: () => DropzoneInputProps;
 
   // Mutations passed from parent
-  deleteInteraction: {
-    isPending: boolean;
-    mutate: (
-      args: { id: string; contactId: string },
-      opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
-    ) => void;
-  };
-  updateInteraction: {
-    mutate: (args: {
-      id: string;
-      contactId: string;
-      data: { title?: string; content?: string | null };
-    }) => void;
-  };
-  promoteGhost: {
-    mutate: (id: string, opts?: { onSuccess?: () => void }) => void;
-  };
+  deleteInteraction: DeleteInteractionMutation;
+  updateInteraction: UpdateInteractionMutation;
+  promoteGhost: PromoteGhostMutation;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Returns the icon component and color classes for a given interaction type. */
-function getInteractionStyle(type: string) {
-  let Icon = FileText;
-  let bgClass = "bg-surface-container";
-  let textClass = "text-on-surface";
-
-  if (type === "call") {
-    Icon = Phone;
-    bgClass = "bg-blue-500/10";
-    textClass = "text-info";
-  }
-  if (type === "meeting") {
-    Icon = Handshake;
-    bgClass = "bg-emerald-500/10";
-    textClass = "text-success";
-  }
-  if (type === "email") {
-    Icon = Mail;
-    bgClass = "bg-green-500/10";
-    textClass = "text-success";
-  }
-  if (type === "note") {
-    // The AI colour, as a glyph on its own 10 percent wash.
-    bgClass = "bg-ai/10";
-    textClass = "text-ai";
-  }
-  if (type === "message" || type === "sms") {
-    Icon = MessageSquare;
-    bgClass = "bg-teal-500/10";
-    textClass = "text-success";
-  }
-  if (type === "linkedin") {
-    Icon = Linkedin;
-    bgClass = "bg-blue-600/10";
-    textClass = "text-info";
-  }
-  if (type === "facebook") {
-    Icon = Facebook;
-    bgClass = "bg-blue-500/10";
-    textClass = "text-info";
-  }
-  if (type === "import") {
-    Icon = ExternalLink;
-    bgClass = "bg-amber-500/10";
-    textClass = "text-warning";
-  }
-
-  return { Icon, bgClass, textClass };
-}
-
-interface ParsedMention {
-  contactId: string;
-  name: string;
-  isGhost?: boolean;
-}
-
-/** Safely parse the JSON mentions string. Returns null if empty/invalid. */
-function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    return parsed;
-  } catch (err) {
-    console.warn("[TimelineTab] Failed to parse mentions JSON:", err);
-    return null;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// InteractionContent — memoized, sanitized rich-text preview for one entry
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Memoized so DOMPurify.sanitize doesn't re-run for every timeline entry on
- * each parent render — it only runs when the entry's HTML actually changes.
- */
-const InteractionContent = React.memo(({ html }: { html: string }) => {
-  const sanitized = useMemo(
-    () => DOMPurify.sanitize(html, TIPTAP_SANITIZE_CONFIG),
-    [html],
-  );
-  return (
-    <div
-      className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"
-      dangerouslySetInnerHTML={{ __html: sanitized }}
-    />
-  );
-});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
@@ -189,6 +76,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   contactId,
   composerFocusRequested = false,
   onComposerFocused,
+  composerCollapsible,
   timeline,
   timelineLoading,
   isDragActive,
@@ -198,10 +86,11 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   updateInteraction,
   promoteGhost,
 }) => {
-  const navigate = useNavigate();
-  const [selectedInteraction, setSelectedInteraction] =
-    useState<Interaction | null>(null);
-  const completeActionItem = useCompleteActionItem();
+  const [opened, setOpened] = useState<OpenedInteraction | null>(null);
+  // An entry in its undo window is gone for the reader, so it does not count
+  // against the empty state.
+  const hidden = useHiddenInteractionIds();
+  const hasEntries = timeline.some((item) => !hidden.has(item.id));
 
   // A note search lands here with `?interaction=<id>`: open that note and
   // scroll to it, then drop the parameter so Back and a reload show the plain
@@ -211,9 +100,11 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   const wantedInteraction = searchParams.get("interaction");
   useEffect(() => {
     if (!wantedInteraction || timelineLoading) return;
-    const item = timeline.find((entry) => entry.id === wantedInteraction);
+    const item = timeline.find(
+      (entry) => entry.id === wantedInteraction && !hidden.has(entry.id),
+    );
     if (item) {
-      setSelectedInteraction(item);
+      setOpened({ interaction: item, editing: false });
       requestAnimationFrame(() => {
         document
           .getElementById(`interaction-${item.id}`)
@@ -228,20 +119,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
       },
       { replace: true },
     );
-  }, [wantedInteraction, timeline, timelineLoading, setSearchParams]);
-
-  const handleDeleteInteraction = (interactionId: string) => {
-    deleteInteraction.mutate(
-      { id: interactionId, contactId },
-      {
-        onSuccess: () => toast.success("Interaction deleted"),
-        onError: (err: Error) =>
-          toast.error(
-            `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
-      },
-    );
-  };
+  }, [wantedInteraction, timeline, timelineLoading, hidden, setSearchParams]);
 
   return (
     <div
@@ -279,11 +157,12 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
           contactId={contactId}
           focusRequested={composerFocusRequested}
           onFocusHandled={onComposerFocused}
+          collapsible={composerCollapsible}
         />
       </Suspense>
 
       {/* Empty State */}
-      {!timelineLoading && timeline.length === 0 && (
+      {!timelineLoading && !hasEntries && (
         <EmptyState
           icon={MessageSquare}
           title="No interactions yet"
@@ -291,228 +170,20 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         />
       )}
 
-      {/* Timeline */}
-      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-surface-container-high before:to-transparent">
-        {timelineLoading && (
-          <div className="text-center p-4 text-on-surface-variant animate-pulse">
-            Loading timeline...
-          </div>
-        )}
+      {timelineLoading && (
+        <div className="text-center p-4 text-on-surface-variant animate-pulse">
+          Loading timeline...
+        </div>
+      )}
 
-        {timeline.map((item: Interaction, index: number) => {
-          const { Icon, bgClass, textClass } = getInteractionStyle(item.type);
-
-          return (
-            <div
-              key={item.id}
-              id={`interaction-${item.id}`}
-              className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active timeline-entry"
-              style={{ animationDelay: `${Math.min(index, 6) * 25}ms` }}
-            >
-              {/* Icon marker */}
-              <div
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm ${bgClass} ${textClass} z-10 mx-auto absolute left-0 md:left-1/2 -translate-x-0`}
-              >
-                <Icon className="w-4 h-4" />
-              </div>
-
-              {/* Content Box */}
-              <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2.5rem)] ml-auto md:ml-0 p-5 rounded-2xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow relative group/card cursor-pointer">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-extrabold text-on-surface">
-                    <button
-                      type="button"
-                      className="hit-area text-left hover:underline"
-                      onClick={() => setSelectedInteraction(item)}
-                    >
-                      {item.title}
-                    </button>
-                  </h3>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <time className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
-                      {new Date(item.date).toLocaleDateString()}
-                    </time>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteInteraction(item.id);
-                      }}
-                      className="hit-area opacity-70 hover:opacity-100 text-error min-w-9 min-h-9 flex items-center justify-center rounded transition-opacity"
-                      disabled={deleteInteraction.isPending}
-                      title="Delete interaction"
-                      aria-label="Delete interaction"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Via mention badge */}
-                {item.isViaName && (
-                  <div
-                    tabIndex={0}
-                    role="button"
-                    className="hit-area mb-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity cursor-pointer text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/contact/${item.isViaId}`);
-                    }}
-                    onKeyDown={activateOnKey(() =>
-                      navigate(`/contact/${item.isViaId}`),
-                    )}
-                    title="Navigate to Original Interaction"
-                  >
-                    <ExternalLink className="w-3 h-3 text-primary" /> via{" "}
-                    {item.isViaName}
-                  </div>
-                )}
-
-                {item.content ? (
-                  <InteractionContent html={item.content} />
-                ) : null}
-
-                {/* Ghost Mentions */}
-                {(() => {
-                  const mentions = parseMentions(item.mentions);
-                  if (!mentions) return null;
-                  return (
-                    <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
-                      <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-primary opacity-60" />{" "}
-                        Mentioned:
-                      </span>
-                      {mentions.map(
-                        (
-                          mention: {
-                            contactId: string;
-                            name: string;
-                            isGhost?: boolean;
-                          },
-                          idx: number,
-                        ) => {
-                          if (mention.isGhost) {
-                            return (
-                              <button
-                                key={idx}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  promoteGhost.mutate(mention.contactId, {
-                                    onSuccess: () =>
-                                      navigate(`/contact/${mention.contactId}`),
-                                  });
-                                }}
-                                title={`Promote ${mention.name} to Contact`}
-                                className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
-                              >
-                                <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
-                                  {mention.name.charAt(0)}
-                                </div>
-                                <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
-                                  {mention.name}
-                                </div>
-                              </button>
-                            );
-                          }
-                          return (
-                            <Link
-                              key={idx}
-                              to={`/contact/${mention.contactId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
-                            >
-                              <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-on-primary-wash">
-                                {mention.name.charAt(0)}
-                              </div>
-                              <span className="text-xs font-semibold text-on-surface line-clamp-1">
-                                {mention.name}
-                              </span>
-                            </Link>
-                          );
-                        },
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* File Attachment */}
-                {item.fileUrl && (
-                  <div className="mt-3">
-                    {item.fileType?.startsWith("image/") ? (
-                      <img
-                        src={item.fileUrl}
-                        alt={item.fileName || "Attachment"}
-                        className="max-w-full rounded-xl shadow-sm object-cover max-h-64"
-                      />
-                    ) : (
-                      <a
-                        href={safeHref(item.fileUrl)}
-                        download
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden"
-                      >
-                        <File className="w-8 h-8 text-primary shrink-0 opacity-80" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-on-surface truncate">
-                            {item.fileName}
-                          </p>
-                          <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">
-                            {item.fileType?.split("/")[1] || "FILE"}
-                          </p>
-                        </div>
-                      </a>
-                    )}
-                  </div>
-                )}
-
-                {/* Follow-up */}
-                {item.actionItems && item.actionItems.length > 0 && (
-                  <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center border-t border-surface-container/50">
-                    <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
-                      Follow Up:
-                    </span>
-                    {item.actionItems.map(
-                      (
-                        action: NonNullable<Interaction["actionItems"]>[number],
-                      ) => (
-                        <div
-                          key={action.id}
-                          className={cn(
-                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all text-xs font-semibold select-none",
-                            action.completedAt
-                              ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60"
-                              : "bg-surface-container-lowest text-on-surface border-surface-container-high shadow-sm",
-                          )}
-                        >
-                          {action.completedAt && (
-                            <CalendarCheck className="w-3 h-3 text-on-surface-variant opacity-60" />
-                          )}
-                          {action.title}
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
-
-                {/* Duration */}
-                {item.duration && (
-                  <p className="text-xs text-on-surface-variant mt-3 font-medium flex items-center gap-1 opacity-70">
-                    Duration: {item.duration}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <InteractionDetailModal
-        isOpen={!!selectedInteraction}
-        onClose={() => setSelectedInteraction(null)}
-        interaction={selectedInteraction}
-        onCompleteActionItem={(id) => completeActionItem.mutate(id)}
-        onUpdateInteraction={(id, data) =>
-          updateInteraction.mutate({ id, contactId, data })
-        }
+      <Timeline
+        contactId={contactId}
+        timeline={timeline}
+        opened={opened}
+        onOpenedChange={setOpened}
+        deleteInteraction={deleteInteraction}
+        updateInteraction={updateInteraction}
+        promoteGhost={promoteGhost}
       />
     </div>
   );

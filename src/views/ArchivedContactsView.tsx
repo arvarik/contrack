@@ -15,9 +15,10 @@ import {
   useBulkDeleteContacts,
   useBulkRestoreContacts,
 } from "../api";
-import { HealthRingAvatar } from "../components/HealthRingAvatar";
+import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
+import { formatDay } from "../lib/datetime";
 import { toastUndoableDelete } from "../lib/undoToast";
 import { CARD, SECTION_HEADING, ICON_BTN } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -243,9 +244,10 @@ export const ArchivedContactsView = () => {
                     )}
                   </AnimatePresence>
 
-                  {/* Avatar */}
+                  {/* Avatar. The row is not a control, so the ring keeps its
+                      own name ("Score 72, strong") and its tooltip. */}
                   <div className="relative shrink-0">
-                    <HealthRingAvatar contact={contact} size={44} />
+                    <ScoreRingAvatar contact={contact} size={44} ring="list" />
                     <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-amber-500/90 rounded-full flex items-center justify-center shadow-sm">
                       <Archive className="w-2.5 h-2.5 text-white" />
                     </div>
@@ -267,12 +269,7 @@ export const ArchivedContactsView = () => {
 
                   {/* Archived date */}
                   <span className="text-[11px] text-on-surface-variant opacity-50 hidden sm:block shrink-0">
-                    {contact.updatedAt
-                      ? new Date(contact.updatedAt).toLocaleDateString(
-                          undefined,
-                          { month: "short", day: "numeric", year: "numeric" },
-                        )
-                      : ""}
+                    {formatDay(contact.updatedAt, "")}
                   </span>
 
                   {/* Individual restore button (hidden in select mode) */}

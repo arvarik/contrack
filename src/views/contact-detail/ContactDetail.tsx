@@ -2,6 +2,10 @@ import React from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 import { ContactProfile } from "./components/ContactProfile";
+import { NAMES } from "../../lib/names";
+
+/** The title of the archived contacts page in Settings. */
+const ARCHIVED_LABEL = "Archived contacts";
 
 export const ContactDetail = () => {
   const { id } = useParams();
@@ -9,15 +13,18 @@ export const ContactDetail = () => {
   const location = useLocation();
 
   const isMapActive = location.pathname.startsWith("/map");
-  const isOverlayActive =
-    isMapActive || location.pathname.startsWith("/settings/archived");
+  const isArchived = location.pathname.startsWith("/settings/archived");
+  const isOverlayActive = isMapActive || isArchived;
 
-  const handleClose = () => {
-    if (location.pathname.startsWith("/settings/archived"))
-      navigate("/settings/archived");
-    else if (isMapActive) navigate("/map");
-    else navigate("/");
-  };
+  // Where Back goes, and the name the button says. The two stay together so
+  // the button never names one page and opens another.
+  const back = isArchived
+    ? { to: "/settings/archived", label: ARCHIVED_LABEL }
+    : isMapActive
+      ? { to: "/map", label: NAMES.map.label }
+      : { to: "/", label: NAMES.network.label };
+
+  const handleClose = () => navigate(back.to);
 
   return (
     <div className="h-full w-full relative bg-surface md:bg-transparent">
@@ -33,7 +40,12 @@ export const ContactDetail = () => {
       )}
 
       {id ? (
-        <ContactProfile key={id} contactId={id} onClose={handleClose} />
+        <ContactProfile
+          key={id}
+          contactId={id}
+          onClose={handleClose}
+          backLabel={back.label}
+        />
       ) : (
         <div className="p-12 text-center text-on-surface-variant">
           No Contact Selected

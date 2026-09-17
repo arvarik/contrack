@@ -57,6 +57,10 @@ export const useContacts = () => {
  * Shares the same query key/cache as `useContacts()` but uses
  * TanStack Query's `select` to project a stable, minimal shape.
  * This prevents re-renders when unrelated contact fields change.
+ *
+ * The score and the last contact are here for the ring around each avatar.
+ * The ring needs both, because a contact with no logged interaction shows no
+ * score (see `contactScore` in shared/scoreBand).
  */
 export interface ContactSlim {
   id: string;
@@ -64,6 +68,8 @@ export interface ContactSlim {
   avatarUrl: string | null;
   themeColor: string;
   isGhost: boolean;
+  relationshipScore: number | null;
+  lastContactedAt: string | null;
 }
 
 export const useContactNames = () => {
@@ -78,6 +84,8 @@ export const useContactNames = () => {
         avatarUrl: c.avatarUrl,
         themeColor: c.themeColor,
         isGhost: c.isGhost,
+        relationshipScore: c.relationshipScore ?? null,
+        lastContactedAt: c.lastContactedAt,
       })),
   });
 };
