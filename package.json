@@ -49,6 +49,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "audit:contrast": "node scripts/contrast-audit.mjs",
+    "brand:icons": "tsx scripts/brand/build-icons.ts",
     "tenancy:verify": "tsx scripts/tenancy-verify.ts",
     "eval:record": "tsx scripts/record-search-eval.ts",
     "test:eval": "vitest run --project eval",

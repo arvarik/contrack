@@ -6,7 +6,7 @@
  * useful answer; the server accepts either.
  */
 import React, { useState } from "react";
-import { Lock, LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2 } from "lucide-react";
 import { signIn } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
@@ -81,7 +81,6 @@ export const SignIn = ({
 
   return (
     <AuthShell
-      icon={<Lock className="w-7 h-7" />}
       title={reason ? HEADINGS[reason].title : "Welcome back"}
       subtitle={
         reason ? HEADINGS[reason].subtitle : "Sign in to your Contrack account."

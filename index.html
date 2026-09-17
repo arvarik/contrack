@@ -64,10 +64,32 @@
       crossorigin
     />
 
-    <!-- Brand mark — see public/favicon.svg -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!--
+      The brand mark: the corvid glyph on the gradient tile. Every icon is
+      generated from src/assets/corvidPaths.ts by `npm run brand:icons`, so do
+      not edit the files in public/ by hand. Browsers pin a favicon hard; the
+      `?v=corvid` query makes them fetch this one.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=corvid" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=corvid" />
     <link rel="manifest" href="/site.webmanifest" />
+
+    <!--
+      Link previews. The image is the tile, the name and the first line of the
+      description above, rendered by the same script. A relative path is the
+      most a self-hosted app can promise: its origin is whatever the instance
+      is served from.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Contrack" />
+    <meta
+      property="og:description"
+      content="A self-hosted People CRM for managing your personal and professional network."
+    />
+    <meta property="og:image" content="/og-image.png?v=corvid" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
 
     <!--
       Base title only. Every route sets its own via usePageTitle(), which

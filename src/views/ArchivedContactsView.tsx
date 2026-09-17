@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { toastUndoableDelete } from "../lib/undoToast";
 import { CARD, SECTION_HEADING, ICON_BTN } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
+import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 
@@ -177,7 +178,7 @@ export const ArchivedContactsView = () => {
 
       {!isLoading && contacts.length === 0 && (
         <EmptyState
-          icon={Archive}
+          illustration={<CorvidMark size={64} className="text-primary/60" />}
           title="No archived contacts"
           body="Archive contacts from their detail page to hide them from your Network."
         />

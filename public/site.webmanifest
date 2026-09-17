@@ -6,7 +6,7 @@
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f6f9",
-  "theme_color": "#009edb",
+  "theme_color": "#006a91",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -21,7 +21,13 @@
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg?v=corvid",
       "sizes": "any",
       "type": "image/svg+xml"
     }

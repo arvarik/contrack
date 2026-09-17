@@ -13,6 +13,7 @@
  */
 import React from "react";
 import { cn } from "../../lib/utils";
+import { CorvidMark } from "../brand/CorvidMark";
 import { useAuth } from "./AuthGate";
 
 export const AuthShell = ({
@@ -23,7 +24,12 @@ export const AuthShell = ({
   children,
   footer,
 }: {
-  icon: React.ReactNode;
+  /**
+   * A shape in place of the mark, for a screen that is not a way in: a dead
+   * invitation link. Every screen that leads somewhere shows the mark, and
+   * its own meaning icon sits in the submit button.
+   */
+  icon?: React.ReactNode;
   title: string;
   subtitle: React.ReactNode;
   onSubmit: (event: React.FormEvent) => void;
@@ -47,19 +53,22 @@ export const AuthShell = ({
       >
         <header className="space-y-3 text-center">
           {/*
-            Whose Contrack this is, above everything else.
+            The mark first, then whose Contrack this is.
 
             Somebody arriving from an invitation link has never seen this
             instance. "Join my Contrack" and a hostname is not enough to know
             you are in the right place, and this is the one screen where the
-            answer has to come before the question. Absent when nobody has
-            named the instance, which is the default and reads exactly as it
-            did before.
+            answer has to come before the question. The instance name is
+            absent when nobody has named the instance, which is the default.
           */}
+          {icon ? (
+            <span className="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto">
+              {icon}
+            </span>
+          ) : (
+            <CorvidMark size={40} className="block mx-auto text-primary" />
+          )}
           <InstanceName />
-          <span className="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto">
-            {icon}
-          </span>
           <h1 className="text-xl font-extrabold font-headline">{title}</h1>
           <p className="text-sm text-on-surface-variant text-pretty">
             {subtitle}

@@ -28,6 +28,7 @@ import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
 import { openKeyboardShortcuts } from "../../lib/appEvents";
 import { SidebarIdentity } from "../auth/AccountIdentity";
+import { CorvidMark } from "../brand/CorvidMark";
 import { NAMES } from "../../lib/names";
 
 // ---------------------------------------------------------------------------
@@ -145,21 +146,17 @@ export const Sidebar = () => {
       )}
     >
       {/*
-        Contrack wordmark, rotated vertical. It is decoration: the page title
-        already names the app, and a `title` alone named it only for a mouse.
-        Hidden from assistive tech until the corvid mark replaces it.
+        The corvid, on its perch. It is decoration: the page title already
+        names the app, and a picture that repeats it is noise to a screen
+        reader, so the SVG is aria-hidden and takes no Tab stop. The title
+        gives a mouse the name. On `text-primary` it follows the accent.
+
+        `idPrefix="corvid"` makes this the one mark whose parts are
+        `#corvid-wing`, `#corvid-eye` and so on: the perch that the motion
+        keyframes will target when the bird learns to fly.
       */}
-      <div className="flex items-center justify-center mb-1" aria-hidden="true">
-        <span
-          className="text-[11px] font-black uppercase tracking-[0.22em] signature-gradient bg-clip-text text-transparent select-none"
-          style={{
-            writingMode: "vertical-rl",
-            transform: "rotate(180deg)",
-            letterSpacing: "0.18em",
-          }}
-        >
-          Contrack
-        </span>
+      <div className="flex items-center justify-center mb-1 text-primary">
+        <CorvidMark size={32} title="Contrack" idPrefix="corvid" />
       </div>
 
       <SidebarTooltip label={NAMES.network.label} shortcut="⌘⇧H">

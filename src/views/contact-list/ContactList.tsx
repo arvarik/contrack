@@ -66,6 +66,7 @@ import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullIndicator } from "../../components/ui/PullIndicator";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { CorvidMark } from "../../components/brand/CorvidMark";
 import {
   useRecentContacts,
   useRecentContactsLimit,
@@ -864,7 +865,9 @@ export const ContactList = () => {
           */}
           {!isLoading && !isError && activeContactCount === 0 && (
             <EmptyState
-              icon={Users}
+              illustration={
+                <CorvidMark size={64} className="text-primary/60" />
+              }
               title="Your network is empty"
               body="Bring in the people you already have, or add one by hand."
               action={{
