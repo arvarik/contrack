@@ -27,7 +27,7 @@ The parsing uses the active AI provider (`POST /api/parse-contact`).
 
 ### Import (CSV, vCard, EML)
 
-Access via **Settings → Import** or the import button on the contact list. Supports:
+Access via the import button on the contact list. Supports:
 
 - **CSV files** — Automatic column mapping with header detection
 - **vCard (.vcf)** — The format Apple Contacts, Google Contacts, Outlook and
@@ -47,7 +47,7 @@ The import pipeline runs in 4 SSE-streamed phases:
 
 ### Export (vCard, CSV, JSON)
 
-**Settings → Data → Export your contacts.** Three formats, because they answer
+**Settings → Export.** Three formats, because they answer
 three different questions:
 
 - **vCard (.vcf)** — another address book. The only format that also comes back

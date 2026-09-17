@@ -46,7 +46,13 @@ import { EmptyState } from "../../components/ui/EmptyState";
 type DedupeTab = "auto" | "manual";
 type ResultView = "swipe" | "list";
 
-export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
+export const DedupeView = ({
+  embedded = false,
+  hideBackLink = false,
+}: {
+  embedded?: boolean;
+  hideBackLink?: boolean;
+}) => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("auto");
   const [resultView, setResultView] = useState<ResultView>("swipe");
   const [showActivity, setShowActivity] = useState(false);
@@ -267,7 +273,7 @@ export const DedupeView = ({ embedded = false }: { embedded?: boolean }) => {
           An icon-only link. A `title` gave it a name for a mouse and a screen
           reader but nothing on touch, so the name lives in `aria-label`.
         */}
-        {embedded && (
+        {embedded && !hideBackLink && (
           <Link
             to="/settings"
             className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"

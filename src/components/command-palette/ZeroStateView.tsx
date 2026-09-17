@@ -35,6 +35,8 @@ import {
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { NAV_SHORTCUTS } from "../../hooks/useGlobalNavShortcuts";
 import { NAMES } from "../../lib/names";
+import { SETTINGS_PAGES } from "../../views/settings/registry";
+import { useAuth } from "../auth/AuthGate";
 import type { SearchHistoryEntry } from "../../hooks/useSearchHistory";
 import type { ZeroStateInsight } from "../../types";
 
@@ -146,9 +148,17 @@ export const ZeroStateView = ({
   onSelectInsight,
   onNavigate,
 }: ZeroStateViewProps) => {
+  const { isAdmin, authRequired } = useAuth();
   const hasRecent = recentContacts.length > 0;
   const hasHistory = historyEntries.length > 0;
   const hasInsights = insights.length > 0;
+
+  const settingsNavItems = SETTINGS_PAGES.filter((page) => {
+    if (page.admin && !isAdmin) return false;
+    if (page.needsAccount && !authRequired) return false;
+    if (page.id === "ai-usage" && isAdmin) return false;
+    return true;
+  });
 
   return (
     <>
@@ -236,11 +246,6 @@ export const ZeroStateView = ({
           >
             <item.icon className="w-4 h-4 shrink-0" />
             <span className="text-sm flex-1">{item.label}</span>
-            {/*
-              The chip spells out its classes instead of using KBD_SM. At
-              9px it failed axe colour contrast, and 11px is the smallest
-              type the style guide allows.
-            */}
             {item.shortcut && (
               <kbd className="bg-surface-container-high text-on-surface-variant px-1.5 rounded font-mono text-[11px] shadow-sm hidden sm:inline-flex">
                 {item.shortcut}
@@ -248,6 +253,21 @@ export const ZeroStateView = ({
             )}
           </Command.Item>
         ))}
+        {settingsNavItems.map((page) => {
+          const Icon = page.icon;
+          return (
+            <Command.Item
+              key={`nav_${page.path}`}
+              value={`Settings: ${page.title}`}
+              keywords={page.keywords}
+              onSelect={() => onNavigate(page.path)}
+              className="flex items-center gap-3 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 transition-colors text-on-surface-variant aria-selected:text-primary"
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="text-sm flex-1">Settings: {page.title}</span>
+            </Command.Item>
+          );
+        })}
       </Command.Group>
     </>
   );

@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest";
+import {
+  SETTINGS_PAGES,
+  REDIRECTS,
+  findRows,
+} from "../../src/views/settings/registry";
+import { NAMES } from "../../src/lib/names";
+
+describe("settings registry", () => {
+  it("has unique paths across all pages", () => {
+    const paths = SETTINGS_PAGES.map((p) => p.path);
+    const unique = new Set(paths);
+    expect(unique.size).toBe(paths.length);
+  });
+
+  it("all redirect targets exist in SETTINGS_PAGES", () => {
+    const validPaths = new Set(SETTINGS_PAGES.map((p) => p.path));
+
+    for (const [from, target] of Object.entries(REDIRECTS)) {
+      if (typeof target === "string") {
+        expect(
+          validPaths.has(target),
+          `Redirect from ${from} targets non-existent path ${target}`,
+        ).toBe(true);
+      } else {
+        const adminTarget = target({ isAdmin: true });
+        const memberTarget = target({ isAdmin: false });
+        expect(
+          validPaths.has(adminTarget),
+          `Admin redirect from ${from} targets non-existent path ${adminTarget}`,
+        ).toBe(true);
+        expect(
+          validPaths.has(memberTarget),
+          `Member redirect from ${from} targets non-existent path ${memberTarget}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("admin pages carry admin: true", () => {
+    const adminPages = SETTINGS_PAGES.filter((p) => p.group === "admin");
+    expect(adminPages.length).toBeGreaterThan(0);
+    for (const page of adminPages) {
+      expect(page.admin).toBe(true);
+    }
+  });
+
+  it("all keywords are lowercase", () => {
+    for (const page of SETTINGS_PAGES) {
+      for (const kw of page.keywords) {
+        expect(kw).toBe(kw.toLowerCase());
+      }
+      if (page.rows) {
+        for (const row of page.rows) {
+          for (const kw of row.keywords) {
+            expect(kw).toBe(kw.toLowerCase());
+          }
+        }
+      }
+    }
+  });
+
+  it('findRows("celsius") returns the temperature row', () => {
+    const hits = findRows("celsius");
+    expect(hits.length).toBeGreaterThan(0);
+    const tempHit = hits.find(
+      (h) => h.id === "temp-unit" || h.row?.id === "temp-unit",
+    );
+    expect(tempHit).toBeDefined();
+    expect(tempHit?.page.path).toBe("/settings/network");
+    expect(tempHit?.path).toBe("/settings/network#temp-unit");
+    expect(tempHit?.label).toBe("Temperature unit");
+  });
+
+  it("every NAMES-backed page uses its NAMES title", () => {
+    const duplicates = SETTINGS_PAGES.find((p) => p.id === "duplicates");
+    expect(duplicates?.title).toBe(NAMES.duplicates.title);
+
+    const enrichment = SETTINGS_PAGES.find((p) => p.id === "enrichment");
+    expect(enrichment?.title).toBe(NAMES.enrichment.title);
+
+    const mail = SETTINGS_PAGES.find((p) => p.id === "admin-mail");
+    expect(mail?.title).toBe(NAMES.outgoingMail.title);
+  });
+});

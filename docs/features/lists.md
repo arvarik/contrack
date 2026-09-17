@@ -4,7 +4,7 @@ Organize your contacts into user-defined groups with custom icons, drag-to-reord
 
 ## Creating Lists
 
-Create a list from the **Settings → List Management** view or from the Command Palette action sub-menu (`L`):
+Create a list from the **Settings → Lists** view or from the Command Palette action sub-menu (`L`):
 
 1. Click **New List**
 2. Enter a name (e.g., "Board Members")
