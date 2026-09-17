@@ -12,7 +12,14 @@
  * could be clicked. The list gives each of them a button.
  *
  * Both use the app's type and colour tokens. MapLibre's popup frame takes its
- * colours from `src/index.css`.
+ * colours from `src/index.css`, and the same file stacks a card above the
+ * pins, so a card never opens under the next pin over.
+ *
+ * Neither card names an anchor. MapLibre then picks the side with room, so a
+ * pin at the top edge of the map gets its card below it and a pin at the
+ * right edge gets it to the left, instead of a card cut off by the edge. The
+ * offset is one number, which MapLibre applies in whichever direction the
+ * card opens.
  *
  * @module views/map/ContactPopup
  */
@@ -29,7 +36,6 @@ export const ContactPopup = ({ contact }: { contact: MapContact }) => (
   <Popup
     longitude={contact.lng}
     latitude={contact.lat}
-    anchor="bottom"
     offset={PIN_CLEARANCE}
     closeButton={false}
     closeOnClick={false}
@@ -89,7 +95,6 @@ export const StackPopup = ({ stack, onSelect, onClose }: StackPopupProps) => {
     <Popup
       longitude={stack.longitude}
       latitude={stack.latitude}
-      anchor="bottom"
       offset={PIN_CLEARANCE}
       closeButton={false}
       closeOnClick

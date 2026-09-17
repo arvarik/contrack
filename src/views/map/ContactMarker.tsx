@@ -6,9 +6,17 @@
  * event handler attribute. It is a real `<button>`: focusable, named
  * "<name>, <company>", and opened with Enter like any other button.
  *
+ * The hover card opens for a pointer that can hover, and for focus. A finger
+ * cannot hover: a tap fires the same enter event a mouse does and never the
+ * leave, so on a phone the card would open under the contact the tap opens
+ * and still be there when the contact closes. A touch is told apart by its
+ * pointer type and opens no card, and the focus some browsers give a tapped
+ * button is not a request for one either: only focus that arrived without a
+ * touch, from a keyboard, opens the card.
+ *
  * @module views/map/ContactMarker
  */
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Marker } from "react-map-gl/maplibre";
 import type { MapContact } from "../../../shared/geo";
 import { fallbackAvatarUrl } from "../../lib/avatar";
@@ -57,6 +65,8 @@ export const ContactMarker = memo(function ContactMarker({
 }: ContactMarkerProps) {
   const [broken, setBroken] = useState(false);
   const src = broken ? fallbackAvatarUrl(contact.name) : pinAvatarSrc(contact);
+  // True between a touch on the pin and the focus that touch may bring.
+  const touched = useRef(false);
 
   return (
     <Marker
@@ -70,9 +80,17 @@ export const ContactMarker = memo(function ContactMarker({
         aria-label={contactPinLabel(contact)}
         data-contact-id={contact.id}
         onClick={() => onSelect(contact.id)}
-        onMouseEnter={() => onPreview(contact.id)}
-        onMouseLeave={() => onPreview(null)}
-        onFocus={() => onPreview(contact.id)}
+        onPointerDown={(event) => {
+          touched.current = event.pointerType === "touch";
+        }}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "touch") onPreview(contact.id);
+        }}
+        onPointerLeave={() => onPreview(null)}
+        onFocus={() => {
+          if (!touched.current) onPreview(contact.id);
+          touched.current = false;
+        }}
         onBlur={() => onPreview(null)}
         className={cn(
           "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
