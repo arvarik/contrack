@@ -14,8 +14,10 @@
 import { Router, type Request } from "express";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { requireAdmin } from "../middleware/auth.ts";
+import { requireAdmin, requirePasswordCurrent } from "../middleware/auth.ts";
+import { createRateLimiter } from "../middleware/rateLimit.ts";
 import { log } from "../utils/logger.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
 import {
   validateBody,
   adminCreateUserSchema,
@@ -23,6 +25,7 @@ import {
   adminDeleteUserSchema,
   adminInvitationSchema,
   adminUpdateUserSchema,
+  adminMailSchema,
   auditQuerySchema,
 } from "../utils/validators.ts";
 import {
@@ -44,6 +47,8 @@ import {
 } from "../services/invitationService.ts";
 import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
 import { publicOrigin } from "../utils/publicOrigin.ts";
+import { mailService } from "../services/mailService.ts";
+import { renderTestEmail } from "../mail/templates.ts";
 import { instanceHealth } from "../services/healthService.ts";
 import {
   getInstanceName,
@@ -230,7 +235,9 @@ router.post(
     // the hash of the secret inside it.
     res
       .status(201)
-      .json(createInvitation(adminContext(req), req.body, publicOrigin(req)));
+      .json(
+        await createInvitation(adminContext(req), req.body, publicOrigin(req)),
+      );
   }),
 );
 
@@ -256,6 +263,7 @@ function settingsView() {
     },
     instanceName: getInstanceName(),
     instanceNameMax: INSTANCE_NAME_MAX,
+    mailConfigured: mailService.isConfigured(),
   };
 }
 
@@ -308,6 +316,100 @@ router.put(
       });
     }
     res.json(settingsView());
+  }),
+);
+
+// ─── Outgoing mail ──────────────────────────────────────────────────────────
+
+const mailTestLimiter = createRateLimiter({
+  windowMs: 10 * 60_000,
+  max: 5,
+  name: "mail test",
+  keyBy: (req) => req.principal?.user.id ?? null,
+});
+
+export function __resetAdminRateLimits(): void {
+  mailTestLimiter.reset();
+}
+
+router.get(
+  "/mail",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(mailService.resolveConfig());
+  }),
+);
+
+router.put(
+  "/mail",
+  requireAdmin,
+  requirePasswordCurrent,
+  validateBody(adminMailSchema),
+  asyncHandler(async (req, res) => {
+    const config = mailService.updateMailSettings(req.body);
+    const ctx = adminContext(req);
+    auditService.record({
+      actorUserId: ctx.actor.id,
+      action: "mail.settings.changed",
+      targetType: "mail",
+      targetId: "smtp",
+      ip: ctx.ip,
+    });
+    res.json(config);
+  }),
+);
+
+router.delete(
+  "/mail",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const config = mailService.deleteMailSettings();
+    const ctx = adminContext(req);
+    auditService.record({
+      actorUserId: ctx.actor.id,
+      action: "mail.settings.changed",
+      targetType: "mail",
+      targetId: "smtp",
+      details: { deleted: true },
+      ip: ctx.ip,
+    });
+    res.json(config);
+  }),
+);
+
+router.post(
+  "/mail/test",
+  requireAdmin,
+  mailTestLimiter,
+  asyncHandler(async (req, res) => {
+    const ctx = adminContext(req);
+    const recipient =
+      (req.body as { to?: string } | undefined)?.to?.trim() || ctx.actor.email;
+    if (!recipient) {
+      throw new AppError("No email address configured for test recipient", 400);
+    }
+    const template = renderTestEmail({ instanceName: getInstanceName() });
+    try {
+      await mailService.sendOrThrow({
+        to: recipient,
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+      });
+    } catch (err) {
+      throw new AppError(getErrorMessage(err), 502, {
+        code: "MAIL_SEND_FAILED",
+      });
+    }
+    auditService.record({
+      actorUserId: ctx.actor.id,
+      action: "mail.test.sent",
+      targetType: "mail",
+      targetId: "test",
+      details: { to: recipient },
+      ip: ctx.ip,
+    });
+    res.json({ sentTo: recipient });
   }),
 );
 

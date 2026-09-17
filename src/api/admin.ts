@@ -82,6 +82,7 @@ export interface InstanceSettings {
   /** What this instance calls itself, or "" when nobody has named it. */
   instanceName: string;
   instanceNameMax: number;
+  mailConfigured?: boolean;
 }
 
 export interface AuditEntry {
@@ -214,6 +215,7 @@ export const adminKeys = {
   audit: ["admin", "audit"] as const,
   backups: ["admin", "backups"] as const,
   health: ["admin", "health"] as const,
+  mail: ["admin", "mail"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -398,13 +400,16 @@ export const useCreateInvitation = () => {
       email?: string | null;
       role: UserRole;
       expiresInDays?: number;
+      send?: boolean;
     }) =>
       // `link` is in this response and nowhere else. The database holds only
       // the SHA-256 of the secret inside it.
-      apiJson<{ id: string; link: string; expiresAt: string }>(
-        "/admin/invitations",
-        { method: "POST", ...jsonBody(input) },
-      ),
+      apiJson<{
+        id: string;
+        link: string;
+        expiresAt: string;
+        sent: boolean;
+      }>("/admin/invitations", { method: "POST", ...jsonBody(input) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.invitations });
       qc.invalidateQueries({ queryKey: adminKeys.audit });
@@ -558,7 +563,12 @@ export const AUDIT_GROUPS = [
   {
     key: "instance",
     label: "Instance",
-    actions: ["settings.changed", "backup.created"],
+    actions: [
+      "settings.changed",
+      "backup.created",
+      "mail.settings.changed",
+      "mail.test.sent",
+    ],
   },
 ] as const;
 
@@ -599,6 +609,83 @@ export const useCreateBackup = () => {
     mutationFn: () => apiJson<BackupInfo>("/backups", { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.backups });
+      qc.invalidateQueries({ queryKey: adminKeys.audit });
+    },
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Mail
+// ---------------------------------------------------------------------------
+
+export interface MailConfig {
+  source: "env" | "settings" | "none";
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  from: string;
+  replyTo: string;
+  hasPassword: boolean;
+}
+
+export interface UpdateMailInput {
+  host: string;
+  port: number;
+  secure: boolean;
+  user?: string;
+  password?: string;
+  from: string;
+  replyTo?: string;
+}
+
+export const useMailConfig = () =>
+  useQuery({
+    queryKey: adminKeys.mail,
+    queryFn: ({ signal }) => apiJson<MailConfig>("/admin/mail", { signal }),
+    staleTime: 15_000,
+  });
+
+export const useUpdateMailConfig = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateMailInput) =>
+      apiJson<MailConfig>("/admin/mail", {
+        method: "PUT",
+        ...jsonBody(input),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.mail });
+      qc.invalidateQueries({ queryKey: adminKeys.settings });
+      qc.invalidateQueries({ queryKey: adminKeys.audit });
+    },
+  });
+};
+
+export const useDeleteMailConfig = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiJson<{ deleted: true }>("/admin/mail", {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.mail });
+      qc.invalidateQueries({ queryKey: adminKeys.settings });
+      qc.invalidateQueries({ queryKey: adminKeys.audit });
+    },
+  });
+};
+
+export const useSendTestMail = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body?: { to?: string }) =>
+      apiJson<{ sent: true; to: string }>("/admin/mail/test", {
+        method: "POST",
+        ...jsonBody(body ?? {}),
+      }),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.audit });
     },
   });

@@ -1971,11 +1971,15 @@ Every route under `/api/admin` needs an account with the `admin` role and answer
 | GET    | `/api/admin/users/:id/export`         | That account's data, for offboarding. Audit-logged                      |
 | DELETE | `/api/admin/users/:id`                | Two steps: `409 USER_HAS_DATA` with counts, then `{"decision":"purge"}` |
 | GET    | `/api/admin/invitations`              | Every invitation with its derived status                                |
-| POST   | `/api/admin/invitations`              | Returns a one-time link                                                 |
+| POST   | `/api/admin/invitations`              | Returns a one-time link, optionally sends it by email                   |
 | DELETE | `/api/admin/invitations/:id`          | Revoke a pending invitation                                             |
 | GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, and the supported range           |
 | PUT    | `/api/admin/settings`                 | Change either or both                                                   |
 | GET    | `/api/admin/audit`                    | Every administrative action, newest first                               |
+| GET    | `/api/admin/mail`                     | Outgoing mail status and configuration without secrets                  |
+| PUT    | `/api/admin/mail`                     | Save SMTP configuration (seals password with secretBox)                 |
+| DELETE | `/api/admin/mail`                     | Clear stored SMTP configuration                                         |
+| POST   | `/api/admin/mail/test`                | Send a test email to verify SMTP delivery (5/10m rate limit)            |
 
 Three guards protect the instance, in this order: the local account that owns
 an unsecured instance's data cannot be disabled or deleted
@@ -1996,6 +2000,103 @@ yet. Added by extra F3.
 An account created or reset by an admin holds a password that admin chose, so
 every route outside the six the sign-in flow needs answers
 `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it.
+
+### `POST /api/admin/invitations`
+
+Admin only. Create an invitation to join the instance.
+
+```bash
+curl -X POST http://localhost:3210/api/admin/invitations \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "colleague@example.com", "role": "member", "expiresInDays": 7, "send": true }'
+```
+
+- Request body fields:
+  - `email` (string, optional): Email hint for the recipient
+  - `role` (`"member"` | `"admin"`, default `"member"`)
+  - `expiresInDays` (number, default 7)
+  - `send` (boolean, optional, default `false`): When `true` and outgoing mail is configured, dispatches an email containing the invitation link to `email`.
+- Response:
+  ```json
+  {
+    "id": "inv_12345",
+    "link": "http://localhost:3210/accept-invitation?token=...",
+    "expiresAt": "2026-09-24T18:00:00.000Z",
+    "sent": true
+  }
+  ```
+  `sent` indicates whether the email was successfully sent. If mail was unconfigured or delivery failed, `sent` is `false` and the admin can copy the link manually.
+
+### `GET /api/admin/mail`
+
+Admin only. Returns the current outgoing mail configuration without secrets.
+
+```bash
+curl http://localhost:3210/api/admin/mail
+```
+
+```json
+{
+  "source": "settings",
+  "host": "smtp.example.com",
+  "port": 587,
+  "secure": false,
+  "user": "smtp-user",
+  "from": "noreply@example.com",
+  "replyTo": "support@example.com",
+  "hasPassword": true
+}
+```
+
+`source` is `"env"` (configured via `SMTP_URL`), `"settings"` (configured in database), or `"none"`. Passwords are never returned in this response.
+
+### `PUT /api/admin/mail`
+
+Admin only. Save SMTP settings to the database. Encrypts the password with AES-256-GCM via `secretBox`. Returns `409 MAIL_CONFIGURED_BY_ENV` if `SMTP_URL` is configured in the environment.
+
+```bash
+curl -X PUT http://localhost:3210/api/admin/mail \
+  -H "Content-Type: application/json" \
+  -d '{
+    "host": "smtp.example.com",
+    "port": 587,
+    "secure": false,
+    "user": "smtp-user",
+    "password": "secret-password",
+    "from": "noreply@example.com",
+    "replyTo": "support@example.com"
+  }'
+```
+
+Omitting or leaving `password` blank when `hasPassword` is `true` preserves the existing sealed password.
+
+### `DELETE /api/admin/mail`
+
+Admin only. Removes stored SMTP configuration from the database. Answers `409 MAIL_CONFIGURED_BY_ENV` if `SMTP_URL` is set in the environment.
+
+```bash
+curl -X DELETE http://localhost:3210/api/admin/mail
+```
+
+```json
+{ "deleted": true }
+```
+
+### `POST /api/admin/mail/test`
+
+Admin only. Sends a test email to verify SMTP delivery. Rate-limited to 5 requests per 10 minutes per account (`429 RATE_LIMITED`).
+
+```bash
+curl -X POST http://localhost:3210/api/admin/mail/test \
+  -H "Content-Type: application/json" \
+  -d '{ "to": "admin@example.com" }'
+```
+
+```json
+{ "sent": true, "to": "admin@example.com" }
+```
+
+If omitted, `to` defaults to the calling administrator's email address. Returns `502 MAIL_SEND_FAILED` with connection or authentication diagnostics if SMTP delivery fails.
 
 ### `GET /api/admin/health`
 

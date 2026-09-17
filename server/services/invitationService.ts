@@ -87,21 +87,26 @@ function statusOf(row: {
   return "pending";
 }
 
+import { mailService } from "./mailService.ts";
+import { renderInvitationEmail } from "../mail/templates.ts";
+import { getInstanceName } from "./authService.ts";
+
 /**
  * Create an invitation and return its one-time link.
  *
  * `origin` comes from the request, so the link works behind a reverse proxy
  * without the operator configuring a public URL anywhere.
  */
-export function createInvitation(
+export async function createInvitation(
   ctx: { actor: User; ip: string | null },
   input: {
     email?: string | null;
     role: "admin" | "member";
     expiresInDays?: number;
+    send?: boolean;
   },
   origin: string,
-): { id: string; link: string; expiresAt: string } {
+): Promise<{ id: string; link: string; expiresAt: string; sent: boolean }> {
   const days = Math.min(
     MAX_INVITATION_DAYS,
     Math.max(
@@ -123,6 +128,34 @@ export function createInvitation(
     )
     .run(id, email, input.role, tokenHash(secret), ctx.actor.id, expiresAt);
 
+  const link = `${origin}/join?token=${secret}`;
+  let sent = false;
+
+  if (input.send && email) {
+    if (mailService.isConfigured()) {
+      const template = renderInvitationEmail({
+        instanceName: getInstanceName(),
+        link,
+        role: input.role,
+        expiresAt,
+      });
+      sent = await mailService.send({
+        to: email,
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+      });
+      if (!sent) {
+        log.warn("Admin", `Failed to send invitation email to ${email}`);
+      }
+    } else {
+      log.warn(
+        "Admin",
+        `Cannot send invitation email to ${email}: mail is not configured`,
+      );
+    }
+  }
+
   auditService.record({
     actorUserId: ctx.actor.id,
     action: "user.invited",
@@ -130,12 +163,15 @@ export function createInvitation(
     targetId: id,
     // The email is a hint the admin typed, not a credential. The secret is
     // not here, and auditService would redact it under the key `link` anyway.
-    details: { email, role: input.role, expiresAt },
+    details: { email, role: input.role, expiresAt, sent },
     ip: ctx.ip,
   });
 
-  log.info("Admin", `Invitation ${id} created for ${email ?? "anyone"}`);
-  return { id, link: `${origin}/join?token=${secret}`, expiresAt };
+  log.info(
+    "Admin",
+    `Invitation ${id} created for ${email ?? "anyone"} (sent: ${sent})`,
+  );
+  return { id, link, expiresAt, sent };
 }
 
 export function listInvitations(): InvitationSummary[] {

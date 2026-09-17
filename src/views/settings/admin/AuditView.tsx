@@ -108,6 +108,16 @@ const LOOK: Record<
     tone: "primary",
     label: "Setting changed",
   },
+  "mail.settings.changed": {
+    icon: Settings2,
+    tone: "primary",
+    label: "Mail setting changed",
+  },
+  "mail.test.sent": {
+    icon: MailPlus,
+    tone: "neutral",
+    label: "Test email sent",
+  },
   "backup.created": { icon: Archive, tone: "neutral", label: "Snapshot" },
 };
 

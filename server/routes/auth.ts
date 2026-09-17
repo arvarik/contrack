@@ -51,6 +51,7 @@ import {
   storedPreferenceKeys,
   type PreferenceKey,
 } from "../services/userPreferencesService.ts";
+import { mailService } from "../services/mailService.ts";
 import {
   requireAdmin,
   requirePasswordCurrent,
@@ -182,6 +183,7 @@ router.get("/status", (req, res) => {
     existingContacts: deviceContacts,
     // Whether the sign-in screen should offer to create an account.
     registrationOpen: isRegistrationOpen(),
+    mailConfigured: mailService.isConfigured(),
     // True while this instance has never been secured, so its data belongs to
     // an account nobody can sign in to.
     localOwnerPresent: hasLocalOwner(),

@@ -33,6 +33,7 @@ import { ROUTE_MANIFEST } from "../../server/tenancy/routeManifest.ts";
 import { ownerUploadDir, UPLOADS_DIR } from "../../server/utils/paths.ts";
 import { ownerToken, scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { auditService } from "../../server/services/auditService.ts";
+import { mailService } from "../../server/services/mailService.ts";
 
 const app = makeTestApp();
 
@@ -214,9 +215,9 @@ describe("every admin route", () => {
   });
 
   it("covers the whole admin class, so the loops below miss nothing", () => {
-    // Twenty-nine in Phase 3, and thirty with the instance health route in
-    // quality story S9.
-    expect(ADMIN_ROUTES).toHaveLength(30);
+    // Twenty-nine in Phase 3, thirty with the instance health route in
+    // quality story S9, and thirty-four with the four outgoing mail routes in 2.0.
+    expect(ADMIN_ROUTES).toHaveLength(34);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -696,7 +697,7 @@ describe("invitations", () => {
 
   async function invite(
     body: Record<string, unknown> = {},
-  ): Promise<{ id: string; link: string; expiresAt: string }> {
+  ): Promise<{ id: string; link: string; expiresAt: string; sent: boolean }> {
     const res = await as(admin)(
       request(app).post("/api/admin/invitations").send(body),
     );
@@ -851,6 +852,36 @@ describe("invitations", () => {
       });
     expect(res.status).toBe(410);
     expect(res.body.error.code).toBe("INVITATION_REVOKED");
+  });
+
+  it("sends invitation email when send is true and returns sent: true", async () => {
+    mailService.__useJsonTransport(true);
+    mailService.__clearSentMessages();
+
+    const created = await invite({
+      email: "colleague@example.com",
+      send: true,
+    });
+    expect(created.sent).toBe(true);
+
+    const messages = mailService.__getSentMessages();
+    expect(messages).toHaveLength(1);
+    const to = Array.isArray(messages[0].to)
+      ? (messages[0].to[0] as unknown as { address: string }).address
+      : messages[0].to;
+    expect(to).toBe("colleague@example.com");
+    expect(messages[0].text).toContain(created.link);
+
+    // Audit log has details.sent = true
+    const row = sqlite
+      .prepare("SELECT details FROM audit_log WHERE targetId = ?")
+      .get(created.id) as { details: string };
+    expect(JSON.parse(row.details)).toMatchObject({
+      sent: true,
+      email: "colleague@example.com",
+    });
+
+    mailService.__useJsonTransport(false);
   });
 
   it("answers one 404 for every token that is not a live invitation", async () => {

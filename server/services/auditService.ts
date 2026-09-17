@@ -59,12 +59,14 @@ export const AUDIT_ACTIONS = [
   "user.exported",
   "settings.changed",
   "backup.created",
+  "mail.settings.changed",
+  "mail.test.sent",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export type AuditTargetType =
-  "user" | "token" | "invitation" | "setting" | "backup" | "passkey";
+  "user" | "token" | "invitation" | "setting" | "backup" | "passkey" | "mail";
 
 export interface AuditEntry {
   id: string;

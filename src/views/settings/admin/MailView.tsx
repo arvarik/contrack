@@ -4,13 +4,48 @@
  * Configures the SMTP server that sends invitations, password resets,
  * and magic links.
  */
-import React, { useState } from "react";
-import { Mail, Send, Server } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  Loader2,
+  Mail,
+  Send,
+  Server,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
+import {
+  useMailConfig,
+  useUpdateMailConfig,
+  useDeleteMailConfig,
+  useSendTestMail,
+} from "../../../api/admin";
+import { useAuth } from "../../../components/auth/AuthGate";
+import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { NAMES } from "../../../lib/names";
 
+/** Shown in place of the form when reading mail configuration failed. */
+const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
+  <div className={cn(CARD, "space-y-3")}>
+    <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
+      <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+      Mail settings could not be loaded. Nothing has changed.
+    </p>
+    <button type="button" onClick={onRetry} className="btn-secondary">
+      Try again
+    </button>
+  </div>
+);
+
 export const MailView = () => {
+  const { data, isLoading, isError, refetch } = useMailConfig();
+  const updateMail = useUpdateMailConfig();
+  const deleteMail = useDeleteMailConfig();
+  const sendTest = useSendTestMail();
+  const { user } = useAuth();
+
   const [host, setHost] = useState("");
   const [port, setPort] = useState("587");
   const [secure, setSecure] = useState(false);
@@ -18,6 +53,97 @@ export const MailView = () => {
   const [password, setPassword] = useState("");
   const [fromAddress, setFromAddress] = useState("");
   const [replyTo, setReplyTo] = useState("");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setHost(data.host ?? "");
+      setPort(data.port ? String(data.port) : "587");
+      setSecure(Boolean(data.secure));
+      setUsername(data.user ?? "");
+      setPassword("");
+      setFromAddress(data.from ?? "");
+      setReplyTo(data.replyTo ?? "");
+    }
+  }, [data]);
+
+  if (isError) {
+    return (
+      <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+        <ReadFailed onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+
+  const isEnv = data?.source === "env";
+  const isSettings = data?.source === "settings";
+  const isConfigured = data?.source === "env" || data?.source === "settings";
+  const adminEmail = user?.email;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isEnv) return;
+
+    const parsedPort = parseInt(port, 10);
+    if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      toast.error("Please enter a valid port between 1 and 65535.");
+      return;
+    }
+
+    updateMail.mutate(
+      {
+        host: host.trim(),
+        port: parsedPort,
+        secure,
+        user: username.trim(),
+        password: password || undefined,
+        from: fromAddress.trim(),
+        replyTo: replyTo.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast.success("Mail settings saved");
+          setPassword("");
+        },
+        onError: (err: Error) => {
+          toast.error(err.message || "Failed to save mail settings");
+        },
+      },
+    );
+  };
+
+  const handleSendTest = () => {
+    sendTest.mutate(adminEmail ? { to: adminEmail } : {}, {
+      onSuccess: (res) => toast.success(`Test message sent to ${res.to}`),
+      onError: (err: Error) =>
+        toast.error(err.message || "Failed to send test message"),
+    });
+  };
+
+  const handleClear = () => {
+    deleteMail.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("Mail settings cleared");
+        setShowClearConfirm(false);
+        setHost("");
+        setPort("587");
+        setSecure(false);
+        setUsername("");
+        setPassword("");
+        setFromAddress("");
+        setReplyTo("");
+      },
+      onError: (err: Error) => {
+        toast.error(err.message || "Failed to clear mail settings");
+      },
+    });
+  };
+
+  const statusText = isEnv
+    ? "Configured by the environment (SMTP_URL). Edit the environment to change it."
+    : isSettings
+      ? "Configured here"
+      : "Not configured";
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
@@ -34,17 +160,17 @@ export const MailView = () => {
             <p className="text-sm text-on-surface-variant">
               {NAMES.outgoingMail.description}
             </p>
-            <p className="text-xs text-on-surface-variant font-medium">
-              Status: Not configured
+            <p
+              className={cn(
+                "text-xs font-medium",
+                isConfigured ? "text-primary" : "text-on-surface-variant",
+              )}
+            >
+              Status: {statusText}
             </p>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-            }}
-            className="space-y-4"
-          >
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2 space-y-1">
                 <label
@@ -56,10 +182,15 @@ export const MailView = () => {
                 <input
                   id="mail-host"
                   type="text"
+                  required
+                  disabled={isEnv || isLoading}
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
                   placeholder="smtp.example.com"
-                  className="w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isEnv && "opacity-60 cursor-not-allowed",
+                  )}
                 />
               </div>
 
@@ -73,10 +204,15 @@ export const MailView = () => {
                 <input
                   id="mail-port"
                   type="text"
+                  required
+                  disabled={isEnv || isLoading}
                   value={port}
                   onChange={(e) => setPort(e.target.value)}
                   placeholder="587"
-                  className="w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isEnv && "opacity-60 cursor-not-allowed",
+                  )}
                 />
               </div>
             </div>
@@ -85,13 +221,20 @@ export const MailView = () => {
               <input
                 id="mail-tls"
                 type="checkbox"
+                disabled={isEnv || isLoading}
                 checked={secure}
                 onChange={(e) => setSecure(e.target.checked)}
-                className="w-4 h-4 rounded text-primary focus:ring-primary"
+                className={cn(
+                  "w-4 h-4 rounded text-primary focus:ring-primary",
+                  isEnv && "opacity-60 cursor-not-allowed",
+                )}
               />
               <label
                 htmlFor="mail-tls"
-                className="text-sm font-medium text-on-surface cursor-pointer"
+                className={cn(
+                  "text-sm font-medium text-on-surface cursor-pointer",
+                  isEnv && "opacity-60 cursor-not-allowed",
+                )}
               >
                 Use TLS (secure)
               </label>
@@ -108,10 +251,14 @@ export const MailView = () => {
                 <input
                   id="mail-user"
                   type="text"
+                  disabled={isEnv || isLoading}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="off"
-                  className="w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isEnv && "opacity-60 cursor-not-allowed",
+                  )}
                 />
               </div>
 
@@ -125,11 +272,19 @@ export const MailView = () => {
                 <input
                   id="mail-pass"
                   type="password"
+                  disabled={isEnv || isLoading}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Leave blank to keep the current one"
+                  placeholder={
+                    data?.hasPassword
+                      ? "Leave blank to keep the current one"
+                      : "Enter password"
+                  }
                   autoComplete="new-password"
-                  className="w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isEnv && "opacity-60 cursor-not-allowed",
+                  )}
                 />
               </div>
             </div>
@@ -145,10 +300,15 @@ export const MailView = () => {
                 <input
                   id="mail-from"
                   type="email"
+                  required
+                  disabled={isEnv || isLoading}
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
                   placeholder="noreply@example.com"
-                  className="w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isEnv && "opacity-60 cursor-not-allowed",
+                  )}
                 />
               </div>
 
@@ -162,27 +322,74 @@ export const MailView = () => {
                 <input
                   id="mail-reply"
                   type="email"
+                  disabled={isEnv || isLoading}
                   value={replyTo}
                   onChange={(e) => setReplyTo(e.target.value)}
                   placeholder="support@example.com"
-                  className="w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isEnv && "opacity-60 cursor-not-allowed",
+                  )}
                 />
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button type="submit" className="btn-primary">
-                <Mail className="w-4 h-4" />
-                Save
+              {!isEnv && (
+                <button
+                  type="submit"
+                  disabled={isLoading || updateMail.isPending}
+                  className="btn-primary"
+                >
+                  {updateMail.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Mail className="w-4 h-4" />
+                  )}
+                  Save
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSendTest}
+                disabled={!isConfigured || sendTest.isPending}
+                className="btn-secondary"
+              >
+                {sendTest.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                {adminEmail
+                  ? `Send a test message to ${adminEmail}`
+                  : "Send a test message"}
               </button>
-              <button type="button" className="btn-secondary">
-                <Send className="w-4 h-4" />
-                Send a test message
-              </button>
+              {isSettings && (
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(true)}
+                  disabled={deleteMail.isPending}
+                  className="btn-secondary text-error hover:text-error ml-auto"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Clear configuration
+                </button>
+              )}
             </div>
           </form>
         </div>
       </section>
+
+      <ConfirmDialog
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={handleClear}
+        title="Clear mail configuration?"
+        description="Outgoing mail will be disabled until configured again. Unsent invitations and password resets will not be sent by email."
+        confirmLabel="Clear configuration"
+        tone="danger"
+        busy={deleteMail.isPending}
+      />
     </div>
   );
 };
