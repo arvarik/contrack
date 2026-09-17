@@ -584,6 +584,7 @@ describe("sessions", () => {
     expect(res.status).toBe(200);
     expect(res.body.sessions).toHaveLength(1);
     expect(res.body.sessions[0].current).toBe(true);
+    expect(res.body.sessions[0].method).toBe("password");
   });
 
   it("signs out, and the cookie stops working", async () => {

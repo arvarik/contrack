@@ -12,6 +12,7 @@ import crypto from "crypto";
 import morgan from "morgan";
 import { log } from "./utils/logger.ts";
 import { styleOrigins } from "./utils/mapConfig.ts";
+import { validatePublicUrl } from "./utils/publicOrigin.ts";
 import path from "path";
 
 import { linkPreviewRouter } from "./routes/linkPreview.ts";
@@ -146,6 +147,7 @@ morgan.token("url", (req) =>
 );
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
+  validatePublicUrl(process.env.PUBLIC_URL);
   const app = express();
   app.disable("x-powered-by");
   app.use((req, res, next) => {

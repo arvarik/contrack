@@ -205,12 +205,19 @@ sqlite.exec(`
     createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     expiresAt TEXT NOT NULL,
     lastSeenAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    userAgent TEXT
+    userAgent TEXT,
+    method TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(userId);
   CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expiresAt);
 `);
+
+const sessionCols = sqlite.pragma("table_info(sessions)") as { name: string }[];
+if (!sessionCols.some((c) => c.name === "method")) {
+  sqlite.exec("ALTER TABLE sessions ADD COLUMN method TEXT");
+  log.info("Database", "Added method column to sessions");
+}
 
 // The ownership columns themselves are added in §9i, once every table that
 // carries one has been created.
@@ -390,6 +397,30 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(createdAt DESC);
   CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actorUserId, createdAt DESC);
+
+  CREATE TABLE IF NOT EXISTS passkeys (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    publicKey BLOB NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    transports TEXT,
+    deviceType TEXT NOT NULL DEFAULT 'singleDevice',
+    backedUp INTEGER NOT NULL DEFAULT 0,
+    aaguid TEXT,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    lastUsedAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkeys(userId);
+
+  CREATE TABLE IF NOT EXISTS auth_challenges (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    userId TEXT REFERENCES users(id) ON DELETE CASCADE,
+    challenge TEXT NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    expiresAt TEXT NOT NULL
+  );
 `);
 
 // =============================================================================

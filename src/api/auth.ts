@@ -118,6 +118,7 @@ export interface SessionSummary {
   lastSeenAt: string;
   userAgent: string | null;
   current: boolean;
+  method?: string | null;
 }
 
 /**
@@ -132,7 +133,7 @@ export interface SessionSummary {
  * which was right while this file only signed people in and would have told
  * somebody redeeming a dead invitation that their password was wrong.
  */
-async function authFetch<T>(
+export async function authFetch<T>(
   path: string,
   init?: RequestInit,
   fallback = "Sign-in failed",

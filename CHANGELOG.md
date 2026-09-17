@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Passkeys (FIDO2 / WebAuthn).** Accounts can now register biometric
+  passkeys (Touch ID, Face ID, Windows Hello, security keys) to sign in
+  without typing a password. Includes a first-run nudge interstitial after
+  setup or account creation, inline WebAuthn registration and verification,
+  browser autofill (conditional UI) on the sign-in form with an abort controller
+  handoff for Chrome, and a dedicated "Sign in with a passkey" button. Account
+  settings gains a "Sign-in methods" section to inspect and manage passkeys, with
+  inline renaming, a removal confirmation dialog, and a device icon naming the
+  browser or operating system. Active sessions now track their authentication
+  method (`method: "password"` or `method: "passkey"`), displayed under
+  Devices in Account settings. Reverse proxies can configure `PUBLIC_URL` to
+  ensure consistent rpID and origin derivation during WebAuthn ceremonies.
 - **Search history table and API.** The server now stores every question asked
   per account across People, Notes and palette modes in a dedicated
   `search_history` table. Distinct queries per mode are deduplicated by
