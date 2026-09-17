@@ -249,6 +249,15 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
   - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `ContactPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`
   - `SearchView.tsx`, `DashboardView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`)
+  - `src/views/settings/` — Settings revamp:
+    - `registry.ts`: Declarative registry of settings pages, navigation groups, redirect aliases, and row-level search.
+    - `SettingsShell.tsx`: Two-pane layout with 240px navigation rail on wide screens (`lg`), single-pane on phone.
+    - `SettingsRail.tsx`: Desktop navigation rail with embedded row search.
+    - `SettingsSearch.tsx`: Row-level instant search with deep-link navigation and keyboard controls.
+    - `SettingRow.tsx`: Reusable row component with anchor ID, 1.2s flash highlight, modified dot indicator, and reset button.
+    - `SettingsHome.tsx`: Registry-driven mobile/root landing view.
+    - `pages/`: Individual settings pages (`AppearancePage.tsx`, `NetworkPage.tsx`, `DuplicatesPage.tsx`, `EnrichmentPage.tsx`, `ExportPage.tsx`).
+    - `admin/`: Admin settings views (`GeneralView.tsx`, `AiProvidersView.tsx`, `MailView.tsx`, etc.).
 - `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
 - `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`
 - `src/db/` — `schema.ts` (Drizzle ORM schema definitions)
@@ -524,7 +533,7 @@ return withRetry(
 - **Migrations**: `npm run db:generate` (outputs Drizzle migration)
 - **Type Check**: `npm run lint` (`tsc --noEmit`)
 - **Test**: `npm test` (Vitest in watch mode) / `npx vitest run` (single-run)
-- **Requirements**: Provide at least one AI credential — an API key in `.env` (copy from `.env.example`), a key entered under Settings → AI Configuration, or a custom OpenAI-compatible endpoint
+- **Requirements**: Provide at least one AI credential — an API key in `.env` (copy from `.env.example`), a key entered under Settings → Administration → AI providers, or a custom OpenAI-compatible endpoint
 
 ## 11. AI Stats API Contracts
 

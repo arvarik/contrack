@@ -187,3 +187,19 @@ export function setPreferences(
   write();
   return getPreferences(userId);
 }
+
+/**
+ * Remove a stored preference for this account, reverting it to the default.
+ */
+export function deletePreference(
+  userId: string,
+  key: PreferenceKey,
+): Preferences {
+  sqlite
+    .prepare(
+      // tenant-lint: allow user-owned settings
+      "DELETE FROM user_settings WHERE userId = ? AND key = ?",
+    )
+    .run(userId, PREFIX + key);
+  return getPreferences(userId);
+}

@@ -44,6 +44,9 @@ const get = (actor: Actor) =>
 const patch = (actor: Actor, body: object) =>
   asUser(actor)(request(app).patch("/api/auth/preferences").send(body));
 
+const del = (actor: Actor, key: string) =>
+  asUser(actor)(request(app).delete(`/api/auth/preferences/${key}`));
+
 describe("GET /api/auth/preferences", () => {
   it("answers with every preference, and says none were chosen", async () => {
     const res = await get(A);
@@ -151,6 +154,61 @@ describe("PATCH /api/auth/preferences", () => {
     const before = getPreferences(A.user.id);
     await patch(A, { listDensity: "roomy" });
     expect(getPreferences(A.user.id)).toEqual(before);
+  });
+});
+
+describe("DELETE /api/auth/preferences/:key", () => {
+  it("un-stores one preference and returns the default", async () => {
+    await patch(A, { listDensity: "compact" });
+    const before = await get(A);
+    expect(before.body.stored).toContain("listDensity");
+
+    const res = await del(A, "listDensity");
+    expect(res.status).toBe(200);
+    expect(res.body.preferences.listDensity).toBe("comfortable");
+    expect(res.body.stored).not.toContain("listDensity");
+
+    const again = await get(A);
+    expect(again.body.preferences.listDensity).toBe("comfortable");
+    expect(again.body.stored).not.toContain("listDensity");
+  });
+
+  it("refuses an unknown key with 404", async () => {
+    const res = await del(A, "notAKey");
+    expect(res.status).toBe(404);
+  });
+
+  it("refuses a request with no credential at all", async () => {
+    const res = await request(app).delete("/api/auth/preferences/listDensity");
+    expect(res.status).toBe(401);
+  });
+
+  it("lets a personal token delete its own account's preference", async () => {
+    await patch(A, { tempUnit: "fahrenheit" });
+    const created = await asUser(A)(
+      request(app).post("/api/auth/tokens").send({ name: "prefs-del" }),
+    );
+    const token = created.body.token as string;
+
+    const res = await request(app)
+      .delete("/api/auth/preferences/tempUnit")
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.preferences.tempUnit).toBe("celsius");
+    expect(res.body.stored).not.toContain("tempUnit");
+  });
+
+  it("works for the local owner when sign-in is off", async () => {
+    delete process.env.AUTH_REQUIRED;
+    try {
+      await request(app).patch("/api/auth/preferences").send({ theme: "dark" });
+      const res = await request(app).delete("/api/auth/preferences/theme");
+      expect(res.status).toBe(200);
+      expect(res.body.preferences.theme).toBe("system");
+      expect(res.body.stored).not.toContain("theme");
+    } finally {
+      process.env.AUTH_REQUIRED = "true";
+    }
   });
 });
 

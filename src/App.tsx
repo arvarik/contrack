@@ -37,8 +37,10 @@ const loadMapView = () => import("./views/map");
 const MapView = React.lazy(() =>
   loadMapView().then((m) => ({ default: m.MapView })),
 );
-const SettingsView = React.lazy(() =>
-  import("./views/SettingsView").then((m) => ({ default: m.SettingsView })),
+const SettingsShell = React.lazy(() =>
+  import("./views/settings/SettingsShell").then((m) => ({
+    default: m.SettingsShell,
+  })),
 );
 const SearchView = React.lazy(() =>
   import("./views/SearchView").then((m) => ({ default: m.SearchView })),
@@ -240,7 +242,7 @@ const ResponsiveLayout = () => {
                 element={
                   <RouteErrorBoundary viewName="Settings">
                     <Suspense fallback={<RouteFallback variant="settings" />}>
-                      <SettingsView />
+                      <SettingsShell />
                     </Suspense>
                   </RouteErrorBoundary>
                 }

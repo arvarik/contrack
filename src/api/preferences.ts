@@ -77,3 +77,10 @@ export const savePreferences = (
     method: "PATCH",
     ...jsonBody(patch),
   });
+
+export const deletePreference = (
+  key: keyof Preferences,
+): Promise<PreferencesResponse> =>
+  apiJson<PreferencesResponse>(`/auth/preferences/${key}`, {
+    method: "DELETE",
+  });

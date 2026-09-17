@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Legacy search history from user preferences is automatically backfilled on the
   first request for an account with no history rows.
 
+- **Settings revamp: registry, two-pane shell, and row search.** Settings is now
+  driven by a declarative registry (`src/views/settings/registry.ts`). On wide
+  screens (1024px and wider), settings renders as a two-pane shell with a 240px
+  rail on the left and the active page on the right. On phones, it retains the
+  single-pane list with instant back navigation. Live row search searches titles,
+  descriptions, and keywords across all pages with keyboard navigation and hash
+  links. Individual setting rows flash and focus on navigation, display a dot
+  indicator when modified, and provide a reset button. Old settings URLs redirect
+  to their new paths. `DELETE /api/auth/preferences/:key` allows resetting
+  preferences to defaults.
 - **The corvid, everywhere.** One drawing of the raven, traced by hand from
   `docs/brand/corvid-source.jpg` into `src/assets/corvidPaths.ts`, is now the
   mark. It replaces the gradient "C" in the tab strip, the PWA and Apple
