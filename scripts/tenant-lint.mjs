@@ -35,6 +35,7 @@ export const OWNED_TABLES = [
   "dedupe_merge_log",
   "ai_invocations",
   "imports",
+  "search_history",
 ];
 
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */
@@ -54,6 +55,7 @@ export const OWNED_SCHEMA_KEYS = [
   "dedupeSuggestions",
   "dedupeExclusions",
   "dedupeMergeLog",
+  "searchHistory",
 ];
 
 /** The only reasons an allow comment may give. */

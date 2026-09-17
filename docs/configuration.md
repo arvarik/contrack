@@ -59,7 +59,7 @@ timeouts, retry limits, cache behavior, and testing guidance.
 Contrack routes AI work by **capability**, not by "the AI provider". You connect
 whichever providers you have keys for, and each kind of task is served by a
 suitable model. Everything is configurable in the app under
-**Settings → AI Configuration**; no restart or file editing required.
+**Settings → Administration → AI providers**; no restart or file editing required.
 
 | Capability       | Powers                                                                                        | Default          |
 | ---------------- | --------------------------------------------------------------------------------------------- | ---------------- |
@@ -126,7 +126,7 @@ A custom endpoint has no such map — its models are whatever you have pulled �
 so Auto uses **the first chat model in the endpoint's discovered list**, and
 uses the same one for both Quick and Deep. Nothing in the OpenAI-compatible
 model list says which of your models is the cheap one, so Contrack does not
-guess. Pin Quick and Deep in **Settings → AI** to split them, which is worth
+guess. Pin Quick and Deep in **Settings → Administration → AI providers** to split them, which is worth
 doing if you run both a small and a large model.
 
 If discovery found no chat models, Auto skips the endpoint entirely and the
@@ -343,7 +343,7 @@ is removed in 3.0.
   warning at startup whenever it binds a non-loopback address with auth off.
 
 Sessions are stored server-side and last 30 days by default; the lifetime is
-configurable from 1 to 365 days in **Settings → Account** (it applies to new
+configurable from 1 to 365 days in **Settings → Administration → General** (it applies to new
 sign-ins only). The cookie holds a random secret; the database stores only its
 SHA-256, so a leaked database (or one of the rotating backups) does not hand
 over live sessions. `Secure` is set whenever the request arrived over HTTPS,

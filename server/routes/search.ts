@@ -20,6 +20,13 @@ import {
   enqueueMissingContactsForOwner,
   drainIndexQueue,
 } from "../services/search/indexQueue.ts";
+import { searchHistoryService } from "../services/searchHistoryService.ts";
+import {
+  recordHistorySchema,
+  patchHistorySchema,
+  listHistoryQuerySchema,
+  historyModeSchema,
+} from "../../shared/searchHistory.ts";
 
 const router = Router();
 
@@ -340,6 +347,75 @@ router.post(
           ? `Queued ${queued} contact(s) for indexing`
           : "All contacts already indexed",
     });
+  }),
+);
+
+// =============================================================================
+// Search History
+// =============================================================================
+
+router.get(
+  "/history",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    searchHistoryService.backfillFromPreferences(scope.ownerId);
+    const query = listHistoryQuerySchema.parse(req.query);
+    const result = searchHistoryService.list(scope.ownerId, query);
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/history",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const body = recordHistorySchema.parse(req.body);
+    const entry = searchHistoryService.record(scope.ownerId, body);
+    res.json({ entry });
+  }),
+);
+
+router.delete(
+  "/history",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const modeQuery = req.query.mode;
+    const mode =
+      modeQuery !== undefined ? historyModeSchema.parse(modeQuery) : undefined;
+    const result = searchHistoryService.clear(scope.ownerId, mode);
+    res.json(result);
+  }),
+);
+
+router.patch(
+  "/history/:id",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const body = patchHistorySchema.parse(req.body);
+    const entry = searchHistoryService.setPinned(
+      scope.ownerId,
+      String(req.params.id),
+      body.pinned,
+    );
+    if (!entry) {
+      throw new AppError("Search history entry not found", 404);
+    }
+    res.json({ entry });
+  }),
+);
+
+router.delete(
+  "/history/:id",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const deleted = searchHistoryService.remove(
+      scope.ownerId,
+      String(req.params.id),
+    );
+    if (!deleted) {
+      throw new AppError("Search history entry not found", 404);
+    }
+    res.json({ success: true });
   }),
 );
 

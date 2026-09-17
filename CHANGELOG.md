@@ -21,6 +21,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   method (`method: "password"` or `method: "passkey"`), displayed under
   Devices in Account settings. Reverse proxies can configure `PUBLIC_URL` to
   ensure consistent rpID and origin derivation during WebAuthn ceremonies.
+- **Search history table and API.** The server now stores every question asked
+  per account across People, Notes and palette modes in a dedicated
+  `search_history` table. Distinct queries per mode are deduplicated by
+  normalised text, with automatic run counting, last run timestamps, pinned
+  flags, and result snapshots. Five new scoped and isolated routes under
+  `/api/search/history` support listing with cursor pagination, recording,
+  pinning, individual deletion, and clearing history by mode or entirely.
+  Legacy search history from user preferences is automatically backfilled on the
+  first request for an account with no history rows.
+
+- **Settings revamp: registry, two-pane shell, and row search.** Settings is now
+  driven by a declarative registry (`src/views/settings/registry.ts`). On wide
+  screens (1024px and wider), settings renders as a two-pane shell with a 240px
+  rail on the left and the active page on the right. On phones, it retains the
+  single-pane list with instant back navigation. Live row search searches titles,
+  descriptions, and keywords across all pages with keyboard navigation and hash
+  links. Individual setting rows flash and focus on navigation, display a dot
+  indicator when modified, and provide a reset button. Old settings URLs redirect
+  to their new paths. `DELETE /api/auth/preferences/:key` allows resetting
+  preferences to defaults.
 - **The corvid, everywhere.** One drawing of the raven, traced by hand from
   `docs/brand/corvid-source.jpg` into `src/assets/corvidPaths.ts`, is now the
   mark. It replaces the gradient "C" in the tab strip, the PWA and Apple

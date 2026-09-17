@@ -73,6 +73,11 @@ function stubFetch() {
         stored = { ...stored, ...(body as Record<string, unknown>) };
       }
 
+      if (method === "DELETE") {
+        const key = url.split("/").pop() as string;
+        delete stored[key];
+      }
+
       return new Response(
         JSON.stringify({
           preferences: { ...DEFAULT_PREFERENCES, ...stored },
@@ -402,5 +407,40 @@ describe("the one-time migration", () => {
     });
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
     expect(patches()).toEqual([]);
+  });
+});
+
+describe("resetting a preference", () => {
+  it("exposes stored preference keys", async () => {
+    stored = { listDensity: "compact" };
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.stored).toEqual(["listDensity"]);
+  });
+
+  it("resets an account preference back to default and deletes it on the server", async () => {
+    stored = { listDensity: "compact" };
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.preferences.listDensity).toBe("compact");
+    expect(result.current.stored).toContain("listDensity");
+
+    act(() => result.current.resetPreference("listDensity"));
+
+    await waitFor(() =>
+      expect(result.current.preferences.listDensity).toBe("comfortable"),
+    );
+    expect(result.current.stored).not.toContain("listDensity");
+    expect(
+      calls.some(
+        (c) =>
+          c.method === "DELETE" &&
+          c.url.endsWith("/auth/preferences/listDensity"),
+      ),
+    ).toBe(true);
   });
 });

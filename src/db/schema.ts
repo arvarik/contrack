@@ -6,6 +6,7 @@ import {
   blob,
   primaryKey,
   unique,
+  index,
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
@@ -795,6 +796,63 @@ export const searchIndexQueue = sqliteTable("search_index_queue", {
   contactUpdatedAt: text("contactUpdatedAt"),
 });
 
+/**
+ * search_history — Persistent search queries per owner and mode.
+ *
+ * One row per distinct question per mode. Stores query snapshot,
+ * pinned state, and tracks run count and last run timestamp.
+ */
+export const searchHistory = sqliteTable(
+  "search_history",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    mode: text("mode").notNull(),
+    query: text("query").notNull(),
+    normalizedQuery: text("normalizedQuery").notNull(),
+    resultCount: integer("resultCount"),
+    resultIds: text("resultIds"),
+    fallback: integer("fallback").notNull().default(0),
+    pinned: integer("pinned").notNull().default(0),
+    runCount: integer("runCount").notNull().default(1),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    lastRunAt: text("lastRunAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [
+    unique().on(table.ownerId, table.mode, table.normalizedQuery),
+    index("idx_search_history_owner_last").on(
+      table.ownerId,
+      table.lastRunAt,
+      table.id,
+    ),
+    index("idx_search_history_owner_pinned").on(
+      table.ownerId,
+      table.pinned,
+      table.lastRunAt,
+    ),
+  ],
+);
+
+/** Tables that carry `ownerId`. Mirrored from server/db.ts. */
+export const OWNED_TABLES = [
+  "contacts",
+  "lists",
+  "interactions",
+  "action_items",
+  "dedupe_suggestions",
+  "dedupe_exclusions",
+  "dedupe_merge_log",
+  "ai_invocations",
+  "imports",
+  "search_history",
+] as const;
+
 // =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================
@@ -807,6 +865,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   actionItems: many(actionItems),
   apiTokens: many(apiTokens),
   userSettings: many(userSettings),
+  searchHistory: many(searchHistory),
 }));
 
 export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
@@ -1046,5 +1105,12 @@ export const listMembersRelations = relations(listMembers, ({ one }) => ({
   contact: one(contacts, {
     fields: [listMembers.contactId],
     references: [contacts.id],
+  }),
+}));
+
+export const searchHistoryRelations = relations(searchHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [searchHistory.ownerId],
+    references: [users.id],
   }),
 }));
