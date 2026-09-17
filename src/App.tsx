@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { isTypingTarget } from "./lib/keyboard";
+import { whenIdle } from "./lib/idle";
 import { useGlobalNavShortcuts } from "./hooks/useGlobalNavShortcuts";
 import { Toaster } from "sonner";
 import React, { useState, useEffect, Suspense } from "react";
@@ -31,8 +32,10 @@ import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 
 // Route-level code splitting: secondary views load on demand so the initial
 // bundle only carries the ContactList/ContactDetail critical path.
+/** The map's code, in a function so it can be warmed before the map opens. */
+const loadMapView = () => import("./views/map");
 const MapView = React.lazy(() =>
-  import("./views/map").then((m) => ({ default: m.MapView })),
+  loadMapView().then((m) => ({ default: m.MapView })),
 );
 const SettingsView = React.lazy(() =>
   import("./views/SettingsView").then((m) => ({ default: m.SettingsView })),
@@ -83,6 +86,16 @@ const ResponsiveLayout = () => {
 
   const isMapActive = location.pathname.startsWith("/map");
   const isCleanup = location.pathname.startsWith("/settings");
+
+  /**
+   * Warm the map's code while the reader is elsewhere.
+   *
+   * MapLibre is the largest chunk in the build and only the map loads it,
+   * so the first visit to the map would otherwise begin with a download. An
+   * idle moment on whichever page opens first pays for it instead. A
+   * browser told to save data is left alone (see `lib/idle.ts`).
+   */
+  useEffect(() => whenIdle(() => void loadMapView()), []);
   const isSearch = location.pathname.startsWith("/search");
   const isPulse = location.pathname.startsWith("/pulse");
 
@@ -113,6 +126,8 @@ const ResponsiveLayout = () => {
   const mobileNav = (
     <nav
       aria-label="Primary"
+      // The map reads this to keep its centre above the bar (`insets.ts`).
+      data-covers-map="bottom"
       className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch px-1 pt-1.5 glass-panel rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
@@ -386,6 +401,10 @@ const ResponsiveLayout = () => {
             // stays the page's main content while a contact is open over it.
             <motion.section
               aria-label="Contact"
+              // The map reads this to centre a pin beside the contact, not
+              // under it (`insets.ts`). The panel sits flush with the map's
+              // right edge, so its width is what it covers.
+              data-covers-map="right"
               initial={{ x: "100%", opacity: 0.5 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "100%", opacity: 0 }}

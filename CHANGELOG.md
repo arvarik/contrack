@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A map that opens where you left it, and knows what covers it.** The map
+  page keeps its MapLibre map alive between visits and writes its view to
+  `localStorage` when a move ends, so a return to the map, and a reload,
+  open on the same spot at once. The map's code is warmed in an idle moment
+  on whichever page opens first, unless the browser asks to save data, and
+  the build now keeps MapLibre out of every other page: React and Vite's
+  preload helper had been folded into the map's chunk, and every page
+  preloaded a megabyte of MapLibre to get them. The open contact and the
+  phone's tab bar are measured as covers and passed to MapLibre as padding,
+  so a contact opens beside its pin instead of over it, and a pin on a phone
+  settles above the bar. The hover card stacks above every pin and opens on
+  the side with room, and it does not open for a touch. The attribution
+  opens collapsed. The map no longer rotates by touch or by key.
 - **A pin you can move by hand, and a basemap you can host yourself.**
   "Adjust pin" under the map on a contact opens a dialog with that person's
   pin on an interactive map. Drag it, click the map, or nudge it with the

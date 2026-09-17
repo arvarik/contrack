@@ -743,6 +743,14 @@
   transform: translate(-50%, -50%);
 }
 
+/*
+ * A card opens above the pins. Every pin carries a z-index, so the open
+ * contact's pin stands above its neighbours, and MapLibre gives its popup
+ * none, so without this line a card opened under the next pin over.
+ */
+.contact-map .maplibregl-popup {
+  z-index: 3;
+}
 .contact-map .maplibregl-popup-content {
   padding: 0.5rem 0.75rem;
   border-radius: 0.75rem;

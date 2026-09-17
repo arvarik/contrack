@@ -11,10 +11,27 @@
  * waits on a public service. The request still leaves the page, which is what
  * makes the style URL assertions meaningful.
  */
+import { devices } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
 import { ContrackInstance } from "./fixtures/instance";
-import { EMPTY_STYLE, stubBasemap } from "./fixtures/map";
+import { EMPTY_STYLE, OPENFREEMAP_ROUTE, stubBasemap } from "./fixtures/map";
+
+/**
+ * A style with something to credit. One source with an attribution, and one
+ * layer on it, because MapLibre credits only a source a layer uses.
+ */
+const CREDITED_STYLE = {
+  version: 8,
+  sources: {
+    credit: {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+      attribution: "© Test Basemap",
+    },
+  },
+  layers: [{ id: "credit", type: "circle", source: "credit" }],
+};
 
 interface PinFields {
   lat: number | null;
@@ -171,19 +188,22 @@ test.describe("map", () => {
     await page.getByRole("link", { name: "Open in map" }).click();
     await expect(page).toHaveURL(new RegExp(`/map/contact/${ada.id}$`));
 
-    // The map flies to her, so her pin ends at the middle of the map. A
-    // world view would leave it wherever London falls on the screen.
+    // The map flies to her, so her pin ends at the middle of the part of
+    // the map her contact leaves open. A world view would leave it wherever
+    // London falls on the screen.
     const map = page.getByRole("region", { name: "Contact map" });
+    const overlay = page.getByRole("region", { name: "Contact", exact: true });
     const pin = map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" });
     await expect(pin).toBeVisible();
     await expect
       .poll(
         async () => {
           const mapBox = await map.boundingBox();
+          const panelBox = await overlay.boundingBox();
           const pinBox = await pin.boundingBox();
-          if (!mapBox || !pinBox) return Number.POSITIVE_INFINITY;
-          const dx =
-            pinBox.x + pinBox.width / 2 - (mapBox.x + mapBox.width / 2);
+          if (!mapBox || !panelBox || !pinBox) return Number.POSITIVE_INFINITY;
+          const open = panelBox.x - mapBox.x;
+          const dx = pinBox.x + pinBox.width / 2 - (mapBox.x + open / 2);
           const dy =
             pinBox.y + pinBox.height / 2 - (mapBox.y + mapBox.height / 2);
           return Math.round(Math.hypot(dx, dy));
@@ -349,5 +369,198 @@ test.describe("map", () => {
       "https://tiles.openfreemap.org/styles/positron",
     );
     await context.close();
+  });
+
+  test("remembers where it was left, across pages and across a reload", async ({
+    page,
+  }) => {
+    await stubBasemap(page);
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    const zoomIn = map.getByRole("button", { name: "Zoom in", exact: true });
+    const zoomOut = map.getByRole("button", { name: "Zoom out", exact: true });
+
+    // A first visit opens on the whole world, where there is nothing left
+    // to zoom out to. One step in, and there is.
+    await expect(zoomOut).toBeDisabled();
+    await zoomIn.click();
+    await expect(zoomOut).toBeEnabled();
+
+    // To another page and back, within the app: the same map, as it was.
+    await page.getByRole("link", { name: "Pulse" }).first().click();
+    await expect(page).toHaveURL(/\/pulse$/);
+    await page.getByRole("link", { name: "Map", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/map$/);
+    await expect(zoomOut).toBeEnabled();
+
+    // A reload builds a new map, on the view the old one wrote down.
+    await page.reload();
+    await expect(
+      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
+    await expect(zoomOut).toBeEnabled();
+  });
+
+  test("centres the open contact's pin in the part of the map it leaves open", async ({
+    page,
+  }) => {
+    await stubBasemap(page);
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    const pin = map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" });
+    await pin.click();
+    const overlay = page.getByRole("region", { name: "Contact", exact: true });
+    await expect(overlay).toBeVisible();
+
+    // The contact covers the right of the map. The pin ends in the middle
+    // of what is left, and none of it under the contact.
+    await expect
+      .poll(
+        async () => {
+          const mapBox = await map.boundingBox();
+          const panelBox = await overlay.boundingBox();
+          const pinBox = await pin.boundingBox();
+          if (!mapBox || !panelBox || !pinBox) return Number.POSITIVE_INFINITY;
+          const open = panelBox.x - mapBox.x;
+          if (pinBox.x + pinBox.width > panelBox.x)
+            return Number.POSITIVE_INFINITY;
+          const dx = pinBox.x + pinBox.width / 2 - (mapBox.x + open / 2);
+          const dy =
+            pinBox.y + pinBox.height / 2 - (mapBox.y + mapBox.height / 2);
+          return Math.round(Math.hypot(dx, dy));
+        },
+        { message: "the pin did not settle beside the contact" },
+      )
+      .toBeLessThan(40);
+
+    // Closed, the pin glides to the middle of the whole map.
+    await page.mouse.click(120, 700);
+    await expect(page).toHaveURL(/\/map$/);
+    await expect
+      .poll(
+        async () => {
+          const mapBox = await map.boundingBox();
+          const pinBox = await pin.boundingBox();
+          if (!mapBox || !pinBox) return Number.POSITIVE_INFINITY;
+          const dx =
+            pinBox.x + pinBox.width / 2 - (mapBox.x + mapBox.width / 2);
+          const dy =
+            pinBox.y + pinBox.height / 2 - (mapBox.y + mapBox.height / 2);
+          return Math.round(Math.hypot(dx, dy));
+        },
+        { message: "the pin did not return to the middle of the map" },
+      )
+      .toBeLessThan(40);
+  });
+
+  test("opens the attribution collapsed, with the credit one click away", async ({
+    page,
+  }) => {
+    // A style with a credit to show. The empty style has no source, so it
+    // has no attribution and MapLibre draws no strip at all.
+    await page.route(OPENFREEMAP_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(CREDITED_STYLE),
+      }),
+    );
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(
+      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
+
+    const toggle = map.locator(".maplibregl-ctrl-attrib-button");
+    const credit = map.locator(".maplibregl-ctrl-attrib-inner");
+    await expect(toggle).toBeVisible();
+    await expect(credit).toBeHidden();
+
+    await toggle.click();
+    await expect(credit).toBeVisible();
+    await expect(credit).toContainText("Test Basemap");
+  });
+
+  test("opens the hover card above the pins", async ({ page }) => {
+    await stubBasemap(page);
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await map
+      .getByRole("button", { name: "Ada Lovelace, Babbage & Co" })
+      .hover();
+    const card = map.locator(".maplibregl-popup");
+    await expect(card).toContainText("London, UK");
+
+    // A pin carries a z-index so the open contact's pin stands above its
+    // neighbours. The card stands above every pin.
+    const stacking = await page.evaluate(() => {
+      const above = (selector: string) =>
+        Number(
+          getComputedStyle(document.querySelector(selector) as Element).zIndex,
+        );
+      return {
+        card: above(".contact-map .maplibregl-popup"),
+        pin: above(".contact-map .maplibregl-marker"),
+      };
+    });
+    expect(stacking.card).toBeGreaterThan(stacking.pin);
+    expect(stacking.pin).toBeGreaterThanOrEqual(1);
+  });
+});
+
+/**
+ * The iPhone 13 viewport, touch and scale. The browser type is left out:
+ * the project runs Chromium, and a describe block may not choose a browser.
+ */
+const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
+
+test.describe("map on a phone", () => {
+  test.use({ ...PHONE });
+
+  test("opens a contact with a tap, with no hover card, and comes back to its pin above the bar", async ({
+    page,
+  }) => {
+    await stubBasemap(page);
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    // A portrait phone shows a slice of the world, the Americas, so the
+    // pin is one of the people there. London is off the right edge.
+    const pin = map.getByRole("button", {
+      name: "Linus Torvalds, Linux Foundation",
+    });
+    await expect(pin).toBeVisible();
+
+    await pin.tap();
+    await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+    const overlay = page.getByRole("region", { name: "Contact", exact: true });
+    await expect(
+      overlay.getByRole("heading", { level: 1, name: /Linus Torvalds/ }),
+    ).toBeVisible();
+    // A finger cannot hover. No card opened under the contact.
+    await expect(map.locator(".maplibregl-popup")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Back" }).tap();
+    await expect(page).toHaveURL(/\/map$/);
+    await expect(map.locator(".maplibregl-popup")).toHaveCount(0);
+
+    // The tab bar covers the bottom of the map. The pin sits in the middle
+    // of the map above it, not in the middle of the map under it.
+    const bar = page.getByRole("navigation", { name: "Primary" });
+    await expect
+      .poll(
+        async () => {
+          const mapBox = await map.boundingBox();
+          const barBox = await bar.boundingBox();
+          const pinBox = await pin.boundingBox();
+          if (!mapBox || !barBox || !pinBox) return Number.POSITIVE_INFINITY;
+          const open = barBox.y - mapBox.y;
+          const dx =
+            pinBox.x + pinBox.width / 2 - (mapBox.x + mapBox.width / 2);
+          const dy = pinBox.y + pinBox.height / 2 - (mapBox.y + open / 2);
+          return Math.round(Math.hypot(dx, dy));
+        },
+        { message: "the pin did not settle above the tab bar" },
+      )
+      .toBeLessThan(40);
   });
 });

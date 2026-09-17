@@ -42,11 +42,24 @@ reachable this way.
 
 ### Hover Card
 
-Hover a pin or move focus to it, and a small card opens above it. The card
+Hover a pin or move focus to it, and a small card opens beside it. The card
 shows the name, the company and the location that placed the pin. A contact
 with several addresses is pinned by one of them, and the card names that one
 before you navigate. The card closes when the pointer leaves or focus moves
 away.
+
+The card opens above every pin. A pin carries a z-index, so the open
+contact's pin stands above its neighbours, and MapLibre gives its popup none.
+`src/index.css` stacks the card above both, so a card never opens under the
+next pin over. The card names no anchor: MapLibre opens it on the side with
+room, so a pin at the top edge of the map gets its card below it instead of a
+card cut off by the edge.
+
+A finger cannot hover. A tap fires the same enter event a mouse does and
+never the leave, so on a phone the card would open under the contact the tap
+opens and still be there when the contact closes. The pin reads the pointer
+type: a touch opens no card, and the focus some browsers give a tapped button
+opens none either. Focus from a keyboard opens the card on every device.
 
 ### Light and Dark Basemaps
 
@@ -70,6 +83,8 @@ When you click a contact on the map, their profile slides in from the right as a
 - Full contact detail view (same as the Network view)
 - Animated entry with spring physics
 - Responsive width (full on mobile, 760px on tablet, 860px on desktop)
+- The map treats the overlay as a cover, and keeps the pin in the part of
+  the map it leaves open (see the next section)
 
 ### Fly to the Open Contact
 
@@ -77,6 +92,21 @@ When you click a contact on the map, their profile slides in from the right as a
 and stops at zoom 11, close enough to read the streets around the pin. A map
 already closer than that keeps its zoom, so opening a second contact in the
 same street does not pull the view back.
+
+"Centred" means centred in the part of the map you can see. The open
+contact covers the right of the map on a wide screen, and a pin centred in
+the whole map would sit under it. So the map measures what covers it and
+passes the cover to MapLibre as padding, and the pin lands in the middle of
+the open part, beside the contact. When the contact closes, the padding eases
+away over the 400 ms of the contact's slide, and the pin glides to the middle
+of the whole map.
+
+The covers are found by an attribute, not by a width copied from a class
+name. The contact overlay carries `data-covers-map="right"` and the phone's
+tab bar carries `data-covers-map="bottom"`. `src/views/map/insets.ts`
+measures both. A cover that leaves less than 240 px of open map is treated as
+the whole map: on a phone the contact covers the map edge to edge, and the
+pin is centred for the moment the contact closes.
 
 The move waits for the map's load event. It never runs at mount, because the
 view a map is born with is a creation prop, and an animation started before
@@ -86,6 +116,55 @@ the map has a style leaves every pin in the wrong place. See the header of
 A reader who set "reduce motion" in their system gets the same view with
 `jumpTo` and no animation (WCAG 2.3.3). `src/views/map/flyTo.ts` holds both
 paths and the one decision between them.
+
+### The Map Remembers Where You Left It
+
+The map writes its view to `localStorage` each time a move ends, under
+`contrack.map.lastView`, and opens on that view the next time: after a visit
+to another page, and after a reload. A first visit opens on the world. The
+value is a fact about this browser and your last look, not a setting of the
+account, so it does not travel between devices. A value that is not a view
+reads as no view, and the map opens on its default.
+
+The read is synchronous and happens before the map exists, so the remembered
+view is a creation prop like the zoom and the bounds. Nothing animates into
+it. `src/views/map/lastView.ts` holds the read, the write and the check.
+
+### The Map Stays Warm Between Visits
+
+Leaving the map page does not destroy the map. `react-map-gl` keeps the map
+instance, with its style, its tiles and its worker, and hands it back when
+the page mounts again. A return to the map shows it at once, where you left
+it, with no style fetch and no tile fetch. One map is kept, and only the page
+map asks for it: the still map on a contact and the map in the Adjust pin
+dialog are born with other options and are destroyed when they close.
+
+The map's code is warmed too. MapLibre is the largest chunk in the build,
+and only the map loads it, so the first visit to the map would otherwise
+begin with a download. An idle moment on whichever page opens first fetches
+it instead. A browser that asks to save data is left alone. See
+[Performance](#performance).
+
+### Attribution
+
+MapLibre draws the basemap's credit in the bottom right corner, as a compact
+"i" button. MapLibre opens it expanded on load and collapses it on the first
+drag. Here it opens collapsed. The credit the basemap's terms require is one
+click away, where MapLibre puts it after a drag.
+
+### On a Phone
+
+- A tap on a pin opens the contact. No hover card opens, because a finger
+  cannot hover (see [Hover Card](#hover-card)).
+- The contact covers the whole map. When it closes, the pin is in the
+  middle of the map above the tab bar, because the bar is one of the covers
+  the map measures.
+- The map does not rotate. Two fingers rotate a MapLibre map by default, and
+  so do Shift and the arrow keys, and there is no compass here to put north
+  back at the top. Both rotation handlers are off. Pinch still zooms, the
+  arrow keys still pan.
+- The zoom buttons grow to 44 px and sit above the tab bar with the
+  attribution.
 
 ---
 
@@ -137,7 +216,7 @@ moves three ways:
 
 - **Drag it.** The pin follows the pointer and lands where the pointer lets
   go.
-- **Click the map.** The pin jumps to the click.
+- **Tap or click the map.** The pin jumps to the tap or the click.
 - **Focus the pin and press an arrow key.** Each key moves the pin 10 pixels
   on the screen, or 50 with Shift. The step is in pixels, so a nudge is the
   same size at every zoom, and the map does not pan with it.
@@ -378,6 +457,35 @@ Without Mapbox, Nominatim (OpenStreetMap) is used. Nominatim is free but has rat
 
 ---
 
+## Performance
+
+What makes the map fast to open, in the order a visit meets it:
+
+1. **The map's code is on the map alone.** The build puts MapLibre,
+   react-maplibre and PMTiles in one chunk, `vendor-maplibre`, and React in
+   its own, `vendor-react`. Every page preloads React. Only the map, the
+   still map on a contact and the Adjust pin dialog load MapLibre. Before
+   this split, React and Vite's own preload helper were folded into the map's
+   chunk, and every page preloaded a megabyte of MapLibre to get them. The
+   groups are in `vite.config.ts`.
+2. **The chunk is warmed while you read something else.** `src/App.tsx`
+   asks for an idle moment after the first page settles and fetches the map's
+   code then, so the first visit to the map does not start with a download.
+   `src/lib/idle.ts` skips the fetch when the browser asks to save data.
+3. **The map opens where you left it.** No flight from the world to your
+   city on every visit. See
+   [The Map Remembers Where You Left It](#the-map-remembers-where-you-left-it).
+4. **The map is kept between visits.** A return to the page reuses the map
+   instance, tiles and all. See
+   [The Map Stays Warm Between Visits](#the-map-stays-warm-between-visits).
+5. **The contacts are cached.** `GET /api/contacts/map` is a React Query
+   with a five minute stale time, so a return to the map draws the pins from
+   the cache while the answer refreshes.
+6. **The basemap is cached by the browser.** OpenFreeMap sends long cache
+   headers on its style, sprite, glyphs and tiles.
+
+---
+
 ## Accessibility
 
 - The map container is a region named "Contact map", and the mini map on a
@@ -385,7 +493,8 @@ Without Mapbox, Nominatim (OpenStreetMap) is used. Nominatim is free but has rat
 - The page carries a visually hidden `h1`, "Map"
 - Every pin is a real `<button>` named `"<name>, <company>"`
 - Every cluster is a real `<button>` named `"<n> contacts, zoom in"`
-- Tab reaches a pin, focus opens its hover card, and Enter opens the contact
+- Tab reaches a pin, focus from a keyboard opens its hover card on any
+  device, and Enter opens the contact
 - The zoom buttons sit in MapLibre's navigation control
 - In the Adjust pin dialog the pin is a `<button>` that the arrow keys move,
   and the coordinates line is a live region, so the dialog works with no

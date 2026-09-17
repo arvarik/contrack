@@ -25,12 +25,21 @@ vi.mock("../../src/views/map/maplibreWorker", () => ({
   MAPLIBRE_WORKER_URL: "/assets/maplibre-worker.js",
 }));
 
+/** The props the map was created with, for the tests that read them. */
+const mapProps = vi.fn<(props: Record<string, unknown>) => void>();
+
 vi.mock("react-map-gl/maplibre", () => {
   const Passthrough = ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   );
+  const Map = (
+    props: Record<string, unknown> & { children?: React.ReactNode },
+  ) => {
+    mapProps(props);
+    return <div data-testid="map">{props.children}</div>;
+  };
   return {
-    Map: Passthrough,
+    Map,
     Marker: Passthrough,
     Popup: Passthrough,
     Source: Passthrough,
@@ -78,8 +87,44 @@ const point = (contact: MapContact): VisibleFeature => ({
   latitude: contact.lat,
 });
 
+/** What the mocked map was last created with. */
+const createdWith = () =>
+  mapProps.mock.calls[mapProps.mock.calls.length - 1][0] as {
+    initialViewState: {
+      longitude: number;
+      latitude: number;
+      zoom: number;
+      padding?: unknown;
+    };
+    reuseMaps?: boolean;
+    onMoveEnd?: (event: { viewState: Record<string, number> }) => void;
+    onLoad: (event: { target: unknown }) => void;
+  };
+
+/** A MapLibre map as `onLoad` sees it: a container, and the two rotation handlers. */
+function loadedMap() {
+  const container = document.createElement("div");
+  const strip = document.createElement("details");
+  strip.className =
+    "maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show";
+  strip.setAttribute("open", "");
+  container.append(strip);
+  return {
+    strip,
+    getContainer: () => container,
+    touchZoomRotate: { disableRotation: vi.fn() },
+    keyboard: { disableRotation: vi.fn() },
+    on: vi.fn(),
+    off: vi.fn(),
+    getSource: () => undefined,
+    isStyleLoaded: () => true,
+  };
+}
+
 beforeEach(() => {
   visible.mockReturnValue([]);
+  mapProps.mockClear();
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -143,14 +188,133 @@ describe("ContactMap", () => {
       name: "Ada Lovelace, Babbage & Co",
     });
     expect(screen.queryByText("London, UK")).toBeNull();
-    fireEvent.mouseEnter(pin);
+    fireEvent.pointerEnter(pin, { pointerType: "mouse" });
     expect(screen.getByText("London, UK")).toBeTruthy();
-    fireEvent.mouseLeave(pin);
+    fireEvent.pointerLeave(pin, { pointerType: "mouse" });
     expect(screen.queryByText("London, UK")).toBeNull();
+  });
+
+  it("opens no card for a finger, which cannot hover", () => {
+    visible.mockReturnValue([point(PEOPLE[0])]);
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
+    const pin = screen.getByRole("button", {
+      name: "Ada Lovelace, Babbage & Co",
+    });
+    // A tap fires the enter and never the leave. The card would open under
+    // the contact the tap opens and still be there when the contact closes.
+    fireEvent.pointerEnter(pin, { pointerType: "touch" });
+    expect(screen.queryByText("London, UK")).toBeNull();
+    // Some browsers focus a tapped button. That focus is the tap's, not a
+    // keyboard's, and opens nothing.
+    fireEvent.pointerDown(pin, { pointerType: "touch" });
+    fireEvent.focus(pin);
+    expect(screen.queryByText("London, UK")).toBeNull();
+    fireEvent.blur(pin);
+    // Focus from a keyboard still opens it, on any device.
+    fireEvent.focus(pin);
+    expect(screen.getByText("London, UK")).toBeTruthy();
   });
 
   it("says it is still loading while the contacts load", () => {
     render(<ContactMap contacts={[]} onSelect={() => {}} loading />);
     expect(screen.getByText("Scanning geospatial data...")).toBeTruthy();
+  });
+
+  it("is born on the default view, and keeps no map, unless asked", async () => {
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
+    await screen.findByTestId("map");
+    const props = createdWith();
+    expect(props.initialViewState.longitude).toBe(-95);
+    expect(props.initialViewState.latitude).toBe(20);
+    expect(props.reuseMaps).toBe(false);
+    expect(props.onMoveEnd).toBeUndefined();
+  });
+
+  it("opens on the view it was left at, and remembers every move", async () => {
+    window.localStorage.setItem(
+      "contrack.map.lastView",
+      JSON.stringify({ longitude: -0.1278, latitude: 51.5074, zoom: 11 }),
+    );
+    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} rememberView />);
+    await screen.findByTestId("map");
+    const props = createdWith();
+    expect(props.initialViewState).toMatchObject({
+      longitude: -0.1278,
+      latitude: 51.5074,
+      zoom: 11,
+    });
+
+    props.onMoveEnd?.({
+      viewState: { longitude: 2.3522, latitude: 48.8566, zoom: 12 },
+    });
+    expect(
+      JSON.parse(window.localStorage.getItem("contrack.map.lastView") ?? ""),
+    ).toEqual({ longitude: 2.3522, latitude: 48.8566, zoom: 12 });
+  });
+
+  it("lets a caller's view win over the remembered one", async () => {
+    window.localStorage.setItem(
+      "contrack.map.lastView",
+      JSON.stringify({ longitude: -0.1278, latitude: 51.5074, zoom: 11 }),
+    );
+    render(
+      <ContactMap
+        contacts={PEOPLE}
+        onSelect={() => {}}
+        rememberView
+        initialView={{ longitude: 139.65, latitude: 35.68, zoom: 9 }}
+      />,
+    );
+    await screen.findByTestId("map");
+    expect(createdWith().initialViewState).toMatchObject({
+      longitude: 139.65,
+      latitude: 35.68,
+    });
+  });
+
+  it("is born with the padding it is given, and kept when asked", async () => {
+    const padding = { top: 0, right: 860, bottom: 0, left: 0 };
+    render(
+      <ContactMap
+        contacts={PEOPLE}
+        onSelect={() => {}}
+        initialPadding={padding}
+        reuse
+      />,
+    );
+    await screen.findByTestId("map");
+    const props = createdWith();
+    expect(props.initialViewState.padding).toEqual(padding);
+    expect(props.reuseMaps).toBe(true);
+  });
+
+  it("collapses the attribution and stops rotation once the map has loaded", async () => {
+    const onMapReady = vi.fn();
+    render(
+      <ContactMap
+        contacts={PEOPLE}
+        onSelect={() => {}}
+        onMapReady={onMapReady}
+      />,
+    );
+    await screen.findByTestId("map");
+    const map = loadedMap();
+
+    createdWith().onLoad({ target: map });
+
+    expect(map.strip.classList.contains("maplibregl-compact-show")).toBe(false);
+    expect(map.touchZoomRotate.disableRotation).toHaveBeenCalledOnce();
+    expect(map.keyboard.disableRotation).toHaveBeenCalledOnce();
+    expect(onMapReady).toHaveBeenCalledWith(map);
+  });
+
+  it("leaves rotation alone on a still map, which has no handlers to stop", async () => {
+    render(
+      <ContactMap contacts={PEOPLE} onSelect={() => {}} interactive={false} />,
+    );
+    await screen.findByTestId("map");
+    const map = loadedMap();
+    createdWith().onLoad({ target: map });
+    expect(map.touchZoomRotate.disableRotation).not.toHaveBeenCalled();
   });
 });

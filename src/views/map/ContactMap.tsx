@@ -12,7 +12,11 @@
  * The Leaflet map this replaces once set its zoom in an effect after mount,
  * and the animation it started put every pin in the ocean on a fresh load.
  * The only later change is the resize path, and it uses `jumpTo`, never an
- * animation.
+ * animation. Two things keep the rule rather than break it: the page map
+ * opens on the view it was left at, read from storage before the map exists
+ * (see `lastView.ts`), and it is born with padding for what covers it (see
+ * `insets.ts`). The page map can also keep its map alive between visits with
+ * `reuse`, and a kept map is not born at all: it comes back as it was.
  *
  * @module views/map/ContactMap
  */
@@ -34,10 +38,12 @@ import {
   type ErrorEvent,
   type LayerProps,
   type MapLayerMouseEvent,
+  type ViewStateChangeEvent,
 } from "react-map-gl/maplibre";
 import type {
   GeoJSONSource,
   Map as MapLibreMap,
+  PaddingOptions,
   StyleSpecification,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -55,6 +61,8 @@ import {
   type ContactStack,
 } from "./ContactPopup";
 import { prefersReducedMotion } from "./flyTo";
+import { readLastView, writeLastView } from "./lastView";
+import { collapseAttribution, disableRotation } from "./mapChrome";
 import { WORLD_BOUNDS, minZoomFor } from "./mapMath";
 import { registerPmtilesProtocol, styleFor } from "./mapStyles";
 import { MAPLIBRE_WORKER_URL } from "./maplibreWorker";
@@ -120,6 +128,23 @@ export interface ContactMapProps {
   /** False draws a still map: no pan, no zoom, no zoom buttons. */
   interactive?: boolean;
   initialView?: { longitude: number; latitude: number; zoom?: number };
+  /**
+   * Padding the map is born with, for what covers it at mount. The map page
+   * measures its covers before the map exists (see `insets.ts`).
+   */
+  initialPadding?: PaddingOptions;
+  /**
+   * Open on the view this browser was left at, and remember every move. An
+   * `initialView` still wins when both are given. The page map alone.
+   */
+  rememberView?: boolean;
+  /**
+   * Keep the map alive when this component unmounts and take it back on the
+   * next mount, style, tiles and worker included, so a return to the page
+   * shows the map at once. One map is kept, so one caller sets this: the
+   * page map. A map born with other options must not take it.
+   */
+  reuse?: boolean;
   /** Keep the minimum zoom where the world covers the container. */
   minZoomFromViewport?: boolean;
   /**
@@ -151,6 +176,9 @@ export const ContactMap = ({
   onMapClick,
   interactive = true,
   initialView,
+  initialPadding,
+  rememberView = false,
+  reuse = false,
   minZoomFromViewport = true,
   hoverCard = true,
   label = "Contact map",
@@ -162,6 +190,17 @@ export const ContactMap = ({
   const { mode } = usePreferences();
   const { mapStyles } = useAuth();
   const styleUrl = styleFor(mode, mapStyles);
+
+  // Read once, before the map exists, so the remembered view is a creation
+  // prop like every other part of the first frame.
+  const [remembered] = useState(() =>
+    rememberView && !initialView ? readLastView() : null,
+  );
+  const startView = initialView ?? remembered ?? DEFAULT_VIEW;
+  const remember = useCallback(
+    (event: ViewStateChangeEvent) => writeLastView(event.viewState),
+    [],
+  );
 
   // Measure before the map exists. useLayoutEffect runs after layout and
   // before paint, so the map still appears on the first painted frame, with
@@ -320,13 +359,12 @@ export const ContactMap = ({
           mapStyle={styleBroken ? BLANK_STYLE : styleUrl}
           workerUrl={MAPLIBRE_WORKER_URL}
           initialViewState={{
-            longitude: initialView?.longitude ?? DEFAULT_VIEW.longitude,
-            latitude: initialView?.latitude ?? DEFAULT_VIEW.latitude,
-            zoom: Math.max(
-              initialView?.zoom ?? DEFAULT_VIEW.zoom,
-              initialMinZoom,
-            ),
+            longitude: startView.longitude,
+            latitude: startView.latitude,
+            zoom: Math.max(startView.zoom ?? DEFAULT_VIEW.zoom, initialMinZoom),
+            padding: initialPadding,
           }}
+          reuseMaps={reuse}
           minZoom={initialMinZoom}
           maxBounds={WORLD_BOUNDS}
           renderWorldCopies={false}
@@ -336,9 +374,13 @@ export const ContactMap = ({
           touchPitch={false}
           pitchWithRotate={false}
           onLoad={(event) => {
-            setMap(event.target);
-            onMapReady?.(event.target);
+            const loaded = event.target;
+            collapseAttribution(loaded.getContainer());
+            if (interactive) disableRotation(loaded);
+            setMap(loaded);
+            onMapReady?.(loaded);
           }}
+          onMoveEnd={rememberView ? remember : undefined}
           onError={handleError}
           onClick={handleClick}
           style={{ width: "100%", height: "100%" }}
