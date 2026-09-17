@@ -42,6 +42,7 @@ export interface Preferences {
   tempUnit: TempUnit;
   searchHistory: SearchHistoryEntry[];
   pulseLayout: PulseLayout;
+  askHistoryOpen: boolean;
 }
 
 export interface PreferencesResponse {
@@ -77,6 +78,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
     hidden: [],
     order: {},
   },
+  askHistoryOpen: true,
 };
 
 export const fetchPreferences = (): Promise<PreferencesResponse> =>

@@ -81,12 +81,15 @@ function getHiddenIds(): ReadonlySet<string> {
 }
 
 /**
- * The ids the timeline must not show: in the undo window, being sent, or
+ * The ids that must not be shown: in the undo window, being sent, or
  * deleted in this session.
  */
-export function useHiddenInteractionIds(): ReadonlySet<string> {
+export function useHiddenPendingIds(): ReadonlySet<string> {
   return useSyncExternalStore(subscribe, getHiddenIds, getHiddenIds);
 }
+
+/** Alias for backward compatibility with Timeline. */
+export const useHiddenInteractionIds = useHiddenPendingIds;
 
 /** True while `entry` is still the store's entry for `id`. */
 const isCurrent = (id: string, entry: PendingDelete) =>
@@ -161,19 +164,22 @@ export function flushPendingDeletes(): void {
 }
 
 export interface PendingDeleteOptions {
-  /** The interaction to delete. */
+  /** The interaction or item to delete. */
   id: string;
   /** Sends the DELETE. Resolves when the server deleted the row. */
   send: () => Promise<unknown>;
+  /** Optional toast message. Defaults to "Interaction deleted". */
+  message?: string;
 }
 
 /**
- * Hide an interaction now, and delete it on the server when Undo is no longer
+ * Hide an item now, and delete it on the server when Undo is no longer
  * offered.
  */
 export function startPendingDelete({
   id,
   send: request,
+  message = "Interaction deleted",
 }: PendingDeleteOptions): void {
   if (entries.has(id)) return;
   if (!listening && typeof window !== "undefined") {
@@ -186,7 +192,7 @@ export function startPendingDelete({
   // Each callback holds this entry. A late callback of an old toast then
   // cannot end the window of a newer delete of the same id.
   const end = () => endWindow(id, entry);
-  entry.toastId = toast.success("Interaction deleted", {
+  entry.toastId = toast.success(message, {
     duration: UNDO_WINDOW_MS,
     action: { label: "Undo", onClick: () => undo(id, entry) },
     onAutoClose: end,

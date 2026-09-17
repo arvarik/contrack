@@ -117,6 +117,7 @@ export const preferenceSchemas = {
   tempUnit: z.enum(["celsius", "fahrenheit"]),
   searchHistory: z.array(searchHistoryEntrySchema).max(MAX_SEARCH_HISTORY),
   pulseLayout: pulseLayoutSchema,
+  askHistoryOpen: z.boolean(),
 } as const;
 
 export type PreferenceKey = keyof typeof preferenceSchemas;
@@ -143,6 +144,7 @@ const DEFAULTS: Preferences = {
     hidden: [],
     order: {},
   },
+  askHistoryOpen: true,
 };
 
 /** A PATCH body: any subset, and nothing else. */
@@ -160,6 +162,7 @@ export function defaultPreferences(): Preferences {
     ...DEFAULTS,
     searchHistory: [],
     pulseLayout: { hidden: [], order: {} },
+    askHistoryOpen: true,
   };
 }
 

@@ -13,7 +13,7 @@
 // to answer NDJSON the way the server does. The request bodies are recorded,
 // because "which question did the server receive" is the whole point.
 // =============================================================================
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
@@ -21,12 +21,15 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "../../src/contexts/SessionContext";
+import { PreferencesProvider } from "../../src/contexts/PreferencesContext";
 import { SearchView } from "../../src/views/SearchView";
+import { resetLastRecorded } from "../../src/api/searchHistory";
 
 // The view reads one hook off the `api` barrel, and the barrel pulls in every
 // API module in the app. Coverage instruments what is imported, so loading
@@ -64,10 +67,32 @@ vi.mock("../../src/views/search/SearchResultCards", () => ({
   ShimmerCard: () => null,
 }));
 
+function stubMatchMedia(wide = true) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      matches: wide && query.includes("min-width"),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      onchange: null,
+    })),
+  );
+}
+
+beforeEach(() => {
+  stubMatchMedia(true);
+  resetLastRecorded();
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  resetLastRecorded();
 });
 
 // Three, because the synthesis bar hides itself under three results.
@@ -104,21 +129,88 @@ function stream() {
 
 interface Sent {
   url: string;
+  method: string;
   body: Record<string, unknown> | undefined;
 }
 
+const defaultPreferences = {
+  theme: "system",
+  accent: "#006a91",
+  listDensity: "comfortable",
+  recentLimit: 3,
+  dedupePreset: "default",
+  tempUnit: "celsius",
+  searchHistory: [],
+  askHistoryOpen: true,
+};
+
+const plainAnswers = (s: Sent) => {
+  if (s.url.endsWith("/search/synthesize")) {
+    return new Response(brief());
+  }
+  if (s.url.includes("/search/history")) {
+    if (s.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          entry: {
+            id: "hist-1",
+            ownerId: "user-1",
+            query: (s.body?.query as string) || "test",
+            normalizedQuery: (
+              (s.body?.query as string) || "test"
+            ).toLowerCase(),
+            mode: (s.body?.mode as string) || "people",
+            resultCount: (s.body?.resultCount as number) || 0,
+            resultIds: (s.body?.resultIds as string[]) || [],
+            fallback: Boolean(s.body?.fallback),
+            pinned: false,
+            runCount: 1,
+            createdAt: new Date().toISOString(),
+            lastRunAt: new Date().toISOString(),
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return new Response(
+      JSON.stringify({ entries: [], nextCursor: null, total: 0 }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (s.url.includes("/preferences")) {
+    return new Response(
+      JSON.stringify({ preferences: defaultPreferences, stored: [] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (s.url.endsWith("/search/coverage")) {
+    return new Response(
+      JSON.stringify({ total: 10, indexed: 10, pending: 0, failed: 0 }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  return new Response(complete());
+};
+
 /** Stub `fetch`, answer per request, and keep every body that was sent. */
-function stubFetch(answer: (sent: Sent, index: number) => Response) {
+function stubFetch(
+  answer?: (sent: Sent, index: number) => Response | undefined,
+) {
   const sent: Sent[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
       const entry: Sent = {
         url,
+        method: init?.method || "GET",
         body: init?.body ? JSON.parse(String(init.body)) : undefined,
       };
       sent.push(entry);
-      return Promise.resolve(answer(entry, sent.length - 1));
+      const customResponse = answer?.(entry, sent.length - 1);
+      if (customResponse !== undefined) {
+        return Promise.resolve(customResponse);
+      }
+      return Promise.resolve(plainAnswers(entry));
     }),
   );
   return sent;
@@ -129,23 +221,19 @@ const semantic = (sent: Sent[]) =>
 const synthesize = (sent: Sent[]) =>
   sent.filter((s) => s.url.endsWith("/search/synthesize"));
 
-/** Answers every search with the same three people and every brief the same. */
-const plainAnswers = (s: Sent) =>
-  s.url.endsWith("/search/synthesize")
-    ? new Response(brief())
-    : new Response(complete());
-
 const client = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
 
 function renderView(path = "/search") {
   return render(
     <QueryClientProvider client={client()}>
-      <SessionProvider>
-        <MemoryRouter initialEntries={[path]}>
-          <SearchView />
-        </MemoryRouter>
-      </SessionProvider>
+      <PreferencesProvider>
+        <SessionProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <SearchView />
+          </MemoryRouter>
+        </SessionProvider>
+      </PreferencesProvider>
     </QueryClientProvider>,
   );
 }
@@ -162,7 +250,7 @@ const QUESTION = "Who likes espresso?";
 
 describe("asking the same question again", () => {
   it("runs the same question again after the search was cleared", async () => {
-    const sent = stubFetch(plainAnswers);
+    const sent = stubFetch();
     renderView();
 
     ask(QUESTION);
@@ -180,7 +268,7 @@ describe("asking the same question again", () => {
   });
 
   it("runs the same question again after Escape cleared it", async () => {
-    const sent = stubFetch(plainAnswers);
+    const sent = stubFetch();
     renderView();
 
     ask(QUESTION);
@@ -195,7 +283,11 @@ describe("asking the same question again", () => {
 
   it("does not send the same question twice while it is being answered", async () => {
     const pending = stream();
-    const sent = stubFetch(() => pending.response);
+    const sent = stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic")) {
+        return pending.response;
+      }
+    });
     renderView();
 
     ask(QUESTION);
@@ -215,9 +307,13 @@ describe("asking the same question again", () => {
   });
 
   it("offers Retry after a failed search, and Retry sends the question again", async () => {
-    const sent = stubFetch((s, index) =>
-      index === 0 ? new Response(truncated()) : plainAnswers(s),
-    );
+    let semanticCalls = 0;
+    const sent = stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic")) {
+        semanticCalls++;
+        return semanticCalls === 1 ? new Response(truncated()) : undefined;
+      }
+    });
     renderView();
 
     ask(QUESTION);
@@ -230,11 +326,15 @@ describe("asking the same question again", () => {
   });
 
   it("offers Refresh beside the results, which re-asks the answered question", async () => {
-    const sent = stubFetch((s, index) =>
-      index === 0
-        ? new Response(complete())
-        : new Response(complete(OTHER_MATCHES)),
-    );
+    let semanticCalls = 0;
+    const sent = stubFetch((s) => {
+      if (s.url.endsWith("/search/semantic")) {
+        semanticCalls++;
+        return semanticCalls === 1
+          ? new Response(complete())
+          : new Response(complete(OTHER_MATCHES));
+      }
+    });
     renderView();
 
     ask(QUESTION);
@@ -253,7 +353,7 @@ describe("asking the same question again", () => {
 
 describe("the question the results belong to", () => {
   it("synthesises the answered question, not whatever is being typed", async () => {
-    const sent = stubFetch(plainAnswers);
+    const sent = stubFetch();
     renderView();
 
     ask(QUESTION);
@@ -274,17 +374,19 @@ describe("the question the results belong to", () => {
   });
 
   it("records the question a ?q= link asked, so the view restores it", async () => {
-    stubFetch(plainAnswers);
+    stubFetch();
     const queryClient = client();
     const Harness = ({ mounted }: { mounted: boolean }) => (
       <QueryClientProvider client={queryClient}>
-        <SessionProvider>
-          <MemoryRouter
-            initialEntries={[`/search?q=${encodeURIComponent(QUESTION)}`]}
-          >
-            {mounted && <SearchView />}
-          </MemoryRouter>
-        </SessionProvider>
+        <PreferencesProvider>
+          <SessionProvider>
+            <MemoryRouter
+              initialEntries={[`/search?q=${encodeURIComponent(QUESTION)}`]}
+            >
+              {mounted && <SearchView />}
+            </MemoryRouter>
+          </SessionProvider>
+        </PreferencesProvider>
       </QueryClientProvider>
     );
 
@@ -297,5 +399,161 @@ describe("the question the results belong to", () => {
     view.rerender(<Harness mounted />);
     expect(input().value).toBe(QUESTION);
     expect(screen.getByText("Ada Lovelace")).toBeTruthy();
+  });
+});
+
+describe("the history pane", () => {
+  it("posts to /api/search/history exactly once after a completed search with the right body", async () => {
+    const sent = stubFetch();
+    renderView();
+
+    ask(QUESTION);
+    await screen.findByText("Ada Lovelace");
+
+    await waitFor(() => {
+      const posts = sent.filter(
+        (s) => s.url.includes("/search/history") && s.method === "POST",
+      );
+      expect(posts).toHaveLength(1);
+      expect(posts[0].body).toEqual({
+        query: QUESTION,
+        mode: "people",
+        resultCount: MATCHES.length,
+        resultIds: MATCHES.map((m) => m.id),
+        fallback: false,
+      });
+    });
+  });
+
+  it("re-runs the search when clicking a fetched history entry", async () => {
+    const fakeEntry = {
+      id: "hist-123",
+      ownerId: "user-1",
+      query: "Who knows Python?",
+      normalizedQuery: "who knows python?",
+      mode: "people" as const,
+      resultCount: 2,
+      resultIds: ["contact-1", "contact-2"],
+      fallback: false,
+      pinned: false,
+      runCount: 1,
+      createdAt: new Date().toISOString(),
+      lastRunAt: new Date().toISOString(),
+    };
+
+    const sent = stubFetch((s) => {
+      if (s.url.includes("/search/history") && s.method === "GET") {
+        return new Response(
+          JSON.stringify({
+            entries: [fakeEntry],
+            nextCursor: null,
+            total: 1,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+    });
+
+    renderView();
+    const entryButton = await screen.findByRole("button", {
+      name: /Who knows Python\?/i,
+    });
+    fireEvent.click(entryButton);
+
+    expect(input().value).toBe("Who knows Python?");
+    await waitFor(() => {
+      const calls = semantic(sent);
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      expect(calls[calls.length - 1].body).toEqual({
+        query: "Who knows Python?",
+      });
+    });
+  });
+
+  it("narrows the visible list when typing into the history filter", async () => {
+    const entries = [
+      {
+        id: "hist-1",
+        ownerId: "user-1",
+        query: "Who knows Python?",
+        normalizedQuery: "who knows python?",
+        mode: "people" as const,
+        resultCount: 1,
+        resultIds: ["contact-1"],
+        fallback: false,
+        pinned: false,
+        runCount: 1,
+        createdAt: new Date().toISOString(),
+        lastRunAt: new Date().toISOString(),
+      },
+      {
+        id: "hist-2",
+        ownerId: "user-1",
+        query: "Who likes green tea?",
+        normalizedQuery: "who likes green tea?",
+        mode: "people" as const,
+        resultCount: 1,
+        resultIds: ["contact-2"],
+        fallback: false,
+        pinned: false,
+        runCount: 1,
+        createdAt: new Date().toISOString(),
+        lastRunAt: new Date().toISOString(),
+      },
+    ];
+
+    stubFetch((s) => {
+      if (s.url.includes("/search/history") && s.method === "GET") {
+        const url = new URL(s.url, "http://localhost");
+        const qParam = url.searchParams.get("q")?.toLowerCase();
+        const filtered = qParam
+          ? entries.filter((e) => e.normalizedQuery.includes(qParam))
+          : entries;
+        return new Response(
+          JSON.stringify({
+            entries: filtered,
+            nextCursor: null,
+            total: filtered.length,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+    });
+
+    renderView();
+    const historyAside = await screen.findByRole("complementary", {
+      name: "Search history",
+    });
+    await within(historyAside).findByText("Who knows Python?");
+    expect(within(historyAside).getByText("Who likes green tea?")).toBeTruthy();
+
+    const filterInput = within(historyAside).getByLabelText("Filter history");
+    fireEvent.change(filterInput, { target: { value: "tea" } });
+
+    await waitFor(() => {
+      expect(within(historyAside).queryByText("Who knows Python?")).toBeNull();
+      expect(
+        within(historyAside).getByText("Who likes green tea?"),
+      ).toBeTruthy();
+    });
+  });
+
+  it("writes askHistoryOpen preference when clicking the history toggle button on desktop", async () => {
+    stubMatchMedia(true);
+    const sent = stubFetch();
+    renderView();
+
+    const toggleButton = await screen.findByRole("button", {
+      name: "Search history",
+    });
+    fireEvent.click(toggleButton);
+
+    await waitFor(() => {
+      const patches = sent.filter(
+        (s) => s.url.includes("/preferences") && s.method === "PATCH",
+      );
+      expect(patches).toHaveLength(1);
+      expect(patches[0].body).toEqual({ askHistoryOpen: false });
+    });
   });
 });
