@@ -34,6 +34,7 @@ import {
 } from "../../../lib/styles";
 import { parseBriefingPoints } from "../../../lib/safeParse";
 import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
+import { useAiAllowed } from "../../../hooks/useAiAllowed";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -43,17 +44,13 @@ import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
 export interface BriefingMutation {
   mutate: (
     id: string,
-    opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    options?: { onSuccess?: () => void; onError?: () => void },
   ) => void;
   isPending: boolean;
 }
 
 export interface DossierTabProps {
   contact: Contact;
-  /**
-   * Writes a new briefing. Optional so the dossier can render on its own.
-   * Without it the briefing card shows the saved points and no button.
-   */
   generateBriefing?: BriefingMutation;
 }
 
@@ -62,41 +59,45 @@ export interface DossierTabProps {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Shown when a contact has no dossier content at all.
+ * Empty state: a contact with no bio, no work history, no education, and no
+ * notes to pull a dossier from.
  *
- * The tab previously rendered an empty container: every section is
- * conditional, so a contact nobody has researched produced a blank panel with
- * no indication of whether the feature was broken, still loading, or simply
+ * This used to be a card with a header and a disabled-looking subhead that
  * had nothing to say. An empty state has to answer "what is missing and how do
  * I get it", and here the answer is a specific place to go.
  */
-const EmptyDossier = ({ name }: { name: string }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    className={cn(CARD, "flex flex-col items-center text-center gap-4 py-10")}
-  >
-    <span className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-      <FileText className="w-7 h-7" />
-    </span>
-    <div className="space-y-1.5 max-w-sm">
-      <h3 className="font-bold text-on-surface">No dossier yet</h3>
-      <p className="text-sm text-on-surface-variant text-pretty">
-        The dossier collects background on {name}: what they do, where they have
-        worked and studied, and anything else worth remembering. Contact
-        enrichment researches that from the web and fills it in.
+const EmptyDossier = ({ name }: { name: string }) => {
+  const aiAllowed = useAiAllowed();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(CARD, "flex flex-col items-center text-center gap-4 py-10")}
+    >
+      <span className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+        <FileText className="w-7 h-7" />
+      </span>
+      <div className="space-y-1.5 max-w-sm">
+        <h3 className="font-bold text-on-surface">No dossier yet</h3>
+        <p className="text-sm text-on-surface-variant text-pretty">
+          The dossier collects background on {name}: what they do, where they
+          have worked and studied, and anything else worth remembering. Contact
+          enrichment researches that from the web and fills it in.
+        </p>
+      </div>
+      {aiAllowed && (
+        <Link to="/settings/enrichment" className="btn-primary">
+          <Sparkles className="w-4 h-4" />
+          Enrich contacts
+        </Link>
+      )}
+      <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
+        You can also fill any of this in by hand from the contact&rsquo;s
+        details, or paste a bio into a note and let Contrack pull it apart.
       </p>
-    </div>
-    <Link to="/settings/enrichment" className="btn-primary">
-      <Sparkles className="w-4 h-4" />
-      Enrich contacts
-    </Link>
-    <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
-      You can also fill any of this in by hand from the contact&rsquo;s details,
-      or paste a bio into a note and let Contrack pull it apart.
-    </p>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 /** A briefing older than this is stale: the notes have likely moved on. */
 const BRIEFING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -117,6 +118,7 @@ function BriefingCard({
   generateBriefing?: BriefingMutation;
 }) {
   const headingId = useId();
+  const aiAllowed = useAiAllowed();
   const [failed, setFailed] = useState(false);
   const pending = generateBriefing?.isPending ?? false;
 
@@ -131,7 +133,7 @@ function BriefingCard({
   const hasBriefing = points.length > 0;
 
   const generate = () => {
-    if (!generateBriefing || pending) return;
+    if (!generateBriefing || pending || !aiAllowed) return;
     setFailed(false);
     generateBriefing.mutate(contact.id, {
       onSuccess: () => setFailed(false),
@@ -186,7 +188,7 @@ function BriefingCard({
         </p>
       )}
 
-      {(generateBriefing || (hasBriefing && !pending)) && (
+      {((generateBriefing && aiAllowed) || (hasBriefing && !pending)) && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           {hasBriefing && !pending && contact.aiBriefingAt && (
             <p className="text-xs text-on-surface-variant">
@@ -196,7 +198,7 @@ function BriefingCard({
               })}
             </p>
           )}
-          {generateBriefing && (
+          {generateBriefing && aiAllowed && (
             <button
               type="button"
               onClick={generate}

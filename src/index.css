@@ -677,6 +677,10 @@
  * `motion.*` components are covered by their own reduced-motion handling.
  * ===================================================================== */
 
+html[data-text-scale="large"] {
+  font-size: 17px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -689,6 +693,16 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* =====================================================================

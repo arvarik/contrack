@@ -20,6 +20,7 @@ import { InteractionVelocityModal } from "./dashboard/InteractionVelocityModal";
 import { NetworkGrowthModal } from "./dashboard/NetworkGrowthModal";
 import { QuickInteractionModal } from "../components/QuickInteractionModal";
 import { EmptyState } from "../components/ui/EmptyState";
+import { useAiAllowed } from "../hooks/useAiAllowed";
 import {
   Users,
   HeartPulse,
@@ -144,7 +145,10 @@ export const DashboardView = () => {
     }
   }, [isDashboardLoading, hasDashboard]);
 
-  const { data: insight, isLoading: isInsightLoading } = useDailyInsight();
+  const aiAllowed = useAiAllowed();
+  const { data: insight, isLoading: isInsightLoading } = useDailyInsight({
+    enabled: aiAllowed,
+  });
   const [isCompositionOpen, setIsCompositionOpen] = useState(false);
   const [isVelocityOpen, setIsVelocityOpen] = useState(false);
   const [isGrowthOpen, setIsGrowthOpen] = useState(false);
@@ -306,6 +310,7 @@ export const DashboardView = () => {
               insight={insight}
               isLoading={isInsightLoading}
               delay={tileDelay(3)}
+              aiAllowed={aiAllowed}
             />
 
             {/* Left Column: Action Items */}

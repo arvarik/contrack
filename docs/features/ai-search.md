@@ -189,3 +189,16 @@ The Ask Contrack page retains search questions across sessions so frequent quest
 - **Row actions & re-running:** Clicking any question entry fills the search box and immediately re-runs the search. Hovering or focusing a row reveals Pin/Unpin and Delete actions. Deleting triggers an undo toast notification before sending a hard delete request.
 - **Filtering & modes:** A quick search filter debounced at 200ms narrows questions in real time. A Segmented control filters between All, People, and Notes questions.
 - **Clear history:** A "Clear" action in the pane header allows deleting all recorded history (or mode-specific history) behind a confirmation dialog.
+
+---
+
+## Account AI Switch
+
+Users can turn AI off for their account under **Settings → Privacy and AI** (`aiAssist` preference).
+
+When AI is turned off for an account:
+
+- Outbound requests to generative AI endpoints return `403 AI_OFF_FOR_ACCOUNT` (enforced by `requireAiAllowed` middleware on all AI-cost routes).
+- The client suppresses AI generation triggers including Dossier briefing buttons, contact enrichment buttons, command palette enrichment actions, and group synthesis buttons.
+- The Dashboard daily insight card displays an informative message explaining that AI is disabled for the account, with a link to Privacy settings.
+- Fast local retrieval remains fully operational: SQLite FTS5 full-text search, local vector embeddings, and direct query filtering continue running entirely on your machine with zero external network requests.

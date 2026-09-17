@@ -60,6 +60,7 @@ import {
   aiEndpointRateLimit,
   aiUserRateLimit,
 } from "./middleware/rateLimit.ts";
+import { requireAiAllowed } from "./middleware/aiAllowed.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
 import { redactUrlForLog } from "./utils/helpers.ts";
 
@@ -251,6 +252,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   if (!options.disableRateLimit) {
     app.use(aiUserRateLimit);
   }
+
+  // Refuse AI requests when the caller has switched AI off for their account.
+  app.use(requireAiAllowed);
 
   // Nothing under these four prefixes may be stored by a browser or by a
   // proxy. Mounted before the routers so it applies to every response they

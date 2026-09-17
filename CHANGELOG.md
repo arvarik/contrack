@@ -61,6 +61,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   indicator when modified, and provide a reset button. Old settings URLs redirect
   to their new paths. `DELETE /api/auth/preferences/:key` allows resetting
   preferences to defaults.
+- **Personal preferences and dedicated settings pages.** Added 9 personal
+  preferences (`startPage`, `listSort`, `defaultCadenceDays`, `weekStart`,
+  `showWeather`, `textScale`, `motion`, `singleKeyShortcuts`, and `aiAssist`)
+  with persistent account-level storage. Added four dedicated settings pages:
+  Appearance (theme, accent, text scale, motion, list density), Network and
+  contacts (default start page, default sort order, recent contacts limit,
+  default cadence, week start, weather forecast toggle, temperature unit),
+  Keyboard shortcuts (toggle switch for single-key shortcuts and complete
+  reference table), and Privacy and AI (account-level AI toggle, data privacy
+  transparency cards, and links to AI usage). Turning off AI for an account
+  disables generative AI endpoints with 403 AI_OFF_FOR_ACCOUNT and suppresses
+  client AI action buttons while preserving fast local search and retrieval.
 - **The corvid, everywhere.** One drawing of the raven, traced by hand from
   `docs/brand/corvid-source.jpg` into `src/assets/corvidPaths.ts`, is now the
   mark. It replaces the gradient "C" in the tab strip, the PWA and Apple

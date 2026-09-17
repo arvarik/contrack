@@ -444,3 +444,33 @@ describe("resetting a preference", () => {
     ).toBe(true);
   });
 });
+
+describe("text scale and motion attributes", () => {
+  it("sets data-text-scale and data-motion on document.documentElement", async () => {
+    stored = { textScale: "large", motion: "reduced" };
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(document.documentElement.getAttribute("data-text-scale")).toBe(
+      "large",
+    );
+    expect(document.documentElement.getAttribute("data-motion")).toBe(
+      "reduced",
+    );
+
+    act(() => {
+      result.current.setPreference("textScale", "default");
+      result.current.setPreference("motion", "system");
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute("data-text-scale")).toBe(
+        "default",
+      );
+      expect(document.documentElement.getAttribute("data-motion")).toBe(
+        "system",
+      );
+    });
+  });
+});

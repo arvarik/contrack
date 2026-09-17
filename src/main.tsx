@@ -52,16 +52,27 @@ const queryClient = new QueryClient({
 //
 // It now lives in AuthGate and runs the moment the gate opens. Same warm
 // cache, one round trip later, and no request is made as nobody.
-// =============================================================================
+import { usePreferences } from "./contexts/PreferencesContext";
+
+function MotionPreference({ children }: { children: React.ReactNode }) {
+  const { preferences } = usePreferences();
+  return (
+    <MotionConfig
+      reducedMotion={preferences.motion === "reduced" ? "always" : "user"}
+    >
+      {children}
+    </MotionConfig>
+  );
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthGate>
-          <MotionConfig reducedMotion="user">
+          <MotionPreference>
             <App />
-          </MotionConfig>
+          </MotionPreference>
         </AuthGate>
       </QueryClientProvider>
     </ErrorBoundary>

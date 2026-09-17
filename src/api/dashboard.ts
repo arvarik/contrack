@@ -140,7 +140,7 @@ export const useDashboardMomentum = () => {
   });
 };
 
-export const useDailyInsight = () => {
+export const useDailyInsight = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ["dashboard", "insight"],
     queryFn: async ({ signal }): Promise<DailyInsight | null> => {
@@ -149,6 +149,7 @@ export const useDailyInsight = () => {
       return res.json();
     },
     staleTime: 1000 * 60 * 60 * 2, // 2 hours stale time to prevent multi-fetching AI calls
+    enabled: options?.enabled,
   });
 };
 

@@ -38,6 +38,7 @@ import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { isoWeekStart } from "../../shared/dates.ts";
+import { getPreferences } from "./userPreferencesService.ts";
 
 // =============================================================================
 // Types
@@ -133,13 +134,19 @@ function statsStatement() {
  * Compute a single contact's relationship score.
  * Returns a clamped integer 0-100.
  */
-function computeScoreForContact(contact: ContactScoreRow): number {
-  return computeBreakdown(contact).score;
+function computeScoreForContact(
+  contact: ContactScoreRow,
+  defaultCadence: number = 90,
+): number {
+  return computeBreakdown(contact, defaultCadence).score;
 }
 
 /** Compute the score *and* the reasoning behind it. */
-function computeBreakdown(contact: ContactScoreRow): ScoreBreakdown {
-  const cadence = contact.cadenceDays || 90;
+function computeBreakdown(
+  contact: ContactScoreRow,
+  defaultCadence: number = 90,
+): ScoreBreakdown {
+  const cadence = contact.cadenceDays || defaultCadence;
 
   // ── Recency (40%) ──────────────────────────────────────────────────────
   let recency = 0;
@@ -362,19 +369,30 @@ async function runSweep(options: { full: boolean }): Promise<SweepResult> {
 
   let scored = 0;
   let skipped = 0;
+  const ownerCadence = new Map<string, number>();
 
   // Round-robin: one batch per account per round. An account with fifty
   // thousand contacts therefore cannot put an account with fifty behind it.
   while (queues.some((q) => q.next < q.rows.length)) {
     for (const queue of queues) {
       if (queue.next >= queue.rows.length) continue;
+      const defaultCadence =
+        ownerCadence.get(queue.ownerId) ??
+        (() => {
+          const pref = getPreferences(queue.ownerId).defaultCadenceDays ?? 90;
+          ownerCadence.set(queue.ownerId, pref);
+          return pref;
+        })();
       const batch = queue.rows.slice(queue.next, queue.next + BATCH_SIZE);
       queue.next += batch.length;
 
       const txn = sqlite.transaction(() => {
         for (const contact of batch) {
           try {
-            updateStmt.run(computeScoreForContact(contact), contact.id);
+            updateStmt.run(
+              computeScoreForContact(contact, defaultCadence),
+              contact.id,
+            );
             scored++;
           } catch (err: unknown) {
             skipped++;
@@ -432,12 +450,16 @@ export const relationshipService = {
     const contact = sqlite
       .prepare(
         // tenant-lint: allow owner-checked by caller
-        `SELECT id, cadenceDays, lastContactedAt FROM contacts WHERE id = ?`,
+        `SELECT id, ownerId, cadenceDays, lastContactedAt FROM contacts WHERE id = ?`,
       )
-      .get(contactId) as ContactScoreRow | undefined;
+      .get(contactId) as
+      (ContactScoreRow & { ownerId?: string | null }) | undefined;
     if (!contact) return null;
 
-    const breakdown = computeBreakdown(contact);
+    const defaultCadence = contact.ownerId
+      ? (getPreferences(contact.ownerId).defaultCadenceDays ?? 90)
+      : 90;
+    const breakdown = computeBreakdown(contact, defaultCadence);
 
     // Write the fresh score back. `contacts.relationshipScore` is a cache
     // refreshed hourly, so by the time someone asks *why* a score is what it
@@ -464,14 +486,18 @@ export const relationshipService = {
       .prepare(
         // tenant-lint: allow owner-checked by caller
         `
-      SELECT id, cadenceDays, lastContactedAt FROM contacts WHERE id = ?
+      SELECT id, ownerId, cadenceDays, lastContactedAt FROM contacts WHERE id = ?
     `,
       )
-      .get(contactId) as ContactScoreRow | undefined;
+      .get(contactId) as
+      (ContactScoreRow & { ownerId?: string | null }) | undefined;
 
     if (!contact) return 50;
 
-    const score = computeScoreForContact(contact);
+    const defaultCadence = contact.ownerId
+      ? (getPreferences(contact.ownerId).defaultCadenceDays ?? 90)
+      : 90;
+    const score = computeScoreForContact(contact, defaultCadence);
     sqlite
       .prepare(
         // tenant-lint: allow owner-checked by caller

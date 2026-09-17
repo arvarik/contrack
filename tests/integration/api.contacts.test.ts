@@ -44,6 +44,33 @@ describe("POST /api/contacts", () => {
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
     expect(res.body.error.requestId).toMatch(/^[0-9a-f]{8}$/);
   });
+
+  it("uses defaultCadenceDays from preferences when cadenceDays is omitted", async () => {
+    // Default without preference is 90
+    const res1 = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Default Cadence Person" });
+    expect(res1.status).toBe(201);
+    expect(res1.body.cadenceDays).toBe(90);
+
+    // Update preference to 30
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ defaultCadenceDays: 30 });
+
+    const res2 = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Custom Cadence Person" });
+    expect(res2.status).toBe(201);
+    expect(res2.body.cadenceDays).toBe(30);
+
+    // Explicit cadenceDays overrides default
+    const res3 = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Explicit Cadence Person", cadenceDays: 180 });
+    expect(res3.status).toBe(201);
+    expect(res3.body.cadenceDays).toBe(180);
+  });
 });
 
 describe("GET /api/contacts", () => {

@@ -122,7 +122,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       : DEFAULT_PREFERENCES;
   }, []);
 
-  const preferences = data?.preferences ?? fallback;
+  const preferences = useMemo(
+    () =>
+      data?.preferences
+        ? { ...DEFAULT_PREFERENCES, ...data.preferences }
+        : fallback,
+    [data?.preferences, fallback],
+  );
   const stored = useMemo(() => data?.stored ?? [], [data?.stored]);
 
   const mutation = useMutation({
@@ -230,6 +236,19 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyTheme(preferences.theme, preferences.accent);
   }, [preferences.theme, preferences.accent, mode]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.setAttribute(
+      "data-text-scale",
+      preferences.textScale,
+    );
+  }, [preferences.textScale]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.setAttribute("data-motion", preferences.motion);
+  }, [preferences.motion]);
 
   const value = useMemo<PreferencesContextValue>(
     () => ({

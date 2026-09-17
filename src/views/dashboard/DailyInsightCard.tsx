@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { cn } from "../../lib/utils";
 import { CARD_TINTED, SECTION_HEADING } from "../../lib/styles";
 import { Sparkles } from "lucide-react";
@@ -9,6 +10,7 @@ interface DailyInsightCardProps {
   isLoading: boolean;
   /** CSS entrance delay from `tileDelay(index)`. */
   delay?: string;
+  aiAllowed?: boolean;
 }
 
 /**
@@ -24,8 +26,15 @@ export const DailyInsightCard = ({
   insight,
   isLoading,
   delay,
+  aiAllowed = true,
 }: DailyInsightCardProps) => {
-  const state = isLoading ? "loading" : insight ? "loaded" : "empty";
+  const state = !aiAllowed
+    ? "disabled"
+    : isLoading
+      ? "loading"
+      : insight
+        ? "loaded"
+        : "empty";
 
   return (
     <div
@@ -59,7 +68,17 @@ export const DailyInsightCard = ({
       <div className="min-h-[4.5rem]">
         {/* Keyed so the crossfade replays on state change, not on re-render. */}
         <div key={state} className="fade-enter">
-          {state === "loading" ? (
+          {state === "disabled" ? (
+            <p className="text-on-surface-variant text-sm">
+              AI is off for your account.{" "}
+              <Link
+                to="/settings/privacy#ai-assist"
+                className="text-primary hover:underline font-medium"
+              >
+                Turn on in Settings
+              </Link>
+            </p>
+          ) : state === "loading" ? (
             <div className="space-y-3" aria-hidden>
               <div className="h-4 bg-primary/20 rounded animate-pulse w-3/4" />
               <div className="h-4 bg-primary/20 rounded animate-pulse w-full" />

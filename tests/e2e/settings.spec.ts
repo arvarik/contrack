@@ -182,11 +182,118 @@ test.describe("Settings — Phone", () => {
   });
 });
 
+test.describe("Settings — Personal preferences", () => {
+  test("large text sets data-text-scale='large' and 17px root font", async ({
+    page,
+  }) => {
+    await page.goto("/settings/appearance");
+    const textScaleRow = page.locator("#text-scale");
+    await expect(textScaleRow).toBeVisible();
+
+    const largeRadio = textScaleRow.getByRole("radio", { name: "Large" });
+    await largeRadio.click();
+
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-text-scale",
+      "large",
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.getComputedStyle(document.documentElement).fontSize,
+        ),
+      )
+      .toBe("17px");
+
+    // Restore to default
+    const defaultRadio = textScaleRow.getByRole("radio", { name: "Default" });
+    await defaultRadio.click();
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-text-scale",
+      "default",
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.getComputedStyle(document.documentElement).fontSize,
+        ),
+      )
+      .toBe("16px");
+  });
+
+  test("reduced motion sets data-motion='reduced'", async ({ page }) => {
+    await page.goto("/settings/appearance");
+    const motionRow = page.locator("#motion");
+    await expect(motionRow).toBeVisible();
+
+    const reducedRadio = motionRow.getByRole("radio", { name: "Reduced" });
+    await reducedRadio.click();
+
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-motion",
+      "reduced",
+    );
+
+    // Restore to system
+    const systemRadio = motionRow.getByRole("radio", { name: "System" });
+    await systemRadio.click();
+    await expect(page.locator("html")).toHaveAttribute("data-motion", "system");
+  });
+
+  test("single-key shortcuts toggle turns window-level shortcuts off and on", async ({
+    page,
+  }) => {
+    // 1. With single-key shortcuts on (default), pressing 'n' on '/' opens New Contact modal
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur?.(),
+    );
+
+    await page.keyboard.press("n");
+    const dialog = page.getByRole("dialog", { name: "New Contact" });
+    await expect(dialog).toBeVisible();
+
+    // Close dialog
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    // 2. Turn off single-key shortcuts
+    await page.goto("/settings/keyboard");
+    const shortcutRow = page.locator("#single-key-shortcuts");
+    await expect(shortcutRow).toBeVisible();
+
+    const switchBtn = shortcutRow.getByRole("switch", {
+      name: "Single-key shortcuts",
+    });
+    await expect(switchBtn).toHaveAttribute("aria-checked", "true");
+    await switchBtn.click();
+    await expect(switchBtn).toHaveAttribute("aria-checked", "false");
+
+    // 3. Navigate to '/' and press 'n', modal does not open
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur?.(),
+    );
+
+    await page.keyboard.press("n");
+    await expect(dialog).toBeHidden();
+
+    // 4. Restore single-key shortcuts to on
+    await page.goto("/settings/keyboard");
+    await switchBtn.click();
+    await expect(switchBtn).toHaveAttribute("aria-checked", "true");
+  });
+});
+
 test.describe("Settings — Accessibility", () => {
   const pages = [
     { name: "settings landing", path: "/settings" },
     { name: "appearance", path: "/settings/appearance" },
     { name: "network", path: "/settings/network" },
+    { name: "keyboard", path: "/settings/keyboard" },
+    { name: "privacy", path: "/settings/privacy" },
     { name: "duplicates", path: "/settings/duplicates" },
     { name: "enrichment", path: "/settings/enrichment" },
     { name: "export", path: "/settings/export" },

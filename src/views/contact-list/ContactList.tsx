@@ -38,6 +38,7 @@ import {
   Clock,
   Archive,
   Copy,
+  Activity,
 } from "lucide-react";
 import {
   useContacts,
@@ -741,8 +742,8 @@ export const ContactList = () => {
               "hit-area p-2 rounded-xl transition-all shrink-0 flex items-center justify-center group relative",
               "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
             )}
-            title={`Sort: ${sortBy === "name" ? "Name" : "Date Added"} ${sortDir === "asc" ? "↑" : "↓"}`}
-            aria-label={`Sort by ${sortBy === "name" ? "name" : "date added"}, ${sortDir === "asc" ? "ascending" : "descending"}`}
+            title={`Sort: ${sortBy === "name" ? "Name" : sortBy === "score" ? "Relationship Score" : "Date Added"} ${sortDir === "asc" ? "↑" : "↓"}`}
+            aria-label={`Sort by ${sortBy === "name" ? "name" : sortBy === "score" ? "relationship score" : "date added"}, ${sortDir === "asc" ? "ascending" : "descending"}`}
           >
             {sortBy === "name" ? (
               sortDir === "asc" ? (
@@ -750,6 +751,8 @@ export const ContactList = () => {
               ) : (
                 <ArrowUpAZ className="w-4 h-4" />
               )
+            ) : sortBy === "score" ? (
+              <Activity className="w-4 h-4" />
             ) : sortDir === "desc" ? (
               <CalendarArrowDown className="w-4 h-4" />
             ) : (

@@ -36,6 +36,7 @@ import {
   ActivityFeed,
 } from "./components";
 import { useDedupe } from "../../contexts/DedupeContext";
+import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { EmptyState } from "../../components/ui/EmptyState";
 
@@ -162,11 +163,19 @@ export const DedupeView = ({
     if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   }, [currentIndex]);
 
+  const singleKeys = useSingleKeyShortcuts();
+
   // Keyboard shortcuts (only active on auto tab, swipe view)
   useEffect(() => {
     if (activeTab !== "auto" || resultView !== "swipe" || !hasResults) return;
     const handler = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
+      if (
+        !singleKeys &&
+        (e.key === "h" || e.key === "l" || e.key === "j" || e.key === "k")
+      ) {
+        return;
+      }
 
       switch (e.key) {
         case "ArrowLeft":
@@ -215,6 +224,7 @@ export const DedupeView = ({
     goNext,
     goPrev,
     currentCluster,
+    singleKeys,
   ]);
 
   // Start scan handler. The server reads the account's sensitivity preset

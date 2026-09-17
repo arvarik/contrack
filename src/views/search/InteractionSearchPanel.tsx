@@ -39,6 +39,7 @@ import type { LucideIcon } from "lucide-react";
 import { useInteractionSearch } from "../../api/search";
 import { useRecordSearch } from "../../api/searchHistory";
 import { useDebounce } from "../../hooks/useDebounce";
+import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { isTypingTarget } from "../../lib/keyboard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
@@ -325,9 +326,12 @@ export const InteractionSearchPanel = () => {
     inputRef.current?.focus();
   }, []);
 
+  const singleKeys = useSingleKeyShortcuts();
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
+      if (!singleKeys) return;
       if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();
@@ -335,7 +339,7 @@ export const InteractionSearchPanel = () => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [singleKeys]);
 
   const params = useMemo(
     () => ({

@@ -20,12 +20,14 @@ import {
   useDeferredValue,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import { usePreferences } from "../../../contexts/PreferencesContext";
 import type { Contact } from "../../../types";
 
-type SortField = "name" | "date";
+type SortField = "name" | "date" | "score";
 type SortDir = "asc" | "desc";
 
 export function useContactListFilters(contacts: Contact[]) {
+  const { preferences } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── URL-persisted list filter ─────────────────────────────────────────
@@ -114,16 +116,47 @@ export function useContactListFilters(contacts: Contact[]) {
   const searchQuery = useDeferredValue(inputValue);
 
   // ── Sort state ────────────────────────────────────────────────────────
-  const [sortBy, setSortBy] = useState<SortField>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortBy, setSortBy] = useState<SortField>(() => {
+    if (preferences.listSort === "recent") return "date";
+    if (preferences.listSort === "score") return "score";
+    return "name";
+  });
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    if (preferences.listSort === "recent" || preferences.listSort === "score")
+      return "desc";
+    return "asc";
+  });
+
+  const userHasChangedSort = useRef(false);
+
+  useEffect(() => {
+    if (!userHasChangedSort.current) {
+      if (preferences.listSort === "recent") {
+        setSortBy("date");
+        setSortDir("desc");
+      } else if (preferences.listSort === "score") {
+        setSortBy("score");
+        setSortDir("desc");
+      } else {
+        setSortBy("name");
+        setSortDir("asc");
+      }
+    }
+  }, [preferences.listSort]);
 
   const cycleSortMode = useCallback(() => {
+    userHasChangedSort.current = true;
     if (sortBy === "name" && sortDir === "asc") {
       setSortDir("desc");
     } else if (sortBy === "name" && sortDir === "desc") {
       setSortBy("date");
       setSortDir("desc");
     } else if (sortBy === "date" && sortDir === "desc") {
+      setSortDir("asc");
+    } else if (sortBy === "date" && sortDir === "asc") {
+      setSortBy("score");
+      setSortDir("desc");
+    } else if (sortBy === "score" && sortDir === "desc") {
       setSortDir("asc");
     } else {
       setSortBy("name");
@@ -215,6 +248,8 @@ export function useContactListFilters(contacts: Contact[]) {
         let cmp = 0;
         if (sortBy === "name") {
           cmp = (a.name || "").localeCompare(b.name || "");
+        } else if (sortBy === "score") {
+          cmp = (a.relationshipScore ?? 0) - (b.relationshipScore ?? 0);
         } else {
           // Date added — newer first by default (desc). ISO strings sort lexicographically without Date allocations.
           const da = a.addedAt || "";

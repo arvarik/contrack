@@ -20,6 +20,7 @@
  */
 import { useEffect } from "react";
 import { isActivationTarget, isTypingTarget } from "../../../lib/keyboard";
+import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import type { Contact } from "../../../types";
 
 interface UseContactListKeyboardParams {
@@ -43,12 +44,25 @@ export function useContactListKeyboard({
   onNewContact,
   onSmartPaste,
 }: UseContactListKeyboardParams) {
+  const singleKeys = useSingleKeyShortcuts();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
       // A row or the letter rail already answered this key: the arrows
       // move focus inside the list, and a letter is type-ahead there.
       if (e.defaultPrevented) return;
+
+      if (
+        !singleKeys &&
+        (e.key === "/" ||
+          e.key === "n" ||
+          e.key === "v" ||
+          e.key === "j" ||
+          e.key === "k")
+      ) {
+        return;
+      }
 
       if (e.key === "Escape" && isSelectMode) {
         exitSelectMode();
@@ -113,6 +127,7 @@ export function useContactListKeyboard({
     locationSearch,
     onNewContact,
     onSmartPaste,
+    singleKeys,
   ]);
 
   // Auto-scroll active item into view

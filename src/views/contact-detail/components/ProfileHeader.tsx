@@ -62,6 +62,7 @@ import {
   LocalTimeWeather,
   timeZoneAt,
 } from "../../../components/LocalTimeWeather";
+import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 
@@ -354,6 +355,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 }) => {
   const navigate = useNavigate();
   const narrow = layout === "narrow";
+  const { preferences } = usePreferences();
 
   /**
    * Opening a contact puts focus on its name.
@@ -436,7 +438,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
           lng={contact.lng}
           // The settings revamp's `showWeather` preference replaces the wide
           // case. The narrow header has room for one line, and no weather.
-          showWeather={!narrow}
+          showWeather={!narrow && preferences.showWeather}
         />
       ),
     });

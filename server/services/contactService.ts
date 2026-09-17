@@ -34,6 +34,7 @@ import { log } from "../utils/logger.ts";
 import { dedupeService } from "./dedupe/index.ts";
 import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { getPreferences } from "./userPreferencesService.ts";
 
 // ---------------------------------------------------------------------------
 // Incremental Dedupe — Debounce Map
@@ -114,7 +115,10 @@ function buildInsertValues(scope: Scope, body: NewContactPayload, id: string) {
     birthday: body.birthday || null,
     preferences: body.preferences || null,
     avatarUrl: body.avatarUrl || null,
-    cadenceDays: body.cadenceDays ?? 90,
+    cadenceDays:
+      body.cadenceDays ??
+      getPreferences(scope.ownerId).defaultCadenceDays ??
+      90,
     about: body.about || null,
     pronouns: body.pronouns || null,
     industry: body.industry || null,

@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { sqlite, SCORE_COLUMNS, contactEditColumns } from "../../server/db.ts";
 import { relationshipService } from "../../server/services/relationshipService.ts";
+import { setPreferences } from "../../server/services/userPreferencesService.ts";
 import { makeTestApp } from "./helpers.ts";
 import { createActor, type Actor } from "./tenancy/helpers.ts";
 
@@ -477,5 +478,37 @@ describe("the full sweep", () => {
     expect(breakdown?.score).toBe(score);
     // Explaining writes the fresh score back, and that is not an edit either.
     expect(readRow(id).scoreDirty).toBe(0);
+  });
+
+  it("uses the owner's defaultCadenceDays preference when contact has no cadence", async () => {
+    // 45 days ago
+    const lastContact45 = new Date(Date.now() - 45 * 86_400_000).toISOString();
+    const id30 = addContact(A.user.id, {
+      cadenceDays: 0,
+      lastContactedAt: lastContact45,
+    });
+    const id180 = addContact(B.user.id, {
+      cadenceDays: 0,
+      lastContactedAt: lastContact45,
+    });
+
+    setPreferences(A.user.id, { defaultCadenceDays: 30 });
+    setPreferences(B.user.id, { defaultCadenceDays: 180 });
+
+    const breakdown30 = relationshipService.explainScore(id30);
+    const breakdown180 = relationshipService.explainScore(id180);
+
+    const recency30 = breakdown30!.components.find(
+      (c) => c.key === "recency",
+    )!.value;
+    const recency180 = breakdown180!.components.find(
+      (c) => c.key === "recency",
+    )!.value;
+
+    // With 45 days elapsed:
+    // For cadence 30 (A): daysSince (45) > cadence (30), so recency penalty kicks in
+    // For cadence 180 (B): daysSince (45) < cadence (180), recency is much higher
+    expect(recency180).toBeGreaterThan(recency30);
+    expect(breakdown180!.score).toBeGreaterThan(breakdown30!.score);
   });
 });
