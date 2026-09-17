@@ -53,7 +53,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { SkipLink, MAIN_CONTENT_ID } from "./components/layout/SkipLink";
 import { RouteFallback } from "./components/layout/RouteFallback";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
-import { EmptyState } from "./components/layout/EmptyState";
+import { StartRedirect } from "./components/layout/StartRedirect";
 import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
 import { useUrgentActionItemCount } from "./api";
 import { AISearchProvider } from "./contexts/AISearchContext";
@@ -85,6 +85,13 @@ const ResponsiveLayout = () => {
       setLastContactId(matchContact.params.id);
     }
   }, [matchContact?.params.id, setLastContactId]);
+
+  // Deep links / other routes opened directly mark the session as started so later navigating to "/" does not redirect to pulse
+  useEffect(() => {
+    if (location.pathname !== "/") {
+      sessionStorage.setItem("contrack.started", "true");
+    }
+  }, [location.pathname]);
 
   const isMapActive = location.pathname.startsWith("/map");
   const isCleanup = location.pathname.startsWith("/settings");
@@ -382,7 +389,7 @@ const ResponsiveLayout = () => {
         `}
         >
           <Routes location={location}>
-            <Route path="/" element={<EmptyState />} />
+            <Route path="/" element={<StartRedirect />} />
             <Route
               path="/contact/:id"
               element={

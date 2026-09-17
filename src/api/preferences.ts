@@ -17,6 +17,12 @@ export type ThemeMode = "light" | "dark" | "system";
 export type ListDensity = "comfortable" | "compact";
 export type MergePreset = "conservative" | "default" | "aggressive";
 export type TempUnit = "celsius" | "fahrenheit";
+export type StartPage = "network" | "pulse";
+export type ListSort = "name" | "recent" | "score";
+export type CadenceDays = 30 | 60 | 90 | 180;
+export type WeekStart = "monday" | "sunday";
+export type TextScale = "default" | "large";
+export type MotionPreference = "system" | "reduced";
 
 export interface SearchHistoryEntry {
   query: string;
@@ -43,6 +49,15 @@ export interface Preferences {
   searchHistory: SearchHistoryEntry[];
   pulseLayout: PulseLayout;
   askHistoryOpen: boolean;
+  startPage: StartPage;
+  listSort: ListSort;
+  defaultCadenceDays: CadenceDays;
+  weekStart: WeekStart;
+  showWeather: boolean;
+  textScale: TextScale;
+  motion: MotionPreference;
+  singleKeyShortcuts: boolean;
+  aiAssist: boolean;
 }
 
 export interface PreferencesResponse {
@@ -79,6 +94,15 @@ export const DEFAULT_PREFERENCES: Preferences = {
     order: {},
   },
   askHistoryOpen: true,
+  startPage: "network",
+  listSort: "name",
+  defaultCadenceDays: 90,
+  weekStart: "monday",
+  showWeather: false,
+  textScale: "default",
+  motion: "system",
+  singleKeyShortcuts: true,
+  aiAssist: true,
 };
 
 export const fetchPreferences = (): Promise<PreferencesResponse> =>

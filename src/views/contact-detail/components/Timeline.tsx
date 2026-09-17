@@ -41,6 +41,8 @@ import {
   Trash2,
 } from "lucide-react";
 import DOMPurify from "dompurify";
+import { usePreferences } from "../../../contexts/PreferencesContext";
+import { weekStartsOn } from "../../../../shared/dates";
 
 import type { Interaction } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
@@ -173,9 +175,6 @@ function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
   }
 }
 
-/** Monday. The settings revamp's `weekStart` preference replaces this constant. */
-const WEEK_START = 1;
-
 const MONTH = new Intl.DateTimeFormat(undefined, { month: "long" });
 const MONTH_YEAR = new Intl.DateTimeFormat(undefined, {
   month: "long",
@@ -196,9 +195,9 @@ interface TimelineGroup {
 }
 
 /** Local midnight at the start of the week that holds `now`. */
-function startOfWeek(now: Date): Date {
+function startOfWeek(now: Date, weekStartDay: 0 | 1 = 1): Date {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  start.setDate(start.getDate() - ((start.getDay() - WEEK_START + 7) % 7));
+  start.setDate(start.getDate() - ((start.getDay() - weekStartDay + 7) % 7));
   return start;
 }
 
@@ -210,8 +209,12 @@ function startOfWeek(now: Date): Date {
  * "This week" with an earlier September group below it. The two groups are
  * not merged, because that would break the date order.
  */
-function groupEntries(items: Interaction[], now: Date): TimelineGroup[] {
-  const weekStart = startOfWeek(now).getTime();
+function groupEntries(
+  items: Interaction[],
+  now: Date,
+  weekStartDay: 0 | 1 = 1,
+): TimelineGroup[] {
+  const weekStart = startOfWeek(now, weekStartDay).getTime();
   const nextWeek = new Date(weekStart);
   nextWeek.setDate(nextWeek.getDate() + 7);
   const weekEnd = nextWeek.getTime();
@@ -548,14 +551,17 @@ export const Timeline = ({
   const [confirming, setConfirming] = useState<Interaction | null>(null);
   /** The entry whose title takes focus after the next render. */
   const focusAfterDelete = useRef<string | null>(null);
+  const { preferences } = usePreferences();
+  const weekStartDay = weekStartsOn(preferences.weekStart);
 
   const groups = useMemo(
     () =>
       groupEntries(
         timeline.filter((item) => !hidden.has(item.id)),
         new Date(),
+        weekStartDay,
       ),
-    [timeline, hidden],
+    [timeline, hidden, weekStartDay],
   );
 
   // After a delete, the kebab that opened the dialog is gone. Focus goes to

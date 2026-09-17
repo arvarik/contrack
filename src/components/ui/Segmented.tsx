@@ -18,7 +18,7 @@ import { useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 
-export interface SegmentedOption<T extends string> {
+export interface SegmentedOption<T extends string | number> {
   value: T;
   label: string;
   /**
@@ -29,7 +29,7 @@ export interface SegmentedOption<T extends string> {
   icon?: LucideIcon;
 }
 
-export const Segmented = <T extends string>({
+export const Segmented = <T extends string | number>({
   options,
   value,
   onChange,

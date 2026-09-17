@@ -82,4 +82,36 @@ describe("settings registry", () => {
     const mail = SETTINGS_PAGES.find((p) => p.id === "admin-mail");
     expect(mail?.title).toBe(NAMES.outgoingMail.title);
   });
+
+  it("registers Keyboard and Privacy pages with their rows", () => {
+    const keyboard = SETTINGS_PAGES.find((p) => p.id === "keyboard");
+    expect(keyboard).toBeDefined();
+    expect(keyboard?.path).toBe("/settings/keyboard");
+    expect(keyboard?.rows?.some((r) => r.id === "single-key-shortcuts")).toBe(
+      true,
+    );
+
+    const privacy = SETTINGS_PAGES.find((p) => p.id === "privacy");
+    expect(privacy).toBeDefined();
+    expect(privacy?.path).toBe("/settings/privacy");
+    expect(privacy?.rows?.some((r) => r.id === "ai-assist")).toBe(true);
+  });
+
+  it("findRows returns hits for personal preference rows", () => {
+    const cadenceHit = findRows("cadence").find((h) => h.id === "cadence");
+    expect(cadenceHit?.path).toBe("/settings/network#cadence");
+
+    const textScaleHit = findRows("font size").find(
+      (h) => h.id === "text-scale",
+    );
+    expect(textScaleHit?.path).toBe("/settings/appearance#text-scale");
+
+    const aiHit = findRows("ai assist").find((h) => h.id === "ai-assist");
+    expect(aiHit?.path).toBe("/settings/privacy#ai-assist");
+
+    const shortcutHit = findRows("single-key").find(
+      (h) => h.id === "single-key-shortcuts",
+    );
+    expect(shortcutHit?.path).toBe("/settings/keyboard#single-key-shortcuts");
+  });
 });

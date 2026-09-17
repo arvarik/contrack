@@ -57,10 +57,13 @@ import { fallbackAvatarUrl } from "../../lib/avatar";
 import { FacetPills } from "./FacetPills";
 import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
+import { usePreferences } from "../../contexts/PreferencesContext";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export const CommandPalette = () => {
+  const { preferences } = usePreferences();
+  const aiAllowed = preferences.aiAssist;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
@@ -313,7 +316,7 @@ export const CommandPalette = () => {
     try {
       const newContact = await createContact.mutateAsync({
         name: search.trim(),
-        cadenceDays: 90,
+        cadenceDays: preferences.defaultCadenceDays,
       });
       recordVisit(newContact.id);
       navigate(`/contact/${newContact.id}`);
@@ -887,14 +890,17 @@ export const CommandPalette = () => {
                           }
                           isEnriching={enrichContact.isPending}
                           enrichingContactId={enrichingContactId}
-                          onRefresh={handleRefreshContact}
+                          onRefresh={
+                            aiAllowed ? handleRefreshContact : undefined
+                          }
                         />
                       ))}
                     </Command.Group>
                   )}
 
                   {/* Synthesis executive brief (Feature 6) */}
-                  {aiQuery.length >= 3 &&
+                  {aiAllowed &&
+                    aiQuery.length >= 3 &&
                     !isAiLoading &&
                     !aiFallback &&
                     aiResults.length > 0 && (
@@ -1107,7 +1113,9 @@ export const CommandPalette = () => {
                               }
                               isEnriching={enrichContact.isPending}
                               enrichingContactId={enrichingContactId}
-                              onRefresh={handleRefreshContact}
+                              onRefresh={
+                                aiAllowed ? handleRefreshContact : undefined
+                              }
                             />
                           </div>
                           {/* → action button: always visible on mobile (touch), hover-reveal on desktop */}

@@ -445,13 +445,31 @@ SMTP passwords and other sensitive integration secrets stored in the database ar
   the app with it. The accent picker keeps the hue you choose and darkens or
   lightens it until it clears WCAG AA on every surface of the palette on
   screen, so no choice can make the app unreadable.
-- **Preferences:** the theme, the accent, list density, the recent-contacts
-  limit, auto-merge sensitivity, the temperature unit and the search history
-  are stored on the account rather than in the browser, so they follow a
-  person to another device and are not shared between two accounts using one
-  browser. `GET` and `PATCH /api/auth/preferences`. A browser upgrading from
-  an older release hands over whatever it still holds, once, and then forgets
-  it.
+- **Preferences:** personal preferences are stored per-account in the database, so they follow a person to another device and are never shared between multiple accounts on one browser. The server exposes `GET` and `PATCH /api/auth/preferences`, plus `DELETE /api/auth/preferences/:key` to restore defaults. A browser upgrading from an older release hands over whatever it still holds in local storage, once, and then forgets it.
+
+### Personal Settings
+
+Every personal preference can be changed in Settings and is stored in user preferences:
+
+| Preference             | Type                                               | Default         | Description                                                     |
+| ---------------------- | -------------------------------------------------- | --------------- | --------------------------------------------------------------- |
+| `theme`                | `"system"` \| `"light"` \| `"dark"`                | `"system"`      | Visual theme (system follows device `prefers-color-scheme`)     |
+| `accent`               | string hex                                         | `"#d97706"`     | Accent color tuned for WCAG AA contrast                         |
+| `textScale`            | `"default"` \| `"large"`                           | `"default"`     | Interface text scaling (`large` sets root font to 17px)         |
+| `motion`               | `"system"` \| `"reduced"`                          | `"system"`      | Motion preference (`reduced` disables non-essential animations) |
+| `density`              | `"comfortable"` \| `"compact"`                     | `"comfortable"` | Contact list row density                                        |
+| `startPage`            | `"network"` \| `"pulse"`                           | `"network"`     | Initial destination for first navigation of a session           |
+| `listSort`             | `"name"` \| `"recent"` \| `"score"`                | `"name"`        | Initial sort order for contact list                             |
+| `recentContactsLimit`  | number                                             | `10`            | Number of recent contacts to display                            |
+| `defaultCadenceDays`   | `30` \| `60` \| `90` \| `180`                      | `90`            | Default follow-up cadence days for new contacts and scoring     |
+| `weekStart`            | `"monday"` \| `"sunday"`                           | `"monday"`      | Week starting day for timeline groupings and calendar views     |
+| `showWeather`          | boolean                                            | `false`         | Show weather forecast next to contact local time                |
+| `temperatureUnit`      | `"celsius"` \| `"fahrenheit"`                      | `"celsius"`     | Temperature unit for weather displays                           |
+| `singleKeyShortcuts`   | boolean                                            | `true`          | Enable single-key keyboard shortcuts                            |
+| `aiAssist`             | boolean                                            | `true`          | Enable AI-assisted features for this account                    |
+| `autoMergeSensitivity` | `"conservative"` \| `"balanced"` \| `"aggressive"` | `"balanced"`    | Duplicate auto-merge threshold                                  |
+| `searchHistory`        | boolean                                            | `true`          | Record recent search queries                                    |
+
 - **Backups:** SQLite snapshots are written to `DATA_DIR/backups` every
   `BACKUP_INTERVAL_HOURS` (online backup API — safe while the app runs),
   keeping the `BACKUP_KEEP` most recent. Trigger one manually with

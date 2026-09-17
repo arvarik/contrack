@@ -35,6 +35,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
+import { useAiAllowed } from "../hooks/useAiAllowed";
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -114,6 +115,7 @@ export const SearchView = () => {
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
   const singleKeys = useSingleKeyShortcuts();
+  const aiAllowed = useAiAllowed();
   const recordSearch = useRecordSearch();
   const lastRecordedPeopleQueryRef = useRef<string | null>(null);
 
@@ -260,6 +262,7 @@ export const SearchView = () => {
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
+      if (!singleKeys) return;
       if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();
@@ -514,7 +517,7 @@ export const SearchView = () => {
                     </div>
 
                     {/* Synthesis executive brief (Feature 6) */}
-                    {!isFallback && (
+                    {aiAllowed && !isFallback && (
                       <SynthesisBar
                         query={answeredQuery}
                         contacts={results}

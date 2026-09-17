@@ -61,6 +61,48 @@ export const AppearancePage = () => {
         </SettingRow>
 
         <SettingRow
+          id="text-scale"
+          title="Text size"
+          prefKey="textScale"
+          description={
+            preferences.textScale === "large"
+              ? "Large (17 px root) for easier reading across the app."
+              : "Default (16 px root font size)."
+          }
+        >
+          <Segmented
+            label="Text size"
+            value={preferences.textScale}
+            onChange={(next) => setPreference("textScale", next)}
+            options={[
+              { value: "default", label: "Default" },
+              { value: "large", label: "Large" },
+            ]}
+          />
+        </SettingRow>
+
+        <SettingRow
+          id="motion"
+          title="Motion"
+          prefKey="motion"
+          description={
+            preferences.motion === "reduced"
+              ? "Minimizes animations and transitions across the app."
+              : "Follows your operating system's reduced motion setting."
+          }
+        >
+          <Segmented
+            label="Motion"
+            value={preferences.motion}
+            onChange={(next) => setPreference("motion", next)}
+            options={[
+              { value: "system", label: "System" },
+              { value: "reduced", label: "Reduced" },
+            ]}
+          />
+        </SettingRow>
+
+        <SettingRow
           id="list-density"
           title="List density"
           prefKey="listDensity"

@@ -114,7 +114,7 @@ interface StaleChipProps {
   /** Contact ID currently being enriched (to target loading state) */
   enrichingContactId: string | null;
   /** Callback to trigger enrichment */
-  onRefresh: (contactId: string) => void;
+  onRefresh?: (contactId: string) => void;
 }
 
 /**
@@ -150,7 +150,7 @@ export const StaleChip = ({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Don't trigger the result's onSelect
     e.preventDefault();
-    if (!disabled) {
+    if (!disabled && onRefresh) {
       onRefresh(contactId);
     }
   };
@@ -158,19 +158,21 @@ export const StaleChip = ({
   return (
     <span className="inline-flex items-center gap-1 text-[11px] text-warning bg-amber-500/10 px-1.5 py-0.5 rounded-md font-medium">
       {ageLabel}
-      <button
-        type="button"
-        title={tooltip}
-        onClick={handleClick}
-        disabled={disabled}
-        className={`hit-area inline-flex items-center justify-center w-3.5 h-3.5 rounded transition-colors ${
-          disabled
-            ? "text-on-surface-variant/30 cursor-not-allowed"
-            : "text-warning hover:text-warning hover:bg-amber-500/20 cursor-pointer"
-        } ${isThisEnriching ? "animate-spin" : ""}`}
-      >
-        <RefreshCw className="w-2.5 h-2.5" />
-      </button>
+      {onRefresh && (
+        <button
+          type="button"
+          title={tooltip}
+          onClick={handleClick}
+          disabled={disabled}
+          className={`hit-area inline-flex items-center justify-center w-3.5 h-3.5 rounded transition-colors ${
+            disabled
+              ? "text-on-surface-variant/30 cursor-not-allowed"
+              : "text-warning hover:text-warning hover:bg-amber-500/20 cursor-pointer"
+          } ${isThisEnriching ? "animate-spin" : ""}`}
+        >
+          <RefreshCw className="w-2.5 h-2.5" />
+        </button>
+      )}
     </span>
   );
 };

@@ -83,6 +83,19 @@ describe("the shortcuts table", () => {
     expect(bare(["⌘", "K"])).toBe(false);
   });
 
+  it("marks alwaysOn only on bare-letter entries", () => {
+    for (const entry of SHORTCUTS) {
+      if (entry.alwaysOn) {
+        expect(
+          entry.bareLetter,
+          `"${entry.description}" in ${entry.group} has alwaysOn but bareLetter is false`,
+        ).toBe(true);
+      }
+    }
+    const alwaysOn = SHORTCUTS.filter((e) => e.alwaysOn);
+    expect(alwaysOn.map((e) => e.keys.join("+"))).toEqual(["?", "A–Z"]);
+  });
+
   it("lists every group in the order, and orders no group that has no shortcut", () => {
     const groups = new Set(SHORTCUTS.map((entry) => entry.group));
     for (const group of groups) expect(SHORTCUT_GROUP_ORDER).toContain(group);

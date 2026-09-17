@@ -40,6 +40,11 @@ export interface Shortcut {
    * off exactly these, so every entry says which kind it is.
    */
   bareLetter: boolean;
+  /**
+   * When true, this shortcut stays active even when singleKeyShortcuts is off.
+   * Only bare-letter shortcuts can be alwaysOn.
+   */
+  alwaysOn?: boolean;
   /** The route where the shortcut works. Absent means everywhere. */
   page?: string;
 }
@@ -65,6 +70,7 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   NAMES.network.label,
   "Contact",
   NAMES.ask.label,
+  "Notes",
   NAMES.duplicates.label,
 ];
 
@@ -119,6 +125,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     keys: ["?"],
     description: "Show keyboard shortcuts",
     bareLetter: true,
+    alwaysOn: true,
   },
   {
     group: "Global",
@@ -198,6 +205,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     keys: ["A–Z"],
     description: "Jump to the next name with that letter",
     bareLetter: true,
+    alwaysOn: true,
     page: "/",
   },
   {
@@ -252,6 +260,15 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: NAMES.ask.label,
     keys: ["H"],
     description: "Toggle search history",
+    bareLetter: true,
+    page: "/search",
+  },
+
+  // Notes
+  {
+    group: "Notes",
+    keys: ["/"],
+    description: "Focus search",
     bareLetter: true,
     page: "/search",
   },

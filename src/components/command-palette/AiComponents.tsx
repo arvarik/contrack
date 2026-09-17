@@ -33,7 +33,7 @@ interface AIResultCardProps {
   hasGroundingCapacity: boolean;
   isEnriching: boolean;
   enrichingContactId: string | null;
-  onRefresh: (contactId: string) => void;
+  onRefresh?: (contactId: string) => void;
 }
 
 export const AIResultCard = ({

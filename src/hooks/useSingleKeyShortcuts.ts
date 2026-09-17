@@ -1,12 +1,14 @@
 /**
- * useSingleKeyShortcuts — whether printable single-key shortcuts are active.
+ * useSingleKeyShortcuts — whether single-key (bare-letter) shortcuts are active.
  *
- * Bare-letter shortcuts (like '/', 'h', 'n') can be triggered by stray keystrokes.
- * Defaults to true.
+ * Controlled by the account's `singleKeyShortcuts` preference. When false,
+ * window-level single-key shortcuts like `/`, `n`, `v`, `j`, `k` return early.
  *
  * @module hooks/useSingleKeyShortcuts
  */
+import { usePreferences } from "../contexts/PreferencesContext";
 
 export function useSingleKeyShortcuts(): boolean {
-  return true;
+  const { preferences } = usePreferences();
+  return preferences.singleKeyShortcuts;
 }
