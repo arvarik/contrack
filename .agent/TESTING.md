@@ -155,6 +155,13 @@ card, taps Back, and measures the pin at the middle of the map above the tab
 bar. `tests/e2e/metrics.spec.ts` measures the tap-target and text-size floors
 on `/map` on a 390 pixel phone.
 
+### Ask history (2.0)
+
+| File                                          | Asserts                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/searchHistory.normalize.test.ts`  | `normalizeQuery` lowercases, collapses whitespace, trims leading and trailing spaces, strips leading `? ` prefix, preserves trailing question marks, and handles edge cases.                                                                                                                                                                                                                                                            |
+| `tests/integration/api.searchHistory.test.ts` | Search history endpoints (`GET`, `POST`, `PATCH /:id`, `DELETE /:id`, `DELETE /history`): upsert semantics, runCount bump, query snapshot update, cursor pagination walk over 120 rows with limit 50, pinned updates, individual and bulk deletion with/without mode, input validation (empty query, 501 characters, invalid mode, resultIds trimming to 30), preference backfill idempotency, and isolation matrix between two owners. |
+
 ### Test Setup Mock Pattern (`tests/setup.ts`)
 
 The global setup file mocks the database module to prevent any test from accidentally writing to `curator.db`:

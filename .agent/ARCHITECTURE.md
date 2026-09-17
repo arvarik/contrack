@@ -140,6 +140,7 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 | `action_items`         | First-class follow-up tasks        | `contactId` FK CASCADE, `interactionId` FK SET NULL, `title`, `dueAt`, `completedAt`                                                                                                                                                  |
 | `lists`                | User-created contact groups        | `id`, `name`, `icon`, `sortOrder`                                                                                                                                                                                                     |
 | `list_members`         | List↔Contact junction              | Composite PK(`listId`, `contactId`), both FK CASCADE                                                                                                                                                                                  |
+| `search_history`       | Persistent question history        | `id`, `ownerId` FK RESTRICT, `mode`, `query`, `normalizedQuery`, `resultCount`, `resultIds`, `fallback`, `pinned`, `runCount`, `createdAt`, `lastRunAt`, UNIQUE(`ownerId`, `mode`, `normalizedQuery`)                                 |
 
 ### Deduplication Engine Tables
 
@@ -203,7 +204,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
 - `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`
 - `server/services/` — Heavy business logic:
-  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`
+  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
   - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
