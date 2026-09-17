@@ -17,6 +17,7 @@ import { Link2, MailPlus, Send } from "lucide-react";
 import {
   invitationState,
   useCreateInvitation,
+  useInstanceSettings,
   useInvitations,
   useRevokeInvitation,
   type Invitation,
@@ -62,10 +63,19 @@ const NewInvitationModal = ({
   onClose: () => void;
 }) => {
   const create = useCreateInvitation();
+  const { data: settings } = useInstanceSettings();
+  const mailConfigured = Boolean(settings?.mailConfigured);
+
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>("member");
   const [expiresInDays, setExpiresInDays] = useState<number>(7);
-  const [link, setLink] = useState<string | null>(null);
+  const [sendByEmail, setSendByEmail] = useState(true);
+  const [createdResult, setCreatedResult] = useState<{
+    link: string;
+    sent: boolean;
+    email: string | null;
+    sendAttempted: boolean;
+  } | null>(null);
 
   const close = () => {
     onClose();
@@ -73,7 +83,8 @@ const NewInvitationModal = ({
       setEmail("");
       setRole("member");
       setExpiresInDays(7);
-      setLink(null);
+      setSendByEmail(true);
+      setCreatedResult(null);
       create.reset();
     }, 200);
   };
@@ -82,16 +93,26 @@ const NewInvitationModal = ({
     <Modal
       isOpen={isOpen}
       onClose={close}
-      title={link ? "Send this link" : "New invitation"}
+      title={createdResult ? "Send this link" : "New invitation"}
       size="md"
     >
-      {link ? (
+      {createdResult ? (
         <div className="space-y-4">
           <p className="text-sm text-on-surface-variant text-pretty">
             Anyone who opens this link can create one account with it, once.
             Send it the way you would send a password.
           </p>
-          <SecretReveal value={link} label="Invitation link" />
+          <SecretReveal value={createdResult.link} label="Invitation link" />
+          {createdResult.sent && createdResult.email && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              Also sent to {createdResult.email}
+            </p>
+          )}
+          {createdResult.sendAttempted && !createdResult.sent && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+              Sending failed. Copy the link instead.
+            </p>
+          )}
           <div className="flex justify-end">
             <AdminButton onClick={close}>I&rsquo;ve copied it</AdminButton>
           </div>
@@ -100,14 +121,24 @@ const NewInvitationModal = ({
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            const trimmedEmail = email.trim();
+            const shouldSend =
+              mailConfigured && Boolean(trimmedEmail) && sendByEmail;
             create.mutate(
               {
-                email: email.trim() || null,
+                email: trimmedEmail || null,
                 role,
                 expiresInDays,
+                send: shouldSend,
               },
               {
-                onSuccess: (result) => setLink(result.link),
+                onSuccess: (result) =>
+                  setCreatedResult({
+                    link: result.link,
+                    sent: result.sent,
+                    email: trimmedEmail || null,
+                    sendAttempted: shouldSend,
+                  }),
                 onError: (error: Error) => toast.error(error.message),
               },
             );
@@ -153,6 +184,46 @@ const NewInvitationModal = ({
               the link picks their own email.
             </p>
           </div>
+
+          {mailConfigured && email.trim().length > 0 && (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-surface-container-highest">
+              <label
+                htmlFor="invite-send-email"
+                className="block text-xs font-bold text-on-surface cursor-pointer select-none"
+              >
+                Send it by email
+              </label>
+              <button
+                id="invite-send-email"
+                type="button"
+                role="switch"
+                aria-checked={sendByEmail}
+                aria-label="Send it by email"
+                onClick={() => setSendByEmail(!sendByEmail)}
+                className={cn(
+                  "shrink-0 inline-flex items-center justify-center",
+                  "min-w-[44px] min-h-[44px] rounded-full",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "relative block w-14 h-8 rounded-full transition-colors",
+                    sendByEmail ? "bg-primary" : "bg-surface-container-high",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
+                      "transition-transform",
+                      sendByEmail ? "translate-x-7" : "translate-x-1",
+                    )}
+                  />
+                </span>
+              </button>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <span className="block text-xs font-bold text-on-surface">

@@ -333,6 +333,18 @@ export const adminInvitationSchema = z.object({
   email: z.string().trim().max(254).nullable().optional(),
   role: roleSchema.default("member"),
   expiresInDays: z.number().int().min(1).max(90).optional(),
+  send: z.boolean().optional().default(false),
+});
+
+/** Body for PUT /api/admin/mail */
+export const adminMailSchema = z.object({
+  host: z.string().trim().min(1, "Host is required"),
+  port: z.coerce.number().int().min(1).max(65535),
+  secure: z.boolean().default(false),
+  user: z.string().trim().optional().default(""),
+  password: z.string().optional(),
+  from: z.string().trim().min(1, "From address is required"),
+  replyTo: z.string().trim().optional().default(""),
 });
 
 /** Body for POST /api/auth/accept-invitation.

@@ -81,6 +81,8 @@ export interface AuthStatus {
    * this client, where the map uses its built-in defaults.
    */
   map?: MapStyleUrls;
+  /** True when outgoing mail is configured (via SMTP_URL or settings). */
+  mailConfigured?: boolean;
 }
 
 /** One personal API token, as the account's own token list shows it. */

@@ -253,6 +253,9 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)                                                                                                       | `127.0.0.1`  |
 | `PUBLIC_URL`            | Canonical external origin behind a proxy (e.g. `https://crm.example.com`) for passkeys and invites                                                | — (derived)  |
 | `AUTH_REQUIRED`         | `true` = require sign-in with an account                                                                                                          | `false`      |
+| `SMTP_URL`              | SMTP connection URL (`smtp://` or `smtps://`) for outgoing transactional mail                                                                     | — (off)      |
+| `MAIL_FROM`             | Sender address for outgoing emails                                                                                                                | — (auto)     |
+| `CONTRACK_SECRET_KEY`   | 64-character hex key encrypting database secrets; generated at `DATA_DIR/secret.key` when omitted                                                 | — (auto)     |
 | `API_TOKEN`             | **Deprecated.** Instance-wide machine credential, and setting it gates the instance. Removed in 3.0, use a personal token from Settings → Account | — (off)      |
 | `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache)                                                                                         | project root |
 | `MAPBOX_API_KEY`        | Mapbox geocoding (optional, higher accuracy)                                                                                                      | —            |

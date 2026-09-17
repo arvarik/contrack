@@ -24,6 +24,9 @@ cp .env.example .env
 | `MAP_STYLE_LIGHT`         | Basemap style the map loads in the light palette. An absolute `https://` URL or a root-relative path such as `/map/style.json`                                                                 | OpenFreeMap `positron` | No       |
 | `MAP_STYLE_DARK`          | Basemap style the map loads in the dark palette. Same rule as `MAP_STYLE_LIGHT`                                                                                                                | OpenFreeMap `dark`     | No       |
 | `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                    | `false`                | No       |
+| `SMTP_URL`                | SMTP connection URL (e.g. `smtp://user:pass@smtp.example.com:587` or `smtps://user:pass@smtp.example.com:465`). Environment overrides UI settings                                              | —                      | No       |
+| `MAIL_FROM`               | Sender address for outgoing email (e.g. `Contrack <noreply@example.com>` or `noreply@example.com`)                                                                                             | — (derived)            | No       |
+| `CONTRACK_SECRET_KEY`     | 32-byte hexadecimal key (64 hex characters) used to encrypt stored credentials like SMTP passwords. Generated at `DATA_DIR/secret.key` when omitted                                            | — (auto)               | No       |
 | `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token              | — (auth off)           | No       |
 | `AUTH_TOKEN`              | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                          | —                      | No       |
 | `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                                 | `30`                   | No       |
@@ -388,6 +391,47 @@ Passkeys allow people to sign in using biometrics (Apple Touch ID / Face ID, Win
 
 - **HTTPS and Localhost**: The Web Authentication API (WebAuthn) requires a Secure Context. Passkeys function out of the box on `localhost` during development, or over HTTPS in production. Passkeys are unsupported over plain-HTTP on IP addresses (such as `http://192.168.1.50:3210`). The Account settings screen displays an explanatory banner when loaded in an insecure context.
 - **Reverse Proxies and `PUBLIC_URL`**: When hosting Contrack behind a reverse proxy (such as Caddy, Nginx, Traefik, or Cloudflare) that terminates TLS or rewrites the `Host` header, set `PUBLIC_URL` in your environment (e.g. `PUBLIC_URL="https://crm.example.com"`). WebAuthn mandates that the Relying Party ID (`rpID`) and origin match the exact origin in the browser address bar. Contrack checks `PUBLIC_URL` first, then falls back to `X-Forwarded-Proto` and `X-Forwarded-Host` / `Host`. If your proxy changes `Host` without forwarding client headers, set `PUBLIC_URL` to avoid ceremony verification failures.
+
+## Outgoing Mail
+
+Contrack sends transactional emails for invitations, password resets, and magic-link authentication.
+
+Outgoing mail can be configured either through the environment or through the administration interface.
+
+### Configuration via Environment
+
+Set `SMTP_URL` and optionally `MAIL_FROM` in your `.env` or container environment:
+
+```bash
+SMTP_URL="smtp://user:password@smtp.example.com:587"
+MAIL_FROM="noreply@example.com"
+```
+
+URLs can use `smtp://` (plain or STARTTLS, default port 587) or `smtps://` (TLS wrapper, default port 465). When `SMTP_URL` is set in the environment, it takes precedence over database settings, and the **Settings → Administration → Outgoing mail** page displays configuration values as read-only.
+
+### Configuration via Administration UI
+
+Administrators can configure SMTP credentials in the app at **Settings → Administration → Outgoing mail** (`/settings/admin/mail`).
+
+Fields:
+
+- **Host**: SMTP server hostname (e.g. `smtp.example.com` or a local relay like `192.168.1.10`)
+- **Port**: SMTP port (typically `587` for STARTTLS or `465` for TLS)
+- **Use TLS**: Check for direct TLS wrapper connections
+- **Username**: SMTP account username
+- **Password**: SMTP account password (write-only, stored sealed in `app_settings`)
+- **From address**: Email address shown in the From header
+- **Reply-to**: Optional email address for the Reply-To header
+
+Use the **Send a test message** button to verify connectivity and delivery to your administrator email address.
+
+### Encryption Key (`CONTRACK_SECRET_KEY` and `secret.key`)
+
+SMTP passwords and other sensitive integration secrets stored in the database are encrypted using AES-256-GCM via `secretBox`.
+
+- If `CONTRACK_SECRET_KEY` is provided as an environment variable, it must be a 64-character hexadecimal string (32 bytes).
+- If `CONTRACK_SECRET_KEY` is omitted, Contrack generates a cryptographic key at boot and writes it to `DATA_DIR/secret.key` with strict permissions (`0600`).
+- **Backing up your key**: Always back up `DATA_DIR/secret.key` alongside your database (`contrack.db`). If the secret key is lost or modified, encrypted values cannot be decrypted.
 
 ## Data Lifecycle
 

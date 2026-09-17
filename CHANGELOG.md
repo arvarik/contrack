@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Outgoing mail and email invitations.** Administrators can configure
+  outgoing SMTP mail either declaratively via `SMTP_URL` and `MAIL_FROM`
+  environment variables or interactively through the Outgoing mail administration
+  view at `/settings/admin/mail`. Database-stored SMTP passwords are encrypted
+  with AES-256-GCM using `secretBox` backed by `CONTRACK_SECRET_KEY` or an
+  auto-generated `DATA_DIR/secret.key`. The invitation creation flow now includes
+  an option to send invitations directly by email when mail is configured,
+  reporting delivery status back to the administrator. Includes a rate-limited
+  test email endpoint (`POST /api/admin/mail/test`), read and update endpoints
+  (`/api/admin/mail`), and full audit logging for configuration updates and test
+  dispatches.
 - **Passkeys (FIDO2 / WebAuthn).** Accounts can now register biometric
   passkeys (Touch ID, Face ID, Windows Hello, security keys) to sign in
   without typing a password. Includes a first-run nudge interstitial after

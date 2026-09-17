@@ -34,8 +34,10 @@ import {
 } from "./server/services/search/localEmbeddings.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { validatePublicUrl } from "./server/utils/publicOrigin.ts";
+import { validateSecretKey } from "./server/utils/secretBox.ts";
 
 validatePublicUrl(process.env.PUBLIC_URL);
+validateSecretKey(process.env.CONTRACK_SECRET_KEY);
 
 // ── AI posture at boot ───────────────────────────────────────────────────────
 // This used to check only the key matching AI_PROVIDER (default gemini), so
