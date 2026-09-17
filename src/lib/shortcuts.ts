@@ -64,6 +64,7 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   "Global",
   NAMES.network.label,
   "Contact",
+  NAMES.ask.label,
   NAMES.duplicates.label,
 ];
 
@@ -237,6 +238,22 @@ export const SHORTCUTS: readonly Shortcut[] = [
     description: "Move the value down one place",
     bareLetter: false,
     page: "/contact/:id",
+  },
+
+  // Ask Contrack
+  {
+    group: NAMES.ask.label,
+    keys: ["/"],
+    description: "Focus search",
+    bareLetter: true,
+    page: "/search",
+  },
+  {
+    group: NAMES.ask.label,
+    keys: ["H"],
+    description: "Toggle search history",
+    bareLetter: true,
+    page: "/search",
   },
 
   // Duplicates, in the swipe view. The arrow and the letter do the same

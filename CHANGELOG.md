@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   method (`method: "password"` or `method: "passkey"`), displayed under
   Devices in Account settings. Reverse proxies can configure `PUBLIC_URL` to
   ensure consistent rpID and origin derivation during WebAuthn ceremonies.
+- **Ask Contrack history pane.** The Ask Contrack search view now includes a
+  history pane displaying past search questions organized into Pinned, Today,
+  Yesterday, This week, and monthly buckets. Features a 320px desktop aside,
+  a mobile bottom sheet modal triggered from a header Clock button, the `h`
+  keyboard shortcut for quick toggling, one-click search re-running, row pinning,
+  deletion with undo toasts, live query filtering, and a confirmation dialog
+  for clearing history. Account preference `askHistoryOpen` persists the pane
+  visibility across sessions.
 - **Search history table and API.** The server now stores every question asked
   per account across People, Notes and palette modes in a dedicated
   `search_history` table. Distinct queries per mode are deduplicated by

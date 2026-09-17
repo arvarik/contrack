@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useInteractionSearch } from "../../api/search";
+import { useRecordSearch } from "../../api/searchHistory";
 import { useDebounce } from "../../hooks/useDebounce";
 import { isTypingTarget } from "../../lib/keyboard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
@@ -356,6 +357,30 @@ export const InteractionSearchPanel = () => {
   const period: Period = customOpen ? "custom" : periodOf(from, to);
   const hasSearch = Boolean(q || from || to || type);
   const showModeToggle = (result?.query.tokens.length ?? 0) >= 2;
+
+  const recordSearch = useRecordSearch();
+  const lastRecordedNotesQueryRef = useRef<string | null>(null);
+
+  // Record Notes search once per settled term of at least 2 characters that resolved with data
+  // (settles for 1.5s to avoid recording per keystroke)
+  useEffect(() => {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) return;
+    if (!search.isSuccess || !result) return;
+    if (lastRecordedNotesQueryRef.current === trimmed) return;
+
+    const timer = setTimeout(() => {
+      lastRecordedNotesQueryRef.current = trimmed;
+      recordSearch.mutate({
+        query: trimmed,
+        mode: "notes",
+        resultCount: result.total,
+        resultIds: (result.hits ?? []).slice(0, 30).map((h) => h.contactId),
+      });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [q, search.isSuccess, result, recordSearch]);
 
   const choosePeriod = (next: Period) => {
     setCustomOpen(next === "custom");

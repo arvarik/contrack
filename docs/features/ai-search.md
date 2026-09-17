@@ -171,3 +171,21 @@ From the search results view or Command Palette, click **"✨ Synthesize"** to g
 - Streams in real-time via NDJSON
 
 **API:** `POST /api/search/synthesize`
+
+---
+
+## History Pane
+
+The Ask Contrack page retains search questions across sessions so frequent questions can be re-run, pinned, and organized:
+
+- **Layout:** Displays as a fixed 320px right-hand side pane on desktop screens (`lg` and wider). On smaller viewports, it opens as a mobile bottom sheet modal from the Clock icon button in the header.
+- **Header toggle & shortcut:** The Clock button in the header toggles the pane and saves the `askHistoryOpen` preference to the account. Pressing `h` anywhere on the page (when not typing in an input and single-key shortcuts are enabled) also toggles the pane.
+- **Groupings:** Questions are automatically organized into chronological groups:
+  1. **Pinned** (pinned rows stay at the top and do not repeat in date groups)
+  2. **Today**
+  3. **Yesterday**
+  4. **This week** (Monday-start)
+  5. **Months** (e.g. "August 2026")
+- **Row actions & re-running:** Clicking any question entry fills the search box and immediately re-runs the search. Hovering or focusing a row reveals Pin/Unpin and Delete actions. Deleting triggers an undo toast notification before sending a hard delete request.
+- **Filtering & modes:** A quick search filter debounced at 200ms narrows questions in real time. A Segmented control filters between All, People, and Notes questions.
+- **Clear history:** A "Clear" action in the pane header allows deleting all recorded history (or mode-specific history) behind a confirmation dialog.
