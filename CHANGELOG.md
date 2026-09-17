@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The corvid, everywhere.** One drawing of the raven, traced by hand from
+  `docs/brand/corvid-source.jpg` into `src/assets/corvidPaths.ts`, is now the
+  mark. It replaces the gradient "C" in the tab strip, the PWA and Apple
+  icons, the rotated word in the sidebar, the icon square on the sign-in
+  card, the empty Network, Trash and Archived screens, the "No Contact
+  Selected" pane, the crash screen's footer and the README header.
+  `npm run brand:icons` renders every icon in `public/` from that one file,
+  adds a maskable icon for Android launchers and a 1200 by 630 link preview,
+  and a unit test fails when the committed favicon and the drawing disagree.
+  In the app the mark strokes with `currentColor`, so it follows the accent
+  a person chose, and its eye keeps the new `--color-corvid-eye` token. The
+  icon links carry `?v=corvid` so a browser that pinned the old favicon
+  fetches the new one, and the manifest's theme colour is the current
+  primary, `#006a91`. The mark is decoration in this phase: it is hidden from
+  assistive tech and takes no Tab stop. See `.agent/STYLE.md` section 6.
 - **A map that opens where you left it, and knows what covers it.** The map
   page keeps its MapLibre map alive between visits and writes its view to
   `localStorage` when a move ends, so a return to the map, and a reload,

@@ -138,18 +138,18 @@ keyboard chips.
 
 These reusable atomic classes are the blessed patterns. Use them instead of ad-hoc utilities.
 
-| Class                | Pattern                                                                                 | Usage                                                                   |
-| -------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, dropdowns, Command Palette, floating nav                        |
-| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (sidebar logo text). ⚠️ NEVER use for buttons or CTAs |
-| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                 |
-| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                          |
-| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                             |
-| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                               |
-| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                        |
-| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                     |
-| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                   |
-| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                            |
+| Class                | Pattern                                                                                 | Usage                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, dropdowns, Command Palette, floating nav                         |
+| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (the tile behind the glyph). ⚠️ NEVER for buttons/CTAs |
+| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                  |
+| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                           |
+| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                              |
+| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                                |
+| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                         |
+| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                      |
+| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                    |
+| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                             |
 
 ### Buttons
 
@@ -361,3 +361,72 @@ Use `sonner` via the `<Toaster>` in `App.tsx`. Toasts use `glass-panel` styling 
 - ❌ Direct `@google/genai` imports outside `server/ai/adapters/gemini.ts`.
 - ❌ Placing business logic in Express route files — delegate to services.
 - ❌ Using `any` type without explicit narrowing justification.
+
+## 6. Brand
+
+The corvid is the one mark. `src/assets/corvidPaths.ts` holds the drawing, and
+everything that shows the bird reads that file: the React components, the
+favicon, the PWA icons, the link preview and the README picture. There is no
+second drawing anywhere.
+
+### The mark
+
+- `<CorvidMark>` (`src/components/brand/CorvidMark.tsx`) draws the bird
+  inline. Variant `mark` is the whole bird, for 24 px and up. Variant `glyph`
+  is the crown, the beak and the wing at a heavier stroke, for 16 and 32 px.
+- The stroke is `currentColor`. Put the mark on `text-primary` and it follows
+  the accent a person chose. The eye fills with `--color-corvid-eye` (light
+  `#47befd`, dark `#7fd6ff`) and does not follow the accent. A rose bird keeps
+  its cyan eye.
+- Decorative by default: `aria-hidden`, never focusable, no Tab stop. Pass
+  `decorative={false}` only where the mark is the one thing that names the
+  app, and it becomes `role="img"` named "Contrack".
+- Every part has an id, `<prefix>-body`, `<prefix>-wing`, `<prefix>-eye` and
+  so on. The prefix is unique per instance. The sidebar perch passes
+  `idPrefix="corvid"`, so `#corvid-wing` is that one bird and nothing else.
+- `<CorvidTile>` is the favicon inline: the gradient rounded square with the
+  white glyph, in fixed colours. `<Wordmark>` is the mark beside the name in
+  the headline face, for a wide surface.
+
+### Sizes
+
+| Surface                          | Variant       | Size       | Colour                           |
+| -------------------------------- | ------------- | ---------- | -------------------------------- |
+| Tab strip favicon                | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
+| PWA and touch icons              | glyph on tile | 180 to 512 | same                             |
+| Sidebar perch                    | mark          | 32         | `text-primary`, eye token        |
+| Auth card                        | mark          | 40         | `text-primary`                   |
+| Empty states                     | mark          | 64 to 96   | `text-primary/60`                |
+| Crash screen footer              | mark          | 20         | `text-on-surface-variant`        |
+| README header                    | PNG           | 96         | fixed brand colours              |
+| Settings footer (phone, Phase 2) | mark          | 20         | `text-on-surface-variant`        |
+| Thinking indicator (Phase 2)     | glyph         | 20         | `text-primary`                   |
+| Flight overlay (Phase 2)         | flying        | 48         | `text-primary`                   |
+
+The last three rows are reserved for the motion phase and have no surface
+yet.
+
+- ✅ Width equals height. The `size` prop sets both. Never stretch the mark.
+- ✅ An empty state passes the mark through the `illustration` slot of
+  `<EmptyState>`, at 64 px on `text-primary/60`.
+- ❌ No emoji, lucide bird or second drawing as the brand anywhere, the
+  README included.
+- ❌ No recolouring of the eye, and no mark drawn in a colour that is not a
+  text token.
+
+### Public icons are generated, never edited
+
+- `npm run brand:icons` runs `scripts/brand/build-icons.ts`. It writes
+  `public/favicon.svg`, `icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png`, `apple-touch-icon.png`, `og-image.png` and
+  `docs/brand/corvid-mark.png` from the paths.
+- ❌ Never edit a file the script writes. Change `corvidPaths.ts`, run the
+  script, commit what it writes. `tests/unit/brand.icons.test.ts` renders the
+  favicon again and fails when the committed file differs.
+- ❌ No CSS variables in anything the script renders. librsvg does not resolve
+  them. Colours there are literals from `BRAND` and `TILE` in
+  `corvidPaths.ts`, copied from the light palette.
+- `docs/brand/corvid-source.jpg` is the reference drawing. Nothing serves it,
+  and `public/` holds only what the script writes.
+- The icon links in `index.html` and the manifest carry `?v=corvid`. Browsers
+  pin a favicon hard. Change the query when the tile changes.

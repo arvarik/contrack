@@ -88,7 +88,6 @@ export const AcceptInvitation = ({
 
   return (
     <AuthShell
-      icon={<MailCheck className="w-7 h-7" />}
       title="You've been invited"
       subtitle="Choose how you'll sign in. Your account starts empty — an invitation gives you a place on this Contrack, not access to anybody else's contacts."
       onSubmit={handleSubmit}

@@ -1,5 +1,8 @@
 <div align="center">
-  <h1>🤝 Contrack</h1>
+  <h1>
+    <img src="docs/brand/corvid-mark.png" alt="" width="96" height="96" align="middle" />
+    Contrack
+  </h1>
   <p><b>People Relationship Manager for Proactive Networking</b></p>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)

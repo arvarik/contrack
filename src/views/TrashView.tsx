@@ -6,6 +6,7 @@ import { useTrash, useRestoreContact, usePurgeTrashedContact } from "../api";
 import { Modal } from "../components/ui/Modal";
 import { CARD, ICON_BTN } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
+import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import type { TrashedContact } from "../types";
@@ -75,7 +76,7 @@ export const TrashView = () => {
         (30 by default), and the client cannot read what an instance set.
       */
       <EmptyState
-        icon={Trash2}
+        illustration={<CorvidMark size={64} className="text-primary/60" />}
         title="Trash is empty"
         body="You can restore a deleted contact from here until it is removed for good."
       />

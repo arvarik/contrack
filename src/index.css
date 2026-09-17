@@ -59,6 +59,11 @@
      there and `text-primary` everywhere else. */
   --color-on-primary-wash: #005e81;
 
+  /* The corvid's eye. The mark itself strokes with currentColor and follows
+     the accent; the eye does not. A rose bird with a cyan eye is the brand,
+     a rose eye is a different bird. See src/components/brand/CorvidMark.tsx. */
+  --color-corvid-eye: #47befd;
+
   /* ── AI-derived data ────────────────────────────────────────────────
    * The second accent, and the only one that means something. A chip, a
    * glyph or a label in this colour says "a model wrote this, not you":
@@ -179,6 +184,7 @@
     --color-on-primary-container: #c2e7fb;
     /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
     --color-on-primary-wash: #6ec6ee;
+    --color-corvid-eye: #7fd6ff;
     --color-ai: #bfa3f9;
     /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
     --color-on-ai-wash: #bfa3f9;
@@ -212,6 +218,7 @@
   --color-on-primary-container: #c2e7fb;
   /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
   --color-on-primary-wash: #6ec6ee;
+  --color-corvid-eye: #7fd6ff;
   --color-ai: #bfa3f9;
   /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
   --color-on-ai-wash: #bfa3f9;

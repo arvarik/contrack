@@ -56,7 +56,6 @@ export const Register = ({
 
   return (
     <AuthShell
-      icon={<UserPlus className="w-7 h-7" />}
       title="Create an account"
       subtitle="This Contrack is open to new accounts. Yours starts empty — nobody else's contacts are in it, and yours are not in theirs."
       onSubmit={handleSubmit}

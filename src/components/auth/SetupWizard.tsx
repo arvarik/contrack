@@ -16,7 +16,7 @@
  * and accept-invitation screens — see `accountForm.tsx`.
  */
 import React, { useState } from "react";
-import { UserPlus, Loader2, ShieldCheck } from "lucide-react";
+import { UserPlus, Loader2 } from "lucide-react";
 import { setupAccount } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
@@ -67,7 +67,6 @@ export const SetupWizard = ({
 
   return (
     <AuthShell
-      icon={<ShieldCheck className="w-7 h-7" />}
       title={localOwnerPresent ? "Secure this instance" : "Set up Contrack"}
       subtitle={
         localOwnerPresent ? (

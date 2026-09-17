@@ -73,7 +73,6 @@ export const ForcedPasswordChange = ({
 
   return (
     <AuthShell
-      icon={<KeyRound className="w-7 h-7" />}
       title="Choose your own password"
       subtitle={
         <>
