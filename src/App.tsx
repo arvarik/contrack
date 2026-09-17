@@ -460,7 +460,8 @@ export default function App() {
 
       // Cmd+Shift+I → quick interaction modal
       // Conflict guard: close Cmd+K if open
-      if (e.key === "i" && e.metaKey && e.shiftKey) {
+      // Either case: with Shift held, a browser may report the key as "I".
+      if (e.key.toLowerCase() === "i" && e.metaKey && e.shiftKey) {
         e.preventDefault();
         // If Cmd+K is open, close it first
         const cmdkDialog = document.querySelector("[cmdk-dialog]");

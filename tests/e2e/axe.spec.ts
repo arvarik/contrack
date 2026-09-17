@@ -45,7 +45,7 @@ const SCREENS: Screen[] = [
     path: (seed) => `/contact/${seed.byName("Ada Lovelace").id}`,
     ready: async (page) => {
       await expect(
-        page.getByRole("button", { name: "Change avatar" }),
+        page.getByRole("button", { name: "Log interaction" }),
       ).toBeVisible();
       // Ada has coordinates, so the page draws her mini map. Her pin exists
       // only once that map has loaded, so it is the proof the scan sees the

@@ -110,11 +110,11 @@ test.describe("map", () => {
     ).toBeVisible();
 
     // With nothing else listening, Escape closes the contact. The cancelled
-    // field hands focus back to the page first, and the key belongs to
-    // whatever holds focus.
-    await expect
-      .poll(() => page.evaluate(() => document.activeElement?.tagName))
-      .toBe("BODY");
+    // field hands focus back to the value it edited, which does not answer
+    // Escape, so the next press belongs to the map page.
+    await expect(
+      overlay.getByRole("button", { name: "Analytical Engineer" }),
+    ).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/map$/);
     await expect(overlay).toHaveCount(0);
@@ -181,9 +181,12 @@ test.describe("map", () => {
     await expect(
       mini.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
     ).toBeVisible();
+    // "Show on map" sits in the address row's kebab.
+    await page.getByRole("button", { name: /^Actions for London/ }).click();
     await expect(
-      page.getByRole("link", { name: "Show on map" }).first(),
+      page.getByRole("menuitem", { name: "Show on map" }),
     ).toHaveAttribute("href", `/map/contact/${ada.id}`);
+    await page.keyboard.press("Escape");
 
     await page.getByRole("link", { name: "Open in map" }).click();
     await expect(page).toHaveURL(new RegExp(`/map/contact/${ada.id}$`));

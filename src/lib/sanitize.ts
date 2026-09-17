@@ -1,7 +1,7 @@
 /**
  * Shared DOMPurify configuration for TipTap-authored rich text.
  *
- * Pins ALLOWED_TAGS/ALLOWED_ATTR to exactly what the RichInteractionComposer
+ * Pins ALLOWED_TAGS/ALLOWED_ATTR to exactly what the InteractionComposer
  * (TipTap) emits — paragraphs, basic marks, links, lists, mention spans,
  * headings, blockquotes, and code blocks — so stored HTML cannot smuggle
  * unexpected elements or attributes through render-time sanitization.

@@ -64,8 +64,10 @@ export const MentionList = forwardRef<
               props.command({ id: item.id, label: item.name });
             }}
           >
-            <div className="w-6 h-6">
-              <HealthRingAvatar contact={item} />
+            {/* Sized to the row, and hidden: the name beside it already names
+                the button, and the image's alt text said it twice. */}
+            <div className="w-7 h-7 shrink-0" aria-hidden="true">
+              <HealthRingAvatar contact={item} size={28} />
             </div>
             <span className="font-semibold truncate">{item.name}</span>
             {item.isGhost && (
@@ -84,9 +86,22 @@ export const MentionList = forwardRef<
   );
 });
 
-export const getMentionSuggestion = (contacts: ContactSlim[]) => ({
+/**
+ * The @mention suggestion for a tiptap editor.
+ *
+ * `contacts` is read each time somebody types @, not when the editor is
+ * created. An editor is created once, and a list captured then stays empty
+ * when the names had not loaded yet.
+ *
+ * The list is placed inside the dialog when the editor is in one. A modal
+ * dialog makes everything outside it inert: the rest of the page takes no
+ * pointer events and is hidden from assistive tech. A list appended to
+ * `document.body` could be seen and not clicked, and a click on it counted as
+ * a click outside, which closed the dialog.
+ */
+export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
   items: ({ query }: { query: string }) => {
-    return contacts
+    return contacts()
       .filter((item) => item.name.toLowerCase().startsWith(query.toLowerCase()))
       .slice(0, 5);
   },
@@ -104,9 +119,12 @@ export const getMentionSuggestion = (contacts: ContactSlim[]) => ({
 
         if (!props.clientRect) return;
 
+        const host =
+          props.editor.view.dom.closest<HTMLElement>('[role="dialog"]') ??
+          document.body;
         popup = tippy("body", {
           getReferenceClientRect: props.clientRect as () => DOMRect,
-          appendTo: () => document.body,
+          appendTo: () => host,
           content: component.element,
           showOnCreate: true,
           interactive: true,

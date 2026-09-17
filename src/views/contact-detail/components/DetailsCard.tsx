@@ -1,22 +1,13 @@
 /**
- * DetailsCard — Left-column card displaying contact facts: location, email,
- * phone, birthday, industry, preferences, interests, and follow-up dates.
+ * DetailsCard: the left-column card with a contact's facts. Location, email,
+ * phone, birthday, industry, preferences, interests and the next follow-up.
+ *
+ * Every fact is a `Field`: a sentence case label, the value, and at most one
+ * way to add another. The heading stays uppercase, one step above the labels.
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { useState } from "react";
-import {
-  MapPin,
-  Mail,
-  Phone,
-  Cake,
-  Globe,
-  Coffee,
-  Heart,
-  Sparkles,
-  X,
-  Activity,
-} from "lucide-react";
+import React from "react";
 
 import type {
   Contact,
@@ -24,16 +15,13 @@ import type {
   ContactAddress,
 } from "../../../types";
 import { cn } from "../../../lib/utils";
-import {
-  LABEL,
-  LABEL_PRIMARY,
-  CARD,
-  SECTION_HEADING,
-} from "../../../lib/styles";
+import { CARD, SECTION_HEADING } from "../../../lib/styles";
 
 import { LocationMiniMap } from "../../map/LocationMiniMap";
 import { IndustryField } from "./IndustryField";
 import { BirthdayField } from "./BirthdayField";
+import { ChipInput, type Chip } from "./ChipInput";
+import { Field, FIELD_VALUE, showUndoToast } from "./Field";
 import {
   MultiValueField,
   EMAIL_LABELS,
@@ -54,6 +42,24 @@ export interface DetailsCardProps {
   };
 }
 
+/**
+ * The parts of the comma-joined preferences string: trimmed, with no blanks
+ * and no repeats. A repeat that differs only in case is a repeat, because
+ * each part is also a chip id, and two chips must not share one.
+ */
+const splitPreferences = (text: string | null | undefined): string[] => {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const raw of (text ?? "").split(",")) {
+    const part = raw.trim();
+    const key = part.toLowerCase();
+    if (!part || seen.has(key)) continue;
+    seen.add(key);
+    parts.push(part);
+  }
+  return parts;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
@@ -64,9 +70,6 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   onUpdate,
   updateContact,
 }) => {
-  const [newInterest, setNewInterest] = useState("");
-  const [newPreference, setNewPreference] = useState("");
-
   /**
    * The addresses, from the address list or from the single legacy
    * `location` field. The mini map below reads the same list, so a contact
@@ -84,287 +87,180 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
         : [];
   const isPlaced = contact.lat !== null && contact.lng !== null;
 
-  const handleAddInterest = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && newInterest.trim()) {
-      e.preventDefault();
-      const updated = [
-        ...(contact.interests || []),
-        {
-          id: Math.random().toString(),
-          interest: newInterest.trim(),
-          isAiGenerated: false,
-        },
-      ];
-      updateContact.mutate({ id: contactId, data: { interests: updated } });
-      setNewInterest("");
-    }
+  // Preferences are one string on the contact, so a chip is one part of it.
+  // Its id comes from its text: the same preference keeps the same chip.
+  const preferences = splitPreferences(contact.preferences);
+  const preferenceChips: Chip[] = preferences.map((text) => ({
+    id: `pref:${text.toLowerCase()}`,
+    label: text,
+  }));
+
+  const addPreference = (text: string) => {
+    // "Tea, Jazz" is two preferences, and a comma inside one would split it
+    // on the next read anyway.
+    const next = splitPreferences([...preferences, text].join(","));
+    if (next.length === preferences.length) return;
+    onUpdate("preferences", next.join(", "));
   };
 
-  const handleRemoveInterest = (interestId: string) => {
-    const updated = (contact.interests || []).filter(
-      (i: { id: string }) => i.id !== interestId,
+  const removePreference = (chip: Chip) => {
+    const before = contact.preferences ?? "";
+    const next = preferences.filter(
+      (text) => text.toLowerCase() !== chip.label.toLowerCase(),
     );
-    updateContact.mutate({ id: contactId, data: { interests: updated } });
+    onUpdate("preferences", next.join(", "));
+    showUndoToast(`Removed "${chip.label}"`, () =>
+      onUpdate("preferences", before),
+    );
+  };
+
+  const interests = contact.interests ?? [];
+  const interestChips: Chip[] = interests.map((interest) => ({
+    id: interest.id,
+    label: interest.interest,
+    ai: !!interest.isAiGenerated,
+  }));
+
+  const saveInterests = (next: ContactUpdateData["interests"]) =>
+    updateContact.mutate({ id: contactId, data: { interests: next } });
+
+  const addInterest = (text: string) =>
+    saveInterests([
+      ...interests,
+      { id: Math.random().toString(), interest: text, isAiGenerated: false },
+    ]);
+
+  const removeInterest = (chip: Chip) => {
+    const before = interests;
+    saveInterests(interests.filter((interest) => interest.id !== chip.id));
+    showUndoToast(`Removed "${chip.label}"`, () => saveInterests(before));
   };
 
   return (
-    <div className={cn(CARD, "space-y-4")}>
+    <div className={cn(CARD, "space-y-5")}>
       {/* h2: the first section under the contact's name, which is the h1. */}
       <h2 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h2>
 
-      {/* Location */}
-      <div className="flex items-start gap-4 group">
-        <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <span className={LABEL}>Location</span>
-          <MultiValueField
-            items={addressItems}
-            onSave={(updated) =>
-              updateContact.mutate({
-                id: contactId,
-                data: {
-                  addresses: updated.map((a, i) => ({
-                    address: a.value,
-                    label: a.label || "home",
-                    isPrimary: i === 0,
-                  })),
-                },
-              })
-            }
-            labelOptions={ADDR_LABELS}
-            emptyPlaceholder="Add Location..."
-            inputPlaceholder="San Francisco, CA"
-            isAddress
-            mapHref={isPlaced ? `/map/contact/${contactId}` : undefined}
-          />
-          <LocationMiniMap
-            contact={contact}
-            hasAddress={addressItems.length > 0}
-          />
-        </div>
-      </div>
+      {/* The list fields draw their own "+ Add" under their rows, so the
+          Field gets no `onAdd`. */}
+      <Field label="Location">
+        <MultiValueField
+          items={addressItems}
+          onSave={(updated) =>
+            updateContact.mutate({
+              id: contactId,
+              data: {
+                addresses: updated.map((a, i) => ({
+                  address: a.value,
+                  label: a.label || "home",
+                  isPrimary: i === 0,
+                })),
+              },
+            })
+          }
+          labelOptions={ADDR_LABELS}
+          noun="address"
+          addLabel="Add location"
+          inputPlaceholder="San Francisco, CA"
+          isAddress
+          mapHref={isPlaced ? `/map/contact/${contactId}` : undefined}
+        />
+        <LocationMiniMap
+          contact={contact}
+          hasAddress={addressItems.length > 0}
+        />
+      </Field>
 
-      {/* Email */}
-      <div className="flex items-start gap-4 group">
-        <Mail className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <span className={LABEL}>Email</span>
-          <MultiValueField
-            items={(contact.emails ?? []).map((e) => ({
-              id: e.id,
-              value: e.email,
-              label: e.label || "personal",
-            }))}
-            onSave={(updated) =>
-              updateContact.mutate({
-                id: contactId,
-                data: {
-                  emails: updated.map((e, i) => ({
-                    email: e.value,
-                    label: e.label,
-                    isPrimary: i === 0,
-                  })),
-                },
-              })
-            }
-            labelOptions={EMAIL_LABELS}
-            emptyPlaceholder="Add Email..."
-            inputPlaceholder="email@example.com"
-          />
-        </div>
-      </div>
+      <Field label="Email">
+        <MultiValueField
+          items={(contact.emails ?? []).map((e) => ({
+            id: e.id,
+            value: e.email,
+            label: e.label || "personal",
+          }))}
+          onSave={(updated) =>
+            updateContact.mutate({
+              id: contactId,
+              data: {
+                emails: updated.map((e, i) => ({
+                  email: e.value,
+                  label: e.label,
+                  isPrimary: i === 0,
+                })),
+              },
+            })
+          }
+          labelOptions={EMAIL_LABELS}
+          noun="email"
+          addLabel="Add email"
+          inputPlaceholder="email@example.com"
+        />
+      </Field>
 
-      {/* Phone */}
-      <div className="flex items-start gap-4 group">
-        <Phone className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col gap-1">
-          <span className={LABEL}>Phone</span>
-          <MultiValueField
-            items={(contact.phones ?? []).map((p) => ({
-              id: p.id,
-              value: p.phone,
-              label: p.label || "mobile",
-            }))}
-            onSave={(updated) =>
-              updateContact.mutate({
-                id: contactId,
-                data: {
-                  phones: updated.map((p, i) => ({
-                    phone: p.value,
-                    label: p.label,
-                    isPrimary: i === 0,
-                  })),
-                },
-              })
-            }
-            labelOptions={PHONE_LABELS}
-            emptyPlaceholder="Add Phone..."
-            inputPlaceholder="+1 (555) 000-0000"
-          />
-        </div>
-      </div>
+      <Field label="Phone">
+        <MultiValueField
+          items={(contact.phones ?? []).map((p) => ({
+            id: p.id,
+            value: p.phone,
+            label: p.label || "mobile",
+          }))}
+          onSave={(updated) =>
+            updateContact.mutate({
+              id: contactId,
+              data: {
+                phones: updated.map((p, i) => ({
+                  phone: p.value,
+                  label: p.label,
+                  isPrimary: i === 0,
+                })),
+              },
+            })
+          }
+          labelOptions={PHONE_LABELS}
+          noun="phone"
+          addLabel="Add phone"
+          inputPlaceholder="+1 (555) 000-0000"
+        />
+      </Field>
 
-      {/* Birthday */}
-      <div className="flex items-start gap-4 group">
-        <Cake className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col">
-          <span className={LABEL}>Birthday</span>
-          <BirthdayField
-            value={contact.birthday}
-            onSave={(val) => onUpdate("birthday", val)}
-          />
-        </div>
-      </div>
+      <Field label="Birthday">
+        <BirthdayField
+          value={contact.birthday}
+          onSave={(val) => onUpdate("birthday", val)}
+        />
+      </Field>
 
-      {/* Industry */}
-      <div className="flex items-start gap-4 group">
-        <Globe className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col">
-          <span className={LABEL}>Industry</span>
-          <IndustryField
-            value={contact.industry}
-            onSave={(val) => onUpdate("industry", val)}
-          />
-        </div>
-      </div>
+      <Field label="Industry">
+        <IndustryField
+          value={contact.industry}
+          onSave={(val) => onUpdate("industry", val)}
+        />
+      </Field>
 
-      {/* Preferences */}
-      <div className="flex items-start gap-4 group">
-        <Coffee className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col">
-          <span className={LABEL}>Preferences</span>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {contact.preferences && contact.preferences.trim() ? (
-              contact.preferences
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-                .map((pref: string, idx: number) => (
-                  // No overflow clip: it would clip the remove button's tap
-                  // box. `max-w-full` and `min-w-0` keep a long word inside.
-                  <div
-                    key={idx}
-                    className="group/pill w-fit max-w-full flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full bg-surface-container text-on-surface-variant transition-all"
-                  >
-                    <span className="min-w-0 whitespace-normal break-words">
-                      {pref}
-                    </span>
-                    <button
-                      aria-label={`Remove preference ${pref}`}
-                      onClick={() => {
-                        const newPrefs = contact
-                          .preferences!.split(",")
-                          .map((s: string) => s.trim())
-                          .filter(Boolean);
-                        newPrefs.splice(idx, 1);
-                        onUpdate("preferences", newPrefs.join(", "));
-                      }}
-                      className="hit-area w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))
-            ) : (
-              <span className="text-sm font-medium text-on-surface-variant italic">
-                No preferences logged
-              </span>
-            )}
-          </div>
-          <input
-            aria-label="Add a preference"
-            type="text"
-            value={newPreference}
-            onChange={(e) => setNewPreference(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newPreference.trim()) {
-                e.preventDefault();
-                const current = contact.preferences
-                  ? contact.preferences
-                      .split(",")
-                      .map((s: string) => s.trim())
-                      .filter(Boolean)
-                  : [];
-                current.push(newPreference.trim());
-                onUpdate("preferences", current.join(", "));
-                setNewPreference("");
-              }
-            }}
-            placeholder="Add Preference"
-            className="mt-2 min-h-[44px] sm:min-h-0 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
-          />
-        </div>
-      </div>
+      <Field label="Preferences">
+        <ChipInput
+          chips={preferenceChips}
+          onAdd={addPreference}
+          onRemove={removePreference}
+          noun="preference"
+        />
+      </Field>
 
-      {/* Interests */}
-      <div className="flex items-start gap-4 group">
-        <Heart className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-        <div className="flex-1 min-w-0 flex flex-col">
-          <span className={LABEL}>Interests</span>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {contact.interests && contact.interests.length > 0 ? (
-              contact.interests.map(
-                (interest: {
-                  id: string;
-                  interest: string;
-                  isAiGenerated?: boolean;
-                }) => (
-                  <div
-                    key={interest.id}
-                    className={cn(
-                      "group/pill w-fit max-w-full flex items-center gap-1.5 text-xs font-bold py-1 px-2.5 rounded-full transition-all",
-                      // The AI colour marks what enrichment found, and
-                      // nothing else.
-                      interest.isAiGenerated
-                        ? "bg-ai/10 text-on-ai-wash border border-ai/20"
-                        : "bg-surface-container text-on-surface-variant border border-transparent",
-                    )}
-                  >
-                    {!!interest.isAiGenerated && (
-                      <Sparkles className="w-3 h-3 opacity-70 shrink-0" />
-                    )}
-                    <span className="min-w-0 whitespace-normal break-words">
-                      {interest.interest}
-                    </span>
-                    <button
-                      aria-label={`Remove interest ${interest.interest}`}
-                      onClick={() => handleRemoveInterest(interest.id)}
-                      className="hit-area w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ),
-              )
-            ) : (
-              <span className="text-sm font-medium text-on-surface-variant italic">
-                No interests logged
-              </span>
-            )}
-          </div>
-          <input
-            aria-label="Add an interest"
-            type="text"
-            value={newInterest}
-            onChange={(e) => setNewInterest(e.target.value)}
-            onKeyDown={handleAddInterest}
-            placeholder="Add Interest"
-            className="mt-2 min-h-[44px] sm:min-h-0 text-xs bg-transparent border-b border-surface-container-highest focus:border-primary outline-none py-1 placeholder-on-surface-variant/50 text-on-surface w-full max-w-[200px] transition-colors"
-          />
-        </div>
-      </div>
+      <Field label="Interests">
+        <ChipInput
+          chips={interestChips}
+          onAdd={addInterest}
+          onRemove={removeInterest}
+          noun="interest"
+        />
+      </Field>
 
-      {/* Follow-Up */}
       {contact.nextFollowUpAt && (
-        <div className="flex items-start gap-4 group mt-6 pt-4">
-          <Activity className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-          <div className="flex-1 min-w-0 flex flex-col">
-            <span className={LABEL_PRIMARY}>Next Follow Up</span>
-            <span className="text-sm font-bold text-on-surface">
-              {new Date(contact.nextFollowUpAt).toLocaleString()}
-            </span>
-          </div>
-        </div>
+        <Field label="Next follow-up">
+          <span className={FIELD_VALUE}>
+            {new Date(contact.nextFollowUpAt).toLocaleString()}
+          </span>
+        </Field>
       )}
     </div>
   );

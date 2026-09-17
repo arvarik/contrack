@@ -236,7 +236,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
 - `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`
-- `src/components/` — Feature components: `ImportModal.tsx`, `QuickInteractionModal.tsx`, `RichInteractionComposer.tsx`, `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `HealthRingAvatar.tsx`, `FloatingContactCard.tsx`
+- `src/components/` — Feature components: `ImportModal.tsx`, `QuickInteractionModal.tsx` (the dialog around the compact composer), `InteractionComposer.tsx` (the one composer, contact page and dialog), `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `HealthRingAvatar.tsx`, `FloatingContactCard.tsx`
 - `src/views/` — Route-driven page components:
   - `src/views/contact-list/` — Network list (left panel)
   - `src/views/contact-detail/` — Contact profile (right panel)

@@ -42,9 +42,9 @@ import { EmptyState } from "../../../components/ui/EmptyState";
  * fetch, not a blocking one, so by the time anyone reaches for the keyboard
  * it has almost always landed — without making the first keystroke wait.
  */
-const RichInteractionComposer = React.lazy(() =>
-  import("../../../components/RichInteractionComposer").then((m) => ({
-    default: m.RichInteractionComposer,
+const InteractionComposer = React.lazy(() =>
+  import("../../../components/InteractionComposer").then((m) => ({
+    default: m.InteractionComposer,
   })),
 );
 import { InteractionDetailModal } from "./InteractionDetailModal";
@@ -58,6 +58,9 @@ import { activateOnKey } from "../../../lib/a11y";
 
 export interface TimelineTabProps {
   contactId: string;
+  /** True after "Log interaction", until the composer has taken focus. */
+  composerFocusRequested?: boolean;
+  onComposerFocused?: () => void;
   timeline: Interaction[];
   timelineLoading: boolean;
   isDragActive: boolean;
@@ -184,6 +187,8 @@ const InteractionContent = React.memo(({ html }: { html: string }) => {
 
 const TimelineTabInner: React.FC<TimelineTabProps> = ({
   contactId,
+  composerFocusRequested = false,
+  onComposerFocused,
   timeline,
   timelineLoading,
   isDragActive,
@@ -270,7 +275,11 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
       </AnimatePresence>
 
       <Suspense fallback={<ComposerPlaceholder />}>
-        <RichInteractionComposer contactId={contactId} />
+        <InteractionComposer
+          contactId={contactId}
+          focusRequested={composerFocusRequested}
+          onFocusHandled={onComposerFocused}
+        />
       </Suspense>
 
       {/* Empty State */}

@@ -103,20 +103,22 @@ A timeline chart showing contact additions over time, with:
 
 ---
 
-## Quick Note Modal (`Cmd+Shift+I`)
+## Quick Interaction Dialog (`Cmd+Shift+I`)
 
 A system-wide shortcut for rapid interaction logging from anywhere in the app:
 
-1. Press `Cmd+Shift+I` to open
-2. **Fuzzy-search** to select a contact
-3. Choose type (Note / Call / Meeting / Email)
-4. Write your note in the auto-growing textarea
-5. Press `Cmd+Enter` to save
+1. Press `Cmd+Shift+I` to open the "Log an interaction" dialog.
+2. Search for the contact and press Enter. Focus moves to the editor.
+3. Write the note. Type `@` to mention another person.
+4. Choose the type (Note, Call, Meeting, Email), and add a next action if you want a follow-up task.
+5. Press `Cmd+Enter`, or Save.
 
-The modal automatically:
+The dialog draws the same composer as the contact page, in its compact form, so mentions and the next-action line work the same way in both. See [Logging Interactions](contact-management.md#logging-interactions).
 
-- Invalidates the contact's React Query cache
+On save, the dialog:
+
+- Refreshes the contact's timeline and the views that show the contact
 - Triggers relationship score recomputation
-- Closes with a success toast
+- Closes with a toast such as "Note logged for Ada Lovelace"
 
-This is the fastest way to log an interaction — no navigation required.
+`QuickInteractionModal` takes an optional `initialContactId`. With it the dialog opens for that contact, shows the name instead of the search, and starts in the editor.

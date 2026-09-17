@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { activateOnKey } from "../../../lib/a11y";
+import React, { useEffect, useRef, useState } from "react";
+import { cn } from "../../../lib/utils";
+import { EditHint } from "./EditableField";
 
 export const BirthdayField = ({
   value,
@@ -9,6 +10,19 @@ export const BirthdayField = ({
   onSave: (val: string) => void;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  /**
+   * True when a key closed the date input. The input leaves the page, so
+   * focus goes back to the value, as it does for every other value in the
+   * card.
+   */
+  const refocus = useRef(false);
+
+  useEffect(() => {
+    if (isEditing || !refocus.current) return;
+    refocus.current = false;
+    button.current?.focus();
+  }, [isEditing]);
 
   // Normalize stored value to YYYY-MM-DD for the input
   const toInputValue = (v: string | null): string => {
@@ -75,6 +89,16 @@ export const BirthdayField = ({
         defaultValue={toInputValue(value)}
         onChange={handleChange}
         onBlur={() => setIsEditing(false)}
+        onKeyDown={(e) => {
+          // A date saves as soon as it is whole, so Enter and Escape both
+          // only close the input.
+          if (e.key === "Enter" || e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            refocus.current = true;
+            setIsEditing(false);
+          }
+        }}
         className="min-h-[44px] sm:min-h-0 text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none w-full"
       />
     );
@@ -83,25 +107,26 @@ export const BirthdayField = ({
   const display = formatDisplay(value);
 
   return (
-    <div
-      onKeyDown={activateOnKey(() => setIsEditing(true))}
-      tabIndex={0}
-      role="button"
-      onClick={() => setIsEditing(true)}
-      // 44 px tall on a phone: the whole row is the tap target.
-      className="flex items-center gap-2 min-h-[44px] sm:min-h-0 cursor-text group/bday"
-    >
-      <span
-        className={`text-sm font-medium py-0.5 px-2 -ml-2 rounded transition-colors hover:bg-surface-container-high ${
+    // 44 px tall on a phone, so the row gives the value's tap box room.
+    <div className="flex flex-wrap items-center gap-2 min-h-[44px] sm:min-h-0">
+      {/* A real button: Enter and Space open the date input with no key
+          handler, and `group/edit` shows the pencil on keyboard focus. */}
+      <button
+        ref={button}
+        type="button"
+        onClick={() => setIsEditing(true)}
+        className={cn(
+          "group/edit hit-area inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-text transition-colors hover:bg-surface-container-high",
           display
             ? "text-on-surface"
             : // Italic rather than half-opacity: the same prompt measured
               // 2.19:1 on a white card, and it is text somebody has to read.
-              "text-on-surface-variant italic"
-        }`}
+              "text-on-surface-variant italic",
+        )}
       >
-        {display || "Add Birthday..."}
-      </span>
+        <span className="min-w-0 break-words">{display || "Add birthday"}</span>
+        <EditHint />
+      </button>
       {upcomingDays !== null && (
         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-warning shrink-0">
           {upcomingDays === 0 ? "🎂 Today!" : `🎂 in ${upcomingDays}d`}

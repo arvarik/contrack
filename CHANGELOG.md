@@ -130,6 +130,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A contact header with one primary action.** The name is followed by the
+  role at the company on one line, and then a meta line of plain facts: the
+  location, the person's local time and the weather. Social links and the
+  website follow as links with a `↗` glyph that open in a new tab, each with
+  its own small menu. Tags are chips with a "+ tag" button. The header shows
+  one primary button, "Log interaction", which opens the Timeline tab and puts
+  focus in the composer. Every other action is in "Contact actions": Change
+  colour, Change avatar, Copy basic details, Copy full details, Archive and
+  Delete, with Delete last on its own surface tone. The palette icon, the
+  archive icon, the avatar's hover button and the unlabelled sparkle are gone
+  from the header. The menu follows the menu pattern: focus moves into it,
+  the arrow keys, Home, End and a first letter move, and Escape returns to the
+  button. The colour picker opens from the menu as a radiogroup named
+  "Contact colour". The weather is fetched only when it is shown, so the
+  settings revamp's switch can turn the request off with it.
+- **The briefing lives in the Dossier tab.** A "Briefing" card at the top of
+  the tab offers "Generate briefing", shows the three points inline with when
+  they were written, and offers "Regenerate briefing". A briefing that fails
+  says so in the card. It used to be a 28 px sparkle beside the company that
+  opened a modal and, on an error, showed a spinner that never ended.
+- **One pattern for every detail.** Each value in the Details card is a
+  `Field`: a 12 px sentence-case label, the value, its label select and a row
+  menu, and a "+ Add" button under the list. A value edits in place with a
+  click or Enter, and Escape cancels. A pencil after the value shows at 40
+  percent on a touch screen and on keyboard focus. The row menu holds Make
+  primary, Show on map (address rows) and Remove, and the first address
+  says "Map pin" in plain text. A row moves with Alt+Arrow Up and Alt+Arrow
+  Down, a screen reader hears its new position, and the drag handle shows
+  while the row's menu is open. The label select is a 32 px chip at every
+  width. Tags, preferences and interests share one `ChipInput`, and removing
+  a preference or an interest now offers Undo too. Birthday and Industry are
+  real buttons with the same pencil. The italic "Add another", the
+  underlined bare inputs and the per-row "Show on map" link are gone. The
+  shortcuts dialog lists Enter, Escape and the Alt+Arrow moves under a new
+  "Contact" group, and ⌘ Enter under Global.
+- **One composer.** `InteractionComposer` replaces `RichInteractionComposer`
+  and the textarea inside `QuickInteractionModal`. The quick interaction
+  dialog now has @mentions and the next-action line too. The type is a
+  radiogroup, Note, Call, Meeting and Email, with text from `sm` and icons
+  below. Save is always enabled: a Save with nothing written says "Write
+  something first" and moves focus to the editor, and in the dialog a Save
+  with no contact says "Choose a contact first". A "⌘ Enter to save" hint
+  sits at the end of the next-action line, and ⌘ Enter works from that line
+  as well as the editor. The mention list opens inside the dialog, where it
+  can be clicked, and its avatars fit their rows. `QuickInteractionModal` keeps `isOpen` and `onClose` and gains
+  `initialContactId`, which opens it for one person without the contact
+  search. The dialog loads the composer only when it opens.
 - **The map is MapLibre GL JS on OpenFreeMap vector tiles.** Leaflet, its
   cluster plugin and the raster basemap are gone. The basemap is OpenFreeMap's
   `positron` in the light palette and `dark` in the dark one. Neither needs an
@@ -159,6 +206,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Typing `@` in the composer finds people even when the contact names had not
+  loaded when the editor was created. The editor kept the list it was created
+  with, which could be empty.
+- An inline edit closed with Enter or Escape gives focus back to the value.
+  Focus used to fall to the page.
+- ⌘⇧I opens the quick interaction dialog when the browser reports the key as
+  a capital "I".
 - The temperature on a contact arrives at its full colour. It used to fade in
   from nothing, which is text below its contrast for as long as the fade
   lasts, and an accessibility scan that started in that window read it as a

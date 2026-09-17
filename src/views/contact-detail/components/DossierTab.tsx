@@ -2,13 +2,24 @@
  * DossierTab — The "Dossier" tab content showing AI-generated background
  * research, custom attributes, about section, work experience, and education.
  *
+ * The briefing card sits at the top. A briefing is a read-before-you-meet
+ * summary of the profile and the past notes, which is the same kind of
+ * reading as the dossier under it.
+ *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React, { useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Briefcase, ChevronDown, FileText, Sparkles } from "lucide-react";
+import {
+  Briefcase,
+  ChevronDown,
+  FileText,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
 
 import type {
   Contact,
@@ -21,13 +32,29 @@ import {
   SECTION_HEADING_SPACED,
   STATUS_BADGE_SUCCESS,
 } from "../../../lib/styles";
+import { parseBriefingPoints } from "../../../lib/safeParse";
+import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** The `useGenerateBriefing()` mutation, or anything shaped like it. */
+export interface BriefingMutation {
+  mutate: (
+    id: string,
+    opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
+  ) => void;
+  isPending: boolean;
+}
+
 export interface DossierTabProps {
   contact: Contact;
+  /**
+   * Writes a new briefing. Optional so the dossier can render on its own.
+   * Without it the briefing card shows the saved points and no button.
+   */
+  generateBriefing?: BriefingMutation;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -57,7 +84,7 @@ const EmptyDossier = ({ name }: { name: string }) => (
       <p className="text-sm text-on-surface-variant text-pretty">
         The dossier collects background on {name}: what they do, where they have
         worked and studied, and anything else worth remembering. Contact
-        Enrichment researches that from the web and fills it in.
+        enrichment researches that from the web and fills it in.
       </p>
     </div>
     <Link to="/settings/ai-search" className="btn-primary">
@@ -71,7 +98,138 @@ const EmptyDossier = ({ name }: { name: string }) => (
   </motion.div>
 );
 
-const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
+/** A briefing older than this is stale: the notes have likely moved on. */
+const BRIEFING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * The briefing: three points to read before a conversation.
+ *
+ * It was a sparkle button beside the company name that opened a modal. The
+ * button had no label, and the modal covered the page the points were about.
+ * Here it is a card at the top of the dossier. It has a labelled button, and
+ * the points stay on screen while the person scrolls.
+ */
+function BriefingCard({
+  contact,
+  generateBriefing,
+}: {
+  contact: Contact;
+  generateBriefing?: BriefingMutation;
+}) {
+  const headingId = useId();
+  const [failed, setFailed] = useState(false);
+  const pending = generateBriefing?.isPending ?? false;
+
+  // The points of a briefing written in the last three days. An older one
+  // counts as no briefing, so the card offers to write a new one.
+  const points = useMemo(() => {
+    if (!contact.aiBriefing || !contact.aiBriefingAt) return [];
+    const age = Date.now() - new Date(contact.aiBriefingAt).getTime();
+    if (age >= BRIEFING_MAX_AGE_MS) return [];
+    return parseBriefingPoints(contact.aiBriefing);
+  }, [contact.aiBriefing, contact.aiBriefingAt]);
+  const hasBriefing = points.length > 0;
+
+  const generate = () => {
+    if (!generateBriefing || pending) return;
+    setFailed(false);
+    generateBriefing.mutate(contact.id, {
+      onSuccess: () => setFailed(false),
+      onError: () => setFailed(true),
+    });
+  };
+
+  return (
+    <section aria-labelledby={headingId} className={cn(CARD, "min-w-0")}>
+      <h2 id={headingId} className={SECTION_HEADING_SPACED}>
+        <Sparkles aria-hidden="true" className="w-4 h-4" /> Briefing
+      </h2>
+      <p className="text-sm text-on-surface-variant text-pretty">
+        Three points to read before you talk: what you last discussed, what is
+        still open, and something to open with.
+      </p>
+
+      {pending ? (
+        <div className="mt-4">
+          <SkeletonText lines={3} />
+        </div>
+      ) : (
+        hasBriefing && (
+          <ul className="mt-4 space-y-3">
+            {points.map((point, index) => (
+              <li key={index} className="flex gap-3">
+                <span aria-hidden="true" className="text-primary font-bold">
+                  •
+                </span>
+                <span className="text-sm leading-relaxed text-on-surface">
+                  {point}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+
+      {/* Always in the page, so a screen reader announces the text when it
+          arrives. Empty, it takes no space. */}
+      <p
+        role="status"
+        className="mt-3 empty:mt-0 text-sm font-medium text-on-surface-variant"
+      >
+        {pending ? "Writing the briefing…" : ""}
+      </p>
+
+      {failed && !pending && (
+        <p role="alert" className="mt-3 text-sm font-medium text-error">
+          Could not write the briefing. Check that AI is set up in Settings,
+          then try again.
+        </p>
+      )}
+
+      {(generateBriefing || (hasBriefing && !pending)) && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          {hasBriefing && !pending && contact.aiBriefingAt && (
+            <p className="text-xs text-on-surface-variant">
+              Generated{" "}
+              {formatDistanceToNow(new Date(contact.aiBriefingAt), {
+                addSuffix: true,
+              })}
+            </p>
+          )}
+          {generateBriefing && (
+            <button
+              type="button"
+              onClick={generate}
+              disabled={pending}
+              aria-busy={pending}
+              className={cn(
+                hasBriefing ? "btn-secondary" : "btn-primary",
+                "ml-auto",
+              )}
+            >
+              {hasBriefing ? (
+                <>
+                  <RefreshCw aria-hidden="true" className="w-4 h-4" />
+                  Regenerate briefing
+                </>
+              ) : (
+                <>
+                  <Sparkles aria-hidden="true" className="w-4 h-4" />
+                  Generate briefing
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const DossierTabInner: React.FC<DossierTabProps> = ({
+  contact,
+  generateBriefing,
+}) => {
   // Every section below is conditional, so "nothing to show" needs answering
   // once, here, rather than as a blank space.
   const hasContent =
@@ -81,8 +239,21 @@ const DossierTabInner: React.FC<DossierTabProps> = ({ contact }) => {
     (contact.experience?.length ?? 0) > 0 ||
     (contact.education?.length ?? 0) > 0;
 
-  if (!hasContent) return <EmptyDossier name={contact.name} />;
+  return (
+    <div className="flex flex-col gap-6">
+      {/* First, and shown whether or not there is a dossier yet. */}
+      <BriefingCard contact={contact} generateBriefing={generateBriefing} />
+      {hasContent ? (
+        <DossierContent contact={contact} />
+      ) : (
+        <EmptyDossier name={contact.name} />
+      )}
+    </div>
+  );
+};
 
+/** Every dossier section that has something to show. */
+const DossierContent = ({ contact }: { contact: Contact }) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}

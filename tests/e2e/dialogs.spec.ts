@@ -109,7 +109,7 @@ test("a search result opens a contact dialog that returns focus to the result", 
     dialog.getByRole("button", { name: "Close contact details" }),
   ).toBeFocused();
   await expect(
-    dialog.getByRole("button", { name: "Change avatar" }),
+    dialog.getByRole("button", { name: "Log interaction" }),
   ).toBeVisible();
 
   await expectFocusStaysWithin(page, dialog, 6);
