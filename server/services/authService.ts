@@ -193,6 +193,7 @@ export interface SessionInfo {
   expiresAt: string;
   lastSeenAt: string;
   userAgent: string | null;
+  method: string | null;
   /** True for the session making the current request. */
   current: boolean;
 }
@@ -678,9 +679,14 @@ function sessionKey(secret: string): string {
  * @returns the secret to put in the cookie — the only time it exists in
  *   plaintext anywhere.
  */
+export interface CreateSessionOptions {
+  method?: string | null;
+}
+
 export function createSession(
   userId: string,
   userAgent?: string | null,
+  options?: CreateSessionOptions,
 ): { secret: string; expiresAt: string } {
   const secret = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(
@@ -689,14 +695,15 @@ export function createSession(
 
   sqlite
     .prepare(
-      `INSERT INTO sessions (id, userId, expiresAt, userAgent)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, userId, expiresAt, userAgent, method)
+       VALUES (?, ?, ?, ?, ?)`,
     )
     .run(
       sessionKey(secret),
       userId,
       expiresAt,
       userAgent ? userAgent.slice(0, USER_AGENT_MAX) : null,
+      options?.method ?? null,
     );
 
   return { secret, expiresAt };
@@ -754,7 +761,7 @@ export function listSessions(
 ): SessionInfo[] {
   const rows = sqlite
     .prepare(
-      `SELECT id, createdAt, expiresAt, lastSeenAt, userAgent
+      `SELECT id, createdAt, expiresAt, lastSeenAt, userAgent, method
          FROM sessions
         WHERE userId = ? AND datetime(expiresAt) > datetime('now')
         ORDER BY lastSeenAt DESC`,

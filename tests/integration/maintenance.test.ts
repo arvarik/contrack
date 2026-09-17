@@ -61,6 +61,8 @@ function clearAll(): void {
     DELETE FROM invitations;
     DELETE FROM api_tokens;
     DELETE FROM sessions;
+    DELETE FROM auth_challenges;
+    DELETE FROM passkeys;
     DELETE FROM ai_invocations;
     DELETE FROM imports;
   `);
@@ -115,6 +117,15 @@ function insertToken(
       fields.revokedAt ?? null,
       fields.expiresAt ?? null,
     );
+}
+
+function insertChallenge(id: string, expiresAt: string): void {
+  sqlite
+    .prepare(
+      `INSERT INTO auth_challenges (id, kind, challenge, expiresAt)
+       VALUES (?, 'login', 'challenge_payload', ?)`,
+    )
+    .run(id, expiresAt);
 }
 
 function insertInvitation(
@@ -243,6 +254,15 @@ describe("the daily sweep", () => {
     expect(ids("sessions")).toEqual(["live"]);
   });
 
+  it("removes an auth challenge whose expiry has passed", () => {
+    insertChallenge("expired", daysAgo(1));
+    insertChallenge("live", daysAhead(1));
+
+    const counts = runDailyMaintenance();
+    expect(counts.expiredChallenges).toBe(1);
+    expect(ids("auth_challenges")).toEqual(["live"]);
+  });
+
   it("removes one that expired earlier today, in the format a sign-in writes", () => {
     // `createSession` writes `new Date(...).toISOString()`, not
     // `CURRENT_TIMESTAMP`. SQLite compares TEXT byte by byte, and the two
@@ -344,9 +364,10 @@ describe("the daily sweep", () => {
     expect(ids("ai_invocations")).toEqual(["recent"]);
   });
 
-  it("sweeps all six tables in one pass", () => {
+  it("sweeps all seven tables in one pass", () => {
     insertAudit("a", daysAgo(AUDIT_RETENTION_DAYS + 1));
     insertSession("s", daysAgo(1), owner);
+    insertChallenge("c", daysAgo(1));
     insertToken("t", owner, {
       revokedAt: daysAgo(REVOKED_TOKEN_RETENTION_DAYS + 1),
     });
@@ -361,6 +382,7 @@ describe("the daily sweep", () => {
     expect(runDailyMaintenance()).toEqual({
       auditRows: 1,
       expiredSessions: 1,
+      expiredChallenges: 1,
       agedTokens: 1,
       deadInvitations: 1,
       oldInvocations: 1,
@@ -374,6 +396,7 @@ describe("the daily sweep", () => {
     for (const table of [
       "audit_log",
       "sessions",
+      "auth_challenges",
       "api_tokens",
       "invitations",
       "ai_invocations",
@@ -388,6 +411,7 @@ describe("the daily sweep", () => {
     expect(runDailyMaintenance()).toEqual({
       auditRows: 0,
       expiredSessions: 0,
+      expiredChallenges: 0,
       agedTokens: 0,
       deadInvitations: 0,
       oldInvocations: 0,

@@ -17,6 +17,7 @@ cp .env.example .env
 | `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                                           | `FREE`                 | No       |
 | `PORT`                    | Express listening port                                                                                                                                                                         | `3210`                 | No       |
 | `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`            | No       |
+| `PUBLIC_URL`              | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for WebAuthn/passkey ceremonies and invite links                                     | — (derived)            | No       |
 | `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled)           | No       |
 | `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root           | No       |
 | `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                                     | —                      | No       |
@@ -380,6 +381,13 @@ it. Un-owned rows are re-claimed by the next account you create.
 For access outside your LAN, prefer a private overlay network (e.g. Tailscale)
 or a reverse proxy with TLS in front of the container — the app itself serves
 plain HTTP.
+
+### Passkeys and WebAuthn
+
+Passkeys allow people to sign in using biometrics (Apple Touch ID / Face ID, Windows Hello) or hardware security keys without typing a password.
+
+- **HTTPS and Localhost**: The Web Authentication API (WebAuthn) requires a Secure Context. Passkeys function out of the box on `localhost` during development, or over HTTPS in production. Passkeys are unsupported over plain-HTTP on IP addresses (such as `http://192.168.1.50:3210`). The Account settings screen displays an explanatory banner when loaded in an insecure context.
+- **Reverse Proxies and `PUBLIC_URL`**: When hosting Contrack behind a reverse proxy (such as Caddy, Nginx, Traefik, or Cloudflare) that terminates TLS or rewrites the `Host` header, set `PUBLIC_URL` in your environment (e.g. `PUBLIC_URL="https://crm.example.com"`). WebAuthn mandates that the Relying Party ID (`rpID`) and origin match the exact origin in the browser address bar. Contrack checks `PUBLIC_URL` first, then falls back to `X-Forwarded-Proto` and `X-Forwarded-Host` / `Host`. If your proxy changes `Host` without forwarding client headers, set `PUBLIC_URL` to avoid ceremony verification failures.
 
 ## Data Lifecycle
 

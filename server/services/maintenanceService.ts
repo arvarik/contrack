@@ -37,6 +37,7 @@ export const IMPORT_RETENTION_DAYS = 30;
 export interface MaintenanceCounts {
   auditRows: number;
   expiredSessions: number;
+  expiredChallenges: number;
   agedTokens: number;
   deadInvitations: number;
   oldInvocations: number;
@@ -66,6 +67,7 @@ export function runDailyMaintenance(): MaintenanceCounts {
   const counts: MaintenanceCounts = {
     auditRows: 0,
     expiredSessions: 0,
+    expiredChallenges: 0,
     agedTokens: 0,
     deadInvitations: 0,
     oldInvocations: 0,
@@ -84,6 +86,12 @@ export function runDailyMaintenance(): MaintenanceCounts {
     counts.expiredSessions = sqlite
       .prepare(
         `DELETE FROM sessions WHERE datetime(expiresAt) <= datetime('now')`,
+      )
+      .run().changes;
+
+    counts.expiredChallenges = sqlite
+      .prepare(
+        `DELETE FROM auth_challenges WHERE datetime(expiresAt) <= datetime('now')`,
       )
       .run().changes;
 

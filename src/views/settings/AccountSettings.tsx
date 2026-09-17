@@ -51,6 +51,8 @@ import { SecretReveal } from "../../components/ui/SecretReveal";
 import { CARD, SECTION_HEADING, DANGER_BTN } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
+import { describeDevice } from "../../lib/devices";
+import { PasskeysCard } from "./account/PasskeysCard";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -127,30 +129,10 @@ const SaveButton = ({
   </button>
 );
 
-/** Turn a User-Agent into something a person can recognise their laptop in. */
-function describeDevice(userAgent: string | null): string {
-  if (!userAgent) return "Unknown device";
-  const browser = /Firefox\//.test(userAgent)
-    ? "Firefox"
-    : /Edg\//.test(userAgent)
-      ? "Edge"
-      : /Chrome\//.test(userAgent)
-        ? "Chrome"
-        : /Safari\//.test(userAgent)
-          ? "Safari"
-          : "Browser";
-  const platform = /iPhone|iPad/.test(userAgent)
-    ? "iOS"
-    : /Android/.test(userAgent)
-      ? "Android"
-      : /Mac OS X/.test(userAgent)
-        ? "macOS"
-        : /Windows/.test(userAgent)
-          ? "Windows"
-          : /Linux/.test(userAgent)
-            ? "Linux"
-            : "";
-  return platform ? `${browser} on ${platform}` : browser;
+function formatSessionMethod(method?: string | null): string {
+  if (method === "passkey") return "Passkey";
+  if (method === "link") return "Emailed link";
+  return "Password";
 }
 
 function formatWhen(iso: string): string {
@@ -323,7 +305,8 @@ const SessionRow = ({ session }: { session: SessionSummary }) => (
         )}
       </p>
       <p className="text-xs text-on-surface-variant">
-        Last used {formatWhen(session.lastSeenAt)}
+        Last used {formatWhen(session.lastSeenAt)} ·{" "}
+        {formatSessionMethod(session.method)}
       </p>
     </div>
   </li>
@@ -757,12 +740,15 @@ export const AccountSettings = () => {
       </section>
 
       <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
-        <GroupHeading>Password</GroupHeading>
-        <PasswordCard />
+        <GroupHeading>Sign-in methods</GroupHeading>
+        <div className="space-y-4">
+          <PasswordCard />
+          <PasskeysCard />
+        </div>
       </section>
 
       <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>
-        <GroupHeading>Signed in on</GroupHeading>
+        <GroupHeading>Devices</GroupHeading>
         <SessionsCard />
       </section>
 

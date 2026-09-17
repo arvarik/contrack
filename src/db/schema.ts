@@ -3,6 +3,7 @@ import {
   text,
   integer,
   real,
+  blob,
   primaryKey,
   unique,
   type AnySQLiteColumn,
@@ -194,6 +195,47 @@ export const sessions = sqliteTable("sessions", {
     .default(sql`(CURRENT_TIMESTAMP)`),
   /** Truncated User-Agent, so the sessions list can say which device. */
   userAgent: text("userAgent"),
+  /** Method used to establish the session: 'password' | 'passkey' | 'email-link' | null. */
+  method: text("method"),
+});
+
+/**
+ * passkeys — WebAuthn discoverable credentials.
+ */
+export const passkeys = sqliteTable("passkeys", {
+  /** Credential ID, base64url encoded. */
+  id: text("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** COSE public key bytes. */
+  publicKey: blob("publicKey", { mode: "buffer" }).notNull(),
+  counter: integer("counter").notNull().default(0),
+  /** JSON array of transport strings, or null. */
+  transports: text("transports"),
+  deviceType: text("deviceType").notNull().default("singleDevice"),
+  backedUp: integer("backedUp").notNull().default(0),
+  aaguid: text("aaguid"),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  lastUsedAt: text("lastUsedAt"),
+});
+
+/**
+ * auth_challenges — Temporary WebAuthn ceremony challenges.
+ */
+export const authChallenges = sqliteTable("auth_challenges", {
+  id: text("id").primaryKey(),
+  /** 'register' | 'login'. */
+  kind: text("kind").notNull(),
+  userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
+  challenge: text("challenge").notNull(),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  expiresAt: text("expiresAt").notNull(),
 });
 
 // =============================================================================

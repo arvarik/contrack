@@ -1674,7 +1674,7 @@ Ends every session except the one making the request.
 
 ### `GET /api/auth/sessions` _(account)_
 
-Live sessions for this account, newest first, with `current: true` on the one making the request. `DELETE /api/auth/sessions` revokes all the others and returns `{ "revoked": n }`.
+Live sessions for this account, newest first, with `current: true` on the one making the request. Each row carries `id`, `createdAt`, `lastSeenAt`, `expiresAt`, `ip`, `userAgent`, `current`, and `method` (`"password"`, `"passkey"`, or `null`). `DELETE /api/auth/sessions` revokes all the others and returns `{ "revoked": n }`.
 
 ---
 
@@ -1695,6 +1695,54 @@ curl -X POST http://localhost:3210/api/auth/accept-invitation \
 ```
 
 `404` for a token that is unknown, malformed or empty, with one body for all three. `410 INVITATION_USED`, `410 INVITATION_EXPIRED` or `410 INVITATION_REVOKED` for a link that is real but dead. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/passkeys/register/options` _(account)_
+
+Generate WebAuthn creation options for registering a new passkey. The account must have a live session (a bearer token returns `403 SESSION_REQUIRED`). If the account has a temporary password, returns `403 PASSWORD_CHANGE_REQUIRED`. Returns `{ ceremonyId, options }`. Challenges expire in 5 minutes.
+
+---
+
+### `POST /api/auth/passkeys/register/verify` _(account)_
+
+Verify a WebAuthn creation ceremony and store the passkey. Request body: `{ ceremonyId, name?, response }`. On success, stores the credential and returns `201 { passkey }`.
+
+---
+
+### `GET /api/auth/passkeys` _(account)_
+
+List all registered passkeys for the signed-in account, and whether the post-creation nudge was dismissed. Returns `{ passkeys: PasskeySummary[], nudgeDismissed: boolean }`.
+
+---
+
+### `PATCH /api/auth/passkeys/:id` _(account)_
+
+Rename an existing passkey. Request body: `{ name: string }`. Returns `{ passkey: PasskeySummary }`. Returns `404` if the passkey does not exist or belongs to another account.
+
+---
+
+### `DELETE /api/auth/passkeys/:id` _(account)_
+
+Remove an existing passkey. Returns `{ ok: true }`. Returns `404` if the passkey does not exist or belongs to another account.
+
+---
+
+### `POST /api/auth/passkeys/login/options`
+
+Generate WebAuthn request options for signing in with a passkey. Publicly reachable. Returns `{ ceremonyId, options }` with `allowCredentials: []` to permit resident passkeys. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/passkeys/login/verify`
+
+Verify a passkey authentication assertion response and issue a session cookie. Request body: `{ ceremonyId, remember?, response }`. The session is stamped with `method: "passkey"`. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/passkey-nudge/dismiss` _(account)_
+
+Dismiss the first-run passkey nudge for the signed-in account. Stores `{ dismissed: true }` in `user_settings` under `auth.passkeyNudge`. Returns `{ ok: true }`.
 
 ---
 

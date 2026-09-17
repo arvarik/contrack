@@ -5,12 +5,18 @@
  * someone decide which of their own identifiers to type is a question with no
  * useful answer; the server accepts either.
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { LogIn, Loader2 } from "lucide-react";
 import { signIn } from "../../api/auth";
+import {
+  passkeysSupported,
+  passkeyAutofillSupported,
+  signInWithPasskey,
+} from "../../api/passkeys";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
 import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import { PasskeyButton } from "./PasskeyButton";
 
 /** Why this screen appeared, when it was not the user's own doing. */
 export type SignInReason = "expired" | "disabled" | null;
@@ -49,10 +55,74 @@ export const SignIn = ({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  const isPasskeySupported = passkeysSupported();
+  const autofillAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isPasskeySupported) return;
+
+    let mounted = true;
+    const controller = new AbortController();
+    autofillAbortRef.current = controller;
+
+    passkeyAutofillSupported()
+      .then((supported) => {
+        if (!supported || !mounted || controller.signal.aborted) return;
+        return signInWithPasskey({
+          useBrowserAutofill: true,
+          signal: controller.signal,
+        });
+      })
+      .then((user) => {
+        if (user && mounted) {
+          onSignedIn();
+        }
+      })
+      .catch((err) => {
+        // AbortError is normal when user switches to password or clicks passkey button.
+        // Ignore quiet autofill dismissal/errors.
+        if (err?.name !== "AbortError") {
+          // No alert for passive autofill failure
+        }
+      });
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [isPasskeySupported, onSignedIn]);
+
+  const abortAutofill = () => {
+    if (autofillAbortRef.current) {
+      autofillAbortRef.current.abort();
+      autofillAbortRef.current = null;
+    }
+  };
+
+  const handlePasskeySignIn = async () => {
+    abortAutofill();
+    if (busy || passkeyBusy) return;
+    setPasskeyBusy(true);
+    setError(null);
+    try {
+      await signInWithPasskey();
+      onSignedIn();
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name !== "AbortError") {
+        setError(
+          "That passkey did not work. Try again, or sign in with your password.",
+        );
+      }
+      setPasskeyBusy(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (busy || !identifier.trim() || !password) return;
+    abortAutofill();
+    if (busy || passkeyBusy || !identifier.trim() || !password) return;
     setBusy(true);
     setError(null);
     try {
@@ -113,7 +183,7 @@ export const SignIn = ({
           type="text"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
-          autoComplete="username"
+          autoComplete={isPasskeySupported ? "username webauthn" : "username"}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -134,19 +204,42 @@ export const SignIn = ({
         {error && <AuthError>{error}</AuthError>}
       </div>
 
-      <AuthSubmit busy={busy} disabled={!identifier.trim() || !password}>
-        {busy ? (
+      <div className="space-y-3">
+        <AuthSubmit
+          busy={busy}
+          disabled={passkeyBusy || !identifier.trim() || !password}
+        >
+          {busy ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Signing in…
+            </>
+          ) : (
+            <>
+              <LogIn className="w-4 h-4" />
+              Sign in
+            </>
+          )}
+        </AuthSubmit>
+
+        {isPasskeySupported && (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Signing in…
-          </>
-        ) : (
-          <>
-            <LogIn className="w-4 h-4" />
-            Sign in
+            <div className="relative my-3 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-outline-variant/30" />
+              </div>
+              <span className="relative bg-surface-container-low px-3 text-xs text-on-surface-variant">
+                or
+              </span>
+            </div>
+            <PasskeyButton
+              onClick={handlePasskeySignIn}
+              busy={passkeyBusy}
+              disabled={busy}
+            />
           </>
         )}
-      </AuthSubmit>
+      </div>
     </AuthShell>
   );
 };

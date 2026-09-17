@@ -44,6 +44,9 @@ export const AUDIT_ACTIONS = [
   "auth.password.changed",
   "auth.token.created",
   "auth.token.revoked",
+  "auth.passkey.added",
+  "auth.passkey.renamed",
+  "auth.passkey.removed",
   "user.created",
   "user.invited",
   "user.invitation.accepted",
@@ -61,7 +64,7 @@ export const AUDIT_ACTIONS = [
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export type AuditTargetType =
-  "user" | "token" | "invitation" | "setting" | "backup";
+  "user" | "token" | "invitation" | "setting" | "backup" | "passkey";
 
 export interface AuditEntry {
   id: string;
