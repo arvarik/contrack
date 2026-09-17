@@ -753,6 +753,32 @@ export const searchIndexQueue = sqliteTable("search_index_queue", {
   contactUpdatedAt: text("contactUpdatedAt"),
 });
 
+/**
+ * score_snapshots — Weekly snapshots of relationship scores.
+ *
+ * Populated on boot and during scoring recomputation.
+ * Keyed by (contactId, weekStart). Retained for 26 weeks.
+ */
+export const scoreSnapshots = sqliteTable(
+  "score_snapshots",
+  {
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    contactId: text("contactId")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    weekStart: text("weekStart").notNull(),
+    score: real("score").notNull(),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.contactId, t.weekStart] }),
+  }),
+);
+
 // =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================
@@ -1004,5 +1030,16 @@ export const listMembersRelations = relations(listMembers, ({ one }) => ({
   contact: one(contacts, {
     fields: [listMembers.contactId],
     references: [contacts.id],
+  }),
+}));
+
+export const scoreSnapshotsRelations = relations(scoreSnapshots, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [scoreSnapshots.contactId],
+    references: [contacts.id],
+  }),
+  owner: one(users, {
+    fields: [scoreSnapshots.ownerId],
+    references: [users.id],
   }),
 }));

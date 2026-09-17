@@ -63,6 +63,7 @@ function clearAll(): void {
     DELETE FROM sessions;
     DELETE FROM ai_invocations;
     DELETE FROM imports;
+    DELETE FROM score_snapshots;
   `);
 }
 
@@ -151,6 +152,19 @@ function insertInvocation(id: string, createdAt: string, owner: string): void {
        VALUES (?, 'searchExpansion', 'mock', 10, 1, 0, ?, ?)`,
     )
     .run(id, createdAt, owner);
+}
+
+function insertScoreSnapshot(
+  ownerId: string,
+  contactId: string,
+  weekStart: string,
+  score = 50,
+): void {
+  sqlite
+    .prepare(
+      `INSERT INTO score_snapshots (ownerId, contactId, weekStart, score) VALUES (?, ?, ?, ?)`,
+    )
+    .run(ownerId, contactId, weekStart, score);
 }
 
 function ids(table: string): string[] {
@@ -344,7 +358,29 @@ describe("the daily sweep", () => {
     expect(ids("ai_invocations")).toEqual(["recent"]);
   });
 
-  it("sweeps all six tables in one pass", () => {
+  it("prunes score snapshots older than retention limit", () => {
+    const contactId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, name, ownerId) VALUES (?, 'Snapshot Test', ?)`,
+      )
+      .run(contactId, owner);
+
+    const oldWeek = "2020-01-06";
+    const recentWeek = "2026-09-14";
+    insertScoreSnapshot(owner, contactId, oldWeek, 80);
+    insertScoreSnapshot(owner, contactId, recentWeek, 85);
+
+    const counts = runDailyMaintenance();
+    expect(counts.prunedScoreSnapshots).toBe(1);
+
+    const remaining = sqlite
+      .prepare(`SELECT weekStart FROM score_snapshots WHERE ownerId = ?`)
+      .all(owner) as { weekStart: string }[];
+    expect(remaining.map((r) => r.weekStart)).toEqual([recentWeek]);
+  });
+
+  it("sweeps all seven tables in one pass", () => {
     insertAudit("a", daysAgo(AUDIT_RETENTION_DAYS + 1));
     insertSession("s", daysAgo(1), owner);
     insertToken("t", owner, {
@@ -358,6 +394,14 @@ describe("the daily sweep", () => {
     insertInvocation("v", daysAgo(31), owner);
     insertImport("m", "complete", daysAgo(IMPORT_RETENTION_DAYS + 1), owner);
 
+    const contactId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, name, ownerId) VALUES (?, 'Snapshot Sweep', ?)`,
+      )
+      .run(contactId, owner);
+    insertScoreSnapshot(owner, contactId, "2020-01-06", 80);
+
     expect(runDailyMaintenance()).toEqual({
       auditRows: 1,
       expiredSessions: 1,
@@ -365,6 +409,7 @@ describe("the daily sweep", () => {
       deadInvitations: 1,
       oldInvocations: 1,
       oldImports: 1,
+      prunedScoreSnapshots: 1,
       // The sweep also checkpoints the write-ahead log, and how many pages
       // that moves depends on everything written before this test ran.
       // `expect.any` keeps the shape exhaustive, so a field added later still
@@ -381,6 +426,9 @@ describe("the daily sweep", () => {
     ]) {
       expect(ids(table), table).toEqual([]);
     }
+    expect(
+      sqlite.prepare("SELECT COUNT(*) as n FROM score_snapshots").get(),
+    ).toEqual({ n: 0 });
   });
 
   it("changes nothing on an instance with nothing to remove", () => {
@@ -392,6 +440,7 @@ describe("the daily sweep", () => {
       deadInvitations: 0,
       oldInvocations: 0,
       oldImports: 0,
+      prunedScoreSnapshots: 0,
       walPagesCheckpointed: expect.any(Number),
     });
     expect(ids("audit_log")).toEqual(["new"]);

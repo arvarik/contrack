@@ -37,6 +37,7 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
   "tag",
   "score",
   "updated",
+  "missing",
 ]);
 
 /**
@@ -45,14 +46,14 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
  * Non-greedy value match stops at whitespace boundary.
  */
 const COMPLETED_FACET_REGEX =
-  /\b(role|company|location|industry|tag|score|updated):(\S+)\s/gi;
+  /\b(role|company|location|industry|tag|score|updated|missing):(\S+)\s/gi;
 
 /**
  * Regex to detect an in-progress facet at the end of input.
  * e.g., "role:" or "role:eng" (no trailing space).
  */
 const ACTIVE_PREFIX_REGEX =
-  /\b(role|company|location|industry|tag|score|updated):(\S*)$/i;
+  /\b(role|company|location|industry|tag|score|updated|missing):(\S*)$/i;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
