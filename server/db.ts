@@ -492,6 +492,26 @@ sqlite.exec(`
     PRIMARY KEY (importId, rowIndex)
   );
   CREATE INDEX IF NOT EXISTS idx_import_rows_status ON import_rows(importId, status);
+
+  CREATE TABLE IF NOT EXISTS search_history (
+    id              TEXT PRIMARY KEY,
+    ownerId         TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    mode            TEXT NOT NULL,
+    query           TEXT NOT NULL,
+    normalizedQuery TEXT NOT NULL,
+    resultCount     INTEGER,
+    resultIds       TEXT,
+    fallback        INTEGER NOT NULL DEFAULT 0,
+    pinned          INTEGER NOT NULL DEFAULT 0,
+    runCount        INTEGER NOT NULL DEFAULT 1,
+    createdAt       TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    lastRunAt       TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE (ownerId, mode, normalizedQuery)
+  );
+  CREATE INDEX IF NOT EXISTS idx_search_history_owner_last
+    ON search_history (ownerId, lastRunAt DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_search_history_owner_pinned
+    ON search_history (ownerId, pinned, lastRunAt DESC);
 `);
 
 // =============================================================================
@@ -527,6 +547,7 @@ export const OWNED_TABLES = [
   "dedupe_merge_log",
   "ai_invocations",
   "imports",
+  "search_history",
 ] as const;
 
 /** Owned tables with no parent contact. The caller must supply the owner. */
@@ -536,6 +557,7 @@ const OWNER_REQUIRED_TABLES = [
   "dedupe_merge_log",
   "ai_invocations",
   "imports",
+  "search_history",
 ] as const;
 
 /**

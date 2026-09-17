@@ -705,6 +705,36 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
+    method: "DELETE",
+    path: "/api/search/history",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "GET",
+    path: "/api/search/history",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "POST",
+    path: "/api/search/history",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "DELETE",
+    path: "/api/search/history/:id",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "PATCH",
+    path: "/api/search/history/:id",
+    class: "scoped",
+    isolated: true,
+  },
+  {
     method: "GET",
     path: "/api/search/interactions",
     class: "scoped",

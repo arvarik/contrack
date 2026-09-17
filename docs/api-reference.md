@@ -763,6 +763,93 @@ curl -X POST http://localhost:3210/api/search/synthesize \
 
 ---
 
+### Search history
+
+Search history stores every question asked by an account, across People, Notes, and Command Palette modes. Entries are deduplicated per mode and normalised query, tracking run count, pinned status, and the most recent result snapshot.
+
+#### `GET /api/search/history`
+
+List search history entries for the authenticated account, ordered newest first (`lastRunAt DESC, id DESC`). On the first request for an account with no history, legacy searches from user preferences are automatically backfilled.
+
+**Query parameters** (all optional):
+
+- `mode`: `"people" | "notes" | "palette"` filter.
+- `q`: search filter matched against normalised query.
+- `pinned`: `1` (or `true`) / `0` (or `false`) filter.
+- `cursor`: base64 cursor (`lastRunAt|id`) from `nextCursor` of previous page.
+- `limit`: page size (default 50, maximum 200).
+
+**Response:**
+
+```json
+{
+  "entries": [
+    {
+      "id": "c1f7…",
+      "ownerId": "usr_…",
+      "mode": "people",
+      "query": "who likes coffee",
+      "normalizedQuery": "who likes coffee",
+      "resultCount": 5,
+      "resultIds": ["cont_1", "cont_2"],
+      "fallback": false,
+      "pinned": false,
+      "runCount": 1,
+      "createdAt": "2026-09-17T12:00:00.000Z",
+      "lastRunAt": "2026-09-17T12:00:00.000Z"
+    }
+  ],
+  "nextCursor": "MjAyNi0wOS0xN1QxMjowMDowMC4wMDBafGMxZjflfg==",
+  "total": 1
+}
+```
+
+#### `POST /api/search/history`
+
+Record a completed search question. Upserts on `(ownerId, mode, normalizedQuery)`: increments `runCount`, updates `lastRunAt` to the current timestamp, and replaces the result snapshot.
+
+**Request body:**
+
+- `query` (required string, 1 to 500 characters)
+- `mode` (required `"people" | "notes" | "palette"`)
+- `resultCount` (optional integer)
+- `resultIds` (optional array of contact IDs, trimmed to at most 30 items)
+- `fallback` (optional boolean)
+
+**Response:** `{ "entry": HistoryEntry }`
+
+#### `PATCH /api/search/history/:id`
+
+Pin or unpin a search history entry. Returns 404 if the entry does not exist or belongs to another account.
+
+**Request body:**
+
+```json
+{
+  "pinned": true
+}
+```
+
+**Response:** `{ "entry": HistoryEntry }`
+
+#### `DELETE /api/search/history/:id`
+
+Delete a single search history entry. Returns 404 if the entry does not exist or belongs to another account.
+
+**Response:** `{ "success": true }`
+
+#### `DELETE /api/search/history`
+
+Clear search history for the authenticated account, optionally scoped to a single mode.
+
+**Query parameters:**
+
+- `mode` (optional `"people" | "notes" | "palette"`): when specified, deletes only entries in that mode. When omitted, deletes all entries for the account.
+
+**Response:** `{ "deleted": 4 }`
+
+---
+
 ## Contact enrichment (batch)
 
 These routes power the Contact enrichment page in Settings. The routes keep
