@@ -99,8 +99,9 @@ A contact's Details card shows where that person is, under their addresses.
 | An address, no coordinates | The line "Not on the map yet", and "Set location"                      |
 | Neither                    | Nothing                                                                |
 
-"Adjust pin" and "Set location" are drawn but disabled. A later release wires
-them to the manual pin. Each one carries an InfoTip that says so.
+A pin a person placed also shows a "Placed by hand" badge, with an InfoTip
+that says the geocoder will not move it. "Adjust pin" and "Set location" open
+the dialog described in [Moving a Pin by Hand](#moving-a-pin-by-hand).
 
 Each address row also shows a "Show on map" link when the contact has
 coordinates. Every link leads to `/map/contact/<id>`, because a contact has
@@ -116,9 +117,70 @@ Two rules keep it cheap and quiet:
 - **The map arrives only when there is a pin to draw.** `LocationMiniMap`
   loads `ContactMap` with `React.lazy`, from the chunk the map page uses. A
   contact with no coordinates loads no map code.
-- **It stands down on the map page.** On `/map/contact/<id>` the map behind
-  the panel already holds the pin, so a second canvas and a second pin with
-  the same name would be waste and noise.
+- **The picture stands down on the map page.** On `/map/contact/<id>` the
+  map behind the panel already holds the pin, so a second canvas and a second
+  pin with the same name would be waste and noise, and "Open in map" would
+  lead where the reader already is. "Adjust pin" and the badge stay, because
+  a wrong pin is most visible from the map.
+
+---
+
+## Moving a Pin by Hand
+
+The geocoder reads an address and places a pin, and sometimes it reads wrong:
+the other Springfield, the office instead of the house, a street two cities
+share. The fix needs no API and no key. A person moves the pin.
+
+"Adjust pin" under the mini map opens a dialog with an interactive map, 480 px
+tall, centred on the pin at zoom 11. The pin is the contact's avatar, and it
+moves three ways:
+
+- **Drag it.** The pin follows the pointer and lands where the pointer lets
+  go.
+- **Click the map.** The pin jumps to the click.
+- **Focus the pin and press an arrow key.** Each key moves the pin 10 pixels
+  on the screen, or 50 with Shift. The step is in pixels, so a nudge is the
+  same size at every zoom, and the map does not pan with it.
+
+The coordinates show under the map as text, latitude first, to five decimals.
+The line is a live region, so a screen reader hears the new position after a
+move. Nothing is written until **Save**, which is off until the pin has moved.
+**Cancel** closes the dialog and the pin stays where it was.
+
+"Set location" opens the same dialog for a contact the geocoder could not
+place. The map opens on the world, there is no pin until the first click, and
+Save is off until then.
+
+### Who placed the pin
+
+Every contact carries `geoSource`: `'geocoder'` when the geocoder read the
+address into the coordinates, `'manual'` when a person placed the pin, and
+null before either, or when the coordinates arrived with the contact. The
+contact page shows "Placed by hand" for a `'manual'` pin.
+
+The geocoder never overwrites a `'manual'` row. That guard is in the write
+itself, so a geocode queued before the pin was moved lands on nothing when it
+runs. The startup sweep leaves such a row alone. An edit to the contact asks
+the geocoder again only when it changes the address the pin stands for: the
+primary address row when there are rows, else the `location` field. That
+edit clears `geoSource` and queues the geocoder. The old coordinates stand
+until it answers.
+
+### Use address again
+
+The third button in the dialog hands the pin back. The server clears the
+coordinates and `geoSource` and queues the geocoder on the same address text
+it read the first time. A cached answer lands before the dialog closes. A new
+one lands when the queue drains, and until then the contact reads "Not on the
+map yet".
+
+### API
+
+`PATCH /api/contacts/:id/location` takes `{ "lat": -33.9, "lng": 151.3 }` or
+`{ "regeocode": true }`, and nothing else. Latitude must be in [-90, 90] and
+longitude in [-180, 180]. The answer is the whole contact. A contact in the
+trash, or another account's, answers 404 with the same body as an unknown id.
+See [API Reference](../api-reference.md#patch-apicontactsidlocation).
 
 ---
 
@@ -127,7 +189,7 @@ Two rules keep it cheap and quiet:
 `GET /api/contacts/map` returns one row per placed contact:
 
 ```
-id, name, company, avatarUrl, location, lat, lng
+id, name, company, avatarUrl, location, lat, lng, geoSource
 ```
 
 The route returns only contacts with valid `lat` and `lng` coordinates. It
@@ -156,12 +218,16 @@ Contrack automatically geocodes contact addresses to latitude/longitude coordina
 
 1. When a contact's address is created or updated, a geocoding job fires in the background
 2. The geocoder resolves the address to lat/lng coordinates
-3. Coordinates are stored on the contact record (`lat`, `lng` columns)
+3. Coordinates are stored on the contact record (`lat`, `lng` columns), and
+   `geoSource` is set to `'geocoder'`
 4. The contact appears on the map at the next page load
+
+A pin a person placed (`geoSource = 'manual'`) is never overwritten by the
+geocoder. See [Who placed the pin](#who-placed-the-pin).
 
 ### Retroactive Geocoding
 
-On server startup, Contrack scans for contacts with addresses but no coordinates and geocodes them in the background. This is non-blocking, and the app is fully usable during geocoding.
+On server startup, Contrack scans for contacts with addresses but no coordinates and geocodes them in the background. This is non-blocking, and the app is fully usable during geocoding. A pin placed by hand is left out of the scan.
 
 ---
 
@@ -197,10 +263,108 @@ With `NODE_ENV=production` the server sends a Content-Security-Policy that
 A root-relative style is same-origin and adds nothing to the header. That is
 what makes a self-hosted basemap a configuration change and not a code change.
 
-Contrack also registers the `pmtiles://` protocol when the map loads. A
-self-hosted style can therefore point one source at a single `.pmtiles`
-archive, with no tile server behind it. A worked example and an offline guide
-come in a later release.
+### Self-hosted and offline basemaps
+
+The default basemap comes from OpenFreeMap over the network. An instance on a
+private network, or one that must not depend on a public host, can serve its
+own basemap from this app's `public/` folder. Nothing in the code changes.
+Three kinds of file and one setting do it.
+
+Contrack registers the `pmtiles://` protocol when the map loads, so a style
+can point one source at a single `.pmtiles` archive and no tile server is
+needed. A PMTiles archive is one file that holds every tile with an index at
+the front, and the browser reads tiles out of it with HTTP range requests,
+which this server answers for anything under `public/`.
+
+**1. The tiles, as one archive.** Get a planet build from
+[Protomaps](https://maps.protomaps.com/builds/) and cut it to the area you
+need with the `pmtiles` command line tool. The box is west, south, east,
+north. A city is a few hundred megabytes. The planet is about 100 GB.
+
+```bash
+pmtiles extract https://build.protomaps.com/20260901.pmtiles \
+  public/map/area.pmtiles --bbox=-0.6,51.2,0.4,51.8
+```
+
+**2. The glyphs and the sprite.** A vector style draws labels from font glyph
+files and icons from a sprite. Copy the `fonts/` and `sprites/` folders from
+[protomaps/basemaps-assets](https://github.com/protomaps/basemaps-assets)
+into `public/map/`.
+
+**3. The style**, at `public/map/style.json`. The source names the archive
+with the `pmtiles://` protocol and a root-relative path. The layers below are
+the smallest useful set for the Protomaps schema. The
+[`@protomaps/basemaps`](https://www.npmjs.com/package/@protomaps/basemaps)
+package generates the full set for a named theme.
+
+```json
+{
+  "version": 8,
+  "glyphs": "/map/fonts/{fontstack}/{range}.pbf",
+  "sprite": "/map/sprites/v4/light",
+  "sources": {
+    "protomaps": {
+      "type": "vector",
+      "url": "pmtiles:///map/area.pmtiles",
+      "attribution": "<a href=\"https://protomaps.com\">Protomaps</a> © <a href=\"https://openstreetmap.org\">OpenStreetMap</a>"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#f4f2ee" }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "water",
+      "paint": { "fill-color": "#cfe0f0" }
+    },
+    {
+      "id": "roads",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "paint": { "line-color": "#ffffff", "line-width": 1 }
+    },
+    {
+      "id": "places",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "places",
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 12
+      }
+    }
+  ]
+}
+```
+
+**4. The setting.** Point one palette or both at the file and restart:
+
+```
+MAP_STYLE_LIGHT="/map/style.json"
+MAP_STYLE_DARK="/map/style-dark.json"
+```
+
+`GET /api/auth/status` then reports `map.light` as `/map/style.json`, the
+client asks this origin for it, and the production CSP lets the fetch through
+because the origin is `'self'`. No request leaves the instance. Open `/map`
+and watch the network panel: `/map/style.json` answers 200, and
+`/map/area.pmtiles` answers 206 to each range request.
+
+Two things to know:
+
+- `public/` is copied into `dist/` at build time, so a file added after the
+  build goes under `dist/map/` on a running instance. With Docker, mount the
+  folder at `/app/dist/map`.
+- A style on another host needs that host in `connect-src`. The server adds
+  it when the style URL is absolute. Tiles, glyphs or a sprite on a third
+  host are the operator's to serve from the style's host, or from here.
 
 ### Mapbox Geocoding
 
@@ -223,25 +387,19 @@ Without Mapbox, Nominatim (OpenStreetMap) is used. Nominatim is free but has rat
 - Every cluster is a real `<button>` named `"<n> contacts, zoom in"`
 - Tab reaches a pin, focus opens its hover card, and Enter opens the contact
 - The zoom buttons sit in MapLibre's navigation control
+- In the Adjust pin dialog the pin is a `<button>` that the arrow keys move,
+  and the coordinates line is a live region, so the dialog works with no
+  pointer at all
 
 The markers are React components, so an avatar URL never passes through
 `innerHTML` and no marker carries an inline event handler attribute.
 
 `tests/e2e/axe.spec.ts` waits for the "Contact map" region and a named pin,
 then scans the page. Its contact scan waits for the "Location map" region and
-its pin for the same reason. `tests/e2e/metrics.spec.ts` scans `/map` on a 390 pixel
-phone for the tap-target and text-size floors. See
+its pin for the same reason. `tests/e2e/map.spec.ts` scans the page again
+with the Adjust pin dialog open. `tests/e2e/metrics.spec.ts` scans `/map` on
+a 390 pixel phone for the tap-target and text-size floors. See
 [Accessibility](../accessibility.md).
-
----
-
-## Not in the map yet
-
-One thing is planned and is deliberately absent today:
-
-- Manual pin adjustment, for a contact the geocoder placed wrongly. The
-  "Adjust pin" and "Set location" actions on a contact are drawn and
-  disabled until then.
 
 ---
 
@@ -250,6 +408,17 @@ One thing is planned and is deliberately absent today:
 ```bash
 # Fetch all geocoded contacts
 curl http://localhost:3210/api/contacts/map
+
+# Put a pin where a person dropped it
+curl -X PATCH http://localhost:3210/api/contacts/abc123/location \
+  -H "Content-Type: application/json" \
+  -d '{"lat": -33.9, "lng": 151.3}'
+
+# Hand the pin back to the geocoder
+curl -X PATCH http://localhost:3210/api/contacts/abc123/location \
+  -H "Content-Type: application/json" \
+  -d '{"regeocode": true}'
 ```
 
-Returns only contacts with valid `lat` and `lng` coordinates.
+The first returns only contacts with valid `lat` and `lng` coordinates. The
+other two return the whole contact.

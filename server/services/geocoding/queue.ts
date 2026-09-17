@@ -1,6 +1,6 @@
 import { db } from "../../db.ts";
 import * as schema from "../../../src/db/schema.ts";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { log } from "../../utils/logger.ts";
 import {
   normalizeLocationKey,
@@ -29,11 +29,7 @@ export function queueGeocode(contactId: string, location: string): void {
 
   const cached = getCachedGeocode(key);
   if (cached) {
-    // tenant-lint: allow instance sweep
-    db.update(schema.contacts)
-      .set({ lat: cached.lat, lng: cached.lng })
-      .where(eq(schema.contacts.id, contactId))
-      .run();
+    writeGeocoded(contactId, cached.lat, cached.lng);
     log.debug(
       "Geocode",
       `Cache hit for "${location}" → ${cached.lat}, ${cached.lng}`,
@@ -113,25 +109,42 @@ async function processGeocodeQueue(): Promise<void> {
   isGeocoding = false;
 }
 
+/**
+ * Write what the geocoder found, unless a person placed the pin.
+ *
+ * A row with `geoSource = 'manual'` is one somebody dragged into place, and
+ * the geocoder's answer for the same text does not outrank that. The guard
+ * is in the statement itself, so every path through this module honours it,
+ * and a task queued before the pin was moved lands on nothing when it drains.
+ * A row the geocoder does place is marked `'geocoder'` in the same write.
+ */
+function writeGeocoded(contactId: string, lat: number, lng: number): void {
+  // tenant-lint: allow instance sweep
+  db.update(schema.contacts)
+    .set({ lat, lng, geoSource: "geocoder" })
+    .where(
+      and(
+        eq(schema.contacts.id, contactId),
+        or(
+          isNull(schema.contacts.geoSource),
+          ne(schema.contacts.geoSource, "manual"),
+        ),
+      ),
+    )
+    .run();
+}
+
 function applyCoordinates(
   contactId: string,
   normalizedKey: string,
   lat: number,
   lng: number,
 ): void {
-  // tenant-lint: allow instance sweep
-  db.update(schema.contacts)
-    .set({ lat, lng })
-    .where(eq(schema.contacts.id, contactId))
-    .run();
+  writeGeocoded(contactId, lat, lng);
 
   const dupes = geocodeQueue.filter((t) => t.normalizedKey === normalizedKey);
   for (const dupe of dupes) {
-    // tenant-lint: allow instance sweep
-    db.update(schema.contacts)
-      .set({ lat, lng })
-      .where(eq(schema.contacts.id, dupe.contactId))
-      .run();
+    writeGeocoded(dupe.contactId, lat, lng);
   }
   const remaining = geocodeQueue.filter(
     (t) => t.normalizedKey !== normalizedKey,

@@ -210,6 +210,21 @@ export const contactUpdateSchema = contactCreateSchema
     message: "No valid fields to update",
   });
 
+/**
+ * The body of `PATCH /api/contacts/:id/location`: a pin a person dropped, or
+ * a request to hand the pin back to the geocoder. One or the other, with
+ * nothing else beside it, so a body that carries both, or a coordinate the
+ * map cannot draw, is refused whole.
+ */
+export const contactLocationSchema = z.union([
+  z.strictObject({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  }),
+  z.strictObject({ regeocode: z.literal(true) }),
+]);
+export type ContactLocationInput = z.infer<typeof contactLocationSchema>;
+
 // Cap bulk imports — combined with the 50 MB JSON body limit, an unbounded
 // array lets one request allocate arbitrary memory.
 export const contactBulkCreateSchema = z.array(contactCreateSchema).max(5000);

@@ -79,18 +79,18 @@ Each contact has a comprehensive profile with two tabs: **Dossier** (details) an
 
 ### Detail Fields
 
-| Field             | Type | Notes                                                                                                                                      |
-| ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Name, First, Last | Text | Auto-split on creation                                                                                                                     |
-| Headline          | Text | One-line professional summary                                                                                                              |
-| Role              | Text | Job title                                                                                                                                  |
-| Company           | Text | Auto-fetches company logo via local proxy                                                                                                  |
-| Location          | Text | Auto-geocoded, and places the contact's pin on the map. A placed contact shows a small map of that spot, and every address row links to it |
-| Birthday          | Date | With age calculation display                                                                                                               |
-| Pronouns          | Text |                                                                                                                                            |
-| Industry          | Text | With autocomplete from existing industries                                                                                                 |
-| Website           | URL  |                                                                                                                                            |
-| About             | Text | Free-form biography                                                                                                                        |
+| Field             | Type | Notes                                                                                                                                                                          |
+| ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name, First, Last | Text | Auto-split on creation                                                                                                                                                         |
+| Headline          | Text | One-line professional summary                                                                                                                                                  |
+| Role              | Text | Job title                                                                                                                                                                      |
+| Company           | Text | Auto-fetches company logo via local proxy                                                                                                                                      |
+| Location          | Text | Auto-geocoded, and places the contact's pin on the map. A placed contact shows a small map of that spot, every address row links to it, and "Adjust pin" moves the pin by hand |
+| Birthday          | Date | With age calculation display                                                                                                                                                   |
+| Pronouns          | Text |                                                                                                                                                                                |
+| Industry          | Text | With autocomplete from existing industries                                                                                                                                     |
+| Website           | URL  |                                                                                                                                                                                |
+| About             | Text | Free-form biography                                                                                                                                                            |
 
 ### Multi-Value Fields
 
@@ -105,6 +105,17 @@ These fields support multiple entries with labels:
 - **Tags** — Free-form tags with autocomplete
 - **Interests** — Including AI-generated interests
 - **Custom Attributes** — Key-value pairs
+
+### The Pin on the Map
+
+The geocoder places a pin from the address. When it places it wrongly, **Adjust
+pin** under the small map opens a dialog where you drag the pin, click the
+map, or nudge the pin with the arrow keys, and save. The contact then shows a
+"Placed by hand" badge, and the geocoder leaves that pin alone. It reads the
+address again only when the address changes, or when you choose **Use address
+again** in the same dialog. A contact the geocoder could not place shows "Not
+on the map yet" and **Set location**, which opens the same dialog with no pin
+until you click the map. See [Map View](map-view.md#moving-a-pin-by-hand).
 
 <!-- Screenshot: contact-detail.png -->
 

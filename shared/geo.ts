@@ -20,6 +20,13 @@ export interface MapStyleUrls {
   dark: string;
 }
 
+/**
+ * Who placed a contact's pin. `"geocoder"` read it from the address,
+ * `"manual"` is a person who dragged it, and null is a pin nobody has placed
+ * yet, or one that arrived with the coordinates already set.
+ */
+export type GeoSource = "geocoder" | "manual" | null;
+
 /** One row of `GET /api/contacts/map`. */
 export interface MapContact {
   id: string;
@@ -29,6 +36,7 @@ export interface MapContact {
   location: string | null;
   lat: number;
   lng: number;
+  geoSource?: GeoSource;
 }
 
 /**

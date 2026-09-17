@@ -221,6 +221,10 @@ to the log, and the default style loads instead.
 the origin of each one, so the style the browser asks for and the origin the
 header allows never drift apart.
 
+A style served from `public/`, with its tiles in one `.pmtiles` archive, is
+the offline path. [Map View](features/map-view.md#self-hosted-and-offline-basemaps)
+has the worked example.
+
 A root-relative style adds no origin to the CSP, because it is same-origin.
 That is what makes a self-hosted basemap a configuration change rather than a
 code change. Contrack also registers the `pmtiles://` protocol, so a

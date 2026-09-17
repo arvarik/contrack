@@ -19,6 +19,8 @@ import {
   contactCreateSchema,
   contactUpdateSchema,
   contactBulkCreateSchema,
+  contactLocationSchema,
+  type ContactLocationInput,
 } from "../utils/validators.ts";
 import { z } from "zod";
 import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
@@ -529,6 +531,37 @@ router.delete(
     if (!success) throw new NotFoundError("Contact");
     log.info("API", `[${rid}] DELETE /api/contacts/${String(req.params.id)}`);
     res.json({ success: true });
+  }),
+);
+
+/**
+ * PATCH /api/contacts/:id/location
+ *
+ * The pin, by hand. `{ lat, lng }` puts it where a person dropped it and
+ * marks the row `geoSource = 'manual'`, which the geocoder then leaves alone
+ * until the address text changes. `{ regeocode: true }` hands the pin back:
+ * the coordinates are cleared and the geocoder reads the address again.
+ */
+router.patch(
+  "/contacts/:id/location",
+  requireContact,
+  validateBody(contactLocationSchema),
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+    const id = String(req.params.id);
+    const body = req.body as ContactLocationInput;
+    const updated =
+      "regeocode" in body
+        ? contactService.regeocode(scopeOf(req), id)
+        : contactService.setLocation(scopeOf(req), id, body.lat, body.lng);
+    if (!updated) throw new NotFoundError("Contact");
+    log.info(
+      "API",
+      `[${rid}] PATCH /api/contacts/${id}/location → ${
+        "regeocode" in body ? "back to the geocoder" : "placed by hand"
+      }`,
+    );
+    res.json(updated);
   }),
 );
 
