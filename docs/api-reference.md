@@ -1160,10 +1160,94 @@ curl -X DELETE http://localhost:3210/api/action-items/ai123
 
 ### `GET /api/dashboard`
 
-Fetch the metrics for the Pulse page.
+Fetch the metrics for the Pulse page. Returns action items, ghosts, network metrics, at-risk contacts, recently added contacts, composition breakdowns, 30-day timelines, data hygiene counts (`missingCompany`, `missingLocation`, `missingEmail`, `stale`), upcoming meetings for the next 7 days, and correspondent count.
 
 ```bash
 curl http://localhost:3210/api/dashboard
+```
+
+---
+
+### `GET /api/dashboard/activity`
+
+Fetch deterministic activity aggregates for the logged-in owner. Returns 84 days of activity ending today, 12 rolling week totals, 12 previous rolling week totals, interaction streak metrics, today's counts (logged, completed, due), and current week counts.
+
+All calendar days, week starts, and streaks are computed in the server's local time.
+
+```bash
+curl http://localhost:3210/api/dashboard/activity
+```
+
+**Response shape:**
+
+```json
+{
+  "days": [
+    { "day": "2026-06-25", "count": 2, "byType": { "email": 1, "call": 1 } }
+  ],
+  "weekTotals": [12, 15, 8, 14, 20, 11, 16, 9, 13, 10, 18, 14],
+  "prevWeekTotals": [10, 12, 7, 11, 15, 9, 14, 8, 12, 9, 15, 11],
+  "streak": {
+    "current": 4,
+    "best": 12,
+    "lastDay": "2026-09-17"
+  },
+  "today": {
+    "logged": 2,
+    "completed": 1,
+    "due": 3
+  },
+  "thisWeek": {
+    "logged": 8,
+    "byType": { "email": 5, "call": 3 }
+  }
+}
+```
+
+---
+
+### `GET /api/dashboard/momentum`
+
+Fetch relationship score momentum and cadence monitoring for the logged-in owner. Returns `snapshotWeeks` count, `rising` contacts (score delta >= +3 over 4 weeks), `cooling` contacts (score delta <= -3 over 4 weeks), and `silent` contacts (contacts with an active cadence overdue for contact, excluding contacts already flagged at risk).
+
+Rising and cooling require at least 4 recorded weekly snapshot weeks to evaluate.
+
+```bash
+curl http://localhost:3210/api/dashboard/momentum
+```
+
+**Response shape:**
+
+```json
+{
+  "snapshotWeeks": 6,
+  "rising": [
+    {
+      "id": "c1",
+      "name": "Jane Smith",
+      "company": "Acme Corp",
+      "avatarUrl": null,
+      "themeColor": "emerald",
+      "relationshipScore": 82,
+      "score": 82,
+      "delta": 14
+    }
+  ],
+  "cooling": [],
+  "silent": [
+    {
+      "id": "c2",
+      "name": "Bob Jones",
+      "company": null,
+      "avatarUrl": null,
+      "themeColor": "sky",
+      "relationshipScore": 65,
+      "cadenceDays": 14,
+      "daysSinceContact": 25,
+      "overshootDays": 11
+    }
+  ]
+}
 ```
 
 ---

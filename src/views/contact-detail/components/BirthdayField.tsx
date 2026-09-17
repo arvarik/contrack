@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cn } from "../../../lib/utils";
-import { formatDay } from "../../../lib/datetime";
 import { EditHint } from "./EditableField";
+import {
+  toBirthdayInputValue,
+  formatBirthdayDisplay,
+  getUpcomingBirthdayDays,
+} from "../../../lib/birthday";
 
 export const BirthdayField = ({
   value,
@@ -25,43 +29,7 @@ export const BirthdayField = ({
     button.current?.focus();
   }, [isEditing]);
 
-  // Normalize stored value to YYYY-MM-DD for the input
-  const toInputValue = (v: string | null): string => {
-    if (!v) return "";
-    // If already YYYY-MM-DD, return as-is
-    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    // Try parsing other formats
-    try {
-      const d = new Date(v);
-      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    } catch {}
-    return "";
-  };
-
-  // The same medium date as every other absolute date in the app. formatDay
-  // reads a bare YYYY-MM-DD as a local day, so a birthday does not show as
-  // the day before west of Greenwich. A value it cannot read shows as stored.
-  const formatDisplay = (v: string | null): string | null => {
-    if (!v) return null;
-    const inputVal = toInputValue(v);
-    if (!inputVal) return v;
-    return formatDay(inputVal, v);
-  };
-
-  // Upcoming birthday badge (within 30 days)
-  const upcomingDays = (() => {
-    const inputVal = toInputValue(value);
-    if (!inputVal) return null;
-    const [, month, day] = inputVal.split("-").map(Number);
-    const today = new Date();
-    const thisYear = today.getFullYear();
-    let bday = new Date(thisYear, month - 1, day);
-    if (bday < today) bday = new Date(thisYear + 1, month - 1, day);
-    const diff = Math.round(
-      (bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    return diff <= 30 ? diff : null;
-  })();
+  const upcomingDays = getUpcomingBirthdayDays(value);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value; // YYYY-MM-DD
@@ -79,7 +47,7 @@ export const BirthdayField = ({
         // Inline editor, opened by clicking the value it replaces.
         // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
-        defaultValue={toInputValue(value)}
+        defaultValue={toBirthdayInputValue(value)}
         onChange={handleChange}
         onBlur={() => setIsEditing(false)}
         onKeyDown={(e) => {
@@ -97,7 +65,7 @@ export const BirthdayField = ({
     );
   }
 
-  const display = formatDisplay(value);
+  const display = formatBirthdayDisplay(value);
 
   return (
     // 44 px tall on a phone, so the row gives the value's tap box room.

@@ -263,6 +263,49 @@ describe("search history", () => {
   });
 });
 
+describe("pulse layout", () => {
+  it("stores hidden cards and column order", async () => {
+    const res = await patch(A, {
+      pulseLayout: {
+        hidden: ["up-next", "inbox"],
+        order: {
+          focus: ["completed", "activity"],
+          network: ["momentum", "composition"],
+          intel: ["insight", "coming-up", "new-people"],
+        },
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.preferences.pulseLayout).toEqual({
+      hidden: ["up-next", "inbox"],
+      order: {
+        focus: ["completed", "activity"],
+        network: ["momentum", "composition"],
+        intel: ["insight", "coming-up", "new-people"],
+      },
+    });
+    expect(res.body.stored).toContain("pulseLayout");
+  });
+
+  it("filters unknown card IDs on write and read", async () => {
+    const res = await patch(B, {
+      pulseLayout: {
+        hidden: ["up-next", "unknown-card-1"],
+        order: {
+          focus: ["activity", "unknown-card-2"],
+        },
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.preferences.pulseLayout).toEqual({
+      hidden: ["up-next"],
+      order: {
+        focus: ["activity"],
+      },
+    });
+  });
+});
+
 describe("one account's preferences are its own", () => {
   it("does not show A's choices to B", async () => {
     await patch(A, { listDensity: "compact", theme: "dark" });

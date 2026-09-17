@@ -39,6 +39,13 @@ const UPDATED_PRESETS = [
   { label: "Very stale (>6 months)", value: "6m", operator: ">" as const },
 ];
 
+const MISSING_PRESETS = [
+  { label: "Company", value: "company" },
+  { label: "Location", value: "location" },
+  { label: "Email", value: "email" },
+  { label: "Phone", value: "phone" },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
@@ -73,6 +80,18 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
       ).map((p) => ({
         label: p.label,
         filter: { field, value: p.value, operator: p.operator } as FacetFilter,
+      }));
+    }
+
+    if (field === "missing") {
+      return MISSING_PRESETS.filter(
+        (p) =>
+          !partial ||
+          p.value.includes(partial.toLowerCase()) ||
+          p.label.toLowerCase().includes(partial.toLowerCase()),
+      ).map((p) => ({
+        label: p.label,
+        filter: { field, value: p.value } as FacetFilter,
       }));
     }
 

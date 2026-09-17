@@ -216,7 +216,7 @@ const CASES: PlanCase[] = [
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
              cadenceDays, lastContactedAt, nextFollowUpAt,
-             lat, lng, relationshipScore, aiHydratedAt
+             lat, lng, relationshipScore, aiHydratedAt, birthday
       FROM contacts
       WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
       ORDER BY addedAt DESC`,
@@ -353,6 +353,13 @@ const CASES: PlanCase[] = [
       "with the statement below and computes the phonetic key in JavaScript " +
       "(normalization.ts doubleMetaphone, blocking.ts buildBlockIndex). The " +
       "statement below is the load the block index is really built from.",
+  },
+  {
+    label: "dashboard activity query",
+    source: "server/services/dashboardService.ts getActivity",
+    sql: `SELECT date, type, source FROM interactions WHERE ownerId = ? AND date >= ? ORDER BY date ASC`,
+    params: () => [ownerA, "2026-01-01"],
+    index: /USING (?:COVERING )?INDEX idx_interactions_owner_date/,
   },
 ];
 

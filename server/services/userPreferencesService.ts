@@ -63,6 +63,48 @@ export type SearchHistoryEntry = z.infer<typeof searchHistoryEntrySchema>;
  * defaults live in their own object below, where they cannot leak into a
  * request body.
  */
+export const PULSE_COLUMNS = ["focus", "network", "intel"] as const;
+export type PulseColumn = (typeof PULSE_COLUMNS)[number];
+
+export const PULSE_CARD_IDS = [
+  "up-next",
+  "completed",
+  "activity",
+  "momentum",
+  "composition",
+  "insight",
+  "inbox",
+  "coming-up",
+  "new-people",
+] as const;
+export type PulseCardId = (typeof PULSE_CARD_IDS)[number];
+export const KNOWN_PULSE_CARD_IDS: ReadonlySet<string> = new Set(
+  PULSE_CARD_IDS,
+);
+
+export interface PulseLayout {
+  hidden: string[];
+  order: Partial<Record<PulseColumn, string[]>>;
+}
+
+export const pulseLayoutSchema = z
+  .object({
+    hidden: z.array(z.string().max(40)).max(20),
+    order: z.partialRecord(
+      z.enum(PULSE_COLUMNS),
+      z.array(z.string().max(40)).max(20),
+    ),
+  })
+  .transform((val): PulseLayout => ({
+    hidden: val.hidden.filter((id) => KNOWN_PULSE_CARD_IDS.has(id)),
+    order: Object.fromEntries(
+      Object.entries(val.order).map(([col, ids]) => [
+        col,
+        (ids ?? []).filter((id) => KNOWN_PULSE_CARD_IDS.has(id)),
+      ]),
+    ),
+  }));
+
 export const preferenceSchemas = {
   theme: z.enum(THEME_MODES),
   accent: z
@@ -74,6 +116,7 @@ export const preferenceSchemas = {
   dedupePreset: z.enum(["conservative", "default", "aggressive"]),
   tempUnit: z.enum(["celsius", "fahrenheit"]),
   searchHistory: z.array(searchHistoryEntrySchema).max(MAX_SEARCH_HISTORY),
+  pulseLayout: pulseLayoutSchema,
 } as const;
 
 export type PreferenceKey = keyof typeof preferenceSchemas;
@@ -96,6 +139,10 @@ const DEFAULTS: Preferences = {
   dedupePreset: "default",
   tempUnit: "celsius",
   searchHistory: [],
+  pulseLayout: {
+    hidden: [],
+    order: {},
+  },
 };
 
 /** A PATCH body: any subset, and nothing else. */
@@ -109,7 +156,11 @@ export const preferencesPatchSchema = z
 
 /** The defaults, freshly built. Never share one object between callers. */
 export function defaultPreferences(): Preferences {
-  return { ...DEFAULTS, searchHistory: [] };
+  return {
+    ...DEFAULTS,
+    searchHistory: [],
+    pulseLayout: { hidden: [], order: {} },
+  };
 }
 
 // ---------------------------------------------------------------------------

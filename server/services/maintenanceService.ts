@@ -21,6 +21,7 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { cleanupOldInvocations } from "./aiStatsService.ts";
 import { runWalMaintenance } from "./walHealth.ts";
+import { isoWeekStart } from "../../shared/dates.ts";
 
 /** How long each kind of row is kept. */
 export const AUDIT_RETENTION_DAYS = 90;
@@ -33,6 +34,7 @@ export const DEAD_INVITATION_RETENTION_DAYS = 30;
  * it `running`, and the next read is what settles it.
  */
 export const IMPORT_RETENTION_DAYS = 30;
+export const SCORE_SNAPSHOT_RETENTION_WEEKS = 26;
 
 export interface MaintenanceCounts {
   auditRows: number;
@@ -43,6 +45,8 @@ export interface MaintenanceCounts {
   oldInvocations: number;
   /** Finished imports past retention, with their rows. */
   oldImports: number;
+  /** Pruned score snapshots older than 26 weeks. */
+  prunedScoreSnapshots: number;
   /** Pages the checkpoint moved back into the database. */
   walPagesCheckpointed: number;
 }
@@ -72,6 +76,7 @@ export function runDailyMaintenance(): MaintenanceCounts {
     deadInvitations: 0,
     oldInvocations: 0,
     oldImports: 0,
+    prunedScoreSnapshots: 0,
     walPagesCheckpointed: 0,
   };
 
@@ -129,6 +134,18 @@ export function runDailyMaintenance(): MaintenanceCounts {
             AND datetime(updatedAt) < datetime('now', ?)`,
       )
       .run(`-${IMPORT_RETENTION_DAYS} days`).changes;
+
+    const cutoffWeek = isoWeekStart(
+      new Date(
+        Date.now() - SCORE_SNAPSHOT_RETENTION_WEEKS * 7 * 24 * 60 * 60 * 1000,
+      ),
+    );
+    counts.prunedScoreSnapshots = sqlite
+      .prepare(
+        // tenant-lint: allow instance sweep
+        `DELETE FROM score_snapshots WHERE weekStart < ?`,
+      )
+      .run(cutoffWeek).changes;
   } catch (err) {
     log.warn(
       "Maintenance",
@@ -147,7 +164,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
     counts.agedTokens +
     counts.deadInvitations +
     counts.oldInvocations +
-    counts.oldImports;
+    counts.oldImports +
+    counts.prunedScoreSnapshots;
   if (total > 0) {
     log.info(
       "Maintenance",
@@ -156,7 +174,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `${counts.agedTokens} aged revoked tokens, ` +
         `${counts.deadInvitations} dead invitations, ` +
         `${counts.oldInvocations} old AI invocations, ` +
-        `${counts.oldImports} old imports`,
+        `${counts.oldImports} old imports, ` +
+        `${counts.prunedScoreSnapshots} old score snapshots`,
     );
   }
   return counts;
