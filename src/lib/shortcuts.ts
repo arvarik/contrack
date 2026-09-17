@@ -63,6 +63,7 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   "Navigation",
   "Global",
   NAMES.network.label,
+  "Contact",
   NAMES.duplicates.label,
 ];
 
@@ -130,6 +131,15 @@ export const SHORTCUTS: readonly Shortcut[] = [
     description: "Quick interaction",
     bareLetter: false,
   },
+  // The composer, on a contact and in the quick interaction dialog. Ctrl
+  // outside macOS: tiptap's Mod key and the field's own handler both follow
+  // the platform.
+  {
+    group: "Global",
+    keys: ["⌘", "Enter"],
+    description: "Save the interaction you are writing",
+    bareLetter: false,
+  },
 
   // The contact list. The arrows, Home, End, the letters and Enter move
   // focus inside the list, so they work once the list has focus.
@@ -195,6 +205,38 @@ export const SHORTCUTS: readonly Shortcut[] = [
     description: "Open the contact",
     bareLetter: false,
     page: "/",
+  },
+
+  // A contact's details. Every value edits in place: it is a button at rest
+  // and a field once opened. The pencil after a value is the visible sign.
+  {
+    group: "Contact",
+    keys: ["Enter"],
+    description: "Edit the value that has focus",
+    bareLetter: false,
+    page: "/contact/:id",
+  },
+  {
+    group: "Contact",
+    keys: ["Esc"],
+    description: "Cancel the edit",
+    bareLetter: false,
+    page: "/contact/:id",
+  },
+  // An address, an email or a phone. The first one is the primary one.
+  {
+    group: "Contact",
+    keys: ["⌥", "↑"],
+    description: "Move the value up one place",
+    bareLetter: false,
+    page: "/contact/:id",
+  },
+  {
+    group: "Contact",
+    keys: ["⌥", "↓"],
+    description: "Move the value down one place",
+    bareLetter: false,
+    page: "/contact/:id",
   },
 
   // Duplicates, in the swipe view. The arrow and the letter do the same

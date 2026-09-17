@@ -1,38 +1,57 @@
 /**
- * ProfileHeader — Contact identity header with avatar, name, social links,
- * tags, vibe picker, archive toggles, and the "Catch Me Up" AI briefing.
+ * ProfileHeader: who this contact is, and the one thing to do next.
  *
- * Extracted from ContactProfile to keep each section under ~250 lines.
+ * ```
+ * (avatar) Thomas Walker (they/them)            [ Log interaction ] ⋮
+ *          UX Researcher at Umbrella Corp
+ *          Sydney · 2:45 AM · 13°C · in ThomasWalker ↗ · @Thomas_Walker ↗
+ *          [tech-lead ×] [advisor ×] [+ tag]
+ * ```
+ *
+ * 1. The name is the page's h1 and takes focus when a contact opens.
+ * 2. The meta line is text. Facts (place, local time, weather) are plain,
+ *    and links look like links, with ↗ because they open a new tab.
+ * 3. "Log interaction" is the only primary button. Colour, avatar, copy,
+ *    archive and delete sit in the kebab beside it.
+ *
+ * The briefing lives in the Dossier tab, not here.
  */
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Briefcase,
   ArrowLeft,
   Sparkles,
   Archive,
-  X,
   ArrowUpRight,
   CalendarClock,
-  MoreVertical,
   Copy,
+  NotebookPen,
   Trash2,
 } from "lucide-react";
 import { isPast, isToday } from "date-fns";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 
-import type { Contact, ContactUpdateData } from "../../../types";
+import type {
+  Contact,
+  ContactSocialLink,
+  ContactUpdateData,
+} from "../../../types";
 import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
+import { META_LINE } from "../../../lib/styles";
+import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 
-import { LocalTimeWeather } from "../../../components/LocalTimeWeather";
+import {
+  LocalTimeWeather,
+  timeZoneAt,
+} from "../../../components/LocalTimeWeather";
+import { ActionMenu } from "../../../components/ui/ActionMenu";
 
 import { EditableField } from "./EditableField";
 import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
-import { VibePickerPopover } from "./VibePickerPopover";
 import { ContactActionsMenu } from "./ContactActionsMenu";
 import { ContactListsSection } from "./ContactListsSection";
-import { CatchMeUpFab } from "./CatchMeUpFab";
+import { ChipInput, type Chip } from "./ChipInput";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
 import { hasUserInteracted } from "../../../lib/userInteraction";
@@ -47,10 +66,11 @@ export interface ProfileHeaderProps {
   onDelete: () => void;
   onClose?: () => void;
   onOpenAvatarPicker: () => void;
+  /** Opens the Timeline tab and focuses the composer. */
+  onLogInteraction: () => void;
   showNetworkButton?: boolean;
 
   // Mutations passed from parent
-  generateBriefing: { mutate: (id: string) => void; isPending: boolean };
   archiveContact: {
     mutate: (
       id: string,
@@ -78,105 +98,140 @@ export interface ProfileHeaderProps {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SocialLinkPill — Individual link pill with hover action menu
+// Meta line helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SocialLinkPill: React.FC<{
-  sl: { id: string; platform: string; url: string; handle?: string | null };
+/** The first comma part of a place: "Sydney" from "Sydney, NSW, Australia". */
+const shortPlace = (text: string | null | undefined): string | null =>
+  text?.split(",")[0]?.trim() || null;
+
+/** "Linkedin" from "linkedin": the label used when a link has no handle. */
+const capitalise = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The text a social link shows: its handle, else its platform, else its host. */
+function socialLinkName(sl: ContactSocialLink): string {
+  const platformKey = sl.platform?.toLowerCase() || "other";
+  const isKnown = hasKnownIcon(platformKey);
+
+  let displayName = sl.handle || sl.platform;
+  if (!sl.handle && sl.url) {
+    try {
+      displayName = new URL(sl.url).hostname.replace("www.", "");
+    } catch {}
+  }
+  // Capitalize platform name for known ones
+  if (!sl.handle && isKnown) {
+    displayName = capitalise(sl.platform);
+  }
+
+  // Clean up LinkedIn auto-generated suffixes for display
+  if (platformKey === "linkedin" && sl.handle) {
+    displayName = cleanLinkedInSlug(sl.handle);
+  } else if (platformKey === "linkedin" && sl.url) {
+    // Extract slug from LinkedIn URL and clean it
+    try {
+      const url = new URL(sl.url);
+      const pathParts = url.pathname.replace(/\/+$/, "").split("/");
+      const slug = pathParts[pathParts.length - 1];
+      if (slug && slug !== "in") {
+        displayName = cleanLinkedInSlug(slug);
+      }
+    } catch {}
+  }
+  return displayName;
+}
+
+/** The host of a website, without "www.". */
+function websiteName(url: string): string {
+  try {
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return "Website";
+  }
+}
+
+/** The middle dot between two facts. Decoration: a screen reader skips it. */
+const MetaDot = () => <span aria-hidden="true">·</span>;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SocialLink: a text link on the meta line, with its own small actions menu
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SocialLink = ({
+  url,
+  platform,
+  displayName,
+  platformName,
+  iconClassName,
+  useFavicon,
+  onRemove,
+}: {
+  url: string;
+  platform: string;
   displayName: string;
-  platformColor: string;
-  isKnown: boolean;
-  onDelete: () => void;
-}> = ({ sl, displayName, platformColor, isKnown, onDelete }) => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Close menu on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node))
-        setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
-
-  return (
-    <div className="relative group/pill flex" ref={menuRef}>
-      <a
-        href={safeHref(sl.url)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="hit-area flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high pl-3 pr-1.5 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
-      >
+  /** Said to a screen reader when the icon is the only sign of the platform. */
+  platformName?: string;
+  iconClassName: string;
+  useFavicon: boolean;
+  /** When set, the link gets a menu with Copy link and Remove link. */
+  onRemove?: () => void;
+}) => (
+  <span className="group/link inline-flex items-center gap-1 max-w-full">
+    <a
+      href={safeHref(url)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="hit-area inline-flex items-center gap-1.5 min-w-0 rounded font-medium text-on-surface underline-offset-2 hover:underline"
+    >
+      {/* The icon is hidden: a favicon's alt text would add a host name to
+          the link's name. */}
+      <span aria-hidden="true" className="inline-flex shrink-0">
         <PlatformIcon
-          platform={sl.platform}
-          url={sl.url}
-          className={cn("w-4 h-4", platformColor)}
-          useFavicon={!isKnown}
+          platform={platform}
+          url={url}
+          className={cn("w-4 h-4", iconClassName)}
+          useFavicon={useFavicon}
         />
-        <span className="text-on-surface-variant group-hover/pill:text-on-surface transition-colors">
-          {displayName}
-        </span>
-        {/* Spacer for the action button, which shows at rest on a phone */}
-        <span className="w-5 sm:w-0 sm:group-hover/pill:w-5 transition-all duration-200 overflow-hidden shrink-0" />
-      </a>
-
-      {/*
-        Action trigger. It fades in on hover from `sm`. A phone has no hover,
-        and an invisible button with a 44 px tap box would swallow taps on the
-        link, so below `sm` it shows at rest.
-      */}
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setMenuOpen((v) => !v);
-        }}
-        className={cn(
-          "hit-area absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded-lg transition-all duration-200",
-          "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest",
-          menuOpen
-            ? "opacity-100"
-            : "opacity-100 sm:opacity-0 sm:group-hover/pill:opacity-100 focus-visible:opacity-100",
-        )}
-        aria-label="Link actions"
-      >
-        <MoreVertical className="w-3.5 h-3.5" />
-      </button>
-
-      {/* Dropdown menu */}
-      {menuOpen && (
-        <div className="absolute right-0 top-full mt-1 z-50 glass-panel rounded-xl shadow-xl overflow-hidden min-w-[140px] animate-in fade-in slide-in-from-top-1 duration-150">
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              navigator.clipboard.writeText(sl.url);
-              toast.success("Link copied");
-              setMenuOpen(false);
-            }}
-            className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
-          >
-            <Copy className="w-3.5 h-3.5 text-primary" />
-            Copy link
-          </button>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              onDelete();
-              setMenuOpen(false);
-            }}
-            className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2 text-sm text-error hover:bg-rose-500/8 transition-colors text-left"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete link
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
+      </span>
+      <span className="min-w-0 break-words">{displayName}</span>
+      {platformName && <span className="sr-only">, {platformName}</span>}
+      <span aria-hidden="true" className="text-on-surface-variant">
+        ↗
+      </span>
+      <span className="sr-only"> (opens in a new tab)</span>
+    </a>
+    {onRemove && (
+      <ActionMenu
+        label={`Actions for ${displayName}`}
+        iconClassName="w-3.5 h-3.5"
+        // At rest at every width. Hidden until hover, it still took its width,
+        // so the gap after each link was wider than the gap after each fact.
+        triggerClassName="p-1 rounded-lg"
+        items={[
+          {
+            id: "copy",
+            label: "Copy link",
+            icon: Copy,
+            onSelect: () => {
+              copyToClipboard(url).then(
+                () => toast.success("Link copied"),
+                () => toast.error(CLIPBOARD_DENIED),
+              );
+            },
+          },
+          {
+            id: "remove",
+            label: "Remove link",
+            icon: Trash2,
+            danger: true,
+            onSelect: onRemove,
+          },
+        ]}
+      />
+    )}
+  </span>
+);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Component
@@ -188,15 +243,14 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   onDelete,
   onClose,
   onOpenAvatarPicker,
+  onLogInteraction,
   showNetworkButton = false,
-  generateBriefing,
   archiveContact,
   unarchiveContact,
   updateContact,
   promoteGhost,
 }) => {
   const navigate = useNavigate();
-  const [showVibePicker, setShowVibePicker] = useState(false);
 
   /**
    * Opening a contact puts focus on its name.
@@ -229,10 +283,144 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     heading.focus({ preventScroll: true });
   }, []);
 
-  const handleVibeSelect = (vibeId: string) => {
-    updateContact.mutate({ id: contact.id, data: { themeColor: vibeId } });
-    setShowVibePicker(false);
+  const timezone = useMemo(
+    () => timeZoneAt(contact.lat, contact.lng),
+    [contact.lat, contact.lng],
+  );
+
+  // ── Social links ──────────────────────────────────────────────────────
+  const removeSocialLink = (id: string) => {
+    const before = contact.socialLinks || [];
+    const after = before.filter((s) => s.id !== id);
+    const payload = (links: ContactSocialLink[]) =>
+      links.map((s) => ({
+        platform: s.platform,
+        url: s.url,
+        handle: s.handle,
+      }));
+    updateContact.mutate({
+      id: contact.id,
+      data: { socialLinks: payload(after) },
+    });
+    toast("Link removed", {
+      duration: 7000,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          updateContact.mutate({
+            id: contact.id,
+            data: { socialLinks: payload(before) },
+          }),
+      },
+    });
   };
+
+  // ── Tags ──────────────────────────────────────────────────────────────
+  // Tags come from enrichment today, which is why they wear the AI colour.
+  const tagChips: Chip[] = (contact.tags || []).map((t) => ({
+    id: t.id,
+    label: t.tag,
+    ai: true,
+  }));
+
+  const addTag = (text: string) => {
+    updateContact.mutate({
+      id: contact.id,
+      data: {
+        tags: [
+          ...(contact.tags || []).map((t) => ({ tag: t.tag })),
+          { tag: text },
+        ],
+      },
+    });
+  };
+
+  const removeTag = (chip: Chip) => {
+    const before = contact.tags || [];
+    const after = before.filter((tag) => tag.id !== chip.id);
+    updateContact.mutate({
+      id: contact.id,
+      data: { tags: after.map((tag) => ({ tag: tag.tag })) },
+    });
+    toast("Tag removed", {
+      duration: 7000,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          updateContact.mutate({
+            id: contact.id,
+            data: { tags: before.map((tag) => ({ tag: tag.tag })) },
+          }),
+      },
+    });
+  };
+
+  // ── Meta line ─────────────────────────────────────────────────────────
+  // Each item is one fact or one link. The dots go between items, so the
+  // line never starts or ends with one.
+  const metaItems: { key: string; node: React.ReactNode }[] = [];
+  const place =
+    shortPlace(contact.addresses?.[0]?.address) ?? shortPlace(contact.location);
+  if (place) {
+    metaItems.push({ key: "place", node: <span>{place}</span> });
+  }
+  if (timezone) {
+    metaItems.push({
+      key: "time",
+      node: (
+        <LocalTimeWeather
+          lat={contact.lat}
+          lng={contact.lng}
+          // The settings revamp's `showWeather` preference replaces this constant.
+          showWeather={true}
+        />
+      ),
+    });
+  }
+  for (const sl of contact.socialLinks || []) {
+    const platformKey = sl.platform?.toLowerCase() || "other";
+    const isKnown = hasKnownIcon(platformKey);
+    const displayName = socialLinkName(sl);
+    const platformName = isKnown ? capitalise(platformKey) : undefined;
+    metaItems.push({
+      key: `link-${sl.id}`,
+      node: (
+        <SocialLink
+          url={sl.url}
+          platform={sl.platform}
+          displayName={displayName}
+          platformName={
+            platformName && platformName !== displayName
+              ? platformName
+              : undefined
+          }
+          iconClassName={
+            PLATFORM_COLORS[platformKey] || "text-on-surface-variant"
+          }
+          useFavicon={!isKnown}
+          onRemove={() => removeSocialLink(sl.id)}
+        />
+      ),
+    });
+  }
+  // The website, when it is not already one of the social links.
+  if (
+    contact.website &&
+    !contact.socialLinks?.some((sl) => sl.url === contact.website)
+  ) {
+    metaItems.push({
+      key: "website",
+      node: (
+        <SocialLink
+          url={contact.website}
+          platform="website"
+          displayName={websiteName(contact.website)}
+          iconClassName="text-on-surface-variant"
+          useFavicon
+        />
+      ),
+    });
+  }
 
   return (
     <>
@@ -243,7 +431,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             onClick={onClose}
             className="hit-area flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" /> Back
+            <ArrowLeft aria-hidden="true" className="w-5 h-5" /> Back
           </button>
         </div>
       )}
@@ -265,40 +453,19 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         )}
 
       <div className="p-6 md:p-8 lg:px-10 lg:pt-8 lg:pb-6 max-w-6xl mx-auto w-full relative lg:shrink-0">
-        <section className="flex flex-col md:flex-row items-start gap-6">
-          {/* Avatar */}
-          <div className="relative shrink-0 group/avatar">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
+        <section className="flex flex-col sm:flex-row items-start gap-5 sm:gap-6">
+          {/* Avatar. "Change avatar" is in the contact actions menu. */}
+          <div className="relative shrink-0">
+            <div className="w-24 h-24 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
               <img
                 alt={contact.name}
                 className="w-full h-full object-cover"
                 src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
               />
             </div>
-            <button
-              aria-label="Change avatar"
-              onClick={onOpenAvatarPicker}
-              title="Edit Avatar"
-              className="absolute inset-0 rounded-3xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer z-10"
-            >
-              <div className="bg-white/20 backdrop-blur-sm rounded-full p-2">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-5 h-5"
-                >
-                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                </svg>
-              </div>
-            </button>
             {!!contact.isArchived && (
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap z-20">
-                <Archive className="w-2.5 h-2.5" />
+                <Archive aria-hidden="true" className="w-2.5 h-2.5" />
                 Archived
               </div>
             )}
@@ -316,8 +483,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
           </div>
 
           {/* Identity */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-1">
+          <div className="flex-1 min-w-0 w-full">
+            {/* The name, then the actions. On a narrow screen the actions
+                wrap under the name. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
               {/*
                 The page's h1. `tabIndex={-1}` lets focus land here on
                 navigation and from the skip link without adding a Tab stop.
@@ -328,7 +497,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 id={CONTACT_HEADING_ID}
                 ref={headingRef}
                 tabIndex={-1}
-                className="text-4xl md:text-5xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 pt-1 outline-none"
+                className="min-w-0 text-3xl md:text-4xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 py-0.5 outline-none"
               >
                 <EditableField
                   value={contact.name}
@@ -336,85 +505,71 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   placeholder="Contact Name"
                 />
                 {contact.pronouns && (
-                  <span className="text-on-surface-variant text-2xl font-medium tracking-normal inline-block align-middle pb-1">
+                  <span className="text-on-surface-variant text-xl font-medium tracking-normal inline-block align-middle">
                     ({contact.pronouns})
                   </span>
                 )}
               </h1>
 
-              <VibePickerPopover
-                showVibePicker={showVibePicker}
-                setShowVibePicker={setShowVibePicker}
-                currentVibeId={contact.themeColor}
-                onSelect={handleVibeSelect}
-              />
-
-              {!!contact.isGhost && (
-                <button
-                  onClick={() => {
-                    promoteGhost.mutate(contact.id, {
-                      onSuccess: () =>
-                        toast.success(`${contact.name} promoted to network!`),
-                    });
-                  }}
-                  disabled={promoteGhost.isPending}
-                  className="btn-primary ml-2"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {promoteGhost.isPending
-                    ? "Promoting..."
-                    : "Promote to Contact"}
-                </button>
-              )}
-
-              <button
-                onClick={() => {
-                  if (contact.isArchived) {
-                    unarchiveContact.mutate(contact.id, {
-                      onSuccess: () =>
-                        toast.success(`${contact.name} restored to network`),
-                      onError: (err: Error) =>
-                        toast.error(
-                          `Failed: ${err instanceof Error ? err.message : String(err)}`,
-                        ),
-                    });
-                  } else {
-                    archiveContact.mutate(contact.id, {
-                      onSuccess: () =>
-                        toast.success(`${contact.name} archived`),
-                      onError: (err: Error) =>
-                        toast.error(
-                          `Failed: ${err instanceof Error ? err.message : String(err)}`,
-                        ),
-                    });
-                  }
-                }}
-                disabled={
-                  archiveContact.isPending || unarchiveContact.isPending
-                }
-                title={
-                  contact.isArchived ? "Unarchive Contact" : "Archive Contact"
-                }
-                aria-label={
-                  contact.isArchived ? "Unarchive contact" : "Archive contact"
-                }
-                aria-pressed={!!contact.isArchived}
-                className={cn(
-                  "hit-area p-2 rounded-xl transition-all flex items-center justify-center",
-                  contact.isArchived
-                    ? "text-warning bg-amber-500/15 hover:bg-amber-500/25"
-                    : "text-on-surface-variant hover:bg-surface-container hover:text-warning",
+              <div className="flex flex-wrap items-center gap-2">
+                {!!contact.isGhost && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      promoteGhost.mutate(contact.id, {
+                        onSuccess: () =>
+                          toast.success(`${contact.name} promoted to network!`),
+                      });
+                    }}
+                    disabled={promoteGhost.isPending}
+                    className="btn-secondary"
+                  >
+                    <Sparkles aria-hidden="true" className="w-4 h-4" />
+                    {promoteGhost.isPending
+                      ? "Promoting…"
+                      : "Promote to contact"}
+                  </button>
                 )}
-              >
-                <Archive className="w-5 h-5" />
-              </button>
 
-              <ContactActionsMenu contact={contact} onDelete={onDelete} />
+                <button
+                  type="button"
+                  onClick={onLogInteraction}
+                  className="btn-primary"
+                >
+                  <NotebookPen aria-hidden="true" className="w-4 h-4" />
+                  Log interaction
+                </button>
+
+                <ContactActionsMenu
+                  contact={contact}
+                  onDelete={onDelete}
+                  onOpenAvatarPicker={onOpenAvatarPicker}
+                  archiveContact={archiveContact}
+                  unarchiveContact={unarchiveContact}
+                  updateContact={updateContact}
+                />
+              </div>
+            </div>
+
+            {/* Role at company */}
+            <div className="mt-1 text-base md:text-lg font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5">
+              <EditableField
+                value={contact.role}
+                onSave={(val) => onUpdate("role", val)}
+                placeholder="Role / Title"
+              />
+              <span>at</span>
+              <EditableField
+                value={contact.company}
+                onSave={(val) => onUpdate("company", val)}
+                placeholder="Company"
+              />
             </div>
 
             {contact.headline &&
               (() => {
-                // Suppress headline if it's just "{role} at {company}" — that's already shown below
+                // Hide the headline when it only repeats the role and
+                // company, which the line above already shows.
                 const normalize = (s: string) =>
                   s.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const headlineNorm = normalize(contact.headline);
@@ -432,7 +587,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     headlineNorm === normalize(contact.company));
                 if (isDuplicate) return null;
                 return (
-                  <div className="text-base text-on-surface-variant font-medium mb-1 italic">
+                  <div className="text-base text-on-surface-variant font-medium mt-1 italic">
                     <EditableField
                       value={contact.headline}
                       onSave={(val) => onUpdate("headline", val)}
@@ -443,208 +598,45 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               })()}
 
             {contact.aiSummary && (
-              <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mb-3 max-w-fit">
-                <Sparkles className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mt-3 max-w-fit">
+                <Sparkles
+                  aria-hidden="true"
+                  className="w-4 h-4 text-primary mt-0.5 shrink-0"
+                />
                 <div className="text-sm text-primary font-medium leading-relaxed italic">
                   {contact.aiSummary}
                 </div>
               </div>
             )}
 
-            <div className="text-lg md:text-xl font-medium text-on-surface-variant flex items-center flex-wrap gap-x-2 mb-2">
-              <Briefcase className="w-5 h-5 opacity-50 inline-block" />
-              <EditableField
-                value={contact.role}
-                onSave={(val) => onUpdate("role", val)}
-                placeholder="Role / Title"
-              />
-              <span className="text-on-surface-variant">at</span>
-              <EditableField
-                value={contact.company}
-                onSave={(val) => onUpdate("company", val)}
-                placeholder="Company"
+            {/* Meta line: facts as text, links as links */}
+            {metaItems.length > 0 && (
+              <div className={cn(META_LINE, "mt-3")}>
+                {metaItems.map((item, index) => (
+                  <React.Fragment key={item.key}>
+                    {index > 0 && <MetaDot />}
+                    {item.node}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+
+            {/* Tags, then lists. The row always shows, so "+ tag" is always
+                there. */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <ChipInput
+                chips={tagChips}
+                onAdd={addTag}
+                onRemove={removeTag}
+                noun="tag"
+                addText="tag"
               />
               <ContactListsSection
                 contactId={contact.id}
                 contactLists={contact.lists || []}
               />
-              <CatchMeUpFab
-                contact={contact}
-                generateBriefing={generateBriefing}
-              />
             </div>
 
-            {/* Social Links */}
-            {((contact.lat && contact.lng) ||
-              (contact.socialLinks && contact.socialLinks.length > 0) ||
-              contact.website) && (
-              <div className="flex flex-wrap items-center gap-2 mt-4 mb-2">
-                {contact.lat && contact.lng && (
-                  <LocalTimeWeather lat={contact.lat} lng={contact.lng} />
-                )}
-                {contact.socialLinks?.map((sl) => {
-                  const platformKey = sl.platform?.toLowerCase() || "other";
-                  const platformColor =
-                    PLATFORM_COLORS[platformKey] || "text-on-surface-variant";
-                  const isKnown = hasKnownIcon(platformKey);
-
-                  // Build display name: prefer handle, then platform label, then hostname
-                  let displayName = sl.handle || sl.platform;
-                  if (!sl.handle && sl.url) {
-                    try {
-                      displayName = new URL(sl.url).hostname.replace(
-                        "www.",
-                        "",
-                      );
-                    } catch {}
-                  }
-                  // Capitalize platform name for known ones
-                  if (!sl.handle && isKnown) {
-                    displayName =
-                      sl.platform.charAt(0).toUpperCase() +
-                      sl.platform.slice(1);
-                  }
-
-                  // Clean up LinkedIn auto-generated suffixes for display
-                  if (platformKey === "linkedin" && sl.handle) {
-                    displayName = cleanLinkedInSlug(sl.handle);
-                  } else if (platformKey === "linkedin" && sl.url) {
-                    // Extract slug from LinkedIn URL and clean it
-                    try {
-                      const url = new URL(sl.url);
-                      const pathParts = url.pathname
-                        .replace(/\/+$/, "")
-                        .split("/");
-                      const slug = pathParts[pathParts.length - 1];
-                      if (slug && slug !== "in") {
-                        displayName = cleanLinkedInSlug(slug);
-                      }
-                    } catch {}
-                  }
-
-                  return (
-                    <SocialLinkPill
-                      key={sl.id}
-                      sl={sl}
-                      displayName={displayName}
-                      platformColor={platformColor}
-                      isKnown={isKnown}
-                      onDelete={() => {
-                        const before = contact.socialLinks || [];
-                        const after = before.filter((s) => s.id !== sl.id);
-                        updateContact.mutate({
-                          id: contact.id,
-                          data: {
-                            socialLinks: after.map((s) => ({
-                              platform: s.platform,
-                              url: s.url,
-                              handle: s.handle,
-                            })),
-                          },
-                        });
-                        toast("Link removed", {
-                          duration: 7000,
-                          action: {
-                            label: "Undo",
-                            onClick: () =>
-                              updateContact.mutate({
-                                id: contact.id,
-                                data: {
-                                  socialLinks: before.map((s) => ({
-                                    platform: s.platform,
-                                    url: s.url,
-                                    handle: s.handle,
-                                  })),
-                                },
-                              }),
-                          },
-                        });
-                      }}
-                    />
-                  );
-                })}
-                {/* Show website if not already in social links */}
-                {contact.website &&
-                  !contact.socialLinks?.some(
-                    (sl) => sl.url === contact.website,
-                  ) && (
-                    <a
-                      href={safeHref(contact.website)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hit-area group flex items-center gap-1.5 text-sm font-bold bg-surface-container hover:bg-surface-container-high px-3 py-1.5 rounded-xl shadow-sm transition-all hover:shadow-md"
-                    >
-                      <PlatformIcon
-                        platform="website"
-                        url={contact.website}
-                        className="w-4 h-4 text-on-surface-variant"
-                        useFavicon
-                      />
-                      <span className="text-on-surface-variant group-hover:text-on-surface transition-colors">
-                        {(() => {
-                          try {
-                            return new URL(contact.website).hostname.replace(
-                              "www.",
-                              "",
-                            );
-                          } catch {
-                            return "Website";
-                          }
-                        })()}
-                      </span>
-                    </a>
-                  )}
-              </div>
-            )}
-
-            {contact.tags && contact.tags.length > 0 && (
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {contact.tags.map((t) => (
-                  // The AI colour: tags come from enrichment. No overflow
-                  // clip, which would clip the remove button's tap box.
-                  <div
-                    key={t.id}
-                    className="group/pill max-w-full flex items-center gap-1 text-xs font-bold py-1 px-2.5 rounded-full bg-ai/10 text-on-ai-wash border border-ai/20 transition-all"
-                  >
-                    <Sparkles className="w-2.5 h-2.5 opacity-60 shrink-0" />
-                    <span className="min-w-0 whitespace-normal break-words">
-                      {t.tag}
-                    </span>
-                    <button
-                      onClick={() => {
-                        const before = contact.tags || [];
-                        const after = before.filter((tag) => tag.id !== t.id);
-                        updateContact.mutate({
-                          id: contact.id,
-                          data: {
-                            tags: after.map((tag) => ({ tag: tag.tag })),
-                          },
-                        });
-                        toast("Tag removed", {
-                          duration: 7000,
-                          action: {
-                            label: "Undo",
-                            onClick: () =>
-                              updateContact.mutate({
-                                id: contact.id,
-                                data: {
-                                  tags: before.map((tag) => ({ tag: tag.tag })),
-                                },
-                              }),
-                          },
-                        });
-                      }}
-                      className="hit-area w-6 h-6 -my-1 -mr-1.5 rounded-full text-on-ai-wash hover:text-error hover:bg-red-500/10 flex items-center justify-center transition-colors shrink-0"
-                      aria-label={`Remove tag ${t.tag}`}
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Actions Row */}
             {/* Actions Row */}
             {showNetworkButton && (
               <div className="mt-4 flex items-center gap-3 flex-wrap">
@@ -655,7 +647,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   }}
                   className="flex items-center gap-2 min-h-[44px] sm:min-h-0 px-4 py-2 bg-primary/10 text-on-primary-wash rounded-xl font-bold hover:bg-primary/20 transition-colors text-sm"
                 >
-                  <ArrowUpRight className="w-4 h-4" />
+                  <ArrowUpRight aria-hidden="true" className="w-4 h-4" />
                   Open in Network
                 </button>
               </div>

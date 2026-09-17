@@ -106,7 +106,7 @@ test.describe("open instance", () => {
     await row.click();
     await expect(page).toHaveURL(/\/contact\//);
     await expect(
-      page.getByRole("button", { name: "Change avatar" }),
+      page.getByRole("button", { name: "Log interaction" }),
     ).toBeVisible();
   });
 });

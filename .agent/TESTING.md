@@ -373,7 +373,7 @@ _Populated by the SDET during the Trap phase. Every interactive component must b
 | `ListDetailView` (lists view)         |       |         |         |       |         |
 | `ImportModal`                         |       |         |         |       |         |
 | `QuickInteractionModal`               |       |         |         |       |         |
-| `RichInteractionComposer`             |       |         |         |       |         |
+| `InteractionComposer`                 |       |         |         |       |         |
 | `AvatarPickerModal`                   |       |         |         |       |         |
 | `BulkEditFieldModal`                  |       |         |         |       |         |
 | `KeyboardShortcutsModal`              |       |         |         |       |         |

@@ -1,138 +1,168 @@
-import React, { useState, useEffect } from "react";
-import { MoreVertical, Copy, Trash2 } from "lucide-react";
+/**
+ * ContactActionsMenu: the kebab beside "Log interaction" in the contact
+ * header.
+ *
+ * The header had a palette button and an archive button at the same rank as
+ * the name, and delete in a kebab. None of them is something a person does
+ * every visit, so they all live here now, in one menu built on `ActionMenu`:
+ *
+ * 1. Change colour, which opens the colour picker under this button.
+ * 2. Change avatar.
+ * 3. Copy basic details and Copy full details.
+ * 4. Archive or Unarchive.
+ * 5. Delete, last and on its own surface tone.
+ *
+ * The colour picker renders in the same positioned wrapper as the button, so
+ * it opens under it and Escape can hand focus back to it.
+ */
+import { useCallback, useRef, useState } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  Copy,
+  ImageIcon,
+  Palette,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "../../../lib/utils";
-import { DROPDOWN_MENU, DROPDOWN_ITEM } from "../../../lib/styles";
-import type {
-  Contact,
-  ContactEmail,
-  ContactPhone,
-  ContactAddress,
-} from "../../../types";
-import { activateOnKey } from "../../../lib/a11y";
+import type { Contact } from "../../../types";
+import {
+  ActionMenu,
+  type ActionMenuItem,
+} from "../../../components/ui/ActionMenu";
+import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
+import { VibePickerPopover } from "./VibePickerPopover";
+import type { ProfileHeaderProps } from "./ProfileHeader";
 
-/** Menu rows are 36 px from `sm` and 44 px on a phone, where a thumb taps them. */
-const ITEM_TAP_HEIGHT = "min-h-[44px] sm:min-h-0";
+/** Name, emails and phones: enough to reach the person. */
+export function basicDetailsText(contact: Contact): string {
+  const textChunks = [`Name: ${contact.name}`];
+  if (contact.emails?.length)
+    textChunks.push(`Email: ${contact.emails.map((e) => e.email).join(", ")}`);
+  if (contact.phones?.length)
+    textChunks.push(`Phone: ${contact.phones.map((p) => p.phone).join(", ")}`);
+  return textChunks.join("\n");
+}
+
+/** Every plain fact on the contact, one per line. */
+export function fullDetailsText(contact: Contact): string {
+  const textChunks = [`Name: ${contact.name}`];
+  if (contact.role) textChunks.push(`Role: ${contact.role}`);
+  if (contact.company) textChunks.push(`Company: ${contact.company}`);
+  if (contact.emails?.length)
+    textChunks.push(`Email: ${contact.emails.map((e) => e.email).join(", ")}`);
+  if (contact.phones?.length)
+    textChunks.push(`Phone: ${contact.phones.map((p) => p.phone).join(", ")}`);
+  if (contact.birthday) textChunks.push(`Birthday: ${contact.birthday}`);
+  if (contact.addresses?.length) {
+    textChunks.push(
+      `Location: ${contact.addresses.map((a) => a.address).join(" | ")}`,
+    );
+  } else if (contact.location) {
+    textChunks.push(`Location: ${contact.location}`);
+  }
+  return textChunks.join("\n");
+}
+
+type ContactActionsMenuProps = Pick<
+  ProfileHeaderProps,
+  | "contact"
+  | "onDelete"
+  | "onOpenAvatarPicker"
+  | "archiveContact"
+  | "unarchiveContact"
+  | "updateContact"
+>;
 
 export const ContactActionsMenu = ({
   contact,
   onDelete,
-}: {
-  contact: Contact;
-  onDelete: () => void;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  onOpenAvatarPicker,
+  archiveContact,
+  unarchiveContact,
+  updateContact,
+}: ContactActionsMenuProps) => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const closePicker = useCallback(() => setPickerOpen(false), []);
 
-  useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      )
-        setIsOpen(false);
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
-
-  const copyBasic = () => {
-    const textChunks = [`Name: ${contact.name}`];
-    if (contact.emails?.length)
-      textChunks.push(
-        `Email: ${contact.emails.map((e: ContactEmail) => e.email).join(", ")}`,
-      );
-    if (contact.phones?.length)
-      textChunks.push(
-        `Phone: ${contact.phones.map((p: ContactPhone) => p.phone).join(", ")}`,
-      );
-
-    navigator.clipboard.writeText(textChunks.join("\n"));
-    toast.success("Basic details copied");
-    setIsOpen(false);
+  const copy = (text: string, success: string) => {
+    copyToClipboard(text).then(
+      () => toast.success(success),
+      () => toast.error(CLIPBOARD_DENIED),
+    );
   };
 
-  const copyAdvanced = () => {
-    const textChunks = [`Name: ${contact.name}`];
-    if (contact.role) textChunks.push(`Role: ${contact.role}`);
-    if (contact.company) textChunks.push(`Company: ${contact.company}`);
-    if (contact.emails?.length)
-      textChunks.push(
-        `Email: ${contact.emails.map((e: ContactEmail) => e.email).join(", ")}`,
-      );
-    if (contact.phones?.length)
-      textChunks.push(
-        `Phone: ${contact.phones.map((p: ContactPhone) => p.phone).join(", ")}`,
-      );
-    if (contact.birthday) textChunks.push(`Birthday: ${contact.birthday}`);
-    if (contact.addresses?.length) {
-      textChunks.push(
-        `Location: ${contact.addresses.map((a: ContactAddress) => a.address).join(" | ")}`,
-      );
-    } else if (contact.location) {
-      textChunks.push(`Location: ${contact.location}`);
+  const failed = (err: Error) =>
+    toast.error(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+
+  const toggleArchive = () => {
+    if (contact.isArchived) {
+      unarchiveContact.mutate(contact.id, {
+        onSuccess: () => toast.success(`${contact.name} restored to network`),
+        onError: failed,
+      });
+    } else {
+      archiveContact.mutate(contact.id, {
+        onSuccess: () => toast.success(`${contact.name} archived`),
+        onError: failed,
+      });
     }
-
-    navigator.clipboard.writeText(textChunks.join("\n"));
-    toast.success("All details copied");
-    setIsOpen(false);
   };
+
+  const items: ActionMenuItem[] = [
+    {
+      id: "colour",
+      label: "Change colour",
+      icon: Palette,
+      onSelect: () => setPickerOpen(true),
+    },
+    {
+      id: "avatar",
+      label: "Change avatar",
+      icon: ImageIcon,
+      onSelect: onOpenAvatarPicker,
+    },
+    {
+      id: "copy-basic",
+      label: "Copy basic details",
+      icon: Copy,
+      onSelect: () => copy(basicDetailsText(contact), "Basic details copied"),
+    },
+    {
+      id: "copy-full",
+      label: "Copy full details",
+      icon: Copy,
+      onSelect: () => copy(fullDetailsText(contact), "All details copied"),
+    },
+    {
+      id: "archive",
+      label: contact.isArchived ? "Unarchive" : "Archive",
+      icon: contact.isArchived ? ArchiveRestore : Archive,
+      onSelect: toggleArchive,
+      disabled: archiveContact.isPending || unarchiveContact.isPending,
+    },
+    {
+      id: "delete",
+      label: "Delete",
+      icon: Trash2,
+      onSelect: onDelete,
+      danger: true,
+    },
+  ];
 
   return (
-    <div className="relative inline-block ml-1" ref={containerRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="hit-area p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all flex items-center justify-center"
-        aria-label="Contact actions"
-        aria-expanded={isOpen}
-      >
-        <MoreVertical className="w-5 h-5" />
-      </button>
-      {isOpen && (
-        <ul role="menu" className={cn(DROPDOWN_MENU, "right-0 w-56 mt-2 z-50")}>
-          <li
-            role="menuitem"
-            tabIndex={0}
-            className={cn(DROPDOWN_ITEM, ITEM_TAP_HEIGHT)}
-            onClick={copyBasic}
-            onKeyDown={activateOnKey(copyBasic)}
-          >
-            <Copy className="w-4 h-4 mr-2 opacity-50" />
-            Copy Basic Details
-          </li>
-          <li
-            role="menuitem"
-            tabIndex={0}
-            className={cn(DROPDOWN_ITEM, ITEM_TAP_HEIGHT)}
-            onClick={copyAdvanced}
-            onKeyDown={activateOnKey(copyAdvanced)}
-          >
-            <Copy className="w-4 h-4 mr-2 opacity-50" />
-            Copy Full Details
-          </li>
-          <div className="h-px bg-white/10 my-1 mx-2" />
-          <li
-            tabIndex={0}
-            role="menuitem"
-            className={cn(
-              DROPDOWN_ITEM,
-              ITEM_TAP_HEIGHT,
-              "text-error hover:text-error hover:bg-red-500/10",
-            )}
-            onClick={() => {
-              setIsOpen(false);
-              onDelete();
-            }}
-            onKeyDown={activateOnKey(() => {
-              setIsOpen(false);
-              onDelete();
-            })}
-          >
-            <Trash2 className="w-4 h-4 mr-2 opacity-50" />
-            Delete Contact
-          </li>
-        </ul>
-      )}
+    <div className="relative inline-flex">
+      <ActionMenu label="Contact actions" items={items} triggerRef={trigger} />
+      <VibePickerPopover
+        open={pickerOpen}
+        onClose={closePicker}
+        currentVibeId={contact.themeColor}
+        onSelect={(vibeId) =>
+          updateContact.mutate({ id: contact.id, data: { themeColor: vibeId } })
+        }
+        returnFocusTo={trigger}
+      />
     </div>
   );
 };

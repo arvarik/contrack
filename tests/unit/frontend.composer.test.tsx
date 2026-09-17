@@ -8,11 +8,24 @@
 // connection meets: a 500, a session that expires mid-save, a second click on
 // Save, and a sentence finished while the first half was still uploading.
 //
+// It is also the only composer now. The contact page and the quick
+// interaction dialog both draw it, so the controls it shows (a type
+// radiogroup, a Save that is never disabled, the message an empty Save gets)
+// and its compact form for the dialog are checked here too.
+//
 // The editor is a real tiptap instance. Typing is done by mutating the
 // contenteditable, which is what a browser does, and ProseMirror's DOM
 // observer reads it back into the document.
 // =============================================================================
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import React from "react";
 import {
   act,
@@ -24,7 +37,8 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RichInteractionComposer } from "../../src/components/RichInteractionComposer";
+import { InteractionComposer } from "../../src/components/InteractionComposer";
+import { QuickInteractionModal } from "../../src/components/QuickInteractionModal";
 import { draftKey } from "../../src/lib/composerDrafts";
 
 /** The signed-in account, switched per test. Null is an un-gated instance. */
@@ -60,14 +74,22 @@ interface SaveRequest {
   reject: () => void;
 }
 
+/** One row of the slim contact list, the names @ and the dialog read. */
+const person = (id: string, name: string) => ({
+  id,
+  name,
+  isGhost: false,
+  avatarUrl: null,
+});
+
 /** A fetch that serves the contact list and holds every save for the test. */
-function stubServer() {
+function stubServer(people: ReturnType<typeof person>[] = []) {
   const saves: SaveRequest[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (String(url).includes("view=slim")) {
-        return Promise.resolve(Response.json([]));
+        return Promise.resolve(Response.json(people));
       }
       if (init?.method === "POST") {
         return new Promise<Response>((resolve, reject) => {
@@ -96,7 +118,7 @@ function stubServer() {
 function mount(contactId = "contact-1") {
   render(
     <QueryClientProvider client={client}>
-      <RichInteractionComposer contactId={contactId} />
+      <InteractionComposer contactId={contactId} />
     </QueryClientProvider>,
   );
 }
@@ -120,19 +142,39 @@ async function type(pm: HTMLElement, text: string): Promise<void> {
   await act(async () => {});
 }
 
-const saveButton = () => screen.getByRole("button", { name: /save|saving/i });
-/** One of the four interaction type buttons, by its accessible name. */
+const saveButton = () =>
+  screen.getByRole("button", { name: /^(save|saving…)$/i });
+/** One of the four interaction types, a radio by its accessible name. */
 const typeButton = (name: "Note" | "Call" | "Meeting" | "Email") =>
-  within(screen.getByRole("group", { name: "Interaction type" })).getByRole(
-    "button",
-    { name },
-  );
+  within(
+    screen.getByRole("radiogroup", { name: "Interaction type" }),
+  ).getByRole("radio", { name });
 const followUpInput = () =>
   screen.getByLabelText("Next action") as HTMLInputElement;
+
+/**
+ * jsdom lays nothing out, so a Range has no rectangles. ProseMirror asks for
+ * them when it scrolls the caret into view, which it does for an editor with
+ * focus, and the composer now puts focus in the editor after an empty Save
+ * and when "Log interaction" asks for it.
+ */
+beforeAll(() => {
+  const noRect = () => new DOMRect(0, 0, 0, 0);
+  if (!Range.prototype.getClientRects) {
+    Range.prototype.getClientRects = () =>
+      ({ length: 0, item: () => null }) as unknown as DOMRectList;
+  }
+  if (!Range.prototype.getBoundingClientRect) {
+    Range.prototype.getBoundingClientRect = noRect;
+  }
+});
 
 beforeEach(() => {
   account.current = null;
   localStorage.clear();
+  // Each test serves its own contact list. A list cached by the test before
+  // would be read instead.
+  client.clear();
 });
 
 afterEach(() => {
@@ -160,8 +202,278 @@ describe("names", () => {
     // follows the type.
     fireEvent.click(typeButton("Call"));
     expect(description()).toBe("Summarize the call...");
-    expect(typeButton("Call").getAttribute("aria-pressed")).toBe("true");
-    expect(typeButton("Note").getAttribute("aria-pressed")).toBe("false");
+    expect(typeButton("Call").getAttribute("aria-checked")).toBe("true");
+    expect(typeButton("Note").getAttribute("aria-checked")).toBe("false");
+  });
+});
+
+describe("the controls", () => {
+  it("offers the type as one radiogroup with a single Tab stop that the arrows move", async () => {
+    stubServer();
+    mount();
+    await editorElement();
+
+    const group = screen.getByRole("radiogroup", { name: "Interaction type" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios.map((radio) => radio.textContent)).toEqual([
+      "Note",
+      "Call",
+      "Meeting",
+      "Email",
+    ]);
+    // Only the checked type is in the Tab order.
+    expect(radios.map((radio) => radio.tabIndex)).toEqual([0, -1, -1, -1]);
+
+    fireEvent.keyDown(typeButton("Note"), { key: "ArrowRight" });
+    expect(typeButton("Call").getAttribute("aria-checked")).toBe("true");
+    expect(document.activeElement).toBe(typeButton("Call"));
+    fireEvent.keyDown(typeButton("Call"), { key: "ArrowLeft" });
+    fireEvent.keyDown(typeButton("Note"), { key: "ArrowLeft" });
+    expect(typeButton("Email").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("keeps Save enabled, and an empty Save says what is missing and sends nothing", async () => {
+    const saves = stubServer();
+    mount();
+    const pm = await editorElement();
+
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    fireEvent.click(saveButton());
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe("Write something first");
+    // The message is the button's description, and focus goes where the
+    // missing text is typed.
+    expect(saveButton().getAttribute("aria-describedby")).toBe(alert.id);
+    await waitFor(() => expect(pm.contains(document.activeElement)).toBe(true));
+
+    // ⌘ Enter from the editor takes the same path.
+    fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(saves).toHaveLength(0);
+
+    // Typing takes the message away.
+    await type(pm, "Now there is a note");
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(saveButton().getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("saves with ⌘ Enter from the next-action line too", async () => {
+    const saves = stubServer();
+    mount();
+    await editorElement();
+    fireEvent.change(followUpInput(), {
+      target: { value: "Call back next Friday" },
+    });
+
+    fireEvent.keyDown(followUpInput(), { key: "Enter", metaKey: true });
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].body.title).toBe("Action Scheduled");
+    expect(saves[0].body.content).toBeNull();
+    expect(saves[0].body.actionItem).toMatchObject({ title: "Call back" });
+    await act(async () => {
+      saves[0].resolve();
+    });
+    await waitFor(() => expect(followUpInput().value).toBe(""));
+  });
+
+  it("shows the ⌘ Enter hint at the end of the next-action line", async () => {
+    stubServer();
+    mount();
+    await editorElement();
+    const hint = screen.getByText("to save").parentElement!;
+    expect(
+      within(hint)
+        .getAllByText(/⌘|Enter/)
+        .map((kbd) => kbd.tagName),
+    ).toEqual(["KBD", "KBD"]);
+  });
+
+  it("focuses the editor when asked, once, and says it did", async () => {
+    stubServer();
+    const handled = vi.fn();
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <InteractionComposer contactId="contact-1" />
+      </QueryClientProvider>,
+    );
+    const pm = await editorElement();
+    expect(pm.contains(document.activeElement)).toBe(false);
+
+    rerender(
+      <QueryClientProvider client={client}>
+        <InteractionComposer
+          contactId="contact-1"
+          focusRequested
+          onFocusHandled={handled}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(pm.contains(document.activeElement)).toBe(true));
+    expect(handled).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets @ mention the people in the network, read when @ is typed", async () => {
+    stubServer([person("p-1", "Grace Hopper"), person("p-2", "Ada Lovelace")]);
+    mount();
+    const pm = await editorElement();
+    const editor = (
+      pm as HTMLElement & {
+        editor: {
+          extensionManager: {
+            extensions: {
+              name: string;
+              options: {
+                suggestion?: {
+                  items: (args: { query: string }) => { name: string }[];
+                };
+              };
+            }[];
+          };
+        };
+      }
+    ).editor;
+    const mention = editor.extensionManager.extensions.find(
+      (extension) => extension.name === "mention",
+    );
+    expect(mention).toBeDefined();
+    // The names arrive after the editor was created, and @ still finds them.
+    await waitFor(() =>
+      expect(
+        mention!.options.suggestion!.items({ query: "gr" }).map((p) => p.name),
+      ).toEqual(["Grace Hopper"]),
+    );
+  });
+});
+
+describe("the compact composer", () => {
+  function mountCompact(
+    props: Partial<React.ComponentProps<typeof InteractionComposer>> = {},
+  ) {
+    return render(
+      <QueryClientProvider client={client}>
+        <InteractionComposer compact contactId={null} {...props} />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("asks for a contact when there is text and nobody is chosen", async () => {
+    const saves = stubServer();
+    const missing = vi.fn();
+    mountCompact({ onContactMissing: missing });
+    const pm = await editorElement();
+    await type(pm, "Lunch at the usual place");
+
+    fireEvent.click(saveButton());
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Choose a contact first",
+    );
+    expect(missing).toHaveBeenCalledTimes(1);
+    expect(saves).toHaveLength(0);
+  });
+
+  it("saves for the chosen contact, reports the save, and keeps no draft", async () => {
+    account.current = { id: "user-a" };
+    const saves = stubServer();
+    const saved = vi.fn();
+    const { rerender } = mountCompact({ onSaved: saved });
+    const pm = await editorElement();
+    await type(pm, "Met for coffee");
+    fireEvent.click(typeButton("Meeting"));
+
+    // The contact is chosen after the text was written, and the text stays.
+    rerender(
+      <QueryClientProvider client={client}>
+        <InteractionComposer compact contactId="contact-7" onSaved={saved} />
+      </QueryClientProvider>,
+    );
+    expect(pm.isConnected).toBe(true);
+    expect(pm.textContent).toBe("Met for coffee");
+
+    fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].url).toContain("/contacts/contact-7/interactions");
+    expect(saves[0].body).toMatchObject({
+      type: "meeting",
+      title: "Logged meeting",
+    });
+    await act(async () => {
+      saves[0].resolve();
+    });
+    await waitFor(() =>
+      expect(saved).toHaveBeenCalledWith({
+        type: "meeting",
+        contactId: "contact-7",
+      }),
+    );
+    fireEvent(window, new Event("pagehide"));
+    expect(
+      Object.keys(localStorage).filter((key) =>
+        key.startsWith("contrack:draft:"),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("the quick interaction dialog", () => {
+  it("opens for a preset contact without the picker, and saves for that contact", async () => {
+    const saves = stubServer([person("c-9", "Katherine Johnson")]);
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={client}>
+        <QuickInteractionModal
+          isOpen
+          onClose={onClose}
+          initialContactId="c-9"
+        />
+      </QueryClientProvider>,
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Log an interaction",
+    });
+    expect(
+      within(dialog).queryByRole("textbox", { name: "Search for a contact" }),
+    ).toBeNull();
+    await waitFor(() =>
+      expect(within(dialog).getByText("Katherine Johnson")).toBeTruthy(),
+    );
+
+    const pm = await editorElement();
+    await type(pm, "Reviewed the numbers");
+    fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0].url).toContain("/contacts/c-9/interactions");
+    await act(async () => {
+      saves[0].resolve();
+    });
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("shows the picker without a preset contact, and a Save sends focus to it", async () => {
+    stubServer([person("c-1", "Grace Hopper")]);
+    render(
+      <QueryClientProvider client={client}>
+        <QuickInteractionModal isOpen onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Log an interaction",
+    });
+    const picker = within(dialog).getByRole("textbox", {
+      name: "Search for a contact",
+    });
+    const pm = await editorElement();
+    await type(pm, "A note for somebody");
+
+    fireEvent.click(saveButton());
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Choose a contact first",
+    );
+    expect(document.activeElement).toBe(picker);
   });
 });
 
@@ -187,7 +499,7 @@ describe("a save that fails", () => {
 
     await waitFor(() => expect(saveButton().textContent).toBe("Save"));
     expect(pm.textContent).toBe("Met at the conference");
-    expect(typeButton("Call").getAttribute("aria-pressed")).toBe("true");
+    expect(typeButton("Call").getAttribute("aria-checked")).toBe("true");
     expect(followUpInput().value).toBe("Send slides next Tuesday");
   });
 
@@ -252,7 +564,8 @@ describe("a save that succeeds", () => {
 
     await waitFor(() => expect(pm.textContent).toBe(""));
     expect(followUpInput().value).toBe("");
-    expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+    // Save stays enabled on an empty composer. Pressing it now explains.
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("keeps a sentence finished while the save was out", async () => {
@@ -376,7 +689,7 @@ describe("drafts", () => {
 
     await waitFor(() => expect(pm.textContent).toBe("saved earlier"));
     expect(followUpInput().value).toBe("Ping next week");
-    expect(typeButton("Meeting").getAttribute("aria-pressed")).toBe("true");
+    expect(typeButton("Meeting").getAttribute("aria-checked")).toBe("true");
     expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -437,7 +750,7 @@ describe("drafts", () => {
     const key = draftKey("user-a", "contact-4");
     const { unmount } = render(
       <QueryClientProvider client={client}>
-        <RichInteractionComposer contactId="contact-4" />
+        <InteractionComposer contactId="contact-4" />
       </QueryClientProvider>,
     );
     const pm = await editorElement();

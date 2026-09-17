@@ -182,10 +182,10 @@ A pin a person placed also shows a "Placed by hand" badge, with an InfoTip
 that says the geocoder will not move it. "Adjust pin" and "Set location" open
 the dialog described in [Moving a Pin by Hand](#moving-a-pin-by-hand).
 
-Each address row also shows a "Show on map" link when the contact has
-coordinates. Every link leads to `/map/contact/<id>`, because a contact has
-one pin however many addresses they have, and the first address is the one
-that places it.
+Each address row's menu also holds **Show on map** when the contact has
+coordinates. Every one leads to `/map/contact/<id>`, because a contact has
+one pin however many addresses they have. The first address is the one that
+places it, and its row says **Map pin**.
 
 The mini map is `ContactMap` with `interactive={false}`, one pin, no hover
 card, and `label="Location map"`. It is a still picture: it answers "is this

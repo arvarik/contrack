@@ -15,7 +15,19 @@
  * the control does.
  */
 import { useRef } from "react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+
+export interface SegmentedOption<T extends string> {
+  value: T;
+  label: string;
+  /**
+   * A glyph for narrow screens. With one, the option shows the glyph below
+   * `sm` and the text from `sm`. The text stays in the page as the option's
+   * name at every width, visually hidden where the glyph stands in for it.
+   */
+  icon?: LucideIcon;
+}
 
 export const Segmented = <T extends string>({
   options,
@@ -24,7 +36,7 @@ export const Segmented = <T extends string>({
   label,
   className,
 }: {
-  options: readonly { value: T; label: string }[];
+  options: readonly SegmentedOption<T>[];
   value: T;
   onChange: (next: T) => void;
   /** Names the control for a screen reader. Required: it has no visible label. */
@@ -70,28 +82,41 @@ export const Segmented = <T extends string>({
         className,
       )}
     >
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          // Only the selected option is a tab stop, so Tab moves past the
-          // whole control rather than through every option in it.
-          tabIndex={value === option.value ? 0 : -1}
-          onKeyDown={onKeyDown}
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:min-h-0 sm:h-full rounded-full text-xs font-bold",
-            "flex items-center justify-center whitespace-nowrap transition-colors",
-            value === option.value
-              ? "bg-surface shadow-sm text-primary"
-              : "text-on-surface-variant hover:text-on-surface",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
+      {options.map((option) => {
+        const Icon = option.icon;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={value === option.value}
+            // Only the selected option is a tab stop, so Tab moves past the
+            // whole control rather than through every option in it.
+            tabIndex={value === option.value ? 0 : -1}
+            onKeyDown={onKeyDown}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:min-h-0 sm:h-full rounded-full text-xs font-bold",
+              "flex items-center justify-center whitespace-nowrap transition-colors",
+              // A glyph alone is narrower than a thumb, so it gets the width
+              // floor as well as the height.
+              Icon && "min-w-[44px] sm:min-w-0",
+              value === option.value
+                ? "bg-surface shadow-sm text-primary"
+                : "text-on-surface-variant hover:text-on-surface",
+            )}
+          >
+            {Icon ? (
+              <>
+                <Icon aria-hidden="true" className="w-4 h-4 sm:hidden" />
+                <span className="sr-only sm:not-sr-only">{option.label}</span>
+              </>
+            ) : (
+              option.label
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 };

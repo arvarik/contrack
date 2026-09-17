@@ -108,7 +108,7 @@ checkpoints before exit.
 | Shortcut           | Action                              |
 | ------------------ | ----------------------------------- |
 | `Cmd+K` / `Ctrl+K` | Toggle Command Palette              |
-| `Cmd+Shift+I`      | Quick Note Modal                    |
+| `Cmd+Shift+I`      | Log an interaction (quick dialog)   |
 | `Cmd+Shift+H`      | Navigate to Network                 |
 | `Cmd+Shift+P`      | Navigate to Pulse                   |
 | `Cmd+Shift+M`      | Navigate to Map                     |
@@ -152,11 +152,15 @@ checkpoints before exit.
 | `v`        | Magic Paste (AI extraction) |
 | `Enter`    | Focus interaction composer  |
 
-### Rich Interaction Composer
+### Contact Page
 
-| Shortcut    | Action           |
-| ----------- | ---------------- |
-| `Cmd+Enter` | Save interaction |
+| Shortcut    | Action                               |
+| ----------- | ------------------------------------ |
+| `Enter`     | Edit the value that has focus        |
+| `Escape`    | Cancel the edit                      |
+| `Alt+↑`     | Move an address, email or phone up   |
+| `Alt+↓`     | Move an address, email or phone down |
+| `Cmd+Enter` | Save the interaction in the composer |
 
 ### @Mentions
 

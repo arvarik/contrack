@@ -124,6 +124,16 @@ export const iconToggle = (active: boolean) =>
 /** Text link style — inline clickable text */
 export const TEXT_LINK = "text-primary hover:underline font-bold";
 
+/**
+ * "+ Add": the control under a field or after a row of chips.
+ *
+ * A real button in primary text with a 44 px tap box. It replaced three
+ * looks for one act: an italic "Add another" that read as a placeholder, an
+ * underlined bare input, and nothing at all for tags.
+ */
+export const ADD_BUTTON =
+  "hit-area inline-flex items-center gap-1 w-fit rounded-lg px-1.5 -mx-1.5 py-0.5 text-sm font-bold text-primary hover:bg-primary/10 transition-colors";
+
 /** Danger text button — destructive inline action */
 export const DANGER_BTN =
   "w-full text-xs text-error hover:text-error hover:bg-red-500/5 rounded-xl py-3 transition-colors font-bold uppercase tracking-widest flex items-center justify-center gap-2";

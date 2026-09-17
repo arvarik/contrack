@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { cn } from "../../../lib/utils";
 import { Combobox } from "../../../components/ui/Combobox";
-import { activateOnKey } from "../../../lib/a11y";
+import { EditHint } from "./EditableField";
 
 const COMMON_INDUSTRIES = [
   "Finance",
@@ -38,6 +38,19 @@ export const IndustryField = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [tempVal, setTempVal] = useState(value || "");
+  const button = useRef<HTMLButtonElement>(null);
+  /**
+   * True when Enter or Escape closed the editor. The input leaves the page,
+   * so focus goes back to the value. A blur closes it too, and then focus
+   * is already somewhere else and stays there.
+   */
+  const refocus = useRef(false);
+
+  useEffect(() => {
+    if (isEditing || !refocus.current) return;
+    refocus.current = false;
+    button.current?.focus();
+  }, [isEditing]);
 
   const save = () => {
     setIsEditing(false);
@@ -46,42 +59,53 @@ export const IndustryField = ({
 
   if (isEditing) {
     return (
-      <Combobox
-        // Inline editor, opened by clicking the value it replaces.
-        // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus
-        value={tempVal}
-        onChange={setTempVal}
-        onSave={save}
-        options={COMMON_INDUSTRIES}
-        placeholder="Add Industry..."
-      />
+      <div
+        // Capture only notes the key. The combobox runs its own handler.
+        onKeyDownCapture={(e) => {
+          if (e.key === "Enter" || e.key === "Escape") refocus.current = true;
+        }}
+      >
+        <Combobox
+          // Inline editor, opened by clicking the value it replaces.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          value={tempVal}
+          onChange={setTempVal}
+          onSave={save}
+          options={COMMON_INDUSTRIES}
+          placeholder="Add industry"
+        />
+      </div>
     );
   }
   return (
-    <span
-      tabIndex={0}
-      role="button"
-      onClick={() => {
-        setIsEditing(true);
-        setTempVal(value || "");
-      }}
-      onKeyDown={activateOnKey(() => {
-        setIsEditing(true);
-        setTempVal(value || "");
-      })}
-      className={cn(
-        // 12 px above and below make the row 44 px tall on a phone.
-        "cursor-pointer hover:bg-surface-container-high px-1 -mx-1 py-3 sm:py-0 rounded transition-colors whitespace-pre-wrap max-w-full break-words outline-none text-sm font-medium",
-        // Italic and the muted token, NOT opacity. Half-opacity text is half
-        // the contrast: this placeholder measured 2.86:1 on a white card, and
-        // a prompt somebody is meant to read and click is content rather than
-        // decoration. The browser audit found it on the contact detail route
-        // the first time that route was reachable.
-        !value && "italic text-on-surface-variant",
-      )}
-    >
-      {value || "Add Industry..."}
-    </span>
+    // 44 px tall on a phone, so the row gives the value's tap box room.
+    <div className="flex items-center min-h-[44px] sm:min-h-0">
+      {/* A real button: Enter and Space open the editor with no key handler,
+          and `group/edit` shows the pencil on keyboard focus. hit-area: a
+          short value such as "Law" is narrower than a thumb. */}
+      <button
+        ref={button}
+        type="button"
+        onClick={() => {
+          setIsEditing(true);
+          setTempVal(value || "");
+        }}
+        className={cn(
+          "group/edit hit-area inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-pointer transition-colors hover:bg-surface-container-high",
+          // Italic and the muted token, NOT opacity. Half-opacity text is half
+          // the contrast: this placeholder measured 2.86:1 on a white card, and
+          // a prompt somebody is meant to read and click is content rather than
+          // decoration. The browser audit found it on the contact detail route
+          // the first time that route was reachable.
+          value ? "text-on-surface" : "italic text-on-surface-variant",
+        )}
+      >
+        <span className="min-w-0 whitespace-pre-wrap break-words">
+          {value || "Add industry"}
+        </span>
+        <EditHint />
+      </button>
+    </div>
   );
 };
