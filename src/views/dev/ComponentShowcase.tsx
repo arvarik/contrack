@@ -256,7 +256,7 @@ export const ComponentShowcase = () => {
           <div className={TIMELINE_CARD}>
             <span className={LABEL}>TIMELINE_CARD</span>
             <p className="text-sm text-on-surface mt-2">
-              Timeline entry — hover:shadow-md transition
+              Timeline entry, beside the date column. No hover shadow
             </p>
           </div>
         </Section>

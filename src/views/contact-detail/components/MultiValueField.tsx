@@ -214,7 +214,8 @@ const SortableRow = ({
       }}
       className={cn(
         // An address is long, so it takes its own line and the chip and the
-        // kebab sit under it. An email or a phone shares one line with them.
+        // kebab sit under it. An email or a phone shares one line with them
+        // when the card has room.
         // gap-x-3 on a phone keeps the tap boxes apart.
         "flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:gap-x-2 rounded-lg transition-colors",
         isDragging && "opacity-60 bg-primary/5 shadow-lg",
@@ -222,7 +223,10 @@ const SortableRow = ({
     >
       <div
         data-row-value=""
-        className={cn("min-w-0", isAddress ? "basis-full" : "flex-1")}
+        // An email or a phone asks for 11 rem before it shares the line. In
+        // the 300 px Details column that moves the chip and the kebab under
+        // it, and the address keeps whole words on one line.
+        className={cn("min-w-0", isAddress ? "basis-full" : "flex-[1_1_11rem]")}
       >
         <EditableField
           value={item.value}

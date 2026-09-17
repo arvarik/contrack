@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useCompleteActionItem, useUpdateActionItem } from "../../api";
-import { format, addDays } from "date-fns";
+import { addDays } from "date-fns";
+import { formatWhen } from "../../lib/datetime";
 import { createPortal } from "react-dom";
 
 interface SwimlaneProps {
@@ -176,7 +177,7 @@ const ActionCard = ({
               theme === "urgent" && "text-error font-extrabold",
             )}
           >
-            {format(new Date(item.dueAt), "MMM d, h:mm a")}
+            {formatWhen(item.dueAt)}
           </span>
         </div>
       </div>

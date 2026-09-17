@@ -14,23 +14,31 @@
 import React from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Clock, RefreshCw } from "lucide-react";
+import {
+  bandFor,
+  describeScore,
+  type ScoreBand,
+} from "../../../shared/scoreBand";
 
 // ─── Score Dot ───────────────────────────────────────────────────────────────
 
 interface ScoreDotProps {
   score: number | null | undefined;
+  /**
+   * When the contact was last contacted. Null means never: the score is then
+   * the column default and not a judgement, so no dot shows.
+   */
+  lastContactedAt?: string | null;
 }
 
-const scoreColor = (score: number): string => {
-  if (score >= 70) return "bg-emerald-500";
-  if (score >= 40) return "bg-amber-500";
-  return "bg-rose-500";
-};
-
-const scoreLabel = (score: number): string => {
-  if (score >= 70) return "Strong";
-  if (score >= 40) return "Moderate";
-  return "At risk";
+/**
+ * The dot colour for each band. The cut points and the words come from
+ * shared/scoreBand, so the palette and the avatar ring always agree.
+ */
+const SCORE_DOT_COLOR: Record<ScoreBand, string> = {
+  strong: "bg-emerald-500",
+  fading: "bg-amber-500",
+  "at-risk": "bg-rose-500",
 };
 
 /**
@@ -40,13 +48,13 @@ const scoreLabel = (score: number): string => {
  * Hidden for contacts that have never been interacted with (score 0 or null)
  * to avoid alarming users on fresh imports with hundreds of uncontacted contacts.
  */
-export const ScoreDot = ({ score }: ScoreDotProps) => {
-  if (score == null || score === 0) return null;
+export const ScoreDot = ({ score, lastContactedAt }: ScoreDotProps) => {
+  if (score == null || score === 0 || lastContactedAt === null) return null;
 
   return (
     <span
-      title={`Score: ${score} — ${scoreLabel(score)}`}
-      className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${scoreColor(score)}`}
+      title={describeScore(score)}
+      className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${SCORE_DOT_COLOR[bandFor(score)]}`}
     />
   );
 };

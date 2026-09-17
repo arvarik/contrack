@@ -11,7 +11,9 @@
  */
 import React from "react";
 import { Sparkles, CheckCheck, AlertCircle } from "lucide-react";
-import { HealthRingAvatar } from "../../../components/HealthRingAvatar";
+import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
+import { contactScore, describeScore } from "../../../../shared/scoreBand";
+import { formatDay } from "../../../lib/datetime";
 import { cn } from "../../../lib/utils";
 import type { Contact } from "../../../types";
 import { activateOnKey } from "../../../lib/a11y";
@@ -34,6 +36,7 @@ export function ContactRow({
   hasError,
   onToggle,
 }: ContactRowProps) {
+  const scoreWords = describeScore(contactScore(contact));
   return (
     <div
       onKeyDown={activateOnKey(onToggle)}
@@ -58,9 +61,12 @@ export function ContactRow({
         {isSelected && <CheckCheck className="w-3 h-3 text-white" />}
       </div>
 
-      {/* Avatar */}
-      <div className="relative shrink-0">
-        <HealthRingAvatar contact={contact} size={40} />
+      {/* Avatar. The row is a button named by its text, and a named ring
+          here would put the score before the person's name. So the ring is
+          decorative, the tooltip sits on this wrapper, and the score words
+          follow the name below. */}
+      <div className="relative shrink-0" title={scoreWords} aria-hidden="true">
+        <ScoreRingAvatar contact={contact} size={40} ring="list" decorative />
       </div>
 
       {/* Info */}
@@ -73,6 +79,7 @@ export function ContactRow({
             {[contact.role, contact.company].filter(Boolean).join(" · ")}
           </p>
         )}
+        <span className="sr-only">{scoreWords}</span>
       </div>
 
       {/* Status badge */}
@@ -101,11 +108,7 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   }
 
   if (contact.aiHydratedAt) {
-    const date = new Date(contact.aiHydratedAt);
-    const label = date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
+    const label = formatDay(contact.aiHydratedAt);
     return (
       <span className="flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
         <Sparkles className="w-3 h-3" />

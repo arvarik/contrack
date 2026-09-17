@@ -142,12 +142,10 @@ function periodOf(from: string, to: string): Period {
 function describeRange(from: string | null, to: string | null): string {
   const start = from ? parseServerTime(from) : null;
   const end = to ? parseServerTime(to) : null;
+  // The medium date that formatDay prints. The bounds here are Date values
+  // and not API strings, so the options are the same and the call is direct.
   const day = (d: Date) =>
-    d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    d.toLocaleDateString(undefined, { dateStyle: "medium" });
   // The end is exclusive, so the last day inside the range is a moment before.
   const lastDay = end ? new Date(end.getTime() - 1) : null;
   if (start && lastDay) return `${day(start)} – ${day(lastDay)}`;

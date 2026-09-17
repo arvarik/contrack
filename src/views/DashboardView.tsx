@@ -43,7 +43,8 @@ import {
 import { cn } from "../lib/utils";
 import { tileDelay } from "../lib/motion";
 import { motion, AnimatePresence } from "motion/react";
-import { format, addDays } from "date-fns";
+import { addDays } from "date-fns";
+import { formatDay } from "../lib/datetime";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { NAMES } from "../lib/names";
 import { SuggestionReviewQueue } from "./dedupe/components";
@@ -105,9 +106,7 @@ const CompletedActionsBar = () => {
                   </div>
                 </div>
                 <div className="shrink-0 text-[11px] uppercase font-bold text-on-surface-variant tracking-widest pl-1 sm:pl-0">
-                  {item.completedAt
-                    ? format(new Date(item.completedAt), "MMM d, yyyy")
-                    : ""}
+                  {formatDay(item.completedAt, "")}
                 </div>
               </div>
             ))}

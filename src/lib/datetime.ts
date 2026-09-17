@@ -22,6 +22,14 @@
  */
 export function parseServerTime(value: string | null | undefined): Date | null {
   if (!value) return null;
+  // A date with no time ("1974-05-10", a birthday or a date-only import) is a
+  // day on the calendar, not an instant. Read as UTC midnight it shows as the
+  // day before anywhere west of Greenwich, so it is read as local midnight.
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (day) {
+    const date = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
   // A space separator and no zone means SQLite wrote it, and SQLite writes
   // UTC. Naming the zone is what stops the browser assuming local.
   const normalized = value.includes("T")

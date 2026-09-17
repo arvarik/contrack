@@ -18,8 +18,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { HealthRingAvatar } from "../../components/HealthRingAvatar";
+import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
+import { contactScore, describeScore } from "../../../shared/scoreBand";
 import { useCompanyLogo } from "../../hooks/useCompanyLogo";
+import { formatDay } from "../../lib/datetime";
 import { listRow } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { Contact } from "../../types";
@@ -161,9 +163,23 @@ const ContactListItemInner = ({
   const compact = density === "compact";
   const metrics = DENSITY_METRICS[density];
 
+  // The row's name says the score in words, so the ring's colour is never the
+  // only sign of it: "Betty Clark, Global Dynamics, score 72, strong". The
+  // middle part is the line printed under the name, the company or else the
+  // role, and it is left out when the row prints neither.
+  const score = contactScore(contact);
+  const rowName = [
+    contact.name,
+    contact.company || contact.role,
+    describeScore(score, { sentence: true }),
+  ]
+    .filter(Boolean)
+    .join(", ");
+
   return (
     <Link
       id={`${idPrefix}-${contact.id}`}
+      aria-label={rowName}
       aria-current={active && !isSelectMode ? "page" : undefined}
       to={isSelectMode ? "#" : `/contact/${contact.id}${location.search}`}
       onClick={handleClick}
@@ -207,7 +223,22 @@ const ContactListItemInner = ({
         )}
       </AnimatePresence>
 
-      <HealthRingAvatar contact={contact} size={metrics.avatarSize} />
+      {/* The row's name already says the score, so the ring is decorative
+          and a screen reader hears the score once. The tooltip stays on this
+          wrapper for a pointer user, and aria-hidden keeps it out of the
+          accessibility tree. */}
+      <span
+        className="shrink-0 flex"
+        title={describeScore(score)}
+        aria-hidden="true"
+      >
+        <ScoreRingAvatar
+          contact={contact}
+          size={metrics.avatarSize}
+          ring="list"
+          decorative
+        />
+      </span>
 
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
@@ -292,7 +323,7 @@ const ContactListItemInner = ({
           className="w-14 text-right tabular-nums"
           title={
             contact.lastContactedAt
-              ? `Last contacted ${new Date(contact.lastContactedAt).toLocaleDateString()}`
+              ? `Last contacted ${formatDay(contact.lastContactedAt)}`
               : "No logged interactions yet"
           }
         >

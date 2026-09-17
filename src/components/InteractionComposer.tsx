@@ -21,6 +21,10 @@
  * 4. The action bar: the type control (a radiogroup, text from `sm` and
  *    glyphs below) and Save.
  *
+ * In the narrow contact layout the composer is `collapsible`: one line, the
+ * editor alone, until it takes focus. The page opens on the timeline, not on
+ * an empty form.
+ *
  * Save is always enabled. A disabled button said nothing about why it could
  * not be pressed, and a keyboard user could not reach it to find out. A Save
  * with nothing to send now says what is missing and puts focus where it can
@@ -45,8 +49,8 @@ import { Extension } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
 import { FileText, Phone, Handshake, Mail, CalendarClock } from "lucide-react";
 import * as chrono from "chrono-node";
-import { format } from "date-fns";
 import { toast } from "sonner";
+import { formatWhen } from "../lib/datetime";
 import { LinkPreviewExtension } from "./LinkPreviewExtension";
 import { getMentionSuggestion } from "./MentionSuggestion";
 import { Segmented, type SegmentedOption } from "./ui/Segmented";
@@ -55,7 +59,12 @@ import type { Interaction } from "../types";
 import { COMPOSER, KBD_SM, TAG_PILL } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { useAuth } from "./auth/AuthGate";
-import { draftKey, readDraft, writeDraft } from "../lib/composerDrafts";
+import {
+  draftKey,
+  isEmptyDraft,
+  readDraft,
+  writeDraft,
+} from "../lib/composerDrafts";
 import { markSubmission, removeSubmitted } from "../lib/composerSubmission";
 import {
   INTERACTION_LABELS,
@@ -172,6 +181,13 @@ export interface InteractionComposerProps {
   onSaved?: (saved: { type: InteractionKind; contactId: string }) => void;
   /** Called when Save is pressed with no contact. The dialog focuses its picker. */
   onContactMissing?: () => void;
+  /**
+   * The narrow contact page's form. The composer is one line, the editor
+   * alone, until something in it takes focus. Then the next-action line,
+   * the type control and Save open under it. It closes again when focus
+   * leaves and there is nothing written.
+   */
+  collapsible?: boolean;
 }
 
 export const InteractionComposer = (props: InteractionComposerProps) => {
@@ -200,10 +216,19 @@ const Composer = ({
   onFocusHandled,
   onSaved,
   onContactMissing,
+  collapsible = false,
   storageKey,
 }: InteractionComposerProps & { storageKey: string | null }) => {
   const [draft] = useState(() => (storageKey ? readDraft(storageKey) : null));
   const [type, setType] = useState<InteractionKind>(draft?.type ?? "note");
+  /**
+   * Whether the whole composer shows. Always true unless `collapsible`. A
+   * draft that comes back from disk opens it, so half-written text never
+   * hides behind one line.
+   */
+  const [opened, setOpened] = useState(() => !!draft && !isEmptyDraft(draft));
+  const expanded = !collapsible || opened;
+  const rootRef = useRef<HTMLDivElement>(null);
   /**
    * Mirrors `type` for the Placeholder callback and for the submit path, both
    * of which run outside React's render cycle and so cannot close over state.
@@ -464,25 +489,66 @@ const Composer = ({
     }
   };
 
+  /**
+   * Focus leaving a collapsible composer closes it, when nothing is written
+   * and no save is out. Focus moving between the editor, the next-action
+   * line, the type control and Save keeps it open.
+   */
+  const onBlur = (event: React.FocusEvent) => {
+    if (!collapsible) return;
+    const next = event.relatedTarget as Node | null;
+    if (next && rootRef.current?.contains(next)) return;
+    const current = editorRef.current;
+    if (current && !current.isDestroyed && !current.isEmpty) return;
+    if (followUpRef.current.trim() || pendingRef.current) return;
+    setProblem(null);
+    setOpened(false);
+  };
+
   return (
-    // A key handler on the container, not a control: the keys come from the
-    // fields and buttons inside it.
+    // Key and focus handlers on the container, not a control: the events come
+    // from the fields and buttons inside it.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
+      ref={rootRef}
       onKeyDown={onKeyDown}
+      onFocus={collapsible ? () => setOpened(true) : undefined}
+      onBlur={onBlur}
+      data-expanded={expanded}
       className={cn(
         compact
           ? "flex flex-col"
-          : cn(COMPOSER, "p-0 overflow-hidden flex flex-col shadow-md"),
+          : cn(
+              COMPOSER,
+              "p-0 flex flex-col shadow-md",
+              // `clip` and not `hidden` when the bar can stick: an overflow
+              // that hides makes the card the bar's scroller, and the bar
+              // would never move.
+              collapsible ? "overflow-clip" : "overflow-hidden",
+            ),
       )}
     >
-      {/* Editor area */}
-      <div className={cn("flex-1 relative", compact ? "px-5 pt-2" : "p-5")}>
+      {/* Editor area. While collapsed, a tap anywhere on the line focuses the
+          editor, not only a tap on its text. The editor is the keyboard's way
+          in, so the area needs no key handler of its own. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
+      <div
+        className={cn(
+          "flex-1 relative",
+          compact ? "px-5 pt-2" : expanded ? "p-5" : "px-5 py-3 cursor-text",
+        )}
+        onClick={
+          expanded ? undefined : () => editorRef.current?.commands.focus("end")
+        }
+      >
         <EditorContent
           editor={editor}
           className={cn(
             "w-full custom-tiptap",
             compact && "bg-surface-container-low rounded-xl px-3 py-2",
+            // One line: the editor's own 80 px floor is set once, when it is
+            // created, so the collapsed form lifts it from outside.
+            !expanded && "[&_.ProseMirror]:min-h-0",
           )}
         />
         {/* The placeholder as text, for the editor's aria-describedby. */}
@@ -491,7 +557,12 @@ const Composer = ({
         </span>
 
         {/* The next-action line, and the save hint at its end */}
-        <div className="mt-4 flex items-center gap-3 relative">
+        <div
+          className={cn(
+            "mt-4 flex items-center gap-3 relative",
+            !expanded && "hidden",
+          )}
+        >
           <div className="flex flex-1 items-center px-3 py-0 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-primary/20 transition-all">
             <CalendarClock
               aria-hidden="true"
@@ -512,7 +583,7 @@ const Composer = ({
             />
             {parsedDate && (
               <span className={cn(TAG_PILL, "ml-2 shrink-0 shadow-sm")}>
-                {format(parsedDate, "MMM d, h:mm a")}
+                {formatWhen(parsedDate.toISOString())}
               </span>
             )}
           </div>
@@ -526,7 +597,7 @@ const Composer = ({
           </span>
         </div>
 
-        {problem && (
+        {problem && expanded && (
           <p
             id={messageId}
             role="alert"
@@ -544,6 +615,14 @@ const Composer = ({
           compact
             ? "px-5 py-3.5 mt-4 bg-surface-container-low sticky bottom-0 sm:static"
             : "bg-surface-container-low/40 px-5 py-3",
+          // On a phone a long note pushes Save down the page. The bar then
+          // sticks right on top of the tab bar, which is `md:hidden`, so Save
+          // stays in reach while the note is written. The offset is the tab
+          // bar's height: 3 rem of tab, 0.375 rem above it, and the larger of
+          // 0.75 rem and the home indicator's inset below it (App.tsx).
+          collapsible &&
+            "sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:static z-10 bg-surface-container-low",
+          !expanded && "hidden",
         )}
       >
         <Segmented

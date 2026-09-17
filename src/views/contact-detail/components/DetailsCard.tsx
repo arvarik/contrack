@@ -15,6 +15,7 @@ import type {
   ContactAddress,
 } from "../../../types";
 import { cn } from "../../../lib/utils";
+import { formatWhen } from "../../../lib/datetime";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 
 import { LocationMiniMap } from "../../map/LocationMiniMap";
@@ -258,7 +259,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       {contact.nextFollowUpAt && (
         <Field label="Next follow-up">
           <span className={FIELD_VALUE}>
-            {new Date(contact.nextFollowUpAt).toLocaleString()}
+            {formatWhen(contact.nextFollowUpAt)}
           </span>
         </Field>
       )}

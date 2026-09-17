@@ -65,20 +65,32 @@ other is a name pulled out of a note with no card to write.
 
 ## Contact Profile
 
-Each contact has a profile page. The header sits on top. Under it, the Details card is on the left and two tabs are on the right: **Timeline** (the composer and the interactions) and **Dossier** (the briefing and the background research).
+Each contact has a profile page. The page has two layouts. The width of the contact's own pane chooses the layout, not the width of the window.
+
+- **Wide** (the pane is 768 px or wider): the header sits on top. Under it, the Details card is a column on the left, and a **Timeline** and **Dossier** control is on the right. The Details column stays in view while you scroll, when it fits the window. A taller column scrolls with the page, so its last field stays in reach.
+- **Narrow** (a phone, or a pane under 768 px): a short header, then a **Timeline**, **Details** and **Dossier** control. The control sticks under the Back bar while the page scrolls. The Timeline tab shows first, with the composer above the first entry.
+
+The pane decides, not the window, because the sidebar and the 350 px contact list sit beside the contact. In a 1024 px window the contact pane is about 600 px wide, which is too narrow for two columns.
 
 ### Profile Header
 
 The header names the person, says the facts you need before you talk, and offers one primary action.
 
 ```
-(avatar) Thomas Walker (they/them)                  [ Log interaction ] ⋮
-         UX Researcher at Umbrella Corp
-         Sydney · 2:45 AM · 13°C · ThomasWalker ↗ · @Thomas_Walker ↗
-         [tech-lead ×] [advisor ×] [+ tag]
+Wide:
+(avatar 96) Thomas Walker (they/them)               [ Log interaction ] ⋮
+            UX Researcher at Umbrella Corp
+            Sydney · 2:45 AM · 13°C · ThomasWalker ↗ · @Thomas_Walker ↗
+            [tech-lead ×] [advisor ×] [+ tag]
+
+Narrow:
+← Network
+(avatar 56) Thomas Walker                                               ⋮
+            UX Researcher · Umbrella Corp
+            Sydney · 2:45 AM · ThomasWalker ↗
 ```
 
-1. **The name** is the page's `h1`. Opening a contact moves focus to it. The name, the role and the company each edit in place.
+1. **The name** is the page's `h1`. Opening a contact moves focus to it. The name, the role and the company each edit in place. The ring around the avatar is the relationship score (see [The Score Ring](#the-score-ring)).
 2. **The meta line** is plain text: the location, the person's local time, and the weather. Facts are not controls, so they do not wear pills. Social links and the website follow as links with a `↗` glyph. Each link opens in a new tab and has its own small menu with **Copy link** and **Remove link**.
 3. **The weather** makes a request to Open-Meteo with the contact's coordinates. It shows only when it is allowed. When it is not shown, no request is made. The settings revamp adds the switch for it.
 4. **Tags** are chips. **+ tag** adds one. Removing a tag offers **Undo** for 7 seconds. List memberships sit on the same row.
@@ -86,7 +98,34 @@ The header names the person, says the facts you need before you talk, and offers
 6. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
 7. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
 
-A ghost contact also shows **Promote to contact** beside **Log interaction**.
+A ghost contact also shows **Promote to contact** beside **Log interaction**. In the narrow header, the button sits under the meta line.
+
+The narrow header is about 140 px tall:
+
+- **Back** shows below the `lg` width and says the page it goes to: **Network**, **Map**, or **Archived contacts**. Its accessible name is "Back to Network", and so on.
+- **No Log interaction button.** The composer is the first thing under the section control.
+- **No weather**, so the meta line fits on one line more often.
+- **The headline, the AI summary, the tags and the lists** move to the top of the **Details** tab.
+
+### The Score Ring
+
+The ring around a contact's avatar shows the relationship score. The ring used to show the contact's colour, and people read a red ring as trouble. Now the ring says one thing.
+
+- **The arc length is the score.** A score of 72 fills 72 percent of the ring, clockwise from the top. A faint track shows the rest.
+- **The arc colour is the band.** The bands come from `shared/scoreBand.ts`, which the server and the app both read.
+
+| Band        | Score     | Colour token |
+| ----------- | --------- | ------------ |
+| **Strong**  | 70 to 100 | `success`    |
+| **Fading**  | 40 to 69  | `warning`    |
+| **At risk** | under 40  | `error`      |
+
+- **No interactions yet.** A contact with no logged interaction has no score to show. The ring shows the track with no arc, and the tooltip says "No interactions yet".
+- **Not by colour alone.** The tooltip says the score in words: "Score 72, strong". In the contact list, each row's accessible name ends with the same words: "Betty Clark, Global Dynamics, score 72, strong".
+- **Width.** The ring is 2 px in lists and 3.5 px in the contact header.
+- **Photos.** A real photo shows with no grey disc behind it. The drawn fallback avatar keeps the disc, because its corners are transparent.
+
+The contact's colour (**Change colour**) is now only the accent on that contact's page. The component is `ScoreRingAvatar`. The old name, `HealthRingAvatar`, stays as an alias for one release.
 
 ### Details: One Pattern for Every Value
 
@@ -163,7 +202,36 @@ until you click the map. See [Map View](map-view.md#moving-a-pin-by-hand).
 
 ## Timeline
 
-The timeline tab shows all interactions with a contact in chronological order. Each interaction has:
+The Timeline tab shows every interaction with a contact in one column, newest first. The timeline used to zigzag, with cards on alternate sides. At 1440 px each card was 250 px wide, and titles wrapped to three lines.
+
+```
+THIS WEEK
+10    📞  Follow up regarding partnership                            ⋮
+Sep       Sent over the requested documents…
+AUGUST
+28    📝  Follow up regarding partnership                            ⋮
+Aug
+```
+
+- **Groups.** "This week" holds the entries of the current week, from Monday. Each earlier month is one group: "August" in the current year, "December 2025" in an earlier year. Each group heading is an `h2`, and its entries are a list.
+- **The date column** is 64 px wide. It shows the day and the short month.
+- **The full date** is the entry's tooltip. It uses `formatDay`, the one format for a date across the app.
+- **The type glyph** follows the date: note, call, meeting, email and the rest.
+- **The title** is a button. It opens the interaction in a dialog, with the full text, the follow-ups, **Edit** and **Delete**.
+- **The body** shows at most three lines. The dialog shows all of it.
+- **Mentions, attachments, follow-ups and the duration** show under the body.
+- **The entry menu** (⋮) holds **Edit** and **Delete**. It shows when the pointer is over the entry, when focus is in the entry, and always on a touch screen. There is no red button at rest.
+
+### Deleting an Interaction
+
+1. **Delete** (from the entry menu or the dialog) asks first: "Delete this interaction?"
+2. **Delete interaction** takes the entry off the timeline, and a toast says "Interaction deleted" with **Undo** for 10 seconds.
+3. **Undo** puts the entry back. Nothing was sent to the server.
+4. When the toast closes without **Undo**, the app sends the delete. The server delete is permanent: the interaction and its attached file are gone.
+
+The delete waits for the toast to close, because the server has no Trash for interactions. The wait continues when you leave the contact page. The app sends every waiting delete if you close the tab. If the server refuses a delete, the entry comes back and a toast says so.
+
+Each interaction has:
 
 - **Type** — Note, Call, Meeting, Email, Message, SMS
 - **Title** — Short description
@@ -184,6 +252,8 @@ One composer writes every interaction, on the Timeline tab and in the quick inte
 5. **`Cmd+Enter`** saves from anywhere in the composer. The hint at the end of the next-action line says so, from the `sm` width.
 
 A save clears only what was sent, and only after the server has it. On the Timeline tab the draft is kept on this device, per account and contact, until it is saved. The dialog keeps no draft.
+
+In the narrow layout the composer is one line, "Write a quick note...", until it takes focus. Then the next-action line, the type and **Save** open under it. When focus leaves and nothing is written, it closes again. A draft that comes back from this device opens it. On a phone, **Save** sticks above the tab bar while a long note is written.
 
 `QuickInteractionModal` takes an optional `initialContactId`. With it, the dialog opens for that person: the contact search is not shown, and focus starts in the editor.
 

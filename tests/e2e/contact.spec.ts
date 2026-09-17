@@ -62,6 +62,41 @@ test.afterEach(async () => {
   }
 });
 
+/** An ISO timestamp `days` before now, at the current time of day. */
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+
+/**
+ * Notes for a contact of the test's own, one per title, newest first: the
+ * first today, then one a day back, and the last 40 days ago. The first is
+ * a call, the rest are notes.
+ */
+async function ownNotes(
+  instance: ContrackInstance,
+  contactId: string,
+  titles: string[],
+): Promise<void> {
+  for (const [index, title] of titles.entries()) {
+    await instance.api("POST", `/contacts/${contactId}/interactions`, {
+      type: index === 0 ? "call" : "note",
+      title,
+      content: `Notes for ${title.toLowerCase()}.`,
+      date: daysAgo(index === titles.length - 1 ? 40 : index),
+    });
+  }
+}
+
+/** The month group heading for a date: "August", or "December 2025". */
+function monthHeading(iso: string): string {
+  const date = new Date(iso);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleString("en-US", {
+    month: "long",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+}
+
 test.describe("desktop", () => {
   test("opening a row with a click puts focus on the contact's name", async ({
     page,
@@ -206,9 +241,81 @@ test.describe("the contact header", () => {
     await page.goto(`/contact/${id}`);
 
     // From the Dossier tab too: the press brings the Timeline back first.
-    await page.getByRole("button", { name: "Dossier" }).click();
+    await page
+      .getByRole("radiogroup", { name: "Contact sections" })
+      .getByRole("radio", { name: "Dossier" })
+      .click();
     await page.getByRole("button", { name: "Log interaction" }).click();
     await expect(page.getByRole("textbox", { name: "Note" })).toBeFocused();
+  });
+});
+
+/**
+ * The timeline: one column, in groups, with its actions out of the way.
+ */
+test.describe("the timeline", () => {
+  test("Details sits beside one column of groups, and an entry's menu shows on focus", async ({
+    page,
+    instance,
+  }, testInfo) => {
+    const id = await ownContact(instance, "Zuri Column");
+    // The first note is dated today, so it is in this week whatever the day.
+    await ownNotes(instance, id, [
+      "Call about the offsite",
+      "Lunch in the old office",
+    ]);
+    await page.goto(`/contact/${id}`);
+    const first = page.getByRole("button", {
+      name: "Call about the offsite",
+      exact: true,
+    });
+    await expect(first).toBeVisible();
+
+    // Two sections beside Details, not three.
+    const sections = page.getByRole("radiogroup", { name: "Contact sections" });
+    await expect(sections.getByRole("radio")).toHaveText([
+      "Timeline",
+      "Dossier",
+    ]);
+    const details = page.getByRole("heading", { name: "Details" });
+    const detailsBox = (await details.boundingBox())!;
+    const firstBox = (await first.boundingBox())!;
+    expect(detailsBox.x).toBeLessThan(firstBox.x);
+
+    // Newest first, under "This week", then the month of the older note.
+    await expect(
+      page.getByRole("heading", { level: 2, name: "This week" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: monthHeading(daysAgo(40)) }),
+    ).toBeVisible();
+    // The entry's tooltip is its full date.
+    await expect(page.locator("li", { has: first })).toHaveAttribute(
+      "title",
+      /\d{4}/,
+    );
+
+    // No action at rest. Focus on the entry shows its menu, and Tab reaches it.
+    const kebab = page.getByRole("button", {
+      name: "Actions for Call about the offsite",
+    });
+    await expect(kebab).toHaveCSS("opacity", "0");
+    await first.focus();
+    await expect(kebab).toHaveCSS("opacity", "1");
+    await page.keyboard.press("Tab");
+    await expectVisibleFocus(kebab);
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", {
+      name: "Actions for Call about the offsite",
+    });
+    await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Delete"]);
+    await expectPageAccessible(page, testInfo, "timeline-entry-menu");
+
+    // Edit opens the note ready to change.
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("textbox", { name: "Interaction title" }),
+    ).toBeVisible();
   });
 });
 
@@ -245,7 +352,7 @@ test.describe("the composer", () => {
     await editor.click();
     await page.keyboard.press("ControlOrMeta+Enter");
     await expect(
-      page.getByRole("button", { name: "Logged meeting" }),
+      page.getByRole("button", { name: "Logged meeting", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Walked through the quarterly plan"),
@@ -319,6 +426,175 @@ test.describe("phone", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(edsger).toBeVisible();
     await expect(edsger).toBeFocused();
+  });
+
+  test("the timeline comes first: sticky sections, a one-line composer, delete and undo", async ({
+    page,
+    instance,
+  }, testInfo) => {
+    const id = await ownContact(instance, "Zia Phone");
+    await ownNotes(instance, id, [
+      "Call about the offsite",
+      "Notes from the design review",
+      "Sent the contract draft",
+      "Intro to the new hire",
+      "Catch up on the roadmap",
+      "Lunch in the old office",
+    ]);
+    await page.goto(`/contact/${id}`);
+    const first = page.getByRole("button", {
+      name: "Call about the offsite",
+      exact: true,
+    });
+    await expect(first).toBeVisible();
+
+    // A short header: Back says where it goes, and there is no button to
+    // log, because the composer is right under the sections.
+    await expect(
+      page.getByRole("button", { name: "Back to Network" }),
+    ).toHaveText("Network");
+    await expect(
+      page.getByRole("button", { name: "Log interaction" }),
+    ).toHaveCount(0);
+    const sections = page.getByRole("radiogroup", { name: "Contact sections" });
+    await expect(sections.getByRole("radio")).toHaveText([
+      "Timeline",
+      "Details",
+      "Dossier",
+    ]);
+
+    // The composer is one line, above the first entry.
+    const editor = page.getByRole("textbox", { name: "Note" });
+    const nextAction = page.getByRole("textbox", { name: "Next action" });
+    const save = page.getByRole("button", { name: "Save", exact: true });
+    await expect(editor).toBeVisible();
+    expect((await editor.boundingBox())!.y).toBeLessThan(
+      (await first.boundingBox())!.y,
+    );
+    await expect(nextAction).toBeHidden();
+    await expect(save).toBeHidden();
+    await expectPageAccessible(page, testInfo, "phone-timeline");
+
+    // Focus opens it, with Save above the tab bar. Focus leaving an empty
+    // composer closes it again.
+    await editor.tap();
+    await expect(nextAction).toBeVisible();
+    await expect(save).toBeVisible();
+    const tabBar = page.getByRole("navigation", { name: "Primary" });
+    const saveBox = (await save.boundingBox())!;
+    expect(saveBox.y + saveBox.height).toBeLessThanOrEqual(
+      (await tabBar.boundingBox())!.y,
+    );
+    await page.getByRole("heading", { level: 2 }).first().tap();
+    await expect(nextAction).toBeHidden();
+
+    // The sections stay under the Back bar while the page scrolls.
+    const heading = contactHeading(page, "Zia Phone");
+    await sections.evaluate((node) => {
+      let scroller = node.parentElement;
+      while (scroller && getComputedStyle(scroller).overflowY !== "auto") {
+        scroller = scroller.parentElement;
+      }
+      scroller?.scrollTo(0, scroller.scrollHeight);
+    });
+    await expect
+      .poll(async () => (await heading.boundingBox())?.y ?? -1)
+      .toBeLessThan(0);
+    const backBar = (await page
+      .getByRole("button", { name: "Back to Network" })
+      .locator("xpath=..")
+      .boundingBox())!;
+    await expect
+      .poll(async () => Math.round((await sections.boundingBox())!.y))
+      .toBeGreaterThanOrEqual(Math.round(backBar.y + backBar.height));
+    expect((await sections.boundingBox())!.y).toBeLessThan(
+      backBar.y + backBar.height + 16,
+    );
+
+    // Delete asks, then offers Undo, and Undo sends nothing.
+    const kebab = page.getByRole("button", {
+      name: "Actions for Call about the offsite",
+    });
+    await kebab.scrollIntoViewIfNeeded();
+    // A touch screen has no hover, so the menu button shows at rest.
+    await expect(kebab).toHaveCSS("opacity", "1");
+    await kebab.tap();
+    await page.getByRole("menuitem", { name: "Delete" }).tap();
+    const confirm = page.getByRole("dialog", {
+      name: "Delete this interaction?",
+    });
+    await expect(confirm).toBeVisible();
+    await expectPageAccessible(page, testInfo, "phone-timeline-delete");
+    await confirm.getByRole("button", { name: "Delete interaction" }).tap();
+    await expect(first).toBeHidden();
+    await expect(page.getByText("Interaction deleted")).toBeVisible();
+    await page.getByRole("button", { name: "Undo" }).tap();
+    await expect(first).toBeVisible();
+    await page.reload();
+    await expect(first).toBeVisible();
+
+    // Without Undo, the delete reaches the server once the offer closes.
+    await kebab.tap();
+    await page.getByRole("menuitem", { name: "Delete" }).tap();
+    await confirm.getByRole("button", { name: "Delete interaction" }).tap();
+    await expect(first).toBeHidden();
+    const offer = page.getByText("Interaction deleted");
+    await expect(offer).toBeVisible();
+    // The request waits for the offer to close, and not a moment before.
+    expect(
+      (
+        await instance.api<{ title: string }[]>(
+          "GET",
+          `/contacts/${id}/timeline`,
+        )
+      ).map((entry) => entry.title),
+    ).toContain("Call about the offsite");
+    await expect(offer).toBeHidden({ timeout: 15_000 });
+    await expect
+      .poll(
+        async () =>
+          (
+            await instance.api<{ title: string }[]>(
+              "GET",
+              `/contacts/${id}/timeline`,
+            )
+          ).map((entry) => entry.title),
+        { timeout: 5_000 },
+      )
+      .not.toContain("Call about the offsite");
+  });
+
+  test("the contact page passes axe in both palettes, on each section", async ({
+    page,
+    seed,
+  }, testInfo) => {
+    await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+    await expect(
+      page.getByRole("button", {
+        name: "Coffee about the Berlin office",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const sections = page.getByRole("radiogroup", { name: "Contact sections" });
+
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await expect(page.locator("html")).toHaveCSS(
+        "color-scheme",
+        new RegExp(scheme),
+      );
+      await sections.getByRole("radio", { name: "Timeline" }).tap();
+      await expectPageAccessible(page, testInfo, `phone-contact-${scheme}`);
+      await sections.getByRole("radio", { name: "Details" }).tap();
+      await expect(
+        page.getByRole("heading", { name: "Details" }),
+      ).toBeVisible();
+      await expectPageAccessible(
+        page,
+        testInfo,
+        `phone-contact-details-${scheme}`,
+      );
+    }
   });
 
   test("the browser's Back button returns focus to the row too", async ({

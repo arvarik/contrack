@@ -1,18 +1,35 @@
 /**
  * ProfileHeader: who this contact is, and the one thing to do next.
  *
+ * Wide (the contact pane is 768 px or more):
+ *
  * ```
- * (avatar) Thomas Walker (they/them)            [ Log interaction ] ⋮
- *          UX Researcher at Umbrella Corp
- *          Sydney · 2:45 AM · 13°C · in ThomasWalker ↗ · @Thomas_Walker ↗
- *          [tech-lead ×] [advisor ×] [+ tag]
+ * (avatar 96) Thomas Walker (they/them)          [ Log interaction ] ⋮
+ *             UX Researcher at Umbrella Corp
+ *             Sydney · 2:45 AM · 13°C · in ThomasWalker ↗ · @Thomas_Walker ↗
+ *             [tech-lead ×] [advisor ×] [+ tag]
+ * ```
+ *
+ * Narrow (a phone, or a pane too slim for two columns):
+ *
+ * ```
+ * ← Network
+ * (avatar 56) Thomas Walker                                  ⋮
+ *             UX Researcher · Umbrella Corp
+ *             Sydney · 2:45 AM · in ThomasWalker ↗
  * ```
  *
  * 1. The name is the page's h1 and takes focus when a contact opens.
- * 2. The meta line is text. Facts (place, local time, weather) are plain,
+ * 2. The ring around the avatar is the relationship score (ScoreRingAvatar).
+ *    The contact's own colour is the page accent, not the ring.
+ * 3. The meta line is text. Facts (place, local time, weather) are plain,
  *    and links look like links, with ↗ because they open a new tab.
- * 3. "Log interaction" is the only primary button. Colour, avatar, copy,
- *    archive and delete sit in the kebab beside it.
+ * 4. "Log interaction" is the only primary button. Colour, avatar, copy,
+ *    archive and delete sit in the kebab beside it. The narrow layout has no
+ *    button: the composer is the first thing under the tabs.
+ * 5. The narrow header keeps to about 140 px. The headline, the summary and
+ *    the tags move to the Details tab (`ContactIntro`, `ContactTags`), and
+ *    the weather stays off.
  *
  * The briefing lives in the Dossier tab, not here.
  */
@@ -46,15 +63,17 @@ import {
   timeZoneAt,
 } from "../../../components/LocalTimeWeather";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
+import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 
 import { EditableField } from "./EditableField";
 import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
 import { ContactActionsMenu } from "./ContactActionsMenu";
-import { ContactListsSection } from "./ContactListsSection";
-import { ChipInput, type Chip } from "./ChipInput";
-import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { ContactTags } from "./ContactTags";
 import { CONTACT_HEADING_ID } from "../../../components/layout/SkipLink";
 import { hasUserInteracted } from "../../../lib/userInteraction";
+
+/** The two forms of the contact page. See ContactProfile. */
+export type ContactLayout = "wide" | "narrow";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -69,6 +88,13 @@ export interface ProfileHeaderProps {
   /** Opens the Timeline tab and focuses the composer. */
   onLogInteraction: () => void;
   showNetworkButton?: boolean;
+  /** Which form to draw. Defaults to wide. */
+  layout?: ContactLayout;
+  /**
+   * Where Back goes, by the name of the page: "Network", "Map". The button
+   * says it, so nobody has to guess. Without one, the button says "Back".
+   */
+  backLabel?: string;
 
   // Mutations passed from parent
   archiveContact: {
@@ -166,6 +192,7 @@ const SocialLink = ({
   iconClassName,
   useFavicon,
   onRemove,
+  iconOnly = false,
 }: {
   url: string;
   platform: string;
@@ -176,12 +203,19 @@ const SocialLink = ({
   useFavicon: boolean;
   /** When set, the link gets a menu with Copy link and Remove link. */
   onRemove?: () => void;
+  /**
+   * The narrow header's form: the platform icon and ↗, with the handle as the
+   * link's name and its tooltip. Two handles in words take a phone's meta
+   * line onto three lines.
+   */
+  iconOnly?: boolean;
 }) => (
   <span className="group/link inline-flex items-center gap-1 max-w-full">
     <a
       href={safeHref(url)}
       target="_blank"
       rel="noopener noreferrer"
+      title={iconOnly ? displayName : undefined}
       className="hit-area inline-flex items-center gap-1.5 min-w-0 rounded font-medium text-on-surface underline-offset-2 hover:underline"
     >
       {/* The icon is hidden: a favicon's alt text would add a host name to
@@ -194,7 +228,9 @@ const SocialLink = ({
           useFavicon={useFavicon}
         />
       </span>
-      <span className="min-w-0 break-words">{displayName}</span>
+      <span className={iconOnly ? "sr-only" : "min-w-0 break-words"}>
+        {displayName}
+      </span>
       {platformName && <span className="sr-only">, {platformName}</span>}
       <span aria-hidden="true" className="text-on-surface-variant">
         ↗
@@ -234,6 +270,70 @@ const SocialLink = ({
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ContactIntro: the headline and the AI summary
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The headline and the summary, when they add something.
+ *
+ * Under the role in the wide header, and at the top of the Details tab in the
+ * narrow layout. Renders nothing when there is nothing new to say.
+ */
+export const ContactIntro = ({
+  contact,
+  onUpdate,
+  className,
+}: {
+  contact: Contact;
+  onUpdate: (field: string, val: string) => void;
+  className?: string;
+}) => {
+  let headline: React.ReactNode = null;
+  if (contact.headline) {
+    // Hide the headline when it only repeats the role and company, which the
+    // line above already shows.
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const headlineNorm = normalize(contact.headline);
+    const isDuplicate =
+      headlineNorm ===
+        normalize(`${contact.role || ""} at ${contact.company || ""}`) ||
+      headlineNorm ===
+        normalize(`${contact.role || ""} ${contact.company || ""}`) ||
+      (contact.role && headlineNorm === normalize(contact.role)) ||
+      (contact.company && headlineNorm === normalize(contact.company));
+    if (!isDuplicate) {
+      headline = (
+        <div className="text-base text-on-surface-variant font-medium italic">
+          <EditableField
+            value={contact.headline}
+            onSave={(val) => onUpdate("headline", val)}
+            placeholder="Add headline"
+          />
+        </div>
+      );
+    }
+  }
+
+  if (!headline && !contact.aiSummary) return null;
+  return (
+    <div className={cn("flex flex-col gap-3", className)}>
+      {headline}
+      {contact.aiSummary && (
+        <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 max-w-fit">
+          <Sparkles
+            aria-hidden="true"
+            className="w-4 h-4 text-primary mt-0.5 shrink-0"
+          />
+          <div className="text-sm text-primary font-medium leading-relaxed italic">
+            {contact.aiSummary}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -245,12 +345,15 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   onOpenAvatarPicker,
   onLogInteraction,
   showNetworkButton = false,
+  layout = "wide",
+  backLabel,
   archiveContact,
   unarchiveContact,
   updateContact,
   promoteGhost,
 }) => {
   const navigate = useNavigate();
+  const narrow = layout === "narrow";
 
   /**
    * Opening a contact puts focus on its name.
@@ -315,46 +418,6 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     });
   };
 
-  // ── Tags ──────────────────────────────────────────────────────────────
-  // Tags come from enrichment today, which is why they wear the AI colour.
-  const tagChips: Chip[] = (contact.tags || []).map((t) => ({
-    id: t.id,
-    label: t.tag,
-    ai: true,
-  }));
-
-  const addTag = (text: string) => {
-    updateContact.mutate({
-      id: contact.id,
-      data: {
-        tags: [
-          ...(contact.tags || []).map((t) => ({ tag: t.tag })),
-          { tag: text },
-        ],
-      },
-    });
-  };
-
-  const removeTag = (chip: Chip) => {
-    const before = contact.tags || [];
-    const after = before.filter((tag) => tag.id !== chip.id);
-    updateContact.mutate({
-      id: contact.id,
-      data: { tags: after.map((tag) => ({ tag: tag.tag })) },
-    });
-    toast("Tag removed", {
-      duration: 7000,
-      action: {
-        label: "Undo",
-        onClick: () =>
-          updateContact.mutate({
-            id: contact.id,
-            data: { tags: before.map((tag) => ({ tag: tag.tag })) },
-          }),
-      },
-    });
-  };
-
   // ── Meta line ─────────────────────────────────────────────────────────
   // Each item is one fact or one link. The dots go between items, so the
   // line never starts or ends with one.
@@ -371,8 +434,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         <LocalTimeWeather
           lat={contact.lat}
           lng={contact.lng}
-          // The settings revamp's `showWeather` preference replaces this constant.
-          showWeather={true}
+          // The settings revamp's `showWeather` preference replaces the wide
+          // case. The narrow header has room for one line, and no weather.
+          showWeather={!narrow}
         />
       ),
     });
@@ -386,6 +450,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       key: `link-${sl.id}`,
       node: (
         <SocialLink
+          iconOnly={narrow}
           url={sl.url}
           platform={sl.platform}
           displayName={displayName}
@@ -412,6 +477,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       key: "website",
       node: (
         <SocialLink
+          iconOnly={narrow}
           url={contact.website}
           platform="website"
           displayName={websiteName(contact.website)}
@@ -422,16 +488,25 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     });
   }
 
+  const avatarSize = narrow ? 56 : 96;
+
   return (
     <>
-      {/* Mobile Back Button */}
+      {/*
+        Back, below `lg`, where the contact has the screen and the list does
+        not show. It names the page it goes to. The bar is 56 px tall, and the
+        narrow layout's tabs stick right under it (ContactProfile).
+      */}
       {onClose && (
-        <div className="sticky top-0 z-30 glass-panel px-4 py-3 lg:hidden flex items-center shrink-0">
+        <div className="sticky top-0 z-30 glass-panel h-14 px-4 lg:hidden flex items-center shrink-0">
           <button
+            type="button"
             onClick={onClose}
+            aria-label={backLabel ? `Back to ${backLabel}` : undefined}
             className="hit-area flex items-center gap-2 text-on-primary-wash font-bold px-3 py-1.5 -ml-3 rounded-xl hover:bg-primary/10 active:bg-primary/15 transition-colors"
           >
-            <ArrowLeft aria-hidden="true" className="w-5 h-5" /> Back
+            <ArrowLeft aria-hidden="true" className="w-5 h-5" />
+            {backLabel ?? "Back"}
           </button>
         </div>
       )}
@@ -452,17 +527,26 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
           </motion.div>
         )}
 
-      <div className="p-6 md:p-8 lg:px-10 lg:pt-8 lg:pb-6 max-w-6xl mx-auto w-full relative lg:shrink-0">
-        <section className="flex flex-col sm:flex-row items-start gap-5 sm:gap-6">
-          {/* Avatar. "Change avatar" is in the contact actions menu. */}
+      <div
+        className={cn(
+          "max-w-6xl mx-auto w-full relative shrink-0",
+          narrow ? "px-4 pt-4 pb-3" : "p-8 lg:px-10 lg:pt-8 lg:pb-6",
+        )}
+      >
+        <section
+          className={cn(
+            "flex flex-row items-start",
+            narrow ? "gap-4" : "gap-6",
+          )}
+        >
+          {/* Avatar in the score ring. "Change avatar" is in the contact
+              actions menu. */}
           <div className="relative shrink-0">
-            <div className="w-24 h-24 rounded-3xl overflow-hidden bg-surface-container-highest ring-1 ring-surface-container-highest shadow-xl">
-              <img
-                alt={contact.name}
-                className="w-full h-full object-cover"
-                src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
-              />
-            </div>
+            <ScoreRingAvatar
+              contact={contact}
+              size={avatarSize}
+              ring="header"
+            />
             {!!contact.isArchived && (
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap z-20">
                 <Archive aria-hidden="true" className="w-2.5 h-2.5" />
@@ -486,7 +570,12 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
           <div className="flex-1 min-w-0 w-full">
             {/* The name, then the actions. On a narrow screen the actions
                 wrap under the name. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <div
+              className={cn(
+                "flex items-center justify-between",
+                narrow ? "gap-2" : "flex-wrap gap-x-4 gap-y-3",
+              )}
+            >
               {/*
                 The page's h1. `tabIndex={-1}` lets focus land here on
                 navigation and from the skip link without adding a Tab stop.
@@ -497,7 +586,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 id={CONTACT_HEADING_ID}
                 ref={headingRef}
                 tabIndex={-1}
-                className="min-w-0 text-3xl md:text-4xl font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 py-0.5 outline-none"
+                className={cn(
+                  "min-w-0 font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 py-0.5 outline-none",
+                  narrow ? "text-2xl" : "text-4xl",
+                )}
               >
                 <EditableField
                   value={contact.name}
@@ -505,14 +597,19 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   placeholder="Contact Name"
                 />
                 {contact.pronouns && (
-                  <span className="text-on-surface-variant text-xl font-medium tracking-normal inline-block align-middle">
+                  <span
+                    className={cn(
+                      "text-on-surface-variant font-medium tracking-normal inline-block align-middle",
+                      narrow ? "text-base" : "text-xl",
+                    )}
+                  >
                     ({contact.pronouns})
                   </span>
                 )}
               </h1>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {!!contact.isGhost && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {!!contact.isGhost && !narrow && (
                   <button
                     type="button"
                     onClick={() => {
@@ -531,14 +628,16 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={onLogInteraction}
-                  className="btn-primary"
-                >
-                  <NotebookPen aria-hidden="true" className="w-4 h-4" />
-                  Log interaction
-                </button>
+                {!narrow && (
+                  <button
+                    type="button"
+                    onClick={onLogInteraction}
+                    className="btn-primary"
+                  >
+                    <NotebookPen aria-hidden="true" className="w-4 h-4" />
+                    Log interaction
+                  </button>
+                )}
 
                 <ContactActionsMenu
                   contact={contact}
@@ -551,14 +650,19 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </div>
             </div>
 
-            {/* Role at company */}
-            <div className="mt-1 text-base md:text-lg font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5">
+            {/* Role at company. Narrow, a dot joins them, as in the meta line. */}
+            <div
+              className={cn(
+                "font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5",
+                narrow ? "text-sm" : "mt-1 text-lg",
+              )}
+            >
               <EditableField
                 value={contact.role}
                 onSave={(val) => onUpdate("role", val)}
                 placeholder="Role / Title"
               />
-              <span>at</span>
+              {narrow ? <MetaDot /> : <span>at</span>}
               <EditableField
                 value={contact.company}
                 onSave={(val) => onUpdate("company", val)}
@@ -566,76 +670,57 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               />
             </div>
 
-            {contact.headline &&
-              (() => {
-                // Hide the headline when it only repeats the role and
-                // company, which the line above already shows.
-                const normalize = (s: string) =>
-                  s.toLowerCase().replace(/[^a-z0-9]/g, "");
-                const headlineNorm = normalize(contact.headline);
-                const roleCompanyNorm = normalize(
-                  `${contact.role || ""} at ${contact.company || ""}`,
-                );
-                const roleAtCompany2 = normalize(
-                  `${contact.role || ""} ${contact.company || ""}`,
-                );
-                const isDuplicate =
-                  headlineNorm === roleCompanyNorm ||
-                  headlineNorm === roleAtCompany2 ||
-                  (contact.role && headlineNorm === normalize(contact.role)) ||
-                  (contact.company &&
-                    headlineNorm === normalize(contact.company));
-                if (isDuplicate) return null;
-                return (
-                  <div className="text-base text-on-surface-variant font-medium mt-1 italic">
-                    <EditableField
-                      value={contact.headline}
-                      onSave={(val) => onUpdate("headline", val)}
-                      placeholder="Add headline"
-                    />
-                  </div>
-                );
-              })()}
-
-            {contact.aiSummary && (
-              <div className="flex items-start gap-2 bg-primary/10 rounded-xl p-3 mt-3 max-w-fit">
-                <Sparkles
-                  aria-hidden="true"
-                  className="w-4 h-4 text-primary mt-0.5 shrink-0"
-                />
-                <div className="text-sm text-primary font-medium leading-relaxed italic">
-                  {contact.aiSummary}
-                </div>
-              </div>
+            {!narrow && (
+              <ContactIntro
+                contact={contact}
+                onUpdate={onUpdate}
+                className="mt-3"
+              />
             )}
 
             {/* Meta line: facts as text, links as links */}
             {metaItems.length > 0 && (
-              <div className={cn(META_LINE, "mt-3")}>
+              <div className={cn(META_LINE, narrow ? "mt-1" : "mt-3")}>
+                {/* Each dot stays with the item after it, so a line that
+                    wraps never ends on a dot. */}
                 {metaItems.map((item, index) => (
-                  <React.Fragment key={item.key}>
+                  <span
+                    key={item.key}
+                    className="inline-flex items-center gap-x-2 min-w-0 max-w-full"
+                  >
                     {index > 0 && <MetaDot />}
                     {item.node}
-                  </React.Fragment>
+                  </span>
                 ))}
               </div>
             )}
 
-            {/* Tags, then lists. The row always shows, so "+ tag" is always
-                there. */}
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <ChipInput
-                chips={tagChips}
-                onAdd={addTag}
-                onRemove={removeTag}
-                noun="tag"
-                addText="tag"
+            {/* Tags, then lists. Narrow, they open the Details tab. */}
+            {!narrow && (
+              <ContactTags
+                contact={contact}
+                updateContact={updateContact}
+                className="mt-3"
               />
-              <ContactListsSection
-                contactId={contact.id}
-                contactLists={contact.lists || []}
-              />
-            </div>
+            )}
+
+            {/* A ghost's one step, under the name where a phone has room. */}
+            {!!contact.isGhost && narrow && (
+              <button
+                type="button"
+                onClick={() => {
+                  promoteGhost.mutate(contact.id, {
+                    onSuccess: () =>
+                      toast.success(`${contact.name} promoted to network!`),
+                  });
+                }}
+                disabled={promoteGhost.isPending}
+                className="btn-secondary mt-3"
+              >
+                <Sparkles aria-hidden="true" className="w-4 h-4" />
+                {promoteGhost.isPending ? "Promoting…" : "Promote to contact"}
+              </button>
+            )}
 
             {/* Actions Row */}
             {showNetworkButton && (

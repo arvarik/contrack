@@ -877,3 +877,100 @@ describe("drafts", () => {
     });
   });
 });
+
+describe("the one-line composer on a narrow contact page", () => {
+  /** The composer's root, which says whether it is open. */
+  const root = (pm: HTMLElement) =>
+    pm.closest("[data-expanded]") as HTMLElement;
+  /** True when the element or one of its parents is hidden by class. */
+  const hiddenByClass = (el: Element) => !!el.closest(".hidden");
+
+  function mountCollapsible(contactId = "contact-1") {
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionComposer contactId={contactId} collapsible />
+        <button type="button">Elsewhere</button>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("shows the editor alone until something in it takes focus", async () => {
+    stubServer();
+    mountCollapsible();
+    const pm = await editorElement();
+
+    expect(root(pm).dataset.expanded).toBe("false");
+    expect(hiddenByClass(followUpInput())).toBe(true);
+    expect(hiddenByClass(saveButton())).toBe(true);
+
+    fireEvent.focus(pm);
+    expect(root(pm).dataset.expanded).toBe("true");
+    expect(hiddenByClass(followUpInput())).toBe(false);
+    expect(hiddenByClass(saveButton())).toBe(false);
+  });
+
+  it("closes when focus leaves with nothing written, and stays open over text", async () => {
+    stubServer();
+    mountCollapsible();
+    const pm = await editorElement();
+    const elsewhere = screen.getByRole("button", { name: "Elsewhere" });
+
+    // Between the parts of the composer it stays open.
+    fireEvent.focus(pm);
+    fireEvent.blur(pm, { relatedTarget: followUpInput() });
+    expect(root(pm).dataset.expanded).toBe("true");
+
+    fireEvent.blur(followUpInput(), { relatedTarget: elsewhere });
+    expect(root(pm).dataset.expanded).toBe("false");
+
+    fireEvent.focus(pm);
+    await type(pm, "Half a thought");
+    fireEvent.blur(pm, { relatedTarget: elsewhere });
+    expect(root(pm).dataset.expanded).toBe("true");
+  });
+
+  it("stays open over a next action with no note", async () => {
+    stubServer();
+    mountCollapsible();
+    const pm = await editorElement();
+    fireEvent.focus(followUpInput());
+    fireEvent.change(followUpInput(), { target: { value: "Call Friday" } });
+    fireEvent.blur(followUpInput(), { relatedTarget: null });
+    expect(root(pm).dataset.expanded).toBe("true");
+  });
+
+  it("opens at once over a draft that came back from disk", async () => {
+    localStorage.setItem(
+      draftKey(undefined, "contact-1"),
+      JSON.stringify({
+        html: "<p>kept from before</p>",
+        followUpText: "",
+        type: "note",
+        savedAt: Date.now(),
+      }),
+    );
+    stubServer();
+    mountCollapsible();
+    const pm = await editorElement();
+    await waitFor(() => expect(pm.textContent).toBe("kept from before"));
+    expect(root(pm).dataset.expanded).toBe("true");
+  });
+
+  it("puts focus in the editor from a tap anywhere on the line", async () => {
+    stubServer();
+    mountCollapsible();
+    const pm = await editorElement();
+    const line = pm.closest(".custom-tiptap")!.parentElement!;
+    fireEvent.click(line);
+    await waitFor(() => expect(root(pm).dataset.expanded).toBe("true"));
+  });
+
+  it("is always open without the prop", async () => {
+    stubServer();
+    mount();
+    const pm = await editorElement();
+    expect(root(pm).dataset.expanded).toBe("true");
+    fireEvent.blur(pm, { relatedTarget: null });
+    expect(root(pm).dataset.expanded).toBe("true");
+  });
+});

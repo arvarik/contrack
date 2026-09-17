@@ -130,6 +130,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A timeline in one column.** The contact timeline used to zigzag, with
+  cards on alternate sides, so at 1440 px each card was 250 px wide and its
+  title wrapped to three lines. Entries now sit in one column, newest first,
+  in groups: "This week", then one group per month ("August", or "December
+  2025" for an earlier year). Each entry shows a 64 px date column with the
+  day and short month, the type glyph, the title as a button that opens the
+  interaction, and the body cut at three lines. The full date is the entry's
+  tooltip. The red trash icon on every card is gone. A menu with Edit and
+  Delete shows on hover, on focus, and always on a touch screen, and the
+  interaction dialog has Delete too.
+- **Delete an interaction, then undo it.** Delete asks first, and then a
+  toast offers Undo for 10 seconds. The server delete is permanent, so the
+  app sends it only when the toast closes. Undo sends nothing, leaving the
+  page does not cancel a waiting delete, and closing the tab sends it.
+- **The contact page follows the width of its own pane.** From 768 px the
+  header sits over two columns: Details on the left, in view while it fits
+  the window, and Timeline or Dossier on the right. Under 768 px (a phone, or
+  a 1024 px window with the list beside the contact) the header is about 140
+  px: a 56 px avatar, the name, the role and company, and one meta line. A
+  Timeline, Details and Dossier control sticks under the Back bar, the
+  composer is one line above the first entry until it takes focus, and Save
+  sticks above the phone's tab bar while a note is written. The headline, the
+  summary, the tags and the lists move to the Details tab. Back now says where
+  it goes: "Network", "Map" or "Archived contacts".
+- **The ring around an avatar is the relationship score.** It used to be the
+  contact's colour, and a red ring read as trouble. The arc length is now the
+  score, and its colour is the band: Strong (70 and up), Fading (40 to 69) or
+  At risk (under 40). A contact with no logged interaction shows an empty ring
+  and "No interactions yet". The tooltip says the score in words, and each
+  contact row's accessible name ends with it, for example "score 72,
+  strong". The ring is 2 px in lists and 3.5 px in the header, and a photo
+  shows with no grey disc behind it. The bands live in `shared/scoreBand.ts`,
+  which the server's at-risk counts and the command palette read too, so the
+  palette's "Moderate" is now "Fading". `HealthRingAvatar` is now
+  `ScoreRingAvatar`, and the old name stays as an alias for one release. The
+  contact's colour is only the accent on its own page.
+- **One date format.** Absolute dates use `formatDay` (or `formatWhen` where
+  the time matters) across the contact page, the contact list, archived
+  contacts, Pulse, AI usage and Ask Contrack, in the reader's locale.
 - **A contact header with one primary action.** The name is followed by the
   role at the company on one line, and then a meta line of plain facts: the
   location, the person's local time and the weather. Social links and the
@@ -206,6 +245,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A date with no time, such as a birthday stored as `1974-05-10`, shows on
+  its own day. It was read as midnight in UTC, which is the day before
+  anywhere west of Greenwich.
 - Typing `@` in the composer finds people even when the contact names had not
   loaded when the editor was created. The editor kept the list it was created
   with, which could be empty.
