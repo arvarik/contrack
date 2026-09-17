@@ -224,6 +224,57 @@ export const useUpdateContact = () => {
   });
 };
 
+/**
+ * The body of `PATCH /api/contacts/:id/location`: a pin a person dropped, or
+ * a request to hand the pin back to the geocoder.
+ */
+export type ContactLocationInput =
+  { lat: number; lng: number } | { regeocode: true };
+
+/**
+ * Move a contact's pin by hand, or hand it back to the geocoder.
+ *
+ * The answer is the whole contact, so it is written straight into the
+ * contact query and the badge follows without a round trip. The map's data
+ * and the contact are then refreshed: the map because a pin moved, and the
+ * contact because a regeocode with a cached answer has already put the pin
+ * back by the time the response left the server.
+ */
+export const useSetContactLocation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: ContactLocationInput;
+    }): Promise<Contact> =>
+      writeContactInOrder(id, async () => {
+        const res = await apiFetch(
+          `/contacts/${encodeURIComponent(id)}/location`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          },
+        );
+        return res.json();
+      }),
+    onSuccess: (contact) => {
+      queryClient.setQueryData(["contacts", contact.id], contact);
+      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
+        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["contacts", "map"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["contacts", contact.id],
+      });
+    },
+    onError: (error) => toast.error(`Could not move the pin: ${error.message}`),
+  });
+};
+
 /** Trashed (soft-deleted) contacts, newest deletions first. */
 export const useTrash = () => {
   return useQuery({

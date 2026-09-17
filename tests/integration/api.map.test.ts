@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { describe, it, expect } from "vitest";
+import crypto from "crypto";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { buildProductionCsp } from "../../server/app.ts";
@@ -24,6 +25,13 @@ interface MapRow {
   name: string;
   lat: number;
   lng: number;
+  geoSource: "geocoder" | "manual" | null;
+}
+
+interface PinFields {
+  lat: number | null;
+  lng: number | null;
+  geoSource: "geocoder" | "manual" | null;
 }
 
 /** A contact with coordinates, which is what puts it on the map. */
@@ -78,6 +86,117 @@ describe("GET /api/contacts/map", () => {
       .send({ isArchived: true });
     expect(patched.status).toBe(200);
     expect(await mapIds()).not.toContain(id);
+  });
+
+  it("says who placed each pin", async () => {
+    // Coordinates that arrived with the contact were placed by nobody the
+    // map can name, so the row says so with null rather than guessing.
+    const id = await place("Placed Person");
+    const rowFor = async (contactId: string) => {
+      const res = await request(app).get("/api/contacts/map");
+      return (res.body as MapRow[]).find((r) => r.id === contactId);
+    };
+    expect((await rowFor(id))?.geoSource).toBeNull();
+
+    const moved = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send({ lat: 48.8566, lng: 2.3522 });
+    expect(moved.status).toBe(200);
+    expect((await rowFor(id))?.geoSource).toBe("manual");
+  });
+});
+
+describe("PATCH /api/contacts/:id/location", () => {
+  const PARIS = { lat: 48.8566, lng: 2.3522 };
+
+  const pinOf = async (id: string): Promise<PinFields> => {
+    const res = await request(app).get(`/api/contacts/${id}`);
+    expect(res.status).toBe(200);
+    const { lat, lng, geoSource } = res.body as PinFields;
+    return { lat, lng, geoSource };
+  };
+
+  it("puts the pin where a person dropped it", async () => {
+    const id = await place("Dropped Person");
+
+    const res = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send(PARIS);
+
+    expect(res.status).toBe(200);
+    // The answer is the whole contact, as every other contact write returns.
+    expect(res.body).toMatchObject({
+      id,
+      name: "Dropped Person",
+      ...PARIS,
+      geoSource: "manual",
+    });
+    expect(await pinOf(id)).toEqual({ ...PARIS, geoSource: "manual" });
+  });
+
+  it("refuses a coordinate the map cannot draw", async () => {
+    const id = await place("Careful Person");
+    const before = await pinOf(id);
+
+    for (const body of [
+      { lat: 91, lng: 0 },
+      { lat: -91, lng: 0 },
+      { lat: 0, lng: 181 },
+      { lat: 0, lng: -181 },
+      { lat: "48.8", lng: "2.3" },
+      { lat: 48.8 },
+      {},
+      // One thing or the other, never both.
+      { ...PARIS, regeocode: true },
+      { regeocode: false },
+      { regeocode: "yes" },
+    ]) {
+      const res = await request(app)
+        .patch(`/api/contacts/${id}/location`)
+        .send(body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await pinOf(id)).toEqual(before);
+  });
+
+  it("hands the pin back to the geocoder", async () => {
+    const id = await place("Returned Person");
+    const moved = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send(PARIS);
+    expect(moved.status).toBe(200);
+
+    const res = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send({ regeocode: true });
+
+    // Background jobs are off in this suite, so nothing answers the geocoder.
+    // The three fields are cleared, and the contact leaves the map until the
+    // geocoder answers. `geocoding.manualPin.test.ts` follows the answer in.
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id,
+      lat: null,
+      lng: null,
+      geoSource: null,
+    });
+    expect(await pinOf(id)).toEqual({ lat: null, lng: null, geoSource: null });
+    expect(await mapIds()).not.toContain(id);
+  });
+
+  it("answers 404 for a contact in the trash, and for one that never was", async () => {
+    const id = await place("Trashed Pin Person");
+    const deleted = await request(app).delete(`/api/contacts/${id}`);
+    expect(deleted.status).toBe(200);
+
+    const trashed = await request(app)
+      .patch(`/api/contacts/${id}/location`)
+      .send(PARIS);
+    const unknown = await request(app)
+      .patch(`/api/contacts/${crypto.randomUUID()}/location`)
+      .send(PARIS);
+    expect(trashed.status).toBe(404);
+    expect(unknown.status).toBe(404);
   });
 });
 

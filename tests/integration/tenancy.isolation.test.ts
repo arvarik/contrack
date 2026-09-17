@@ -134,6 +134,7 @@ const COVERED = [
   "PATCH /api/action-items/:id",
   "PATCH /api/action-items/:id/complete",
   "PATCH /api/contacts/:id",
+  "PATCH /api/contacts/:id/location",
   "PATCH /api/interactions/:id",
   "PATCH /api/lists/:id",
   "POST /api/ai-search",
@@ -475,6 +476,44 @@ describe("PUT and PATCH /api/contacts/:id", () => {
       request(app)
         .patch(`/api/contacts/${randomId()}`)
         .send({ company: "Bob Co" }),
+    );
+    expect(comparableError(foreign.body)).toEqual(
+      comparableError(unknown.body),
+    );
+  });
+});
+
+describe("PATCH /api/contacts/:id/location", () => {
+  it("refuses to move a foreign pin, by hand or back to the geocoder", async () => {
+    const target = seedA.contactIds[4];
+    const before = snapshotRow("contacts", target);
+
+    const placed = await asUser(B)(
+      request(app)
+        .patch(`/api/contacts/${target}/location`)
+        .send({ lat: 48.8566, lng: 2.3522 }),
+    );
+    const handedBack = await asUser(B)(
+      request(app)
+        .patch(`/api/contacts/${target}/location`)
+        .send({ regeocode: true }),
+    );
+
+    expect(placed.status).toBe(404);
+    expect(handedBack.status).toBe(404);
+    expect(snapshotRow("contacts", target)).toEqual(before);
+  });
+
+  it("gives a foreign id the same 404 body as an unknown id", async () => {
+    const foreign = await asUser(B)(
+      request(app)
+        .patch(`/api/contacts/${seedA.contactIds[4]}/location`)
+        .send({ lat: 48.8566, lng: 2.3522 }),
+    );
+    const unknown = await asUser(B)(
+      request(app)
+        .patch(`/api/contacts/${randomId()}/location`)
+        .send({ lat: 48.8566, lng: 2.3522 }),
     );
     expect(comparableError(foreign.body)).toEqual(
       comparableError(unknown.body),

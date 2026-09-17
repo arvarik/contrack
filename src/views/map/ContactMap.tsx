@@ -23,6 +23,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type RefObject,
 } from "react";
 import {
@@ -114,8 +115,8 @@ export interface ContactMapProps {
   /** The contact whose detail is open, drawn above the others. */
   selectedId?: string | null;
   onSelect: (id: string) => void;
-  /** A click on the map itself, not on a pin or a card. */
-  onMapClick?: () => void;
+  /** A click on the map itself, not on a pin or a card, and where it landed. */
+  onMapClick?: (at: { longitude: number; latitude: number }) => void;
   /** False draws a still map: no pan, no zoom, no zoom buttons. */
   interactive?: boolean;
   initialView?: { longitude: number; latitude: number; zoom?: number };
@@ -136,6 +137,11 @@ export interface ContactMapProps {
   /** The contacts are still loading. */
   loading?: boolean;
   className?: string;
+  /**
+   * Rendered inside the map, after the pins. A caller that needs one marker
+   * of its own, such as the pin a person drags into place, puts it here.
+   */
+  children?: ReactNode;
 }
 
 export const ContactMap = ({
@@ -151,6 +157,7 @@ export const ContactMap = ({
   onMapReady,
   loading = false,
   className,
+  children,
 }: ContactMapProps) => {
   const { mode } = usePreferences();
   const { mapStyles } = useAuth();
@@ -227,7 +234,10 @@ export const ContactMap = ({
       // opening a contact must not also close it.
       const target = event.originalEvent.target as Element | null;
       if (target?.closest?.(".maplibregl-marker, .maplibregl-popup")) return;
-      onMapClick?.();
+      onMapClick?.({
+        longitude: event.lngLat.lng,
+        latitude: event.lngLat.lat,
+      });
     },
     [onMapClick],
   );
@@ -376,6 +386,7 @@ export const ContactMap = ({
               onClose={() => setStack(null)}
             />
           )}
+          {children}
         </MapGL>
       )}
     </div>

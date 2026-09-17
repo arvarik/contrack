@@ -35,6 +35,11 @@ const STOP_TIMEOUT_MS = 5_000;
 export interface InstanceOptions {
   /** Require an account. Defaults to an open instance. */
   authRequired?: boolean;
+  /**
+   * Operator settings for this instance alone, such as `MAP_STYLE_LIGHT`.
+   * Applied last, so a value here wins over the defaults below.
+   */
+  env?: Record<string, string>;
 }
 
 /** A free TCP port on the loopback interface. */
@@ -107,6 +112,7 @@ export class ContrackInstance {
         // The local embedding model would otherwise be fetched into the
         // developer's cache. Nothing in this suite embeds anything.
         TRANSFORMERS_CACHE: path.join(dataDir, ".cache"),
+        ...options.env,
       },
     });
 

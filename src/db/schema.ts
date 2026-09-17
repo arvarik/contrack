@@ -229,6 +229,12 @@ export const contacts = sqliteTable("contacts", {
   website: text("website"),
   lat: real("lat"),
   lng: real("lng"),
+  /**
+   * Who placed the pin. `'geocoder'` when the address was read into `lat` and
+   * `lng`, `'manual'` when a person dragged the pin, NULL before either. The
+   * geocoder never overwrites a `'manual'` row.
+   */
+  geoSource: text("geoSource"),
   aiBriefing: text("aiBriefing"),
   aiBackground: text("aiBackground"),
   aiSummary: text("aiSummary"),

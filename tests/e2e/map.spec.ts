@@ -12,7 +12,18 @@
  * makes the style URL assertions meaningful.
  */
 import { test, expect } from "./fixtures/test";
-import { stubBasemap } from "./fixtures/map";
+import { expectPageAccessible } from "./fixtures/a11y";
+import { ContrackInstance } from "./fixtures/instance";
+import { EMPTY_STYLE, stubBasemap } from "./fixtures/map";
+
+interface PinFields {
+  lat: number | null;
+  lng: number | null;
+  geoSource: "geocoder" | "manual" | null;
+}
+
+/** Sydney. Far from everyone the seed places, so this pin is alone. */
+const SYDNEY = { lat: -33.8688, lng: 151.2093 };
 
 test.describe("map", () => {
   test("shows a named pin and the zoom control", async ({ page }) => {
@@ -180,6 +191,145 @@ test.describe("map", () => {
         { message: "the map did not fly to the contact" },
       )
       .toBeLessThan(40);
+  });
+
+  test("moves a pin by hand, keeps it, and says who placed it", async ({
+    page,
+    instance,
+  }, testInfo) => {
+    // A contact of this test's own, so the seed's pins stay where the other
+    // journeys expect them.
+    const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+      name: "Pin Mover",
+      company: "Handmade Ltd",
+      location: "Sydney, Australia",
+      ...SYDNEY,
+    });
+    await stubBasemap(page);
+    await page.goto(`/contact/${id}`);
+    await expect(
+      page
+        .getByRole("region", { name: "Location map" })
+        .getByRole("button", { name: "Pin Mover, Handmade Ltd" }),
+    ).toBeVisible();
+    expect(page.getByText("Placed by hand")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Adjust pin" }).click();
+    const dialog = page.getByRole("dialog", { name: "Adjust pin" });
+    const pin = dialog.getByRole("button", { name: "Pin Mover, Handmade Ltd" });
+    await expect(pin).toBeVisible();
+    const coordinates = dialog.getByRole("status", {
+      name: "Pin coordinates",
+    });
+    await expect(coordinates).toHaveText("-33.86880, 151.20930");
+    await expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
+    await expectPageAccessible(page, testInfo, "adjust pin dialog");
+
+    // Drag the pin 100 px east. The marker takes the pointer down, the map
+    // takes the moves, and the pin lands where the pointer let go.
+    const box = await pin.boundingBox();
+    if (!box) throw new Error("The pin has no box to drag from");
+    const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 40, from.y, { steps: 4 });
+    await page.mouse.move(from.x + 100, from.y, { steps: 6 });
+    await page.mouse.up();
+
+    await expect(coordinates).not.toHaveText("-33.86880, 151.20930");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText("Placed by hand")).toBeVisible();
+
+    // East of where it was, on the same latitude, and marked as a person's.
+    const after = await instance.api<PinFields>("GET", `/contacts/${id}`);
+    expect(after.geoSource).toBe("manual");
+    expect(after.lng).toBeGreaterThan(SYDNEY.lng);
+    expect(after.lat).toBeCloseTo(SYDNEY.lat, 2);
+
+    // A reload reads the pin back from the server, badge and all.
+    await page.reload();
+    await expect(page.getByText("Placed by hand")).toBeVisible();
+  });
+
+  test("hands a pin back to the geocoder", async ({ page, instance }) => {
+    const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+      name: "Pin Returner",
+      company: "Handmade Ltd",
+      location: "Sydney, Australia",
+      ...SYDNEY,
+    });
+    const placed = await instance.api<PinFields>(
+      "PATCH",
+      `/contacts/${id}/location`,
+      { lat: -33.9, lng: 151.3 },
+    );
+    expect(placed.geoSource).toBe("manual");
+    await stubBasemap(page);
+    await page.goto(`/contact/${id}`);
+    await expect(page.getByText("Placed by hand")).toBeVisible();
+
+    await page.getByRole("button", { name: "Adjust pin" }).click();
+    await page.getByRole("button", { name: "Use address again" }).click();
+
+    // Background jobs are off on a test instance, so nothing answers the
+    // geocoder: the contact waits, off the map, with the line that says so.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByText("Not on the map yet")).toBeVisible();
+    await expect(page.getByText("Placed by hand")).toHaveCount(0);
+    const after = await instance.api<PinFields>("GET", `/contacts/${id}`);
+    expect(after).toMatchObject({ lat: null, lng: null, geoSource: null });
+  });
+
+  test("loads a self-hosted style from this origin, with the CSP on", async ({
+    browser,
+  }) => {
+    // An instance of its own, because the override is an operator setting
+    // read at boot. The style is answered by the route below, so what this
+    // proves is the chain from the setting to the request: the server
+    // reports the path, the client asks this origin for it, the production
+    // CSP lets the fetch through, and the map draws its pins on the answer.
+    const local = await ContrackInstance.start({
+      env: { MAP_STYLE_LIGHT: "/map/style.json" },
+    });
+    try {
+      await local.api("POST", "/contacts", {
+        name: "Local Style Person",
+        company: "Home Ltd",
+        location: "Lima, Peru",
+        lat: -12.0464,
+        lng: -77.0428,
+      });
+      const status = await local.api<{ map: { light: string; dark: string } }>(
+        "GET",
+        "/auth/status",
+      );
+      expect(status.map.light).toBe("/map/style.json");
+      expect(status.map.dark).toBe("https://tiles.openfreemap.org/styles/dark");
+
+      const context = await browser.newContext({ baseURL: local.baseURL });
+      const page = await context.newPage();
+      const served: string[] = [];
+      await page.route("**/map/style.json", async (route) => {
+        served.push(route.request().url());
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(EMPTY_STYLE),
+        });
+      });
+      const openFreeMap = await stubBasemap(page);
+      await page.goto("/map");
+      await expect(
+        page.getByRole("button", { name: "Local Style Person, Home Ltd" }),
+      ).toBeVisible();
+
+      expect(served).toEqual([`${local.baseURL}/map/style.json`]);
+      expect(openFreeMap).toEqual([]);
+      await context.close();
+    } finally {
+      await local.stop();
+    }
   });
 
   test("asks for the dark basemap in the dark palette", async ({

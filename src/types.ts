@@ -154,6 +154,8 @@ export interface Contact {
   website: string | null;
   lat: number | null;
   lng: number | null;
+  /** Who placed the pin: the geocoder, a person, or nobody yet. */
+  geoSource?: "geocoder" | "manual" | null;
   aiBriefing?: string | null;
   aiBriefingAt?: string | null;
   aiSummary?: string | null;

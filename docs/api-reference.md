@@ -427,10 +427,37 @@ Fetch geocoded contacts for the map view (only those with lat/lng coordinates). 
 curl http://localhost:3210/api/contacts/map
 # → [ { "id": "abc123", "name": "Jane Smith", "company": "Acme Corp",
 #       "avatarUrl": "/uploads/avatars/abc123.webp", "location": "Berlin",
-#       "lat": 52.52, "lng": 13.405 } ]
+#       "lat": 52.52, "lng": 13.405, "geoSource": "geocoder" } ]
 ```
 
-The row shape is the seven fields above and nothing more. `shared/geo.ts` declares it as `MapContact`.
+The row shape is the eight fields above and nothing more. `shared/geo.ts` declares it as `MapContact`. `geoSource` says who placed the pin: `"geocoder"`, `"manual"` for a pin a person placed, or `null` for coordinates that arrived with the contact.
+
+---
+
+### `PATCH /api/contacts/:id/location`
+
+Move a contact's pin by hand, or hand it back to the geocoder. The body is one of two shapes and nothing else.
+
+```bash
+# Put the pin where a person dropped it
+curl -X PATCH http://localhost:3210/api/contacts/abc123/location \
+  -H "Content-Type: application/json" \
+  -d '{"lat": 52.52, "lng": 13.405}'
+
+# Hand the pin back to the geocoder
+curl -X PATCH http://localhost:3210/api/contacts/abc123/location \
+  -H "Content-Type: application/json" \
+  -d '{"regeocode": true}'
+```
+
+| Body                  | Effect                                                                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `{ lat, lng }`        | Sets the coordinates and `geoSource = "manual"`. The geocoder never overwrites the row again, until the address text changes.     |
+| `{ regeocode: true }` | Clears `lat`, `lng` and `geoSource`, and queues the geocoder on the address. A cached answer is back in the row before the reply. |
+
+`lat` must be in `[-90, 90]` and `lng` in `[-180, 180]`. A body with both shapes, a missing field, or a value out of range answers `400`. The reply is the whole contact, as `GET /api/contacts/:id` returns it.
+
+**Error codes:** `400` (invalid body), `404` (unknown id, a contact in the trash, or another account's contact, all with the same body).
 
 ---
 

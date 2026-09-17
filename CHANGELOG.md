@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A pin you can move by hand, and a basemap you can host yourself.**
+  "Adjust pin" under the map on a contact opens a dialog with that person's
+  pin on an interactive map. Drag it, click the map, or nudge it with the
+  arrow keys, and Save. The new `PATCH /api/contacts/:id/location` route
+  writes the coordinates and marks the row `geoSource = 'manual'`, and the
+  geocoder leaves it alone from then on: its write skips a manual row, the
+  startup sweep leaves the row out, and an edit to the contact asks the
+  geocoder again only when it changes the address the pin stands for. "Use
+  address again" hands the pin back. A pin a person placed shows "Placed by
+  hand" with an InfoTip, and `GET /api/contacts/map` now says who placed each
+  pin. "Set location" opens the same dialog for a contact the geocoder could
+  not place. The `pmtiles://` protocol, registered since the MapLibre swap,
+  now has its worked example: `docs/features/map-view.md` shows a style under
+  `public/map/` that reads one `.pmtiles` archive from this origin, and the
+  `MAP_STYLE_*` override that points the map at it, with no request leaving
+  the instance.
 - **A map on the contact page, and the map page opens on the person you
   asked for.** A placed contact shows a 160 px still map of where they are,
   under their addresses, with their pin on it. "Open in map" and a "Show on
@@ -18,8 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gets the same view without the animation. A contact with an address the
   geocoder has not placed reads "Not on the map yet" and loads no map at all.
   The mini map is a region named "Location map", so the two maps on
-  `/map/contact/<id>` stay two landmarks a reader can tell apart, and it
-  stands down there because the map behind the panel already holds the pin.
+  `/map/contact/<id>` stay two landmarks a reader can tell apart, and its
+  picture stands down there because the map behind the panel already holds
+  the pin.
   See `docs/features/map-view.md`.
 - **Two floors: 44 px targets and 11 px text.** Every control a finger can
   reach now has a tap box of at least 44 by 44 pixels on a phone, and no text

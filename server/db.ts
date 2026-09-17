@@ -274,6 +274,9 @@ if (readTenancyVersion() < 1) {
 // Adding them here turns the later sections into no-ops. Each of those still
 // guards itself, so no code there changed and an older database that already
 // has the columns takes the same path it always did.
+//
+// `geoSource` is not indexed by anything. It lives in this loop because it is
+// the one place a contacts column is added once, by name, and guarded.
 // =============================================================================
 
 for (const column of [
@@ -283,6 +286,7 @@ for (const column of [
   "isArchived INTEGER DEFAULT 0",
   "phoneticHash TEXT",
   "relationshipScore INTEGER DEFAULT 50",
+  "geoSource TEXT",
 ]) {
   const name = column.split(" ")[0];
   const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
