@@ -502,6 +502,7 @@ export const dashboardService = {
    * streaks, and today/this-week counts.
    */
   getActivity(scope: Scope): DashboardActivityResponse {
+    const startMs = Date.now();
     const now = new Date();
     // 84 days ending today (day 83 is today, day 0 is 83 days ago)
     const days: ActivityDay[] = [];
@@ -597,17 +598,14 @@ export const dashboardService = {
     const todayEntry = dayMap.get(todayStr);
     const loggedToday = todayEntry ? todayEntry.count : 0;
 
-    const startOfToday = startOfDay(now).toISOString();
-    const endOfToday = addDays(startOfDay(now), 1).toISOString();
-
     const completedToday = (
       sqlite
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NOT NULL
-              AND completedAt >= ? AND completedAt < ?`,
+              AND date(completedAt) = ?`,
         )
-        .get(scope.ownerId, startOfToday, endOfToday) as { count: number }
+        .get(scope.ownerId, todayStr) as { count: number }
     ).count;
 
     const dueToday = (
@@ -615,9 +613,9 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NULL
-              AND dueAt >= ? AND dueAt < ?`,
+              AND date(dueAt) = ?`,
         )
-        .get(scope.ownerId, startOfToday, endOfToday) as { count: number }
+        .get(scope.ownerId, todayStr) as { count: number }
     ).count;
 
     // thisWeek: logged, byType (starts on ISO week Monday)
@@ -633,6 +631,9 @@ export const dashboardService = {
         }
       }
     }
+
+    const elapsed = Date.now() - startMs;
+    log.info("Dashboard", `Assembled dashboard activity in ${elapsed}ms`);
 
     return {
       days,
@@ -655,6 +656,7 @@ export const dashboardService = {
    * Score momentum for one owner: rising, cooling and silent contacts.
    */
   getMomentum(scope: Scope): DashboardMomentumResponse {
+    const startMs = Date.now();
     const weekRows = sqlite
       .prepare(
         `SELECT DISTINCT weekStart FROM score_snapshots
@@ -778,6 +780,9 @@ export const dashboardService = {
         daysSinceContact: c.daysSinceContact,
         overshootDays: c.overshootDays,
       }));
+
+    const elapsed = Date.now() - startMs;
+    log.info("Dashboard", `Assembled dashboard momentum in ${elapsed}ms`);
 
     return {
       snapshotWeeks,

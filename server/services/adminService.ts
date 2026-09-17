@@ -651,6 +651,7 @@ export function purgeOwner(ownerId: string): void {
       // contacts because a row's contactId carries no foreign key: an import
       // record outlives the contacts it made, on purpose.
       "imports",
+      "search_history",
     ]) {
       sqlite.prepare(`DELETE FROM ${table} WHERE ownerId = ?`).run(ownerId);
     }

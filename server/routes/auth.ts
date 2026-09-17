@@ -30,12 +30,26 @@ import {
   revokeToken,
 } from "../services/apiTokenService.ts";
 import { resolveApiToken } from "../middleware/auth.ts";
+import {
+  createRegistrationOptions,
+  verifyRegistration,
+  listPasskeys,
+  renamePasskey,
+  removePasskey,
+  createLoginOptions,
+  verifyLogin,
+  isPasskeyNudgeDismissed,
+  dismissPasskeyNudge,
+} from "../services/passkeyService.ts";
 import { getMapStyles } from "../utils/mapConfig.ts";
 import {
+  deletePreference,
   getPreferences,
+  preferenceSchemas,
   preferencesPatchSchema,
   setPreferences,
   storedPreferenceKeys,
+  type PreferenceKey,
 } from "../services/userPreferencesService.ts";
 import {
   requireAdmin,
@@ -221,7 +235,9 @@ router.post(
 
     // Sign the new account in immediately — making someone re-type the
     // password they just chose twice in a row is pure friction.
-    const session = createSession(user.id, req.headers["user-agent"] ?? null);
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "password",
+    });
     setSessionCookie(req, res, session.secret, session.expiresAt);
 
     res.status(201).json({ user: publicUser(user) });
@@ -257,7 +273,9 @@ router.post(
     }
 
     const user = await createUser({ ...req.body, role: "member" });
-    const session = createSession(user.id, req.headers["user-agent"] ?? null);
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "password",
+    });
     setSessionCookie(req, res, session.secret, session.expiresAt);
     auditService.record({
       actorUserId: user.id,
@@ -330,7 +348,9 @@ router.post(
       );
     }
 
-    const session = createSession(user.id, req.headers["user-agent"] ?? null);
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "password",
+    });
     setSessionCookie(req, res, session.secret, session.expiresAt);
     auditService.record({
       actorUserId: user.id,
@@ -379,7 +399,9 @@ router.post(
   validateBody(acceptInvitationSchema),
   asyncHandler(async (req, res) => {
     const user = await acceptInvitation(req.body, ipOf(req));
-    const session = createSession(user.id, req.headers["user-agent"] ?? null);
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "password",
+    });
     setSessionCookie(req, res, session.secret, session.expiresAt);
     res.status(201).json({ user: publicUser(user) });
   }),
@@ -467,6 +489,24 @@ router.patch(
     res.json({ preferences, stored: storedPreferenceKeys(user.id) });
   },
 );
+
+router.delete("/preferences/:key", (req, res) => {
+  const user = currentUser(req);
+  if (!user) {
+    throw new AppError("Authentication required", 401, {
+      code: "UNAUTHORIZED",
+    });
+  }
+  const { key } = req.params;
+  if (!(key in preferenceSchemas)) {
+    throw new AppError(`Unknown preference key: ${key}`, 404, {
+      code: "NOT_FOUND",
+    });
+  }
+  const preferences = deletePreference(user.id, key as PreferenceKey);
+  log.info("API", `[${req.requestId}] DELETE /api/auth/preferences/${key}`);
+  res.json({ preferences, stored: storedPreferenceKeys(user.id) });
+});
 
 router.post(
   "/change-password",
@@ -590,6 +630,131 @@ router.put(
       ip: ipOf(req),
     });
     res.json({ sessionTtlDays });
+  }),
+);
+
+// =============================================================================
+// Passkeys
+// =============================================================================
+
+router.post(
+  "/passkeys/register/options",
+  credentialLimiter,
+  requireSession,
+  requirePasswordCurrent,
+  asyncHandler(async (req, res) => {
+    const user = req.principal!.user;
+    const result = await createRegistrationOptions(req, user);
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/passkeys/register/verify",
+  credentialLimiter,
+  requireSession,
+  requirePasswordCurrent,
+  asyncHandler(async (req, res) => {
+    const user = req.principal!.user;
+    const { ceremonyId, response, name } = req.body ?? {};
+    const result = await verifyRegistration(
+      req,
+      user,
+      ceremonyId,
+      response,
+      name,
+    );
+    res.status(201).json(result);
+  }),
+);
+
+router.get(
+  "/passkeys",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const user = req.principal!.user;
+    const passkeys = listPasskeys(user.id);
+    const nudgeDismissed = isPasskeyNudgeDismissed(user.id);
+    res.json({ passkeys, nudgeDismissed });
+  }),
+);
+
+router.patch(
+  "/passkeys/:id",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const user = req.principal!.user;
+    const name = bodyString(req, "name");
+    const result = renamePasskey(req, user.id, String(req.params.id), name);
+    res.json(result);
+  }),
+);
+
+router.delete(
+  "/passkeys/:id",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const user = req.principal!.user;
+    const result = removePasskey(req, user.id, String(req.params.id));
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/passkeys/login/options",
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
+    const result = await createLoginOptions(req);
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/passkeys/login/verify",
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
+    const { ceremonyId, response } = req.body ?? {};
+    const { user } = await verifyLogin(req, ceremonyId, response);
+
+    if (user.status === "disabled") {
+      auditService.record({
+        actorUserId: user.id,
+        action: "auth.login.failed",
+        targetType: "user",
+        targetId: user.id,
+        details: { identifier: user.username, reason: "disabled" },
+        ip: ipOf(req),
+      });
+      throw new AppError(
+        "This account has been disabled. Ask an administrator to re-enable it.",
+        403,
+        { code: "ACCOUNT_DISABLED" },
+      );
+    }
+
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "passkey",
+    });
+    setSessionCookie(req, res, session.secret, session.expiresAt);
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.login.success",
+      targetType: "user",
+      targetId: user.id,
+      details: { username: user.username, method: "passkey" },
+      ip: ipOf(req),
+    });
+    res.json({ user: publicUser(user) });
+  }),
+);
+
+router.post(
+  "/passkey-nudge/dismiss",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const user = req.principal!.user;
+    dismissPasskeyNudge(user.id);
+    res.json({ ok: true });
   }),
 );
 

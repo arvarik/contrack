@@ -17,6 +17,7 @@ cp .env.example .env
 | `AI_TIER`                 | Rate limit profile: `FREE` or `PAID`                                                                                                                                                           | `FREE`                 | No       |
 | `PORT`                    | Express listening port                                                                                                                                                                         | `3210`                 | No       |
 | `HOST`                    | Interface to bind. Authentication is off by default, so it binds localhost; set `0.0.0.0` to expose on your LAN (Docker sets this automatically)                                               | `127.0.0.1`            | No       |
+| `PUBLIC_URL`              | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for WebAuthn/passkey ceremonies and invite links                                     | — (derived)            | No       |
 | `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled)           | No       |
 | `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root           | No       |
 | `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                                     | —                      | No       |
@@ -58,7 +59,7 @@ timeouts, retry limits, cache behavior, and testing guidance.
 Contrack routes AI work by **capability**, not by "the AI provider". You connect
 whichever providers you have keys for, and each kind of task is served by a
 suitable model. Everything is configurable in the app under
-**Settings → AI Configuration**; no restart or file editing required.
+**Settings → Administration → AI providers**; no restart or file editing required.
 
 | Capability       | Powers                                                                                        | Default          |
 | ---------------- | --------------------------------------------------------------------------------------------- | ---------------- |
@@ -125,7 +126,7 @@ A custom endpoint has no such map — its models are whatever you have pulled �
 so Auto uses **the first chat model in the endpoint's discovered list**, and
 uses the same one for both Quick and Deep. Nothing in the OpenAI-compatible
 model list says which of your models is the cheap one, so Contrack does not
-guess. Pin Quick and Deep in **Settings → AI** to split them, which is worth
+guess. Pin Quick and Deep in **Settings → Administration → AI providers** to split them, which is worth
 doing if you run both a small and a large model.
 
 If discovery found no chat models, Auto skips the endpoint entirely and the
@@ -342,7 +343,7 @@ is removed in 3.0.
   warning at startup whenever it binds a non-loopback address with auth off.
 
 Sessions are stored server-side and last 30 days by default; the lifetime is
-configurable from 1 to 365 days in **Settings → Account** (it applies to new
+configurable from 1 to 365 days in **Settings → Administration → General** (it applies to new
 sign-ins only). The cookie holds a random secret; the database stores only its
 SHA-256, so a leaked database (or one of the rotating backups) does not hand
 over live sessions. `Secure` is set whenever the request arrived over HTTPS,
@@ -380,6 +381,13 @@ it. Un-owned rows are re-claimed by the next account you create.
 For access outside your LAN, prefer a private overlay network (e.g. Tailscale)
 or a reverse proxy with TLS in front of the container — the app itself serves
 plain HTTP.
+
+### Passkeys and WebAuthn
+
+Passkeys allow people to sign in using biometrics (Apple Touch ID / Face ID, Windows Hello) or hardware security keys without typing a password.
+
+- **HTTPS and Localhost**: The Web Authentication API (WebAuthn) requires a Secure Context. Passkeys function out of the box on `localhost` during development, or over HTTPS in production. Passkeys are unsupported over plain-HTTP on IP addresses (such as `http://192.168.1.50:3210`). The Account settings screen displays an explanatory banner when loaded in an insecure context.
+- **Reverse Proxies and `PUBLIC_URL`**: When hosting Contrack behind a reverse proxy (such as Caddy, Nginx, Traefik, or Cloudflare) that terminates TLS or rewrites the `Host` header, set `PUBLIC_URL` in your environment (e.g. `PUBLIC_URL="https://crm.example.com"`). WebAuthn mandates that the Relying Party ID (`rpID`) and origin match the exact origin in the browser address bar. Contrack checks `PUBLIC_URL` first, then falls back to `X-Forwarded-Proto` and `X-Forwarded-Host` / `Host`. If your proxy changes `Host` without forwarding client headers, set `PUBLIC_URL` to avoid ceremony verification failures.
 
 ## Data Lifecycle
 

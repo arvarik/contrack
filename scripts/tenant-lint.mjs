@@ -36,6 +36,7 @@ export const OWNED_TABLES = [
   "ai_invocations",
   "imports",
   "score_snapshots",
+  "search_history",
 ];
 
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */
@@ -56,6 +57,7 @@ export const OWNED_SCHEMA_KEYS = [
   "dedupeExclusions",
   "dedupeMergeLog",
   "scoreSnapshots",
+  "searchHistory",
 ];
 
 /** The only reasons an allow comment may give. */

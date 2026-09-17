@@ -36,6 +36,9 @@ import {
   ensureEmbeddingStore,
 } from "./server/services/search/localEmbeddings.ts";
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
+import { validatePublicUrl } from "./server/utils/publicOrigin.ts";
+
+validatePublicUrl(process.env.PUBLIC_URL);
 
 // ── AI posture at boot ───────────────────────────────────────────────────────
 // This used to check only the key matching AI_PROVIDER (default gemini), so

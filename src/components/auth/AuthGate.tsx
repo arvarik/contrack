@@ -60,6 +60,8 @@ import { SetupWizard } from "./SetupWizard";
 import { Register } from "./Register";
 import { AcceptInvitation } from "./AcceptInvitation";
 import { ForcedPasswordChange } from "./ForcedPasswordChange";
+import { PasskeyNudge } from "./PasskeyNudge";
+import { passkeysSupported, listPasskeys } from "../../api/passkeys";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 
 interface AuthContextValue {
@@ -137,6 +139,7 @@ type GateState =
   | "signin"
   | "register"
   | "password-change"
+  | "passkey-nudge"
   | "open"
   | "unreachable";
 
@@ -268,17 +271,36 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }, [state, check]);
 
   /**
-   * Re-check after signing in, setting up, joining, or registering.
-   *
-   * The cache is cleared first because everything in it was fetched as a
-   * different principal. Clearing beats a full page reload: no white flash,
-   * and the queries refetch on mount anyway.
+   * Re-check after signing in.
    */
   const handleAuthenticated = useCallback(async () => {
     queryClient.clear();
     setSignInReason(null);
     clearInvitation();
     await check();
+  }, [check, clearInvitation, queryClient]);
+
+  /**
+   * Post-creation flow: setup, join, or register.
+   * If passkeys are supported and the user has none registered and has not dismissed
+   * the nudge, present the passkey nudge interstitial.
+   */
+  const handleAccountCreated = useCallback(async () => {
+    queryClient.clear();
+    setSignInReason(null);
+    clearInvitation();
+    await check();
+    if (passkeysSupported()) {
+      try {
+        const { passkeys, nudgeDismissed } = await listPasskeys();
+        if (passkeys.length === 0 && !nudgeDismissed) {
+          setState("passkey-nudge");
+          return;
+        }
+      } catch {
+        // Fall through to open
+      }
+    }
   }, [check, clearInvitation, queryClient]);
 
   const handleSignOut = useCallback(async () => {
@@ -305,7 +327,13 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       setState((current) => {
         // Only meaningful while the app is up. During setup, sign-in or the
         // join form a 401 is the expected state, not news.
-        if (current !== "open" && current !== "password-change") return current;
+        if (
+          current !== "open" &&
+          current !== "password-change" &&
+          current !== "passkey-nudge"
+        ) {
+          return current;
+        }
         queryClient.clear();
         setUser(null);
         setSignInReason(reason);
@@ -390,7 +418,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       case "setup":
         return (
           <SetupWizard
-            onCreated={handleAuthenticated}
+            onCreated={handleAccountCreated}
             deviceContacts={deviceContacts}
             localOwnerPresent={localOwnerPresent}
           />
@@ -399,7 +427,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         return (
           <AcceptInvitation
             token={invitation ?? ""}
-            onAccepted={handleAuthenticated}
+            onAccepted={handleAccountCreated}
             onCancel={() => {
               clearInvitation();
               void check();
@@ -409,8 +437,17 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       case "register":
         return (
           <Register
-            onRegistered={handleAuthenticated}
+            onRegistered={handleAccountCreated}
             onCancel={() => setState("signin")}
+          />
+        );
+      case "passkey-nudge":
+        return (
+          <PasskeyNudge
+            onDone={() => {
+              void check();
+              setState("open");
+            }}
           />
         );
       case "password-change":

@@ -82,7 +82,10 @@ export async function signOutFromSidebar(
   account: Account,
 ): Promise<void> {
   await accountMenu(page, account).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page
+    .getByLabel("Account", { exact: true })
+    .getByRole("button", { name: "Sign out" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();

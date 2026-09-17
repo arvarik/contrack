@@ -763,6 +763,93 @@ curl -X POST http://localhost:3210/api/search/synthesize \
 
 ---
 
+### Search history
+
+Search history stores every question asked by an account, across People, Notes, and Command Palette modes. Entries are deduplicated per mode and normalised query, tracking run count, pinned status, and the most recent result snapshot.
+
+#### `GET /api/search/history`
+
+List search history entries for the authenticated account, ordered newest first (`lastRunAt DESC, id DESC`). On the first request for an account with no history, legacy searches from user preferences are automatically backfilled.
+
+**Query parameters** (all optional):
+
+- `mode`: `"people" | "notes" | "palette"` filter.
+- `q`: search filter matched against normalised query.
+- `pinned`: `1` (or `true`) / `0` (or `false`) filter.
+- `cursor`: base64 cursor (`lastRunAt|id`) from `nextCursor` of previous page.
+- `limit`: page size (default 50, maximum 200).
+
+**Response:**
+
+```json
+{
+  "entries": [
+    {
+      "id": "c1f7…",
+      "ownerId": "usr_…",
+      "mode": "people",
+      "query": "who likes coffee",
+      "normalizedQuery": "who likes coffee",
+      "resultCount": 5,
+      "resultIds": ["cont_1", "cont_2"],
+      "fallback": false,
+      "pinned": false,
+      "runCount": 1,
+      "createdAt": "2026-09-17T12:00:00.000Z",
+      "lastRunAt": "2026-09-17T12:00:00.000Z"
+    }
+  ],
+  "nextCursor": "MjAyNi0wOS0xN1QxMjowMDowMC4wMDBafGMxZjflfg==",
+  "total": 1
+}
+```
+
+#### `POST /api/search/history`
+
+Record a completed search question. Upserts on `(ownerId, mode, normalizedQuery)`: increments `runCount`, updates `lastRunAt` to the current timestamp, and replaces the result snapshot.
+
+**Request body:**
+
+- `query` (required string, 1 to 500 characters)
+- `mode` (required `"people" | "notes" | "palette"`)
+- `resultCount` (optional integer)
+- `resultIds` (optional array of contact IDs, trimmed to at most 30 items)
+- `fallback` (optional boolean)
+
+**Response:** `{ "entry": HistoryEntry }`
+
+#### `PATCH /api/search/history/:id`
+
+Pin or unpin a search history entry. Returns 404 if the entry does not exist or belongs to another account.
+
+**Request body:**
+
+```json
+{
+  "pinned": true
+}
+```
+
+**Response:** `{ "entry": HistoryEntry }`
+
+#### `DELETE /api/search/history/:id`
+
+Delete a single search history entry. Returns 404 if the entry does not exist or belongs to another account.
+
+**Response:** `{ "success": true }`
+
+#### `DELETE /api/search/history`
+
+Clear search history for the authenticated account, optionally scoped to a single mode.
+
+**Query parameters:**
+
+- `mode` (optional `"people" | "notes" | "palette"`): when specified, deletes only entries in that mode. When omitted, deletes all entries for the account.
+
+**Response:** `{ "deleted": 4 }`
+
+---
+
 ## Contact enrichment (batch)
 
 These routes power the Contact enrichment page in Settings. The routes keep
@@ -1311,7 +1398,7 @@ curl -X POST http://localhost:3210/api/lists/list123/members/bulk \
 
 ## AI Configuration
 
-Backs **Settings → AI**. Capabilities are `quick`, `deep`, `embeddings`, and
+Backs **Settings → Administration → AI providers**. Capabilities are `quick`, `deep`, `embeddings`, and
 `research`. See [Configuration](configuration.md#ai-configuration) for what each
 one powers.
 
@@ -1738,9 +1825,19 @@ should be told, not quietly ignored. `theme` is `light`, `dark` or `system`;
 tokens are derived; `searchHistory` holds at most twenty entries of
 `{ query, mode, timestamp }`.
 
-These two are the only routes under `/api/auth` that a personal token can
+These three are the only routes under `/api/auth` that a personal token can
 reach, and the only ones that work on an instance with sign-in switched off —
 which runs as the local owner, who has no session to require.
+
+---
+
+### `DELETE /api/auth/preferences/:key` _(account)_
+
+Resets a single preference to its default value by removing it from the user's stored preferences. Returns the updated `{ preferences, stored }` object, identical to `GET`. Returns `404` if the key is unknown to the server.
+
+```bash
+curl -X DELETE http://localhost:3210/api/auth/preferences/theme -b cookies.txt
+```
 
 ---
 
@@ -1758,7 +1855,7 @@ Ends every session except the one making the request.
 
 ### `GET /api/auth/sessions` _(account)_
 
-Live sessions for this account, newest first, with `current: true` on the one making the request. `DELETE /api/auth/sessions` revokes all the others and returns `{ "revoked": n }`.
+Live sessions for this account, newest first, with `current: true` on the one making the request. Each row carries `id`, `createdAt`, `lastSeenAt`, `expiresAt`, `ip`, `userAgent`, `current`, and `method` (`"password"`, `"passkey"`, or `null`). `DELETE /api/auth/sessions` revokes all the others and returns `{ "revoked": n }`.
 
 ---
 
@@ -1779,6 +1876,54 @@ curl -X POST http://localhost:3210/api/auth/accept-invitation \
 ```
 
 `404` for a token that is unknown, malformed or empty, with one body for all three. `410 INVITATION_USED`, `410 INVITATION_EXPIRED` or `410 INVITATION_REVOKED` for a link that is real but dead. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/passkeys/register/options` _(account)_
+
+Generate WebAuthn creation options for registering a new passkey. The account must have a live session (a bearer token returns `403 SESSION_REQUIRED`). If the account has a temporary password, returns `403 PASSWORD_CHANGE_REQUIRED`. Returns `{ ceremonyId, options }`. Challenges expire in 5 minutes.
+
+---
+
+### `POST /api/auth/passkeys/register/verify` _(account)_
+
+Verify a WebAuthn creation ceremony and store the passkey. Request body: `{ ceremonyId, name?, response }`. On success, stores the credential and returns `201 { passkey }`.
+
+---
+
+### `GET /api/auth/passkeys` _(account)_
+
+List all registered passkeys for the signed-in account, and whether the post-creation nudge was dismissed. Returns `{ passkeys: PasskeySummary[], nudgeDismissed: boolean }`.
+
+---
+
+### `PATCH /api/auth/passkeys/:id` _(account)_
+
+Rename an existing passkey. Request body: `{ name: string }`. Returns `{ passkey: PasskeySummary }`. Returns `404` if the passkey does not exist or belongs to another account.
+
+---
+
+### `DELETE /api/auth/passkeys/:id` _(account)_
+
+Remove an existing passkey. Returns `{ ok: true }`. Returns `404` if the passkey does not exist or belongs to another account.
+
+---
+
+### `POST /api/auth/passkeys/login/options`
+
+Generate WebAuthn request options for signing in with a passkey. Publicly reachable. Returns `{ ceremonyId, options }` with `allowCredentials: []` to permit resident passkeys. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/passkeys/login/verify`
+
+Verify a passkey authentication assertion response and issue a session cookie. Request body: `{ ceremonyId, remember?, response }`. The session is stamped with `method: "passkey"`. Rate limited to 10/minute per IP.
+
+---
+
+### `POST /api/auth/passkey-nudge/dismiss` _(account)_
+
+Dismiss the first-run passkey nudge for the signed-in account. Stores `{ dismissed: true }` in `user_settings` under `auth.passkeyNudge`. Returns `{ ok: true }`.
 
 ---
 

@@ -141,6 +141,7 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 | `lists`                | User-created contact groups         | `id`, `name`, `icon`, `sortOrder`                                                                                                                                                                                                                 |
 | `list_members`         | List↔Contact junction               | Composite PK(`listId`, `contactId`), both FK CASCADE                                                                                                                                                                                              |
 | `score_snapshots`      | Weekly relationship score snapshots | Composite PK(`contactId`, `weekStart`), `ownerId` FK RESTRICT, `contactId` FK CASCADE, `score`, `createdAt`                                                                                                                                       |
+| `search_history`       | Persistent question history         | `id`, `ownerId` FK RESTRICT, `mode`, `query`, `normalizedQuery`, `resultCount`, `resultIds`, `fallback`, `pinned`, `runCount`, `createdAt`, `lastRunAt`, UNIQUE(`ownerId`, `mode`, `normalizedQuery`)                                             |
 
 ### Deduplication Engine Tables
 
@@ -204,7 +205,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
 - `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`
 - `server/services/` — Heavy business logic:
-  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`
+  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
   - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
@@ -213,10 +214,12 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `paths.ts` (DATA_DIR-aware upload paths + traversal-safe resolution), `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts`, `unionFind.ts`
   - `server/utils/nlp/` — NLP primitives: `names.ts`, `nicknames.ts`, `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts`
 - `server/middleware/auth.ts` — Resolves a `Principal` (`anonymous` | `user` | `service`) onto every request via `attachPrincipal`, then gates `/api` + `/uploads` with `requireAuth` when `AUTH_REQUIRED=true` or `API_TOKEN` is set. `requireUser` additionally rejects service tokens for endpoints that need a real account. Cookie helpers set `Secure` only over HTTPS (honouring `X-Forwarded-Proto`, one proxy hop). Timing-safe token comparison; env read per request so tests can toggle. `AUTH_TOKEN` is a deprecated alias for `API_TOKEN`.
-- `server/routes/auth.ts` — `/api/auth` router mounted pre-gate: status, setup (closes itself once an account exists), login, logout, me, change-password, sessions. Credential endpoints are rate limited per IP.
-- `server/services/authService.ts` — Accounts and sessions. Sessions are server-side rows keyed by the SHA-256 of the cookie secret. `reconcileOwnership()` calls `ensureLocalOwner()` and `claimUnownedData()` from `server/db.ts` on every boot; both live there because `authService` imports `db.ts` and the cycle would not resolve. `convertLocalOwner` is what `POST /api/auth/setup` calls on an instance that has been used without auth: it turns the local owner into a real account in place, keeping the id, so nothing has to be re-owned.
+- `server/routes/auth.ts` — `/api/auth` router mounted pre-gate: status, setup (closes itself once an account exists), login, logout, me, change-password, sessions, and passkey registration/login endpoints. Credential endpoints are rate limited per IP.
+- `server/services/authService.ts` — Accounts and sessions. Sessions are server-side rows keyed by the SHA-256 of the cookie secret, tracking the sign-in `method` (`"password"` or `"passkey"`). `reconcileOwnership()` calls `ensureLocalOwner()` and `claimUnownedData()` from `server/db.ts` on every boot; both live there because `authService` imports `db.ts` and the cycle would not resolve. `convertLocalOwner` is what `POST /api/auth/setup` calls on an instance that has been used without auth: it turns the local owner into a real account in place, keeping the id, so nothing has to be re-owned.
+- `server/services/passkeyService.ts` — WebAuthn registration and authentication ceremonies powered by `@simplewebauthn/server`. Manages 5-minute single-use challenges in `auth_challenges` table, per-user credentials in `passkeys` table, and first-run nudge dismissal in `user_settings` (`auth.passkeyNudge`).
+- `server/utils/publicOrigin.ts` — Computes canonical external origin and WebAuthn `rpID` via `publicOrigin(req)` and `publicRpId(req)`. Prioritizes `PUBLIC_URL` env variable, falls back to `X-Forwarded-Proto` and `X-Forwarded-Host` or `Host`. Throws `PASSKEY_UNSUPPORTED_ORIGIN` for bare IP addresses.
 - `server/services/passwords.ts` — scrypt hashing with parameters embedded in the hash string (`scrypt$N$r$p$salt$hash`), so cost can be raised without invalidating existing passwords. `needsRehash` drives silent upgrade on sign-in.
-- `src/components/auth/` — `AuthGate` decides between setup wizard, sign-in, and the app, and publishes the current account through `useAuth`. Listens for `AUTH_EXPIRED_EVENT` (dispatched by `src/api/client.ts` on any 401) so an expired session returns to sign-in instead of a wall of error toasts.
+- `src/components/auth/` — `AuthGate` decides between setup wizard, sign-in, passkey-nudge, and the app, and publishes the current account through `useAuth`. Listens for `AUTH_EXPIRED_EVENT` (dispatched by `src/api/client.ts` on any 401) so an expired session returns to sign-in instead of a wall of error toasts. `PasskeyButton` offers biometric/hardware login; `PasskeyNudge` offers first-run passkey enrollment; `PasskeysCard` manages credentials in Account settings.
 - `server/services/backupService.ts` — Scheduled SQLite snapshots (online backup API) into `DATA_DIR/backups` with rotation (`BACKUP_INTERVAL_HOURS`/`BACKUP_KEEP`).
 - `server/services/exportService.ts` — Full-DB JSON export + flat contacts CSV.
 - `server/routes/dataLifecycle.ts` — `/api/trash` (+restore/purge), `/api/backups`, `/api/export/{json,csv}`.
@@ -249,6 +252,15 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
   - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `ContactPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`
   - `SearchView.tsx`, `DashboardView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`)
+  - `src/views/settings/` — Settings revamp:
+    - `registry.ts`: Declarative registry of settings pages, navigation groups, redirect aliases, and row-level search.
+    - `SettingsShell.tsx`: Two-pane layout with 240px navigation rail on wide screens (`lg`), single-pane on phone.
+    - `SettingsRail.tsx`: Desktop navigation rail with embedded row search.
+    - `SettingsSearch.tsx`: Row-level instant search with deep-link navigation and keyboard controls.
+    - `SettingRow.tsx`: Reusable row component with anchor ID, 1.2s flash highlight, modified dot indicator, and reset button.
+    - `SettingsHome.tsx`: Registry-driven mobile/root landing view.
+    - `pages/`: Individual settings pages (`AppearancePage.tsx`, `NetworkPage.tsx`, `DuplicatesPage.tsx`, `EnrichmentPage.tsx`, `ExportPage.tsx`).
+    - `admin/`: Admin settings views (`GeneralView.tsx`, `AiProvidersView.tsx`, `MailView.tsx`, etc.).
 - `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
 - `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`
 - `src/db/` — `schema.ts` (Drizzle ORM schema definitions)
@@ -524,7 +536,7 @@ return withRetry(
 - **Migrations**: `npm run db:generate` (outputs Drizzle migration)
 - **Type Check**: `npm run lint` (`tsc --noEmit`)
 - **Test**: `npm test` (Vitest in watch mode) / `npx vitest run` (single-run)
-- **Requirements**: Provide at least one AI credential — an API key in `.env` (copy from `.env.example`), a key entered under Settings → AI Configuration, or a custom OpenAI-compatible endpoint
+- **Requirements**: Provide at least one AI credential — an API key in `.env` (copy from `.env.example`), a key entered under Settings → Administration → AI providers, or a custom OpenAI-compatible endpoint
 
 ## 11. AI Stats API Contracts
 

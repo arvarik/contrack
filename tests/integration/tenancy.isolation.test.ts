@@ -87,6 +87,8 @@ const COVERED = [
   "DELETE /api/interactions/:id",
   "DELETE /api/lists/:id",
   "DELETE /api/lists/:id/members/:contactId",
+  "DELETE /api/search/history",
+  "DELETE /api/search/history/:id",
   "DELETE /api/trash/:id",
   "GET /api/action-items",
   "GET /api/action-items/completed",
@@ -129,6 +131,7 @@ const COVERED = [
   "GET /api/query/contacts",
   "GET /api/search",
   "GET /api/search/coverage",
+  "GET /api/search/history",
   "GET /api/search/interactions",
   "GET /api/tags",
   "GET /api/timeline",
@@ -139,6 +142,7 @@ const COVERED = [
   "PATCH /api/contacts/:id/location",
   "PATCH /api/interactions/:id",
   "PATCH /api/lists/:id",
+  "PATCH /api/search/history/:id",
   "POST /api/ai-search",
   "POST /api/ai-search/:batchId/cancel",
   "POST /api/contacts",
@@ -164,6 +168,7 @@ const COVERED = [
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
+  "POST /api/search/history",
   "POST /api/search/refresh-index",
   "POST /api/search/semantic",
   "POST /api/search/synthesize",
@@ -1823,6 +1828,87 @@ describe("POST /api/search/refresh-index", () => {
   });
 });
 
+describe("search history (/api/search/history)", () => {
+  it("isolates POST, GET, PATCH, and DELETE across accounts", async () => {
+    // 1. Account A records a history entry
+    const postA = await asUser(A)(
+      request(app)
+        .post("/api/search/history")
+        .send({ query: "isolation question A", mode: "people" }),
+    );
+    expect(postA.status).toBe(200);
+    const entryA = postA.body.entry;
+    expect(entryA.ownerId).toBe(A.user.id);
+    expect(entryA.query).toBe("isolation question A");
+
+    // 2. Account B records a history entry
+    const postB = await asUser(B)(
+      request(app)
+        .post("/api/search/history")
+        .send({ query: "isolation question B", mode: "people" }),
+    );
+    expect(postB.status).toBe(200);
+    const entryB = postB.body.entry;
+    expect(entryB.ownerId).toBe(B.user.id);
+
+    // 3. GET /api/search/history: A sees entryA and not entryB; B sees entryB and not entryA
+    const getA = await asUser(A)(request(app).get("/api/search/history"));
+    expect(getA.status).toBe(200);
+    const aIds = (getA.body.entries as { id: string }[]).map((e) => e.id);
+    expect(aIds).toContain(entryA.id);
+    expect(aIds).not.toContain(entryB.id);
+
+    const getB = await asUser(B)(request(app).get("/api/search/history"));
+    expect(getB.status).toBe(200);
+    const bIds = (getB.body.entries as { id: string }[]).map((e) => e.id);
+    expect(bIds).toContain(entryB.id);
+    expect(bIds).not.toContain(entryA.id);
+
+    // Account C has no entries
+    const getC = await asUser(C)(request(app).get("/api/search/history"));
+    expect(getC.status).toBe(200);
+    expect(getC.body.total).toBe(0);
+    expect(getC.body.entries).toEqual([]);
+
+    // 4. PATCH /api/search/history/:id: B tries to patch A's entry -> 404
+    const patchAcross = await asUser(B)(
+      request(app)
+        .patch(`/api/search/history/${entryA.id}`)
+        .send({ pinned: true }),
+    );
+    expect(patchAcross.status).toBe(404);
+
+    // A's entry remains unpinned
+    const checkA = await asUser(A)(request(app).get("/api/search/history"));
+    const fetchedA = (
+      checkA.body.entries as { id: string; pinned: boolean }[]
+    ).find((e) => e.id === entryA.id);
+    expect(fetchedA?.pinned).toBe(false);
+
+    // 5. DELETE /api/search/history/:id: B tries to delete A's entry -> 404
+    const deleteAcross = await asUser(B)(
+      request(app).delete(`/api/search/history/${entryA.id}`),
+    );
+    expect(deleteAcross.status).toBe(404);
+
+    // 6. DELETE /api/search/history: B clears history; B's entries gone, A's entries intact
+    const clearB = await asUser(B)(request(app).delete("/api/search/history"));
+    expect(clearB.status).toBe(200);
+    expect(clearB.body.deleted).toBeGreaterThanOrEqual(1);
+
+    const checkAAfterClear = await asUser(A)(
+      request(app).get("/api/search/history"),
+    );
+    const aIdsAfter = (checkAAfterClear.body.entries as { id: string }[]).map(
+      (e) => e.id,
+    );
+    expect(aIdsAfter).toContain(entryA.id);
+
+    // Clean up A's entry
+    await asUser(A)(request(app).delete(`/api/search/history/${entryA.id}`));
+  });
+});
+
 // =============================================================================
 // AI Search
 // =============================================================================
@@ -3166,7 +3252,7 @@ describe("all scoped routes are isolated", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(36);
+    expect(collections).toHaveLength(37);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

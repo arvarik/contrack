@@ -10,7 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **The data behind Pulse.** Added `score_snapshots` table with weekly relationship score snapshots, retention pruning at 26 weeks, and weekly sweep tracking. Added deterministic activity aggregates (`GET /api/dashboard/activity`) with 84-day rolling activity, weekly totals, streak tracking, and daily task counts. Added relationship score momentum (`GET /api/dashboard/momentum`) with rising, cooling, and silent contact detection. Added data hygiene metrics (`missingCompany`, `missingLocation`, `missingEmail`, `stale`), upcoming meetings, and correspondent counts to `GET /api/dashboard`. Added `missing:` search facet (`company`, `location`, `email`, `phone`) and birthday normalization utilities. Added `pulseLayout` user preference with column orders and card visibility controls.
+- **Passkeys (FIDO2 / WebAuthn).** Accounts can now register biometric
+  passkeys (Touch ID, Face ID, Windows Hello, security keys) to sign in
+  without typing a password. Includes a first-run nudge interstitial after
+  setup or account creation, inline WebAuthn registration and verification,
+  browser autofill (conditional UI) on the sign-in form with an abort controller
+  handoff for Chrome, and a dedicated "Sign in with a passkey" button. Account
+  settings gains a "Sign-in methods" section to inspect and manage passkeys, with
+  inline renaming, a removal confirmation dialog, and a device icon naming the
+  browser or operating system. Active sessions now track their authentication
+  method (`method: "password"` or `method: "passkey"`), displayed under
+  Devices in Account settings. Reverse proxies can configure `PUBLIC_URL` to
+  ensure consistent rpID and origin derivation during WebAuthn ceremonies.
+- **Search history table and API.** The server now stores every question asked
+  per account across People, Notes and palette modes in a dedicated
+  `search_history` table. Distinct queries per mode are deduplicated by
+  normalised text, with automatic run counting, last run timestamps, pinned
+  flags, and result snapshots. Five new scoped and isolated routes under
+  `/api/search/history` support listing with cursor pagination, recording,
+  pinning, individual deletion, and clearing history by mode or entirely.
+  Legacy search history from user preferences is automatically backfilled on the
+  first request for an account with no history rows.
 
+- **Settings revamp: registry, two-pane shell, and row search.** Settings is now
+  driven by a declarative registry (`src/views/settings/registry.ts`). On wide
+  screens (1024px and wider), settings renders as a two-pane shell with a 240px
+  rail on the left and the active page on the right. On phones, it retains the
+  single-pane list with instant back navigation. Live row search searches titles,
+  descriptions, and keywords across all pages with keyboard navigation and hash
+  links. Individual setting rows flash and focus on navigation, display a dot
+  indicator when modified, and provide a reset button. Old settings URLs redirect
+  to their new paths. `DELETE /api/auth/preferences/:key` allows resetting
+  preferences to defaults.
 - **The corvid, everywhere.** One drawing of the raven, traced by hand from
   `docs/brand/corvid-source.jpg` into `src/assets/corvidPaths.ts`, is now the
   mark. It replaces the gradient "C" in the tab strip, the PWA and Apple

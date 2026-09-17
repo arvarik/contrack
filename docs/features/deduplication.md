@@ -83,7 +83,7 @@ The scan streams progress via SSE through these phases:
 
 ## Sensitivity Presets
 
-Configure auto-merge behavior in **Settings → Preferences → Auto-merge sensitivity**:
+Configure auto-merge behavior in **Settings → Duplicates → Auto-merge sensitivity**:
 
 | Preset           | Auto-merge threshold | Behavior                                      |
 | ---------------- | -------------------- | --------------------------------------------- |

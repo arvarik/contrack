@@ -423,7 +423,7 @@ export const SuggestionReviewQueue = () => {
         action={{
           label: "Scan now",
           icon: ScanSearch,
-          onClick: () => navigate("/settings/dedupe"),
+          onClick: () => navigate("/settings/duplicates"),
         }}
       />
     );

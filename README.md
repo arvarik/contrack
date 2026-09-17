@@ -251,6 +251,7 @@ Full documentation lives in the [`docs/`](docs/) directory:
 | `AI_TIER`               | `FREE` or `PAID` rate limit profile                                                                                                               | `FREE`       |
 | `PORT`                  | Express listening port                                                                                                                            | `3210`       |
 | `HOST`                  | Bind interface (`0.0.0.0` to expose on LAN)                                                                                                       | `127.0.0.1`  |
+| `PUBLIC_URL`            | Canonical external origin behind a proxy (e.g. `https://crm.example.com`) for passkeys and invites                                                | — (derived)  |
 | `AUTH_REQUIRED`         | `true` = require sign-in with an account                                                                                                          | `false`      |
 | `API_TOKEN`             | **Deprecated.** Instance-wide machine credential, and setting it gates the instance. Removed in 3.0, use a personal token from Settings → Account | — (off)      |
 | `DATA_DIR`              | Root for runtime data (DB, uploads, backups, model cache)                                                                                         | project root |

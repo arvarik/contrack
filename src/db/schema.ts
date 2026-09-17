@@ -3,8 +3,10 @@ import {
   text,
   integer,
   real,
+  blob,
   primaryKey,
   unique,
+  index,
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
@@ -194,6 +196,47 @@ export const sessions = sqliteTable("sessions", {
     .default(sql`(CURRENT_TIMESTAMP)`),
   /** Truncated User-Agent, so the sessions list can say which device. */
   userAgent: text("userAgent"),
+  /** Method used to establish the session: 'password' | 'passkey' | 'email-link' | null. */
+  method: text("method"),
+});
+
+/**
+ * passkeys — WebAuthn discoverable credentials.
+ */
+export const passkeys = sqliteTable("passkeys", {
+  /** Credential ID, base64url encoded. */
+  id: text("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** COSE public key bytes. */
+  publicKey: blob("publicKey", { mode: "buffer" }).notNull(),
+  counter: integer("counter").notNull().default(0),
+  /** JSON array of transport strings, or null. */
+  transports: text("transports"),
+  deviceType: text("deviceType").notNull().default("singleDevice"),
+  backedUp: integer("backedUp").notNull().default(0),
+  aaguid: text("aaguid"),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  lastUsedAt: text("lastUsedAt"),
+});
+
+/**
+ * auth_challenges — Temporary WebAuthn ceremony challenges.
+ */
+export const authChallenges = sqliteTable("auth_challenges", {
+  id: text("id").primaryKey(),
+  /** 'register' | 'login'. */
+  kind: text("kind").notNull(),
+  userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
+  challenge: text("challenge").notNull(),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  expiresAt: text("expiresAt").notNull(),
 });
 
 // =============================================================================
@@ -779,6 +822,64 @@ export const scoreSnapshots = sqliteTable(
   }),
 );
 
+/**
+ * search_history — Persistent search queries per owner and mode.
+ *
+ * One row per distinct question per mode. Stores query snapshot,
+ * pinned state, and tracks run count and last run timestamp.
+ */
+export const searchHistory = sqliteTable(
+  "search_history",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    mode: text("mode").notNull(),
+    query: text("query").notNull(),
+    normalizedQuery: text("normalizedQuery").notNull(),
+    resultCount: integer("resultCount"),
+    resultIds: text("resultIds"),
+    fallback: integer("fallback").notNull().default(0),
+    pinned: integer("pinned").notNull().default(0),
+    runCount: integer("runCount").notNull().default(1),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    lastRunAt: text("lastRunAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [
+    unique().on(table.ownerId, table.mode, table.normalizedQuery),
+    index("idx_search_history_owner_last").on(
+      table.ownerId,
+      table.lastRunAt,
+      table.id,
+    ),
+    index("idx_search_history_owner_pinned").on(
+      table.ownerId,
+      table.pinned,
+      table.lastRunAt,
+    ),
+  ],
+);
+
+/** Tables that carry `ownerId`. Mirrored from server/db.ts. */
+export const OWNED_TABLES = [
+  "contacts",
+  "lists",
+  "interactions",
+  "action_items",
+  "dedupe_suggestions",
+  "dedupe_exclusions",
+  "dedupe_merge_log",
+  "ai_invocations",
+  "imports",
+  "score_snapshots",
+  "search_history",
+] as const;
+
 // =============================================================================
 // Drizzle Relations (for relational query builder)
 // =============================================================================
@@ -791,6 +892,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   actionItems: many(actionItems),
   apiTokens: many(apiTokens),
   userSettings: many(userSettings),
+  searchHistory: many(searchHistory),
 }));
 
 export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
@@ -1040,6 +1142,13 @@ export const scoreSnapshotsRelations = relations(scoreSnapshots, ({ one }) => ({
   }),
   owner: one(users, {
     fields: [scoreSnapshots.ownerId],
+    references: [users.id],
+  }),
+}));
+
+export const searchHistoryRelations = relations(searchHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [searchHistory.ownerId],
     references: [users.id],
   }),
 }));
