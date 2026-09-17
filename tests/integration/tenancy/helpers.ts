@@ -248,6 +248,7 @@ export function resetAccounts(): void {
     DELETE FROM dedupe_merge_log;
     DELETE FROM dedupe_exclusions;
     DELETE FROM dedupe_suggestions;
+    DELETE FROM score_snapshots;
     DELETE FROM ai_invocations;
     DELETE FROM imports;
     DELETE FROM action_items;

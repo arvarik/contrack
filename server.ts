@@ -21,7 +21,10 @@ import { countUsers } from "./server/services/authService.ts";
 import { startBackupSchedule } from "./server/services/backupService.ts";
 import { contactService } from "./server/services/contactService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
-import { relationshipService } from "./server/services/relationshipService.ts";
+import {
+  relationshipService,
+  ensureWeeklySnapshot,
+} from "./server/services/relationshipService.ts";
 import { startDailyMaintenance } from "./server/services/maintenanceService.ts";
 import {
   backfillEmbeddings,
@@ -242,7 +245,18 @@ async function startServer() {
     ).catch((err) =>
       log.warn("Server", `Relationship score sweep failed: ${err.message}`),
     );
-  runSweep("stale")();
+  runSweep("stale")()
+    .then(() => {
+      try {
+        ensureWeeklySnapshot();
+      } catch (err) {
+        log.warn(
+          "Server",
+          `Weekly score snapshot failed: ${getErrorMessage(err)}`,
+        );
+      }
+    })
+    .catch(() => {});
   setInterval(runSweep("stale"), 60 * 60 * 1000);
   setInterval(runSweep("all"), 24 * 60 * 60 * 1000);
 

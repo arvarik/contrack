@@ -20,6 +20,30 @@ router.get(
 );
 
 router.get(
+  "/dashboard/activity",
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+
+    const payload = dashboardService.getActivity(scopeOf(req));
+    log.debug("API", `[${rid}] GET /api/dashboard/activity`);
+
+    res.json(payload);
+  }),
+);
+
+router.get(
+  "/dashboard/momentum",
+  asyncHandler(async (req, res) => {
+    const rid = req.requestId;
+
+    const payload = dashboardService.getMomentum(scopeOf(req));
+    log.debug("API", `[${rid}] GET /api/dashboard/momentum`);
+
+    res.json(payload);
+  }),
+);
+
+router.get(
   "/dashboard/insight",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;

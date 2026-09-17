@@ -323,6 +323,7 @@ type SlimContactRow = Pick<
   | "lng"
   | "relationshipScore"
   | "aiHydratedAt"
+  | "birthday"
 >;
 
 export const contactService = {
@@ -907,7 +908,7 @@ export const contactService = {
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
              cadenceDays, lastContactedAt, nextFollowUpAt,
-             lat, lng, relationshipScore, aiHydratedAt
+             lat, lng, relationshipScore, aiHydratedAt, birthday
       FROM contacts
       WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
       ORDER BY addedAt DESC

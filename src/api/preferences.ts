@@ -25,6 +25,13 @@ export interface SearchHistoryEntry {
   timestamp: number;
 }
 
+export type PulseColumn = "focus" | "network" | "intel";
+
+export interface PulseLayout {
+  hidden: string[];
+  order: Partial<Record<PulseColumn, string[]>>;
+}
+
 export interface Preferences {
   theme: ThemeMode;
   /** `#rrggbb`. The primary and container tokens are derived from it. */
@@ -34,6 +41,7 @@ export interface Preferences {
   dedupePreset: MergePreset;
   tempUnit: TempUnit;
   searchHistory: SearchHistoryEntry[];
+  pulseLayout: PulseLayout;
 }
 
 export interface PreferencesResponse {
@@ -65,6 +73,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dedupePreset: "default",
   tempUnit: "celsius",
   searchHistory: [],
+  pulseLayout: {
+    hidden: [],
+    order: {},
+  },
 };
 
 export const fetchPreferences = (): Promise<PreferencesResponse> =>

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The data behind Pulse.** Added `score_snapshots` table with weekly relationship score snapshots, retention pruning at 26 weeks, and weekly sweep tracking. Added deterministic activity aggregates (`GET /api/dashboard/activity`) with 84-day rolling activity, weekly totals, streak tracking, and daily task counts. Added relationship score momentum (`GET /api/dashboard/momentum`) with rising, cooling, and silent contact detection. Added data hygiene metrics (`missingCompany`, `missingLocation`, `missingEmail`, `stale`), upcoming meetings, and correspondent counts to `GET /api/dashboard`. Added `missing:` search facet (`company`, `location`, `email`, `phone`) and birthday normalization utilities. Added `pulseLayout` user preference with column orders and card visibility controls.
 - **Passkeys (FIDO2 / WebAuthn).** Accounts can now register biometric
   passkeys (Touch ID, Face ID, Windows Hello, security keys) to sign in
   without typing a password. Includes a first-run nudge interstitial after

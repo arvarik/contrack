@@ -35,6 +35,7 @@ export const OWNED_TABLES = [
   "dedupe_merge_log",
   "ai_invocations",
   "imports",
+  "score_snapshots",
   "search_history",
 ];
 
@@ -55,6 +56,7 @@ export const OWNED_SCHEMA_KEYS = [
   "dedupeSuggestions",
   "dedupeExclusions",
   "dedupeMergeLog",
+  "scoreSnapshots",
   "searchHistory",
 ];
 

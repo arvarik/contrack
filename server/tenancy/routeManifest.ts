@@ -549,7 +549,19 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   { method: "GET", path: "/api/dashboard", class: "scoped", isolated: true },
   {
     method: "GET",
+    path: "/api/dashboard/activity",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "GET",
     path: "/api/dashboard/insight",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "GET",
+    path: "/api/dashboard/momentum",
     class: "scoped",
     isolated: true,
   },

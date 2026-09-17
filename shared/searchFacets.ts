@@ -1,5 +1,12 @@
 export type FacetField =
-  "role" | "company" | "location" | "industry" | "tag" | "score" | "updated";
+  | "role"
+  | "company"
+  | "location"
+  | "industry"
+  | "tag"
+  | "score"
+  | "updated"
+  | "missing";
 
 export interface FacetFilter {
   field: FacetField;
@@ -8,7 +15,7 @@ export interface FacetFilter {
   operator?: ">" | "<";
 }
 
-interface FacetContact {
+export interface FacetContact {
   role?: string | null;
   company?: string | null;
   location?: string | null;
@@ -16,6 +23,8 @@ interface FacetContact {
   tags?: { tag: string }[];
   relationshipScore?: number | null;
   updatedAt?: string | null;
+  emails?: { email: string }[];
+  phones?: { phone: string }[];
 }
 
 /** Match a facet filter against a SlimSearchContact */
@@ -40,8 +49,34 @@ export function matchesFacet(
       return matchesScoreFilter(contact.relationshipScore ?? null, filter);
     case "updated":
       return matchesDateFilter(contact.updatedAt ?? null, filter);
+    case "missing":
+      return matchesMissingFilter(contact, v);
     default:
       return true;
+  }
+}
+
+/** Missing field check: missing:company, missing:location, missing:email, missing:phone */
+function matchesMissingFilter(contact: FacetContact, field: string): boolean {
+  switch (field) {
+    case "company":
+      return !contact.company || contact.company.trim() === "";
+    case "location":
+      return !contact.location || contact.location.trim() === "";
+    case "email":
+      return (
+        !contact.emails ||
+        contact.emails.length === 0 ||
+        contact.emails.every((e) => !e.email || e.email.trim() === "")
+      );
+    case "phone":
+      return (
+        !contact.phones ||
+        contact.phones.length === 0 ||
+        contact.phones.every((p) => !p.phone || p.phone.trim() === "")
+      );
+    default:
+      return false;
   }
 }
 

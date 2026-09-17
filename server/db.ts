@@ -524,6 +524,16 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_import_rows_status ON import_rows(importId, status);
 
+  CREATE TABLE IF NOT EXISTS score_snapshots (
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    contactId TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    weekStart TEXT NOT NULL,
+    score REAL NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    PRIMARY KEY (contactId, weekStart)
+  );
+  CREATE INDEX IF NOT EXISTS idx_score_snapshots_owner_week ON score_snapshots(ownerId, weekStart);
+
   CREATE TABLE IF NOT EXISTS search_history (
     id              TEXT PRIMARY KEY,
     ownerId         TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -578,6 +588,7 @@ export const OWNED_TABLES = [
   "dedupe_merge_log",
   "ai_invocations",
   "imports",
+  "score_snapshots",
   "search_history",
 ] as const;
 
@@ -588,6 +599,7 @@ const OWNER_REQUIRED_TABLES = [
   "dedupe_merge_log",
   "ai_invocations",
   "imports",
+  "score_snapshots",
   "search_history",
 ] as const;
 
@@ -1880,7 +1892,7 @@ export function vecTableDdl(table: string, dimension: number): string {
 }
 
 /** True when the named table is already in this database. */
-function tableExists(name: string): boolean {
+export function tableExists(name: string): boolean {
   return (
     sqlite
       .prepare(

@@ -37,6 +37,7 @@
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { isoWeekStart } from "../../shared/dates.ts";
 
 // =============================================================================
 // Types
@@ -392,6 +393,13 @@ async function runSweep(options: { full: boolean }): Promise<SweepResult> {
     }
   }
 
+  if (full) {
+    const weekStart = isoWeekStart(new Date());
+    for (const queue of queues) {
+      snapshotScores(queue.ownerId, weekStart);
+    }
+  }
+
   const elapsedMs = Date.now() - startMs;
   const result: SweepResult = {
     owners: queues.length,
@@ -493,4 +501,34 @@ export const relationshipService = {
   async recomputeStale(): Promise<SweepResult> {
     return runSweep({ full: false });
   },
+
+  snapshotScores,
+  ensureWeeklySnapshot,
 };
+
+/**
+ * Record a weekly score snapshot for an owner's contacts.
+ * Uses INSERT OR IGNORE so each contact is captured at most once per ISO week.
+ */
+export function snapshotScores(ownerId: string, weekStart: string): number {
+  return sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO score_snapshots (ownerId, contactId, weekStart, score)
+       SELECT ownerId, id, ?, relationshipScore FROM contacts
+        WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
+          AND (isArchived = 0 OR isArchived IS NULL)`,
+    )
+    .run(weekStart, ownerId).changes;
+}
+
+/**
+ * Capture weekly score snapshots for all active owners.
+ * Called on boot after the startup stale sweep.
+ */
+export function ensureWeeklySnapshot(now: Date = new Date()): void {
+  const weekStart = isoWeekStart(now);
+  const owners = ownersWithWork(true);
+  for (const ownerId of owners) {
+    snapshotScores(ownerId, weekStart);
+  }
+}

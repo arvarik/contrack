@@ -2,6 +2,25 @@ import { apiFetch } from "./client";
 import { useQuery } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import type { ActionItem, ZeroStatePayload } from "../types";
+import type {
+  ActivityDay,
+  DashboardActivityResponse,
+  DashboardMomentumResponse,
+  ContactCard,
+  MomentumCard,
+  SilentCard,
+  StreakResult,
+} from "../../shared/pulse";
+
+export type {
+  ActivityDay,
+  DashboardActivityResponse,
+  DashboardMomentumResponse,
+  ContactCard,
+  MomentumCard,
+  SilentCard,
+  StreakResult,
+};
 
 export interface DashboardPayload {
   overdue: ActionItem[];
@@ -64,6 +83,19 @@ export interface DashboardPayload {
     themeColor: string;
     addedAt: string;
   }[];
+  hygiene: {
+    missingCompany: number;
+    missingLocation: number;
+    missingEmail: number;
+    stale: number;
+  };
+  meetings: {
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    contactIds: string[];
+  }[];
+  correspondents: number;
 }
 
 export interface DailyInsight {
@@ -78,6 +110,30 @@ export const useDashboard = () => {
     queryFn: async ({ signal }): Promise<DashboardPayload> => {
       const res = await apiFetch(`/dashboard`, { signal });
       if (!res.ok) throw new Error("Failed to fetch dashboard payload");
+      return res.json();
+    },
+    staleTime: STALE_TIMES.dashboard,
+  });
+};
+
+export const useDashboardActivity = () => {
+  return useQuery({
+    queryKey: ["dashboard", "activity"],
+    queryFn: async ({ signal }): Promise<DashboardActivityResponse> => {
+      const res = await apiFetch(`/dashboard/activity`, { signal });
+      if (!res.ok) throw new Error("Failed to fetch dashboard activity");
+      return res.json();
+    },
+    staleTime: STALE_TIMES.dashboard,
+  });
+};
+
+export const useDashboardMomentum = () => {
+  return useQuery({
+    queryKey: ["dashboard", "momentum"],
+    queryFn: async ({ signal }): Promise<DashboardMomentumResponse> => {
+      const res = await apiFetch(`/dashboard/momentum`, { signal });
+      if (!res.ok) throw new Error("Failed to fetch dashboard momentum");
       return res.json();
     },
     staleTime: STALE_TIMES.dashboard,

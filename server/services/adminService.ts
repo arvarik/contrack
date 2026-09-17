@@ -639,6 +639,7 @@ export function purgeOwner(ownerId: string): void {
 
     // 2. Owned tables that hang off contacts or off nothing.
     for (const table of [
+      "score_snapshots",
       "dedupe_suggestions",
       "dedupe_exclusions",
       "dedupe_merge_log",
