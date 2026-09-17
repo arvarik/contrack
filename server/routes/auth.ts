@@ -32,10 +32,13 @@ import {
 import { resolveApiToken } from "../middleware/auth.ts";
 import { getMapStyles } from "../utils/mapConfig.ts";
 import {
+  deletePreference,
   getPreferences,
+  preferenceSchemas,
   preferencesPatchSchema,
   setPreferences,
   storedPreferenceKeys,
+  type PreferenceKey,
 } from "../services/userPreferencesService.ts";
 import {
   requireAdmin,
@@ -467,6 +470,24 @@ router.patch(
     res.json({ preferences, stored: storedPreferenceKeys(user.id) });
   },
 );
+
+router.delete("/preferences/:key", (req, res) => {
+  const user = currentUser(req);
+  if (!user) {
+    throw new AppError("Authentication required", 401, {
+      code: "UNAUTHORIZED",
+    });
+  }
+  const { key } = req.params;
+  if (!(key in preferenceSchemas)) {
+    throw new AppError(`Unknown preference key: ${key}`, 404, {
+      code: "NOT_FOUND",
+    });
+  }
+  const preferences = deletePreference(user.id, key as PreferenceKey);
+  log.info("API", `[${req.requestId}] DELETE /api/auth/preferences/${key}`);
+  res.json({ preferences, stored: storedPreferenceKeys(user.id) });
+});
 
 router.post(
   "/change-password",

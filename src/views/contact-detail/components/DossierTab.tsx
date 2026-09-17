@@ -87,7 +87,7 @@ const EmptyDossier = ({ name }: { name: string }) => (
         enrichment researches that from the web and fills it in.
       </p>
     </div>
-    <Link to="/settings/ai-search" className="btn-primary">
+    <Link to="/settings/enrichment" className="btn-primary">
       <Sparkles className="w-4 h-4" />
       Enrich contacts
     </Link>

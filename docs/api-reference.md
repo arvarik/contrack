@@ -1227,7 +1227,7 @@ curl -X POST http://localhost:3210/api/lists/list123/members/bulk \
 
 ## AI Configuration
 
-Backs **Settings → AI**. Capabilities are `quick`, `deep`, `embeddings`, and
+Backs **Settings → Administration → AI providers**. Capabilities are `quick`, `deep`, `embeddings`, and
 `research`. See [Configuration](configuration.md#ai-configuration) for what each
 one powers.
 
@@ -1654,9 +1654,19 @@ should be told, not quietly ignored. `theme` is `light`, `dark` or `system`;
 tokens are derived; `searchHistory` holds at most twenty entries of
 `{ query, mode, timestamp }`.
 
-These two are the only routes under `/api/auth` that a personal token can
+These three are the only routes under `/api/auth` that a personal token can
 reach, and the only ones that work on an instance with sign-in switched off —
 which runs as the local owner, who has no session to require.
+
+---
+
+### `DELETE /api/auth/preferences/:key` _(account)_
+
+Resets a single preference to its default value by removing it from the user's stored preferences. Returns the updated `{ preferences, stored }` object, identical to `GET`. Returns `404` if the key is unknown to the server.
+
+```bash
+curl -X DELETE http://localhost:3210/api/auth/preferences/theme -b cookies.txt
+```
 
 ---
 

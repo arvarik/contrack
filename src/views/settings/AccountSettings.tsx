@@ -795,7 +795,7 @@ export const AccountSettings = () => {
               instance, so it is set under Administration.
             </p>
             <Link
-              to="/settings/admin/instance"
+              to="/settings/admin/general"
               className="btn-secondary shrink-0"
             >
               <ServerCog className="w-4 h-4" />

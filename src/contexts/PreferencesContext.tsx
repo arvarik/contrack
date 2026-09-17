@@ -37,6 +37,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_PREFERENCES,
+  deletePreference,
   fetchPreferences,
   savePreferences,
   type Preferences,
@@ -69,17 +70,22 @@ interface PreferencesContextValue {
   isLoaded: boolean;
   /** The palette actually on screen, after `system` has been resolved. */
   mode: ResolvedMode;
+  /** The keys this account has actually chosen. */
+  stored: (keyof Preferences)[];
   setPreference: <K extends keyof Preferences>(
     key: K,
     value: Preferences[K],
   ) => void;
+  resetPreference: (key: keyof Preferences) => void;
 }
 
 const PreferencesContext = createContext<PreferencesContextValue>({
   preferences: DEFAULT_PREFERENCES,
   isLoaded: false,
   mode: "light",
+  stored: [],
   setPreference: () => {},
+  resetPreference: () => {},
 });
 
 /**
@@ -117,6 +123,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const preferences = data?.preferences ?? fallback;
+  const stored = useMemo(() => data?.stored ?? [], [data?.stored]);
 
   const mutation = useMutation({
     mutationFn: savePreferences,
@@ -146,12 +153,43 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     onSuccess: (response) => queryClient.setQueryData(QUERY_KEY, response),
   });
 
+  const resetMutation = useMutation({
+    mutationFn: deletePreference,
+    onMutate: async (key: keyof Preferences) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
+      const previous = queryClient.getQueryData<PreferencesResponse>(QUERY_KEY);
+      if (previous) {
+        queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, {
+          preferences: {
+            ...previous.preferences,
+            [key]: DEFAULT_PREFERENCES[key],
+          },
+          stored: previous.stored.filter((k) => k !== key),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _key, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(QUERY_KEY, context.previous);
+      }
+    },
+    onSuccess: (response) => queryClient.setQueryData(QUERY_KEY, response),
+  });
+
   const { mutate } = mutation;
   const setPreference = useCallback(
     <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
       mutate({ [key]: value } as Partial<Preferences>);
     },
     [mutate],
+  );
+
+  const resetPreference = useCallback(
+    (key: keyof Preferences) => {
+      resetMutation.mutate(key);
+    },
+    [resetMutation],
   );
 
   // ── The one-time move out of localStorage ────────────────────────────────
@@ -194,8 +232,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [preferences.theme, preferences.accent, mode]);
 
   const value = useMemo<PreferencesContextValue>(
-    () => ({ preferences, isLoaded: isSuccess, mode, setPreference }),
-    [preferences, isSuccess, mode, setPreference],
+    () => ({
+      preferences,
+      isLoaded: isSuccess,
+      mode,
+      stored,
+      setPreference,
+      resetPreference,
+    }),
+    [preferences, isSuccess, mode, stored, setPreference, resetPreference],
   );
 
   return (
