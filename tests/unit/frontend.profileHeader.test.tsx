@@ -33,10 +33,21 @@ vi.mock("../../src/api", () => ({
   useRemoveFromList: () => ({ mutate: vi.fn() }),
 }));
 
+/** The toasts, so a test can read what was offered and press Undo. */
+const toastMock = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+);
+vi.mock("sonner", () => ({ toast: toastMock }));
+
 import {
   ProfileHeader,
   type ProfileHeaderProps,
 } from "../../src/views/contact-detail/components/ProfileHeader";
+import {
+  basicDetailsText,
+  fullDetailsText,
+} from "../../src/views/contact-detail/components/ContactActionsMenu";
+import { CLIPBOARD_DENIED } from "../../src/lib/clipboard";
 import {
   DossierTab,
   type BriefingMutation,
@@ -152,7 +163,33 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  toastMock.mockClear();
+  toastMock.success.mockClear();
+  toastMock.error.mockClear();
 });
+
+/** A clipboard that records what it was given, or refuses. */
+function stubClipboard(refuse = false) {
+  const writeText = vi.fn(() =>
+    refuse ? Promise.reject(new Error("denied")) : Promise.resolve(),
+  );
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+  return writeText;
+}
+
+/** Open the header kebab and choose an item. */
+function chooseAction(name: string) {
+  fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
+  fireEvent.click(screen.getByRole("menuitem", { name }));
+}
+
+/** The Undo action of the last plain toast. */
+function lastUndo(): () => void {
+  const options = toastMock.mock.calls.at(-1)?.[1] as {
+    action: { onClick: () => void };
+  };
+  return options.action.onClick;
+}
 
 describe("the contact header", () => {
   it("names the contact in the page's h1", () => {
@@ -292,6 +329,182 @@ describe("the contact header", () => {
     fireEvent.keyDown(emerald, { key: "Escape" });
     expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(document.activeElement).toBe(kebab);
+  });
+});
+
+describe("the contact actions", () => {
+  const withDetails = () =>
+    makeContact({
+      emails: [
+        {
+          id: "e1",
+          email: "thomas@umbrella.com",
+          label: "work",
+          isPrimary: true,
+        },
+      ] as Contact["emails"],
+      phones: [
+        { id: "p1", phone: "440-434-9585", label: "mobile", isPrimary: true },
+      ] as Contact["phones"],
+      birthday: "1974-05-11",
+    });
+
+  it("copies the basic details: name, emails and phones", async () => {
+    const writeText = stubClipboard();
+    mount(<ProfileHeader {...makeProps({ contact: withDetails() })} />);
+    chooseAction("Copy basic details");
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
+    expect(writeText).toHaveBeenCalledWith(
+      "Name: Thomas Walker\nEmail: thomas@umbrella.com\nPhone: 440-434-9585",
+    );
+    expect(toastMock.success).toHaveBeenCalledWith("Basic details copied");
+  });
+
+  it("copies the full details, with the role, company, birthday and place", async () => {
+    const writeText = stubClipboard();
+    mount(<ProfileHeader {...makeProps({ contact: withDetails() })} />);
+    chooseAction("Copy full details");
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
+    expect(writeText).toHaveBeenCalledWith(fullDetailsText(withDetails()));
+    expect(fullDetailsText(withDetails()).split("\n")).toEqual([
+      "Name: Thomas Walker",
+      "Role: UX Researcher",
+      "Company: Umbrella Corp",
+      "Email: thomas@umbrella.com",
+      "Phone: 440-434-9585",
+      "Birthday: 1974-05-11",
+      "Location: Sydney, NSW, Australia",
+    ]);
+    // Addresses win over the single location when there are any.
+    expect(
+      fullDetailsText(
+        makeContact({
+          addresses: [
+            { id: "a1", address: "1 Main St", label: "home", isPrimary: true },
+            { id: "a2", address: "2 Side St", label: "work", isPrimary: false },
+          ] as Contact["addresses"],
+        }),
+      ),
+    ).toContain("Location: 1 Main St | 2 Side St");
+    expect(basicDetailsText(makeContact())).toBe("Name: Thomas Walker");
+  });
+
+  it("says so when the clipboard refuses", async () => {
+    stubClipboard(true);
+    mount(<ProfileHeader {...makeProps()} />);
+    chooseAction("Copy basic details");
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(CLIPBOARD_DENIED),
+    );
+  });
+
+  it("archives, and reports the result or the failure", () => {
+    const props = makeProps();
+    mount(<ProfileHeader {...props} />);
+    chooseAction("Archive");
+    const mutate = props.archiveContact.mutate as ReturnType<typeof vi.fn>;
+    expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
+    const opts = mutate.mock.calls[0][1];
+    opts.onSuccess();
+    expect(toastMock.success).toHaveBeenCalledWith("Thomas Walker archived");
+    opts.onError(new Error("offline"));
+    expect(toastMock.error).toHaveBeenCalledWith("Failed: offline");
+  });
+
+  it("unarchives an archived contact", () => {
+    const props = makeProps({ contact: makeContact({ isArchived: true }) });
+    mount(<ProfileHeader {...props} />);
+    chooseAction("Unarchive");
+    const mutate = props.unarchiveContact.mutate as ReturnType<typeof vi.fn>;
+    mutate.mock.calls[0][1].onSuccess();
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Thomas Walker restored to network",
+    );
+  });
+
+  it("deletes from the last item", () => {
+    const props = makeProps();
+    mount(<ProfileHeader {...props} />);
+    chooseAction("Delete");
+    expect(props.onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("promotes a ghost with its own button", () => {
+    const props = makeProps({ contact: makeContact({ isGhost: true }) });
+    mount(<ProfileHeader {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Promote to contact" }));
+    const mutate = props.promoteGhost.mutate as ReturnType<typeof vi.fn>;
+    expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
+    mutate.mock.calls[0][1].onSuccess();
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Thomas Walker promoted to network!",
+    );
+  });
+
+  it("copies a link, and removes one with an undo that puts it back", async () => {
+    const writeText = stubClipboard();
+    const props = makeProps();
+    mount(<ProfileHeader {...props} />);
+    const update = props.updateContact.mutate as ReturnType<typeof vi.fn>;
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for ThomasWalker" }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy link" }));
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith("Link copied"),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      "https://www.linkedin.com/in/ThomasWalker",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions for ThomasWalker" }),
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove link" }));
+    expect(update).toHaveBeenLastCalledWith({
+      id: "c1",
+      data: {
+        socialLinks: [
+          {
+            platform: "twitter",
+            url: "https://twitter.com/Thomas_Walker",
+            handle: "@Thomas_Walker",
+          },
+        ],
+      },
+    });
+    expect(toastMock).toHaveBeenLastCalledWith(
+      "Link removed",
+      expect.any(Object),
+    );
+    lastUndo()();
+    expect(update.mock.lastCall?.[0].data.socialLinks).toHaveLength(2);
+  });
+
+  it("puts a removed tag back from the undo", () => {
+    const props = makeProps();
+    mount(<ProfileHeader {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove tag tech-lead" }),
+    );
+    lastUndo()();
+    expect(props.updateContact.mutate).toHaveBeenLastCalledWith({
+      id: "c1",
+      data: { tags: [{ tag: "tech-lead" }] },
+    });
+  });
+
+  it("links the website when it is not one of the social links", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          contact: makeContact({ website: "https://www.umbrella.com" }),
+        })}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /umbrella\.com/ });
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 });
 

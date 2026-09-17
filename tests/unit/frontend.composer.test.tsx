@@ -37,6 +37,7 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { InteractionComposer } from "../../src/components/InteractionComposer";
 import { QuickInteractionModal } from "../../src/components/QuickInteractionModal";
 import { draftKey } from "../../src/lib/composerDrafts";
@@ -451,6 +452,107 @@ describe("the quick interaction dialog", () => {
       saves[0].resolve();
     });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("picks a contact with the arrows and Enter, and Change contact brings the search back", async () => {
+    stubServer([
+      person("c-1", "Grace Hopper"),
+      person("c-2", "Grace Kelly"),
+      { ...person("c-3", "Grace Ghost"), isGhost: true },
+    ]);
+    render(
+      <QueryClientProvider client={client}>
+        <QuickInteractionModal isOpen onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Log an interaction",
+    });
+    const picker = within(dialog).getByRole("textbox", {
+      name: "Search for a contact",
+    });
+    // Wait for the names, then search. Ghosts are not offered.
+    await waitFor(() => {
+      fireEvent.change(picker, { target: { value: "gra" } });
+      expect(
+        within(dialog).getByRole("button", { name: "Grace Kelly" }),
+      ).toBeTruthy();
+    });
+    expect(
+      within(dialog).queryByRole("button", { name: "Grace Ghost" }),
+    ).toBeNull();
+
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    fireEvent.keyDown(picker, { key: "ArrowUp" });
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    fireEvent.keyDown(picker, { key: "Enter" });
+    await waitFor(() =>
+      expect(within(dialog).getByText("Grace Kelly")).toBeTruthy(),
+    );
+    expect(
+      within(dialog).queryByRole("textbox", { name: "Search for a contact" }),
+    ).toBeNull();
+    // Choosing a contact hands focus to the editor.
+    const pm = await editorElement();
+    await waitFor(() => expect(pm.contains(document.activeElement)).toBe(true));
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Change contact" }),
+    );
+    const again = within(dialog).getByRole("textbox", {
+      name: "Search for a contact",
+    });
+    await waitFor(() => expect(document.activeElement).toBe(again));
+
+    // Escape closes the list and keeps the search.
+    fireEvent.change(again, { target: { value: "grace" } });
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("button", { name: "Grace Hopper" }),
+      ).toBeTruthy(),
+    );
+    fireEvent.keyDown(again, { key: "Escape" });
+    // The list leaves once its exit animation has run.
+    await waitFor(() =>
+      expect(
+        within(dialog).queryByRole("button", { name: "Grace Hopper" }),
+      ).toBeNull(),
+    );
+    expect((again as HTMLInputElement).value).toBe("grace");
+  });
+
+  it("names the saved kind and the contact in the toast", async () => {
+    const toastSuccess = vi.spyOn(toast, "success");
+    const saves = stubServer([person("c-5", "Ada Lovelace")]);
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={client}>
+        <QuickInteractionModal
+          isOpen
+          onClose={onClose}
+          initialContactId="c-5"
+        />
+      </QueryClientProvider>,
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Log an interaction",
+    });
+    await waitFor(() =>
+      expect(within(dialog).getByText("Ada Lovelace")).toBeTruthy(),
+    );
+    const pm = await editorElement();
+    await type(pm, "Rang about the engine");
+    fireEvent.click(typeButton("Call"));
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(saves).toHaveLength(1));
+    await act(async () => {
+      saves[0].resolve();
+    });
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith("Call logged for Ada Lovelace"),
+    );
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("shows the picker without a preset contact, and a Save sends focus to it", async () => {
