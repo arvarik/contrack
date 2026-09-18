@@ -95,6 +95,7 @@ describe("settings registry", () => {
     expect(privacy).toBeDefined();
     expect(privacy?.path).toBe("/settings/privacy");
     expect(privacy?.rows?.some((r) => r.id === "ai-assist")).toBe(true);
+    expect(privacy?.rows?.some((r) => r.id === "search-history")).toBe(true);
   });
 
   it("findRows returns hits for personal preference rows", () => {
@@ -108,6 +109,11 @@ describe("settings registry", () => {
 
     const aiHit = findRows("ai assist").find((h) => h.id === "ai-assist");
     expect(aiHit?.path).toBe("/settings/privacy#ai-assist");
+
+    const historyHit = findRows("history").find(
+      (h) => h.id === "search-history",
+    );
+    expect(historyHit?.path).toBe("/settings/privacy#search-history");
 
     const shortcutHit = findRows("single-key").find(
       (h) => h.id === "single-key-shortcuts",

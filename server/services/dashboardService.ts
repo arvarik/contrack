@@ -603,9 +603,9 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NOT NULL
-              AND date(completedAt) = ?`,
+              AND (date(completedAt, 'localtime') = ? OR date(completedAt) = ?)`,
         )
-        .get(scope.ownerId, todayStr) as { count: number }
+        .get(scope.ownerId, todayStr, todayStr) as { count: number }
     ).count;
 
     const dueToday = (
@@ -613,9 +613,9 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NULL
-              AND date(dueAt) = ?`,
+              AND (date(dueAt, 'localtime') = ? OR date(dueAt) = ?)`,
         )
-        .get(scope.ownerId, todayStr) as { count: number }
+        .get(scope.ownerId, todayStr, todayStr) as { count: number }
     ).count;
 
     // thisWeek: logged, byType (starts on ISO week Monday)

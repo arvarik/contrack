@@ -177,6 +177,86 @@ test.describe("desktop", () => {
     await expect(page.getByText("Find what was said, and when")).toBeVisible();
     await expectPageAccessible(page, testInfo, "ask-history-notes");
   });
+
+  test("palette and Ask Contrack pane share unified search history", async ({
+    page,
+    seed,
+  }, testInfo) => {
+    const ada = personMatch(seed.byName("Ada Lovelace"));
+    await answerPeopleSearch(page, [ada]);
+
+    // 1. Ask a question on the /search page
+    await page.goto("/search");
+    const searchInput = page.getByRole("textbox", {
+      name: "Ask anything about your network",
+    });
+    await searchInput.fill("who knows python");
+    await searchInput.press("Enter");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    // Verify it appears in Today in the history pane
+    const historyPane = page.getByRole("complementary", {
+      name: "Search history",
+    });
+    await expect(
+      historyPane.getByRole("button", {
+        name: "Run again: who knows python",
+      }),
+    ).toBeVisible();
+
+    // 2. Open command palette and verify page question appears in Recent Searches
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog");
+    await expect(palette).toHaveAttribute("data-state", "open");
+    await expect(palette.getByText("Recent Searches")).toBeVisible();
+    await expect(palette.getByText("who knows python")).toBeVisible();
+
+    // 3. Ask a ? question in the palette
+    const paletteInput = palette.getByRole("combobox");
+    await page.waitForTimeout(1100);
+    await paletteInput.fill("? who understands compilers");
+    // Wait for AI results to settle in palette and call addEntry
+    await expect(palette.getByText("Ada Lovelace")).toBeVisible();
+    await page.waitForTimeout(600);
+
+    // Close palette
+    await page.keyboard.press("Escape");
+    await expect(palette).toHaveCount(0);
+
+    // 4. Verify ? question from palette appears in the Ask Contrack history pane
+    await page.goto("/search");
+    await expect(
+      historyPane.getByRole("button", {
+        name: "Run again: who understands compilers",
+      }),
+    ).toBeVisible();
+
+    // 5. Navigate to Privacy and AI page in Settings
+    await page.goto("/settings/privacy");
+    await expect(
+      page.getByRole("heading", { name: "Search history" }),
+    ).toBeVisible();
+    await expect(page.getByText("2 questions")).toBeVisible();
+
+    // Scan accessibility of the Privacy page
+    await expectPageAccessible(page, testInfo, "settings-privacy");
+
+    // 6. Clear history from Privacy page
+    await page.getByRole("button", { name: "Clear history" }).click();
+    const confirmDialog = page.getByRole("dialog", {
+      name: "Clear search history",
+    });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Delete all" }).click();
+    await expect(confirmDialog).toBeHidden();
+    await expect(page.getByText("0 questions")).toBeVisible();
+
+    // 7. Verify /search history pane is now empty
+    await page.goto("/search");
+    await expect(
+      historyPane.getByText("Your questions will appear here"),
+    ).toBeVisible();
+  });
 });
 
 test.describe("phone", () => {
