@@ -381,6 +381,39 @@ router.put(
   requireAdmin,
   validateBody(adminSettingsSchema),
   asyncHandler(async (req, res) => {
+    // Validate all environment overrides and preconditions upfront before applying any writes
+    if (req.body.magicLinkSignIn && !mailService.isConfigured()) {
+      throw new AppError(
+        "Outgoing mail must be configured before enabling magic links",
+        409,
+        { code: "MAIL_NOT_CONFIGURED" },
+      );
+    }
+    if (req.body.trashRetentionDays !== undefined && isTrashRetentionEnvSet()) {
+      throw new AppError(
+        "Trash retention is set by environment variable TRASH_RETENTION_DAYS",
+        409,
+        { code: "SET_BY_ENVIRONMENT" },
+      );
+    }
+    if (
+      req.body.backupIntervalHours !== undefined &&
+      isBackupIntervalEnvSet()
+    ) {
+      throw new AppError(
+        "Backup interval is set by environment variable BACKUP_INTERVAL_HOURS",
+        409,
+        { code: "SET_BY_ENVIRONMENT" },
+      );
+    }
+    if (req.body.backupKeep !== undefined && isBackupKeepEnvSet()) {
+      throw new AppError(
+        "Backup keep count is set by environment variable BACKUP_KEEP",
+        409,
+        { code: "SET_BY_ENVIRONMENT" },
+      );
+    }
+
     const changed: string[] = [];
     if (req.body.registrationOpen !== undefined) {
       setRegistrationOpen(req.body.registrationOpen);
@@ -395,46 +428,18 @@ router.put(
       changed.push("instance.name");
     }
     if (req.body.magicLinkSignIn !== undefined) {
-      if (req.body.magicLinkSignIn && !mailService.isConfigured()) {
-        throw new AppError(
-          "Outgoing mail must be configured before enabling magic links",
-          409,
-          { code: "MAIL_NOT_CONFIGURED" },
-        );
-      }
       setMagicLinkSignIn(req.body.magicLinkSignIn);
       changed.push("auth.magicLinkSignIn");
     }
     if (req.body.trashRetentionDays !== undefined) {
-      if (isTrashRetentionEnvSet()) {
-        throw new AppError(
-          "Trash retention is set by environment variable TRASH_RETENTION_DAYS",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
       setTrashRetentionDays(req.body.trashRetentionDays);
       changed.push(SETTING_KEYS.trashRetentionDays);
     }
     if (req.body.backupIntervalHours !== undefined) {
-      if (isBackupIntervalEnvSet()) {
-        throw new AppError(
-          "Backup interval is set by environment variable BACKUP_INTERVAL_HOURS",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
       setBackupIntervalHours(req.body.backupIntervalHours);
       changed.push(SETTING_KEYS.backupIntervalHours);
     }
     if (req.body.backupKeep !== undefined) {
-      if (isBackupKeepEnvSet()) {
-        throw new AppError(
-          "Backup keep count is set by environment variable BACKUP_KEEP",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
       setBackupKeep(req.body.backupKeep);
       changed.push(SETTING_KEYS.backupKeep);
     }

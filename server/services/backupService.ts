@@ -249,55 +249,73 @@ function rotateBackups(): void {
   }
 }
 
+let activeBackupPromise: Promise<BackupInfo> | null = null;
+
 /**
  * Take a snapshot now. Uses the online backup API — consistent even with
  * concurrent writers, and runs incrementally without blocking the event loop.
  */
 export async function runBackup(): Promise<BackupInfo> {
-  ensureDir(BACKUPS_DIR);
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const filename = `curator-${stamp}.db`;
-  const dest = path.join(BACKUPS_DIR, filename);
-
-  const startMs = Date.now();
-  await sqlite.backup(dest);
-  const stat = fs.statSync(dest);
-  const writtenMs = Date.now() - startMs;
-
-  // Opened again immediately. The check is worth almost nothing a week later
-  // and everything now, because now is when the snapshot can be taken again.
-  const verification = verifyBackup(dest);
-  try {
-    fs.writeFileSync(sidecarPath(dest), JSON.stringify(verification, null, 2));
-  } catch (err) {
-    log.warn(
-      "Backup",
-      `Could not record the verification for ${filename}: ${getErrorMessage(err)}`,
-    );
+  if (activeBackupPromise) {
+    log.info("Backup", "Backup already in progress; attaching to active run");
+    return activeBackupPromise;
   }
 
-  const size = `${(stat.size / 1024 / 1024).toFixed(2)} MB`;
-  if (verification.ok) {
-    log.info(
-      "Backup",
-      `Snapshot ${filename} written and verified (${size} in ${writtenMs}ms, checked in ${Date.now() - startMs - writtenMs}ms)`,
-    );
-  } else {
-    // An error, not a warning. A snapshot that cannot be read is not a
-    // degraded backup, it is no backup, and the operator is relying on it.
-    log.error(
-      "Backup",
-      `Snapshot ${filename} FAILED VERIFICATION (${size}): ${verification.problem}`,
-    );
-  }
+  activeBackupPromise = (async () => {
+    try {
+      ensureDir(BACKUPS_DIR);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `curator-${stamp}.db`;
+      const dest = path.join(BACKUPS_DIR, filename);
 
-  rotateBackups();
-  return {
-    filename,
-    sizeBytes: stat.size,
-    createdAt: stat.mtime.toISOString(),
-    verification,
-  };
+      const startMs = Date.now();
+      await sqlite.backup(dest);
+      const stat = fs.statSync(dest);
+      const writtenMs = Date.now() - startMs;
+
+      // Opened again immediately. The check is worth almost nothing a week later
+      // and everything now, because now is when the snapshot can be taken again.
+      const verification = verifyBackup(dest);
+      try {
+        fs.writeFileSync(
+          sidecarPath(dest),
+          JSON.stringify(verification, null, 2),
+        );
+      } catch (err) {
+        log.warn(
+          "Backup",
+          `Could not record the verification for ${filename}: ${getErrorMessage(err)}`,
+        );
+      }
+
+      const size = `${(stat.size / 1024 / 1024).toFixed(2)} MB`;
+      if (verification.ok) {
+        log.info(
+          "Backup",
+          `Snapshot ${filename} written and verified (${size} in ${writtenMs}ms, checked in ${Date.now() - startMs - writtenMs}ms)`,
+        );
+      } else {
+        // An error, not a warning. A snapshot that cannot be read is not a
+        // degraded backup, it is no backup, and the operator is relying on it.
+        log.error(
+          "Backup",
+          `Snapshot ${filename} FAILED VERIFICATION (${size}): ${verification.problem}`,
+        );
+      }
+
+      rotateBackups();
+      return {
+        filename,
+        sizeBytes: stat.size,
+        createdAt: stat.mtime.toISOString(),
+        verification,
+      };
+    } finally {
+      activeBackupPromise = null;
+    }
+  })();
+
+  return activeBackupPromise;
 }
 
 /**

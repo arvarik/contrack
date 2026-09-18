@@ -204,24 +204,27 @@ export function defaultPreferences(): Preferences {
 
 const PREFIX = "pref.";
 
-const selectStmt = () =>
-  sqlite.prepare(
-    // tenant-lint: allow user-owned settings
-    `SELECT key, value FROM user_settings WHERE userId = ? AND key LIKE 'pref.%'`,
-  );
+const _selectPrefStmt = sqlite.prepare(
+  // tenant-lint: allow user-owned settings
+  `SELECT key, value FROM user_settings WHERE userId = ? AND key LIKE 'pref.%'`,
+);
 
-const upsertStmt = () =>
-  sqlite.prepare(
-    // tenant-lint: allow user-owned settings
-    `INSERT INTO user_settings (userId, key, value, updatedAt)
-     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-     ON CONFLICT(userId, key)
-     DO UPDATE SET value = excluded.value, updatedAt = CURRENT_TIMESTAMP`,
-  );
+const _upsertPrefStmt = sqlite.prepare(
+  // tenant-lint: allow user-owned settings
+  `INSERT INTO user_settings (userId, key, value, updatedAt)
+   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+   ON CONFLICT(userId, key)
+   DO UPDATE SET value = excluded.value, updatedAt = CURRENT_TIMESTAMP`,
+);
+
+const _deletePrefStmt = sqlite.prepare(
+  // tenant-lint: allow user-owned settings
+  "DELETE FROM user_settings WHERE userId = ? AND key = ?",
+);
 
 /** What this account has actually chosen, ignoring anything unreadable. */
 function readStored(userId: string): Partial<Preferences> {
-  const rows = selectStmt().all(userId) as { key: string; value: string }[];
+  const rows = _selectPrefStmt.all(userId) as { key: string; value: string }[];
   const stored: Record<string, unknown> = {};
 
   for (const row of rows) {
@@ -263,11 +266,10 @@ export function setPreferences(
   userId: string,
   patch: Partial<Preferences>,
 ): Preferences {
-  const upsert = upsertStmt();
   const write = sqlite.transaction(() => {
     for (const [key, value] of Object.entries(patch)) {
       if (value === undefined) continue;
-      upsert.run(userId, PREFIX + key, JSON.stringify(value));
+      _upsertPrefStmt.run(userId, PREFIX + key, JSON.stringify(value));
     }
   });
   write();
@@ -281,11 +283,6 @@ export function deletePreference(
   userId: string,
   key: PreferenceKey,
 ): Preferences {
-  sqlite
-    .prepare(
-      // tenant-lint: allow user-owned settings
-      "DELETE FROM user_settings WHERE userId = ? AND key = ?",
-    )
-    .run(userId, PREFIX + key);
+  _deletePrefStmt.run(userId, PREFIX + key);
   return getPreferences(userId);
 }

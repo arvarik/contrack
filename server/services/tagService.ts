@@ -91,16 +91,16 @@ export const tagService = {
       return { affected: 0 };
     }
 
-    const rows = _stmts.contactsWithTag.all(scope.ownerId, from) as Array<{
-      contactId: string;
-    }>;
-    if (rows.length === 0) {
-      return { affected: 0 };
-    }
-
-    const affectedIds = rows.map((r) => r.contactId);
-
+    let affectedIds: string[] = [];
     sqlite.transaction(() => {
+      const rows = _stmts.contactsWithTag.all(scope.ownerId, from) as Array<{
+        contactId: string;
+      }>;
+      if (rows.length === 0) {
+        return;
+      }
+      affectedIds = rows.map((r) => r.contactId);
+
       for (const contactId of affectedIds) {
         const alreadyHasTo = Boolean(_stmts.hasTag.get(contactId, to));
         if (alreadyHasTo) {
@@ -113,6 +113,10 @@ export const tagService = {
         _stmts.touchContact.run(contactId, scope.ownerId);
       }
     })();
+
+    if (affectedIds.length === 0) {
+      return { affected: 0 };
+    }
 
     for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
       aiCache.invalidateForOwner(tier, scope.ownerId);
@@ -128,21 +132,28 @@ export const tagService = {
     const targetTag = tag.trim();
     if (!targetTag) return { affected: 0 };
 
-    const rows = _stmts.contactsWithTag.all(scope.ownerId, targetTag) as Array<{
-      contactId: string;
-    }>;
-    if (rows.length === 0) {
-      return { affected: 0 };
-    }
-
-    const affectedIds = rows.map((r) => r.contactId);
-
+    let affectedIds: string[] = [];
     sqlite.transaction(() => {
+      const rows = _stmts.contactsWithTag.all(
+        scope.ownerId,
+        targetTag,
+      ) as Array<{
+        contactId: string;
+      }>;
+      if (rows.length === 0) {
+        return;
+      }
+      affectedIds = rows.map((r) => r.contactId);
+
       _stmts.deleteTagForOwner.run(targetTag, scope.ownerId);
       for (const id of affectedIds) {
         _stmts.touchContact.run(id, scope.ownerId);
       }
     })();
+
+    if (affectedIds.length === 0) {
+      return { affected: 0 };
+    }
 
     for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
       aiCache.invalidateForOwner(tier, scope.ownerId);

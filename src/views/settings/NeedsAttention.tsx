@@ -10,7 +10,7 @@
  *
  * @module views/settings/NeedsAttention
  */
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Copy, Sparkles, UploadCloud } from "lucide-react";
 import { useDedupeCount, useContacts } from "../../api";
@@ -25,16 +25,21 @@ export const NeedsAttention = () => {
   const { data: contacts = [] } = useContacts();
   const { data: imports = [] } = useImports();
 
-  const thirtyDaysAgo = Date.now() - 30 * 86400 * 1000;
-  const failedImportCount = imports.filter(
-    (imp) =>
-      new Date(imp.createdAt).getTime() >= thirtyDaysAgo &&
-      (imp.status === "failed" || imp.failed > 0),
-  ).length;
+  const failedImportCount = useMemo(() => {
+    const thirtyDaysAgo = Date.now() - 30 * 86400 * 1000;
+    return imports.filter(
+      (imp) =>
+        new Date(imp.createdAt).getTime() >= thirtyDaysAgo &&
+        (imp.status === "failed" || imp.failed > 0),
+    ).length;
+  }, [imports]);
 
-  const neverEnrichedCount = contacts.filter(
-    (c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost,
-  ).length;
+  const neverEnrichedCount = useMemo(
+    () =>
+      contacts.filter((c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost)
+        .length,
+    [contacts],
+  );
 
   const items: {
     path: string;

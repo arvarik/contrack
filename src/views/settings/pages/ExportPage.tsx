@@ -26,7 +26,7 @@ export const ExportPage = () => {
           Looking for full database snapshots? Administrators can manage{" "}
           <Link
             to="/settings/admin/backups"
-            className="text-primary hover:underline font-medium"
+            className="text-primary underline font-medium"
           >
             database backups
           </Link>

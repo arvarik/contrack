@@ -9,6 +9,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, HardDrive, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
@@ -33,6 +34,12 @@ export const PrivacyPage = () => {
     clearMutation.mutate(undefined, {
       onSuccess: () => {
         setClearDialogOpen(false);
+        toast.success("Search history cleared");
+      },
+      onError: (err) => {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to clear search history",
+        );
       },
     });
   };
@@ -159,6 +166,7 @@ export const PrivacyPage = () => {
         title="Clear search history"
         description={`Delete all ${count} questions? This cannot be undone.`}
         confirmLabel="Delete all"
+        busy={clearMutation.isPending}
       />
     </div>
   );

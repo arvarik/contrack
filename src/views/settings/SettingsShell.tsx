@@ -74,6 +74,20 @@ const RedirectRoute = ({ to }: { to: RedirectTarget }) => {
   return <Navigate to={target} replace />;
 };
 
+const lazyComponentCache = new Map<
+  string,
+  React.LazyExoticComponent<React.ComponentType>
+>();
+
+function getLazyComponent(page: SettingsPage) {
+  let comp = lazyComponentCache.get(page.id);
+  if (!comp) {
+    comp = React.lazy(page.load);
+    lazyComponentCache.set(page.id, comp);
+  }
+  return comp;
+}
+
 export const SettingsShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -165,7 +179,7 @@ export const SettingsShell = () => {
 
             {/* Registry driven pages */}
             {SETTINGS_PAGES.map((page: SettingsPage) => {
-              const Component = React.lazy(page.load);
+              const Component = getLazyComponent(page);
               const relativePath = page.path.replace(/^\/settings\/?/, "");
 
               if (page.admin) {

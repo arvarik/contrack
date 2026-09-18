@@ -111,11 +111,13 @@ export const TrashView = () => {
                 <div className="font-bold truncate">{item.name}</div>
                 <div className="text-xs text-on-surface-variant truncate">
                   {item.company ? `${item.company} · ` : ""}
-                  {deletedLabel(item.deletedAt)} · purges in{" "}
-                  {daysUntilPurge(item.deletedAt, retentionDays)} day
-                  {daysUntilPurge(item.deletedAt, retentionDays) !== 1
-                    ? "s"
-                    : ""}
+                  {(() => {
+                    const daysLeft = daysUntilPurge(
+                      item.deletedAt,
+                      retentionDays,
+                    );
+                    return `${deletedLabel(item.deletedAt)} · purges in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`;
+                  })()}
                 </div>
               </div>
               <button
