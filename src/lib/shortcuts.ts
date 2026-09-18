@@ -67,6 +67,7 @@ export const isCombination = (keys: readonly string[]): boolean =>
 export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   "Navigation",
   "Global",
+  NAMES.pulse.label,
   NAMES.network.label,
   "Contact",
   NAMES.ask.label,
@@ -75,6 +76,49 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
 ];
 
 export const SHORTCUTS: readonly Shortcut[] = [
+  // Pulse office
+  {
+    group: NAMES.pulse.label,
+    keys: ["J"],
+    description: "Next item in Up next",
+    bareLetter: true,
+    page: "/pulse",
+  },
+  {
+    group: NAMES.pulse.label,
+    keys: ["K"],
+    description: "Previous item in Up next",
+    bareLetter: true,
+    page: "/pulse",
+  },
+  {
+    group: NAMES.pulse.label,
+    keys: ["D"],
+    description: "Mark item done",
+    bareLetter: true,
+    page: "/pulse",
+  },
+  {
+    group: NAMES.pulse.label,
+    keys: ["S"],
+    description: "Snooze item",
+    bareLetter: true,
+    page: "/pulse",
+  },
+  {
+    group: NAMES.pulse.label,
+    keys: ["L"],
+    description: "Log note for contact",
+    bareLetter: true,
+    page: "/pulse",
+  },
+  {
+    group: NAMES.pulse.label,
+    keys: ["Enter"],
+    description: "Open contact",
+    bareLetter: false,
+    page: "/pulse",
+  },
   // Navigation. Cmd+Shift so that no letter typed into a field can reach it.
   {
     group: "Navigation",

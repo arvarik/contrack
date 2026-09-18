@@ -425,7 +425,7 @@ export const CommandPalette = () => {
       } else if (insight.type === "stale_data") {
         navigate("/settings");
       } else if (insight.type === "dedupe") {
-        navigate("/pulse");
+        navigate("/pulse/duplicates");
       } else if (insight.contact) {
         recordVisit(insight.contact.id);
         navigate(`/contact/${insight.contact.id}`);

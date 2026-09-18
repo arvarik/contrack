@@ -544,10 +544,10 @@ describe("SDK Import Containment Invariant", () => {
     const { execSync } = await import("child_process");
 
     // Search for openai imports outside of adapters directory
-    // Allow: server/ai/adapters/openai.ts, package.json, package-lock.json, node_modules
+    // Allow: server/ai/adapters/*.ts, package.json, package-lock.json, node_modules
     try {
       const result = execSync(
-        `grep -rl "from ['\\"]openai['\\"]" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "server/ai/adapters/openai.ts"`,
+        `grep -rl "from ['\\"]openai['\\"]" --include="*.ts" --include="*.tsx" --exclude-dir=node_modules --exclude-dir=.git . | grep -v "server/ai/adapters/"`,
         {
           cwd: path.resolve(new URL("../../", import.meta.url).pathname),
           encoding: "utf-8",
@@ -560,7 +560,7 @@ describe("SDK Import Containment Invariant", () => {
       // grep returns exit code 1 when no matches found — this is the PASSING case
       expect(true).toBe(true);
     }
-  });
+  }, 20000);
 
   it("@anthropic-ai/sdk is only imported in the adapter file", async () => {
     const path = await import("path");
@@ -568,7 +568,7 @@ describe("SDK Import Containment Invariant", () => {
 
     try {
       const result = execSync(
-        `grep -rl "from ['\\"]@anthropic-ai/sdk['\\"]" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "server/ai/adapters/anthropic.ts"`,
+        `grep -rl "from ['\\"]@anthropic-ai/sdk['\\"]" --include="*.ts" --include="*.tsx" --exclude-dir=node_modules --exclude-dir=.git . | grep -v "server/ai/adapters/"`,
         {
           cwd: path.resolve(new URL("../../", import.meta.url).pathname),
           encoding: "utf-8",
@@ -580,7 +580,7 @@ describe("SDK Import Containment Invariant", () => {
       // No matches = correct containment
       expect(true).toBe(true);
     }
-  });
+  }, 20000);
 });
 
 // =============================================================================

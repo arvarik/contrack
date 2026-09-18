@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ActionItem } from "../types";
+export type { ActionItem };
 
 export const useCompletedActionItems = () => {
   return useQuery({

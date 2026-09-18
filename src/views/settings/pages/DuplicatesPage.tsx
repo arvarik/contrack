@@ -4,10 +4,12 @@
  * Wraps DedupeView with the auto-merge sensitivity row above the engine.
  */
 import React from "react";
+import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";
 import { SettingRow } from "../SettingRow";
 import { Segmented } from "../../../components/ui/Segmented";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
+import { useDedupeCount } from "../../../api";
 import { CARD } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
@@ -21,10 +23,27 @@ const DEDUPE_PRESET_COPY = {
 
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
+  const { data: dedupeCount } = useDedupeCount();
+  const pendingSuggestions = dedupeCount?.count ?? 0;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="p-4 sm:p-6 pb-4 shrink-0 max-w-4xl w-full mx-auto">
+        {pendingSuggestions > 0 && (
+          <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between">
+            <span className="text-sm text-on-surface">
+              You have <strong>{pendingSuggestions}</strong> pending duplicate{" "}
+              {pendingSuggestions === 1 ? "suggestion" : "suggestions"} to
+              review.
+            </span>
+            <Link
+              to="/pulse/duplicates"
+              className="text-sm font-medium text-primary hover:underline shrink-0 ml-3"
+            >
+              Review in Pulse &rarr;
+            </Link>
+          </div>
+        )}
         <div className={cn(CARD, "p-4 sm:p-5")}>
           <SettingRow
             id="sensitivity"
