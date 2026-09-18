@@ -11,6 +11,8 @@
  * @module shared/geo
  */
 
+import { bandFor } from "./scoreBand";
+
 /**
  * The basemap style URL for each palette, as `GET /api/auth/status` reports
  * it in `map`. An absolute `https://` URL or a root-relative path.
@@ -27,15 +29,25 @@ export interface MapStyleUrls {
  */
 export type GeoSource = "geocoder" | "manual" | null;
 
-/** One row of `GET /api/contacts/map`. */
+/** One row of `GET /api/contacts/map` and the projection of a slim row. */
 export interface MapContact {
   id: string;
   name: string;
   company: string | null;
-  avatarUrl: string | null;
+  role?: string | null;
+  industry?: string | null;
   location: string | null;
+  avatarUrl: string | null;
+  themeColor?: string | null;
   lat: number;
   lng: number;
+  relationshipScore?: number | null;
+  lastContactedAt?: string | null;
+  nextFollowUpAt?: string | null;
+  cadenceDays?: number | null;
+  interactionCount?: number;
+  tags?: string[];
+  lists?: { id: string; name: string }[];
   geoSource?: GeoSource;
 }
 
@@ -52,6 +64,10 @@ export interface ContactPointProperties {
   company?: string;
   avatarUrl?: string;
   location?: string;
+  score: number;
+  atRisk: number;
+  overdue: number;
+  weight: number;
 }
 
 export interface ContactPointFeature {
@@ -81,6 +97,29 @@ export function isValidLatLng(lat: unknown, lng: unknown): boolean {
 }
 
 /**
+ * Distance between two coordinates in kilometers using the Haversine formula.
+ * Earth radius R = 6371 km.
+ */
+export function haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+
+  const h =
+    sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+  const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  return R * c;
+}
+
+/**
  * Build the map source from the route's rows.
  *
  * GeoJSON orders a position longitude first. The contact id is the feature
@@ -89,13 +128,31 @@ export function isValidLatLng(lat: unknown, lng: unknown): boolean {
  */
 export function toFeatureCollection(
   contacts: readonly MapContact[],
+  now: Date = new Date(),
 ): ContactFeatureCollection {
+  const nowTime = now.getTime();
   const features: ContactPointFeature[] = [];
   for (const contact of contacts) {
     if (!isValidLatLng(contact.lat, contact.lng)) continue;
+    const score =
+      contact.relationshipScore != null
+        ? Math.round(contact.relationshipScore)
+        : 0;
+    const atRisk = bandFor(score) === "at-risk" ? 1 : 0;
+    const overdue =
+      contact.nextFollowUpAt &&
+      new Date(contact.nextFollowUpAt).getTime() < nowTime
+        ? 1
+        : 0;
+    const weight = contact.interactionCount ?? 0;
+
     const properties: ContactPointProperties = {
       id: contact.id,
       name: contact.name,
+      score,
+      atRisk,
+      overdue,
+      weight,
     };
     if (contact.company) properties.company = contact.company;
     if (contact.avatarUrl) properties.avatarUrl = contact.avatarUrl;

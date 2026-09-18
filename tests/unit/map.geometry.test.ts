@@ -132,7 +132,14 @@ describe("toFeatureCollection", () => {
     const [feature] = toFeatureCollection([
       person({ company: null, avatarUrl: null, location: null }),
     ]).features;
-    expect(feature.properties).toEqual({ id: "c1", name: "Ada Lovelace" });
+    expect(feature.properties).toEqual({
+      id: "c1",
+      name: "Ada Lovelace",
+      score: 0,
+      atRisk: 1,
+      overdue: 0,
+      weight: 0,
+    });
   });
 
   it("carries the company, avatar and location when they exist", () => {
@@ -145,7 +152,25 @@ describe("toFeatureCollection", () => {
       company: "Babbage & Co",
       avatarUrl: "/api/avatar/avataaars?seed=ada",
       location: "London, UK",
+      score: 0,
+      atRisk: 1,
+      overdue: 0,
+      weight: 0,
     });
+  });
+
+  it("computes score, atRisk, overdue and weight properties", () => {
+    const [feature] = toFeatureCollection([
+      person({
+        relationshipScore: 85,
+        interactionCount: 7,
+        nextFollowUpAt: new Date(Date.now() - 60_000).toISOString(),
+      }),
+    ]).features;
+    expect(feature.properties.score).toBe(85);
+    expect(feature.properties.atRisk).toBe(0);
+    expect(feature.properties.overdue).toBe(1);
+    expect(feature.properties.weight).toBe(7);
   });
 });
 

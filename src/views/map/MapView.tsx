@@ -29,14 +29,21 @@ import { NAMES } from "../../lib/names";
 import { ContactMap } from "./ContactMap";
 import { flyToContact, settlePadding } from "./flyTo";
 import { measureInsets, paddingFor, type Insets } from "./insets";
+import { useMapFilter } from "./useMapFilter";
+import { MapToolbar } from "./MapToolbar";
+import { isTypingTarget } from "../../lib/keyboard";
+import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
+  const filter = useMapFilter(contacts);
   const navigate = useNavigate();
   const openMatch = useMatch("/map/contact/:id");
   const openId = openMatch?.params.id ?? null;
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const singleKeyShortcuts = useSingleKeyShortcuts();
 
   usePageTitle(NAMES.map.title);
 
@@ -136,6 +143,27 @@ export const MapView = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigate, openId]);
 
+  /**
+   * "/" focuses the filter input on this page.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === "/" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        if (isTypingTarget(event)) return;
+        if (!singleKeyShortcuts) return;
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [singleKeyShortcuts]);
+
   return (
     <div
       ref={pageRef}
@@ -144,8 +172,23 @@ export const MapView = () => {
       {/* The page has no visible title, since the map is the page, but a
           screen reader user navigating by heading still needs to land here. */}
       <h1 className="sr-only">{NAMES.map.label}</h1>
-      <ContactMap
+      <MapToolbar
         contacts={contacts}
+        map={map}
+        rawInput={filter.rawInput}
+        setRawInput={filter.setRawInput}
+        tokenizer={filter.tokenizer}
+        effectiveFilters={filter.effectiveFilters}
+        filteredContacts={filter.filteredContacts}
+        totalCount={filter.totalCount}
+        matchCount={filter.matchCount}
+        hasActiveFilter={filter.hasActiveFilter}
+        resolveNearFilters={filter.resolveNearFilters}
+        clearFilters={filter.clearFilters}
+        inputRef={inputRef}
+      />
+      <ContactMap
+        contacts={filter.filteredContacts}
         loading={isLoading}
         selectedId={openId}
         onSelect={openContact}

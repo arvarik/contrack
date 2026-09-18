@@ -15,7 +15,7 @@ sqlite.exec(`
 
 const cacheStmts = {
   get: sqlite.prepare(
-    `SELECT lat, lng, success, createdAt FROM geocode_cache WHERE key = ?`,
+    `SELECT lat, lng, provider, success, createdAt FROM geocode_cache WHERE key = ?`,
   ),
   upsert: sqlite.prepare(`
     INSERT INTO geocode_cache (key, lat, lng, provider, success)
@@ -37,18 +37,23 @@ export function normalizeLocationKey(location: string): string {
 interface CacheEntry {
   lat: number | null;
   lng: number | null;
+  provider: string;
   success: number;
   createdAt: string;
 }
 
 export function getCachedGeocode(
   key: string,
-): { lat: number; lng: number } | null {
+): { lat: number; lng: number; provider: string } | null {
   const row = cacheStmts.get.get(key) as CacheEntry | undefined;
   if (!row) return null;
 
   if (row.success && row.lat != null && row.lng != null) {
-    return { lat: row.lat, lng: row.lng };
+    return {
+      lat: row.lat,
+      lng: row.lng,
+      provider: row.provider || "Nominatim",
+    };
   }
 
   if (!row.success) {

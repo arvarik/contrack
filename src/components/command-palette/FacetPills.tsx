@@ -21,6 +21,9 @@ const FIELD_COLORS: Record<string, string> = {
   tag: "bg-pink-500/15 text-pink-600 ring-pink-500/20",
   score: "bg-orange-500/15 text-warning ring-orange-500/20",
   updated: "bg-teal-500/15 text-success ring-teal-500/20",
+  list: "bg-indigo-500/15 text-indigo-600 ring-indigo-500/20",
+  near: "bg-cyan-500/15 text-cyan-600 ring-cyan-500/20",
+  missing: "bg-rose-500/15 text-error ring-rose-500/20",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -39,29 +42,44 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
   return (
     <div className="flex items-center gap-1.5 flex-wrap px-4 pt-3 sm:pt-2 pb-0">
       <AnimatePresence>
-        {filters.map((filter, i) => (
-          <motion.button
-            key={`${filter.field}-${filter.value}-${i}`}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.12 }}
-            onClick={() => onRemove(i)}
-            className={`
-              hit-area inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold
-              ring-1 ring-inset cursor-pointer transition-all
-              hover:ring-2 group
-              ${FIELD_COLORS[filter.field] || "bg-surface-container-high text-on-surface-variant ring-surface-container-highest"}
-            `}
-          >
-            <span className="opacity-60">{filter.field}:</span>
-            <span>
-              {filter.operator || ""}
-              {filter.value}
-            </span>
-            <X className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-          </motion.button>
-        ))}
+        {filters.map((filter, i) => {
+          const isError = Boolean(filter.error);
+          const pillColor = isError
+            ? "bg-rose-500/15 text-error ring-rose-500/20"
+            : FIELD_COLORS[filter.field] ||
+              "bg-surface-container-high text-on-surface-variant ring-surface-container-highest";
+
+          return (
+            <motion.button
+              key={`${filter.field}-${filter.value}-${i}`}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.12 }}
+              onClick={() => onRemove(i)}
+              className={`
+                hit-area inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold
+                ring-1 ring-inset cursor-pointer transition-all
+                hover:ring-2 group
+                ${pillColor}
+              `}
+            >
+              <span className="opacity-60">{filter.field}:</span>
+              <span>
+                {filter.field === "near"
+                  ? filter.error
+                    ? `${filter.value} (${filter.error})`
+                    : filter.resolving
+                      ? `${filter.value} (resolving…)`
+                      : filter.km
+                        ? `${filter.value}/${filter.km}km`
+                        : filter.value
+                  : `${filter.operator || ""}${filter.value}`}
+              </span>
+              <X className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            </motion.button>
+          );
+        })}
       </AnimatePresence>
     </div>
   );

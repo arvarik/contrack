@@ -143,4 +143,103 @@ describe("searchFacets matchesFacet", () => {
       ).toBe(false);
     });
   });
+
+  describe("list: facet", () => {
+    const contact: FacetContact = {
+      lists: [
+        { id: "list-1", name: "Advisors" },
+        { id: "list-2", name: "Board Members" },
+      ],
+    };
+
+    it("matches list by exact name case-insensitively", () => {
+      expect(matchesFacet(contact, { field: "list", value: "advisors" })).toBe(
+        true,
+      );
+      expect(matchesFacet(contact, { field: "list", value: "ADVISORS" })).toBe(
+        true,
+      );
+      expect(
+        matchesFacet(contact, { field: "list", value: "Board Members" }),
+      ).toBe(true);
+      expect(matchesFacet(contact, { field: "list", value: "Investors" })).toBe(
+        false,
+      );
+    });
+
+    it("matches list by id", () => {
+      expect(matchesFacet(contact, { field: "list", value: "list-1" })).toBe(
+        true,
+      );
+      expect(matchesFacet(contact, { field: "list", value: "list-2" })).toBe(
+        true,
+      );
+      expect(matchesFacet(contact, { field: "list", value: "list-999" })).toBe(
+        false,
+      );
+    });
+
+    it("matches hyphenated list name form", () => {
+      expect(
+        matchesFacet(contact, { field: "list", value: "board-members" }),
+      ).toBe(true);
+    });
+
+    it("returns false if contact has no lists", () => {
+      expect(
+        matchesFacet({ lists: [] }, { field: "list", value: "advisors" }),
+      ).toBe(false);
+      expect(matchesFacet({}, { field: "list", value: "advisors" })).toBe(
+        false,
+      );
+    });
+  });
+
+  describe("near: facet", () => {
+    // London: 51.5074, -0.1278
+    // Oxford: 51.7520, -1.2577 (~83 km from London)
+    // Paris: 48.8566, 2.3522 (~344 km from London)
+    const londonContact: FacetContact = { lat: 51.5074, lng: -0.1278 };
+    const oxfordContact: FacetContact = { lat: 51.752, lng: -1.2577 };
+    const noCoordContact: FacetContact = { lat: null, lng: null };
+
+    it("matches all contacts when point is not resolved yet (resolving state)", () => {
+      expect(
+        matchesFacet(londonContact, { field: "near", value: "London" }),
+      ).toBe(true);
+      expect(
+        matchesFacet(oxfordContact, { field: "near", value: "London" }),
+      ).toBe(true);
+      expect(
+        matchesFacet(noCoordContact, { field: "near", value: "London" }),
+      ).toBe(true);
+    });
+
+    it("filters contacts within distance when point is resolved", () => {
+      const londonCenter = { lat: 51.5074, lng: -0.1278 };
+
+      // 50 km radius: London is inside, Oxford (~83 km) is outside
+      const filter50km = {
+        field: "near" as const,
+        value: "London",
+        km: 50,
+        point: { ...londonCenter, km: 50 },
+      };
+
+      expect(matchesFacet(londonContact, filter50km)).toBe(true);
+      expect(matchesFacet(oxfordContact, filter50km)).toBe(false);
+      expect(matchesFacet(noCoordContact, filter50km)).toBe(false);
+
+      // 100 km radius: both London and Oxford are inside
+      const filter100km = {
+        field: "near" as const,
+        value: "London",
+        km: 100,
+        point: { ...londonCenter, km: 100 },
+      };
+
+      expect(matchesFacet(londonContact, filter100km)).toBe(true);
+      expect(matchesFacet(oxfordContact, filter100km)).toBe(true);
+    });
+  });
 });

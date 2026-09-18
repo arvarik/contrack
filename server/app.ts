@@ -33,6 +33,7 @@ import { logosRouter } from "./routes/logos.ts";
 import { dataLifecycleRouter } from "./routes/dataLifecycle.ts";
 import { aiSettingsRouter } from "./routes/aiSettings.ts";
 import { avatarRouter } from "./routes/avatar.ts";
+import { geoRouter } from "./routes/geo.ts";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.ts";
 import {
   attachPrincipal,
@@ -328,6 +329,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api/ai/stats", aiStatsRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/logos", logosRouter);
+  app.use("/api/geo", geoRouter);
 
   // ── Cache diagnostics (dev only) ─────────────────────────────────────────
   // Exposes hit/miss counters and entry counts for all aiCache tiers.
