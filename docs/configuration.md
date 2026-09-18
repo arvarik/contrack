@@ -264,7 +264,7 @@ Contrack uses **SQLite** in WAL (Write-Ahead Logging) mode for maximum local-fir
 | Path inside `DATA_DIR` | Contents                                          |
 | ---------------------- | ------------------------------------------------- |
 | `curator.db`           | The database (plus `-wal`/`-shm` while running)   |
-| `uploads/`             | Avatars and interaction attachments               |
+| `uploads/`             | Profile photos, avatars, and attachments          |
 | `backups/`             | Rotating automatic snapshots                      |
 | `.cache/`              | The local embedding model (re-downloaded if lost) |
 

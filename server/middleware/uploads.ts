@@ -24,6 +24,9 @@ import { NotFoundError } from "../utils/AppError.ts";
 /** `/u/<uuid>/` at the start of the path, capturing the owner. */
 const OWNER_PREFIX = /^\/u\/([0-9a-f-]{36})\//;
 
+/** `/u/<uuid>/profile/` at the start of the path. */
+const PROFILE_PREFIX = /^\/u\/[0-9a-f-]{36}\/profile\//;
+
 /** A `..` segment in either slash direction, after decoding. */
 const TRAVERSAL = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
 
@@ -55,6 +58,12 @@ export function guardUploads(
 
   const owner = OWNER_PREFIX.exec(path);
   if (owner && owner[1] === req.principal?.user.id) return next();
+
+  // Profile photos are visible to any authenticated user on the instance so
+  // that team members can see each other's avatars (e.g. in the admin accounts
+  // list or shared collaborative views). Contact avatars and private files
+  // remain owner-only.
+  if (req.principal && PROFILE_PREFIX.test(path)) return next();
 
   // Everything else, including the flat pre-Phase-1 layout, is gone.
   next(new NotFoundError("File"));

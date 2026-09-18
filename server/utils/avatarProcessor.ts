@@ -13,10 +13,27 @@ import sharp from "sharp";
 import { log } from "./logger.ts";
 import { getErrorMessage } from "./helpers.ts";
 import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
+import { ValidationError } from "./AppError.ts";
 import type { Scope } from "../tenancy/scope.ts";
+
+// Raster image types only. SVG is deliberately excluded — it can carry
+// scripts and is served from the app origin. The extension is derived from
+// the MIME type, never from the client-supplied filename.
+export const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/avif": ".avif",
+};
+
+export const RASTER_MIME_ALLOWLIST = Object.keys(AVATAR_MIME_EXTENSIONS);
 
 const AVATAR_SIZE = 256; // px — 2x for 128px CSS display (retina-ready)
 const JPEG_QUALITY = 80;
+
+const PROFILE_PHOTO_SIZE = 512;
+const PROFILE_PHOTO_QUALITY = 82;
 
 /**
  * Process a base64 data-URI avatar: resize, compress, save to disk.
@@ -78,4 +95,46 @@ export async function processBase64Avatar(
  */
 export function isBase64DataUri(url: string | null | undefined): url is string {
   return !!url && url.startsWith("data:image/");
+}
+
+/**
+ * Normalise and save an account profile photo.
+ *
+ * Resizes to 512px cover, auto-rotates by EXIF orientation, strips metadata,
+ * converts to JPEG quality 82, and saves to uploads/u/<userId>/profile/.
+ * Returns the public URL path (/uploads/u/<userId>/profile/profile-<timestamp>.jpg).
+ *
+ * Throws ValidationError if sharp cannot decode the buffer.
+ */
+export async function processProfilePhoto(
+  userId: string,
+  buffer: Buffer,
+): Promise<string> {
+  const profileDir = ownerUploadDir(userId, "profile");
+  ensureDir(profileDir);
+
+  const filename = `profile-${Date.now()}.jpg`;
+  const outputPath = path.join(profileDir, filename);
+
+  try {
+    await sharp(buffer)
+      .rotate()
+      .resize(PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE, {
+        fit: "cover",
+        position: "centre",
+      })
+      .jpeg({ quality: PROFILE_PHOTO_QUALITY, mozjpeg: true })
+      .toFile(outputPath);
+  } catch (err: unknown) {
+    if (fs.existsSync(outputPath)) {
+      try {
+        fs.unlinkSync(outputPath);
+      } catch {}
+    }
+    throw new ValidationError("Invalid or unsupported image format", {
+      cause: err,
+    });
+  }
+
+  return ownerUploadUrl(userId, "profile", filename);
 }

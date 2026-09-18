@@ -85,12 +85,20 @@ import {
   findUserByEmail,
   resetUserPasswordWithToken,
   getUserById,
+  setUserAvatar,
   getSessionTtlDays,
   setSessionTtlDays,
   MIN_SESSION_TTL_DAYS,
   MAX_SESSION_TTL_DAYS,
   DEFAULT_SESSION_TTL_DAYS,
 } from "../services/authService.ts";
+import fs from "fs";
+import multer from "multer";
+import { resolveUploadPath } from "../utils/paths.ts";
+import {
+  processProfilePhoto,
+  AVATAR_MIME_EXTENSIONS,
+} from "../utils/avatarProcessor.ts";
 import { publicOrigin } from "../utils/publicOrigin.ts";
 import {
   renderPasswordResetEmail,
@@ -104,6 +112,19 @@ import {
 } from "../services/authLinkService.ts";
 
 const router = Router();
+
+const uploadAccountAvatar = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for profile photos
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
+    cb(
+      new ValidationError(
+        "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed",
+      ),
+    );
+  },
+});
 
 /**
  * Brute-force protection on the credential endpoints.
@@ -667,6 +688,55 @@ router.patch(
         : {}),
     });
     res.json({ user: publicUser(user) });
+  }),
+);
+
+router.post(
+  "/me/avatar",
+  requireSession,
+  uploadAccountAvatar.single("avatar"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new ValidationError("No image file provided");
+
+    const user = currentUser(req)!;
+    const avatarUrl = await processProfilePhoto(user.id, req.file.buffer);
+
+    const latest = getUserById(user.id) ?? user;
+    if (latest.avatarUrl) {
+      const oldPath = resolveUploadPath(latest.avatarUrl);
+      if (oldPath && fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+        } catch {
+          // Ignore unlinking errors on replaced photo
+        }
+      }
+    }
+
+    const updated = setUserAvatar(user.id, avatarUrl);
+    res.json({ user: publicUser(updated) });
+  }),
+);
+
+router.delete(
+  "/me/avatar",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req)!;
+    const latest = getUserById(user.id) ?? user;
+    if (latest.avatarUrl) {
+      const oldPath = resolveUploadPath(latest.avatarUrl);
+      if (oldPath && fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+        } catch {
+          // Ignore unlinking errors on removed photo
+        }
+      }
+    }
+
+    const updated = setUserAvatar(user.id, null);
+    res.json({ user: publicUser(updated) });
   }),
 );
 

@@ -196,7 +196,8 @@ sqlite.exec(`
     role TEXT NOT NULL DEFAULT 'member',
     createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    lastLoginAt TEXT
+    lastLoginAt TEXT,
+    avatarUrl TEXT
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
@@ -323,6 +324,7 @@ for (const column of [
   "passwordChangedAt TEXT",
   "disabledAt TEXT",
   "createdBy TEXT REFERENCES users(id) ON DELETE SET NULL",
+  "avatarUrl TEXT",
 ]) {
   const name = column.split(" ")[0];
   const columns = sqlite.pragma("table_info(users)") as { name: string }[];
