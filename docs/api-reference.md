@@ -512,6 +512,75 @@ curl -X POST http://localhost:3210/api/contacts/abc123/avatar \
 
 ---
 
+### `POST /api/auth/me/avatar` _(account)_
+
+Upload a profile photo for the signed-in account. Uses `multipart/form-data` with field `avatar`.
+Normalised through sharp to a 512 px cover JPEG at quality 82 (EXIF rotated, metadata stripped) stored in `/uploads/u/<userId>/profile/`.
+Any previous profile photo is unlinked.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/me/avatar \
+  -b cookies.txt \
+  -F "avatar=@photo.jpg"
+```
+
+**Response:**
+
+```json
+{
+  "user": {
+    "id": "abc12345-...",
+    "email": "user@example.com",
+    "username": "user",
+    "displayName": "User Name",
+    "role": "member",
+    "createdAt": "2026-09-18T00:00:00.000Z",
+    "lastLoginAt": "2026-09-18T09:00:00.000Z",
+    "status": "active",
+    "credentialState": "password",
+    "mustChangePassword": false,
+    "avatarUrl": "/uploads/u/abc12345-.../profile/profile-1789750000000.jpg"
+  }
+}
+```
+
+**Error codes:** `400` (missing file, unsupported MIME type, or invalid image bytes), `401` (not authenticated), `413` (file exceeds 10 MB limit).
+
+---
+
+### `DELETE /api/auth/me/avatar` _(account)_
+
+Remove the profile photo for the signed-in account. Idempotent. Unlinks the file on disk and resets `users.avatarUrl` to `null`.
+
+```bash
+curl -X DELETE http://localhost:3210/api/auth/me/avatar \
+  -b cookies.txt
+```
+
+**Response:**
+
+```json
+{
+  "user": {
+    "id": "abc12345-...",
+    "email": "user@example.com",
+    "username": "user",
+    "displayName": "User Name",
+    "role": "member",
+    "createdAt": "2026-09-18T00:00:00.000Z",
+    "lastLoginAt": "2026-09-18T09:00:00.000Z",
+    "status": "active",
+    "credentialState": "password",
+    "mustChangePassword": false,
+    "avatarUrl": null
+  }
+}
+```
+
+**Error codes:** `401` (not authenticated).
+
+---
+
 ### `POST /api/contacts/:id/enrich`
 
 Single-contact enrichment via AI web grounding. Uses the provider-appropriate strategy (two-pass for Gemini, single-pass for OpenAI/Anthropic).
@@ -1884,7 +1953,7 @@ Returns `401 INVALID_CREDENTIALS` for both a wrong password and an unknown accou
 
 ### `GET /api/auth/me` _(account)_
 
-The signed-in account. `PATCH /api/auth/me` updates `displayName`, `username`, or `email`; omitted fields are left alone.
+The signed-in account. `PATCH /api/auth/me` updates `displayName`, `username`, or `email`; omitted fields are left alone. Profile photos are uploaded via `POST /api/auth/me/avatar` and removed via `DELETE /api/auth/me/avatar`.
 
 ---
 

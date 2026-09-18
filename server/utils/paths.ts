@@ -29,7 +29,7 @@ export const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
  */
 export function ownerUploadDir(
   ownerId: string,
-  kind: "avatars" | "files",
+  kind: "avatars" | "files" | "profile",
 ): string {
   return path.join(UPLOADS_DIR, "u", assertOwnerId(ownerId), kind);
 }
@@ -37,7 +37,7 @@ export function ownerUploadDir(
 /** The public URL for a file in an owner's directory. */
 export function ownerUploadUrl(
   ownerId: string,
-  kind: "avatars" | "files",
+  kind: "avatars" | "files" | "profile",
   filename: string,
 ): string {
   return `/uploads/u/${assertOwnerId(ownerId)}/${kind}/${path.basename(filename)}`;

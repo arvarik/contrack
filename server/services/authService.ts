@@ -195,6 +195,7 @@ export interface User {
   passwordChangedAt: string | null;
   disabledAt: string | null;
   createdBy: string | null;
+  avatarUrl: string | null;
 }
 
 /** A user row plus the hash — never leaves this module. */
@@ -226,6 +227,7 @@ export function publicUser(user: User) {
     status: user.status,
     credentialState: user.credentialState,
     mustChangePassword: user.mustChangePassword === 1,
+    avatarUrl: user.avatarUrl ?? null,
   };
 }
 
@@ -289,7 +291,7 @@ export function validateEmail(email: string): string | null {
 const USER_COLUMNS = `id, email, username, displayName, passwordHash, role,
                       createdAt, updatedAt, lastLoginAt,
                       status, credentialState, mustChangePassword,
-                      passwordChangedAt, disabledAt, createdBy`;
+                      passwordChangedAt, disabledAt, createdBy, avatarUrl`;
 
 // =============================================================================
 // Hot-path prepared statements
@@ -380,6 +382,7 @@ function stripHash(row: UserRow): User {
     passwordChangedAt: row.passwordChangedAt,
     disabledAt: row.disabledAt,
     createdBy: row.createdBy,
+    avatarUrl: row.avatarUrl ?? null,
   };
 }
 
@@ -592,6 +595,24 @@ export async function updateUser(
   }
 
   return getUserById(id)!;
+}
+
+/**
+ * Update or clear an account's profile photo.
+ *
+ * @returns the updated user record
+ */
+export function setUserAvatar(userId: string, url: string | null): User {
+  const current = getUserById(userId);
+  if (!current) throw new AppError("Account not found", 404);
+
+  sqlite
+    .prepare(
+      `UPDATE users SET avatarUrl = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+    )
+    .run(url, userId);
+
+  return getUserById(userId)!;
 }
 
 /**
