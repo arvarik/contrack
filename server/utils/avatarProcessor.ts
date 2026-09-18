@@ -66,7 +66,7 @@ export async function processBase64Avatar(
     const outputPath = path.join(avatarDir, filename);
 
     // Resize + convert to JPEG
-    await sharp(inputBuffer)
+    const info = await sharp(inputBuffer)
       .resize(AVATAR_SIZE, AVATAR_SIZE, {
         fit: "cover",
         position: "centre",
@@ -74,10 +74,9 @@ export async function processBase64Avatar(
       .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
       .toFile(outputPath);
 
-    const stats = fs.statSync(outputPath);
     log.debug(
       "AvatarProcessor",
-      `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(stats.size / 1024)}KB (${filename})`,
+      `Processed avatar: ${Math.round(inputBuffer.length / 1024)}KB → ${Math.round(info.size / 1024)}KB (${filename})`,
     );
 
     return ownerUploadUrl(scope.ownerId, "avatars", filename);
@@ -128,7 +127,7 @@ export async function processProfilePhoto(
   } catch (err: unknown) {
     if (fs.existsSync(outputPath)) {
       try {
-        fs.unlinkSync(outputPath);
+        await fs.promises.unlink(outputPath).catch(() => {});
       } catch {}
     }
     throw new ValidationError("Invalid or unsupported image format", {

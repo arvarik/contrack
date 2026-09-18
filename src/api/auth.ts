@@ -388,6 +388,7 @@ export function useUploadAccountAvatar() {
     mutationFn: (file: File) => uploadAccountAvatar(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
   });
 }
@@ -399,6 +400,7 @@ export function useRemoveAccountAvatar() {
     mutationFn: () => removeAccountAvatar(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
   });
 }

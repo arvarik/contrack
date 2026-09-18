@@ -39,11 +39,11 @@ import {
   createApiToken,
   fetchApiTokens,
   fetchSessions,
-  removeAccountAvatar,
   revokeApiToken,
   revokeOtherSessions,
   updateProfile,
-  uploadAccountAvatar,
+  useRemoveAccountAvatar,
+  useUploadAccountAvatar,
   type ApiTokenSummary,
   type CreatedApiToken,
   type SessionSummary,
@@ -240,33 +240,40 @@ const PhotoCard = () => {
   const theme = preferences.theme === "system" ? undefined : mode;
   const fallbackUrl = user ? accountAvatarUrl(user.username, theme) : "";
 
-  const upload = useMutation({
-    mutationFn: (f: File) => uploadAccountAvatar(f),
-    onSuccess: async () => {
-      setFile(null);
-      await refresh();
-      toast.success("Photo updated");
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const remove = useMutation({
-    mutationFn: () => removeAccountAvatar(),
-    onSuccess: async () => {
-      setFile(null);
-      await refresh();
-      toast.success("Photo removed");
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const upload = useUploadAccountAvatar();
+  const remove = useRemoveAccountAvatar();
 
   const isBusy = upload.isPending || remove.isPending;
+
+  const handleUpload = () => {
+    if (!file || isBusy) return;
+    upload.mutate(file, {
+      onSuccess: async () => {
+        setFile(null);
+        await refresh();
+        toast.success("Photo updated");
+      },
+      onError: (error: Error) => toast.error(error.message),
+    });
+  };
+
+  const handleRemove = () => {
+    if (!user?.avatarUrl || isBusy) return;
+    remove.mutate(undefined, {
+      onSuccess: async () => {
+        setFile(null);
+        await refresh();
+        toast.success("Photo removed");
+      },
+      onError: (error: Error) => toast.error(error.message),
+    });
+  };
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (file && !isBusy) upload.mutate(file);
+        handleUpload();
       }}
       className={cn(CARD, "p-4 sm:p-6 space-y-4")}
     >
@@ -277,17 +284,12 @@ const PhotoCard = () => {
         fallbackUrl={fallbackUrl}
         onChange={setFile}
         showRemoveCurrent={false}
-        onRemove={() => {
-          if (user?.avatarUrl && !isBusy) {
-            remove.mutate();
-          }
-        }}
       />
       <div className="flex items-center justify-end gap-3 pt-2">
         {user?.avatarUrl && (
           <button
             type="button"
-            onClick={() => remove.mutate()}
+            onClick={handleRemove}
             disabled={isBusy}
             className={cn(
               "btn-secondary text-sm text-error hover:bg-error/10 hover:text-error",

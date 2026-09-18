@@ -55,6 +55,12 @@ test("account profile photo lifecycle in Settings", async ({
   const cardImg = page.locator("section:has-text('Profile') img").first();
   await expect(cardImg).toHaveAttribute("src", /\/profile\//);
 
+  // Reload page to verify photo persists across refreshes
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Photo" })).toBeVisible();
+  await expect(sidebarAvatar).toHaveAttribute("src", /\/profile\//);
+  await expect(cardImg).toHaveAttribute("src", /\/profile\//);
+
   // Accessible with photo uploaded
   await expectPageAccessible(page, testInfo, "settings-account-with-photo");
 

@@ -91,6 +91,8 @@ export const AccountPhotoField = ({
     multiple: false,
   });
 
+  const chooseBtnRef = React.useRef<HTMLButtonElement>(null);
+
   const displayUrl = objectUrl
     ? objectUrl
     : currentUrl && !imgFailed
@@ -101,6 +103,9 @@ export const AccountPhotoField = ({
     setError(null);
     onChange(null);
     onRemove?.();
+    setTimeout(() => {
+      chooseBtnRef.current?.focus();
+    }, 0);
   };
 
   return (
@@ -109,6 +114,7 @@ export const AccountPhotoField = ({
         <input
           {...getInputProps({
             "aria-label": "Choose a profile photo",
+            "aria-describedby": error ? "account-photo-error" : undefined,
           })}
         />
         <button
@@ -116,6 +122,7 @@ export const AccountPhotoField = ({
           {...getRootProps({
             role: "button",
             "aria-label": "Choose a profile photo",
+            "aria-describedby": error ? "account-photo-error" : undefined,
             className: cn(
               "relative rounded-full overflow-hidden shrink-0 group cursor-pointer",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -144,6 +151,7 @@ export const AccountPhotoField = ({
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            ref={chooseBtnRef}
             type="button"
             onClick={open}
             className="btn-secondary text-sm"
@@ -163,7 +171,11 @@ export const AccountPhotoField = ({
       </div>
 
       {error && (
-        <p role="alert" className="text-xs text-error font-medium">
+        <p
+          id="account-photo-error"
+          role="alert"
+          className="text-xs text-error font-medium"
+        >
           {error}
         </p>
       )}
