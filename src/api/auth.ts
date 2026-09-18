@@ -21,8 +21,16 @@
  * @module api/auth
  */
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { MapStyleUrls } from "../../shared/geo";
-import { ApiError, API_BASE, NetworkError, apiJson, jsonBody } from "./client";
+import {
+  ApiError,
+  API_BASE,
+  NetworkError,
+  apiFetch,
+  apiJson,
+  jsonBody,
+} from "./client";
 
 export interface AccountUser {
   id: string;
@@ -41,6 +49,7 @@ export interface AccountUser {
    */
   credentialState: string;
   mustChangePassword: boolean;
+  avatarUrl: string | null;
 }
 
 export interface AuthStatus {
@@ -334,5 +343,62 @@ export function createApiToken(input: {
 export function revokeApiToken(id: string): Promise<{ revoked: true }> {
   return apiJson(`/auth/tokens/${encodeURIComponent(id)}`, {
     method: "DELETE",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Account profile pictures
+// ---------------------------------------------------------------------------
+
+/**
+ * Upload and set a new profile picture for the signed-in account.
+ *
+ * Normalised by the server to a 512 px square JPEG with EXIF orientation
+ * applied and metadata stripped.
+ */
+export async function uploadAccountAvatar(
+  file: File,
+): Promise<{ user: AccountUser }> {
+  const formData = new FormData();
+  formData.append("avatar", file);
+  const res = await apiFetch("/auth/me/avatar", {
+    method: "POST",
+    body: formData,
+  });
+  return res.json();
+}
+
+/**
+ * Remove the signed-in account's profile photo.
+ *
+ * Idempotent. Unlinks the uploaded file on the server and clears the account's
+ * avatarUrl, falling back to initials.
+ */
+export async function removeAccountAvatar(): Promise<{ user: AccountUser }> {
+  const res = await apiFetch("/auth/me/avatar", {
+    method: "DELETE",
+  });
+  return res.json();
+}
+
+/** React Query mutation hook for uploading an account avatar. */
+export function useUploadAccountAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => uploadAccountAvatar(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth"] });
+    },
+  });
+}
+
+/** React Query mutation hook for removing an account avatar. */
+export function useRemoveAccountAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => removeAccountAvatar(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth"] });
+    },
   });
 }

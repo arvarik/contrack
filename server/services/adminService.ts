@@ -69,6 +69,7 @@ export interface AdminUserSummary {
   /** The account nobody can sign in to, which owns this device's data. */
   isLocalOwner: boolean;
   isSelf: boolean;
+  avatarUrl: string | null;
 }
 
 /**
@@ -91,7 +92,7 @@ export interface OwnedCounts {
 
 const USER_LIST_SQL = `SELECT id, email, username, displayName, role, status,
                               credentialState, mustChangePassword, createdAt,
-                              lastLoginAt, passwordChangedAt
+                              lastLoginAt, passwordChangedAt, avatarUrl
                          FROM users`;
 
 interface UserListRow {
@@ -106,6 +107,7 @@ interface UserListRow {
   createdAt: string;
   lastLoginAt: string | null;
   passwordChangedAt: string | null;
+  avatarUrl: string | null;
 }
 
 /**
@@ -173,6 +175,7 @@ function toSummary(
     passwordChangedAt: row.passwordChangedAt,
     isLocalOwner: row.credentialState === "none",
     isSelf: row.id === selfId,
+    avatarUrl: row.avatarUrl ?? null,
   };
 }
 
