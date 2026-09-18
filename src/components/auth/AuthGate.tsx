@@ -54,13 +54,20 @@ import {
   type AuthExpiredDetail,
 } from "../../lib/appEvents";
 import { logCacheEvent } from "../../lib/queryConfig";
-import { takeInvitationToken } from "../../lib/credentials";
+import {
+  takeInvitationToken,
+  takeUrlSecret,
+  RESET_PASSWORD_PATH,
+  SIGNIN_LINK_PATH,
+} from "../../lib/credentials";
 import { SignIn } from "./SignIn";
 import { SetupWizard } from "./SetupWizard";
 import { Register } from "./Register";
 import { AcceptInvitation } from "./AcceptInvitation";
 import { ForcedPasswordChange } from "./ForcedPasswordChange";
 import { PasskeyNudge } from "./PasskeyNudge";
+import { ResetPassword } from "./ResetPassword";
+import { MagicLinkLanding } from "./MagicLinkLanding";
 import { passkeysSupported, listPasskeys } from "../../api/passkeys";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 
@@ -136,6 +143,8 @@ type GateState =
   | "checking"
   | "setup"
   | "join"
+  | "reset"
+  | "link"
   | "signin"
   | "register"
   | "password-change"
@@ -173,6 +182,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [instanceName, setInstanceName] = useState("");
   const [mapStyles, setMapStyles] = useState<MapStyleUrls | null>(null);
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
+  const [mailConfigured, setMailConfigured] = useState(false);
+  const [magicLinkSignIn, setMagicLinkSignIn] = useState(false);
   // Why the sign-in screen is showing. Null when the user asked for it
   // (sign-out) or simply arrived signed-out; "expired" when a credential we
   // had stopped being accepted; "disabled" when the account itself is closed,
@@ -194,6 +205,24 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const clearInvitation = useCallback(() => {
     invitationRef.current = null;
     setInvitation(null);
+  }, []);
+
+  const [resetToken, setResetToken] = useState<string | null>(() =>
+    takeUrlSecret(RESET_PASSWORD_PATH),
+  );
+  const resetTokenRef = useRef(resetToken);
+  const clearResetToken = useCallback(() => {
+    resetTokenRef.current = null;
+    setResetToken(null);
+  }, []);
+
+  const [magicToken, setMagicToken] = useState<string | null>(() =>
+    takeUrlSecret(SIGNIN_LINK_PATH),
+  );
+  const magicTokenRef = useRef(magicToken);
+  const clearMagicToken = useCallback(() => {
+    magicTokenRef.current = null;
+    setMagicToken(null);
   }, []);
   const queryClient = useQueryClient();
 
@@ -223,6 +252,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setInstanceName(status.instanceName ?? "");
     setMapStyles(status.map ?? null);
     setLocalOwnerPresent(status.localOwnerPresent ?? false);
+    setMailConfigured(status.mailConfigured ?? false);
+    setMagicLinkSignIn(status.magicLinkSignIn ?? false);
 
     // Order matters, and each rung rules out the ones below it.
     if (status.setupRequired) {
@@ -233,6 +264,14 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     }
     if (invitationRef.current) {
       setState("join");
+      return;
+    }
+    if (resetTokenRef.current) {
+      setState("reset");
+      return;
+    }
+    if (magicTokenRef.current) {
+      setState("link");
       return;
     }
     if (status.authRequired && !status.authenticated) {
@@ -277,8 +316,10 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     queryClient.clear();
     setSignInReason(null);
     clearInvitation();
+    clearResetToken();
+    clearMagicToken();
     await check();
-  }, [check, clearInvitation, queryClient]);
+  }, [check, clearInvitation, clearResetToken, clearMagicToken, queryClient]);
 
   /**
    * Post-creation flow: setup, join, or register.
@@ -289,6 +330,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     queryClient.clear();
     setSignInReason(null);
     clearInvitation();
+    clearResetToken();
+    clearMagicToken();
     await check();
     if (passkeysSupported()) {
       try {
@@ -301,7 +344,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         // Fall through to open
       }
     }
-  }, [check, clearInvitation, queryClient]);
+  }, [check, clearInvitation, clearResetToken, clearMagicToken, queryClient]);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -452,6 +495,28 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         );
       case "password-change":
         return <ForcedPasswordChange onChanged={check} />;
+      case "reset":
+        return (
+          <ResetPassword
+            token={resetToken ?? ""}
+            onReset={handleAuthenticated}
+            onRequestNewLink={() => {
+              clearResetToken();
+              setState("signin");
+            }}
+          />
+        );
+      case "link":
+        return (
+          <MagicLinkLanding
+            token={magicToken ?? ""}
+            onSignedIn={handleAuthenticated}
+            onCancel={() => {
+              clearMagicToken();
+              setState("signin");
+            }}
+          />
+        );
       case "signin":
         return (
           <SignIn
@@ -459,6 +524,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
             reason={signInReason}
             canRegister={registrationOpen}
             onRegister={() => setState("register")}
+            mailConfigured={mailConfigured}
+            magicLinkSignIn={magicLinkSignIn}
           />
         );
       default:

@@ -59,6 +59,16 @@ const LOOK: Record<
     tone: "primary",
     label: "Password changed",
   },
+  "auth.password.reset": {
+    icon: KeyRound,
+    tone: "primary",
+    label: "Password reset",
+  },
+  "auth.magic_link.used": {
+    icon: LogIn,
+    tone: "neutral",
+    label: "Signed in with link",
+  },
   "auth.token.created": {
     icon: Terminal,
     tone: "primary",

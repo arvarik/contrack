@@ -135,4 +135,23 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(alert).toHaveText(
     "That passkey did not work. Try again, or sign in with your password.",
   );
+
+  // 8. Forgot password panel without mail configured (shows operator guidance)
+  const forgotBtn = page.getByRole("button", {
+    name: "Forgot your password?",
+  });
+  await expect(forgotBtn).toBeVisible();
+  await forgotBtn.click();
+  await expect(
+    page.getByRole("heading", { name: "Reset your password" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("This Contrack cannot send email.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("scripts/reset-password.ts")).toBeVisible();
+  await expectPageAccessible(page, testInfo, "forgot-password-panel");
+  await page.getByRole("button", { name: "Back to sign in" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
 });

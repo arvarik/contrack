@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Password reset and magic-link sign-in.** Self-service password reset and
+  passwordless magic-link sign-in backed by single-use hashed auth link tokens.
+  Users can request a 1-hour password reset link from the sign-in screen when
+  outgoing mail is configured, or view clear operator guidance when mail is off.
+  Administrators can email a 24-hour reset link or generate a temporary password
+  from the Accounts administration dialog. When enabled by an administrator under
+  Instance settings, users can request a 15-minute magic link to sign in
+  passwordlessly. Includes the operator recovery CLI script
+  `npm run reset-password <username>` (`scripts/reset-password.ts`), hourly
+  creation limits per account, 30-day retention cleanup, session method tracking
+  (`method: "email-link"`), and audit logging for resets and magic-link logins.
+
 - **Outgoing mail and email invitations.** Administrators can configure
   outgoing SMTP mail either declaratively via `SMTP_URL` and `MAIL_FROM`
   environment variables or interactively through the Outgoing mail administration

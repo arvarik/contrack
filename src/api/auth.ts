@@ -83,6 +83,8 @@ export interface AuthStatus {
   map?: MapStyleUrls;
   /** True when outgoing mail is configured (via SMTP_URL or settings). */
   mailConfigured?: boolean;
+  /** True when magic link sign-in is enabled and mail is configured. */
+  magicLinkSignIn?: boolean;
 }
 
 /** One personal API token, as the account's own token list shows it. */

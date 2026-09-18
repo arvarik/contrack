@@ -102,6 +102,21 @@ export function setRegistrationOpen(value: unknown): boolean {
   return value;
 }
 
+export const MAGIC_LINK_SETTING = "auth.magicLinkSignIn";
+
+export function isMagicLinkSignIn(): boolean {
+  return getSetting<boolean>(MAGIC_LINK_SETTING) === true;
+}
+
+export function setMagicLinkSignIn(value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new ValidationError("Magic link sign-in must be on or off.");
+  }
+  setSetting(MAGIC_LINK_SETTING, value);
+  log.info("Auth", `Magic link sign-in ${value ? "enabled" : "disabled"}`);
+  return value;
+}
+
 // =============================================================================
 // The instance's own name
 // =============================================================================
@@ -627,6 +642,55 @@ export async function changePassword(
 
   revokeOtherSessions(id, keepSessionId);
   log.info("Auth", `Password changed for "${row.username}"`);
+}
+
+/**
+ * Look up a password-enabled account by email address (case-insensitive).
+ */
+export function findUserByEmail(email: string): User | null {
+  const value = email.trim().toLowerCase();
+  if (!value) return null;
+  const row = sqlite
+    .prepare(
+      `SELECT ${USER_COLUMNS} FROM users WHERE lower(email) = ? AND credentialState = 'password' LIMIT 1`,
+    )
+    .get(value) as UserRow | undefined;
+  return row ? stripHash(row) : null;
+}
+
+/**
+ * Reset a user's password using a verified token.
+ *
+ * Sets the new password hash, clears mustChangePassword, updates passwordChangedAt,
+ * and revokes every existing session for this account.
+ */
+export async function resetUserPasswordWithToken(
+  userId: string,
+  newPassword: string,
+): Promise<User> {
+  const row = sqlite
+    .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`)
+    .get(userId) as UserRow | undefined;
+  if (!row) {
+    throw new AppError("Account not found", 404, { code: "USER_NOT_FOUND" });
+  }
+
+  const error = validatePassword(newPassword);
+  if (error) throw new ValidationError(error);
+
+  const hash = await hashPassword(newPassword);
+  sqlite
+    .prepare(
+      `UPDATE users
+          SET passwordHash = ?, mustChangePassword = 0,
+              passwordChangedAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+    )
+    .run(hash, userId);
+
+  revokeOtherSessions(userId, null);
+  log.info("Auth", `Password reset with token for "${row.username}"`);
+  return stripHash(row);
 }
 
 /** Throw a ConflictError if the email/username belongs to a different account. */
