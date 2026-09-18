@@ -460,7 +460,7 @@ router.post(
     const email = bodyString(req, "email").trim().toLowerCase();
     if (email && mailService.isConfigured()) {
       const user = findUserByEmail(email);
-      if (user) {
+      if (user && user.status !== "disabled") {
         const link = createAuthLink(
           "reset",
           user.id,
@@ -556,7 +556,7 @@ router.post(
     const email = bodyString(req, "email").trim().toLowerCase();
     if (email) {
       const user = findUserByEmail(email);
-      if (user) {
+      if (user && user.status !== "disabled") {
         const link = createAuthLink(
           "magic",
           user.id,
@@ -607,8 +607,12 @@ router.post(
 
     const link = redeemAuthLink("magic", token);
     const user = getUserById(link.userId);
-    if (!user || user.disabledAt) {
-      throw new AppError("Account not found or disabled", 404);
+    if (!user || user.status === "disabled") {
+      throw new AppError(
+        "This account has been disabled. Ask an administrator to re-enable it.",
+        403,
+        { code: "ACCOUNT_DISABLED" },
+      );
     }
 
     const remember = req.body?.remember !== false;

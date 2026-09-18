@@ -141,8 +141,9 @@ export async function verifyRegistration(
 
   const challengeRow = sqlite
     .prepare(
-      `SELECT id, challenge, expiresAt FROM auth_challenges
-        WHERE id = ? AND kind = 'register' AND userId = ?`,
+      `DELETE FROM auth_challenges
+        WHERE id = ? AND kind = 'register' AND userId = ?
+        RETURNING id, challenge, expiresAt`,
     )
     .get(ceremonyId, user.id) as
     { id: string; challenge: string; expiresAt: string } | undefined;
@@ -152,9 +153,6 @@ export async function verifyRegistration(
       code: "CEREMONY_EXPIRED",
     });
   }
-
-  // Delete challenge immediately on use
-  sqlite.prepare("DELETE FROM auth_challenges WHERE id = ?").run(ceremonyId);
 
   if (new Date(challengeRow.expiresAt).getTime() <= Date.now()) {
     throw new AppError("Passkey ceremony expired.", 410, {
@@ -367,8 +365,9 @@ export async function verifyLogin(
 
   const challengeRow = sqlite
     .prepare(
-      `SELECT id, challenge, expiresAt FROM auth_challenges
-        WHERE id = ? AND kind = 'login'`,
+      `DELETE FROM auth_challenges
+        WHERE id = ? AND kind = 'login'
+        RETURNING id, challenge, expiresAt`,
     )
     .get(ceremonyId) as
     { id: string; challenge: string; expiresAt: string } | undefined;
@@ -378,9 +377,6 @@ export async function verifyLogin(
       code: "CEREMONY_EXPIRED",
     });
   }
-
-  // Delete challenge immediately on use
-  sqlite.prepare("DELETE FROM auth_challenges WHERE id = ?").run(ceremonyId);
 
   if (new Date(challengeRow.expiresAt).getTime() <= Date.now()) {
     throw new AppError("Passkey ceremony expired.", 410, {
@@ -452,9 +448,11 @@ export async function verifyLogin(
     )
     .run(verification.authenticationInfo.newCounter, passkey.id);
 
-  sqlite
-    .prepare("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?")
-    .run(user.id);
+  if (user.status !== "disabled") {
+    sqlite
+      .prepare("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(user.id);
+  }
 
   return { user };
 }

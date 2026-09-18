@@ -22,7 +22,8 @@ export const PasskeyNudge = ({ onDone }: { onDone: () => void }) => {
       await registerPasskey();
       onDone();
     } catch (err: unknown) {
-      if ((err as { name?: string })?.name !== "AbortError") {
+      const errName = (err as { name?: string })?.name;
+      if (errName !== "AbortError" && errName !== "NotAllowedError") {
         setError(
           err instanceof Error
             ? err.message

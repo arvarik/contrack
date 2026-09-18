@@ -110,6 +110,24 @@ describe("API: Password reset and magic links", () => {
       expect(link).toBeDefined();
     });
 
+    it("does not send email or create link for disabled accounts", async () => {
+      mailService.__useJsonTransport(true);
+      const admin = await freshAdmin("disabled@example.com");
+      sqlite
+        .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
+        .run(admin.id);
+
+      const res = await request(app)
+        .post("/api/auth/password-reset/request")
+        .send({ email: admin.email });
+      expect(res.status).toBe(202);
+      expect(mailService.__getSentMessages()).toHaveLength(0);
+      const link = sqlite
+        .prepare("SELECT * FROM auth_links WHERE userId = ?")
+        .get(admin.id);
+      expect(link).toBeUndefined();
+    });
+
     it("enforces hourly creation cap of 3 per account without error", async () => {
       mailService.__useJsonTransport(true);
       const admin = await freshAdmin("capped@example.com");
@@ -249,6 +267,53 @@ describe("API: Password reset and magic links", () => {
       expect(creds).not.toBeNull();
       expect(creds?.id).toBe(admin.id);
     });
+
+    it("rejects reset completion with 403 ACCOUNT_DISABLED for disabled accounts", async () => {
+      const admin = await freshAdmin();
+      const link = createAuthLink("reset", admin.id, 3600);
+      expect(link).not.toBeNull();
+
+      sqlite
+        .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
+        .run(admin.id);
+
+      const res = await request(app)
+        .post("/api/auth/password-reset/complete")
+        .send({ token: link!.token, password: "newPassword789!" });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("ACCOUNT_DISABLED");
+    });
+
+    it("revokes active API tokens and sibling auth links on reset", async () => {
+      const admin = await freshAdmin();
+      const link1 = createAuthLink("reset", admin.id, 3600);
+      const link2 = createAuthLink("reset", admin.id, 3600);
+      expect(link1).not.toBeNull();
+      expect(link2).not.toBeNull();
+
+      sqlite
+        .prepare(
+          `INSERT INTO api_tokens (id, userId, tokenHash, tokenPrefix, name, expiresAt)
+           VALUES ('tok-1', ?, 'hash-1', 'ct_test', 'Test Token', datetime('now', '+30 days'))`,
+        )
+        .run(admin.id);
+
+      const res = await request(app)
+        .post("/api/auth/password-reset/complete")
+        .send({ token: link1!.token, password: "newPassword123!" });
+      expect(res.status).toBe(200);
+
+      const tokenRow = sqlite
+        .prepare("SELECT revokedAt FROM api_tokens WHERE id = 'tok-1'")
+        .get() as { revokedAt: string | null };
+      expect(tokenRow.revokedAt).not.toBeNull();
+
+      const sibling = sqlite
+        .prepare("SELECT usedAt FROM auth_links WHERE id = ?")
+        .get(link2!.id) as { usedAt: string | null };
+      expect(sibling.usedAt).not.toBeNull();
+    });
   });
 
   describe("POST /api/auth/magic-link/request", () => {
@@ -292,6 +357,21 @@ describe("API: Password reset and magic links", () => {
         .prepare("SELECT * FROM auth_links WHERE userId = ? AND kind = 'magic'")
         .get(admin.id) as { tokenHash: string; expiresAt: string } | undefined;
       expect(link).toBeDefined();
+    });
+
+    it("does not send magic link for disabled accounts", async () => {
+      mailService.__useJsonTransport(true);
+      authService.setMagicLinkSignIn(true);
+      const admin = await freshAdmin("disabledmagic@example.com");
+      sqlite
+        .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
+        .run(admin.id);
+
+      const res = await request(app)
+        .post("/api/auth/magic-link/request")
+        .send({ email: admin.email });
+      expect(res.status).toBe(202);
+      expect(mailService.__getSentMessages()).toHaveLength(0);
     });
   });
 
@@ -361,6 +441,22 @@ describe("API: Password reset and magic links", () => {
         .send({ token: link!.token });
       expect(resExpired.status).toBe(410);
       expect(resExpired.body.error.code).toBe("LINK_EXPIRED");
+    });
+
+    it("rejects magic link completion with 403 ACCOUNT_DISABLED for disabled accounts", async () => {
+      const admin = await freshAdmin();
+      const link = createAuthLink("magic", admin.id, 900);
+      expect(link).not.toBeNull();
+
+      sqlite
+        .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
+        .run(admin.id);
+
+      const res = await request(app)
+        .post("/api/auth/magic-link/complete")
+        .send({ token: link!.token });
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("ACCOUNT_DISABLED");
     });
   });
 

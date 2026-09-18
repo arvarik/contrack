@@ -87,7 +87,7 @@ export const ForgotPassword = ({
           <button
             type="button"
             onClick={onBack}
-            className="w-full py-2.5 px-4 rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm"
+            className="w-full py-2.5 px-4 min-h-[44px] rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm flex items-center justify-center"
           >
             Back to sign in
           </button>
@@ -109,7 +109,7 @@ export const ForgotPassword = ({
           <button
             type="button"
             onClick={onBack}
-            className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+            className="text-primary font-bold hover:underline min-h-[44px] inline-flex items-center gap-1.5 py-2"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to sign in
@@ -120,7 +120,7 @@ export const ForgotPassword = ({
           <button
             type="button"
             onClick={onBack}
-            className="w-full py-2.5 px-4 rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm"
+            className="w-full py-2.5 px-4 min-h-[44px] rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm flex items-center justify-center"
           >
             Back to sign in
           </button>
@@ -138,7 +138,7 @@ export const ForgotPassword = ({
         <button
           type="button"
           onClick={onBack}
-          className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+          className="text-primary font-bold hover:underline min-h-[44px] inline-flex items-center gap-1.5 py-2"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to sign in
@@ -151,7 +151,10 @@ export const ForgotPassword = ({
           label="Email address"
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            if (error) setError(null);
+            setEmail(e.target.value);
+          }}
           autoComplete="email"
           required
         />

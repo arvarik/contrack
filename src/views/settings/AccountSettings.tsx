@@ -175,7 +175,7 @@ const Field = ({
         <p
           id={`${id}-caps`}
           aria-live="polite"
-          className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1"
+          className="text-xs text-warning font-medium flex items-center gap-1"
         >
           Caps Lock is on
         </p>

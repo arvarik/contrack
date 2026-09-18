@@ -150,9 +150,15 @@ export function redeemAuthLink(kind: AuthLinkKind, token: string): AuthLinkRow {
   }
 
   const usedAt = new Date().toISOString();
-  sqlite
+  const res = sqlite
     .prepare(`UPDATE auth_links SET usedAt = ? WHERE id = ? AND usedAt IS NULL`)
     .run(usedAt, row.id);
+
+  if (res.changes === 0) {
+    throw new AppError("That link has already been used.", 410, {
+      code: "LINK_USED",
+    });
+  }
 
   return { ...row, usedAt };
 }

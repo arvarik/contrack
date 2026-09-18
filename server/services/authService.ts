@@ -518,9 +518,11 @@ export async function verifyCredentials(
     }
   }
 
-  sqlite
-    .prepare(`UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?`)
-    .run(row.id);
+  if (row.status !== "disabled") {
+    sqlite
+      .prepare(`UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(row.id);
+  }
 
   return stripHash(row);
 }
@@ -631,16 +633,24 @@ export async function changePassword(
   // temporary password an admin handed over verified above, and the password
   // that replaces it is one only this person knows. `passwordChangedAt` is
   // what the admin user list shows.
-  sqlite
-    .prepare(
-      `UPDATE users
-          SET passwordHash = ?, mustChangePassword = 0,
-              passwordChangedAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-    )
-    .run(hash, id);
+  sqlite.transaction(() => {
+    sqlite
+      .prepare(
+        `UPDATE users
+            SET passwordHash = ?, mustChangePassword = 0,
+                passwordChangedAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+      )
+      .run(hash, id);
 
-  revokeOtherSessions(id, keepSessionId);
+    revokeOtherSessions(id, keepSessionId);
+    sqlite
+      .prepare(
+        `UPDATE auth_links SET usedAt = CURRENT_TIMESTAMP
+          WHERE userId = ? AND usedAt IS NULL`,
+      )
+      .run(id);
+  })();
   log.info("Auth", `Password changed for "${row.username}"`);
 }
 
@@ -662,7 +672,7 @@ export function findUserByEmail(email: string): User | null {
  * Reset a user's password using a verified token.
  *
  * Sets the new password hash, clears mustChangePassword, updates passwordChangedAt,
- * and revokes every existing session for this account.
+ * revokes every existing session, and revokes active API tokens.
  */
 export async function resetUserPasswordWithToken(
   userId: string,
@@ -675,20 +685,43 @@ export async function resetUserPasswordWithToken(
     throw new AppError("Account not found", 404, { code: "USER_NOT_FOUND" });
   }
 
+  if (row.status === "disabled") {
+    throw new AppError(
+      "This account has been disabled. Ask an administrator to re-enable it.",
+      403,
+      { code: "ACCOUNT_DISABLED" },
+    );
+  }
+
   const error = validatePassword(newPassword);
   if (error) throw new ValidationError(error);
 
   const hash = await hashPassword(newPassword);
-  sqlite
-    .prepare(
-      `UPDATE users
-          SET passwordHash = ?, mustChangePassword = 0,
-              passwordChangedAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-    )
-    .run(hash, userId);
+  sqlite.transaction(() => {
+    sqlite
+      .prepare(
+        `UPDATE users
+            SET passwordHash = ?, mustChangePassword = 0,
+                passwordChangedAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+      )
+      .run(hash, userId);
 
-  revokeOtherSessions(userId, null);
+    revokeOtherSessions(userId, null);
+    sqlite
+      .prepare(
+        `UPDATE api_tokens SET revokedAt = CURRENT_TIMESTAMP
+          WHERE userId = ? AND revokedAt IS NULL`,
+      )
+      .run(userId);
+    sqlite
+      .prepare(
+        `UPDATE auth_links SET usedAt = CURRENT_TIMESTAMP
+          WHERE userId = ? AND usedAt IS NULL`,
+      )
+      .run(userId);
+  })();
+
   log.info("Auth", `Password reset with token for "${row.username}"`);
   return stripHash(row);
 }
@@ -912,15 +945,19 @@ export async function convertLocalOwner(input: {
   const passwordHash = await hashPassword(input.password as string);
 
   try {
-    sqlite
+    const result = sqlite
       .prepare(
         `UPDATE users
             SET email = ?, username = ?, displayName = ?, passwordHash = ?,
                 credentialState = 'password', passwordChangedAt = CURRENT_TIMESTAMP,
                 role = 'admin', status = 'active', updatedAt = CURRENT_TIMESTAMP
-          WHERE id = ?`,
+          WHERE id = ? AND credentialState = 'none'`,
       )
       .run(email, username, displayName, passwordHash, local.id);
+
+    if (result.changes === 0) {
+      throw new AppError("There is no local owner to convert", 409);
+    }
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new ConflictError(

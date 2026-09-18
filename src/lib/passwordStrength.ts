@@ -54,6 +54,8 @@ export const WORST_PASSWORDS = [
   "root1234",
 ] as const;
 
+export const WORST_PASSWORDS_SET = new Set<string>(WORST_PASSWORDS);
+
 export const STRENGTH_WORDS = ["", "Short", "OK", "Good", "Strong"] as const;
 
 export type StrengthWord = (typeof STRENGTH_WORDS)[number];
@@ -68,10 +70,8 @@ export function passwordStrength(password: string): number {
   if (!password) return 0;
 
   const normalized = password.toLowerCase();
-  for (const weak of WORST_PASSWORDS) {
-    if (normalized === weak) {
-      return 1;
-    }
+  if (WORST_PASSWORDS_SET.has(normalized)) {
+    return 1;
   }
 
   if (password.length < 8) {

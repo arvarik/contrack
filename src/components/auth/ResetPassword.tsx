@@ -95,7 +95,10 @@ export const ResetPassword = ({
           label="Password"
           type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            if (error) setError(null);
+            setPassword(e.target.value);
+          }}
           autoComplete="new-password"
           required
           revealable
