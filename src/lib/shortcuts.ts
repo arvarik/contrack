@@ -69,6 +69,7 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   "Global",
   NAMES.pulse.label,
   NAMES.network.label,
+  NAMES.map.label,
   "Contact",
   NAMES.ask.label,
   "Notes",
@@ -265,6 +266,22 @@ export const SHORTCUTS: readonly Shortcut[] = [
     description: "Open the contact",
     bareLetter: false,
     page: "/",
+  },
+
+  // Map
+  {
+    group: NAMES.map.label,
+    keys: ["/"],
+    description: "Focus search",
+    bareLetter: true,
+    page: "/map",
+  },
+  {
+    group: NAMES.map.label,
+    keys: ["F"],
+    description: "Fit all in view",
+    bareLetter: true,
+    page: "/map",
   },
 
   // A contact's details. Every value edits in place: it is a button at rest

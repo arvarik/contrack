@@ -1,3 +1,5 @@
+import { haversineKm, isValidLatLng } from "./geo";
+
 export type FacetField =
   | "role"
   | "company"
@@ -6,13 +8,23 @@ export type FacetField =
   | "tag"
   | "score"
   | "updated"
-  | "missing";
+  | "missing"
+  | "list"
+  | "near";
 
 export interface FacetFilter {
   field: FacetField;
   value: string;
   /** For score: and updated: operators (e.g., >80, <40) */
   operator?: ">" | "<";
+  /** Distance in kilometers for near: filter (default 25) */
+  km?: number;
+  /** Resolved geospatial point for near: filter */
+  point?: { lat: number; lng: number; km: number };
+  /** True while near: filter is resolving coordinates */
+  resolving?: boolean;
+  /** Error message if near: resolution failed */
+  error?: string;
 }
 
 export interface FacetContact {
@@ -20,11 +32,14 @@ export interface FacetContact {
   company?: string | null;
   location?: string | null;
   industry?: string | null;
-  tags?: { tag: string }[];
+  tags?: ({ tag: string } | string)[];
   relationshipScore?: number | null;
   updatedAt?: string | null;
   emails?: { email: string }[];
   phones?: { phone: string }[];
+  lists?: { id: string; name: string }[];
+  lat?: number | null;
+  lng?: number | null;
 }
 
 /** Match a facet filter against a SlimSearchContact */
@@ -32,7 +47,7 @@ export function matchesFacet(
   contact: FacetContact,
   filter: FacetFilter,
 ): boolean {
-  const v = filter.value.toLowerCase();
+  const v = filter.value.toLowerCase().replace(/^["']|["']$/g, "");
 
   switch (filter.field) {
     case "role":
@@ -44,13 +59,35 @@ export function matchesFacet(
     case "industry":
       return contact.industry?.toLowerCase().includes(v) ?? false;
     case "tag":
-      return (contact.tags ?? []).some((t) => t.tag.toLowerCase().includes(v));
+      return (contact.tags ?? []).some((t) =>
+        (typeof t === "string" ? t : t.tag).toLowerCase().includes(v),
+      );
     case "score":
       return matchesScoreFilter(contact.relationshipScore ?? null, filter);
     case "updated":
       return matchesDateFilter(contact.updatedAt ?? null, filter);
     case "missing":
       return matchesMissingFilter(contact, v);
+    case "list": {
+      if (!contact.lists || contact.lists.length === 0) return false;
+      return contact.lists.some(
+        (l) =>
+          l.id === filter.value ||
+          l.name.toLowerCase() === v ||
+          l.name.toLowerCase().replace(/\s+/g, "-") === v,
+      );
+    }
+    case "near": {
+      // Without a point it matches everyone and the pill says "resolving…"
+      if (!filter.point) return true;
+      if (!isValidLatLng(contact.lat, contact.lng)) return false;
+      return (
+        haversineKm(
+          { lat: contact.lat as number, lng: contact.lng as number },
+          filter.point,
+        ) <= filter.point.km
+      );
+    }
     default:
       return true;
   }

@@ -66,3 +66,35 @@ export function minZoomFor(width: number, height: number): number {
   const rounded = Math.ceil(exact * 100) / 100;
   return Math.max(0, Math.min(rounded, MAX_MIN_ZOOM));
 }
+
+export { haversineKm } from "../../../shared/geo";
+
+/**
+ * True when the bounding box contains the given coordinate point.
+ * Supports standard [west, south, east, north] bounds and antimeridian crossing.
+ */
+export function boundsContain(
+  bounds:
+    | [west: number, south: number, east: number, north: number]
+    | {
+        getWest: () => number;
+        getSouth: () => number;
+        getEast: () => number;
+        getNorth: () => number;
+      },
+  point: { lat: number; lng: number },
+): boolean {
+  const [west, south, east, north] = Array.isArray(bounds)
+    ? bounds
+    : [
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth(),
+      ];
+  if (point.lat < south || point.lat > north) return false;
+  if (west <= east) {
+    return point.lng >= west && point.lng <= east;
+  }
+  return point.lng >= west || point.lng <= east;
+}

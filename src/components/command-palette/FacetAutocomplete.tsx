@@ -134,6 +134,15 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
           ...new Set(slimContacts.flatMap((c) => c.tags.map((t) => t.tag))),
         ];
         break;
+      case "list":
+        values = [
+          ...new Set(
+            slimContacts
+              .flatMap((c) => (c.lists ?? []).map((l) => l.name))
+              .filter(Boolean),
+          ),
+        ];
+        break;
       default:
         return [];
     }

@@ -13,6 +13,40 @@ draws the attribution on the map.
 
 ## Features
 
+### Filters and Place Search
+
+A glass toolbar floats in the top-left corner of the map (`/` focuses the input from anywhere on the page).
+
+#### Unified Dataset
+
+The map and the contact list share the same TanStack Query client cache (`["contacts"]`). Filtering on the map uses the same `matchesFacet` and free-text scoring (`scoreContactMatch`) as the network list, guaranteeing that contacts on the map and in the list never disagree, and changes made in the overlay show on the map immediately.
+
+#### Search Facets
+
+The filter input supports full facet search with locked facet pills and autocomplete:
+
+- `company:<name>`
+- `role:<title>`
+- `location:<city/country>`
+- `industry:<sector>`
+- `tag:<tag>` (autocompletes from slim contact tags)
+- `list:<name|id>` (autocompletes from contact lists)
+- `near:<place>/<km>` (default 25 km, e.g. `near:London/50km` or `near:Paris`). While resolving, the pill shows `resolving…` and matches all contacts; pressing `Enter` resolves the place's coordinates via `GET /api/geo/search` and applies client-side haversine distance filtering. A failed resolution displays the pill in error styling.
+- `missing:<company|location|email|phone>`
+- Free text matches across contact names, companies, roles, emails, and phone digits.
+
+#### "Go to" Place Navigation
+
+Clicking the **Go to** button turns the input into a place search. Typing a place name (e.g., "Paris", "Austin") and pressing `Enter` resolves the place via `GET /api/geo/search` and flies the camera to zoom level 10 (or uses `jumpTo` when reduced motion is preferred). If no result is found, an inline error ("Nothing found for that place") is displayed.
+
+#### "Fit All"
+
+The **Fit all** button (or keyboard shortcut `F`) fits the map's camera bounds to all placed contacts matching the current filter (or all placed contacts if no filter is active).
+
+#### Mobile Filter Sheet
+
+On mobile viewports below the `lg` breakpoint, the toolbar collapses to a floating "Filters" button with a badge indicating active filters. Tapping it opens a bottom sheet with the search input, facet pills, place search, and "Fit all" controls.
+
 ### Contact Pins
 
 Each pin on the map represents one geocoded contact:
