@@ -33,7 +33,7 @@ export const NewPeopleCard = ({
         headerAction={
           <button
             onClick={() => setIsOpen(true)}
-            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            className="hit-area text-xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
           >
             <span>Details</span>
             <ArrowRight className="w-3 h-3" />

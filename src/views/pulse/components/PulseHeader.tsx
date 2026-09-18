@@ -45,7 +45,7 @@ export const PulseHeader = ({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleLogNote}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs sm:text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
+            className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs sm:text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
           >
             <PenLine className="w-4 h-4" />
             <span>Log a note</span>
@@ -53,7 +53,7 @@ export const PulseHeader = ({
 
           <button
             onClick={handleNewContact}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs sm:text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs sm:text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>New contact</span>
@@ -62,7 +62,7 @@ export const PulseHeader = ({
           <button
             disabled
             title="Coming soon"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container text-on-surface-variant text-xs sm:text-sm font-medium opacity-50 cursor-not-allowed"
+            className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container text-on-surface-variant text-xs sm:text-sm font-medium opacity-50 cursor-not-allowed"
           >
             <SlidersHorizontal className="w-4 h-4" />
             <span>Customize</span>

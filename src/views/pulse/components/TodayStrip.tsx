@@ -59,7 +59,7 @@ export const TodayStrip = ({
         <button
           onClick={onScrollToUpNext}
           className={cn(
-            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer text-xs",
+            "hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer text-xs",
             dueToday + overdueCount > 0
               ? overdueCount > 0
                 ? "bg-error/10 text-error hover:bg-error/20"
@@ -81,7 +81,7 @@ export const TodayStrip = ({
         {birthdayCount > 0 && (
           <button
             onClick={onScrollToComingUp}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer text-xs"
+            className="hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer text-xs"
           >
             <Cake className="w-3 h-3" />
             <span>

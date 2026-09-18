@@ -79,7 +79,7 @@ export const ActionRow = ({
           disabled={isCompleting}
           aria-label={`Mark "${item.title}" done`}
           className={cn(
-            "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer",
+            "hit-area w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer",
             item.dueChip.variant === "urgent"
               ? "border-error/40 text-error hover:bg-error hover:text-white"
               : "border-primary/40 text-primary hover:bg-primary hover:text-on-primary",
@@ -101,7 +101,7 @@ export const ActionRow = ({
           onClick={handleLog}
           title="Log a birthday note"
           aria-label={`Wish ${item.contactName} a happy birthday`}
-          className="w-6 h-6 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+          className="hit-area w-6 h-6 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
         >
           <Cake className="w-3.5 h-3.5" />
         </button>
@@ -110,7 +110,7 @@ export const ActionRow = ({
           onClick={handleLog}
           title="Log an interaction"
           aria-label={`Log note for ${item.contactName}`}
-          className="w-6 h-6 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-on-primary flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+          className="hit-area w-6 h-6 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-on-primary flex items-center justify-center shrink-0 transition-colors cursor-pointer"
         >
           <HeartPulse className="w-3.5 h-3.5" />
         </button>
@@ -167,7 +167,7 @@ export const ActionRow = ({
             onClick={handleOpenSnooze}
             title="Snooze"
             aria-label="Snooze item"
-            className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+            className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
           >
             <Clock className="w-3.5 h-3.5" />
           </button>
@@ -178,7 +178,7 @@ export const ActionRow = ({
           onClick={(e) => e.stopPropagation()}
           title="Open contact profile"
           aria-label={`Open profile for ${item.contactName}`}
-          className="p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="hit-area p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
         >
           <ExternalLink className="w-3.5 h-3.5" />
         </Link>

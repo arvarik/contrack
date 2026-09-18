@@ -132,7 +132,7 @@ export const InboxCard = ({
                     <Link
                       key={g.id}
                       to={`/contact/${g.id}`}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-[11px] font-medium text-on-surface transition-colors"
+                      className="hit-area inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-[11px] font-medium text-on-surface transition-colors"
                     >
                       <img
                         src={g.avatarUrl || fallbackAvatarUrl(g.name)}

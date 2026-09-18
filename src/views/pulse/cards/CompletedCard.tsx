@@ -35,7 +35,7 @@ export const CompletedCard = () => {
       headerAction={
         <button
           onClick={() => setExpanded(!expanded)}
-          className="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+          className="hit-area p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
           aria-label={
             expanded ? "Collapse completed items" : "Expand completed items"
           }

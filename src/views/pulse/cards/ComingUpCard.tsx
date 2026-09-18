@@ -147,7 +147,7 @@ export const ComingUpCard = ({
                                 key={cid}
                                 to={`/contact/${cid}`}
                                 title={c.name}
-                                className="shrink-0"
+                                className="hit-area shrink-0"
                               >
                                 <img
                                   src={c.avatarUrl || fallbackAvatarUrl(c.name)}
