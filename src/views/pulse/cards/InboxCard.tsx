@@ -62,7 +62,7 @@ export const InboxCard = ({
   return (
     <CardFrame cardId="inbox" title="Inbox" icon={Inbox} count={totalItems}>
       {isZero ? (
-        <div className="flex items-center gap-3 py-4 text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-3 py-4 text-success">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <div className="text-xs sm:text-sm font-semibold">
             Inbox zero. Nothing to clean up.

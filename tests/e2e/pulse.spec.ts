@@ -154,7 +154,40 @@ test.describe("Pulse Office", () => {
     await expect(page).toHaveURL(/\/pulse\/duplicates/);
   });
 
-  test("renders office on phone viewport", async ({ page }) => {
+  test("legend link in composition card lands on / with the facet pill", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    await instance.api("PATCH", `/contacts/${ada.id}`, {
+      industry: "Technology",
+    });
+
+    await page.goto("/pulse");
+    const compositionCard = page.locator('[data-card-id="composition"]');
+    await expect(compositionCard).toBeVisible();
+
+    // Click legend link for Technology inside compositionCard
+    const legendLink = compositionCard.getByRole("link", {
+      name: /Technology/i,
+    });
+    await expect(legendLink).toBeVisible();
+    const linkHref = await legendLink.getAttribute("href");
+    expect(linkHref).toMatch(/^\/\?q=industry:Technology/);
+
+    await legendLink.click();
+    await expect(page).toHaveURL(/\/\?q=industry:Technology/);
+
+    const searchInput = page.getByRole("textbox", { name: /search/i });
+    await expect(searchInput).toBeVisible();
+    const inputValue = await searchInput.inputValue();
+    expect(inputValue).toBe("industry:Technology");
+  });
+
+  test("renders office on phone viewport and verifies heatmap horizontal scroller", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/pulse");
     await expect(
@@ -162,6 +195,12 @@ test.describe("Pulse Office", () => {
     ).toBeVisible();
     await expect(page.getByLabel("Today summary")).toBeVisible();
     await expect(page.locator('[data-card-id="up-next"]')).toBeVisible();
+
+    // Verify heatmap sits in horizontal scroller
+    const activityCard = page.locator('[data-card-id="activity"]');
+    await expect(activityCard).toBeVisible();
+    const scroller = activityCard.locator(".overflow-x-auto");
+    await expect(scroller).toBeVisible();
   });
 
   test("page passes automated accessibility scans in light and dark mode", async ({

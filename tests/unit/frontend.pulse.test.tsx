@@ -13,11 +13,9 @@ import { PulseHeader } from "../../src/views/pulse/components/PulseHeader";
 import { CompletedCard } from "../../src/views/pulse/cards/CompletedCard";
 import { NewPeopleCard } from "../../src/views/pulse/cards/NewPeopleCard";
 import { InboxCard } from "../../src/views/pulse/cards/InboxCard";
-import {
-  ActivityCardStopgap,
-  MomentumCardStopgap,
-  CompositionCardStopgap,
-} from "../../src/views/pulse/cards/NetworkStopgapCards";
+import { ActivityCard } from "../../src/views/pulse/cards/ActivityCard";
+import { MomentumCard } from "../../src/views/pulse/cards/MomentumCard";
+import { CompositionCard } from "../../src/views/pulse/cards/CompositionCard";
 import type { DashboardPayload } from "../../src/api";
 
 vi.mock("../../src/views/dedupe/components", () => ({
@@ -554,39 +552,124 @@ describe("frontend.pulse", () => {
     expect(await screen.findByTestId("growth-modal")).toBeDefined();
   });
 
-  it("renders stopgap cards and opens modals on metric click", async () => {
+  it("renders ActivityCard with heatmap, sparkline, and streak tooltip", () => {
+    const dummyActivity = {
+      days: [{ day: "2026-09-17", count: 3, byType: { note: 2, call: 1 } }],
+      weekTotals: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      prevWeekTotals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      streak: { current: 5, best: 14, lastDay: "2026-09-17" },
+      today: { logged: 3, completed: 1, due: 0 },
+      thisWeek: { logged: 12, byType: { note: 8, call: 4 } },
+    };
+
+    render(<ActivityCard activity={dummyActivity} />);
+    expect(screen.getByText("Activity")).toBeDefined();
+    expect(screen.getByTitle("Days you logged something")).toBeDefined();
+    expect(screen.getByText(/5 days · best 14/)).toBeDefined();
+    expect(screen.getByText(/8 notes/)).toBeDefined();
+    expect(screen.getByText(/4 calls/)).toBeDefined();
+  });
+
+  it("renders MomentumCard with rising, cooling, and silent columns when snapshotWeeks >= 4", () => {
+    const dummyMomentum = {
+      snapshotWeeks: 4,
+      rising: [
+        {
+          id: "m-1",
+          name: "Ada Lovelace",
+          company: "Analytical Engines",
+          avatarUrl: null,
+          themeColor: "#006a91",
+          relationshipScore: 85,
+          score: 85,
+          delta: 12,
+        },
+      ],
+      cooling: [
+        {
+          id: "m-2",
+          name: "Charles Babbage",
+          company: "Difference Engine",
+          avatarUrl: null,
+          themeColor: "#046b4e",
+          relationshipScore: 60,
+          score: 60,
+          delta: -8,
+        },
+      ],
+      silent: [
+        {
+          id: "m-3",
+          name: "Grace Hopper",
+          company: "US Navy",
+          avatarUrl: null,
+          themeColor: "#bf1b1b",
+          relationshipScore: 45,
+          cadenceDays: 30,
+          daysSinceContact: 55,
+          overshootDays: 25,
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter>
+        <MomentumCard momentum={dummyMomentum} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Rising")).toBeDefined();
+    expect(screen.getByText("+12")).toBeDefined();
+    expect(screen.getByText("Ada Lovelace")).toBeDefined();
+
+    expect(screen.getByText("Cooling")).toBeDefined();
+    expect(screen.getByText("-8")).toBeDefined();
+    expect(screen.getByText("Charles Babbage")).toBeDefined();
+
+    expect(screen.getByText("Silent")).toBeDefined();
+    expect(screen.getByText("25 d over")).toBeDefined();
+    expect(screen.getByText("Grace Hopper")).toBeDefined();
+  });
+
+  it("renders CompositionCard with donut legend filterPill links and opens modal", async () => {
     const dummyDashboard = {
-      metrics: {
-        totalInteractions30d: 42,
-        totalActive: 100,
-        newContacts30d: 5,
-      },
-      interactionBreakdown30d: [],
-      networkGrowthTimeline30d: [],
+      industryComposition: [
+        { industry: "Technology", count: 15 },
+        { industry: "Education", count: 8 },
+        { industry: "Healthcare", count: 4 },
+      ],
+      roleComposition: [
+        { role: "Founder", count: 12 },
+        { role: "Engineer", count: 10 },
+      ],
+      locationComposition: [{ location: "London", count: 20 }],
     } as unknown as DashboardPayload;
-    const { unmount: unmount1 } = render(
-      <ActivityCardStopgap dashboard={dummyDashboard} />,
-    );
-    expect(screen.getByText("Interactions")).toBeDefined();
-    fireEvent.click(screen.getByText("Interactions"));
-    expect(await screen.findByTestId("velocity-modal")).toBeDefined();
-    unmount1();
 
-    const { unmount: unmount2 } = render(
-      <MomentumCardStopgap dashboard={dummyDashboard} />,
+    render(
+      <MemoryRouter>
+        <CompositionCard dashboard={dummyDashboard} />
+      </MemoryRouter>,
     );
-    expect(screen.getByText("Active Network")).toBeDefined();
-    fireEvent.click(screen.getByText("Active Network"));
+
+    expect(screen.getByText("Composition")).toBeDefined();
+    expect(screen.getByText("Technology")).toBeDefined();
+    expect(screen.getByText("(15)")).toBeDefined();
+
+    // Verify filterPill links have correct query target
+    const techLink = screen.getByRole("link", { name: /Technology/i });
+    expect(techLink.getAttribute("href")).toBe("/?q=industry:Technology");
+
+    // Switch Segmented control to Role
+    const roleRadio = screen.getByRole("radio", { name: "Role" });
+    fireEvent.click(roleRadio);
+
+    expect(screen.getByText("Founder")).toBeDefined();
+    const founderLink = screen.getByRole("link", { name: /Founder/i });
+    expect(founderLink.getAttribute("href")).toBe("/?q=role:Founder");
+
+    // Click "See all" to open NetworkCompositionModal
+    fireEvent.click(screen.getByRole("button", { name: "See all" }));
     expect(await screen.findByTestId("composition-modal")).toBeDefined();
-    unmount2();
-
-    const { unmount: unmount3 } = render(
-      <CompositionCardStopgap dashboard={dummyDashboard} />,
-    );
-    expect(screen.getByText("Network Growth")).toBeDefined();
-    fireEvent.click(screen.getByText("Network Growth"));
-    expect(await screen.findByTestId("growth-modal")).toBeDefined();
-    unmount3();
   });
 
   it("renders InboxCard with multiple items and toggles ghosts", () => {

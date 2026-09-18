@@ -37,11 +37,9 @@ import { InsightCard } from "./cards/InsightCard";
 import { InboxCard } from "./cards/InboxCard";
 import { ComingUpCard } from "./cards/ComingUpCard";
 import { NewPeopleCard } from "./cards/NewPeopleCard";
-import {
-  ActivityCardStopgap,
-  MomentumCardStopgap,
-  CompositionCardStopgap,
-} from "./cards/NetworkStopgapCards";
+import { ActivityCard } from "./cards/ActivityCard";
+import { MomentumCard } from "./cards/MomentumCard";
+import { CompositionCard } from "./cards/CompositionCard";
 const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
 );
@@ -338,25 +336,18 @@ const PulseOffice = () => {
               })}
             </div>
 
-            {/* Column 3: Network (Activity, Momentum, Composition stopgap) */}
+            {/* Column 3: Network (Activity, Momentum, Composition) */}
             <div className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4 flex flex-col gap-6">
               {resolvedLayout.visible.network.map((cardId) => {
                 if (cardId === "activity") {
-                  return (
-                    <ActivityCardStopgap key="activity" dashboard={dashboard} />
-                  );
+                  return <ActivityCard key="activity" activity={activity} />;
                 }
                 if (cardId === "momentum") {
-                  return (
-                    <MomentumCardStopgap key="momentum" dashboard={dashboard} />
-                  );
+                  return <MomentumCard key="momentum" />;
                 }
                 if (cardId === "composition") {
                   return (
-                    <CompositionCardStopgap
-                      key="composition"
-                      dashboard={dashboard}
-                    />
+                    <CompositionCard key="composition" dashboard={dashboard} />
                   );
                 }
                 return null;
