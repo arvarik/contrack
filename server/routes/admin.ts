@@ -22,12 +22,30 @@ import {
   validateBody,
   adminCreateUserSchema,
   adminSettingsSchema,
+  adminIntegrationsSchema,
   adminDeleteUserSchema,
   adminInvitationSchema,
   adminUpdateUserSchema,
   adminMailSchema,
   auditQuerySchema,
 } from "../utils/validators.ts";
+import {
+  getLifecycleSettings,
+  setTrashRetentionDays,
+  setBackupIntervalHours,
+  setBackupKeep,
+  isTrashRetentionEnvSet,
+  isBackupIntervalEnvSet,
+  isBackupKeepEnvSet,
+} from "../services/lifecycleSettings.ts";
+import {
+  getIntegrationsStatus,
+  setMapboxApiKey,
+  setSearxngUrl,
+  isMapboxEnvSet,
+  isSearxngEnvSet,
+} from "../services/integrationSettings.ts";
+import { SETTING_KEYS } from "../services/settingsService.ts";
 import {
   listUsers,
   getUser,
@@ -317,6 +335,7 @@ router.delete(
 
 /** The one shape both routes answer with, so a write reads back as a read. */
 function settingsView() {
+  const lifecycle = getLifecycleSettings();
   return {
     registrationOpen: isRegistrationOpen(),
     sessionTtlDays: getSessionTtlDays(),
@@ -329,6 +348,12 @@ function settingsView() {
     instanceNameMax: INSTANCE_NAME_MAX,
     mailConfigured: mailService.isConfigured(),
     magicLinkSignIn: isMagicLinkSignIn(),
+    trashRetentionDays: lifecycle.trashRetentionDays.value,
+    trashRetentionDaysSource: lifecycle.trashRetentionDays.source,
+    backupIntervalHours: lifecycle.backupIntervalHours.value,
+    backupIntervalHoursSource: lifecycle.backupIntervalHours.source,
+    backupKeep: lifecycle.backupKeep.value,
+    backupKeepSource: lifecycle.backupKeep.source,
   };
 }
 
@@ -380,6 +405,39 @@ router.put(
       setMagicLinkSignIn(req.body.magicLinkSignIn);
       changed.push("auth.magicLinkSignIn");
     }
+    if (req.body.trashRetentionDays !== undefined) {
+      if (isTrashRetentionEnvSet()) {
+        throw new AppError(
+          "Trash retention is set by environment variable TRASH_RETENTION_DAYS",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setTrashRetentionDays(req.body.trashRetentionDays);
+      changed.push(SETTING_KEYS.trashRetentionDays);
+    }
+    if (req.body.backupIntervalHours !== undefined) {
+      if (isBackupIntervalEnvSet()) {
+        throw new AppError(
+          "Backup interval is set by environment variable BACKUP_INTERVAL_HOURS",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setBackupIntervalHours(req.body.backupIntervalHours);
+      changed.push(SETTING_KEYS.backupIntervalHours);
+    }
+    if (req.body.backupKeep !== undefined) {
+      if (isBackupKeepEnvSet()) {
+        throw new AppError(
+          "Backup keep count is set by environment variable BACKUP_KEEP",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setBackupKeep(req.body.backupKeep);
+      changed.push(SETTING_KEYS.backupKeep);
+    }
 
     const ctx = adminContext(req);
     for (const key of changed) {
@@ -392,6 +450,63 @@ router.put(
       });
     }
     res.json(settingsView());
+  }),
+);
+
+// ─── Integrations ──────────────────────────────────────────────────────────
+
+router.get(
+  "/integrations",
+  requireAdmin,
+  asyncHandler(async (_req, res) => {
+    res.json(getIntegrationsStatus());
+  }),
+);
+
+router.put(
+  "/integrations",
+  requireAdmin,
+  requirePasswordCurrent,
+  validateBody(adminIntegrationsSchema),
+  asyncHandler(async (req, res) => {
+    const changed: string[] = [];
+
+    if (req.body.mapboxKey !== undefined) {
+      if (isMapboxEnvSet()) {
+        throw new AppError(
+          "Mapbox API key is set by environment variable MAPBOX_API_KEY",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setMapboxApiKey(req.body.mapboxKey);
+      changed.push("mapboxKey");
+    }
+
+    if (req.body.searxngUrl !== undefined) {
+      if (isSearxngEnvSet()) {
+        throw new AppError(
+          "SearXNG URL is set by environment variable SEARXNG_URL",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setSearxngUrl(req.body.searxngUrl);
+      changed.push("searxngUrl");
+    }
+
+    const ctx = adminContext(req);
+    for (const key of changed) {
+      auditService.record({
+        actorUserId: ctx.actor.id,
+        action: "integrations.changed",
+        targetType: "integration",
+        targetId: key,
+        ip: ctx.ip,
+      });
+    }
+
+    res.json(getIntegrationsStatus());
   }),
 );
 

@@ -28,7 +28,6 @@ import {
   extractionJsonSchema,
 } from "../promptTemplate.ts";
 import { recordInvocation } from "../../aiStatsService.ts";
-import { getSetting, SETTING_KEYS } from "../../settingsService.ts";
 import { safeFetch, readBodyCapped } from "../../../utils/urlSafety.ts";
 import { log } from "../../../utils/logger.ts";
 import { getErrorMessage } from "../../../utils/helpers.ts";
@@ -45,11 +44,8 @@ interface SearxngResult {
   content?: string;
 }
 
-/** The configured SearXNG base URL, or null when unset. */
-export function getSearxngUrl(): string | null {
-  const url = getSetting<{ url: string }>(SETTING_KEYS.aiSearxng)?.url?.trim();
-  return url ? url.replace(/\/+$/, "") : null;
-}
+import { getSearxngUrl } from "../../integrationSettings.ts";
+export { getSearxngUrl };
 
 /** Build the search queries that identify this specific person. */
 function buildQueries(contact: HydratedContact): string[] {

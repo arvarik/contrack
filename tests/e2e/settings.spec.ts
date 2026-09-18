@@ -11,8 +11,9 @@
  * - Accessibility scans for the revamped settings pages
  */
 import { devices } from "@playwright/test";
-import { test, expect } from "./fixtures/test";
+import { test, gatedTest, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
+import { completeSetup, ADMIN } from "./fixtures/accounts";
 
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
@@ -416,4 +417,27 @@ test.describe("Settings — Accessibility", () => {
       await expectPageAccessible(page, testInfo, p.name);
     });
   }
+});
+
+gatedTest.describe("Settings — Admin General Page", () => {
+  gatedTest(
+    "opens the General page on a gated instance as admin and passes accessibility",
+    async ({ page }, testInfo) => {
+      await completeSetup(page, ADMIN);
+      await page.goto("/settings/admin/general");
+      await expect(
+        page.getByRole("heading", { name: "General", level: 1 }),
+      ).toBeVisible();
+
+      // Verify all six cards are present in order
+      await expect(page.locator("#name")).toBeVisible();
+      await expect(page.locator("#registration")).toBeVisible();
+      await expect(page.locator("#session-length")).toBeVisible();
+      await expect(page.locator("#trash")).toBeVisible();
+      await expect(page.locator("#backups")).toBeVisible();
+      await expect(page.locator("#integrations")).toBeVisible();
+
+      await expectPageAccessible(page, testInfo, "admin-general-gated");
+    },
+  );
 });
