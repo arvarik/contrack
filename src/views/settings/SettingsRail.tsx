@@ -5,7 +5,7 @@
  * SECTION_HEADING, and rows with icon, label and optional count pill.
  * The active row has aria-current="page".
  */
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { SETTINGS_GROUPS, SETTINGS_PAGES, type SettingsPage } from "./registry";
 import { SettingsSearch } from "./SettingsSearch";
@@ -26,16 +26,21 @@ export const SettingsRail = () => {
   const { data: contacts = [] } = useContacts();
   const { data: imports = [] } = useImports();
 
-  const thirtyDaysAgo = Date.now() - 30 * 86400 * 1000;
-  const failedImportCount = imports.filter(
-    (imp) =>
-      new Date(imp.createdAt).getTime() >= thirtyDaysAgo &&
-      (imp.status === "failed" || imp.failed > 0),
-  ).length;
+  const failedImportCount = useMemo(() => {
+    const thirtyDaysAgo = Date.now() - 30 * 86400 * 1000;
+    return imports.filter(
+      (imp) =>
+        new Date(imp.createdAt).getTime() >= thirtyDaysAgo &&
+        (imp.status === "failed" || imp.failed > 0),
+    ).length;
+  }, [imports]);
 
-  const neverEnrichedCount = contacts.filter(
-    (c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost,
-  ).length;
+  const neverEnrichedCount = useMemo(
+    () =>
+      contacts.filter((c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost)
+        .length,
+    [contacts],
+  );
 
   const getBadgeCount = (pageId: string): number | null => {
     switch (pageId) {

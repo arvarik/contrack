@@ -7,7 +7,7 @@
  *
  * @module views/settings/pages/TagsPage
  */
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   AlertCircle,
   Check,
@@ -46,11 +46,15 @@ export const TagsPage = () => {
   const [tagToDelete, setTagToDelete] = useState<TagSummary | null>(null);
 
   // Filter and sort alphabetically
-  const filteredTags = [...tags]
-    .filter((t) =>
-      t.tag.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-    )
-    .sort((a, b) => a.tag.localeCompare(b.tag));
+  const filteredTags = useMemo(
+    () =>
+      [...tags]
+        .filter((t) =>
+          t.tag.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+        )
+        .sort((a, b) => a.tag.localeCompare(b.tag)),
+    [tags, searchQuery],
+  );
 
   const startEditing = (t: TagSummary) => {
     setEditingTag(t.tag);
@@ -277,7 +281,13 @@ export const TagsPage = () => {
           title={`Merge "${mergeSource.tag}" into…`}
           size="sm"
         >
-          <div className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleMergeSubmit();
+            }}
+            className="space-y-4"
+          >
             <p className="text-sm text-on-surface-variant">
               All {mergeSource.count}{" "}
               {mergeSource.count === 1 ? "contact" : "contacts"} tagged with{" "}
@@ -321,8 +331,7 @@ export const TagsPage = () => {
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={handleMergeSubmit}
+                type="submit"
                 disabled={
                   !mergeTarget.trim() ||
                   mergeTarget.trim() === mergeSource.tag ||
@@ -336,7 +345,7 @@ export const TagsPage = () => {
                 Merge tags
               </button>
             </div>
-          </div>
+          </form>
         </Modal>
       )}
 

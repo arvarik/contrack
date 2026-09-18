@@ -139,8 +139,8 @@ export const sourceSchema = z.union([
 ]);
 
 export const tagSchema = z.union([
-  z.string(),
-  z.object({ tag: z.string().trim().min(1) }),
+  z.string().trim().min(1, "Tag cannot be empty").max(100),
+  z.object({ tag: z.string().trim().min(1, "Tag cannot be empty").max(100) }),
 ]);
 
 export const interestSchema = z.union([
@@ -395,6 +395,23 @@ export const adminSettingsSchema = z
     message: "Send a setting to change",
   });
 
+function isCloudMetadataOrLinkLocal(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return true;
+    const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    const parts = host.split(".");
+    if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+      const [a, b] = parts.map(Number);
+      if (a === 169 && b === 254) return true; // cloud metadata
+      if (a === 0) return true;
+    }
+    return host.startsWith("fe80:") || host.includes("::ffff:169.254.");
+  } catch {
+    return true;
+  }
+}
+
 /** Body for PUT /api/admin/integrations. Empty string clears. */
 export const adminIntegrationsSchema = z
   .object({
@@ -403,6 +420,9 @@ export const adminIntegrationsSchema = z
       .string()
       .trim()
       .url("Must be a valid URL")
+      .refine((val) => !isCloudMetadataOrLinkLocal(val), {
+        message: "Cloud metadata and link-local addresses are not permitted",
+      })
       .or(z.literal(""))
       .optional(),
   })

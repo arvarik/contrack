@@ -506,6 +506,15 @@ export const ImportPanel = ({
 
   return (
     <div className={cn("w-full space-y-6", className)}>
+      <input
+        aria-label="Choose a file to import"
+        type="file"
+        ref={fileInputRef}
+        className="sr-only"
+        tabIndex={-1}
+        accept={getAcceptedFormats()}
+        onChange={handleFileChange}
+      />
       {/* Tab bar */}
       {showUploadChrome && (
         <div className={cn(TAB_CONTAINER, "mb-4")}>
@@ -629,7 +638,7 @@ export const ImportPanel = ({
       )}
 
       {/* Main content area */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         {phase === "complete" && summary ? (
           <motion.div
             key="summary"
@@ -978,12 +987,21 @@ export const ImportPanel = ({
         ) : (
           <motion.div
             key="upload"
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            role="button"
+            tabIndex={0}
+            aria-label={`Upload ${getFormatLabel()} file`}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
             className={cn(
               "bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors",
-              "hover:bg-surface-container-high cursor-pointer border-2 border-dashed",
+              "hover:bg-surface-container-high cursor-pointer border-2 border-dashed focus-visible:ring-2 focus-visible:ring-primary outline-none",
               isDragging ? "border-primary bg-primary/5" : "border-transparent",
             )}
             onClick={() => fileInputRef.current?.click()}
@@ -991,14 +1009,6 @@ export const ImportPanel = ({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <input
-              aria-label="Choose a file to import"
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept={getAcceptedFormats()}
-              onChange={handleFileChange}
-            />
             <div className="bg-surface-container-high p-4 rounded-full mb-4">
               <UploadCloud className="w-8 h-8 text-primary" />
             </div>

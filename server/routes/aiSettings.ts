@@ -11,8 +11,12 @@ import { z } from "zod";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
-import { requireAdmin } from "../middleware/auth.ts";
+import { requireAdmin, requirePasswordCurrent } from "../middleware/auth.ts";
 import { auditService } from "../services/auditService.ts";
+import {
+  isSearxngEnvSet,
+  setSearxngUrl,
+} from "../services/integrationSettings.ts";
 import {
   getSettingsView,
   getModelsForCapability,
@@ -23,7 +27,7 @@ import {
   deleteCustomEndpoint,
   refreshModels,
 } from "../services/aiSettingsService.ts";
-import { setSetting, SETTING_KEYS } from "../services/settingsService.ts";
+import { SETTING_KEYS } from "../services/settingsService.ts";
 import { invalidateProviderCache } from "../ai/providerRegistry.ts";
 import { ensureEmbeddingStore } from "../services/search/localEmbeddings.ts";
 import { ensureDedupeEmbeddingStore } from "../services/dedupe/embeddings.ts";
@@ -253,9 +257,17 @@ const searxngSchema = z.object({
 router.put(
   "/searxng",
   requireAdmin,
+  requirePasswordCurrent,
   validateBody(searxngSchema),
   asyncHandler(async (req, res) => {
-    setSetting(SETTING_KEYS.aiSearxng, { url: req.body.url });
+    if (isSearxngEnvSet()) {
+      throw new AppError(
+        "SearXNG URL is set by environment variable SEARXNG_URL",
+        409,
+        { code: "SET_BY_ENVIRONMENT" },
+      );
+    }
+    setSearxngUrl(req.body.url);
     auditSettingChange(req, SETTING_KEYS.aiSearxng);
     invalidateProviderCache();
     res.json({ success: true });

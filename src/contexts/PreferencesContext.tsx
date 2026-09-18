@@ -35,6 +35,7 @@ import {
   type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   DEFAULT_PREFERENCES,
   deletePreference,
@@ -149,14 +150,31 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       }
       return { previous };
     },
-    onError: (_err, _patch, context) => {
+    onError: (err, _patch, context) => {
       // Put the old value back. The server refused or could not be reached, and
       // a control left showing a choice that did not happen is a lie.
       if (context?.previous) {
         queryClient.setQueryData(QUERY_KEY, context.previous);
       }
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to save preference. Changes reverted.",
+      );
     },
-    onSuccess: (response) => queryClient.setQueryData(QUERY_KEY, response),
+    onSuccess: (response) => {
+      queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
+        if (!current) return response;
+        return {
+          ...response,
+          preferences: {
+            ...response.preferences,
+            ...current.preferences,
+          },
+          stored: [...new Set([...response.stored, ...current.stored])],
+        };
+      });
+    },
   });
 
   const resetMutation = useMutation({
@@ -175,12 +193,29 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       }
       return { previous };
     },
-    onError: (_err, _key, context) => {
+    onError: (err, _key, context) => {
       if (context?.previous) {
         queryClient.setQueryData(QUERY_KEY, context.previous);
       }
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to reset preference. Changes reverted.",
+      );
     },
-    onSuccess: (response) => queryClient.setQueryData(QUERY_KEY, response),
+    onSuccess: (response) => {
+      queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
+        if (!current) return response;
+        return {
+          ...response,
+          preferences: {
+            ...response.preferences,
+            ...current.preferences,
+          },
+          stored: [...new Set([...response.stored, ...current.stored])],
+        };
+      });
+    },
   });
 
   const { mutate } = mutation;

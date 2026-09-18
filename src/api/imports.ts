@@ -82,6 +82,12 @@ export const useImports = () =>
   useQuery({
     queryKey: ["imports"],
     queryFn: fetchImports,
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.some(
+        (imp) => imp.status === "running" || imp.status === "imported",
+      );
+      return hasActive ? 2500 : false;
+    },
   });
 
 export const fetchImport = (id: string): Promise<ImportRecord> =>

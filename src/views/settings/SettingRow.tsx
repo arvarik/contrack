@@ -62,7 +62,7 @@ export const SettingRow = ({
       className={cn(
         "scroll-mt-20 outline-none rounded-xl transition-colors duration-300",
         "py-4 first:pt-0 last:pb-0",
-        flashing && "flash ring-2 ring-primary/40 bg-primary/10 px-3 -mx-3",
+        flashing && "flash ring-2 ring-primary/40 bg-primary/10",
         className,
       )}
     >
@@ -92,6 +92,7 @@ export const SettingRow = ({
             type="button"
             onClick={() => resetPreference(prefKey)}
             className="hit-area text-xs font-semibold text-primary hover:underline ml-2"
+            title={`Reset ${title} to default`}
           >
             Reset
           </button>

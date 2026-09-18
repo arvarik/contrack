@@ -22,17 +22,23 @@ export const DEFAULT_BACKUP_KEEP = 7;
 
 export function isTrashRetentionEnvSet(): boolean {
   const raw = process.env.TRASH_RETENTION_DAYS?.trim();
-  return raw !== undefined && raw !== "";
+  if (raw === undefined || raw === "") return false;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0;
 }
 
 export function isBackupIntervalEnvSet(): boolean {
   const raw = process.env.BACKUP_INTERVAL_HOURS?.trim();
-  return raw !== undefined && raw !== "";
+  if (raw === undefined || raw === "") return false;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0;
 }
 
 export function isBackupKeepEnvSet(): boolean {
   const raw = process.env.BACKUP_KEEP?.trim();
-  return raw !== undefined && raw !== "";
+  if (raw === undefined || raw === "") return false;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0;
 }
 
 /**
@@ -42,14 +48,20 @@ export function isBackupKeepEnvSet(): boolean {
 export function trashRetentionDays(): ResolvedSetting<number> {
   const setting = getSetting<number>(SETTING_KEYS.trashRetentionDays);
   if (typeof setting === "number" && Number.isFinite(setting) && setting > 0) {
-    return { value: Math.round(setting), source: "setting" };
+    return {
+      value: Math.min(365, Math.max(1, Math.round(setting))),
+      source: "setting",
+    };
   }
 
   const raw = process.env.TRASH_RETENTION_DAYS?.trim();
   if (raw !== undefined && raw !== "") {
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed > 0) {
-      return { value: Math.round(parsed), source: "env" };
+      return {
+        value: Math.min(365, Math.max(1, Math.round(parsed))),
+        source: "env",
+      };
     }
   }
 
@@ -64,14 +76,20 @@ export function trashRetentionDays(): ResolvedSetting<number> {
 export function backupIntervalHours(): ResolvedSetting<number> {
   const setting = getSetting<number>(SETTING_KEYS.backupIntervalHours);
   if (typeof setting === "number" && Number.isFinite(setting) && setting >= 0) {
-    return { value: Math.round(setting), source: "setting" };
+    return {
+      value: Math.min(168, Math.max(0, Math.round(setting))),
+      source: "setting",
+    };
   }
 
   const raw = process.env.BACKUP_INTERVAL_HOURS?.trim();
   if (raw !== undefined && raw !== "") {
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed >= 0) {
-      return { value: Math.round(parsed), source: "env" };
+      return {
+        value: Math.min(168, Math.max(0, Math.round(parsed))),
+        source: "env",
+      };
     }
     // Invalid non-number disables schedule rather than running with NaN
     return { value: 0, source: "env" };
@@ -87,14 +105,20 @@ export function backupIntervalHours(): ResolvedSetting<number> {
 export function backupKeep(): ResolvedSetting<number> {
   const setting = getSetting<number>(SETTING_KEYS.backupKeep);
   if (typeof setting === "number" && Number.isFinite(setting) && setting > 0) {
-    return { value: Math.round(setting), source: "setting" };
+    return {
+      value: Math.min(100, Math.max(1, Math.round(setting))),
+      source: "setting",
+    };
   }
 
   const raw = process.env.BACKUP_KEEP?.trim();
   if (raw !== undefined && raw !== "") {
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed > 0) {
-      return { value: Math.round(parsed), source: "env" };
+      return {
+        value: Math.min(100, Math.max(1, Math.round(parsed))),
+        source: "env",
+      };
     }
   }
 

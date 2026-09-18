@@ -867,7 +867,7 @@ export function findRows(
   const seenPaths = new Set<string>();
 
   for (const page of SETTINGS_PAGES) {
-    if (opts?.isAdmin === false && page.admin) continue;
+    if (!opts?.isAdmin && page.admin) continue;
 
     let matchedRowOnThisPage = false;
 

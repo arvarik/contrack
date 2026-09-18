@@ -333,6 +333,7 @@ export const SessionLengthCard = () => {
                 type="button"
                 role="radio"
                 aria-checked={active}
+                tabIndex={active ? 0 : -1}
                 disabled={save.isPending}
                 onClick={() =>
                   !active &&
@@ -439,6 +440,7 @@ export const TrashCard = () => {
                 type="button"
                 role="radio"
                 aria-checked={active}
+                tabIndex={active ? 0 : -1}
                 disabled={isEnv || save.isPending}
                 onClick={() =>
                   !active &&
@@ -554,6 +556,7 @@ export const BackupScheduleCard = () => {
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  tabIndex={active ? 0 : -1}
                   disabled={isIntervalEnv || save.isPending}
                   onClick={() =>
                     !active &&
@@ -627,6 +630,7 @@ export const BackupScheduleCard = () => {
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  tabIndex={active ? 0 : -1}
                   disabled={isKeepEnv || save.isPending}
                   onClick={() =>
                     !active &&
