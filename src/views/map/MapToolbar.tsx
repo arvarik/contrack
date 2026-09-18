@@ -21,6 +21,7 @@ import {
   SlidersHorizontal,
   X,
   Loader2,
+  BarChart3,
 } from "lucide-react";
 import { searchPlace } from "../../api/geo";
 import { FacetPills } from "../../components/command-palette/FacetPills";
@@ -48,6 +49,7 @@ export interface MapToolbarProps {
   clearFilters: () => void;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   onFitAll?: () => void;
+  onToggleInsights?: () => void;
 }
 
 export const MapToolbar: React.FC<MapToolbarProps> = ({
@@ -65,6 +67,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   clearFilters,
   inputRef: externalInputRef,
   onFitAll: externalFitAll,
+  onToggleInsights,
 }) => {
   const localInputRef = useRef<HTMLInputElement | null>(null);
   const inputRef = externalInputRef || localInputRef;
@@ -363,6 +366,17 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         >
           <Maximize2 className="w-4 h-4" />
         </button>
+        {onToggleInsights && (
+          <button
+            type="button"
+            onClick={onToggleInsights}
+            aria-label="Insights"
+            className="hit-area glass-panel shadow-lg rounded-xl px-2.5 py-2 text-sm font-medium text-on-surface hover:text-primary flex items-center gap-1.5 cursor-pointer border border-outline-variant/30"
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Insights</span>
+          </button>
+        )}
       </div>
 
       {/* Mobile Filter Sheet Modal */}

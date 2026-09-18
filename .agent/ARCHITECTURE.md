@@ -26,6 +26,14 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 - **Client to Server**: React Components → React Query (`useQuery`/`useMutation` in `src/api/`) → Express API routes (`server/routes/`) → Services (`server/services/`) → Repositories (`server/repositories/`) → Drizzle ORM → SQLite. **Never** write native `useEffect` fetch loops.
 - **Cold-Boot Prefetch**: `src/main.tsx` calls `queryClient.prefetchQuery` for `['contacts']` before the first render, ensuring Cmd+K has 0ms client-side data availability.
 
+### Map View & Viewport Analytics
+
+- **Pure Stats Computation**: `src/views/map/mapStats.ts` defines `computeMapStats` to calculate in-view counts, at-risk/overdue contacts, average health score, top industries, top companies, top tags, and time zones from bounding-box coordinates.
+- **Reactive Viewport Tracking**: `src/views/map/useMapStats.ts` debounces `map.on("moveend")` by 150ms to keep stats fresh without camera stutter.
+- **Stats Strip**: `src/views/map/StatsStrip.tsx` renders bottom-left aggregate chips with facet filtering on click and live status announcements.
+- **Map Insights Pane**: `src/views/map/MapInsightsPane.tsx` provides desktop 320px drawer and mobile modal sheet with "Stats" distribution charts and "People" virtualized list.
+- **Preferences**: `mapPaneOpen` (boolean, default true) in `userPreferencesService` and `src/api/preferences.ts` persists desktop drawer open state across sessions.
+
 ### Search Pipeline (Ask Contrack v5 — Plan → Filter → Rank → Verify)
 
 The retrieval pipeline is split into four pipeline stages, each enforcing a different

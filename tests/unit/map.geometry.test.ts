@@ -179,16 +179,29 @@ describe("toVisibleFeatures", () => {
     geometry: { type: "Point", coordinates: [lng, lat] },
     properties: { id },
   });
-  const clusterFeature = (clusterId: number, count: number) => ({
+  const clusterFeature = (
+    clusterId: number,
+    count: number,
+    atRisk = 0,
+    overdue = 0,
+    scoreSum = 0,
+  ) => ({
     geometry: { type: "Point", coordinates: [1, 2] },
-    properties: { cluster: true, cluster_id: clusterId, point_count: count },
+    properties: {
+      cluster: true,
+      cluster_id: clusterId,
+      point_count: count,
+      atRisk,
+      overdue,
+      scoreSum,
+    },
   });
 
   it("reads a contact point and a cluster", () => {
     expect(
       toVisibleFeatures([
         pointFeature("c1", -0.12, 51.5),
-        clusterFeature(7, 12),
+        clusterFeature(7, 12, 1, 2, 85),
       ]),
     ).toEqual([
       {
@@ -203,6 +216,9 @@ describe("toVisibleFeatures", () => {
         key: "cluster:7",
         clusterId: 7,
         count: 12,
+        atRisk: 1,
+        overdue: 2,
+        scoreSum: 85,
         longitude: 1,
         latitude: 2,
       },

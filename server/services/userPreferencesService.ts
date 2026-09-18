@@ -121,6 +121,7 @@ export const preferenceSchemas = {
   searchHistory: z.array(searchHistoryEntrySchema).max(MAX_SEARCH_HISTORY),
   pulseLayout: pulseLayoutSchema,
   askHistoryOpen: z.boolean(),
+  mapPaneOpen: z.boolean(),
   startPage: z.enum(["network", "pulse"]),
   listSort: z.enum(["name", "recent", "score"]),
   defaultCadenceDays: z.union([
@@ -165,6 +166,7 @@ const DEFAULTS: Preferences = {
     order: {},
   },
   askHistoryOpen: true,
+  mapPaneOpen: true,
   startPage: "network",
   listSort: "name",
   defaultCadenceDays: 90,

@@ -534,6 +534,9 @@ _List specific bugs discovered during testing._
 | _FTS5 Trigger Consistency_     | _YYYY-MM-DD_  | All 12 FTS triggers fire correctly on child-table mutations                                                               |
 | _AI Stats Summary Empty State_ | 2026-04-14    | `GET /api/ai/stats/summary` returns zeros with no invocations (not nulls)                                                 |
 | _AI Stats Feed Validation_     | 2026-04-14    | `GET /api/ai/stats/feed?operation=invalid_op` returns 400 with descriptive error                                          |
+| _Map Viewport Stats_           | 2026-09-18    | `mapStats.test.ts` covers pure stats calculation, ranking slices, bounding box filters, empty state                       |
+| _Map Stats Strip_              | 2026-09-18    | `statsStrip.test.tsx` covers chip formatting, facet click filtering, live announcements, empty state                      |
+| _Map Insights Pane_            | 2026-09-18    | `mapInsightsPane.test.tsx` covers tabs (Stats/People), virtualization, fly-to clicks, close handlers                      |
 
 ### Frontend Component State Matrix
 
