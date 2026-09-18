@@ -12,9 +12,10 @@
 // =============================================================================
 
 import { Router, type Request } from "express";
-import { AppError } from "../utils/AppError.ts";
+import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { validatePassword } from "../services/passwords.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
 import {
   validateBody,
@@ -80,12 +81,27 @@ import {
   hasLocalOwner,
   getInstanceName,
   isRegistrationOpen,
+  isMagicLinkSignIn,
+  findUserByEmail,
+  resetUserPasswordWithToken,
+  getUserById,
   getSessionTtlDays,
   setSessionTtlDays,
   MIN_SESSION_TTL_DAYS,
   MAX_SESSION_TTL_DAYS,
   DEFAULT_SESSION_TTL_DAYS,
 } from "../services/authService.ts";
+import { publicOrigin } from "../utils/publicOrigin.ts";
+import {
+  renderPasswordResetEmail,
+  renderMagicLinkEmail,
+} from "../mail/templates.ts";
+import {
+  createAuthLink,
+  redeemAuthLink,
+  RESET_LINK_TTL_SECONDS,
+  MAGIC_LINK_TTL_SECONDS,
+} from "../services/authLinkService.ts";
 
 const router = Router();
 
@@ -128,11 +144,23 @@ const tokenLimiter = createRateLimiter({
   keyBy: (req) => req.principal?.user.id ?? null,
 });
 
+/**
+ * Three link requests per 15 minutes per IP.
+ *
+ * Sits in front of /api/auth/password-reset/request and /api/auth/magic-link/request.
+ */
+const linkLimiter = createRateLimiter({
+  windowMs: 15 * 60_000,
+  max: 3,
+  name: "auth links",
+});
+
 /** Clear every credential window in this module. Test seam. */
 export function __resetAuthRateLimits(): void {
   credentialLimiter.reset();
   setupLimiter.reset();
   tokenLimiter.reset();
+  linkLimiter.reset();
 }
 
 function bodyString(req: Request, field: string): string {
@@ -184,6 +212,7 @@ router.get("/status", (req, res) => {
     // Whether the sign-in screen should offer to create an account.
     registrationOpen: isRegistrationOpen(),
     mailConfigured: mailService.isConfigured(),
+    magicLinkSignIn: isMagicLinkSignIn() && mailService.isConfigured(),
     // True while this instance has never been secured, so its data belongs to
     // an account nobody can sign in to.
     localOwnerPresent: hasLocalOwner(),
@@ -406,6 +435,198 @@ router.post(
     });
     setSessionCookie(req, res, session.secret, session.expiresAt);
     res.status(201).json({ user: publicUser(user) });
+  }),
+);
+
+// =============================================================================
+// Password reset and magic links
+// =============================================================================
+
+/**
+ * Request a password reset link by email.
+ *
+ * Always returns 202 whether the email is known or not, preventing enumeration.
+ * When mail is configured and the account exists, creates a 1-hour reset token
+ * (subject to the hourly cap of 3 per account) and sends an email.
+ */
+router.post(
+  "/password-reset/request",
+  linkLimiter,
+  asyncHandler(async (req, res) => {
+    const email = bodyString(req, "email").trim().toLowerCase();
+    if (email && mailService.isConfigured()) {
+      const user = findUserByEmail(email);
+      if (user) {
+        const link = createAuthLink(
+          "reset",
+          user.id,
+          RESET_LINK_TTL_SECONDS,
+          null,
+          ipOf(req),
+        );
+        if (link) {
+          const origin = publicOrigin(req);
+          const resetUrl = `${origin}/reset-password?token=${link.token}`;
+          const template = renderPasswordResetEmail({
+            instanceName: getInstanceName(),
+            link: resetUrl,
+            expiresHours: 1,
+          });
+          const sent = await mailService.send({
+            to: user.email,
+            subject: template.subject,
+            text: template.text,
+            html: template.html,
+          });
+          if (!sent) {
+            log.warn(
+              "Auth",
+              `Failed to send password reset email to ${user.email}`,
+            );
+          }
+        }
+      }
+    }
+    res.status(202).json({});
+  }),
+);
+
+/**
+ * Complete a password reset using a one-time token.
+ *
+ * Redeems the token (single use, within TTL), sets the new password, clears
+ * mustChangePassword, revokes all other sessions, creates a new session
+ * with method "email-link", sets the session cookie, and writes an audit row.
+ */
+router.post(
+  "/password-reset/complete",
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
+    const token = bodyString(req, "token").trim();
+    const password = bodyString(req, "password");
+    if (!token) {
+      throw new AppError("Reset token is required", 400);
+    }
+    if (!password) {
+      throw new AppError("Password is required", 400);
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      throw new ValidationError(passwordError);
+    }
+
+    const link = redeemAuthLink("reset", token);
+    const user = await resetUserPasswordWithToken(link.userId, password);
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "email-link",
+    });
+    setSessionCookie(req, res, session.secret, session.expiresAt);
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.password.reset",
+      targetType: "user",
+      targetId: user.id,
+      details: { username: user.username },
+      ip: ipOf(req),
+    });
+    res.json({ user: publicUser(user) });
+  }),
+);
+
+/**
+ * Request a magic link sign-in email.
+ *
+ * 404 MAGIC_LINK_OFF when the instance switch is off or mail is not configured.
+ * Always returns 202 when enabled, preventing email enumeration.
+ */
+router.post(
+  "/magic-link/request",
+  linkLimiter,
+  asyncHandler(async (req, res) => {
+    if (!isMagicLinkSignIn() || !mailService.isConfigured()) {
+      throw new AppError("Magic link sign-in is disabled", 404, {
+        code: "MAGIC_LINK_OFF",
+      });
+    }
+    const email = bodyString(req, "email").trim().toLowerCase();
+    if (email) {
+      const user = findUserByEmail(email);
+      if (user) {
+        const link = createAuthLink(
+          "magic",
+          user.id,
+          MAGIC_LINK_TTL_SECONDS,
+          null,
+          ipOf(req),
+        );
+        if (link) {
+          const origin = publicOrigin(req);
+          const magicUrl = `${origin}/signin-link?token=${link.token}`;
+          const template = renderMagicLinkEmail({
+            instanceName: getInstanceName(),
+            link: magicUrl,
+          });
+          const sent = await mailService.send({
+            to: user.email,
+            subject: template.subject,
+            text: template.text,
+            html: template.html,
+          });
+          if (!sent) {
+            log.warn(
+              "Auth",
+              `Failed to send magic link email to ${user.email}`,
+            );
+          }
+        }
+      }
+    }
+    res.status(202).json({});
+  }),
+);
+
+/**
+ * Complete magic link sign-in using a one-time token.
+ *
+ * Redeems the token (single use, within 15m TTL), signs in the user with
+ * session method "email-link", sets the session cookie, and writes audit rows.
+ */
+router.post(
+  "/magic-link/complete",
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
+    const token = bodyString(req, "token").trim();
+    if (!token) {
+      throw new AppError("Sign-in token is required", 400);
+    }
+
+    const link = redeemAuthLink("magic", token);
+    const user = getUserById(link.userId);
+    if (!user || user.disabledAt) {
+      throw new AppError("Account not found or disabled", 404);
+    }
+
+    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+      method: "email-link",
+    });
+    setSessionCookie(req, res, session.secret, session.expiresAt);
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.login.success",
+      targetType: "user",
+      targetId: user.id,
+      details: { username: user.username, method: "magic-link" },
+      ip: ipOf(req),
+    });
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.magic_link.used",
+      targetType: "user",
+      targetId: user.id,
+      ip: ipOf(req),
+    });
+    res.json({ user: publicUser(user) });
   }),
 );
 

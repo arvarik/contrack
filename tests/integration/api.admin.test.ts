@@ -216,8 +216,9 @@ describe("every admin route", () => {
 
   it("covers the whole admin class, so the loops below miss nothing", () => {
     // Twenty-nine in Phase 3, thirty with the instance health route in
-    // quality story S9, and thirty-four with the four outgoing mail routes in 2.0.
-    expect(ADMIN_ROUTES).toHaveLength(34);
+    // quality story S9, thirty-four with outgoing mail routes in Prompt 2,
+    // and thirty-five with user reset link in Prompt 3.
+    expect(ADMIN_ROUTES).toHaveLength(35);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(

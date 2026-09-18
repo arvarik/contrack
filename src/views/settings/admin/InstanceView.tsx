@@ -237,6 +237,77 @@ const RegistrationCard = () => {
   );
 };
 
+const MagicLinkCard = () => {
+  const { data, isLoading, isError, refetch } = useInstanceSettings();
+  const save = useUpdateInstanceSettings();
+  const enabled = data?.magicLinkSignIn === true;
+  const mailConfigured = data?.mailConfigured === true;
+
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+
+  return (
+    <div className={cn(CARD, "space-y-4")}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-bold text-sm text-on-surface">
+            Sign in by emailed link
+          </h3>
+          <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
+            Adds an option to the sign-in screen. Anybody who can read the
+            mailbox can sign in.
+          </p>
+          {!mailConfigured && (
+            <p className="text-xs text-warning mt-1">Configure email first</p>
+          )}
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Sign in by emailed link"
+          disabled={isLoading || save.isPending || !data || !mailConfigured}
+          onClick={() =>
+            save.mutate(
+              { magicLinkSignIn: !enabled },
+              {
+                onSuccess: (settings) =>
+                  toast.success(
+                    settings.magicLinkSignIn
+                      ? "Magic link sign-in enabled"
+                      : "Magic link sign-in disabled",
+                  ),
+                onError: (error: Error) => toast.error(error.message),
+              },
+            )
+          }
+          className={cn(
+            "shrink-0 inline-flex items-center justify-center",
+            "min-w-[44px] min-h-[44px] rounded-full",
+            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "relative block w-14 h-8 rounded-full transition-colors",
+              enabled ? "bg-primary" : "bg-surface-container-high",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
+                "transition-transform",
+                enabled ? "translate-x-7" : "translate-x-1",
+              )}
+            />
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 /**
  * What this instance calls itself.
  *
@@ -353,9 +424,13 @@ export const InstanceView = () => (
       <InstanceNameCard />
     </section>
 
-    <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>
+    <section
+      className="tile-enter space-y-4"
+      style={{ animationDelay: tileDelay(1) }}
+    >
       <GroupHeading>Who can join</GroupHeading>
       <RegistrationCard />
+      <MagicLinkCard />
     </section>
 
     <section className="tile-enter" style={{ animationDelay: tileDelay(2) }}>

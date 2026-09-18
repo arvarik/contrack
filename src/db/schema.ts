@@ -239,6 +239,28 @@ export const authChallenges = sqliteTable("auth_challenges", {
   expiresAt: text("expiresAt").notNull(),
 });
 
+/**
+ * auth_links — One-time tokens for password reset and magic-link sign-in.
+ */
+export const authLinks = sqliteTable("auth_links", {
+  id: text("id").primaryKey(),
+  /** 'reset' | 'magic'. */
+  kind: text("kind").notNull(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("tokenHash").notNull().unique(),
+  createdBy: text("createdBy").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+  expiresAt: text("expiresAt").notNull(),
+  usedAt: text("usedAt"),
+  requestIp: text("requestIp"),
+});
+
 // =============================================================================
 // Core Tables
 // =============================================================================

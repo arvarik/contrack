@@ -44,6 +44,8 @@ export const AUDIT_ACTIONS = [
   "auth.password.changed",
   "auth.token.created",
   "auth.token.revoked",
+  "auth.password.reset",
+  "auth.magic_link.used",
   "auth.passkey.added",
   "auth.passkey.renamed",
   "auth.passkey.removed",

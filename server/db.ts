@@ -421,6 +421,19 @@ sqlite.exec(`
     createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     expiresAt TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS auth_links (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tokenHash TEXT NOT NULL UNIQUE,
+    createdBy TEXT REFERENCES users(id) ON DELETE SET NULL,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    expiresAt TEXT NOT NULL,
+    usedAt TEXT,
+    requestIp TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_auth_links_user ON auth_links(userId, createdAt);
 `);
 
 // =============================================================================

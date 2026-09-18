@@ -107,16 +107,23 @@ export function renderTestEmail(options: {
 export function renderPasswordResetEmail(options: {
   instanceName?: string;
   link: string;
+  expiresHours?: number;
 }): RenderedEmail {
   const name = options.instanceName?.trim() || "Contrack";
   const subject = `Reset your password for ${name}`;
+  const hours = options.expiresHours ?? 1;
+  const expiryText =
+    hours === 1
+      ? "This link works for one hour and can only be used once."
+      : `This link works for ${hours} hours and can only be used once.`;
+
   const text = [
     `A password reset was requested for your account on ${name}.`,
     "",
     `To choose a new password, visit:`,
     options.link,
     "",
-    "This link works for one hour and can only be used once.",
+    expiryText,
     "If you did not request this reset, you can safely ignore this message.",
   ].join("\n");
 
@@ -132,7 +139,7 @@ export function renderPasswordResetEmail(options: {
     Or open this link in your browser:<br/>
     <a href="${escapeHtml(options.link)}" style="color: #005ac1;">${escapeHtml(options.link)}</a>
   </p>
-  <p style="font-size: 12px; color: #74777f; margin-top: 32px;">This link works for one hour and can only be used once.</p>
+  <p style="font-size: 12px; color: #74777f; margin-top: 32px;">${escapeHtml(expiryText)}</p>
 </body>
 </html>`;
 

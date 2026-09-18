@@ -6,7 +6,7 @@
  * useful answer; the server accepts either.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2, Mail, ArrowLeft } from "lucide-react";
 import { signIn } from "../../api/auth";
 import {
   passkeysSupported,
@@ -17,6 +17,8 @@ import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
 import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
 import { PasskeyButton } from "./PasskeyButton";
+import { ForgotPassword } from "./ForgotPassword";
+import { requestMagicLink } from "../../api/authLinks";
 
 /** Why this screen appeared, when it was not the user's own doing. */
 export type SignInReason = "expired" | "disabled" | null;
@@ -44,13 +46,20 @@ export const SignIn = ({
   reason,
   canRegister = false,
   onRegister,
+  mailConfigured = false,
+  magicLinkSignIn = false,
 }: {
   onSignedIn: () => void;
   reason?: SignInReason;
   /** True when this instance accepts new accounts from the sign-in page. */
   canRegister?: boolean;
   onRegister?: () => void;
+  mailConfigured?: boolean;
+  magicLinkSignIn?: boolean;
 }) => {
+  const [view, setView] = useState<"signin" | "forgot" | "magic-link">(
+    "signin",
+  );
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +158,24 @@ export const SignIn = ({
     // the button first would flash an interactive form nobody should use.
   };
 
+  if (view === "forgot") {
+    return (
+      <ForgotPassword
+        onBack={() => setView("signin")}
+        mailConfigured={mailConfigured}
+      />
+    );
+  }
+
+  if (view === "magic-link") {
+    return (
+      <MagicLinkRequest
+        onBack={() => setView("signin")}
+        initialEmail={identifier.includes("@") ? identifier : ""}
+      />
+    );
+  }
+
   return (
     <AuthShell
       title={reason ? HEADINGS[reason].title : "Welcome back"}
@@ -157,10 +184,17 @@ export const SignIn = ({
       }
       onSubmit={handleSubmit}
       footer={
-        <>
+        <span className="inline-flex items-center gap-2 justify-center flex-wrap">
+          <button
+            type="button"
+            onClick={() => setView("forgot")}
+            className="text-primary font-bold hover:underline"
+          >
+            Forgot your password?
+          </button>
           {canRegister && onRegister && (
             <>
-              No account yet?{" "}
+              <span className="text-on-surface-variant/60">·</span>
               <button
                 type="button"
                 onClick={onRegister}
@@ -168,12 +202,9 @@ export const SignIn = ({
               >
                 Create one
               </button>
-              <br />
             </>
           )}
-          Forgot your password? A self-hosted Contrack has no way to email you a
-          reset — see the configuration docs for the recovery steps.
-        </>
+        </span>
       }
     >
       <div className="space-y-4">
@@ -239,6 +270,132 @@ export const SignIn = ({
             />
           </>
         )}
+
+        {magicLinkSignIn && (
+          <div className="text-center pt-1">
+            <button
+              type="button"
+              onClick={() => setView("magic-link")}
+              className="text-xs text-primary font-medium hover:underline"
+            >
+              Email me a sign-in link
+            </button>
+          </div>
+        )}
+      </div>
+    </AuthShell>
+  );
+};
+
+const MagicLinkRequest = ({
+  onBack,
+  initialEmail = "",
+}: {
+  onBack: () => void;
+  initialEmail?: string;
+}) => {
+  const [email, setEmail] = useState(initialEmail);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy || !email.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await requestMagicLink(email.trim());
+      setSent(true);
+    } catch (err) {
+      setError(
+        isNetworkError(err)
+          ? "Can't reach the Contrack server. Is it running?"
+          : (rateLimitMessage(err) ??
+              (err instanceof Error
+                ? err.message
+                : "Could not send sign-in link.")),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <AuthShell
+        title="Check your email"
+        subtitle="If that address has an account, a link is on its way. It works for 15 minutes."
+        onSubmit={(e) => {
+          e.preventDefault();
+          onBack();
+        }}
+        footer={
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to sign in
+          </button>
+        }
+      >
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="w-full py-2.5 px-4 rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm"
+          >
+            Back to sign in
+          </button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      title="Sign in with email"
+      subtitle="Enter your email address and we'll send you a link that signs you right in."
+      onSubmit={handleSubmit}
+      footer={
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to sign in
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        <AuthField
+          id="magic-email"
+          label="Email address"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          required
+        />
+        {error && <AuthError>{error}</AuthError>}
+      </div>
+      <div className="space-y-3 pt-2">
+        <AuthSubmit busy={busy} disabled={!email.trim()}>
+          {busy ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Sending link…
+            </>
+          ) : (
+            <>
+              <Mail className="w-4 h-4" />
+              Send sign-in link
+            </>
+          )}
+        </AuthSubmit>
       </div>
     </AuthShell>
   );

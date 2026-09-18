@@ -18,6 +18,9 @@ import {
   parseInvitationToken,
   takeInvitationToken,
   urlWithoutInvitationToken,
+  takeUrlSecret,
+  RESET_PASSWORD_PATH,
+  SIGNIN_LINK_PATH,
 } from "../../src/lib/credentials";
 
 describe("invitation links", () => {
@@ -130,6 +133,20 @@ describe("taking the invitation out of the address bar", () => {
     expect(takeInvitationToken()).toBeNull();
     expect(window.location.pathname).toBe("/contacts");
     expect(window.location.search).toBe("?q=ann");
+  });
+
+  it("reads reset-password token via takeUrlSecret", () => {
+    window.history.replaceState({}, "", "/reset-password?token=resetToken123");
+    expect(takeUrlSecret(RESET_PASSWORD_PATH)).toBe("resetToken123");
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.search).toBe("");
+  });
+
+  it("reads signin-link token via takeUrlSecret", () => {
+    window.history.replaceState({}, "", "/signin-link?token=magicToken456");
+    expect(takeUrlSecret(SIGNIN_LINK_PATH)).toBe("magicToken456");
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.search).toBe("");
   });
 });
 

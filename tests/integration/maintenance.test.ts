@@ -35,6 +35,7 @@ import {
   REVOKED_TOKEN_RETENTION_DAYS,
   DEAD_INVITATION_RETENTION_DAYS,
   IMPORT_RETENTION_DAYS,
+  AUTH_LINK_RETENTION_DAYS,
 } from "../../server/services/maintenanceService.ts";
 
 /** A timestamp `days` in the past, in the format the columns store. */
@@ -62,6 +63,7 @@ function clearAll(): void {
     DELETE FROM api_tokens;
     DELETE FROM sessions;
     DELETE FROM auth_challenges;
+    DELETE FROM auth_links;
     DELETE FROM passkeys;
     DELETE FROM ai_invocations;
     DELETE FROM imports;
@@ -127,6 +129,30 @@ function insertChallenge(id: string, expiresAt: string): void {
        VALUES (?, 'login', 'challenge_payload', ?)`,
     )
     .run(id, expiresAt);
+}
+
+function insertAuthLink(
+  id: string,
+  userId: string,
+  fields: {
+    createdAt?: string;
+    expiresAt: string;
+    usedAt?: string | null;
+  },
+): void {
+  sqlite
+    .prepare(
+      `INSERT INTO auth_links (id, kind, userId, tokenHash, createdAt, expiresAt, usedAt)
+       VALUES (?, 'reset', ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      id,
+      userId,
+      crypto.randomUUID(),
+      fields.createdAt ?? daysAgo(1),
+      fields.expiresAt,
+      fields.usedAt ?? null,
+    );
 }
 
 function insertInvitation(
@@ -277,6 +303,42 @@ describe("the daily sweep", () => {
     expect(ids("auth_challenges")).toEqual(["live"]);
   });
 
+  it("removes auth links used or expired more than 30 days ago", () => {
+    // Used 31 days ago -> removed
+    insertAuthLink("used-old", owner, {
+      expiresAt: daysAhead(1),
+      usedAt: daysAgo(AUTH_LINK_RETENTION_DAYS + 1),
+    });
+    // Used yesterday -> kept
+    insertAuthLink("used-recent", owner, {
+      expiresAt: daysAhead(1),
+      usedAt: daysAgo(1),
+    });
+    // Expired 31 days ago (unused) -> removed
+    insertAuthLink("expired-old", owner, {
+      expiresAt: daysAgo(AUTH_LINK_RETENTION_DAYS + 1),
+      usedAt: null,
+    });
+    // Expired yesterday (unused) -> kept
+    insertAuthLink("expired-recent", owner, {
+      expiresAt: daysAgo(1),
+      usedAt: null,
+    });
+    // Still valid and unused -> kept
+    insertAuthLink("live", owner, {
+      expiresAt: daysAhead(1),
+      usedAt: null,
+    });
+
+    const counts = runDailyMaintenance();
+    expect(counts.agedAuthLinks).toBe(2);
+    expect(ids("auth_links")).toEqual([
+      "expired-recent",
+      "live",
+      "used-recent",
+    ]);
+  });
+
   it("removes one that expired earlier today, in the format a sign-in writes", () => {
     // `createSession` writes `new Date(...).toISOString()`, not
     // `CURRENT_TIMESTAMP`. SQLite compares TEXT byte by byte, and the two
@@ -414,6 +476,9 @@ describe("the daily sweep", () => {
     });
     insertInvocation("v", daysAgo(31), owner);
     insertImport("m", "complete", daysAgo(IMPORT_RETENTION_DAYS + 1), owner);
+    insertAuthLink("l", owner, {
+      expiresAt: daysAgo(AUTH_LINK_RETENTION_DAYS + 1),
+    });
 
     const contactId = crypto.randomUUID();
     sqlite
@@ -427,6 +492,7 @@ describe("the daily sweep", () => {
       auditRows: 1,
       expiredSessions: 1,
       expiredChallenges: 1,
+      agedAuthLinks: 1,
       agedTokens: 1,
       deadInvitations: 1,
       oldInvocations: 1,
@@ -442,6 +508,7 @@ describe("the daily sweep", () => {
       "audit_log",
       "sessions",
       "auth_challenges",
+      "auth_links",
       "api_tokens",
       "invitations",
       "ai_invocations",
@@ -460,6 +527,7 @@ describe("the daily sweep", () => {
       auditRows: 0,
       expiredSessions: 0,
       expiredChallenges: 0,
+      agedAuthLinks: 0,
       agedTokens: 0,
       deadInvitations: 0,
       oldInvocations: 0,

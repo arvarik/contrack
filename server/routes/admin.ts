@@ -48,7 +48,10 @@ import {
 import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
 import { publicOrigin } from "../utils/publicOrigin.ts";
 import { mailService } from "../services/mailService.ts";
-import { renderTestEmail } from "../mail/templates.ts";
+import {
+  renderPasswordResetEmail,
+  renderTestEmail,
+} from "../mail/templates.ts";
 import { instanceHealth } from "../services/healthService.ts";
 import {
   getInstanceName,
@@ -57,11 +60,17 @@ import {
   setSessionTtlDays,
   isRegistrationOpen,
   setRegistrationOpen,
+  isMagicLinkSignIn,
+  setMagicLinkSignIn,
   INSTANCE_NAME_MAX,
   MIN_SESSION_TTL_DAYS,
   MAX_SESSION_TTL_DAYS,
   DEFAULT_SESSION_TTL_DAYS,
 } from "../services/authService.ts";
+import {
+  createAuthLink,
+  ADMIN_RESET_LINK_TTL_SECONDS,
+} from "../services/authLinkService.ts";
 
 const router = Router();
 
@@ -143,6 +152,61 @@ router.post(
       String(req.params.id),
     );
     res.json(result);
+  }),
+);
+
+router.post(
+  "/users/:id/reset-link",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    if (!mailService.isConfigured()) {
+      throw new AppError("Outgoing mail is not configured", 409, {
+        code: "MAIL_NOT_CONFIGURED",
+      });
+    }
+    const ctx = adminContext(req);
+    const { user: target } = getUser(ctx, String(req.params.id));
+    if (!target.email) {
+      throw new AppError("User does not have an email address", 400);
+    }
+    const link = createAuthLink(
+      "reset",
+      target.id,
+      ADMIN_RESET_LINK_TTL_SECONDS,
+      ctx.actor.id,
+      ctx.ip,
+    );
+    if (!link) {
+      throw new AppError("Failed to create reset link", 500);
+    }
+    const origin = publicOrigin(req);
+    const resetUrl = `${origin}/reset-password?token=${link.token}`;
+    const template = renderPasswordResetEmail({
+      instanceName: getInstanceName(),
+      link: resetUrl,
+      expiresHours: 24,
+    });
+    const sent = await mailService.send({
+      to: target.email,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+    });
+    if (!sent) {
+      log.warn(
+        "Admin",
+        `Failed to send password reset email to ${target.email}`,
+      );
+    }
+    auditService.record({
+      actorUserId: ctx.actor.id,
+      action: "user.password.reset",
+      targetType: "user",
+      targetId: target.id,
+      details: { username: target.username, via: "email" },
+      ip: ctx.ip,
+    });
+    res.json({ sentTo: target.email, expiresAt: link.expiresAt });
   }),
 );
 
@@ -264,6 +328,7 @@ function settingsView() {
     instanceName: getInstanceName(),
     instanceNameMax: INSTANCE_NAME_MAX,
     mailConfigured: mailService.isConfigured(),
+    magicLinkSignIn: isMagicLinkSignIn(),
   };
 }
 
@@ -303,6 +368,17 @@ router.put(
     if (req.body.instanceName !== undefined) {
       setInstanceName(req.body.instanceName);
       changed.push("instance.name");
+    }
+    if (req.body.magicLinkSignIn !== undefined) {
+      if (req.body.magicLinkSignIn && !mailService.isConfigured()) {
+        throw new AppError(
+          "Outgoing mail must be configured before enabling magic links",
+          409,
+          { code: "MAIL_NOT_CONFIGURED" },
+        );
+      }
+      setMagicLinkSignIn(req.body.magicLinkSignIn);
+      changed.push("auth.magicLinkSignIn");
     }
 
     const ctx = adminContext(req);

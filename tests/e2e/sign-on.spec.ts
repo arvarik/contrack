@@ -135,4 +135,39 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(alert).toHaveText(
     "That passkey did not work. Try again, or sign in with your password.",
   );
+
+  // 8. Forgot password panel without mail configured (shows operator guidance)
+  const forgotBtn = page.getByRole("button", {
+    name: "Forgot your password?",
+  });
+  await expect(forgotBtn).toBeVisible();
+  await forgotBtn.click();
+  await expect(
+    page.getByRole("heading", { name: "Reset your password" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("This Contrack cannot send email.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("scripts/reset-password.ts")).toBeVisible();
+  await expectPageAccessible(page, testInfo, "forgot-password-panel");
+  await page.getByRole("button", { name: "Back to sign in" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
+
+  // 9. Reset password dead link shape
+  await page.goto(`${localhostBase}/reset-password?token=not-real`);
+  await expect(
+    page.getByRole("heading", { name: "Choose a new password" }),
+  ).toBeVisible();
+  await page.getByLabel("Password").fill("newPassword123!");
+  await page.getByRole("button", { name: "Set my password" }).click();
+  await expect(
+    page.getByRole("heading", { name: "This reset link is no longer valid" }),
+  ).toBeVisible();
+  await expectPageAccessible(page, testInfo, "reset-password-dead-link");
+  await page.getByRole("button", { name: "Request a new link" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Reset your password" }),
+  ).toBeVisible();
 });

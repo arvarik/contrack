@@ -450,7 +450,7 @@ export async function resetPassword(
     action: "user.password.reset",
     targetType: "user",
     targetId: id,
-    details: { username: target.username },
+    details: { username: target.username, via: "temporary" },
     ip: ctx.ip,
   });
 
