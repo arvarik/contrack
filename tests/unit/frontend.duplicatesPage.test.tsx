@@ -58,7 +58,7 @@ describe("DuplicatesPage", () => {
     renderComponent();
     const reviewLink = screen.getByRole("link", { name: /Review them/i });
     expect(reviewLink).toBeTruthy();
-    expect(reviewLink).toHaveAttribute("href", "/pulse/duplicates");
+    expect(reviewLink.getAttribute("href")).toBe("/pulse/duplicates");
   });
 
   it("omits review strip when dedupeCount is 0", () => {
