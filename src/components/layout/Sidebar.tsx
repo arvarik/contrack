@@ -169,54 +169,57 @@ export const Sidebar = () => {
         </Link>
       </SidebarTooltip>
 
-      <SidebarTooltip label={pulseTooltip} shortcut="⌘⇧P">
-        <Link
-          to="/pulse"
-          className={navLink(isPulse, "relative")}
-          aria-label={pulseLabel}
-        >
-          <Activity className="w-6 h-6" />
+      <div className="relative">
+        <SidebarTooltip label={pulseTooltip} shortcut="⌘⇧P">
+          <Link
+            to="/pulse"
+            className={navLink(isPulse, "relative")}
+            aria-label={pulseLabel}
+          >
+            <Activity className="w-6 h-6" />
 
-          {/*
-            Two different signals, so two different treatments.
+            {/*
+              Two different signals, so two different treatments.
 
-            Urgent follow-ups are about *time* — something is due — so they
-            keep the pinging red dot. A count would invite comparison
-            ("only 3") when the point is that any number above zero needs
-            attention today.
+              Urgent follow-ups are about *time* — something is due — so they
+              keep the pinging red dot. A count would invite comparison
+              ("only 3") when the point is that any number above zero needs
+              attention today.
 
-            Pending duplicates are about *volume*: clearing 3 is a coffee
-            break and clearing 180 is an afternoon, and a dot renders those
-            identically. So that one carries the number.
+              Pending duplicates are about *volume*: clearing 3 is a coffee
+              break and clearing 180 is an afternoon, and a dot renders those
+              identically. So that one carries the number.
 
-            They sit on opposite corners rather than side by side, because a
-            numeric pill next to a dot on a 24px icon reads as one smudge.
-          */}
-          {urgentCount > 0 && (
-            <span
-              className="absolute top-1.5 right-1.5 flex h-2 w-2"
-              aria-hidden="true"
-            >
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-error" />
-            </span>
-          )}
+              They sit on opposite corners rather than side by side, because a
+              numeric pill next to a dot on a 24px icon reads as one smudge.
+            */}
+            {urgentCount > 0 && (
+              <span
+                className="absolute top-1.5 right-1.5 flex h-2 w-2"
+                aria-hidden="true"
+              >
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-error" />
+              </span>
+            )}
+          </Link>
+        </SidebarTooltip>
 
-          {pendingSuggestions > 0 && (
-            <span
-              className={cn(
-                "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1",
-                "flex items-center justify-center rounded-full",
-                "bg-primary text-on-primary text-[11px] font-bold leading-none",
-                "tabular-nums ring-2 ring-surface-container",
-              )}
-              aria-hidden="true"
-            >
-              {pendingSuggestions > 99 ? "99+" : pendingSuggestions}
-            </span>
-          )}
-        </Link>
-      </SidebarTooltip>
+        {pendingSuggestions > 0 && (
+          <Link
+            to="/pulse/duplicates"
+            className={cn(
+              "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 z-10",
+              "flex items-center justify-center rounded-full",
+              "bg-primary text-on-primary text-[11px] font-bold leading-none",
+              "tabular-nums ring-2 ring-surface-container hover:scale-110 transition-transform",
+            )}
+            aria-label={`${pendingSuggestions} duplicate suggestions`}
+          >
+            {pendingSuggestions > 99 ? "99+" : pendingSuggestions}
+          </Link>
+        )}
+      </div>
 
       <SidebarTooltip label={NAMES.map.label} shortcut="⌘⇧M">
         <Link to="/map" className={navLink(isMap)} aria-label={NAMES.map.label}>

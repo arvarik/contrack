@@ -66,21 +66,40 @@ export const RouteFallback = ({
   }
 
   if (variant === "pulse") {
-    // Mirrors DashboardSkeleton: KPI row, insight bar, then swimlanes.
+    // Mirrors PulseSkeleton: header bar and 3-column grid (Focus, Network, Intelligence)
     return (
       <div className="w-full h-full overflow-hidden bg-surface">
-        <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8">
-          <Bar className="h-8 w-32" />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            <Block className="h-24 sm:h-32" />
-            <Block className="h-24 sm:h-32" />
-            <Block className="h-24 sm:h-32" />
+        <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6">
+          <div className="flex flex-col gap-3 pb-2 border-b border-outline/10">
+            <div className="flex items-center justify-between gap-4">
+              <Bar className="h-8 w-32" />
+              <div className="flex items-center gap-2">
+                <Block className="w-24 h-8 rounded-xl" />
+                <Block className="w-28 h-8 rounded-xl" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Bar className="h-4 w-28" />
+              <Block className="w-16 h-5 rounded-full" />
+              <Block className="w-20 h-5 rounded-full" />
+            </div>
           </div>
-          <Block className="h-[120px] bg-primary/5" />
-          <div className="flex flex-col gap-3">
-            <Bar className="h-4 w-24" />
-            <Block className="h-[76px]" />
-            <Block className="h-[76px]" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="order-1 lg:col-span-5 2xl:col-span-4 flex flex-col gap-6">
+              <Block className="h-[400px]" />
+              <Block className="h-[60px]" />
+            </div>
+            <div className="order-3 lg:col-span-12 2xl:order-2 2xl:col-span-4 flex flex-col gap-6">
+              <Block className="h-[140px] bg-primary/5" />
+              <Block className="h-[160px]" />
+              <Block className="h-[140px]" />
+              <Block className="h-[100px]" />
+            </div>
+            <div className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4 flex flex-col gap-6">
+              <Block className="h-[130px]" />
+              <Block className="h-[130px]" />
+              <Block className="h-[130px]" />
+            </div>
           </div>
         </div>
       </div>

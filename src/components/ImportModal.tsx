@@ -457,7 +457,7 @@ export const ImportModal = ({
     onSuccess();
     onClose();
     dismiss();
-    navigate("/pulse?tab=suggestions");
+    navigate("/pulse/duplicates");
   };
 
   // Opening and closing.

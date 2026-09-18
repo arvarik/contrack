@@ -314,6 +314,23 @@ export const ContactList = () => {
   const createList = useCreateList();
   const reorderLists = useReorderLists();
 
+  // Support ?new=1 query param (e.g. from Pulse "New contact" button)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") === "1") {
+      setIsModalOpen(true);
+      params.delete("new");
+      const newSearch = params.toString();
+      navigate(
+        {
+          pathname: location.pathname,
+          search: newSearch ? `?${newSearch}` : "",
+        },
+        { replace: true },
+      );
+    }
+  }, [location.search, location.pathname, navigate]);
+
   // ── Keyboard navigation ─────────────────────────────────────────────
   useContactListKeyboard({
     filteredContacts: filters.filteredContacts,

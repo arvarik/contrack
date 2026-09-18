@@ -1,132 +1,64 @@
-import React, { useEffect, useState, useRef } from "react";
-import { isTypingTarget } from "../../lib/keyboard";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+import { addDays } from "date-fns";
+import { HeartPulse } from "lucide-react";
 import {
   useDashboard,
   useDailyInsight,
-  useCompletedActionItems,
+  useDashboardActivity,
+  useContacts,
   useCompleteActionItem,
   useUpdateActionItem,
   useDedupeCount,
 } from "../../api";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import confetti from "canvas-confetti";
-import { DashboardSkeleton } from "./DashboardSkeleton";
-import { MetricCard } from "./MetricCard";
-import { DailyInsightCard } from "./DailyInsightCard";
-import { ActionItemSwimlane } from "./ActionItemSwimlane";
-import { NetworkHealthPanel } from "./NetworkHealthPanel";
-import { NetworkCompositionModal } from "./NetworkCompositionModal";
-import { InteractionVelocityModal } from "./InteractionVelocityModal";
-import { NetworkGrowthModal } from "./NetworkGrowthModal";
-import { QuickInteractionModal } from "../../components/QuickInteractionModal";
-import { EmptyState } from "../../components/ui/EmptyState";
+import { isTypingTarget } from "../../lib/keyboard";
 import { useAiAllowed } from "../../hooks/useAiAllowed";
-import {
-  Users,
-  HeartPulse,
-  ActivitySquare,
-  UserPlus,
-  CalendarCheck,
-  PenLine,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  Inbox,
-  LayoutDashboard,
-} from "lucide-react";
-import {
-  PAGE_TITLE,
-  EMPTY_STATE,
-  CARD_COMPACT,
-  TAB_CONTAINER,
-  tabItem,
-} from "../../lib/styles";
-import { cn } from "../../lib/utils";
-import { tileDelay } from "../../lib/motion";
-import { motion, AnimatePresence } from "motion/react";
-import { addDays } from "date-fns";
-import { formatDay } from "../../lib/datetime";
 import { usePageTitle } from "../../hooks/usePageTitle";
+import { usePreferences } from "../../contexts/PreferencesContext";
+import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
-import { SuggestionReviewQueue } from "../dedupe/components";
+import { openQuickNote } from "../../lib/appEvents";
+import { EMPTY_STATE } from "../../lib/styles";
+import { resolveLayout } from "./lib/layout";
+import { buildUpNextQueue, computeNextHighlightIndex } from "./lib/upNext";
+import { getUpcomingBirthdays } from "./lib/birthdays";
+import { PulseHeader } from "./components/PulseHeader";
+import { PulseSkeleton } from "./components/PulseSkeleton";
+import { WelcomeOffice } from "./components/WelcomeOffice";
+import { UpNextCard } from "./cards/UpNextCard";
+import { CompletedCard } from "./cards/CompletedCard";
+import { InsightCard } from "./cards/InsightCard";
+import { InboxCard } from "./cards/InboxCard";
+import { ComingUpCard } from "./cards/ComingUpCard";
+import { NewPeopleCard } from "./cards/NewPeopleCard";
+import {
+  ActivityCardStopgap,
+  MomentumCardStopgap,
+  CompositionCardStopgap,
+} from "./cards/NetworkStopgapCards";
+const DuplicatesPage = React.lazy(() =>
+  import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
+);
 
-type PulseTab = "pulse" | "suggestions";
-
-const CompletedActionsBar = () => {
-  const { data: completedItems = [] } = useCompletedActionItems();
-  const [expanded, setExpanded] = useState(false);
-
-  if (completedItems.length === 0) return null;
-
-  return (
-    <div className="mt-4 flex flex-col gap-2 relative">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors group cursor-pointer"
-      >
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-primary opacity-60" />
-          <span className="text-sm font-bold text-on-surface-variant group-hover:text-primary transition-colors">
-            Completed Follow-ups
-          </span>
-          <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-[11px] items-center flex font-mono text-on-surface-variant font-bold leading-none h-5">
-            {completedItems.length}
-          </span>
-        </div>
-        {expanded ? (
-          <ChevronUp className="w-4 h-4 text-on-surface-variant opacity-50" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-on-surface-variant opacity-50" />
-        )}
-      </button>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden flex flex-col gap-2 pl-2 border-l-2 border-surface-container ml-2"
-          >
-            {completedItems.map((item) => (
-              <div
-                key={item.id}
-                className={cn(
-                  CARD_COMPACT,
-                  "opacity-60 saturate-50 hover:opacity-100 hover:saturate-100 transition-all p-3 flex sm:items-center sm:flex-row flex-col gap-2",
-                )}
-              >
-                <div className="flex flex-col flex-1 min-w-0">
-                  <span className="font-bold text-sm text-on-surface truncate pr-2 line-through">
-                    {item.title}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                    <span className="text-xs font-semibold text-on-surface-variant truncate">
-                      {item.contactName || "Unknown"}
-                    </span>
-                  </div>
-                </div>
-                <div className="shrink-0 text-[11px] uppercase font-bold text-on-surface-variant tracking-widest pl-1 sm:pl-0">
-                  {formatDay(item.completedAt, "")}
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
-
-export const PulseView = () => {
+const PulseOffice = () => {
   const mountStart = useRef(performance.now());
   useEffect(() => {
     if (import.meta.env.DEV) {
       console.log(
-        `[Perf] DashboardView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
+        `[Perf] PulseView mounted in ${(performance.now() - mountStart.current).toFixed(2)}ms`,
       );
     }
   }, []);
+
+  const navigate = useNavigate();
+
+  usePageTitle(NAMES.pulse.title);
 
   const {
     data: dashboard,
@@ -134,94 +66,160 @@ export const PulseView = () => {
     isError,
   } = useDashboard();
 
-  // Presence is the signal, not the object: depending on `dashboard` itself
-  // would re-log on every refetch instead of once when data first arrives.
-  const hasDashboard = !!dashboard;
-  useEffect(() => {
-    if (!isDashboardLoading && hasDashboard && import.meta.env.DEV) {
-      console.log(
-        `[Perf] DashboardView data ready: time from mount=${(performance.now() - mountStart.current).toFixed(2)}ms`,
-      );
-    }
-  }, [isDashboardLoading, hasDashboard]);
-
   const aiAllowed = useAiAllowed();
   const { data: insight, isLoading: isInsightLoading } = useDailyInsight({
     enabled: aiAllowed,
   });
-  const [isCompositionOpen, setIsCompositionOpen] = useState(false);
-  const [isVelocityOpen, setIsVelocityOpen] = useState(false);
-  const [isGrowthOpen, setIsGrowthOpen] = useState(false);
-  const [isQuickNoteOpen, setIsQuickNoteOpen] = useState(false);
+
+  const { data: activity } = useDashboardActivity();
+  const { data: contacts = [] } = useContacts();
+  const { data: dedupeCount } = useDedupeCount();
+  const pendingSuggestions = dedupeCount?.count ?? 0;
+
+  const { preferences } = usePreferences();
+  const singleKey = useSingleKeyShortcuts();
 
   const completeAction = useCompleteActionItem();
   const updateAction = useUpdateActionItem();
-  const navigate = useNavigate();
 
-  usePageTitle(NAMES.pulse.title);
-
-  const { data: dedupeCount } = useDedupeCount();
-  const pendingSuggestions = dedupeCount?.count ?? 0;
-  const [searchParams] = useSearchParams();
-  const initialTab =
-    searchParams.get("tab") === "suggestions" ? "suggestions" : "pulse";
-  const [activeTab, setActiveTab] = useState<PulseTab>(initialTab);
-
-  const prevHasItemsRef = useRef<boolean | null>(null);
-
-  const hasActionItems =
-    dashboard &&
-    (dashboard.overdue.length > 0 ||
-      dashboard.dueToday.length > 0 ||
-      dashboard.upcoming.length > 0);
-  const firstActionItem = dashboard
-    ? dashboard.overdue[0] || dashboard.dueToday[0] || dashboard.upcoming[0]
-    : null;
-
-  useEffect(() => {
-    if (prevHasItemsRef.current === true && hasActionItems === false) {
-      // Fire confetti when the last item is cleared!
-      confetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-        // Deliberately the vivid pre-accessibility palette: confetti carries
-        // no text and has no contrast duty, and the AA-safe tones read as
-        // muted when the point is celebration.
-        colors: ["#009EDB", "#10B981", "#F59E0B"],
+  // Map of contacts for fast lookup (e.g. meeting attendee avatars)
+  const contactsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; avatarUrl?: string | null; themeColor?: string }
+    >();
+    for (const c of contacts) {
+      map.set(c.id, {
+        name: c.name,
+        avatarUrl: c.avatarUrl,
+        themeColor: c.themeColor,
       });
     }
-    // Only start tracking after first non-null value — prevents confetti on initial empty load
-    if (hasActionItems !== undefined) {
-      prevHasItemsRef.current = hasActionItems ?? null;
-    }
-  }, [hasActionItems]);
+    return map;
+  }, [contacts]);
 
+  // Compute upcoming birthdays within 14 days client-side
+  const upcomingBirthdays = useMemo(() => {
+    return getUpcomingBirthdays(contacts, new Date(), 14);
+  }, [contacts]);
+
+  // Build the ranked Up Next queue
+  const upNext = useMemo(() => {
+    if (!dashboard) {
+      return buildUpNextQueue({});
+    }
+    return buildUpNextQueue({
+      overdue: dashboard.overdue,
+      dueToday: dashboard.dueToday,
+      upcoming: dashboard.upcoming,
+      birthdays: upcomingBirthdays,
+      slipping: dashboard.atRisk,
+    });
+  }, [dashboard, upcomingBirthdays]);
+
+  // Selected index in Up Next
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const prevItemsRef = useRef(upNext.items);
+
+  // Maintain highlight index when items leave or change
+  useEffect(() => {
+    setSelectedIndex((current) =>
+      computeNextHighlightIndex(current, prevItemsRef.current, upNext.items),
+    );
+    prevItemsRef.current = upNext.items;
+  }, [upNext.items]);
+
+  const highlightedItem =
+    selectedIndex >= 0 && selectedIndex < upNext.items.length
+      ? upNext.items[selectedIndex]
+      : null;
+
+  // Screen reader announcement for keyboard navigation
+  const [liveStatus, setLiveStatus] = useState("");
+  useEffect(() => {
+    if (highlightedItem) {
+      setLiveStatus(
+        `Row ${selectedIndex + 1} of ${upNext.items.length}, ${highlightedItem.contactName}, ${highlightedItem.dueChip.text.toLowerCase()}`,
+      );
+    } else {
+      setLiveStatus("");
+    }
+  }, [selectedIndex, highlightedItem, upNext.items.length]);
+
+  // Keyboard navigation (J / K / D / S / L / Enter)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
-      if (!firstActionItem) return;
-      // Guard against double-firing while a mutation is in-flight
-      if (completeAction.isPending || updateAction.isPending) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Enter opens contact profile (not a bare letter, always active)
+      if (e.key === "Enter") {
+        if (highlightedItem) {
+          e.preventDefault();
+          navigate(`/contact/${highlightedItem.contactId}`);
+        }
+        return;
+      }
+
+      // Single-key shortcuts respect preference
+      if (!singleKey) return;
 
       const key = e.key.toLowerCase();
-      if (key === "d") {
+
+      if (key === "j") {
         e.preventDefault();
-        completeAction.mutate(firstActionItem.id);
+        setSelectedIndex((prev) =>
+          prev < upNext.items.length - 1 ? prev + 1 : prev,
+        );
+      } else if (key === "k") {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      } else if (key === "d") {
+        if (highlightedItem?.hasCheckAction) {
+          e.preventDefault();
+          completeAction.mutate(highlightedItem.id);
+        }
       } else if (key === "s") {
-        e.preventDefault();
-        updateAction.mutate({
-          id: firstActionItem.id,
-          data: { dueAt: addDays(new Date(), 1).toISOString() },
-        });
+        if (highlightedItem?.hasCheckAction) {
+          e.preventDefault();
+          updateAction.mutate({
+            id: highlightedItem.id,
+            data: { dueAt: addDays(new Date(), 1).toISOString() },
+          });
+        }
       } else if (key === "l") {
-        e.preventDefault();
-        navigate(`/contact/${firstActionItem.contactId}`);
+        if (highlightedItem) {
+          e.preventDefault();
+          openQuickNote(highlightedItem.contactId);
+        }
       }
     };
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [firstActionItem, completeAction, updateAction, navigate]);
+  }, [
+    highlightedItem,
+    singleKey,
+    upNext.items.length,
+    completeAction,
+    updateAction,
+    navigate,
+  ]);
+
+  // Layout resolution
+  const resolvedLayout = useMemo(() => {
+    return resolveLayout(preferences?.pulseLayout);
+  }, [preferences?.pulseLayout]);
+
+  const upNextCardRef = useRef<HTMLDivElement>(null);
+  const scrollToUpNext = () => {
+    upNextCardRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const scrollToComingUp = () => {
+    const el = document.querySelector('[data-card-id="coming-up"]');
+    el?.scrollIntoView({ behavior: "smooth" });
+  };
 
   if (isError) {
     return (
@@ -237,185 +235,164 @@ export const PulseView = () => {
     );
   }
 
+  if (isDashboardLoading || !dashboard) {
+    return <PulseSkeleton />;
+  }
+
+  const isZeroContacts = dashboard.metrics.totalActive === 0;
+
   return (
     <div className="w-full h-full overflow-y-auto bg-surface nice-scrollbar relative">
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
-        {/* Header — stacks under 640px so the tab bar never squeezes the title */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <h1 className={PAGE_TITLE}>{NAMES.pulse.label}</h1>
-          {/* Tabs */}
-          <div className={cn(TAB_CONTAINER, "w-full sm:w-fit")}>
-            <button
-              onClick={() => setActiveTab("pulse")}
-              className={cn(
-                tabItem(activeTab === "pulse"),
-                "flex flex-1 sm:flex-none items-center justify-center gap-2 min-h-[44px] sm:min-h-0",
-              )}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Network
-            </button>
-            <button
-              onClick={() => setActiveTab("suggestions")}
-              className={cn(
-                tabItem(activeTab === "suggestions"),
-                "flex flex-1 sm:flex-none items-center justify-center gap-2 relative min-h-[44px] sm:min-h-0",
-              )}
-            >
-              <Inbox className="w-4 h-4" />
-              Suggestions
-              {pendingSuggestions > 0 && (
-                <span className="ml-1.5 flex h-2 w-2">
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {activeTab === "pulse" && (isDashboardLoading || !dashboard) ? (
-          <DashboardSkeleton />
-        ) : activeTab === "pulse" && dashboard ? (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 items-start">
-            {/* Top KPI Row — 1 up on phones, 3 up from md */}
-            <div className="col-span-full grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-              <MetricCard
-                label="Active Network"
-                value={dashboard.metrics.totalActive}
-                icon={Users}
-                delay={tileDelay(0)}
-                onClick={() => setIsCompositionOpen(true)}
-              />
-              <MetricCard
-                label="Interactions"
-                value={dashboard.metrics.totalInteractions30d}
-                subValue="interactions last month"
-                icon={ActivitySquare}
-                delay={tileDelay(1)}
-                onClick={() => setIsVelocityOpen(true)}
-              />
-              <MetricCard
-                label="Network Growth"
-                value={dashboard.metrics.newContacts30d}
-                subValue="added this month"
-                icon={UserPlus}
-                delay={tileDelay(2)}
-                onClick={() => setIsGrowthOpen(true)}
-              />
-            </div>
-
-            {/* AI Insight */}
-            <DailyInsightCard
-              insight={insight}
-              isLoading={isInsightLoading}
-              delay={tileDelay(3)}
-              aiAllowed={aiAllowed}
-            />
-
-            {/* Left Column: Action Items */}
-            <div className="col-span-full xl:col-span-8 flex flex-col gap-6 sm:gap-8">
-              {!hasActionItems ? (
-                <div
-                  style={{ animationDelay: tileDelay(4) }}
-                  className="tile-enter"
-                >
-                  <EmptyState
-                    icon={CalendarCheck}
-                    title="Nothing due"
-                    body="Follow-ups you add from a note or a contact land here."
-                    action={{
-                      label: "Log an interaction",
-                      icon: PenLine,
-                      onClick: () => setIsQuickNoteOpen(true),
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  <ActionItemSwimlane
-                    title="Overdue"
-                    items={dashboard.overdue}
-                    theme="urgent"
-                    delay={tileDelay(4)}
-                    firstActionItemId={firstActionItem?.id}
-                  />
-                  <ActionItemSwimlane
-                    title="Due Today"
-                    items={dashboard.dueToday}
-                    theme="today"
-                    delay={tileDelay(5)}
-                    firstActionItemId={firstActionItem?.id}
-                  />
-                  <ActionItemSwimlane
-                    title="Upcoming"
-                    items={dashboard.upcoming}
-                    theme="upcoming"
-                    delay={tileDelay(6)}
-                    firstActionItemId={firstActionItem?.id}
-                  />
-                </div>
-              )}
-
-              {/* COMPLETED ACTIONS ACCORDION */}
-              <CompletedActionsBar />
-            </div>
-
-            {/* Right Column: Network Health */}
-            <div className="col-span-full xl:col-span-4 flex flex-col gap-6">
-              <NetworkHealthPanel payload={dashboard} delay={tileDelay(5)} />
-            </div>
-          </div>
-        ) : activeTab === "suggestions" ? (
-          /* Suggestions Tab Content */
-          <div className="max-w-4xl mx-auto space-y-10 w-full">
-            {/* Merge Suggestions — primary section */}
-            <section>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-primary/10 rounded-xl">
-                  <Inbox className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-headline font-bold text-on-surface">
-                    Merge Suggestions
-                  </h2>
-                  <p className="text-xs text-on-surface-variant">
-                    Contacts that may be the same person
-                  </p>
-                </div>
-              </div>
-              <SuggestionReviewQueue />
-            </section>
-          </div>
-        ) : null}
+      {/* Screen reader live region */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {liveStatus}
       </div>
 
-      {/* The same quick flow Cmd+Shift+I opens, started from the empty state. */}
-      <QuickInteractionModal
-        isOpen={isQuickNoteOpen}
-        onClose={() => setIsQuickNoteOpen(false)}
-      />
+      <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
+        {/* Header */}
+        <PulseHeader
+          completedToday={activity?.today.completed ?? 0}
+          dueToday={upNext.counts.today}
+          overdueCount={upNext.counts.overdue}
+          birthdayCount={upNext.counts.birthdays}
+          streak={activity?.streak.current ?? 0}
+          onScrollToUpNext={scrollToUpNext}
+          onScrollToComingUp={scrollToComingUp}
+        />
 
-      {dashboard && (
-        <>
-          <NetworkCompositionModal
-            isOpen={isCompositionOpen}
-            onClose={() => setIsCompositionOpen(false)}
-            composition={dashboard}
-          />
-          <InteractionVelocityModal
-            isOpen={isVelocityOpen}
-            onClose={() => setIsVelocityOpen(false)}
-            breakdown={dashboard.interactionBreakdown30d}
-          />
-          <NetworkGrowthModal
-            isOpen={isGrowthOpen}
-            onClose={() => setIsGrowthOpen(false)}
-            timeline={dashboard.networkGrowthTimeline30d}
-            totalCount={dashboard.metrics.newContacts30d}
-          />
-        </>
-      )}
+        {/* Content: Welcome Office if 0 contacts, else 3-column Grid */}
+        {isZeroContacts ? (
+          <WelcomeOffice />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Column 1: Focus (Up next, Completed) */}
+            <div className="order-1 lg:col-span-5 2xl:col-span-4 flex flex-col gap-6">
+              {resolvedLayout.visible.focus.map((cardId) => {
+                if (cardId === "up-next") {
+                  return (
+                    <div key="up-next" ref={upNextCardRef}>
+                      <UpNextCard
+                        items={upNext.items}
+                        groups={upNext.groups}
+                        selectedIndex={selectedIndex}
+                        onSelectIndex={setSelectedIndex}
+                        onComplete={(id) => completeAction.mutate(id)}
+                        onLog={(cid) => openQuickNote(cid)}
+                        onOpenContact={(cid) => navigate(`/contact/${cid}`)}
+                      />
+                    </div>
+                  );
+                }
+                if (cardId === "completed") {
+                  return <CompletedCard key="completed" />;
+                }
+                return null;
+              })}
+            </div>
+
+            {/* Column 2: Intelligence (Insight, Inbox, Coming up, New people) */}
+            <div className="order-3 lg:col-span-12 2xl:order-2 2xl:col-span-4 flex flex-col gap-6">
+              {resolvedLayout.visible.intel.map((cardId) => {
+                if (cardId === "insight") {
+                  return (
+                    <InsightCard
+                      key="insight"
+                      insight={insight}
+                      isLoading={isInsightLoading}
+                      aiAllowed={aiAllowed}
+                    />
+                  );
+                }
+                if (cardId === "inbox") {
+                  return (
+                    <InboxCard
+                      key="inbox"
+                      pendingDuplicates={pendingSuggestions}
+                      ghosts={dashboard.ghosts}
+                      hygiene={dashboard.hygiene}
+                      correspondents={dashboard.correspondents}
+                    />
+                  );
+                }
+                if (cardId === "coming-up") {
+                  return (
+                    <ComingUpCard
+                      key="coming-up"
+                      birthdays={upcomingBirthdays}
+                      meetings={dashboard.meetings}
+                      contactsMap={contactsMap}
+                    />
+                  );
+                }
+                if (cardId === "new-people") {
+                  return (
+                    <NewPeopleCard
+                      key="new-people"
+                      newContacts30d={dashboard.metrics.newContacts30d}
+                      recentlyAdded={dashboard.recentlyAdded}
+                      timeline={dashboard.networkGrowthTimeline30d}
+                    />
+                  );
+                }
+                return null;
+              })}
+            </div>
+
+            {/* Column 3: Network (Activity, Momentum, Composition stopgap) */}
+            <div className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4 flex flex-col gap-6">
+              {resolvedLayout.visible.network.map((cardId) => {
+                if (cardId === "activity") {
+                  return (
+                    <ActivityCardStopgap key="activity" dashboard={dashboard} />
+                  );
+                }
+                if (cardId === "momentum") {
+                  return (
+                    <MomentumCardStopgap key="momentum" dashboard={dashboard} />
+                  );
+                }
+                if (cardId === "composition") {
+                  return (
+                    <CompositionCardStopgap
+                      key="composition"
+                      dashboard={dashboard}
+                    />
+                  );
+                }
+                return null;
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
+
+export const PulseView = () => {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("tab") === "suggestions") {
+    return <Navigate to="/pulse/duplicates" replace />;
+  }
+
+  return (
+    <Routes>
+      <Route
+        path="duplicates"
+        element={
+          <React.Suspense fallback={null}>
+            <DuplicatesPage />
+          </React.Suspense>
+        }
+      />
+      <Route
+        path="suggestions"
+        element={<Navigate to="/pulse/duplicates" replace />}
+      />
+      <Route path="*" element={<PulseOffice />} />
+    </Routes>
+  );
+};
+
+export { PulseView as DashboardView };
+export default PulseView;

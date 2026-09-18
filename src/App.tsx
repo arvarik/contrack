@@ -26,7 +26,11 @@ import { CommandPalette } from "./components/command-palette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { QuickInteractionModal } from "./components/QuickInteractionModal";
 import { cn } from "./lib/utils";
-import { OPEN_SHORTCUTS_EVENT } from "./lib/appEvents";
+import {
+  OPEN_SHORTCUTS_EVENT,
+  OPEN_QUICK_NOTE_EVENT,
+  OpenQuickNoteDetail,
+} from "./lib/appEvents";
 import { NAMES } from "./lib/names";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 
@@ -46,7 +50,7 @@ const SearchView = React.lazy(() =>
   import("./views/SearchView").then((m) => ({ default: m.SearchView })),
 );
 const PulseView = React.lazy(() =>
-  import("./views/pulse").then((m) => ({ default: m.PulseView })),
+  import("./views/pulse").then((m) => ({ default: m.PulseView || m.default })),
 );
 
 import { Sidebar } from "./components/layout/Sidebar";
@@ -449,12 +453,27 @@ const ResponsiveLayout = () => {
 export default function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
+  const [quickNoteContactId, setQuickNoteContactId] = useState<
+    string | undefined
+  >(undefined);
 
   // The sidebar's shortcuts button opens the same overlay `?` does.
   useEffect(() => {
     const open = () => setShortcutsOpen(true);
     window.addEventListener(OPEN_SHORTCUTS_EVENT, open);
     return () => window.removeEventListener(OPEN_SHORTCUTS_EVENT, open);
+  }, []);
+
+  // Listen for open-quick-note events from anywhere in the app (e.g. Pulse office L key)
+  useEffect(() => {
+    const handleQuickNote = (e: Event) => {
+      const customEvent = e as CustomEvent<OpenQuickNoteDetail>;
+      setQuickNoteContactId(customEvent.detail?.contactId);
+      setQuickNoteOpen(true);
+    };
+    window.addEventListener(OPEN_QUICK_NOTE_EVENT, handleQuickNote);
+    return () =>
+      window.removeEventListener(OPEN_QUICK_NOTE_EVENT, handleQuickNote);
   }, []);
 
   // Global keyboard shortcuts: '?' for shortcuts modal, 'Cmd+Shift+I' for quick note
@@ -512,7 +531,11 @@ export default function App() {
         />
         <QuickInteractionModal
           isOpen={quickNoteOpen}
-          onClose={() => setQuickNoteOpen(false)}
+          initialContactId={quickNoteContactId}
+          onClose={() => {
+            setQuickNoteOpen(false);
+            setQuickNoteContactId(undefined);
+          }}
         />
         <Toaster
           theme="light"
