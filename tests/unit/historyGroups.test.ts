@@ -105,4 +105,34 @@ describe("groupHistoryEntries", () => {
     const groups = groupHistoryEntries([], clock);
     expect(groups).toEqual([]);
   });
+
+  it("respects weekStart setting when calculating This week", () => {
+    // Clock is Wednesday Sep 16, 2026
+    const wedClock = new Date("2026-09-16T12:00:00.000Z");
+    // Sunday Sep 13, 2026
+    const sundayEntry = makeEntry(
+      "sun",
+      "2026-09-13T12:00:00.000Z",
+      "Sunday query",
+    );
+
+    // With Monday start, Sunday Sep 13 is in the previous week
+    const mondayGroups = groupHistoryEntries([sundayEntry], wedClock, "monday");
+    expect(mondayGroups.map((g) => g.label)).toEqual(["September 2026"]);
+
+    // With Sunday start, Sunday Sep 13 is in This week
+    const sundayGroups = groupHistoryEntries([sundayEntry], wedClock, "sunday");
+    expect(sundayGroups.map((g) => g.label)).toEqual(["This week"]);
+  });
+
+  it("skips entries with invalid dates without throwing", () => {
+    const entries = [
+      makeEntry("bad", "not-a-valid-date", "Corrupted query"),
+      makeEntry("good", "2026-09-17T10:00:00.000Z", "Good query"),
+    ];
+
+    const groups = groupHistoryEntries(entries, clock);
+    expect(groups.map((g) => g.label)).toEqual(["Today"]);
+    expect(groups[0].entries.map((e) => e.id)).toEqual(["good"]);
+  });
 });

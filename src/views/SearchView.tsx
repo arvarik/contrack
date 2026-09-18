@@ -348,9 +348,22 @@ export const SearchView = () => {
             <IconButton
               ref={historyToggleRef}
               aria-label="Search history"
-              aria-pressed={askHistoryOpen}
+              aria-pressed={isWide ? askHistoryOpen : undefined}
+              aria-expanded={isWide ? undefined : mobileHistoryOpen}
+              aria-haspopup={isWide ? undefined : "dialog"}
+              aria-controls={
+                isWide && askHistoryOpen ? "search-history-aside" : undefined
+              }
               onClick={handleToggleHistory}
-              tone={askHistoryOpen && isWide ? "primary" : "ghost"}
+              tone={
+                isWide
+                  ? askHistoryOpen
+                    ? "primary"
+                    : "ghost"
+                  : mobileHistoryOpen
+                    ? "primary"
+                    : "ghost"
+              }
             >
               <Clock className="w-5 h-5" />
             </IconButton>
@@ -602,11 +615,16 @@ export const SearchView = () => {
       {/* Desktop History Aside (on lg and up when askHistoryOpen is true) */}
       {askHistoryOpen && (
         <aside
+          id="search-history-aside"
           aria-label="Search history"
           className="hidden lg:flex flex-col w-[320px] shrink-0 bg-surface-container-low overflow-y-auto"
         >
           <HistoryPane
-            currentQuery={answeredQuery || query}
+            currentQuery={
+              mode === "notes"
+                ? (searchParams.get("q") ?? "")
+                : answeredQuery || query
+            }
             currentMode={mode}
             onSelect={handleSelectHistoryEntry}
           />
@@ -624,7 +642,11 @@ export const SearchView = () => {
       >
         <div className="p-2 -m-2">
           <HistoryPane
-            currentQuery={answeredQuery || query}
+            currentQuery={
+              mode === "notes"
+                ? (searchParams.get("q") ?? "")
+                : answeredQuery || query
+            }
             currentMode={mode}
             onSelect={(entry) => {
               setMobileHistoryOpen(false);

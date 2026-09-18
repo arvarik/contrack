@@ -7,7 +7,7 @@
  * @module views/search/HistoryPane
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Search, SearchX, Sparkles, X } from "lucide-react";
 import type { HistoryEntry, HistoryMode } from "../../../shared/searchHistory";
 import { normalizeQuery } from "../../../shared/searchHistory";
@@ -21,6 +21,7 @@ import { Badge } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
+import { usePreferences } from "../../contexts/PreferencesContext";
 import { useDebounce } from "../../hooks/useDebounce";
 import {
   startPendingDelete,
@@ -51,7 +52,9 @@ export const HistoryPane = ({
   onSelect,
   className,
 }: HistoryPaneProps) => {
+  const { preferences } = usePreferences();
   const [filterText, setFilterText] = useState("");
+  const filterInputRef = useRef<HTMLInputElement>(null);
   const [selectedMode, setSelectedMode] = useState<ModeFilter>("all");
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
@@ -86,14 +89,21 @@ export const HistoryPane = ({
     [allEntries, hiddenIds],
   );
 
-  const totalCount =
-    typeof data?.pages[0]?.total === "number"
+  const totalCount = Math.max(
+    0,
+    (typeof data?.pages[0]?.total === "number"
       ? data.pages[0].total
-      : visibleEntries.length;
+      : visibleEntries.length) - hiddenIds.size,
+  );
 
   const groups = useMemo(
-    () => groupHistoryEntries(visibleEntries),
-    [visibleEntries],
+    () =>
+      groupHistoryEntries(
+        visibleEntries,
+        new Date(),
+        preferences.weekStart ?? "monday",
+      ),
+    [visibleEntries, preferences.weekStart],
   );
 
   const normalizedCurrent = currentQuery ? normalizeQuery(currentQuery) : "";
@@ -105,22 +115,31 @@ export const HistoryPane = ({
     );
   };
 
-  const handleTogglePin = (id: string, pinned: boolean) => {
-    setPinnedMutation.mutate({ id, pinned });
-  };
+  const handleTogglePin = useCallback(
+    (id: string, pinned: boolean) => {
+      setPinnedMutation.mutate({ id, pinned });
+    },
+    [setPinnedMutation],
+  );
 
-  const handleDelete = (id: string) => {
-    startPendingDelete({
-      id,
-      message: "Question deleted",
-      send: () => deleteMutation.mutateAsync(id),
-    });
-  };
+  const handleDelete = useCallback(
+    (id: string) => {
+      startPendingDelete({
+        id,
+        message: "Question deleted",
+        errorMessage: "Could not delete question.",
+        flushUrl: `/search/history/${encodeURIComponent(id)}`,
+        send: () => deleteMutation.mutateAsync(id),
+      });
+    },
+    [deleteMutation],
+  );
 
   const handleClear = () => {
     clearMutation.mutate(selectedMode === "all" ? undefined : selectedMode, {
       onSuccess: () => {
         setClearDialogOpen(false);
+        filterInputRef.current?.focus();
       },
     });
   };
@@ -135,11 +154,11 @@ export const HistoryPane = ({
           <h2 className="text-base font-semibold text-on-surface">History</h2>
           <Badge tone="neutral">{totalCount}</Badge>
         </div>
-        {totalCount > 0 && (
+        {totalCount > 0 && !filterText.trim() && (
           <button
             type="button"
             onClick={() => setClearDialogOpen(true)}
-            className="text-xs font-medium text-on-surface-variant hover:text-error transition-colors px-2 py-1 rounded-lg cursor-pointer"
+            className="text-xs font-medium text-on-surface-variant hover:text-error transition-colors px-2 py-1 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             Clear
           </button>
@@ -151,6 +170,7 @@ export const HistoryPane = ({
         <div className="relative flex items-center">
           <Search className="w-4 h-4 text-on-surface-variant absolute left-3 pointer-events-none" />
           <input
+            ref={filterInputRef}
             type="text"
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
@@ -161,9 +181,12 @@ export const HistoryPane = ({
           {filterText.length > 0 && (
             <button
               type="button"
-              onClick={() => setFilterText("")}
+              onClick={() => {
+                setFilterText("");
+                filterInputRef.current?.focus();
+              }}
               aria-label="Clear filter text"
-              className="absolute right-2 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
+              className="absolute right-2 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -212,7 +235,7 @@ export const HistoryPane = ({
               type="button"
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
-              className="w-full py-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full py-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-xl transition-colors cursor-pointer disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               {isFetchingNextPage ? "Loading…" : "Load more"}
             </button>
