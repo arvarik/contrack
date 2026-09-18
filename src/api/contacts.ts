@@ -16,7 +16,7 @@ import {
   ParsedContactData,
   TrashedContact,
 } from "../types";
-import type { MapContact } from "../../shared/geo";
+import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { apiFetch } from "./client";
 
 /**
@@ -111,6 +111,7 @@ export interface SlimSearchContact {
   lastContactedAt: string | null;
   relationshipScore: number | null;
   tags: { tag: string }[];
+  lists?: { id: string; name: string }[];
   approximate?: boolean;
   matchType?: "exact" | "approximate";
 }
@@ -135,6 +136,7 @@ export const useSlimContactsForSearch = () => {
           lastContactedAt: c.lastContactedAt,
           relationshipScore: c.relationshipScore ?? null,
           tags: c.tags ?? [],
+          lists: c.lists ?? [],
         })),
   });
 };
@@ -153,12 +155,34 @@ export const useContact = (id: string | undefined) => {
 
 export const useMapContacts = () => {
   return useQuery({
-    queryKey: ["contacts", "map"],
-    queryFn: async ({ signal }): Promise<MapContact[]> => {
-      const res = await apiFetch("/contacts/map", { signal });
-      return res.json();
-    },
-    staleTime: STALE_TIMES.mapData,
+    queryKey: ["contacts"],
+    queryFn: fetchContactsSlim,
+    staleTime: 600_000,
+    select: (contacts): MapContact[] =>
+      contacts
+        .filter(
+          (c) => !c.isGhost && !c.isArchived && isValidLatLng(c.lat, c.lng),
+        )
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          company: c.company,
+          role: c.role,
+          industry: c.industry,
+          location: c.location,
+          avatarUrl: c.avatarUrl,
+          themeColor: c.themeColor,
+          lat: c.lat as number,
+          lng: c.lng as number,
+          relationshipScore: c.relationshipScore ?? null,
+          lastContactedAt: c.lastContactedAt,
+          nextFollowUpAt: c.nextFollowUpAt,
+          cadenceDays: c.cadenceDays,
+          interactionCount: c.interactionCount ?? 0,
+          tags: (c.tags || []).map((t) => (typeof t === "string" ? t : t.tag)),
+          lists: (c.lists || []).map((l) => ({ id: l.id, name: l.name })),
+          geoSource: c.geoSource,
+        })),
   });
 };
 

@@ -38,6 +38,8 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
   "score",
   "updated",
   "missing",
+  "list",
+  "near",
 ]);
 
 /**
@@ -46,14 +48,14 @@ const FACET_FIELDS: ReadonlySet<string> = new Set([
  * Non-greedy value match stops at whitespace boundary.
  */
 const COMPLETED_FACET_REGEX =
-  /\b(role|company|location|industry|tag|score|updated|missing):(\S+)\s/gi;
+  /\b(role|company|location|industry|tag|score|updated|missing|list|near):(\S+)\s/gi;
 
 /**
  * Regex to detect an in-progress facet at the end of input.
  * e.g., "role:" or "role:eng" (no trailing space).
  */
 const ACTIVE_PREFIX_REGEX =
-  /\b(role|company|location|industry|tag|score|updated|missing):(\S*)$/i;
+  /\b(role|company|location|industry|tag|score|updated|missing|list|near):(\S*)$/i;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -153,7 +155,10 @@ export function useQueryTokenizer(
         if (
           candidate &&
           candidate.field === filter.field &&
-          candidate.value === filter.value
+          (candidate.value === filter.value ||
+            candidate.value.toLowerCase() === filter.value.toLowerCase() ||
+            candidate.value.toLowerCase().replace(/-/g, " ") ===
+              filter.value.toLowerCase())
         ) {
           return "";
         }
@@ -226,8 +231,8 @@ export function useQueryTokenizer(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Parse a raw value string into a structured filter, handling operators for score/updated */
-function parseFilterValue(
+/** Parse a raw value string into a structured filter, handling operators for score/updated and near distance */
+export function parseFilterValue(
   field: FacetField,
   rawValue: string,
 ): FacetFilter | null {
@@ -250,6 +255,18 @@ function parseFilterValue(
       field,
       value: opMatch[2],
       operator: (opMatch[1] as ">" | "<") || ">",
+    };
+  }
+
+  if (field === "near") {
+    const match = rawValue.match(/^([^/]+)(?:\/(\d+)(?:km)?)?$/i);
+    if (!match) return null;
+    const place = match[1].trim();
+    const km = match[2] ? parseInt(match[2], 10) : 25;
+    return {
+      field,
+      value: place,
+      km,
     };
   }
 

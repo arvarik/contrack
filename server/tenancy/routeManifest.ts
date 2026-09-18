@@ -740,6 +740,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   { method: "GET", path: "/api/export/vcard", class: "scoped", isolated: true },
   {
     method: "GET",
+    path: "/api/geo/search",
+    class: "instance-read",
+    isolated: false,
+  },
+  {
+    method: "GET",
     path: "/api/imports",
     class: "scoped",
     isolated: true,

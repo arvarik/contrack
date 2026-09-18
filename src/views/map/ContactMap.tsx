@@ -392,6 +392,11 @@ export const ContactMap = ({
             cluster
             clusterRadius={CLUSTER_RADIUS}
             clusterMaxZoom={CLUSTER_MAX_ZOOM}
+            clusterProperties={{
+              atRisk: ["+", ["get", "atRisk"]],
+              overdue: ["+", ["get", "overdue"]],
+              scoreSum: ["+", ["get", "score"]],
+            }}
           >
             <Layer {...PRESENCE_LAYER} />
           </Source>

@@ -501,6 +501,42 @@ curl -X PATCH http://localhost:3210/api/contacts/abc123/location \
 
 ---
 
+## Geocoding
+
+### `GET /api/geo/search`
+
+Search for a place or city by name to resolve geographic coordinates. Backed by the local geocoding cache and Nominatim (or Mapbox if configured). Does not access or modify contacts.
+
+**Query Parameters:**
+
+| Param | Type   | Required | Description                              |
+| ----- | ------ | -------- | ---------------------------------------- |
+| `q`   | string | Yes      | Place query string (2 to 120 characters) |
+
+**Rate limiting:** 30 requests/minute per account (`429 RATE_LIMITED`).
+
+```bash
+curl "http://localhost:3210/api/geo/search?q=London"
+```
+
+```json
+{
+  "query": "London",
+  "lat": 51.5074,
+  "lng": -0.1278,
+  "provider": "Nominatim",
+  "cached": false
+}
+```
+
+**Error codes:**
+
+- `400 VALIDATION_ERROR`: `q` parameter missing or shorter than 2 / longer than 120 characters.
+- `404 NO_RESULT`: Nothing found for that place (the negative result is cached for 7 days to avoid repeated provider hits).
+- `429 RATE_LIMITED`: Exceeded 30 requests per minute.
+
+---
+
 ### `POST /api/contacts/:id/avatar`
 
 Upload an avatar image. Uses `multipart/form-data`.
