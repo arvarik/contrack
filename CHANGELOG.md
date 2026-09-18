@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Pulse charts.** Replaced the temporary MetricCard stopgap in Pulse's Network column with three SVG visualizations. ActivityCard renders a twelve-week activity heatmap with quantile scaling, cell titles, today outline, accessible weekly totals, 40 px sparkline with monthly comparisons, streak counter, and interaction type breakdown pills. MomentumCard surfaces rising, cooling, and silent contacts with score delta chips, row links to contact profiles, and a four-week baseline notice. CompositionCard provides an interactive SVG donut chart with dimension switching for Industry, Role, and Location, legend filter pills linking to facet search queries, and modal deep dives. Includes contrast unit tests ensuring WCAG AA non-text contrast across both light and dark palettes.
+- **Instance settings over environment.** Administrators can now configure trash
+  retention, backup schedule frequency and keep count, Mapbox geocoding API key,
+  and SearXNG search URL directly in the revamped General settings view
+  (`/settings/admin/general`). Settings follow a setting over env over default
+  resolution order. When an environment variable (`TRASH_RETENTION_DAYS`,
+  `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP`, `MAPBOX_API_KEY`, or `SEARXNG_URL`) is
+  defined, the setting is locked in the UI as read-only with source attribution, and
+  update attempts return 409 `SET_BY_ENVIRONMENT`. Stored Mapbox API keys are
+  encrypted at rest with AES-256-GCM using `secretBox` and are strictly write-only,
+  never returned over the API. The backup scheduler dynamically reschedules its
+  timer on interval changes, and the Trash view dynamically displays
+  server-configured retention windows.
 
 - **Password reset and magic-link sign-in.** Self-service password reset and
   passwordless magic-link sign-in backed by single-use hashed auth link tokens.

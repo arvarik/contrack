@@ -82,4 +82,12 @@ export const SETTING_KEYS = {
   magicLinkSignIn: "auth.magicLinkSignIn",
   /** string — what this instance calls itself, 1 to 60 characters */
   instanceName: "instance.name",
+  /** number — days before soft-deleted contacts are permanently purged */
+  trashRetentionDays: "lifecycle.trashRetentionDays",
+  /** number — hours between automated backups, 0 to disable */
+  backupIntervalHours: "backup.intervalHours",
+  /** number — count of backup files to keep */
+  backupKeep: "backup.keep",
+  /** string (sealed) — Mapbox access token encrypted with secretBox */
+  mapboxKey: "geo.mapboxKey",
 } as const;

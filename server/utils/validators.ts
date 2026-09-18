@@ -387,9 +387,27 @@ export const adminSettingsSchema = z
     // length, so this only has to say what kind of thing it is.
     instanceName: z.string().max(200).optional(),
     magicLinkSignIn: z.boolean().optional(),
+    trashRetentionDays: z.number().int().min(1).max(365).optional(),
+    backupIntervalHours: z.number().int().min(0).max(168).optional(),
+    backupKeep: z.number().int().min(1).max(50).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "Send a setting to change",
+  });
+
+/** Body for PUT /api/admin/integrations. Empty string clears. */
+export const adminIntegrationsSchema = z
+  .object({
+    mapboxKey: z.string().optional(),
+    searxngUrl: z
+      .string()
+      .trim()
+      .url("Must be a valid URL")
+      .or(z.literal(""))
+      .optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "Send an integration to change",
   });
 
 /** Query for GET /api/admin/audit. `before` is the opaque cursor a previous

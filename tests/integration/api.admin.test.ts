@@ -34,6 +34,12 @@ import { ownerUploadDir, UPLOADS_DIR } from "../../server/utils/paths.ts";
 import { ownerToken, scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { auditService } from "../../server/services/auditService.ts";
 import { mailService } from "../../server/services/mailService.ts";
+import { clearSettingsCache } from "../../server/services/settingsService.ts";
+import {
+  getActiveBackupTimer,
+  stopBackupSchedule,
+} from "../../server/services/backupService.ts";
+import { getMapboxApiKey } from "../../server/services/integrationSettings.ts";
 
 const app = makeTestApp();
 
@@ -217,8 +223,9 @@ describe("every admin route", () => {
   it("covers the whole admin class, so the loops below miss nothing", () => {
     // Twenty-nine in Phase 3, thirty with the instance health route in
     // quality story S9, thirty-four with outgoing mail routes in Prompt 2,
-    // and thirty-five with user reset link in Prompt 3.
-    expect(ADMIN_ROUTES).toHaveLength(35);
+    // thirty-five with user reset link in Prompt 3, and thirty-seven with
+    // integrations routes in Prompt 4.
+    expect(ADMIN_ROUTES).toHaveLength(37);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -1874,5 +1881,270 @@ describe("the audit log", () => {
       apiKey: "[redacted]",
       note: "[redacted]",
     });
+  });
+});
+
+describe("instance lifecycle and integration settings (P4)", () => {
+  let admin: Handle;
+  let member: Handle;
+  const originalEnv = { ...process.env };
+
+  beforeAll(async () => {
+    admin = await freshInstance("lifecycleadmin");
+    member = await createAndActivate(admin, "lifecyclemember", "member");
+  });
+
+  beforeEach(() => {
+    sqlite.prepare("DELETE FROM app_settings").run();
+    clearSettingsCache();
+    delete process.env.TRASH_RETENTION_DAYS;
+    delete process.env.BACKUP_INTERVAL_HOURS;
+    delete process.env.BACKUP_KEEP;
+    delete process.env.MAPBOX_API_KEY;
+    delete process.env.SEARXNG_URL;
+    stopBackupSchedule();
+  });
+
+  afterAll(() => {
+    process.env = { ...originalEnv };
+    sqlite.prepare("DELETE FROM app_settings").run();
+    clearSettingsCache();
+    stopBackupSchedule();
+  });
+
+  it("reads default lifecycle settings and performs round trip writes with audit logging", async () => {
+    // 1. Initial GET returns defaults
+    const initial = await as(admin)(request(app).get("/api/admin/settings"));
+    expect(initial.status).toBe(200);
+    expect(initial.body.trashRetentionDays).toBe(30);
+    expect(initial.body.trashRetentionDaysSource).toBe("default");
+    expect(initial.body.backupIntervalHours).toBe(24);
+    expect(initial.body.backupIntervalHoursSource).toBe("default");
+    expect(initial.body.backupKeep).toBe(7);
+    expect(initial.body.backupKeepSource).toBe("default");
+
+    // 2. PUT updates lifecycle settings
+    const updated = await as(admin)(
+      request(app).put("/api/admin/settings").send({
+        trashRetentionDays: 90,
+        backupIntervalHours: 12,
+        backupKeep: 14,
+      }),
+    );
+    expect(updated.status).toBe(200);
+    expect(updated.body.trashRetentionDays).toBe(90);
+    expect(updated.body.trashRetentionDaysSource).toBe("setting");
+    expect(updated.body.backupIntervalHours).toBe(12);
+    expect(updated.body.backupIntervalHoursSource).toBe("setting");
+    expect(updated.body.backupKeep).toBe(14);
+    expect(updated.body.backupKeepSource).toBe("setting");
+
+    // 3. Verify audit rows
+    const auditRes = await as(admin)(
+      request(app).get("/api/admin/audit?limit=20"),
+    );
+    expect(auditRes.status).toBe(200);
+    const actions = (
+      auditRes.body.entries as { action: string; targetId: string }[]
+    )
+      .filter((e) => e.action === "settings.changed")
+      .map((e) => e.targetId);
+
+    expect(actions).toContain("lifecycle.trashRetentionDays");
+    expect(actions).toContain("backup.intervalHours");
+    expect(actions).toContain("backup.keep");
+
+    // 4. Subsequent GET returns persisted values
+    const readBack = await as(admin)(request(app).get("/api/admin/settings"));
+    expect(readBack.status).toBe(200);
+    expect(readBack.body.trashRetentionDays).toBe(90);
+    expect(readBack.body.trashRetentionDaysSource).toBe("setting");
+  });
+
+  it("answers 409 when attempting to change a setting locked by the environment", async () => {
+    // Trash retention locked by env
+    process.env.TRASH_RETENTION_DAYS = "60";
+    const resTrash = await as(admin)(
+      request(app).put("/api/admin/settings").send({ trashRetentionDays: 45 }),
+    );
+    expect(resTrash.status).toBe(409);
+    expect(resTrash.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    delete process.env.TRASH_RETENTION_DAYS;
+
+    // Backup interval locked by env
+    process.env.BACKUP_INTERVAL_HOURS = "12";
+    const resInterval = await as(admin)(
+      request(app).put("/api/admin/settings").send({ backupIntervalHours: 6 }),
+    );
+    expect(resInterval.status).toBe(409);
+    expect(resInterval.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    delete process.env.BACKUP_INTERVAL_HOURS;
+
+    // Backup keep locked by env
+    process.env.BACKUP_KEEP = "10";
+    const resKeep = await as(admin)(
+      request(app).put("/api/admin/settings").send({ backupKeep: 5 }),
+    );
+    expect(resKeep.status).toBe(409);
+    expect(resKeep.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    delete process.env.BACKUP_KEEP;
+
+    // Mapbox key locked by env
+    process.env.MAPBOX_API_KEY = "pk.locked_by_env";
+    const resMapbox = await as(admin)(
+      request(app)
+        .put("/api/admin/integrations")
+        .send({ mapboxKey: "pk.new_key" }),
+    );
+    expect(resMapbox.status).toBe(409);
+    expect(resMapbox.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    delete process.env.MAPBOX_API_KEY;
+
+    // SearXNG URL locked by env
+    process.env.SEARXNG_URL = "http://searxng.env";
+    const resSearx = await as(admin)(
+      request(app)
+        .put("/api/admin/integrations")
+        .send({ searxngUrl: "http://searxng.new" }),
+    );
+    expect(resSearx.status).toBe(409);
+    expect(resSearx.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    delete process.env.SEARXNG_URL;
+  });
+
+  it("restarts the backup timer on schedule change and retains only one active timer after multiple changes", async () => {
+    delete process.env.DISABLE_BACKGROUND_JOBS;
+
+    // Update interval first time
+    const res1 = await as(admin)(
+      request(app).put("/api/admin/settings").send({ backupIntervalHours: 12 }),
+    );
+    expect(res1.status).toBe(200);
+    const timer1 = getActiveBackupTimer();
+    expect(timer1).not.toBeNull();
+
+    // Update interval second time
+    const res2 = await as(admin)(
+      request(app).put("/api/admin/settings").send({ backupIntervalHours: 6 }),
+    );
+    expect(res2.status).toBe(200);
+    const timer2 = getActiveBackupTimer();
+    expect(timer2).not.toBeNull();
+    // Previous timer was cleared and replaced
+    expect(timer2).not.toBe(timer1);
+
+    stopBackupSchedule();
+    expect(getActiveBackupTimer()).toBeNull();
+  });
+
+  it("manages integrations, seals Mapbox key, and never returns it in any response", async () => {
+    // 1. Initial GET
+    const initial = await as(admin)(
+      request(app).get("/api/admin/integrations"),
+    );
+    expect(initial.status).toBe(200);
+    expect(initial.body).toEqual({
+      mapbox: { configured: false, source: "none" },
+      searxng: { url: null, source: "none" },
+    });
+
+    // 2. PUT Mapbox key and SearXNG URL
+    const SECRET_KEY =
+      "pk.eyJ1IjoiY29udHJhY2stdGVzdCIsImEiOiJjbGV4YW1wbGUifQ.abcdef12345";
+    const putRes = await as(admin)(
+      request(app).put("/api/admin/integrations").send({
+        mapboxKey: SECRET_KEY,
+        searxngUrl: "https://searxng.internal.example.com",
+      }),
+    );
+    expect(putRes.status).toBe(200);
+    expect(putRes.body).toEqual({
+      mapbox: { configured: true, source: "setting" },
+      searxng: {
+        url: "https://searxng.internal.example.com",
+        source: "setting",
+      },
+    });
+
+    // CRITICAL: The secret key must NEVER be in the response body (raw or sealed)
+    const putJson = JSON.stringify(putRes.body);
+    expect(putJson).not.toContain(SECRET_KEY);
+    expect(putJson).not.toContain("v1:");
+
+    // 3. Subsequent GET must also NEVER return the key
+    const getRes = await as(admin)(request(app).get("/api/admin/integrations"));
+    expect(getRes.status).toBe(200);
+    expect(getRes.body).toEqual({
+      mapbox: { configured: true, source: "setting" },
+      searxng: {
+        url: "https://searxng.internal.example.com",
+        source: "setting",
+      },
+    });
+    const getJson = JSON.stringify(getRes.body);
+    expect(getJson).not.toContain(SECRET_KEY);
+    expect(getJson).not.toContain("v1:");
+
+    // 4. Verify in DB: stored sealed with v1: prefix, not plaintext
+    const row = sqlite
+      .prepare("SELECT value FROM app_settings WHERE key = 'geo.mapboxKey'")
+      .get() as { value: string };
+    expect(row).toBeDefined();
+    expect(row.value).not.toContain(SECRET_KEY);
+    expect(row.value).toContain("v1:");
+
+    // 5. Geocoding provider unseals the key successfully
+    const providerKey = getMapboxApiKey();
+    expect(providerKey).toBe(SECRET_KEY);
+
+    // 6. Audit log check: integrations.changed recorded with key names only, no secret
+    const auditRes = await as(admin)(
+      request(app).get("/api/admin/audit?limit=20"),
+    );
+    const auditJson = JSON.stringify(auditRes.body);
+    expect(auditJson).not.toContain(SECRET_KEY);
+    const integrationsEntries = (
+      auditRes.body.entries as { action: string; targetId: string }[]
+    ).filter((e) => e.action === "integrations.changed");
+    expect(integrationsEntries.map((e) => e.targetId)).toEqual(
+      expect.arrayContaining(["mapboxKey", "searxngUrl"]),
+    );
+
+    // 7. Clear the Mapbox key with empty string
+    const clearRes = await as(admin)(
+      request(app).put("/api/admin/integrations").send({ mapboxKey: "" }),
+    );
+    expect(clearRes.status).toBe(200);
+    expect(clearRes.body.mapbox).toEqual({
+      configured: false,
+      source: "none",
+    });
+    expect(getMapboxApiKey()).toBeNull();
+  });
+
+  it("enforces authentication and admin role on integrations routes", async () => {
+    // Unauthenticated GET -> 401
+    const anonGet = await request(app).get("/api/admin/integrations");
+    expect(anonGet.status).toBe(401);
+
+    // Unauthenticated PUT -> 401
+    const anonPut = await request(app)
+      .put("/api/admin/integrations")
+      .send({ searxngUrl: "http://example.com" });
+    expect(anonPut.status).toBe(401);
+
+    // Member GET -> 403
+    const memberGet = await as(member)(
+      request(app).get("/api/admin/integrations"),
+    );
+    expect(memberGet.status).toBe(403);
+
+    // Member PUT -> 403
+    const memberPut = await as(member)(
+      request(app)
+        .put("/api/admin/integrations")
+        .send({ searxngUrl: "http://example.com" }),
+    );
+    expect(memberPut.status).toBe(403);
   });
 });

@@ -39,6 +39,7 @@ import { activeProviderName, ai } from "../ai/index.ts";
 import { validateEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
+import { trashRetentionDays } from "./lifecycleSettings.ts";
 
 // ---------------------------------------------------------------------------
 // Incremental Dedupe — Debounce Map
@@ -821,11 +822,7 @@ export const contactService = {
    * daily. Returns the number of contacts purged.
    */
   purgeExpiredTrash(retentionDays?: number) {
-    const days =
-      retentionDays ??
-      (Number(process.env.TRASH_RETENTION_DAYS) > 0
-        ? Number(process.env.TRASH_RETENTION_DAYS)
-        : 30);
+    const days = retentionDays ?? trashRetentionDays().value;
     const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
     const expired = sqlite
       .prepare(

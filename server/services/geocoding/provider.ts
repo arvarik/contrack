@@ -1,5 +1,6 @@
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { getMapboxApiKey } from "../integrationSettings.ts";
 
 export const INTER_REQUEST_DELAY_MS = 1100;
 
@@ -13,7 +14,7 @@ export async function geocodeWithFallback(
   location: string,
 ): Promise<GeoResult | null> {
   let searchStr = location;
-  const mapboxKey = process.env.MAPBOX_API_KEY;
+  const mapboxKey = getMapboxApiKey() ?? undefined;
   const provider = mapboxKey ? "Mapbox" : "Nominatim";
 
   for (let fallback = 0; fallback < 4 && searchStr.length > 0; fallback++) {
