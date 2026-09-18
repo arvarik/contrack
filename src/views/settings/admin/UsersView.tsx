@@ -40,6 +40,8 @@ import {
   useCreateUser,
   useDeleteUser,
   useResetPassword,
+  useSendResetLink,
+  useInstanceSettings,
   useSetUserEnabled,
   useUpdateUser,
   type AdminUser,
@@ -684,10 +686,16 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   const { data: users, isLoading, isError, refetch } = useAdminUsers();
   const setEnabled = useSetUserEnabled();
   const reset = useResetPassword();
+  const sendResetLink = useSendResetLink();
+  const { data: instanceSettings } = useInstanceSettings();
+  const mailConfigured = instanceSettings?.mailConfigured === true;
   const remove = useDeleteUser();
 
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const [resetMethod, setResetMethod] = useState<"email" | "temporary">(
+    "email",
+  );
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(
     null,
   );
@@ -811,7 +819,10 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               user={user}
               actions={{
                 onEdit: () => setEditing(user),
-                onReset: () => setResetting(user),
+                onReset: () => {
+                  setResetMethod("email");
+                  setResetting(user);
+                },
                 onExport: () =>
                   downloadUserExport(user.id, user.username)
                     .then(() => toast.success("Export downloaded"))
@@ -855,31 +866,135 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         onClose={() => setDeleting(null)}
       />
 
-      <ConfirmDialog
-        isOpen={resetting !== null}
-        onClose={() => setResetting(null)}
-        busy={reset.isPending}
-        tone="primary"
-        title={`Reset ${resetting?.username}'s password?`}
-        confirmLabel="Reset password"
-        description={
-          <p>
-            They are signed out everywhere and every token they made stops
-            working. You will get a temporary password to hand over, and they
-            must replace it before anything works for them.
-          </p>
-        }
-        onConfirm={() =>
-          resetting &&
-          reset.mutate(resetting.id, {
-            onSuccess: ({ temporaryPassword: password }) => {
-              setResetting(null);
-              setTemporaryPassword(password);
-            },
-            onError: (error: Error) => toast.error(error.message),
-          })
-        }
-      />
+      {!mailConfigured ? (
+        <ConfirmDialog
+          isOpen={resetting !== null}
+          onClose={() => setResetting(null)}
+          busy={reset.isPending}
+          tone="primary"
+          title={`Reset ${resetting?.username}'s password?`}
+          confirmLabel="Reset password"
+          description={
+            <p>
+              They are signed out everywhere and every token they made stops
+              working. You will get a temporary password to hand over, and they
+              must replace it before anything works for them.
+            </p>
+          }
+          onConfirm={() =>
+            resetting &&
+            reset.mutate(resetting.id, {
+              onSuccess: ({ temporaryPassword: password }) => {
+                setResetting(null);
+                setTemporaryPassword(password);
+              },
+              onError: (error: Error) => toast.error(error.message),
+            })
+          }
+        />
+      ) : (
+        <Modal
+          isOpen={resetting !== null}
+          onClose={() => setResetting(null)}
+          title={`Reset ${resetting?.username}'s password?`}
+          size="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-on-surface-variant text-pretty">
+              They are signed out everywhere and every token they made stops
+              working. Choose how to deliver the new password.
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 hover:bg-surface-container-high/40 cursor-pointer transition-colors">
+                <input
+                  id="reset-method-email"
+                  type="radio"
+                  name="resetMethod"
+                  value="email"
+                  checked={resetMethod === "email"}
+                  onChange={() => setResetMethod("email")}
+                  className="mt-0.5 w-4 h-4 accent-primary"
+                />
+                <label
+                  htmlFor="reset-method-email"
+                  className="text-sm cursor-pointer select-none"
+                >
+                  <span className="font-bold text-on-surface block">
+                    Email a reset link
+                  </span>
+                  <span className="text-xs text-on-surface-variant block mt-0.5">
+                    Sends a one-time link to {resetting?.email}. Works for 24
+                    hours.
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 hover:bg-surface-container-high/40 cursor-pointer transition-colors">
+                <input
+                  id="reset-method-temporary"
+                  type="radio"
+                  name="resetMethod"
+                  value="temporary"
+                  checked={resetMethod === "temporary"}
+                  onChange={() => setResetMethod("temporary")}
+                  className="mt-0.5 w-4 h-4 accent-primary"
+                />
+                <label
+                  htmlFor="reset-method-temporary"
+                  className="text-sm cursor-pointer select-none"
+                >
+                  <span className="font-bold text-on-surface block">
+                    Show a temporary password
+                  </span>
+                  <span className="text-xs text-on-surface-variant block mt-0.5">
+                    Displays a password once to copy and hand over directly.
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <AdminButton
+                tone="secondary"
+                onClick={() => setResetting(null)}
+                disabled={reset.isPending || sendResetLink.isPending}
+              >
+                Cancel
+              </AdminButton>
+              <AdminButton
+                busy={reset.isPending || sendResetLink.isPending}
+                onClick={() => {
+                  if (!resetting) return;
+                  if (resetMethod === "email") {
+                    sendResetLink.mutate(resetting.id, {
+                      onSuccess: (res) => {
+                        setResetting(null);
+                        toast.success(
+                          `Sent to ${res.sentTo}. The link works for 24 hours.`,
+                        );
+                      },
+                      onError: (error: Error) => toast.error(error.message),
+                    });
+                  } else {
+                    reset.mutate(resetting.id, {
+                      onSuccess: ({ temporaryPassword: password }) => {
+                        setResetting(null);
+                        setTemporaryPassword(password);
+                      },
+                      onError: (error: Error) => toast.error(error.message),
+                    });
+                  }
+                }}
+              >
+                {resetMethod === "email"
+                  ? "Email a reset link"
+                  : "Show a temporary password"}
+              </AdminButton>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <Modal
         isOpen={temporaryPassword !== null}

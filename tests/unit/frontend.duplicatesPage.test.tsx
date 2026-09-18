@@ -56,8 +56,9 @@ describe("DuplicatesPage", () => {
     } as unknown as ReturnType<typeof api.useDedupeCount>);
 
     renderComponent();
-    expect(screen.getByText("7 possible duplicates")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Review them/i })).toBeTruthy();
+    const reviewLink = screen.getByRole("link", { name: /Review them/i });
+    expect(reviewLink).toBeTruthy();
+    expect(reviewLink).toHaveAttribute("href", "/pulse/duplicates");
   });
 
   it("omits review strip when dedupeCount is 0", () => {

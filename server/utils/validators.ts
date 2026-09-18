@@ -386,6 +386,7 @@ export const adminSettingsSchema = z
     // `setInstanceName` trims, strips control characters, and enforces the
     // length, so this only has to say what kind of thing it is.
     instanceName: z.string().max(200).optional(),
+    magicLinkSignIn: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "Send a setting to change",

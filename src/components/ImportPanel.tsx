@@ -430,7 +430,7 @@ export const ImportPanel = ({
     if (summary) onComplete?.(summary);
     onClose?.();
     dismiss();
-    navigate("/pulse?tab=suggestions");
+    navigate("/pulse/duplicates");
   };
 
   useEffect(() => {

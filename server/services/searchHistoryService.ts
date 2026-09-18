@@ -6,7 +6,7 @@ import {
   type HistoryMode,
   type RecordHistoryInput,
 } from "../../shared/searchHistory.ts";
-import { getPreferences } from "./userPreferencesService.ts";
+import { getPreferences, deletePreference } from "./userPreferencesService.ts";
 
 export interface SearchHistoryRow {
   id: string;
@@ -104,7 +104,7 @@ export function record(
        ) VALUES (
          ?, ?, ?, ?, ?,
          ?, ?, ?, 0, 1,
-         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+         strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
        )
        ON CONFLICT(ownerId, mode, normalizedQuery) DO UPDATE SET
          query = excluded.query,
@@ -112,7 +112,7 @@ export function record(
          resultIds = excluded.resultIds,
          fallback = excluded.fallback,
          runCount = search_history.runCount + 1,
-         lastRunAt = CURRENT_TIMESTAMP
+         lastRunAt = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
        RETURNING id, ownerId, mode, query, normalizedQuery, resultCount, resultIds, fallback, pinned, runCount, createdAt, lastRunAt`,
     )
     .get(
@@ -161,8 +161,12 @@ export function list(
   }
 
   if (params.q && params.q.trim()) {
-    filterClauses.push("AND normalizedQuery LIKE ?");
-    filterValues.push(`%${params.q.trim().toLowerCase()}%`);
+    const escaped = params.q
+      .trim()
+      .toLowerCase()
+      .replace(/[%_\\]/g, "\\$&");
+    filterClauses.push("AND normalizedQuery LIKE ? ESCAPE '\\'");
+    filterValues.push(`%${escaped}%`);
   }
 
   // Compute total (without cursor)
@@ -220,25 +224,14 @@ export function setPinned(
   id: string,
   pinned: boolean,
 ): HistoryEntry | null {
-  const result = sqlite
+  const row = sqlite
     .prepare(
       `UPDATE search_history
        SET pinned = ?
-       WHERE id = ? AND ownerId = ?`,
+       WHERE id = ? AND ownerId = ?
+       RETURNING id, ownerId, mode, query, normalizedQuery, resultCount, resultIds, fallback, pinned, runCount, createdAt, lastRunAt`,
     )
-    .run(pinned ? 1 : 0, id, ownerId);
-
-  if (result.changes === 0) {
-    return null;
-  }
-
-  const row = sqlite
-    .prepare(
-      `SELECT id, ownerId, mode, query, normalizedQuery, resultCount, resultIds, fallback, pinned, runCount, createdAt, lastRunAt
-       FROM search_history
-       WHERE id = ? AND ownerId = ?`,
-    )
-    .get(id, ownerId) as SearchHistoryRow | undefined;
+    .get(pinned ? 1 : 0, id, ownerId) as SearchHistoryRow | undefined;
 
   return row ? mapRowToEntry(row) : null;
 }
@@ -281,6 +274,8 @@ export function clear(
          WHERE ownerId = ?`,
       )
       .run(ownerId);
+    // Clear legacy preferences to prevent resurrection on subsequent GET
+    deletePreference(ownerId, "searchHistory");
   }
 
   return { deleted: result.changes };
@@ -363,6 +358,8 @@ export function backfillFromPreferences(ownerId: string): number {
   });
 
   runTransaction();
+  // Clear legacy preferences once backfilled so it never repeats or resurrects
+  deletePreference(ownerId, "searchHistory");
   return inserted;
 }
 

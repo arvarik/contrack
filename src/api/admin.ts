@@ -83,6 +83,7 @@ export interface InstanceSettings {
   instanceName: string;
   instanceNameMax: number;
   mailConfigured?: boolean;
+  magicLinkSignIn?: boolean;
 }
 
 export interface AuditEntry {
@@ -318,6 +319,18 @@ export const useResetPassword = () => {
   });
 };
 
+export const useSendResetLink = () => {
+  const changed = useAccountsChanged();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiJson<{ sentTo: string; expiresAt: string }>(
+        `/admin/users/${encodeURIComponent(id)}/reset-link`,
+        { method: "POST" },
+      ),
+    onSuccess: changed,
+  });
+};
+
 export const useSetUserEnabled = () => {
   const changed = useAccountsChanged();
   return useMutation({
@@ -462,6 +475,7 @@ export const useUpdateInstanceSettings = () => {
       registrationOpen?: boolean;
       sessionTtlDays?: number;
       instanceName?: string;
+      magicLinkSignIn?: boolean;
     }) =>
       apiJson<InstanceSettings>("/admin/settings", {
         method: "PUT",
@@ -553,6 +567,8 @@ export const AUDIT_GROUPS = [
       "auth.login.failed",
       "auth.logout",
       "auth.password.changed",
+      "auth.password.reset",
+      "auth.magic_link.used",
     ],
   },
   {

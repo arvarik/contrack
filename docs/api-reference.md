@@ -1840,7 +1840,9 @@ curl http://localhost:3210/api/auth/status
 account. `localOwnerPresent` is true while the instance has never been
 secured. `legacyTokenConfigured` is true while the deprecated environment
 `API_TOKEN` is set. `existingContacts` is the old name for `deviceContacts`
-and is removed in 3.0.
+and is removed in 3.0. `mailConfigured` indicates whether outgoing SMTP mail is
+available. `magicLinkSignIn` is true only when passwordless magic-link sign-in is
+both enabled in instance settings and outgoing mail is configured.
 
 `map` names the basemap style the map loads in each palette, from
 `MAP_STYLE_LIGHT` and `MAP_STYLE_DARK`. It rides on this endpoint because the
@@ -2023,6 +2025,70 @@ Dismiss the first-run passkey nudge for the signed-in account. Stores `{ dismiss
 
 ---
 
+### `POST /api/auth/password-reset/request`
+
+Request a password reset link by email.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/password-reset/request \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alex@example.com"}'
+# → 202 {}
+```
+
+Always answers `202 {}`, preventing account enumeration. When outgoing mail is configured and the email belongs to an active account, creates a hashed single-use token valid for 1 hour and sends an email. Subject to an hourly limit of 3 link creations per account. Rate limited to 3 requests per 15 minutes per IP (`linkLimiter`).
+
+---
+
+### `POST /api/auth/password-reset/complete`
+
+Complete a password reset with a one-time token.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/password-reset/complete \
+  -H "Content-Type: application/json" \
+  -d '{"token":"...","password":"correct horse battery staple"}'
+# → 200 { "user": { ... } } (plus Set-Cookie for session)
+```
+
+Redeems the token, validates the new password, updates the password hash, clears `mustChangePassword`, revokes all other active sessions, establishes a new session with method `"email-link"`, sets the session cookie, and records the `auth.password.reset` audit event. Rate limited by `credentialLimiter` (10 per minute per IP).
+
+**Error codes:** `400` (missing token or password, or password fails validation), `404 LINK_INVALID`, `410 LINK_EXPIRED`, `410 LINK_USED`.
+
+---
+
+### `POST /api/auth/magic-link/request`
+
+Request a passwordless sign-in link by email.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/magic-link/request \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alex@example.com"}'
+# → 202 {}
+```
+
+Answers `404 MAGIC_LINK_OFF` when `auth.magicLinkSignIn` is not enabled or outgoing mail is not configured. When enabled, always answers `202 {}`. If the email belongs to an active account, creates a hashed single-use token valid for 15 minutes and emails the sign-in link. Subject to an hourly limit of 3 link creations per account. Rate limited to 3 requests per 15 minutes per IP (`linkLimiter`).
+
+---
+
+### `POST /api/auth/magic-link/complete`
+
+Complete magic link sign-in using a one-time token.
+
+```bash
+curl -X POST http://localhost:3210/api/auth/magic-link/complete \
+  -H "Content-Type: application/json" \
+  -d '{"token":"..."}'
+# → 200 { "user": { ... } } (plus Set-Cookie for session)
+```
+
+Redeems the token, creates a new session with method `"email-link"`, sets the session cookie, and records audit actions `auth.login.success` (`details.method: "magic-link"`) and `auth.magic_link.used`. Rate limited by `credentialLimiter` (10 per minute per IP).
+
+**Error codes:** `400` (missing token), `404 LINK_INVALID`, `410 LINK_EXPIRED`, `410 LINK_USED`.
+
+---
+
 ### `GET /api/auth/tokens` _(account)_
 
 The personal tokens this account holds, newest first. Each row carries `tokenPrefix` (the first 12 characters, enough to tell two apart), `lastUsedAt`, `expiresAt` and `revokedAt`. The token itself is never returned again.
@@ -2055,27 +2121,28 @@ Revoke one of your own tokens. `404` for a token belonging to somebody else. The
 
 Every route under `/api/admin` needs an account with the `admin` role and answers `403 ADMIN_REQUIRED` otherwise.
 
-| Method | Path                                  | What it does                                                            |
-| ------ | ------------------------------------- | ----------------------------------------------------------------------- |
-| GET    | `/api/admin/users`                    | Every account, with contact, session and token counts                   |
-| POST   | `/api/admin/users`                    | Create an account. Returns a one-time temporary password                |
-| GET    | `/api/admin/users/:id`                | One account plus what it owns                                           |
-| PATCH  | `/api/admin/users/:id`                | Change a role or a display name                                         |
-| POST   | `/api/admin/users/:id/reset-password` | New temporary password. Revokes every session and token                 |
-| POST   | `/api/admin/users/:id/disable`        | Reversible. Ends sessions, refuses tokens                               |
-| POST   | `/api/admin/users/:id/enable`         | Gives the tokens back, not the sessions                                 |
-| GET    | `/api/admin/users/:id/export`         | That account's data, for offboarding. Audit-logged                      |
-| DELETE | `/api/admin/users/:id`                | Two steps: `409 USER_HAS_DATA` with counts, then `{"decision":"purge"}` |
-| GET    | `/api/admin/invitations`              | Every invitation with its derived status                                |
-| POST   | `/api/admin/invitations`              | Returns a one-time link, optionally sends it by email                   |
-| DELETE | `/api/admin/invitations/:id`          | Revoke a pending invitation                                             |
-| GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, and the supported range           |
-| PUT    | `/api/admin/settings`                 | Change either or both                                                   |
-| GET    | `/api/admin/audit`                    | Every administrative action, newest first                               |
-| GET    | `/api/admin/mail`                     | Outgoing mail status and configuration without secrets                  |
-| PUT    | `/api/admin/mail`                     | Save SMTP configuration (seals password with secretBox)                 |
-| DELETE | `/api/admin/mail`                     | Clear stored SMTP configuration                                         |
-| POST   | `/api/admin/mail/test`                | Send a test email to verify SMTP delivery (5/10m rate limit)            |
+| Method | Path                                  | What it does                                                              |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------- |
+| GET    | `/api/admin/users`                    | Every account, with contact, session and token counts                     |
+| POST   | `/api/admin/users`                    | Create an account. Returns a one-time temporary password                  |
+| GET    | `/api/admin/users/:id`                | One account plus what it owns                                             |
+| PATCH  | `/api/admin/users/:id`                | Change a role or a display name                                           |
+| POST   | `/api/admin/users/:id/reset-password` | New temporary password. Revokes every session and token                   |
+| POST   | `/api/admin/users/:id/reset-link`     | Send 24-hour reset link by email (requires outgoing mail)                 |
+| POST   | `/api/admin/users/:id/disable`        | Reversible. Ends sessions, refuses tokens                                 |
+| POST   | `/api/admin/users/:id/enable`         | Gives the tokens back, not the sessions                                   |
+| GET    | `/api/admin/users/:id/export`         | That account's data, for offboarding. Audit-logged                        |
+| DELETE | `/api/admin/users/:id`                | Two steps: `409 USER_HAS_DATA` with counts, then `{"decision":"purge"}`   |
+| GET    | `/api/admin/invitations`              | Every invitation with its derived status                                  |
+| POST   | `/api/admin/invitations`              | Returns a one-time link, optionally sends it by email                     |
+| DELETE | `/api/admin/invitations/:id`          | Revoke a pending invitation                                               |
+| GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, `magicLinkSignIn`, `mailConfigured` |
+| PUT    | `/api/admin/settings`                 | Update settings (refuses `magicLinkSignIn: true` without mail: `409`)     |
+| GET    | `/api/admin/audit`                    | Every administrative action, newest first                                 |
+| GET    | `/api/admin/mail`                     | Outgoing mail status and configuration without secrets                    |
+| PUT    | `/api/admin/mail`                     | Save SMTP configuration (seals password with secretBox)                   |
+| DELETE | `/api/admin/mail`                     | Clear stored SMTP configuration                                           |
+| POST   | `/api/admin/mail/test`                | Send a test email to verify SMTP delivery (5/10m rate limit)              |
 
 Three guards protect the instance, in this order: the local account that owns
 an unsecured instance's data cannot be disabled or deleted
@@ -2096,6 +2163,17 @@ yet. Added by extra F3.
 An account created or reset by an admin holds a password that admin chose, so
 every route outside the six the sign-in flow needs answers
 `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it.
+
+### `POST /api/admin/users/:id/reset-link`
+
+Admin only. Send a 24-hour password reset link to a user's email address.
+
+```bash
+curl -X POST http://localhost:3210/api/admin/users/usr_12345/reset-link
+# → 200 { "sentTo": "user@example.com", "expiresAt": "2026-09-19T18:00:00.000Z" }
+```
+
+Answers `409 MAIL_NOT_CONFIGURED` if outgoing mail is not configured. When mail is available, creates a 24-hour reset token, emails the link to the user, and logs the `user.password.reset` audit event (`details.via: "email"`).
 
 ### `POST /api/admin/invitations`
 

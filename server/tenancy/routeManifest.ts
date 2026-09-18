@@ -208,6 +208,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "admin",
     isolated: false,
   },
+  {
+    method: "POST",
+    path: "/api/admin/users/:id/reset-link",
+    class: "admin",
+    isolated: false,
+  },
   { method: "POST", path: "/api/ai-search", class: "scoped", isolated: true },
   {
     method: "POST",
@@ -398,6 +404,30 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   { method: "POST", path: "/api/auth/setup", class: "public", isolated: false },
   { method: "GET", path: "/api/auth/status", class: "public", isolated: false },
+  {
+    method: "POST",
+    path: "/api/auth/password-reset/request",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/password-reset/complete",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/magic-link/request",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/magic-link/complete",
+    class: "public",
+    isolated: false,
+  },
   {
     method: "GET",
     path: "/api/avatar/:style",

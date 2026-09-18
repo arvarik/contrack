@@ -6,18 +6,36 @@
  *
  * @module views/settings/pages/PrivacyPage
  */
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, HardDrive, ArrowRight } from "lucide-react";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { SettingRow } from "../SettingRow";
 import { Switch } from "../../../components/ui/Switch";
+import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
+import {
+  useSearchHistoryList,
+  useClearHistory,
+} from "../../../api/searchHistory";
 import { AiCapabilitiesCard } from "../AiCapabilitiesCard";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 export const PrivacyPage = () => {
   const { preferences, setPreference } = usePreferences();
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const { data } = useSearchHistoryList();
+  const clearMutation = useClearHistory();
+
+  const count = data?.pages[0]?.total ?? 0;
+
+  const handleClearHistory = () => {
+    clearMutation.mutate(undefined, {
+      onSuccess: () => {
+        setClearDialogOpen(false);
+      },
+    });
+  };
 
   return (
     <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28 md:pb-10">
@@ -27,7 +45,7 @@ export const PrivacyPage = () => {
         </p>
       </div>
 
-      <div className={cn(CARD, "p-4 sm:p-6")}>
+      <div className={cn(CARD, "p-4 sm:p-6 divide-y divide-surface-container")}>
         <SettingRow
           id="ai-assist"
           title="Use AI for this account"
@@ -39,6 +57,26 @@ export const PrivacyPage = () => {
             checked={preferences.aiAssist}
             onChange={(next) => setPreference("aiAssist", next)}
           />
+        </SettingRow>
+
+        <SettingRow
+          id="search-history"
+          title="Search history"
+          description="Questions asked in Ask Contrack and the command palette are saved for quick recall. You can clear your history across all modes at any time."
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xs sm:text-sm text-on-surface-variant whitespace-nowrap">
+              {count} {count === 1 ? "question" : "questions"}
+            </span>
+            <button
+              type="button"
+              disabled={count === 0 || clearMutation.isPending}
+              onClick={() => setClearDialogOpen(true)}
+              className="btn-secondary shrink-0 text-xs font-semibold disabled:opacity-50"
+            >
+              Clear history
+            </button>
+          </div>
         </SettingRow>
       </div>
 
@@ -113,6 +151,15 @@ export const PrivacyPage = () => {
           </Link>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={clearDialogOpen}
+        onClose={() => setClearDialogOpen(false)}
+        onConfirm={handleClearHistory}
+        title="Clear search history"
+        description={`Delete all ${count} questions? This cannot be undone.`}
+        confirmLabel="Delete all"
+      />
     </div>
   );
 };

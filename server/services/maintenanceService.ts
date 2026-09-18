@@ -34,12 +34,14 @@ export const DEAD_INVITATION_RETENTION_DAYS = 30;
  * it `running`, and the next read is what settles it.
  */
 export const IMPORT_RETENTION_DAYS = 30;
+export const AUTH_LINK_RETENTION_DAYS = 30;
 export const SCORE_SNAPSHOT_RETENTION_WEEKS = 26;
 
 export interface MaintenanceCounts {
   auditRows: number;
   expiredSessions: number;
   expiredChallenges: number;
+  agedAuthLinks: number;
   agedTokens: number;
   deadInvitations: number;
   oldInvocations: number;
@@ -72,6 +74,7 @@ export function runDailyMaintenance(): MaintenanceCounts {
     auditRows: 0,
     expiredSessions: 0,
     expiredChallenges: 0,
+    agedAuthLinks: 0,
     agedTokens: 0,
     deadInvitations: 0,
     oldInvocations: 0,
@@ -99,6 +102,17 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `DELETE FROM auth_challenges WHERE datetime(expiresAt) <= datetime('now')`,
       )
       .run().changes;
+
+    counts.agedAuthLinks = sqlite
+      .prepare(
+        `DELETE FROM auth_links
+          WHERE (usedAt IS NOT NULL AND datetime(usedAt) < datetime('now', ?))
+             OR (usedAt IS NULL AND datetime(expiresAt) < datetime('now', ?))`,
+      )
+      .run(
+        `-${AUTH_LINK_RETENTION_DAYS} days`,
+        `-${AUTH_LINK_RETENTION_DAYS} days`,
+      ).changes;
 
     // A revoked token ages out. An expired one stays, because the list is
     // where somebody looks to understand why their script stopped working,
@@ -161,6 +175,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
   const total =
     counts.auditRows +
     counts.expiredSessions +
+    counts.expiredChallenges +
+    counts.agedAuthLinks +
     counts.agedTokens +
     counts.deadInvitations +
     counts.oldInvocations +
@@ -171,6 +187,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
       "Maintenance",
       `Daily sweep removed ${counts.auditRows} audit rows, ` +
         `${counts.expiredSessions} expired sessions, ` +
+        `${counts.expiredChallenges} expired challenges, ` +
+        `${counts.agedAuthLinks} aged auth links, ` +
         `${counts.agedTokens} aged revoked tokens, ` +
         `${counts.deadInvitations} dead invitations, ` +
         `${counts.oldInvocations} old AI invocations, ` +

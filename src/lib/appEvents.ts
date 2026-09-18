@@ -22,6 +22,13 @@
 /** Someone asked for the keyboard-shortcuts overlay. Owned by App. */
 export const OPEN_SHORTCUTS_EVENT = "contrack:open-shortcuts";
 
+/** Someone asked for the quick interaction modal. Owned by App. */
+export const OPEN_QUICK_NOTE_EVENT = "contrack:open-quick-note";
+
+export interface OpenQuickNoteDetail {
+  contactId?: string;
+}
+
 /**
  * The server refused a request for want of an acceptable credential.
  *
@@ -103,4 +110,13 @@ export const emitPasswordChangeRequired = (): void => {
 /** Ask the gate to re-read `/api/auth/status`. */
 export const emitAuthStatusStale = (): void => {
   window.dispatchEvent(new Event(AUTH_STATUS_STALE_EVENT));
+};
+
+/** Ask App to open the quick note modal, optionally pre-selecting a contact. */
+export const openQuickNote = (contactId?: string): void => {
+  window.dispatchEvent(
+    new CustomEvent<OpenQuickNoteDetail>(OPEN_QUICK_NOTE_EVENT, {
+      detail: { contactId },
+    }),
+  );
 };

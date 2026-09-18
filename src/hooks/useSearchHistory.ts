@@ -16,24 +16,63 @@
  *
  * @module src/hooks/useSearchHistory
  */
-import { useState, useCallback, useRef } from "react";
-import { usePreferences } from "../contexts/PreferencesContext";
-import type { SearchHistoryEntry } from "../api/preferences";
+import { useState, useCallback, useRef, useMemo } from "react";
+import {
+  useSearchHistoryList,
+  useRecordSearch,
+  useClearHistory,
+} from "../api/searchHistory";
+import { useHiddenPendingIds } from "../lib/pendingDeletes";
+import { parseServerTime } from "../lib/datetime";
+import type { HistoryMode } from "../../shared/searchHistory";
 
-export type { SearchHistoryEntry };
+export interface SearchHistoryEntry {
+  id?: string;
+  query: string;
+  mode: "normal" | "ai" | "action" | "people" | "notes" | "palette";
+  timestamp: number;
+}
 
 /** Duration in ms within which reopening the palette restores the last query. */
 const REPOPULATE_WINDOW_MS = 30_000;
 
-const MAX_STORED = 20;
 const MAX_DISPLAY = 5;
 
 /** The server refuses anything longer, so trim rather than lose the entry. */
 const MAX_QUERY_LENGTH = 200;
 
 export const useSearchHistory = () => {
-  const { preferences, setPreference } = usePreferences();
-  const entries = preferences.searchHistory;
+  const { data } = useSearchHistoryList();
+  const recordMutation = useRecordSearch();
+  const clearMutation = useClearHistory();
+
+  const hiddenIds = useHiddenPendingIds();
+
+  const entries: SearchHistoryEntry[] = useMemo(() => {
+    const list = data?.pages.flatMap((p) => p.entries) ?? [];
+    return list
+      .filter((e) => e?.id && !hiddenIds.has(e.id))
+      .map((e) => {
+        const mode: SearchHistoryEntry["mode"] =
+          e.mode === "people" ? "ai" : e.mode === "palette" ? "normal" : e.mode;
+        const query =
+          e.mode === "people" && !e.query.startsWith("?")
+            ? `? ${e.query}`
+            : e.query;
+        const parsed = e.lastRunAt ? parseServerTime(e.lastRunAt) : null;
+        const timestamp = parsed
+          ? parsed.getTime()
+          : e.lastRunAt
+            ? new Date(e.lastRunAt).getTime()
+            : Date.now();
+        return {
+          id: e.id,
+          query,
+          mode,
+          timestamp: Number.isNaN(timestamp) ? Date.now() : timestamp,
+        };
+      });
+  }, [data, hiddenIds]);
 
   const [historyIndex, setHistoryIndex] = useState(-1);
   // Stash the user's typed text before they started ↑/↓, so ↓ past 0 restores it.
@@ -51,34 +90,48 @@ export const useSearchHistory = () => {
   entriesRef.current = entries;
 
   /**
-   * Record a successful search. Deduplicates case-insensitively, caps at
-   * MAX_STORED. Only call after confirming the search returned something.
+   * Record a successful search. Calls useRecordSearch with:
+   * - normal and action as palette
+   * - ? q as people with the prefix stripped
    */
   const addEntry = useCallback(
-    (query: string, mode: "normal" | "ai" | "action") => {
+    (
+      query: string,
+      mode: "normal" | "ai" | "action",
+      meta?: {
+        resultCount?: number;
+        resultIds?: string[];
+        fallback?: boolean;
+      },
+    ) => {
       const trimmed = query.trim().slice(0, MAX_QUERY_LENGTH);
       if (trimmed.length < 2) return; // Don't record trivially short queries.
+
+      const isAi = mode === "ai" || trimmed.startsWith("?");
+      const targetMode: HistoryMode = isAi ? "people" : "palette";
+      const targetQuery = isAi ? trimmed.replace(/^\?\s*/, "").trim() : trimmed;
+
+      if (targetQuery.length < 1) return;
 
       const timestamp = Date.now();
       lastQueryRef.current = { query: trimmed, mode, timestamp };
 
-      const deduped = entriesRef.current.filter(
-        (e) => e.query.toLowerCase() !== trimmed.toLowerCase(),
-      );
-      const updated: SearchHistoryEntry[] = [
-        { query: trimmed, mode, timestamp },
-        ...deduped,
-      ].slice(0, MAX_STORED);
-      setPreference("searchHistory", updated);
+      recordMutation.mutate({
+        query: targetQuery,
+        mode: targetMode,
+        resultCount: meta?.resultCount,
+        resultIds: meta?.resultIds,
+        fallback: meta?.fallback,
+      });
     },
-    [setPreference],
+    [recordMutation],
   );
 
   /** Clear all search history. */
   const clearHistory = useCallback(() => {
-    setPreference("searchHistory", []);
+    clearMutation.mutate(undefined);
     setHistoryIndex(-1);
-  }, [setPreference]);
+  }, [clearMutation]);
 
   /**
    * Terminal-style ↑/↓ navigation through history.
@@ -117,7 +170,7 @@ export const useSearchHistory = () => {
   }, []);
 
   /** Top N entries for the zero-state display. */
-  const recentDisplay = entries.slice(0, MAX_DISPLAY);
+  const recentDisplay = useMemo(() => entries.slice(0, MAX_DISPLAY), [entries]);
 
   /**
    * The last meaningful query, if it was recorded in the past 30 seconds.

@@ -6,8 +6,9 @@
  *
  * @module views/settings/pages/DuplicatesPage
  */
-import React, { useRef } from "react";
+import React from "react";
 import { ArrowRight, Copy } from "lucide-react";
+import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";
 import { SettingRow } from "../SettingRow";
 import { Segmented } from "../../../components/ui/Segmented";
@@ -32,11 +33,6 @@ export const DuplicatesPage = () => {
   const { data: dedupeData } = useDedupeCount();
   const dedupeCount =
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
-  const engineRef = useRef<HTMLDivElement>(null);
-
-  const handleReviewClick = () => {
-    engineRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -63,14 +59,13 @@ export const DuplicatesPage = () => {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleReviewClick}
+            <Link
+              to="/pulse/duplicates"
               className="btn-primary text-xs px-3 py-2 shrink-0 flex items-center gap-1.5"
             >
               Review them
               <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            </Link>
           </div>
         )}
 
@@ -134,7 +129,7 @@ export const DuplicatesPage = () => {
         </div>
       </div>
 
-      <div ref={engineRef} className="flex-1 min-h-0 relative">
+      <div className="flex-1 min-h-0 relative">
         <DedupeView embedded hideBackLink />
       </div>
     </div>

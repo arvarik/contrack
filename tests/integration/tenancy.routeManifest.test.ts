@@ -148,10 +148,10 @@ describe("route manifest", () => {
     // route in quality story S9. A route added without a decision moves this
     // number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
-    expect(admin).toHaveLength(34);
+    expect(admin).toHaveLength(35);
     expect(
       ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
-    ).toHaveLength(20);
+    ).toHaveLength(21);
 
     // The three token routes act on the caller's own account, so a token
     // cannot reach them and neither can the implicit local owner.

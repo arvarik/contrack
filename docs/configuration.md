@@ -362,24 +362,25 @@ Passwords are hashed with scrypt (N=2^16, r=8, p=1). The parameters are stored
 alongside each hash, so raising them later upgrades passwords silently on next
 sign-in rather than locking anyone out.
 
-**Forgot your password?** A self-hosted Contrack has no mail server, so there
-is no reset email. Recover by deleting the account row and letting the setup
-screen run again — your data is not attached to the deletion:
+**Forgot your password?** Contrack provides three ways to regain access:
+
+1. **Email reset link**: If outgoing mail is configured, click **Forgot your password?** on the sign-in screen. Contrack emails a single-use link valid for 1 hour.
+2. **Administrator reset**: An administrator can reset any user's password from **Settings → Administration → Accounts**. If mail is configured, the administrator can email a 24-hour reset link or generate a temporary password immediately.
+3. **CLI recovery script**: As the server operator, generate a temporary password directly using the CLI recovery script:
 
 ```bash
-# Stop the container first so nothing is mid-write.
-docker stop contrack
-sqlite3 data/curator.db "
-  UPDATE contacts SET ownerId=NULL;  UPDATE lists SET ownerId=NULL;
-  UPDATE ai_invocations SET ownerId=NULL;  UPDATE dedupe_merge_log SET ownerId=NULL;
-  DELETE FROM sessions;  DELETE FROM users;"
-docker start contrack   # first visit shows the setup screen again
+# In the repository directory:
+npm run reset-password <username>
+
+# Or in a Docker container:
+docker exec -it contrack npx tsx scripts/reset-password.ts <username>
 ```
 
-The `UPDATE`s are required, not optional: `ownerId` is `ON DELETE RESTRICT`, so
-SQLite refuses to delete an account that still owns contacts. That is
-deliberate — it means no stray `DELETE FROM users` can take your contacts with
-it. Un-owned rows are re-claimed by the next account you create.
+The script assigns a secure temporary password, marks the account as requiring a password change on next sign-in (`mustChangePassword`), and revokes all active sessions for that account.
+
+### Magic link sign-in
+
+When outgoing mail is configured, an administrator can enable passwordless sign-in by emailed link in **Settings → Administration → Instance** (under "Who can join"). When enabled, users can request a single-use sign-in link valid for 15 minutes sent directly to their email address.
 
 For access outside your LAN, prefer a private overlay network (e.g. Tailscale)
 or a reverse proxy with TLS in front of the container — the app itself serves

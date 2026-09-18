@@ -30,8 +30,10 @@ export interface HistoryGroup {
 export function groupHistoryEntries(
   entries: readonly HistoryEntry[],
   now: Date = new Date(),
+  weekStart: "monday" | "sunday" = "monday",
 ): HistoryGroup[] {
   const groups: HistoryGroup[] = [];
+  const weekStartsOnDay = weekStart === "sunday" ? 0 : 1;
 
   // Pinned entries appear once in the Pinned group only.
   const pinned = entries.filter((e) => e.pinned);
@@ -57,11 +59,13 @@ export function groupHistoryEntries(
 
   for (const entry of unpinned) {
     const date = parseServerTime(entry.lastRunAt) ?? new Date(entry.lastRunAt);
+    if (isNaN(date.getTime())) continue;
+
     if (isSameDay(date, now)) {
       todayEntries.push(entry);
     } else if (isSameDay(date, yesterday)) {
       yesterdayEntries.push(entry);
-    } else if (isSameWeek(date, now, { weekStartsOn: 1 })) {
+    } else if (isSameWeek(date, now, { weekStartsOn: weekStartsOnDay })) {
       thisWeekEntries.push(entry);
     } else {
       const monthKey = format(date, "yyyy-MM");
