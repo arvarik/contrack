@@ -73,6 +73,7 @@ export const users = sqliteTable("users", {
   createdBy: text("createdBy").references((): AnySQLiteColumn => users.id, {
     onDelete: "set null",
   }),
+  avatarUrl: text("avatarUrl"),
 });
 
 /**

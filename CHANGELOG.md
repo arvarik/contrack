@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Profile pictures for accounts (server).** Added `users.avatarUrl` column and endpoints `POST /api/auth/me/avatar` and `DELETE /api/auth/me/avatar` for managing account profile photos. Normalises uploaded photos via sharp (512 px cover JPEG at quality 82 with EXIF rotation and stripped metadata) stored under `uploads/u/<userId>/profile/`. Updated `guardUploads` so any authenticated user on the instance can view profile photos while keeping contact avatars and private files owner-only. Unlinks previous photos on replacement or removal and purges profile folders on account deletion. Note that database backups snapshot the database only, so a restore keeps `avatarUrl` while losing upload files, falling back to initials.
+
 - **Pulse charts.** Replaced the temporary MetricCard stopgap in Pulse's Network column with three SVG visualizations. ActivityCard renders a twelve-week activity heatmap with quantile scaling, cell titles, today outline, accessible weekly totals, 40 px sparkline with monthly comparisons, streak counter, and interaction type breakdown pills. MomentumCard surfaces rising, cooling, and silent contacts with score delta chips, row links to contact profiles, and a four-week baseline notice. CompositionCard provides an interactive SVG donut chart with dimension switching for Industry, Role, and Location, legend filter pills linking to facet search queries, and modal deep dives. Includes contrast unit tests ensuring WCAG AA non-text contrast across both light and dark palettes.
 - **Instance settings over environment.** Administrators can now configure trash
   retention, backup schedule frequency and keep count, Mapbox geocoding API key,

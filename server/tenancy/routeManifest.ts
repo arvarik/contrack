@@ -349,6 +349,18 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   {
+    method: "POST",
+    path: "/api/auth/me/avatar",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "DELETE",
+    path: "/api/auth/me/avatar",
+    class: "session-self",
+    isolated: false,
+  },
+  {
     method: "GET",
     path: "/api/auth/session-policy",
     class: "session-self",

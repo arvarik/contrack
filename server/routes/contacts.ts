@@ -42,20 +42,10 @@ import {
   contactRepo,
   RELATION_REGISTRY,
 } from "../repositories/contactRepository.ts";
+import { AVATAR_MIME_EXTENSIONS } from "../utils/avatarProcessor.ts";
 
 // Avatars go to uploads/u/<ownerId>/avatars/ now, so there is no one directory
 // to create at import time. The destination callback creates the caller's.
-
-// Raster image types only. SVG is deliberately excluded — it can carry
-// scripts and is served from the app origin. The extension is derived from
-// the MIME type, never from the client-supplied filename.
-const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "image/gif": ".gif",
-  "image/webp": ".webp",
-  "image/avif": ".avif",
-};
 
 const avatarStorage = multer.diskStorage({
   // The owner comes off req.principal, not the async context. multer hands
@@ -78,7 +68,11 @@ const uploadAvatar = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for avatars
   fileFilter: (_req, file, cb) => {
     if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
-    cb(new Error("Only JPEG, PNG, GIF, WebP, or AVIF images are allowed"));
+    cb(
+      new ValidationError(
+        "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed",
+      ),
+    );
   },
 });
 

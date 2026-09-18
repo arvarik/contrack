@@ -1428,6 +1428,10 @@ describe("deleting an account", () => {
     fs.mkdirSync(avatars, { recursive: true });
     fs.writeFileSync(path.join(avatars, "face.png"), "not really a png");
 
+    const profile = ownerUploadDir(victim.id, "profile");
+    fs.mkdirSync(profile, { recursive: true });
+    fs.writeFileSync(path.join(profile, "profile-123.jpg"), "fake photo");
+
     expect(ftsRows(victim.id)).toBe(3);
 
     const res = await as(admin)(
@@ -1471,6 +1475,7 @@ describe("deleting an account", () => {
       sqlite.prepare("SELECT id FROM users WHERE id = ?").get(victim.id),
     ).toBeUndefined();
     expect(fs.existsSync(avatars)).toBe(false);
+    expect(fs.existsSync(profile)).toBe(false);
     expect(fs.existsSync(path.join(UPLOADS_DIR, "u", victim.id))).toBe(false);
   });
 

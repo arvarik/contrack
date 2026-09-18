@@ -697,7 +697,11 @@ function removeUploads(ownerId: string): boolean {
       recursive: true,
       force: true,
     });
-    // Both live under uploads/u/<id>/. Removing the parent as well stops an
+    fs.rmSync(ownerUploadDir(ownerId, "profile"), {
+      recursive: true,
+      force: true,
+    });
+    // All live under uploads/u/<id>/. Removing the parent as well stops an
     // empty directory accumulating for every account ever deleted.
     fs.rmSync(path.dirname(avatars), { recursive: true, force: true });
     return true;
