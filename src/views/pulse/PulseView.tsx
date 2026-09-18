@@ -107,8 +107,8 @@ const DroppableColumn = ({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col gap-6 transition-colors rounded-2xl",
-        isOver && "bg-primary/5 ring-1 ring-primary/20 p-2",
+        "flex flex-col gap-6 transition-colors rounded-2xl p-1",
+        isOver && "bg-primary/5 ring-2 ring-primary/30",
         className,
       )}
     >
@@ -400,17 +400,24 @@ const PulseOffice = () => {
     }
   }, [selectedIndex, highlightedItem, upNext.items.length]);
 
+  const highlightedItemRef = useRef(highlightedItem);
+  highlightedItemRef.current = highlightedItem;
+  const itemsCountRef = useRef(upNext.items.length);
+  itemsCountRef.current = upNext.items.length;
+
   // Keyboard navigation (J / K / D / S / L / C / Enter)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+      const item = highlightedItemRef.current;
+
       // Enter opens contact profile (not a bare letter, always active)
       if (e.key === "Enter") {
-        if (highlightedItem) {
+        if (item) {
           e.preventDefault();
-          navigate(`/contact/${highlightedItem.contactId}`);
+          navigate(`/contact/${item.contactId}`);
         }
         return;
       }
@@ -426,28 +433,28 @@ const PulseOffice = () => {
       } else if (key === "j") {
         e.preventDefault();
         setSelectedIndex((prev) =>
-          prev < upNext.items.length - 1 ? prev + 1 : prev,
+          prev < itemsCountRef.current - 1 ? prev + 1 : prev,
         );
       } else if (key === "k") {
         e.preventDefault();
         setSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
       } else if (key === "d") {
-        if (highlightedItem?.hasCheckAction) {
+        if (item?.hasCheckAction) {
           e.preventDefault();
-          completeAction.mutate(highlightedItem.id);
+          completeAction.mutate(item.id);
         }
       } else if (key === "s") {
-        if (highlightedItem?.hasCheckAction) {
+        if (item?.hasCheckAction) {
           e.preventDefault();
           updateAction.mutate({
-            id: highlightedItem.id,
+            id: item.id,
             data: { dueAt: addDays(new Date(), 1).toISOString() },
           });
         }
       } else if (key === "l") {
-        if (highlightedItem) {
+        if (item) {
           e.preventDefault();
-          openQuickNote(highlightedItem.contactId);
+          openQuickNote(item.contactId);
         }
       }
     };
@@ -455,9 +462,7 @@ const PulseOffice = () => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
-    highlightedItem,
     singleKey,
-    upNext.items.length,
     completeAction,
     updateAction,
     navigate,
@@ -584,7 +589,10 @@ const PulseOffice = () => {
     <div className="w-full h-full overflow-y-auto bg-surface nice-scrollbar relative">
       {/* Screen reader live announcements */}
       <div role="status" aria-live="polite" className="sr-only">
-        {announcement || liveStatus}
+        {liveStatus}
+      </div>
+      <div aria-live="polite" className="sr-only">
+        {announcement}
       </div>
 
       <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
@@ -668,7 +676,7 @@ const PulseOffice = () => {
               <DroppableColumn
                 id="focus"
                 cards={resolvedLayout.visible.focus}
-                className="order-1 lg:col-span-5 2xl:col-span-4"
+                className="order-1 lg:col-span-5 xl:col-span-4"
                 isEditing={isEditing}
                 renderCard={(cardId, index, total) =>
                   renderSortableCard(cardId, index, total, "focus")
@@ -679,7 +687,7 @@ const PulseOffice = () => {
               <DroppableColumn
                 id="intel"
                 cards={resolvedLayout.visible.intel}
-                className="order-3 lg:col-span-12 2xl:order-2 2xl:col-span-4"
+                className="order-3 lg:col-span-12 xl:order-2 xl:col-span-4"
                 isEditing={isEditing}
                 renderCard={(cardId, index, total) =>
                   renderSortableCard(cardId, index, total, "intel")
@@ -690,7 +698,7 @@ const PulseOffice = () => {
               <DroppableColumn
                 id="network"
                 cards={resolvedLayout.visible.network}
-                className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4"
+                className="order-2 lg:col-span-7 xl:order-3 xl:col-span-4"
                 isEditing={isEditing}
                 renderCard={(cardId, index, total) =>
                   renderSortableCard(cardId, index, total, "network")
@@ -705,7 +713,7 @@ const PulseOffice = () => {
           <div
             role="region"
             aria-label="Layout customize actions"
-            className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-fit max-w-[calc(100%-2rem)] px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200"
+            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-fit max-w-[calc(100%-2rem)] px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200"
           >
             <span className="text-xs sm:text-sm font-semibold text-on-surface">
               Editing layout

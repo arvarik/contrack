@@ -110,6 +110,8 @@ export const InboxCard = ({
               <button
                 type="button"
                 onClick={() => setGhostsExpanded(!ghostsExpanded)}
+                aria-expanded={ghostsExpanded}
+                aria-controls="ghosts-list"
                 className="w-full flex items-center justify-between min-h-[44px] cursor-pointer group text-left"
               >
                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
@@ -127,7 +129,10 @@ export const InboxCard = ({
               </button>
 
               {ghostsExpanded && (
-                <div className="mt-2.5 pt-2 border-t border-outline/10 flex flex-wrap gap-1.5">
+                <div
+                  id="ghosts-list"
+                  className="mt-2.5 pt-2 border-t border-outline/10 flex flex-wrap gap-1.5"
+                >
                   {ghosts.slice(0, 8).map((g) => (
                     <Link
                       key={g.id}

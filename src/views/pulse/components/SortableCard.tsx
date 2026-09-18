@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../../../lib/utils";
@@ -46,6 +46,33 @@ export const SortableCard = ({
     zIndex: isDragging ? 50 : undefined,
   };
 
+  const contextValue = useMemo(
+    () => ({
+      isEditing,
+      cardId,
+      column,
+      index,
+      totalInColumn,
+      attributes,
+      listeners,
+      onHide,
+      onMoveToColumn,
+      onMoveStep,
+    }),
+    [
+      isEditing,
+      cardId,
+      column,
+      index,
+      totalInColumn,
+      attributes,
+      listeners,
+      onHide,
+      onMoveToColumn,
+      onMoveStep,
+    ],
+  );
+
   return (
     <div
       ref={setNodeRef}
@@ -56,20 +83,7 @@ export const SortableCard = ({
           "opacity-60 bg-primary/5 shadow-xl ring-2 ring-primary/30",
       )}
     >
-      <CardCustomizeContext.Provider
-        value={{
-          isEditing,
-          cardId,
-          column,
-          index,
-          totalInColumn,
-          attributes,
-          listeners,
-          onHide,
-          onMoveToColumn,
-          onMoveStep,
-        }}
-      >
+      <CardCustomizeContext.Provider value={contextValue}>
         {children}
       </CardCustomizeContext.Provider>
     </div>

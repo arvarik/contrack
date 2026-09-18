@@ -88,11 +88,28 @@ export const Sparkline = ({ weekTotals, streak, thisWeek }: SparklineProps) => {
     const minVal = Math.min(...weekTotals, 0);
     const range = maxVal - minVal || 1;
 
-    const coords: [number, number][] = weekTotals.map((val, idx) => {
-      const x = (idx / (weekTotals.length - 1)) * width;
-      const y = height - paddingY - ((val - minVal) / range) * effectiveHeight;
-      return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
-    });
+    const coords: [number, number][] =
+      weekTotals.length === 1
+        ? [
+            [
+              0,
+              height -
+                paddingY -
+                ((weekTotals[0] - minVal) / range) * effectiveHeight,
+            ],
+            [
+              width,
+              height -
+                paddingY -
+                ((weekTotals[0] - minVal) / range) * effectiveHeight,
+            ],
+          ]
+        : weekTotals.map((val, idx) => {
+            const x = (idx / (weekTotals.length - 1)) * width;
+            const y =
+              height - paddingY - ((val - minVal) / range) * effectiveHeight;
+            return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+          });
 
     const pts = coords.map(([x, y]) => `${x},${y}`).join(" ");
     const area = `${pts} ${width},${height} 0,${height}`;

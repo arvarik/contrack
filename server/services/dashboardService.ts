@@ -166,10 +166,10 @@ export const dashboardService = {
     const industryComposition = sqlite
       .prepare(
         `
-      SELECT industry, COUNT(*) as count
+      SELECT trim(industry) as industry, COUNT(*) as count
       FROM contacts
-      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isArchived = 0 AND isGhost = 0 AND industry IS NOT NULL AND industry != ''
-      GROUP BY industry
+      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND (isArchived = 0 OR isArchived IS NULL) AND isGhost = 0 AND industry IS NOT NULL AND trim(industry) != ''
+      GROUP BY trim(industry) COLLATE NOCASE
       ORDER BY count DESC
       LIMIT 8
     `,
@@ -180,10 +180,10 @@ export const dashboardService = {
     const locationComposition = sqlite
       .prepare(
         `
-      SELECT location, COUNT(*) as count
+      SELECT trim(location) as location, COUNT(*) as count
       FROM contacts
-      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isArchived = 0 AND isGhost = 0 AND location IS NOT NULL AND location != ''
-      GROUP BY location
+      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND (isArchived = 0 OR isArchived IS NULL) AND isGhost = 0 AND location IS NOT NULL AND trim(location) != ''
+      GROUP BY trim(location) COLLATE NOCASE
       ORDER BY count DESC
       LIMIT 8
     `,
@@ -194,10 +194,10 @@ export const dashboardService = {
     const roleComposition = sqlite
       .prepare(
         `
-      SELECT role, COUNT(*) as count
+      SELECT trim(role) as role, COUNT(*) as count
       FROM contacts
-      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isArchived = 0 AND isGhost = 0 AND role IS NOT NULL AND role != ''
-      GROUP BY role
+      WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND (isArchived = 0 OR isArchived IS NULL) AND isGhost = 0 AND role IS NOT NULL AND trim(role) != ''
+      GROUP BY trim(role) COLLATE NOCASE
       ORDER BY count DESC
       LIMIT 8
     `,
@@ -301,13 +301,19 @@ export const dashboardService = {
           endsAt: string;
           contactIds: string;
         }[];
-        meetings = rows.map((r) => ({
-          ...r,
-          contactIds:
-            typeof r.contactIds === "string"
-              ? JSON.parse(r.contactIds)
-              : (r.contactIds ?? []),
-        }));
+        meetings = rows.map((r) => {
+          let ids: string[] = [];
+          if (typeof r.contactIds === "string") {
+            try {
+              ids = JSON.parse(r.contactIds);
+            } catch {
+              ids = [];
+            }
+          } else if (Array.isArray(r.contactIds)) {
+            ids = r.contactIds;
+          }
+          return { ...r, contactIds: ids };
+        });
       } catch {
         meetings = [];
       }
@@ -586,7 +592,7 @@ export const dashboardService = {
     // Streak: all interactions with type != 'import' and source IS NULL
     const streakRows = sqlite
       .prepare(
-        `SELECT date, type, source FROM interactions
+        `SELECT DISTINCT substr(date, 1, 10) as date FROM interactions
           WHERE ownerId = ? AND (type != 'import' OR type IS NULL) AND source IS NULL
           ORDER BY date ASC`,
       )
@@ -725,21 +731,7 @@ export const dashboardService = {
         .map(toMomentumCard);
     }
 
-    const atRiskRows = sqlite
-      .prepare(
-        `SELECT c.id
-           FROM contacts c
-          WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
-            AND (c.isArchived = 0 OR c.isArchived IS NULL)
-            AND c.relationshipScore < ${FADING_MIN}
-            AND c.lastContactedAt IS NOT NULL
-          ORDER BY c.relationshipScore ASC
-          LIMIT 10`,
-      )
-      .all(scope.ownerId) as { id: string }[];
-    const atRiskIds = new Set(atRiskRows.map((r) => r.id));
-
-    const candidateSilent = sqlite
+    const silentRows = sqlite
       .prepare(
         `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.relationshipScore,
                 c.cadenceDays,
@@ -751,8 +743,10 @@ export const dashboardService = {
             AND (c.isArchived = 0 OR c.isArchived IS NULL)
             AND c.cadenceDays IS NOT NULL AND c.cadenceDays > 0
             AND c.lastContactedAt IS NOT NULL
+            AND c.relationshipScore >= ${FADING_MIN}
             AND (CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) - c.cadenceDays) > 0
-          ORDER BY overshootDays DESC`,
+          ORDER BY overshootDays DESC
+          LIMIT 5`,
       )
       .all(scope.ownerId) as {
       id: string;
@@ -766,20 +760,17 @@ export const dashboardService = {
       overshootDays: number;
     }[];
 
-    const silent: SilentCard[] = candidateSilent
-      .filter((c) => !atRiskIds.has(c.id))
-      .slice(0, 5)
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        company: c.company,
-        avatarUrl: c.avatarUrl,
-        themeColor: c.themeColor,
-        relationshipScore: c.relationshipScore,
-        cadenceDays: c.cadenceDays,
-        daysSinceContact: c.daysSinceContact,
-        overshootDays: c.overshootDays,
-      }));
+    const silent: SilentCard[] = silentRows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      company: c.company,
+      avatarUrl: c.avatarUrl,
+      themeColor: c.themeColor,
+      relationshipScore: c.relationshipScore,
+      cadenceDays: c.cadenceDays,
+      daysSinceContact: c.daysSinceContact,
+      overshootDays: c.overshootDays,
+    }));
 
     const elapsed = Date.now() - startMs;
     log.info("Dashboard", `Assembled dashboard momentum in ${elapsed}ms`);

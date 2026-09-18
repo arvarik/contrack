@@ -53,6 +53,9 @@ export const actionItemService = {
       JOIN contacts c ON ai.contactId = c.id
       WHERE ai.ownerId = ?
         AND ai.completedAt IS NULL
+        AND c.deletedAt IS NULL
+        AND c.canonicalId IS NULL
+        AND c.isGhost = 0
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
       ORDER BY ai.dueAt ASC
     `,

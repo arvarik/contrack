@@ -41,6 +41,14 @@ describe("pulse.heatmapScale", () => {
     expect(scale(100)).toBe(5);
   });
 
+  it("distributes steps 1 to 5 proportionally when unique positive counts are small (<5)", () => {
+    const scale = heatmapScale([1, 2, 3]);
+    expect(scale(0)).toBe(0);
+    expect(scale(1)).toBe(1);
+    expect(scale(2)).toBe(3);
+    expect(scale(3)).toBe(5);
+  });
+
   it("returns correct alpha values from HEATMAP_ALPHA_STEPS", () => {
     expect(HEATMAP_ALPHA_STEPS).toEqual([0, 0.12, 0.3, 0.55, 0.8, 1]);
     expect(getHeatmapAlpha(0)).toBe(0);

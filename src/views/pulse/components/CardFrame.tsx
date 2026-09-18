@@ -120,29 +120,48 @@ export const CardFrame = ({
             <div className="flex sm:hidden items-center gap-0.5">
               <button
                 type="button"
-                disabled={customize.index === 0}
-                onClick={() => cardId && customize.onMoveStep?.(cardId, -1)}
+                aria-disabled={customize.index === 0}
+                onClick={() =>
+                  customize.index !== 0 &&
+                  cardId &&
+                  customize.onMoveStep?.(cardId, -1)
+                }
                 aria-label={`Move ${title} up`}
-                title={`Move ${title} up`}
+                title={
+                  customize.index === 0
+                    ? `${title} is already at the top`
+                    : `Move ${title} up`
+                }
                 className={cn(
-                  "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                  customize.index === 0 && "opacity-30 cursor-not-allowed",
+                  "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  customize.index === 0
+                    ? "opacity-30 cursor-not-allowed"
+                    : "cursor-pointer",
                 )}
               >
                 <ChevronUp className="w-4 h-4" />
               </button>
               <button
                 type="button"
-                disabled={
+                aria-disabled={
                   customize.index === (customize.totalInColumn ?? 1) - 1
                 }
-                onClick={() => cardId && customize.onMoveStep?.(cardId, 1)}
+                onClick={() =>
+                  customize.index !== (customize.totalInColumn ?? 1) - 1 &&
+                  cardId &&
+                  customize.onMoveStep?.(cardId, 1)
+                }
                 aria-label={`Move ${title} down`}
-                title={`Move ${title} down`}
+                title={
+                  customize.index === (customize.totalInColumn ?? 1) - 1
+                    ? `${title} is already at the bottom`
+                    : `Move ${title} down`
+                }
                 className={cn(
-                  "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-                  customize.index === (customize.totalInColumn ?? 1) - 1 &&
-                    "opacity-30 cursor-not-allowed",
+                  "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  customize.index === (customize.totalInColumn ?? 1) - 1
+                    ? "opacity-30 cursor-not-allowed"
+                    : "cursor-pointer",
                 )}
               >
                 <ChevronDown className="w-4 h-4" />

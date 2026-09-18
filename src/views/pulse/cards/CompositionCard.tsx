@@ -32,7 +32,7 @@ const SLICE_COLORS = [
   "var(--color-success)",
   "var(--color-warning)",
   "var(--color-secondary)",
-  "var(--color-outline-variant)", // for Other
+  "var(--color-on-surface-variant)", // for Other
 ];
 
 export interface CompositionCardProps {
