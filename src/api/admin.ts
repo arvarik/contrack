@@ -84,6 +84,12 @@ export interface InstanceSettings {
   instanceNameMax: number;
   mailConfigured?: boolean;
   magicLinkSignIn?: boolean;
+  trashRetentionDays?: number;
+  trashRetentionDaysSource?: "setting" | "env" | "default";
+  backupIntervalHours?: number;
+  backupIntervalHoursSource?: "setting" | "env" | "default";
+  backupKeep?: number;
+  backupKeepSource?: "setting" | "env" | "default";
 }
 
 export interface AuditEntry {
@@ -217,6 +223,7 @@ export const adminKeys = {
   backups: ["admin", "backups"] as const,
   health: ["admin", "health"] as const,
   mail: ["admin", "mail"] as const,
+  integrations: ["admin", "integrations"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -476,6 +483,9 @@ export const useUpdateInstanceSettings = () => {
       sessionTtlDays?: number;
       instanceName?: string;
       magicLinkSignIn?: boolean;
+      trashRetentionDays?: number;
+      backupIntervalHours?: number;
+      backupKeep?: number;
     }) =>
       apiJson<InstanceSettings>("/admin/settings", {
         method: "PUT",
@@ -492,6 +502,49 @@ export const useUpdateInstanceSettings = () => {
       // way back in, and one who renames the instance sees the old name in
       // the sidebar and the browser tab until a reload.
       emitAuthStatusStale();
+    },
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Integrations
+// ---------------------------------------------------------------------------
+
+export interface IntegrationsConfig {
+  mapbox: {
+    configured: boolean;
+    source: "setting" | "env" | "none";
+  };
+  searxng: {
+    url: string | null;
+    source: "setting" | "env" | "none";
+  };
+}
+
+export interface UpdateIntegrationsInput {
+  mapboxKey?: string;
+  searxngUrl?: string;
+}
+
+export const useIntegrations = () =>
+  useQuery({
+    queryKey: adminKeys.integrations,
+    queryFn: ({ signal }) =>
+      apiJson<IntegrationsConfig>("/admin/integrations", { signal }),
+    staleTime: 30_000,
+  });
+
+export const useUpdateIntegrations = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateIntegrationsInput) =>
+      apiJson<IntegrationsConfig>("/admin/integrations", {
+        method: "PUT",
+        ...jsonBody(input),
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(adminKeys.integrations, data);
+      qc.invalidateQueries({ queryKey: adminKeys.audit });
     },
   });
 };
@@ -584,6 +637,7 @@ export const AUDIT_GROUPS = [
       "backup.created",
       "mail.settings.changed",
       "mail.test.sent",
+      "integrations.changed",
     ],
   },
 ] as const;

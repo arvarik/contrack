@@ -20,7 +20,8 @@ cp .env.example .env
 | `PUBLIC_URL`              | Canonical external origin of the server (e.g. `https://crm.example.com`). Required behind a reverse proxy for WebAuthn/passkey ceremonies and invite links                                     | — (derived)            | No       |
 | `CORS_ORIGIN`             | Enables CORS for the given origin. Off by default — the SPA is same-origin                                                                                                                     | — (disabled)           | No       |
 | `DATA_DIR`                | Root directory for runtime data (SQLite DB, uploads, embedding model cache). Set to `/app/data` in Docker                                                                                      | project root           | No       |
-| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy)                                                                                                                                                     | —                      | No       |
+| `MAPBOX_API_KEY`          | Mapbox geocoding API key (higher accuracy). Environment overrides setting in UI                                                                                                                | —                      | No       |
+| `SEARXNG_URL`             | Base URL of self-hosted SearXNG search instance. Environment overrides setting in UI                                                                                                           | —                      | No       |
 | `MAP_STYLE_LIGHT`         | Basemap style the map loads in the light palette. An absolute `https://` URL or a root-relative path such as `/map/style.json`                                                                 | OpenFreeMap `positron` | No       |
 | `MAP_STYLE_DARK`          | Basemap style the map loads in the dark palette. Same rule as `MAP_STYLE_LIGHT`                                                                                                                | OpenFreeMap `dark`     | No       |
 | `AUTH_REQUIRED`           | `true` requires everyone to sign in with an account. First visit walks through creating one                                                                                                    | `false`                | No       |
@@ -29,9 +30,9 @@ cp .env.example .env
 | `CONTRACK_SECRET_KEY`     | 32-byte hexadecimal key (64 hex characters) used to encrypt stored credentials like SMTP passwords. Generated at `DATA_DIR/secret.key` when omitted                                            | — (auto)               | No       |
 | `API_TOKEN`               | **Deprecated.** Instance-wide machine credential (`Authorization: Bearer <token>`). Setting it gates the instance. Acts as the first admin. Removed in 3.0 — use a personal token              | — (auth off)           | No       |
 | `AUTH_TOKEN`              | **Removed in 2.0.** Rename it to `API_TOKEN`. The server refuses to start while it is set, rather than starting with no credential and no explanation                                          | —                      | No       |
-| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge                                                                                                                                 | `30`                   | No       |
-| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables)                                                                                                                                               | `24`                   | No       |
-| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`                                                                                                                                       | `7`                    | No       |
+| `TRASH_RETENTION_DAYS`    | Days a deleted contact stays restorable before permanent purge. UI setting fallback; environment overrides                                                                                     | `30`                   | No       |
+| `BACKUP_INTERVAL_HOURS`   | Automatic SQLite snapshot cadence (`0` disables). UI setting fallback; environment overrides                                                                                                   | `24`                   | No       |
+| `BACKUP_KEEP`             | How many rotated snapshots to keep in `DATA_DIR/backups`. UI setting fallback; environment overrides                                                                                           | `7`                    | No       |
 | `AI_QUICK_MODEL`          | Pin the Quick-tasks model: `model` or `provider:model` (e.g. `gemini:gemini-3.6-flash`)                                                                                                        | — (auto)               | No       |
 | `AI_DEEP_MODEL`           | Pin the Deep-tasks model                                                                                                                                                                       | — (auto)               | No       |
 | `AI_RESEARCH_MODEL`       | Pin the Web-research model                                                                                                                                                                     | — (auto)               | No       |
@@ -482,6 +483,20 @@ Every personal preference can be changed in Settings and is stored in user prefe
 | `aiAssist`             | boolean                                            | `true`          | Enable AI-assisted features for this account                    |
 | `autoMergeSensitivity` | `"conservative"` \| `"balanced"` \| `"aggressive"` | `"balanced"`    | Duplicate auto-merge threshold                                  |
 | `searchHistory`        | boolean                                            | `true`          | Record recent search queries                                    |
+
+### Instance Settings
+
+Instance-wide policies can be managed by administrators in **Settings → Administration → General** or overridden by environment variables:
+
+| Setting               | Env Variable            | Default | Range / Format        | Notes                                                  |
+| --------------------- | ----------------------- | ------- | --------------------- | ------------------------------------------------------ |
+| `trashRetentionDays`  | `TRASH_RETENTION_DAYS`  | `30`    | `1` to `365` days     | Days deleted contacts remain before automated purge    |
+| `backupIntervalHours` | `BACKUP_INTERVAL_HOURS` | `24`    | `0` to `168` hours    | Snapshot frequency (`0` disables scheduled backups)    |
+| `backupKeep`          | `BACKUP_KEEP`           | `7`     | `1` to `50` snapshots | Maximum number of rotated snapshots kept on disk       |
+| `mapboxKey`           | `MAPBOX_API_KEY`        | —       | string (`pk.ey...`)   | Write-only geocoding key sealed with AES-256-GCM       |
+| `searxngUrl`          | `SEARXNG_URL`           | —       | URL (`http://...`)    | Self-hosted SearXNG instance for web research fallback |
+
+**Environment overrides:** when an environment variable is defined, it takes precedence and locks the setting in the UI as read-only ("Set by `<VAR>` in the environment."). Changes to the backup interval restart the recurring backup timer immediately.
 
 - **Backups:** SQLite snapshots are written to `DATA_DIR/backups` every
   `BACKUP_INTERVAL_HOURS` (online backup API — safe while the app runs),

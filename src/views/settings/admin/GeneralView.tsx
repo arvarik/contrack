@@ -1,16 +1,33 @@
 /**
  * GeneralView — the settings that belong to the instance, not to a person.
  *
- * Session length decides how long everybody's sign-in lasts.
- * Registration is off by default: an open instance on the internet
- * with open registration is an open door.
+ * Cards in order:
+ *   1. Name
+ *   2. Who can join (registration and magic-link sign in)
+ *   3. Session length
+ *   4. Trash (retention window)
+ *   5. Backups (interval and keep count)
+ *   6. Integrations (Mapbox geocoding key and SearXNG search URL)
  */
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { DoorOpen, Tag, Timer, TriangleAlert } from "lucide-react";
+import {
+  Archive,
+  Check,
+  DoorOpen,
+  Globe,
+  Mail,
+  MapPin,
+  Tag,
+  Timer,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import {
   useInstanceSettings,
   useUpdateInstanceSettings,
+  useIntegrations,
+  useUpdateIntegrations,
 } from "../../../api/admin";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
@@ -36,14 +53,248 @@ const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
   </div>
 );
 
-/**
- * How long a sign-in lasts.
- *
- * Presets rather than a free number: the meaningful choice is "this machine
- * is mine" against "this thing is on the internet", and asking somebody to
- * pick between 44 and 46 days is a question with no right answer. A value set
- * elsewhere that matches no preset is shown rather than silently snapped.
- */
+// ─── 1. Instance Name ────────────────────────────────────────────────────────
+
+export const InstanceNameCard = () => {
+  const { data, isLoading, isError, refetch } = useInstanceSettings();
+  const save = useUpdateInstanceSettings();
+  const [draft, setDraft] = useState<string | null>(null);
+  const stored = data?.instanceName ?? "";
+  const max = data?.instanceNameMax ?? 60;
+  const value = draft ?? stored;
+
+  useEffect(() => {
+    if (draft === null && data) setDraft(data.instanceName);
+  }, [data, draft]);
+
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+
+  const dirty = value.trim() !== stored;
+
+  return (
+    <form
+      id="name"
+      className={cn(CARD, "space-y-4 scroll-mt-20")}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!dirty) return;
+        save.mutate(
+          { instanceName: value.trim() },
+          {
+            onSuccess: (settings) => {
+              setDraft(settings.instanceName);
+              toast.success(
+                settings.instanceName
+                  ? `This instance is now "${settings.instanceName}"`
+                  : "The instance name was cleared",
+              );
+            },
+            onError: (error: Error) => toast.error(error.message),
+          },
+        );
+      }}
+    >
+      <div className="space-y-1.5">
+        <label
+          htmlFor="instance-name"
+          className="block text-sm font-bold text-on-surface"
+        >
+          Instance name
+        </label>
+        <p className="text-sm text-on-surface-variant text-pretty">
+          Shown on the sign-in and join screens, in the account menu, and in the
+          browser tab. Leave it empty to show the product name.
+        </p>
+      </div>
+
+      <input
+        id="instance-name"
+        type="text"
+        value={value}
+        maxLength={max}
+        disabled={isLoading || save.isPending}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="Contrack"
+        autoComplete="off"
+        className={cn(
+          "w-full px-4 rounded-xl min-h-[44px]",
+          "bg-surface-container-high text-on-surface text-base sm:text-sm",
+          "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          "disabled:opacity-50",
+        )}
+      />
+
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs text-on-surface-variant">
+          {value.length} of {max}
+        </p>
+        <button
+          type="submit"
+          disabled={!dirty || save.isPending}
+          className="btn-primary"
+        >
+          <Tag className="w-4 h-4" />
+          {save.isPending ? "Saving…" : "Save"}
+        </button>
+      </div>
+
+      <p className="flex items-start gap-2 text-xs text-on-surface-variant text-pretty">
+        <DoorOpen className="w-4 h-4 shrink-0 mt-0.5" />
+        The sign-in screen has no credential behind it, so this name is visible
+        to anybody who can reach this instance.
+      </p>
+    </form>
+  );
+};
+
+// ─── 2. Who Can Join ─────────────────────────────────────────────────────────
+
+export const RegistrationCard = () => {
+  const { data, isLoading, isError, refetch } = useInstanceSettings();
+  const save = useUpdateInstanceSettings();
+  const open = data?.registrationOpen === true;
+  const magicLink = data?.magicLinkSignIn === true;
+  const mailReady = data?.mailConfigured === true;
+
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+
+  return (
+    <div id="registration" className={cn(CARD, "space-y-6 scroll-mt-20")}>
+      {/* Open registration switch */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-bold text-sm text-on-surface">
+            Anyone can create an account
+          </h3>
+          <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
+            Adds a &ldquo;Create one&rdquo; link to the sign-in screen. New
+            accounts are always members and start empty.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={open}
+          aria-label="Anyone can create an account"
+          disabled={isLoading || save.isPending || !data}
+          onClick={() =>
+            save.mutate(
+              { registrationOpen: !open },
+              {
+                onSuccess: (settings) =>
+                  toast.success(
+                    settings.registrationOpen
+                      ? "Anyone who reaches the sign-in page can now create an account"
+                      : "Registration is closed",
+                  ),
+                onError: (error: Error) => toast.error(error.message),
+              },
+            )
+          }
+          className={cn(
+            "shrink-0 inline-flex items-center justify-center",
+            "min-w-[44px] min-h-[44px] rounded-full",
+            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "relative block w-14 h-8 rounded-full transition-colors",
+              open ? "bg-primary" : "bg-surface-container-high",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
+                "transition-transform",
+                open ? "translate-x-7" : "translate-x-1",
+              )}
+            />
+          </span>
+        </button>
+      </div>
+
+      {open && (
+        <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-on-surface text-pretty">
+          <DoorOpen className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+          While this is on, anybody who can reach this instance can make an
+          account on it. On something exposed to the internet, invitations do
+          the same job without the door being open.
+        </p>
+      )}
+
+      <div className="border-t border-outline-variant/30 pt-4">
+        {/* Magic link switch */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm text-on-surface">
+              Sign in by emailed link
+            </h3>
+            <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
+              Allow members to sign in with a single-use magic link sent to
+              their email address.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={magicLink}
+            aria-label="Sign in by emailed link"
+            disabled={isLoading || save.isPending || !data || !mailReady}
+            onClick={() =>
+              save.mutate(
+                { magicLinkSignIn: !magicLink },
+                {
+                  onSuccess: (settings) =>
+                    toast.success(
+                      settings.magicLinkSignIn
+                        ? "Sign in by emailed link enabled"
+                        : "Sign in by emailed link disabled",
+                    ),
+                  onError: (error: Error) => toast.error(error.message),
+                },
+              )
+            }
+            className={cn(
+              "shrink-0 inline-flex items-center justify-center",
+              "min-w-[44px] min-h-[44px] rounded-full",
+              "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "relative block w-14 h-8 rounded-full transition-colors",
+                magicLink ? "bg-primary" : "bg-surface-container-high",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
+                  "transition-transform",
+                  magicLink ? "translate-x-7" : "translate-x-1",
+                )}
+              />
+            </span>
+          </button>
+        </div>
+
+        {!mailReady && (
+          <p className="flex items-start gap-2 rounded-xl bg-surface-container-high/60 p-3 text-xs text-on-surface-variant mt-3 text-pretty">
+            <Mail className="w-4 h-4 shrink-0 mt-0.5" />
+            Outgoing mail must be configured before enabling magic links.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── 3. Session Length ───────────────────────────────────────────────────────
+
 const TTL_PRESETS = [
   { days: 1, label: "1 day", hint: "Exposed to the internet" },
   { days: 7, label: "1 week", hint: "Shared or portable machine" },
@@ -141,173 +392,495 @@ export const SessionLengthCard = () => {
   );
 };
 
-export const RegistrationCard = () => {
+// ─── 4. Trash Retention ──────────────────────────────────────────────────────
+
+const TRASH_PRESETS = [
+  { days: 7, label: "7 days", hint: "Frequent purge" },
+  { days: 30, label: "30 days", hint: "Default" },
+  { days: 90, label: "90 days", hint: "Quarterly" },
+  { days: 365, label: "1 year", hint: "Long retention" },
+] as const;
+
+export const TrashCard = () => {
   const { data, isLoading, isError, refetch } = useInstanceSettings();
   const save = useUpdateInstanceSettings();
-  const open = data?.registrationOpen === true;
+  const current = data?.trashRetentionDays ?? 30;
+  const isEnv = data?.trashRetentionDaysSource === "env";
+  const isCustom = !TRASH_PRESETS.some((preset) => preset.days === current);
 
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="registration" className={cn(CARD, "space-y-4 scroll-mt-20")}>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-bold text-sm text-on-surface">
-            Anyone can create an account
-          </h3>
-          <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
-            Adds a &ldquo;Create one&rdquo; link to the sign-in screen. New
-            accounts are always members and start empty.
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={open}
-          aria-label="Anyone can create an account"
-          disabled={isLoading || save.isPending || !data}
-          onClick={() =>
-            save.mutate(
-              { registrationOpen: !open },
-              {
-                onSuccess: (settings) =>
-                  toast.success(
-                    settings.registrationOpen
-                      ? "Anyone who reaches the sign-in page can now create an account"
-                      : "Registration is closed",
-                  ),
-                onError: (error: Error) => toast.error(error.message),
-              },
-            )
-          }
-          className={cn(
-            "shrink-0 inline-flex items-center justify-center",
-            "min-w-[44px] min-h-[44px] rounded-full",
-            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "relative block w-14 h-8 rounded-full transition-colors",
-              open ? "bg-primary" : "bg-surface-container-high",
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
-                "transition-transform",
-                open ? "translate-x-7" : "translate-x-1",
-              )}
-            />
-          </span>
-        </button>
-      </div>
+    <div id="trash" className={cn(CARD, "space-y-4 scroll-mt-20")}>
+      <p className="text-sm text-on-surface-variant text-pretty">
+        How long deleted contacts stay restorable in Trash before permanent
+        purge.
+      </p>
 
-      {open && (
-        <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-on-surface text-pretty">
-          <DoorOpen className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-          While this is on, anybody who can reach this instance can make an
-          account on it. On something exposed to the internet, invitations do
-          the same job without the door being open.
+      {isEnv && (
+        <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+          Set by TRASH_RETENTION_DAYS in the environment.
         </p>
       )}
+
+      {isLoading ? (
+        <p className="text-sm text-on-surface-variant">Loading…</p>
+      ) : (
+        <div
+          role="radiogroup"
+          aria-label="Trash retention"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+        >
+          {TRASH_PRESETS.map((preset) => {
+            const active = preset.days === current;
+            return (
+              <button
+                key={preset.days}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={isEnv || save.isPending}
+                onClick={() =>
+                  !active &&
+                  !isEnv &&
+                  save.mutate(
+                    { trashRetentionDays: preset.days },
+                    {
+                      onSuccess: (settings) =>
+                        toast.success(
+                          `Trash retention set to ${settings.trashRetentionDays} days`,
+                        ),
+                      onError: (error: Error) => toast.error(error.message),
+                    },
+                  )
+                }
+                className={cn(
+                  "text-left px-4 py-3 rounded-xl transition-colors",
+                  isEnv && "opacity-75 cursor-not-allowed",
+                  "disabled:cursor-not-allowed",
+                  active
+                    ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                    : "bg-surface-container-highest hover:bg-surface-container-high",
+                )}
+              >
+                <span
+                  className={cn(
+                    "block text-sm font-bold",
+                    active ? "text-primary" : "text-on-surface",
+                  )}
+                >
+                  {preset.label}
+                </span>
+                <span className="block text-xs text-on-surface-variant mt-0.5">
+                  {preset.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {isCustom && !isLoading && (
+        <p className="text-xs text-on-surface-variant">
+          Currently set to {current} days. Choosing a preset above will replace
+          it.
+        </p>
+      )}
+
+      <p className="text-xs text-on-surface-variant text-pretty">
+        Lowering retention purges expired contacts on the next daily sweep.
+      </p>
     </div>
   );
 };
 
-export const InstanceNameCard = () => {
+// ─── 5. Backup Schedule ──────────────────────────────────────────────────────
+
+const BACKUP_INTERVAL_PRESETS = [
+  { hours: 0, label: "Off", hint: "Manual only" },
+  { hours: 6, label: "6 hours", hint: "High-churn instances" },
+  { hours: 12, label: "12 hours", hint: "Twice daily" },
+  { hours: 24, label: "24 hours", hint: "Default (daily)" },
+  { hours: 168, label: "7 days", hint: "Weekly" },
+] as const;
+
+const BACKUP_KEEP_PRESETS = [
+  { count: 3, label: "3 snapshots", hint: "Minimal storage" },
+  { count: 7, label: "7 snapshots", hint: "Default" },
+  { count: 14, label: "14 snapshots", hint: "Two weeks" },
+  { count: 30, label: "30 snapshots", hint: "One month" },
+] as const;
+
+export const BackupScheduleCard = () => {
   const { data, isLoading, isError, refetch } = useInstanceSettings();
   const save = useUpdateInstanceSettings();
-  const [draft, setDraft] = useState<string | null>(null);
-  const stored = data?.instanceName ?? "";
-  const max = data?.instanceNameMax ?? 60;
-  const value = draft ?? stored;
 
-  useEffect(() => {
-    if (draft === null && data) setDraft(data.instanceName);
-  }, [data, draft]);
+  const intervalCurrent = data?.backupIntervalHours ?? 24;
+  const isIntervalEnv = data?.backupIntervalHoursSource === "env";
+
+  const keepCurrent = data?.backupKeep ?? 7;
+  const isKeepEnv = data?.backupKeepSource === "env";
 
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
-  const dirty = value.trim() !== stored;
-
   return (
-    <form
-      id="name"
-      className={cn(CARD, "space-y-4 scroll-mt-20")}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!dirty) return;
-        save.mutate(
-          { instanceName: value.trim() },
-          {
-            onSuccess: (settings) => {
-              setDraft(settings.instanceName);
-              toast.success(
-                settings.instanceName
-                  ? `This instance is now "${settings.instanceName}"`
-                  : "The instance name was cleared",
-              );
-            },
-            onError: (error: Error) => toast.error(error.message),
-          },
-        );
-      }}
-    >
-      <div className="space-y-1.5">
-        <label
-          htmlFor="instance-name"
-          className="block text-sm font-bold text-on-surface"
-        >
-          Instance name
-        </label>
+    <div id="backups" className={cn(CARD, "space-y-6 scroll-mt-20")}>
+      {/* Interval section */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-on-surface">Snapshot interval</h3>
         <p className="text-sm text-on-surface-variant text-pretty">
-          Shown on the sign-in and join screens, in the account menu, and in the
-          browser tab. Leave it empty to show the product name.
+          How frequently Contrack takes an automatic SQLite snapshot.
         </p>
-      </div>
 
-      <input
-        id="instance-name"
-        type="text"
-        value={value}
-        maxLength={max}
-        disabled={isLoading || save.isPending}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder="Contrack"
-        autoComplete="off"
-        className={cn(
-          "w-full px-4 rounded-xl min-h-[44px]",
-          "bg-surface-container-high text-on-surface text-base sm:text-sm",
-          "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          "disabled:opacity-50",
+        {isIntervalEnv && (
+          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+            Set by BACKUP_INTERVAL_HOURS in the environment.
+          </p>
         )}
-      />
 
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-on-surface-variant">
-          {value.length} of {max}
-        </p>
-        <button
-          type="submit"
-          disabled={!dirty || save.isPending}
-          className="btn-primary"
-        >
-          <Tag className="w-4 h-4" />
-          {save.isPending ? "Saving…" : "Save"}
-        </button>
+        {isLoading ? (
+          <p className="text-sm text-on-surface-variant">Loading…</p>
+        ) : (
+          <div
+            role="radiogroup"
+            aria-label="Backup interval"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+          >
+            {BACKUP_INTERVAL_PRESETS.map((preset) => {
+              const active = preset.hours === intervalCurrent;
+              return (
+                <button
+                  key={preset.hours}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={isIntervalEnv || save.isPending}
+                  onClick={() =>
+                    !active &&
+                    !isIntervalEnv &&
+                    save.mutate(
+                      { backupIntervalHours: preset.hours },
+                      {
+                        onSuccess: (settings) =>
+                          toast.success(
+                            settings.backupIntervalHours === 0
+                              ? "Scheduled backups turned off"
+                              : `Backup interval set to ${settings.backupIntervalHours} hours`,
+                          ),
+                        onError: (error: Error) => toast.error(error.message),
+                      },
+                    )
+                  }
+                  className={cn(
+                    "text-left px-4 py-3 rounded-xl transition-colors",
+                    isIntervalEnv && "opacity-75 cursor-not-allowed",
+                    "disabled:cursor-not-allowed",
+                    active
+                      ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                      : "bg-surface-container-highest hover:bg-surface-container-high",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "block text-sm font-bold",
+                      active ? "text-primary" : "text-on-surface",
+                    )}
+                  >
+                    {preset.label}
+                  </span>
+                  <span className="block text-xs text-on-surface-variant mt-0.5">
+                    {preset.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <p className="flex items-start gap-2 text-xs text-on-surface-variant text-pretty">
-        <DoorOpen className="w-4 h-4 shrink-0 mt-0.5" />
-        The sign-in screen has no credential behind it, so this name is visible
-        to anybody who can reach this instance.
-      </p>
-    </form>
+      {/* Keep count section */}
+      <div className="border-t border-outline-variant/30 pt-4 space-y-3">
+        <h3 className="text-sm font-bold text-on-surface">Retention count</h3>
+        <p className="text-sm text-on-surface-variant text-pretty">
+          How many recent snapshots to retain before older ones are rotated out.
+        </p>
+
+        {isKeepEnv && (
+          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+            Set by BACKUP_KEEP in the environment.
+          </p>
+        )}
+
+        {isLoading ? (
+          <p className="text-sm text-on-surface-variant">Loading…</p>
+        ) : (
+          <div
+            role="radiogroup"
+            aria-label="Backup retention count"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+          >
+            {BACKUP_KEEP_PRESETS.map((preset) => {
+              const active = preset.count === keepCurrent;
+              return (
+                <button
+                  key={preset.count}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  disabled={isKeepEnv || save.isPending}
+                  onClick={() =>
+                    !active &&
+                    !isKeepEnv &&
+                    save.mutate(
+                      { backupKeep: preset.count },
+                      {
+                        onSuccess: (settings) =>
+                          toast.success(
+                            `Keeping up to ${settings.backupKeep} snapshots`,
+                          ),
+                        onError: (error: Error) => toast.error(error.message),
+                      },
+                    )
+                  }
+                  className={cn(
+                    "text-left px-4 py-3 rounded-xl transition-colors",
+                    isKeepEnv && "opacity-75 cursor-not-allowed",
+                    "disabled:cursor-not-allowed",
+                    active
+                      ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                      : "bg-surface-container-highest hover:bg-surface-container-high",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "block text-sm font-bold",
+                      active ? "text-primary" : "text-on-surface",
+                    )}
+                  >
+                    {preset.label}
+                  </span>
+                  <span className="block text-xs text-on-surface-variant mt-0.5">
+                    {preset.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
+
+// ─── 6. Integrations ─────────────────────────────────────────────────────────
+
+export const IntegrationsCard = () => {
+  const { data, isLoading, isError, refetch } = useIntegrations();
+  const update = useUpdateIntegrations();
+
+  const [mapboxInput, setMapboxInput] = useState("");
+  const [searxngInput, setSearxngInput] = useState<string | null>(null);
+
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+
+  const mapbox = data?.mapbox;
+  const searxng = data?.searxng;
+
+  const isMapboxEnv = mapbox?.source === "env";
+  const isMapboxConfigured = mapbox?.configured === true;
+
+  const isSearxngEnv = searxng?.source === "env";
+  const searxngVal = searxngInput ?? searxng?.url ?? "";
+
+  return (
+    <div id="integrations" className={cn(CARD, "space-y-6 scroll-mt-20")}>
+      {/* Mapbox */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-sm text-on-surface">
+              Mapbox geocoding
+            </h3>
+          </div>
+          {isMapboxConfigured && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Check className="w-3.5 h-3.5" />
+              Configured
+            </span>
+          )}
+        </div>
+
+        <p className="text-sm text-on-surface-variant text-pretty">
+          High-accuracy address geocoding and coordinate lookup for contacts.
+          Falling back to OpenStreetMap Nominatim when unset.
+        </p>
+
+        {isMapboxEnv ? (
+          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+            Set by MAPBOX_API_KEY in the environment.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label htmlFor="mapbox-key" className="flex-1 min-w-0">
+                <span className="sr-only">Mapbox API key</span>
+                <input
+                  id="mapbox-key"
+                  type="password"
+                  aria-label="Mapbox API key"
+                  value={mapboxInput}
+                  disabled={isLoading || update.isPending}
+                  onChange={(e) => setMapboxInput(e.target.value)}
+                  placeholder={
+                    isMapboxConfigured
+                      ? "Enter new key to replace…"
+                      : "pk.eyJ1..."
+                  }
+                  className={cn(
+                    "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl",
+                    "bg-surface-container-highest text-sm font-mono outline-none",
+                    "focus:ring-2 focus:ring-primary/40",
+                  )}
+                />
+              </label>
+
+              <button
+                type="button"
+                disabled={!mapboxInput.trim() || update.isPending}
+                onClick={() =>
+                  update.mutate(
+                    { mapboxKey: mapboxInput.trim() },
+                    {
+                      onSuccess: () => {
+                        setMapboxInput("");
+                        toast.success("Mapbox API key saved");
+                      },
+                      onError: (err: Error) => toast.error(err.message),
+                    },
+                  )
+                }
+                className="btn-primary shrink-0"
+              >
+                Save
+              </button>
+
+              {isMapboxConfigured && (
+                <button
+                  type="button"
+                  disabled={update.isPending}
+                  onClick={() =>
+                    update.mutate(
+                      { mapboxKey: "" },
+                      {
+                        onSuccess: () => {
+                          setMapboxInput("");
+                          toast.success("Mapbox API key removed");
+                        },
+                        onError: (err: Error) => toast.error(err.message),
+                      },
+                    )
+                  }
+                  className="btn-secondary shrink-0 text-danger hover:bg-danger/10"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SearXNG */}
+      <div className="border-t border-outline-variant/30 pt-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Globe className="w-5 h-5 text-primary" />
+          <h3 className="font-bold text-sm text-on-surface">
+            Self-hosted search (SearXNG)
+          </h3>
+        </div>
+
+        <p className="text-sm text-on-surface-variant text-pretty">
+          A fallback for web research that needs no cloud provider. Point
+          Contrack at your own SearXNG instance and it will be used
+          automatically whenever no connected provider offers web search.
+        </p>
+
+        {isSearxngEnv ? (
+          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+            Set by SEARXNG_URL in the environment.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label htmlFor="searxng-url" className="flex-1 min-w-0">
+                <span className="sr-only">SearXNG base URL</span>
+                <input
+                  id="searxng-url"
+                  type="url"
+                  aria-label="SearXNG base URL"
+                  value={searxngVal}
+                  disabled={isLoading || update.isPending}
+                  onChange={(e) => setSearxngInput(e.target.value)}
+                  placeholder="http://searxng.local:8080"
+                  className={cn(
+                    "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl",
+                    "bg-surface-container-highest text-sm font-mono outline-none",
+                    "focus:ring-2 focus:ring-primary/40",
+                  )}
+                />
+              </label>
+
+              <button
+                type="button"
+                disabled={searxngInput === null || update.isPending}
+                onClick={() =>
+                  update.mutate(
+                    { searxngUrl: searxngVal.trim() },
+                    {
+                      onSuccess: () => {
+                        setSearxngInput(null);
+                        toast.success("SearXNG endpoint saved");
+                      },
+                      onError: (err: Error) => toast.error(err.message),
+                    },
+                  )
+                }
+                className="btn-primary shrink-0"
+              >
+                Save
+              </button>
+
+              {searxng?.url && (
+                <button
+                  type="button"
+                  disabled={update.isPending}
+                  onClick={() =>
+                    update.mutate(
+                      { searxngUrl: "" },
+                      {
+                        onSuccess: () => {
+                          setSearxngInput(null);
+                          toast.success("SearXNG endpoint removed");
+                        },
+                        onError: (err: Error) => toast.error(err.message),
+                      },
+                    )
+                  }
+                  className="btn-secondary shrink-0 text-danger hover:bg-danger/10"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Main View ───────────────────────────────────────────────────────────────
 
 export const GeneralView = () => (
   <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
@@ -334,6 +907,36 @@ export const GeneralView = () => (
         </span>
       </GroupHeading>
       <SessionLengthCard />
+    </section>
+
+    <section className="tile-enter" style={{ animationDelay: tileDelay(3) }}>
+      <GroupHeading>
+        <span className="inline-flex items-center gap-1.5">
+          <Trash2 className="w-3.5 h-3.5" />
+          Trash
+        </span>
+      </GroupHeading>
+      <TrashCard />
+    </section>
+
+    <section className="tile-enter" style={{ animationDelay: tileDelay(4) }}>
+      <GroupHeading>
+        <span className="inline-flex items-center gap-1.5">
+          <Archive className="w-3.5 h-3.5" />
+          Backups
+        </span>
+      </GroupHeading>
+      <BackupScheduleCard />
+    </section>
+
+    <section className="tile-enter" style={{ animationDelay: tileDelay(5) }}>
+      <GroupHeading>
+        <span className="inline-flex items-center gap-1.5">
+          <Globe className="w-3.5 h-3.5" />
+          Integrations
+        </span>
+      </GroupHeading>
+      <IntegrationsCard />
     </section>
   </div>
 );

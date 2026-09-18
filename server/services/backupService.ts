@@ -23,11 +23,13 @@ import { OWNED_TABLES, sqlite } from "../db.ts";
 import { DATA_DIR, ensureDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import {
+  backupIntervalHours,
+  backupKeep,
+  registerBackupIntervalChangeListener,
+} from "./lifecycleSettings.ts";
 
 export const BACKUPS_DIR = path.join(DATA_DIR, "backups");
-
-const DEFAULT_KEEP = 7;
-const DEFAULT_INTERVAL_HOURS = 24;
 
 /**
  * The tables a snapshot is counted against.
@@ -200,8 +202,7 @@ function readVerification(file: string): BackupVerification | null {
 }
 
 function keepCount(): number {
-  const n = Number(process.env.BACKUP_KEEP);
-  return Number.isInteger(n) && n > 0 ? n : DEFAULT_KEEP;
+  return backupKeep().value;
 }
 
 /** List existing backups, newest first. */
@@ -333,24 +334,31 @@ function warnAboutStaleBackups(intervalHours: number): void {
   }
 }
 
+let backupScheduleTimer: NodeJS.Timeout | null = null;
+let startupSnapshotTimeout: NodeJS.Timeout | null = null;
+
+/** Returns the active schedule timer handle, or null. */
+export function getActiveBackupTimer(): NodeJS.Timeout | null {
+  return backupScheduleTimer;
+}
+
 /**
- * Start the recurring backup schedule (startup snapshot + interval).
- * Returns the interval handle, or null when disabled.
+ * Reschedule the recurring backup timer.
+ * Keeps the timer handle in the module, clears it before starting a new one,
+ * runs on boot and after the setting changes, and does nothing when
+ * DISABLE_BACKGROUND_JOBS is true.
  */
-export function startBackupSchedule(): NodeJS.Timeout | null {
+export function rescheduleBackups(): NodeJS.Timeout | null {
+  if (backupScheduleTimer) {
+    clearInterval(backupScheduleTimer);
+    backupScheduleTimer = null;
+  }
+
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;
 
-  // Empty string means UNSET, not zero. docker-compose renders an absent
-  // variable as `BACKUP_INTERVAL_HOURS: ""`, and Number("") is 0 — under the
-  // old `!== undefined` check that combination silently disabled the default
-  // 24h snapshots for every Compose user. Only an explicit value counts.
-  const raw = process.env.BACKUP_INTERVAL_HOURS?.trim();
-  const hours = raw ? Number(raw) : DEFAULT_INTERVAL_HOURS;
+  const hours = backupIntervalHours().value;
   if (!Number.isFinite(hours) || hours <= 0) {
-    log.info(
-      "Backup",
-      `Scheduled backups disabled (BACKUP_INTERVAL_HOURS=${raw})`,
-    );
+    log.info("Backup", `Scheduled backups disabled (interval=${hours})`);
     return null;
   }
 
@@ -361,10 +369,45 @@ export function startBackupSchedule(): NodeJS.Timeout | null {
 
   warnAboutStaleBackups(hours);
 
-  // Startup snapshot shortly after boot (let migrations/backfills settle).
-  setTimeout(run, 15_000).unref();
-  const handle = setInterval(run, hours * 3_600_000);
-  handle.unref();
+  backupScheduleTimer = setInterval(run, hours * 3_600_000);
+  backupScheduleTimer.unref();
   log.info("Backup", `Scheduled backups every ${hours}h (keep ${keepCount()})`);
-  return handle;
+  return backupScheduleTimer;
+}
+
+// Automatically reschedule whenever the interval setting changes.
+registerBackupIntervalChangeListener(() => {
+  rescheduleBackups();
+});
+
+/**
+ * Start the recurring backup schedule on boot (startup snapshot + interval).
+ * Returns the interval handle, or null when disabled.
+ */
+export function startBackupSchedule(): NodeJS.Timeout | null {
+  if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;
+
+  const run = () =>
+    runBackup().catch((err) =>
+      log.warn("Backup", `Scheduled backup failed: ${getErrorMessage(err)}`),
+    );
+
+  // Startup snapshot shortly after boot (let migrations/backfills settle).
+  if (startupSnapshotTimeout) clearTimeout(startupSnapshotTimeout);
+  startupSnapshotTimeout = setTimeout(run, 15_000);
+  startupSnapshotTimeout.unref();
+
+  return rescheduleBackups();
+}
+
+/** Stop all backup timers (used for test teardown). */
+export function stopBackupSchedule(): void {
+  if (backupScheduleTimer) {
+    clearInterval(backupScheduleTimer);
+    backupScheduleTimer = null;
+  }
+  if (startupSnapshotTimeout) {
+    clearTimeout(startupSnapshotTimeout);
+    startupSnapshotTimeout = null;
+  }
 }

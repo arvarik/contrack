@@ -2136,8 +2136,10 @@ Every route under `/api/admin` needs an account with the `admin` role and answer
 | GET    | `/api/admin/invitations`              | Every invitation with its derived status                                  |
 | POST   | `/api/admin/invitations`              | Returns a one-time link, optionally sends it by email                     |
 | DELETE | `/api/admin/invitations/:id`          | Revoke a pending invitation                                               |
-| GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, `magicLinkSignIn`, `mailConfigured` |
-| PUT    | `/api/admin/settings`                 | Update settings (refuses `magicLinkSignIn: true` without mail: `409`)     |
+| GET    | `/api/admin/settings`                 | `registrationOpen`, `sessionTtlDays`, `instanceName`, lifecycle settings  |
+| PUT    | `/api/admin/settings`                 | Update settings (refuses env-locked keys: `409 SET_BY_ENVIRONMENT`)       |
+| GET    | `/api/admin/integrations`             | Mapbox and SearXNG status without secrets (`configured`, `source`, `url`) |
+| PUT    | `/api/admin/integrations`             | Update Mapbox key / SearXNG URL (password current; env-locked: `409`)     |
 | GET    | `/api/admin/audit`                    | Every administrative action, newest first                                 |
 | GET    | `/api/admin/mail`                     | Outgoing mail status and configuration without secrets                    |
 | PUT    | `/api/admin/mail`                     | Save SMTP configuration (seals password with secretBox)                   |
@@ -2163,6 +2165,25 @@ yet. Added by extra F3.
 An account created or reset by an admin holds a password that admin chose, so
 every route outside the six the sign-in flow needs answers
 `403 PASSWORD_CHANGE_REQUIRED` until the person replaces it.
+
+### `GET /api/admin/integrations`
+
+Admin only. Read current configuration status and sources for third-party integrations (Mapbox geocoding and SearXNG search). Never returns raw or sealed API keys.
+
+```bash
+curl http://localhost:3210/api/admin/integrations
+# → 200 { "mapbox": { "configured": true, "source": "setting" }, "searxng": { "url": "http://searxng.local:8080", "source": "setting" } }
+```
+
+### `PUT /api/admin/integrations`
+
+Admin only. Requires a current non-temporary password (`requirePasswordCurrent`). Store or clear integration settings. Mapbox keys are sealed using AES-256-GCM (`secretBox`). An empty string clears the setting. Answers `409 SET_BY_ENVIRONMENT` if the key or URL is locked by environment variables.
+
+```bash
+curl -X PUT http://localhost:3210/api/admin/integrations \
+  -H "Content-Type: application/json" \
+  -d '{ "mapboxKey": "pk.ey...", "searxngUrl": "http://searxng.local:8080" }'
+```
 
 ### `POST /api/admin/users/:id/reset-link`
 
@@ -2365,7 +2386,7 @@ curl http://localhost:3210/api/admin/health
 
 ```bash
 curl http://localhost:3210/api/trash
-# → { "items": [{ "id", "name", "company", "avatarUrl", "deletedAt" }] }
+# → { "items": [{ "id", "name", "company", "avatarUrl", "deletedAt" }], "retentionDays": 30 }
 ```
 
 ### `POST /api/trash/:id/restore`

@@ -16,7 +16,6 @@ import {
   useRefreshModels,
   useSaveEndpoint,
   useDeleteEndpoint,
-  useSetSearxng,
 } from "../../api/aiSettings";
 import { Modal } from "../../components/ui/Modal";
 import { CapabilitiesCard } from "./CapabilitiesCard";
@@ -55,7 +54,6 @@ export const AISettingsView = ({
   const refreshModels = useRefreshModels();
   const saveEndpoint = useSaveEndpoint();
   const deleteEndpoint = useDeleteEndpoint();
-  const setSearxng = useSetSearxng();
 
   const [keyModalProvider, setKeyModalProvider] = useState<{
     id: string;
@@ -69,7 +67,6 @@ export const AISettingsView = ({
     baseUrl: "",
     apiKey: "",
   });
-  const [searxngInput, setSearxngInput] = useState<string | null>(null);
 
   if (isLoading || !settings) {
     return (
@@ -342,54 +339,6 @@ export const AISettingsView = ({
 
       {/* ── Semantic Search Index Coverage ────────────────────────────── */}
       <SearchCoverageBar />
-
-      {/* ── SearXNG ───────────────────────────────────────────────────── */}
-      {/* Its own card rather than a footnote inside Capabilities: it is a
-          separate piece of infrastructure the user runs, not a model pick. */}
-      <section className={cn(CARD, "space-y-3 p-4 sm:p-6")}>
-        <div>
-          <h3 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
-            <Globe className="w-5 h-5 text-primary" />
-            Self-hosted search (SearXNG)
-          </h3>
-          <p className="text-sm text-on-surface-variant mt-1 text-pretty">
-            A fallback for web research that needs no cloud provider. Point
-            Contrack at your own SearXNG instance and it will be used
-            automatically whenever no connected provider offers web search.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          {/* The control is nested in its label so the association holds
-              without depending on id resolution. */}
-          <label htmlFor="searxng-url" className="flex-1 min-w-0">
-            <span className="sr-only">SearXNG base URL</span>
-            <input
-              id="searxng-url"
-              type="url"
-              aria-label="SearXNG base URL"
-              value={searxngInput ?? settings.searxngUrl ?? ""}
-              onChange={(e) => setSearxngInput(e.target.value)}
-              placeholder="http://searxng.local:8080"
-              className="w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </label>
-          <button
-            onClick={() =>
-              setSearxng
-                .mutateAsync(searxngInput ?? "")
-                .then(() => {
-                  setSearxngInput(null);
-                  toast.success("SearXNG endpoint saved");
-                })
-                .catch((e) => toast.error(String(e.message ?? e)))
-            }
-            disabled={searxngInput === null}
-            className="btn-secondary shrink-0"
-          >
-            Save
-          </button>
-        </div>
-      </section>
 
       {/* ── Key modal ─────────────────────────────────────────────────── */}
       <Modal

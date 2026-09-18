@@ -15,11 +15,8 @@ import type { TrashedContact } from "../types";
 // TrashView — recently deleted contacts with restore + permanent delete
 // ---------------------------------------------------------------------------
 
-/** Matches the server default; overridable via TRASH_RETENTION_DAYS. */
-const RETENTION_DAYS = 30;
-
-function daysUntilPurge(deletedAt: string): number {
-  const purgeAt = new Date(deletedAt).getTime() + RETENTION_DAYS * 86_400_000;
+function daysUntilPurge(deletedAt: string, retentionDays = 30): number {
+  const purgeAt = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
   return Math.max(0, Math.ceil((purgeAt - Date.now()) / 86_400_000));
 }
 
@@ -33,7 +30,9 @@ function deletedLabel(deletedAt: string): string {
 }
 
 export const TrashView = () => {
-  const { data: items = [], isLoading } = useTrash();
+  const { data, isLoading } = useTrash();
+  const items = data?.items ?? [];
+  const retentionDays = data?.retentionDays ?? 30;
   const restore = useRestoreContact();
   const purge = usePurgeTrashedContact();
   const [purgeTarget, setPurgeTarget] = useState<TrashedContact | null>(null);
@@ -88,7 +87,7 @@ export const TrashView = () => {
       <div className="flex items-center justify-between">
         <p className="text-sm text-on-surface-variant">
           {items.length} contact{items.length !== 1 ? "s" : ""} in the trash.
-          Each is removed forever {RETENTION_DAYS} days after deletion.
+          Each is removed forever {retentionDays} days after deletion.
         </p>
       </div>
 
@@ -113,8 +112,10 @@ export const TrashView = () => {
                 <div className="text-xs text-on-surface-variant truncate">
                   {item.company ? `${item.company} · ` : ""}
                   {deletedLabel(item.deletedAt)} · purges in{" "}
-                  {daysUntilPurge(item.deletedAt)} day
-                  {daysUntilPurge(item.deletedAt) !== 1 ? "s" : ""}
+                  {daysUntilPurge(item.deletedAt, retentionDays)} day
+                  {daysUntilPurge(item.deletedAt, retentionDays) !== 1
+                    ? "s"
+                    : ""}
                 </div>
               </div>
               <button

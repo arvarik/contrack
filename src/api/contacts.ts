@@ -283,14 +283,22 @@ export const useSetContactLocation = () => {
   });
 };
 
+export interface TrashResponse {
+  items: TrashedContact[];
+  retentionDays: number;
+}
+
 /** Trashed (soft-deleted) contacts, newest deletions first. */
 export const useTrash = () => {
   return useQuery({
     queryKey: ["trash"],
-    queryFn: async ({ signal }): Promise<TrashedContact[]> => {
+    queryFn: async ({ signal }): Promise<TrashResponse> => {
       const res = await apiFetch("/trash", { signal });
       const data = await res.json();
-      return data.items as TrashedContact[];
+      return {
+        items: (data.items ?? []) as TrashedContact[],
+        retentionDays: Number(data.retentionDays) || 30,
+      };
     },
     staleTime: 15_000,
   });

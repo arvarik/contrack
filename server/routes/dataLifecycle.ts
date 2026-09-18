@@ -17,6 +17,7 @@ import { scopeOf } from "../tenancy/scope.ts";
 import { requireAdmin } from "../middleware/auth.ts";
 import { auditService } from "../services/auditService.ts";
 import { listBackups, runBackup } from "../services/backupService.ts";
+import { trashRetentionDays } from "../services/lifecycleSettings.ts";
 import {
   buildFullExport,
   buildContactsCsv,
@@ -31,7 +32,10 @@ const router = Router();
 router.get(
   "/trash",
   asyncHandler(async (req, res) => {
-    res.json({ items: contactService.listTrash(scopeOf(req)) });
+    res.json({
+      items: contactService.listTrash(scopeOf(req)),
+      retentionDays: trashRetentionDays().value,
+    });
   }),
 );
 
