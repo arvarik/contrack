@@ -48,7 +48,11 @@ export const useUpdateActionItem = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["actionItems"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: true });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "activity"],
+        exact: true,
+      });
     },
   });
 };
@@ -66,7 +70,11 @@ export const useCompleteActionItem = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["actionItems"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"], exact: true });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "activity"],
+        exact: true,
+      });
     },
   });
 };

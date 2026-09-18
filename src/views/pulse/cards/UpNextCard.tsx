@@ -44,6 +44,10 @@ export const UpNextCard = ({
       });
     }
     prevItemCountRef.current = items.length;
+
+    return () => {
+      confetti.reset();
+    };
   }, [items.length]);
 
   return (
@@ -98,6 +102,7 @@ export const UpNextCard = ({
       {items.length === 0 ? (
         <div className="py-8">
           <EmptyState
+            level={3}
             icon={PartyPopper}
             title="No follow-ups"
             body="Log a note to keep the streak."

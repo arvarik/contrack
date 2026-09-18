@@ -105,7 +105,8 @@ export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
   // 1. Sanitize hidden list (known only, unique, capped at 20)
   const seen = new Set<string>();
   const hidden: PulseCardId[] = [];
-  for (const id of raw.hidden || []) {
+  const rawHidden = Array.isArray(raw.hidden) ? raw.hidden : [];
+  for (const id of rawHidden) {
     if (KNOWN_PULSE_CARD_IDS.has(id) && !seen.has(id)) {
       seen.add(id);
       hidden.push(id as PulseCardId);
@@ -121,7 +122,7 @@ export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
   };
 
   for (const col of PULSE_COLUMNS) {
-    const rawIds = raw.order?.[col] ?? [];
+    const rawIds = Array.isArray(raw.order?.[col]) ? raw.order[col] : [];
     for (const id of rawIds) {
       if (
         KNOWN_PULSE_CARD_IDS.has(id) &&
@@ -201,7 +202,10 @@ export function pulseLayoutReducer(
     case "show": {
       if (!KNOWN_PULSE_CARD_IDS.has(action.cardId)) return state;
       const { visible, hidden } = resolveLayout(state);
-      const targetCol = action.column || getDefaultColumnForCard(action.cardId);
+      const targetCol =
+        action.column && PULSE_COLUMNS.includes(action.column)
+          ? action.column
+          : getDefaultColumnForCard(action.cardId);
 
       const nextHidden = hidden.filter((id) => id !== action.cardId);
       const colItems = visible[targetCol].filter((id) => id !== action.cardId);
@@ -219,7 +223,9 @@ export function pulseLayoutReducer(
     case "move": {
       if (!KNOWN_PULSE_CARD_IDS.has(action.cardId)) return state;
       const { visible, hidden } = resolveLayout(state);
-      const targetCol = action.targetColumn;
+      const targetCol = PULSE_COLUMNS.includes(action.targetColumn)
+        ? action.targetColumn
+        : "focus";
 
       // Unhide if it was hidden
       const nextHidden = hidden.filter((id) => id !== action.cardId);
@@ -233,8 +239,11 @@ export function pulseLayoutReducer(
 
       const targetList = [...nextVisible[targetCol]];
       const targetIdx =
-        action.targetIndex !== undefined
-          ? Math.max(0, Math.min(action.targetIndex, targetList.length))
+        action.targetIndex !== undefined && !Number.isNaN(action.targetIndex)
+          ? Math.max(
+              0,
+              Math.min(Math.floor(action.targetIndex), targetList.length),
+            )
           : targetList.length;
 
       targetList.splice(targetIdx, 0, action.cardId);
@@ -247,18 +256,35 @@ export function pulseLayoutReducer(
     }
 
     case "reorder": {
+      if (!PULSE_COLUMNS.includes(action.column)) return state;
       const { visible, hidden } = resolveLayout(state);
-      // Keep only valid known cards that belong to this column
-      const sanitized = action.cardIds
-        .filter((id) => KNOWN_PULSE_CARD_IDS.has(id))
-        .slice(0, MAX_CARDS_PER_COL);
-
+      const rawIds = Array.isArray(action.cardIds) ? action.cardIds : [];
+      const seenCol = new Set<string>();
+      const sanitized: PulseCardId[] = [];
+      for (const id of rawIds) {
+        if (KNOWN_PULSE_CARD_IDS.has(id) && !seenCol.has(id)) {
+          seenCol.add(id);
+          sanitized.push(id as PulseCardId);
+        }
+      }
+      const nextHidden = hidden.filter((id) => !seenCol.has(id));
+      const nextVisible: Record<PulseColumn, PulseCardId[]> = {
+        focus:
+          action.column === "focus"
+            ? sanitized
+            : visible.focus.filter((id) => !seenCol.has(id)),
+        network:
+          action.column === "network"
+            ? sanitized
+            : visible.network.filter((id) => !seenCol.has(id)),
+        intel:
+          action.column === "intel"
+            ? sanitized
+            : visible.intel.filter((id) => !seenCol.has(id)),
+      };
       return {
-        hidden,
-        order: {
-          ...visible,
-          [action.column]: sanitized,
-        },
+        hidden: nextHidden,
+        order: nextVisible,
       };
     }
 

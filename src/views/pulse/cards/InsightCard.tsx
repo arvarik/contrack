@@ -35,7 +35,7 @@ export const InsightCard = ({
             AI is off for your account.{" "}
             <Link
               to="/settings/privacy#ai-assist"
-              className="text-primary hover:underline font-medium"
+              className="hit-area inline-flex items-center text-primary hover:underline font-medium"
             >
               Turn on in Settings
             </Link>
@@ -54,7 +54,7 @@ export const InsightCard = ({
             <div>
               <Link
                 to={`/search?q=${encodeURIComponent(insight.text)}`}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline group"
+                className="hit-area py-1 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline group"
               >
                 <span>Ask a follow-up</span>
                 <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />

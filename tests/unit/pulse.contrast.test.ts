@@ -77,6 +77,7 @@ describe("pulse.contrast", () => {
       "success",
       "warning",
       "secondary",
+      "on-surface-variant",
     ];
 
     for (const [mode, palette] of Object.entries(PALETTES)) {

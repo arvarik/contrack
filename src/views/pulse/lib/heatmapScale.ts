@@ -27,9 +27,24 @@ export function heatmapScale(counts: number[]): (count: number) => HeatmapStep {
     return (count: number): HeatmapStep => (count <= 0 ? 0 : 1);
   }
 
+  const unique = Array.from(new Set(positive));
+
   // All equal positive counts (e.g. [1, 1, 1] or [5, 5])
-  if (positive[0] === positive[positive.length - 1]) {
+  if (unique.length === 1) {
     return (count: number): HeatmapStep => (count <= 0 ? 0 : 1);
+  }
+
+  // Small positive sets: distribute proportionally across steps 1 to 5
+  if (unique.length < 5) {
+    return (count: number): HeatmapStep => {
+      if (count <= 0) return 0;
+      const min = unique[0];
+      const max = unique[unique.length - 1];
+      if (count <= min) return 1;
+      if (count >= max) return 5;
+      const step = Math.round(1 + ((count - min) / (max - min)) * 4);
+      return Math.min(5, Math.max(1, step)) as HeatmapStep;
+    };
   }
 
   // Compute 4 quantile threshold percentiles (20%, 40%, 60%, 80%)
@@ -44,7 +59,11 @@ export function heatmapScale(counts: number[]): (count: number) => HeatmapStep {
   const t1 = q(0.2);
   const t2 = Math.max(t1, q(0.4));
   const t3 = Math.max(t2, q(0.6));
-  const t4 = Math.max(t3, q(0.8));
+  let t4 = Math.max(t3, q(0.8));
+  const maxVal = positive[positive.length - 1];
+  if (t4 >= maxVal && maxVal > t3) {
+    t4 = maxVal - 0.001;
+  }
 
   return (count: number): HeatmapStep => {
     if (count <= 0) return 0;

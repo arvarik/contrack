@@ -42,6 +42,7 @@ export const TodayStrip = ({
 
   return (
     <div
+      role="region"
       aria-label="Today summary"
       className="w-full flex items-center justify-between gap-3 overflow-x-auto nice-scrollbar py-1 text-xs"
     >
@@ -57,6 +58,7 @@ export const TodayStrip = ({
 
         {/* Due chip */}
         <button
+          type="button"
           onClick={onScrollToUpNext}
           className={cn(
             "hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer text-xs",
@@ -80,6 +82,7 @@ export const TodayStrip = ({
         {/* Birthdays chip */}
         {birthdayCount > 0 && (
           <button
+            type="button"
             onClick={onScrollToComingUp}
             className="hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition-colors cursor-pointer text-xs"
           >

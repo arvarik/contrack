@@ -34,11 +34,14 @@ export const CompletedCard = () => {
       compact
       headerAction={
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
           className="hit-area p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
           aria-label={
             expanded ? "Collapse completed items" : "Expand completed items"
           }
+          aria-expanded={expanded}
+          aria-controls="completed-card-content"
         >
           {expanded ? (
             <ChevronUp className="w-4 h-4" />
@@ -49,7 +52,10 @@ export const CompletedCard = () => {
       }
     >
       {expanded ? (
-        <div className="space-y-2 pt-1 max-h-72 overflow-y-auto nice-scrollbar">
+        <div
+          id="completed-card-content"
+          className="space-y-2 pt-1 max-h-72 overflow-y-auto nice-scrollbar"
+        >
           {completedItems.map((item) => (
             <div
               key={item.id}

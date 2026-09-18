@@ -157,7 +157,7 @@ export const Heatmap = ({
                       ? 1
                       : cell.count > 0
                         ? Math.max(alpha * 0.8, 0.3)
-                        : 0
+                        : 0.15
                   }
                   className="transition-colors duration-150"
                 >
