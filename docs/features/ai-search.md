@@ -91,6 +91,14 @@ Contact enrichment (Settings → Contact enrichment) fills in contact profiles w
 
 <!-- Screenshot: batch-enrichment.png -->
 
+### Automatic Enrichment and Page Controls
+
+Under **Settings → Contact enrichment**:
+
+- **Never-enriched banner:** Displays the count of contacts that have never been researched on the web, with an "Enrich them" button that selects them in the table for immediate batch enrichment.
+- **Enrich new contacts automatically (`autoEnrich`):** When enabled (default `false`), creating a contact by hand queues background web research if AI assist is turned on for the account and grounding quota is available.
+- **Grounding meter:** For administrators with Gemini configured, a live meter tracks daily grounding search usage and remaining requests.
+
 ### Search Strategies
 
 The enrichment strategy varies by AI provider:

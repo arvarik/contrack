@@ -287,6 +287,109 @@ test.describe("Settings — Personal preferences", () => {
   });
 });
 
+test.describe("Settings — Tools and Data", () => {
+  test("import page uploads vCard fixture and displays it in recent imports", async ({
+    page,
+    instance,
+  }) => {
+    await page.goto("/settings/import");
+    await expect(
+      page.getByRole("heading", { name: "Import", level: 1 }),
+    ).toBeVisible();
+
+    const vcard = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "FN:Zora E2E Test",
+      "N:Test;Zora;;;",
+      "EMAIL;TYPE=INTERNET:zora@example.com",
+      "END:VCARD",
+      "",
+    ].join("\n");
+
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles({
+      name: "zora.vcf",
+      mimeType: "text/vcard",
+      buffer: Buffer.from(vcard),
+    });
+
+    // Verify import completes
+    await expect(page.getByText("Import Complete")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("1 contacts processed")).toBeVisible();
+
+    // Click Done to finish
+    await page.getByRole("button", { name: "Done" }).click();
+
+    // Verify Recent imports section displays the imported record
+    const recentImports = page.getByRole("region", { name: "Recent imports" });
+    await expect(recentImports).toBeVisible();
+    await expect(recentImports.getByText("1 imported")).toBeVisible();
+
+    // Cleanup: delete imported test contact
+    const contacts = await instance.api<Array<{ id: string; name: string }>>(
+      "GET",
+      "/contacts?view=slim",
+    );
+    const created = contacts.find((c) => c.name === "Zora E2E Test");
+    if (created) {
+      await instance.api("DELETE", `/contacts/${created.id}`);
+    }
+  });
+
+  test("tags page loads and displays tags list", async ({ page }) => {
+    await page.goto("/settings/tags");
+    await expect(
+      page.getByRole("heading", { name: "Tags", level: 1 }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Organise contacts with labels/i),
+    ).toBeVisible();
+  });
+
+  test("duplicates page displays sensitivity and automatic check switches", async ({
+    page,
+  }) => {
+    await page.goto("/settings/duplicates");
+    await expect(
+      page.getByRole("heading", { name: "Duplicates", level: 1 }),
+    ).toBeVisible();
+
+    const sensitivityRow = page.locator("#sensitivity");
+    await expect(sensitivityRow).toBeVisible();
+
+    const onCreateRow = page.locator("#dedupe-on-create");
+    await expect(onCreateRow).toBeVisible();
+    const onCreateSwitch = onCreateRow.getByRole("switch", {
+      name: "Check new contacts automatically",
+    });
+    await expect(onCreateSwitch).toHaveAttribute("aria-checked", "true");
+
+    const onImportRow = page.locator("#dedupe-on-import");
+    await expect(onImportRow).toBeVisible();
+    const onImportSwitch = onImportRow.getByRole("switch", {
+      name: "Check imports automatically",
+    });
+    await expect(onImportSwitch).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("enrichment page displays auto-enrich switch", async ({ page }) => {
+    await page.goto("/settings/enrichment");
+    await expect(
+      page.getByRole("heading", { name: "Contact enrichment", level: 1 }),
+    ).toBeVisible();
+
+    const autoEnrichRow = page.locator("#auto-enrich");
+    await expect(autoEnrichRow).toBeVisible();
+    const autoEnrichSwitch = autoEnrichRow.getByRole("switch", {
+      name: "Enrich new contacts automatically",
+    });
+    await expect(autoEnrichSwitch).toHaveAttribute("aria-checked", "false");
+  });
+});
+
 test.describe("Settings — Accessibility", () => {
   const pages = [
     { name: "settings landing", path: "/settings" },
@@ -294,6 +397,8 @@ test.describe("Settings — Accessibility", () => {
     { name: "network", path: "/settings/network" },
     { name: "keyboard", path: "/settings/keyboard" },
     { name: "privacy", path: "/settings/privacy" },
+    { name: "import", path: "/settings/import" },
+    { name: "tags", path: "/settings/tags" },
     { name: "duplicates", path: "/settings/duplicates" },
     { name: "enrichment", path: "/settings/enrichment" },
     { name: "export", path: "/settings/export" },

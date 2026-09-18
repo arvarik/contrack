@@ -274,6 +274,46 @@ the batch is all or nothing.
 
 ---
 
+### `GET /api/imports`
+
+Fetch the newest 50 imports for the active account.
+
+```bash
+curl http://localhost:3210/api/imports
+```
+
+```json
+{
+  "imports": [
+    {
+      "id": "6f6a4c1e-0c1b-4a9c-9f61-2d8b1f3e7a10",
+      "status": "complete",
+      "phase": "done",
+      "message": null,
+      "total": 42,
+      "processed": 42,
+      "imported": 40,
+      "failed": 2,
+      "summary": {
+        "imported": 40,
+        "autoMerged": 1,
+        "needsReview": 2,
+        "newUnique": 37,
+        "failed": 2
+      },
+      "error": null,
+      "createdAt": "2026-09-14 16:40:02",
+      "updatedAt": "2026-09-14 16:40:05",
+      "completedAt": "2026-09-14 16:40:05"
+    }
+  ]
+}
+```
+
+Stale abandoned imports settle automatically on read.
+
+---
+
 ### `GET /api/imports/:id`
 
 The record of one import.
@@ -1676,10 +1716,66 @@ curl http://localhost:3210/api/contacts/action-items
 
 ### `GET /api/tags`
 
-Get all unique tags.
+Get all unique tags as an array of strings.
 
 ```bash
 curl http://localhost:3210/api/tags
+```
+
+---
+
+### `GET /api/tags/summary`
+
+Get all tags with contact counts for the active account. Ordered by contact count descending, then tag ascending.
+
+```bash
+curl http://localhost:3210/api/tags/summary
+```
+
+```json
+{
+  "tags": [
+    { "tag": "investor", "count": 14 },
+    { "tag": "founder", "count": 8 },
+    { "tag": "advisor", "count": 3 }
+  ]
+}
+```
+
+---
+
+### `PATCH /api/tags/:tag`
+
+Rename a tag across all contacts owned by the caller in a single transaction.
+
+```bash
+curl -X PATCH http://localhost:3210/api/tags/investor \
+  -H "Content-Type: application/json" \
+  -d '{"newTag":"vc"}'
+```
+
+```json
+{
+  "updated": 14
+}
+```
+
+If a contact already has the target tag, the old tag is removed to avoid duplicates.
+
+---
+
+### `DELETE /api/tags/:tag`
+
+Remove a tag from all contacts owned by the caller in a single transaction.
+
+```bash
+curl -X DELETE http://localhost:3210/api/tags/investor
+```
+
+```json
+{
+  "deleted": 14
+}
 ```
 
 ---

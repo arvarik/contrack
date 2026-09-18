@@ -40,6 +40,7 @@ import {
   isEmbeddingAvailable,
 } from "./dedupe/embeddings.ts";
 import { dedupeService } from "./dedupe/index.ts";
+import { getPreferences } from "./userPreferencesService.ts";
 
 // ---------------------------------------------------------------------------
 // Shapes
@@ -292,6 +293,13 @@ const _stmts = {
                     WHERE r.importId = ? AND r.status = 'done'
                       AND r.contactId IN (dedupe_suggestions.contactIdA, dedupe_suggestions.contactIdB))
   `),
+
+  list: sqlite.prepare(`
+    SELECT * FROM imports
+     WHERE ownerId = ?
+     ORDER BY createdAt DESC, rowid DESC
+     LIMIT ?
+  `),
 };
 
 // ---------------------------------------------------------------------------
@@ -489,7 +497,8 @@ export const importService = {
         }
       }
 
-      if (createdIds.length > 0) {
+      const prefs = getPreferences(scope.ownerId);
+      if (createdIds.length > 0 && prefs.dedupeOnImport) {
         const message = "Looking for duplicates…";
         _stmts.phase.run("scanning", message, id, scope.ownerId);
         send?.({ phase: "scanning", message });
@@ -683,5 +692,21 @@ export const importService = {
   releaseRetry(scope: Scope, id: string): void {
     live.delete(id);
     _stmts.phase.run("done", null, id, scope.ownerId);
+  },
+
+  /**
+   * List the newest imports for this account.
+   * Interrupted running imports that have no process attached are marked failed.
+   */
+  list(scope: Scope, limit = 50): ImportRecord[] {
+    const rows = _stmts.list.all(scope.ownerId, limit) as ImportTableRow[];
+    return rows.map((row) => {
+      if (row.status === "running" && !live.has(row.id)) {
+        _stmts.fail.run(INTERRUPTED_BEFORE_COMMIT, row.id, scope.ownerId);
+        const updated = read(scope, row.id);
+        return toRecord(updated ?? row);
+      }
+      return toRecord(row);
+    });
   },
 };

@@ -10,6 +10,8 @@ import { Link, useLocation } from "react-router-dom";
 import { SETTINGS_GROUPS, SETTINGS_PAGES, type SettingsPage } from "./registry";
 import { SettingsSearch } from "./SettingsSearch";
 import { useAuth } from "../../components/auth/AuthGate";
+import { useDedupeCount, useContacts } from "../../api";
+import { useImports } from "../../api/imports";
 import { SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
@@ -17,6 +19,36 @@ export const SettingsRail = () => {
   const location = useLocation();
   const { isAdmin, authRequired } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+
+  const { data: dedupeData } = useDedupeCount();
+  const dedupeCount =
+    typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
+  const { data: contacts = [] } = useContacts();
+  const { data: imports = [] } = useImports();
+
+  const thirtyDaysAgo = Date.now() - 30 * 86400 * 1000;
+  const failedImportCount = imports.filter(
+    (imp) =>
+      new Date(imp.createdAt).getTime() >= thirtyDaysAgo &&
+      (imp.status === "failed" || imp.failed > 0),
+  ).length;
+
+  const neverEnrichedCount = contacts.filter(
+    (c) => !c.aiHydratedAt && !c.isArchived && !c.isGhost,
+  ).length;
+
+  const getBadgeCount = (pageId: string): number | null => {
+    switch (pageId) {
+      case "duplicates":
+        return dedupeCount > 0 ? dedupeCount : null;
+      case "enrichment":
+        return neverEnrichedCount > 0 ? neverEnrichedCount : null;
+      case "import":
+        return failedImportCount > 0 ? failedImportCount : null;
+      default:
+        return null;
+    }
+  };
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -59,7 +91,9 @@ export const SettingsRail = () => {
                       currentPath === page.path ||
                       (page.path !== "/settings" &&
                         currentPath.startsWith(`${page.path}/`));
-                    const badgeCount = page.badge ? page.badge() : null;
+                    const badgeCount =
+                      getBadgeCount(page.id) ??
+                      (page.badge ? page.badge() : null);
                     const Icon = page.icon;
 
                     return (

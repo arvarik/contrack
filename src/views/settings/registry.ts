@@ -24,7 +24,9 @@ import {
   ServerCog,
   Shield,
   Sparkles,
+  Tag,
   Trash2,
+  UploadCloud,
   UserRound,
   Users,
   type LucideIcon,
@@ -414,6 +416,28 @@ export const SETTINGS_PAGES: SettingsPage[] = [
 
   // ── TOOLS ────────────────────────────────────────────────────────────────
   {
+    id: "import",
+    path: "/settings/import",
+    title: "Import",
+    description:
+      "Bring in contacts from vCard, CSV, Google, LinkedIn or Apple.",
+    icon: UploadCloud,
+    group: "tools",
+    keywords: [
+      "import",
+      "vcard",
+      "vcf",
+      "csv",
+      "google",
+      "google contacts",
+      "linkedin",
+      "apple",
+      "contacts",
+      "upload",
+    ],
+    load: () => import("./pages/ImportPage"),
+  },
+  {
     id: "duplicates",
     path: "/settings/duplicates",
     title: NAMES.duplicates.title,
@@ -428,6 +452,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "suggestions",
       "auto-merge sensitivity",
       "threshold",
+      "dedupe on create",
+      "dedupe on import",
     ],
     rows: [
       {
@@ -441,6 +467,26 @@ export const SETTINGS_PAGES: SettingsPage[] = [
           "threshold",
         ],
       },
+      {
+        id: "dedupe-on-create",
+        label: "Check new contacts automatically",
+        keywords: [
+          "dedupe on create",
+          "check new contacts",
+          "automatic duplicate check",
+          "duplicates",
+        ],
+      },
+      {
+        id: "dedupe-on-import",
+        label: "Check imports automatically",
+        keywords: [
+          "dedupe on import",
+          "check imports",
+          "automatic import scan",
+          "duplicates",
+        ],
+      },
     ],
     load: () => import("./pages/DuplicatesPage"),
   },
@@ -451,11 +497,55 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     description: NAMES.enrichment.description,
     icon: Sparkles,
     group: "tools",
-    keywords: ["contact enrichment", "ai search", "research", "web", "hydrate"],
+    keywords: [
+      "contact enrichment",
+      "ai search",
+      "research",
+      "web",
+      "hydrate",
+      "auto enrich",
+      "grounding",
+    ],
+    rows: [
+      {
+        id: "auto-enrich",
+        label: "Enrich new contacts automatically",
+        keywords: [
+          "auto enrich",
+          "enrich new contacts",
+          "research",
+          "automatic enrichment",
+        ],
+      },
+      {
+        id: "grounding",
+        label: "Grounding capacity",
+        keywords: ["grounding", "grounding capacity", "quota", "used"],
+      },
+    ],
     load: () => import("./pages/EnrichmentPage"),
   },
 
   // ── DATA ─────────────────────────────────────────────────────────────────
+  {
+    id: "tags",
+    path: "/settings/tags",
+    title: "Tags",
+    description: "Organise contacts with labels. Rename, merge, or delete.",
+    icon: Tag,
+    group: "data",
+    keywords: [
+      "tags",
+      "tag",
+      "labels",
+      "organise",
+      "organize",
+      "rename tag",
+      "merge tag",
+      "delete tag",
+    ],
+    load: () => import("./pages/TagsPage"),
+  },
   {
     id: "lists",
     path: "/settings/lists",

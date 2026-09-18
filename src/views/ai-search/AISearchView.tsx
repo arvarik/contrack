@@ -19,13 +19,27 @@ import { EmptyState } from "../../components/ui/EmptyState";
 
 type DataFilter = "all" | "has_links" | "has_email" | "no_data";
 
-export function AISearchView() {
+export interface AISearchViewProps {
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
+  hideHeaderDescription?: boolean;
+}
+
+export function AISearchView({
+  selectedIds: controlledSelectedIds,
+  onSelectionChange: setControlledSelectedIds,
+  hideHeaderDescription = false,
+}: AISearchViewProps = {}) {
   const { data: contacts = [], isLoading } = useContacts();
   const { startSearch, isStarting, batch, limitMessage, clearLimit } =
     useAISearch();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const selectedIds = controlledSelectedIds ?? internalSelectedIds;
+  const setSelectedIds = setControlledSelectedIds ?? setInternalSelectedIds;
   const [showConfirm, setShowConfirm] = useState(false);
   const [dataFilter, setDataFilter] = useState<DataFilter>("all");
 
@@ -68,13 +82,18 @@ export function AISearchView() {
     );
   }, [batch]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
+  const toggleSelect = useCallback(
+    (id: string) => {
+      const next = new Set(selectedIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      setSelectedIds(next);
+    },
+    [selectedIds, setSelectedIds],
+  );
 
   const toggleSelectAll = useCallback(() => {
     if (selectedIds.size === filteredContacts.length) {
@@ -82,7 +101,7 @@ export function AISearchView() {
     } else {
       setSelectedIds(new Set(filteredContacts.map((c) => c.id)));
     }
-  }, [selectedIds.size, filteredContacts]);
+  }, [selectedIds.size, filteredContacts, setSelectedIds]);
 
   const selectedContacts = useMemo(
     () => contacts.filter((c) => selectedIds.has(c.id)),
@@ -112,10 +131,12 @@ export function AISearchView() {
         on top of each other and pushed the actual content off a phone screen.
         Only the description that the shell does not carry survives.
       */}
-      <p className="text-sm text-on-surface-variant">
-        Research contacts on the live web and fill in the gaps in their
-        profiles.
-      </p>
+      {!hideHeaderDescription && (
+        <p className="text-sm text-on-surface-variant">
+          Research contacts on the live web and fill in the gaps in their
+          profiles.
+        </p>
+      )}
 
       {/* Loading */}
       {isLoading && (

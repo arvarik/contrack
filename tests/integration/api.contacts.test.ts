@@ -6,7 +6,7 @@
 // layer, repositories, FTS triggers, and the error envelope all execute.
 // =============================================================================
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 
@@ -228,5 +228,66 @@ describe("error envelope", () => {
       .send('{"name": "broken"');
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_JSON");
+  });
+});
+
+describe("dedupeOnCreate and autoEnrich preferences on contact creation", () => {
+  it("skips incremental dedupe when dedupeOnCreate is false", async () => {
+    const { contactService } =
+      await import("../../server/services/contactService.ts");
+    const dedupeSpy = vi.spyOn(contactService, "scheduleIncrementalDedupe");
+
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ dedupeOnCreate: false });
+
+    await request(app)
+      .post("/api/contacts")
+      .send({ name: "Skip Dedupe Person" });
+
+    expect(dedupeSpy).not.toHaveBeenCalled();
+
+    // Reset preference
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ dedupeOnCreate: true });
+    dedupeSpy.mockRestore();
+  });
+
+  it("starts a one-contact enrichment batch when autoEnrich is true", async () => {
+    const { jobQueue } =
+      await import("../../server/services/aiSearch/jobQueue.ts");
+    const strat =
+      await import("../../server/services/aiSearch/strategies/index.ts");
+    const stratSpy = vi
+      .spyOn(strat, "validateEnrichmentStrategy")
+      .mockReturnValue("two-pass");
+    const batchSpy = vi.spyOn(jobQueue, "createBatch");
+    const processSpy = vi
+      .spyOn(jobQueue, "processBatch")
+      .mockResolvedValue(undefined as unknown as void);
+
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ autoEnrich: true });
+
+    const res = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Auto Enrich Person" });
+    expect(res.status).toBe(201);
+
+    expect(batchSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      [{ id: res.body.id, name: "Auto Enrich Person" }],
+      "two-pass",
+    );
+
+    // Reset preference
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ autoEnrich: false });
+    stratSpy.mockRestore();
+    batchSpy.mockRestore();
+    processSpy.mockRestore();
   });
 });

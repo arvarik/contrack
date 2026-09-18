@@ -90,6 +90,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transparency cards, and links to AI usage). Turning off AI for an account
   disables generative AI endpoints with 403 AI_OFF_FOR_ACCOUNT and suppresses
   client AI action buttons while preserving fast local search and retrieval.
+- **Tools and data settings: Import, Tags, Duplicates, and Contact enrichment.**
+  Settings gains dedicated tools and data management pages and live count badges.
+  A Needs attention banner on the Settings landing page displays up to three
+  action items for pending duplicates, un-enriched contacts, and failed imports.
+  The Settings rail reflects live counts on Duplicates, Tags, Enrichment, and
+  Import pages. Added a dedicated Import page (`/settings/import`) with an inline
+  workbench, recent imports history table, and failed row retries. Added a
+  dedicated Tags page (`/settings/tags`) with contact counts, alphabetical
+  browsing, inline tag renaming, merge tag modal, and bulk deletion. Added
+  automatic duplicate check preferences (`dedupeOnCreate`, `dedupeOnImport`) and
+  an active duplicate count strip on the Duplicates page. Added a never-enriched
+  contact banner, one-click preselection for batch enrichment, automatic contact
+  enrichment preference (`autoEnrich`), and live grounding meter on the Contact
+  enrichment page. Added backend endpoints for listing imports (`GET /api/imports`),
+  summarizing tags (`GET /api/tags/summary`), renaming tags (`PATCH /api/tags/:tag`),
+  and deleting tags (`DELETE /api/tags/:tag`).
 - **The corvid, everywhere.** One drawing of the raven, traced by hand from
   `docs/brand/corvid-source.jpg` into `src/assets/corvidPaths.ts`, is now the
   mark. It replaces the gradient "C" in the tab strip, the PWA and Apple

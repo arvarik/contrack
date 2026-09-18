@@ -714,9 +714,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   { method: "GET", path: "/api/export/csv", class: "scoped", isolated: true },
   { method: "GET", path: "/api/export/json", class: "scoped", isolated: true },
   { method: "GET", path: "/api/export/vcard", class: "scoped", isolated: true },
-  // ── Imports (2.0 extra: recoverable imports) ───────────────────────────
-  // The record a bulk import leaves behind. Owned rows, so a member reads
-  // and retries their own imports and nobody else's.
+  {
+    method: "GET",
+    path: "/api/imports",
+    class: "scoped",
+    isolated: true,
+  },
   {
     method: "GET",
     path: "/api/imports/:id",
@@ -933,6 +936,9 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   { method: "GET", path: "/api/tags", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/tags/summary", class: "scoped", isolated: true },
+  { method: "PATCH", path: "/api/tags/:tag", class: "scoped", isolated: true },
+  { method: "DELETE", path: "/api/tags/:tag", class: "scoped", isolated: true },
   { method: "GET", path: "/api/timeline", class: "scoped", isolated: true },
   { method: "GET", path: "/api/trash", class: "scoped", isolated: true },
   {

@@ -58,6 +58,9 @@ export interface Preferences {
   motion: MotionPreference;
   singleKeyShortcuts: boolean;
   aiAssist: boolean;
+  dedupeOnCreate: boolean;
+  dedupeOnImport: boolean;
+  autoEnrich: boolean;
 }
 
 export interface PreferencesResponse {
@@ -103,6 +106,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   motion: "system",
   singleKeyShortcuts: true,
   aiAssist: true,
+  dedupeOnCreate: true,
+  dedupeOnImport: true,
+  autoEnrich: false,
 };
 
 export const fetchPreferences = (): Promise<PreferencesResponse> =>
