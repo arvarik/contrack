@@ -1,138 +1,154 @@
 # Pulse
 
-Pulse is Contrack's proactive intelligence center. It shows relationship health, action items, and AI-driven insights about your network.
+Pulse is Contrack's daily office. It turns your network into a calm morning workspace arranged across three responsive columns: Focus, Network, and Intelligence.
 
-Access via the **Pulse** tab in the navigation or `Cmd+Shift+P`.
+Access Pulse via the navigation bar or `Cmd+Shift+P`.
 
 <!-- Screenshot: pulse-dashboard.png -->
 
-## Relationship Scoring
+## Layout Overview
 
-Every contact gets an automated relationship score (0–100) based on three weighted factors:
+On wide screens (1280 px and wider), Pulse organizes work into three parallel columns:
 
-| Factor        | Weight | Description                                                  |
-| ------------- | ------ | ------------------------------------------------------------ |
-| **Frequency** | High   | How often you interact (total interaction count)             |
-| **Recency**   | High   | When the last interaction occurred                           |
-| **Depth**     | Medium | Quality signals — meetings and calls score higher than notes |
+1. **Focus**: The ranked Up next queue and completed task history.
+2. **Network**: Interaction habits, score momentum, and network composition charts.
+3. **Intelligence**: Proactive AI insights, cleanup inbox, upcoming events, and new connections.
 
-### Score Bands
-
-A score falls in one of three bands. The bands give the number a word and a colour. They come from `shared/scoreBand.ts`, so the avatar ring, the contact list, the command palette and the at-risk counts on this page use the same cut points.
-
-| Band        | Score     | Where you see it                                                       |
-| ----------- | --------- | ---------------------------------------------------------------------- |
-| **Strong**  | 70 to 100 | A green ring                                                           |
-| **Fading**  | 40 to 69  | An amber ring                                                          |
-| **At risk** | under 40  | A red ring, the **At-Risk** count, and the at-risk list in the palette |
-
-The ring around every avatar is the score: the arc length is the score and the colour is the band. A contact with no logged interaction shows an empty ring and "No interactions yet". See [The Score Ring](contact-management.md#the-score-ring).
-
-The band words mean one thing each. Pulse uses other words for other facts: "slipping" for a contact past its follow-up cadence, and "rising" and "cooling" for a score that moves.
-
-### Score Lifecycle
-
-- Scores are **fully recomputed on server startup**
-- An **hourly sweep** recalculates all scores in the background
-- Individual scores update immediately when interactions are logged
+On phones and narrower viewports, Pulse stacks the columns in priority order (Focus, Intelligence, Network) with horizontal scrolling for today status chips and the activity heatmap.
 
 ---
 
-## Network Health Panel
+## 1. Focus Column
 
-The dashboard header displays key network metrics:
+### Up Next Queue
 
-| Metric                   | Description                                    |
-| ------------------------ | ---------------------------------------------- |
-| **Total Contacts**       | Active (non-archived, non-ghost) contact count |
-| **Avg Score**            | Mean relationship score across all contacts    |
-| **At-Risk**              | Contacts in the At risk band (score under 40)  |
-| **Interaction Velocity** | Interactions per week (with trend)             |
+The Up next card aggregates and ranks everything requesting attention into one continuous list:
 
-Click on any metric card to drill into a detailed modal with charts and breakdowns.
+- **Overdue**: Past-due follow-ups ordered oldest first, highlighted with error badges.
+- **Today**: Follow-up tasks due today.
+- **This week**: Action items scheduled for the next seven days.
+- **Birthdays**: Contacts celebrating birthdays this week, with a one-click action to log a birthday note.
+- **Slipping**: Contacts with relationship scores below 40 that have gone silent past their target cadence, capped at top three suggestions.
 
----
+In the card header, an SVG progress ring visualizes completion rate for today's tasks.
 
-## Action Item Swimlanes
+When all tasks are cleared, the queue displays an empty state celebrating the milestone with party popper confetti.
 
-Action items are organized into three lanes:
+### Keyboard Navigation
 
-| Lane          | Description                         |
-| ------------- | ----------------------------------- |
-| **Overdue**   | Past-due items (highlighted in red) |
-| **Due Today** | Items due within the next 24 hours  |
-| **Upcoming**  | Items due in the next 7 days        |
+Up next provides high-speed, single-key keyboard operations when typing targets do not have focus:
 
-Each action item card shows:
+| Key     | Action                                                          |
+| ------- | --------------------------------------------------------------- |
+| `J`     | Advance highlight to next queue item                            |
+| `K`     | Move highlight to previous queue item                           |
+| `D`     | Mark highlighted action item as completed                       |
+| `S`     | Snooze highlighted action item by one day                       |
+| `L`     | Open quick note composer pre-filled for the highlighted contact |
+| `Enter` | Open contact profile                                            |
+| `C`     | Toggle layout customize mode                                    |
 
-- Task title
-- Contact name + avatar
-- Due date
-- **Complete** button (tap to mark done)
+These single-key shortcuts can be toggled in Settings under Keyboard shortcuts.
 
-The urgent action item count appears as a badge on the Pulse navigation icon.
+### Completed Card
 
-**APIs:**
-
-- `GET /api/action-items` — Fetch all pending items
-- `PATCH /api/action-items/:id/complete` — Mark complete
-- `GET /api/action-items/count` — Urgent count for badges
+An expandable accordion lists tasks completed today with timestamps and undo options, preserving session context while keeping the primary queue focused.
 
 ---
 
-## Daily AI Insight
+## 2. Network Column
 
-An AI-generated card at the top of the dashboard provides daily observations about your network:
+### Activity Heatmap and Streak
 
-<!-- Screenshot: daily-insight.png -->
+The Activity card displays a rolling 84-day (12-week) SVG heatmap mapping interaction density:
 
-Examples:
+- **Quantile Scaling**: Daily interaction counts map to five discrete primary alpha steps (0, 0.12, 0.3, 0.55, 0.8, 1).
+- **Calendar Alignment**: Columns start on the day defined by your account `weekStart` preference (Monday or Sunday).
+- **Today Indicator**: Today's cell is outlined in the primary theme color.
+- **Accessibility**: Every cell contains an SVG title tooltip showing date and interaction counts. A visually hidden list (`.sr-only`) provides screen readers with weekly interaction totals.
+- **Streak Tracking**: Consecutive days with logged interactions. Connector sync rows and import rows are excluded so automated imports never artificially inflate streaks. Tooltip: "Days you logged something".
+- **Sparkline**: A 40 px polyline charting weekly volume over the last 12 weeks compared against the prior 12-week window.
+- **Type Pills**: Badges breaking down this week's logged notes, calls, meetings, and emails.
 
-- "You've interacted with 12 contacts this week — 3x your average. Most active relationships: Jane Smith, Bob Chen."
-- "3 contacts haven't been reached in over 60 days. Consider a check-in with Sarah, Mike, and David."
+### Momentum Card
 
-The insight is cached for 24 hours (via `aiCache.dailyInsight` tier) and regenerated daily.
+The Momentum card tracks relationship trajectories by comparing current relationship scores against snapshots from four weeks prior:
 
-**API:** `GET /api/dashboard/insight`
+- **Rising**: Top five contacts with the largest 4-week score gains.
+- **Cooling**: Top five contacts with the largest 4-week score drops.
+- **Silent**: Contacts overdue against their target cadence, ordered by overdue days. Contacts in the at-risk list are excluded to avoid duplication.
+- **The Four-Week Rule**: Calculating score movement requires four weekly snapshots. If fewer than four weeks of history exist, the card explains when the first snapshot was taken while keeping the Silent column fully operational.
 
----
+### Composition Card
 
-## Network Composition
+The Composition card visualizes network diversity via a hand-drawn 120 px SVG donut chart:
 
-Click the **composition** metric to see:
-
-- **Industry distribution** — Bar chart of contacts by industry
-- **Role distribution** — Most common job titles
-- **Tag cloud** — Most-used tags
-
----
-
-## Network Growth
-
-A timeline chart showing contact additions over time, with:
-
-- Monthly granularity
-- Cumulative vs. net-new views
-- Import spike detection
+- **Dimensions**: Segmented control switches between Industry, Role, and Location views.
+- **Top Six Plus Other**: Arcs represent top categories with remaining items grouped under Other.
+- **Interactive Legend**: Clicking any legend filter pill navigates to filtered search results (`/?q=industry:<value>`, `/?q=role:<value>`, `/?q=location:<value>`).
+- **See All**: Launches the Network Composition modal for exhaustive distributions.
 
 ---
 
-## Quick Interaction Dialog (`Cmd+Shift+I`)
+## 3. Intelligence Column
 
-A system-wide shortcut for rapid interaction logging from anywhere in the app:
+### Daily Insight
 
-1. Press `Cmd+Shift+I` to open the "Log an interaction" dialog.
-2. Search for the contact and press Enter. Focus moves to the editor.
-3. Write the note. Type `@` to mention another person.
-4. Choose the type (Note, Call, Meeting, Email), and add a next action if you want a follow-up task.
-5. Press `Cmd+Enter`, or Save.
+Displays proactive AI-generated observations regarding networking habits and outreach opportunities. The "Ask a follow-up" link opens Ask Contrack pre-populated with the insight query.
 
-The dialog draws the same composer as the contact page, in its compact form, so mentions and the next-action line work the same way in both. See [Logging Interactions](contact-management.md#logging-interactions).
+### Inbox Card
 
-On save, the dialog:
+Surfaces data maintenance tasks that keep your CRM grounded and accurate:
 
-- Refreshes the contact's timeline and the views that show the contact
-- Triggers relationship score recomputation
-- Closes with a toast such as "Note logged for Ada Lovelace"
+- **Duplicates**: Links to `/pulse/duplicates` with count of pending merges.
+- **Ghosts**: Promotes mentioned people into full contacts.
+- **Stale Data**: Links to contacts without updates in six months (`/?q=updated:>6m`).
+- **Data Hygiene**: Filter pills for contacts missing company (`/?q=missing:company`) or location (`/?q=missing:location`).
+- **Correspondents**: Unsaved email correspondents detected by connectors.
+- When clear, displays "Inbox zero. Nothing to clean up."
 
-`QuickInteractionModal` takes an optional `initialContactId`. With it the dialog opens for that contact, shows the name instead of the search, and starts in the editor.
+### Coming Up Card
+
+Displays upcoming birthdays across the next 14 days and scheduled meetings over the next 7 days from connected calendars.
+
+### New People Card
+
+Shows recently added contact avatars with a count of new relationships formed this month, linking directly to the Network Growth modal.
+
+---
+
+## 4. Customize Mode
+
+You can rearrange, hide, or restore any card on the Pulse page:
+
+1. Click **Customize** in the header or press `C`.
+2. Screen readers announce "Layout editing on".
+3. Every card header displays:
+   - A `GripVertical` drag handle on desktop.
+   - An eye toggle button (`EyeOff`) to hide the card.
+   - An ActionMenu offering "Move to Focus", "Move to Network", or "Move to Intelligence".
+   - Move up and Move down buttons on phone viewports.
+4. Hidden cards appear in a **Hidden cards** tray at the top, where they can be restored with the `Eye` button.
+5. A floating bottom bar provides **Reset layout** to restore defaults and **Done** to exit.
+6. Layouts persist to your account via the `pulseLayout` preference, keeping your setup synchronized across devices.
+
+---
+
+## 5. Possible Duplicates
+
+Duplicate review has moved from a tab into its own dedicated view at `/pulse/duplicates`. Old links (`/pulse?tab=suggestions` and `/pulse/suggestions`) automatically redirect to this page.
+
+---
+
+## 6. APIs
+
+| Method  | Path                             | Description                                                                                            |
+| ------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`   | `/api/dashboard`                 | Main dashboard payload (overdue, due today, upcoming, hygiene, meetings, correspondents, compositions) |
+| `GET`   | `/api/dashboard/activity`        | 84 rolling days of activity, 12 weekly totals, streaks, and this week type breakdown                   |
+| `GET`   | `/api/dashboard/momentum`        | Rising, cooling, and silent contacts with score deltas                                                 |
+| `GET`   | `/api/dashboard/insight`         | Cached daily AI insight                                                                                |
+| `GET`   | `/api/auth/preferences`          | Account preferences including `pulseLayout`                                                            |
+| `PATCH` | `/api/auth/preferences`          | Updates account preferences including `pulseLayout`                                                    |
+| `POST`  | `/api/action-items/:id/complete` | Marks an action item complete                                                                          |
+| `PATCH` | `/api/action-items/:id`          | Updates an action item (e.g. snooze due date)                                                          |

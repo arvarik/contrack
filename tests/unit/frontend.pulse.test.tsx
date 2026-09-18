@@ -36,6 +36,7 @@ vi.mock("../../src/views/pulse/NetworkCompositionModal", () => ({
 
 const mockCompleteMutate = vi.fn();
 const mockUpdateMutate = vi.fn();
+const mockSetPreference = vi.fn();
 let mockDashboardData: DashboardPayload | null = null;
 let mockMomentumData: {
   snapshotWeeks: number;
@@ -130,7 +131,7 @@ vi.mock("../../src/api", () => ({
 vi.mock("../../src/contexts/PreferencesContext", () => ({
   usePreferences: () => ({
     preferences: mockPreferences,
-    setPreference: vi.fn(),
+    setPreference: mockSetPreference,
   }),
 }));
 
@@ -224,6 +225,7 @@ describe("frontend.pulse", () => {
   beforeEach(() => {
     mockCompleteMutate.mockClear();
     mockUpdateMutate.mockClear();
+    mockSetPreference.mockClear();
     mockDashboardData = createSampleDashboard();
     mockMomentumData = {
       snapshotWeeks: 0,
@@ -704,5 +706,148 @@ describe("frontend.pulse", () => {
     );
     fireEvent.click(ghostBtn);
     expect(screen.getByText("Ghost One")).toBeDefined();
+  });
+
+  it("toggles customize mode on Customize button click and C key press", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+
+    // Initial state: Customize button exists and is not active
+    const customizeBtn = screen.getByRole("button", { name: "Customize" });
+    expect(customizeBtn).toBeDefined();
+    expect(screen.queryByText("Editing layout")).toBeNull();
+
+    // Click Customize button to enter customize mode
+    fireEvent.click(customizeBtn);
+    expect(screen.getByText("Editing layout")).toBeDefined();
+    expect(screen.getByText("Layout editing on")).toBeDefined();
+    expect(screen.getByTestId("hidden-cards-tray")).toBeDefined();
+
+    // Press 'c' to toggle customize mode off
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.queryByText("Editing layout")).toBeNull();
+    expect(screen.getByText("Layout editing off")).toBeDefined();
+
+    // Press 'c' to toggle back on
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.getByText("Editing layout")).toBeDefined();
+
+    // Click 'Done' button in floating bar to exit
+    const doneBtn = screen.getByRole("button", { name: "Done" });
+    fireEvent.click(doneBtn);
+    expect(screen.queryByText("Editing layout")).toBeNull();
+  });
+
+  it("hides card using eye toggle and restores from hidden tray", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+
+    // Enter customize mode
+    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+
+    // Find eye toggle for Momentum card
+    const hideMomentumBtn = screen.getByRole("button", {
+      name: "Hide Momentum",
+    });
+    fireEvent.click(hideMomentumBtn);
+
+    // Verify setPreference was called with hide action result
+    expect(mockSetPreference).toHaveBeenCalledWith(
+      "pulseLayout",
+      expect.objectContaining({
+        hidden: ["momentum"],
+      }),
+    );
+  });
+
+  it("resets layout when Reset layout button is clicked", () => {
+    mockPreferences.pulseLayout = {
+      hidden: ["momentum", "insight"],
+      order: { focus: ["up-next"], network: [], intel: [] },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+
+    // Enter customize mode
+    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+
+    const resetBtn = screen.getByRole("button", { name: "Reset layout" });
+    fireEvent.click(resetBtn);
+
+    expect(mockSetPreference).toHaveBeenCalledWith(
+      "pulseLayout",
+      expect.objectContaining({
+        hidden: [],
+        order: expect.objectContaining({
+          focus: ["up-next", "completed"],
+          network: ["activity", "momentum", "composition"],
+          intel: ["insight", "inbox", "coming-up", "new-people"],
+        }),
+      }),
+    );
+  });
+
+  it("moves card to another column via ActionMenu", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+
+    // Enter customize mode
+    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+
+    // Open ActionMenu on Momentum card
+    const moveMenuBtn = screen.getByRole("button", { name: "Move Momentum" });
+    fireEvent.click(moveMenuBtn);
+
+    // Choose "Move to Focus"
+    const moveToFocusItem = screen.getByRole("menuitem", {
+      name: "Move to Focus",
+    });
+    fireEvent.click(moveToFocusItem);
+
+    expect(mockSetPreference).toHaveBeenCalledWith(
+      "pulseLayout",
+      expect.objectContaining({
+        order: expect.objectContaining({
+          focus: expect.arrayContaining(["momentum"]),
+        }),
+      }),
+    );
+  });
+
+  it("moves card up and down via mobile arrow buttons", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+
+    // Enter customize mode
+    fireEvent.click(screen.getByRole("button", { name: "Customize" }));
+
+    // Move Momentum up (since in network column: activity, momentum, composition)
+    const moveUpBtn = screen.getByRole("button", { name: "Move Momentum up" });
+    fireEvent.click(moveUpBtn);
+
+    expect(mockSetPreference).toHaveBeenCalledWith(
+      "pulseLayout",
+      expect.objectContaining({
+        order: expect.objectContaining({
+          network: ["momentum", "activity", "composition"],
+        }),
+      }),
+    );
   });
 });

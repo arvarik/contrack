@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   Routes,
   Route,
@@ -7,7 +13,23 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { addDays } from "date-fns";
-import { HeartPulse } from "lucide-react";
+import { HeartPulse, Eye, EyeOff } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  useDroppable,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  arrayMove,
+} from "@dnd-kit/sortable";
 import {
   useDashboard,
   useDailyInsight,
@@ -25,12 +47,24 @@ import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { openQuickNote } from "../../lib/appEvents";
 import { EMPTY_STATE } from "../../lib/styles";
-import { resolveLayout } from "./lib/layout";
+import { cn } from "../../lib/utils";
+import {
+  resolveLayout,
+  pulseLayoutReducer,
+  PULSE_COLUMNS,
+  CARD_TITLES,
+  COLUMN_NAMES,
+  DEFAULT_PULSE_LAYOUT,
+  getDefaultColumnForCard,
+  type PulseColumn,
+  type PulseCardId,
+} from "./lib/layout";
 import { buildUpNextQueue, computeNextHighlightIndex } from "./lib/upNext";
 import { getUpcomingBirthdays } from "./lib/birthdays";
 import { PulseHeader } from "./components/PulseHeader";
 import { PulseSkeleton } from "./components/PulseSkeleton";
 import { WelcomeOffice } from "./components/WelcomeOffice";
+import { SortableCard } from "./components/SortableCard";
 import { UpNextCard } from "./cards/UpNextCard";
 import { CompletedCard } from "./cards/CompletedCard";
 import { InsightCard } from "./cards/InsightCard";
@@ -40,9 +74,55 @@ import { NewPeopleCard } from "./cards/NewPeopleCard";
 import { ActivityCard } from "./cards/ActivityCard";
 import { MomentumCard } from "./cards/MomentumCard";
 import { CompositionCard } from "./cards/CompositionCard";
+
 const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
 );
+
+interface DroppableColumnProps {
+  id: PulseColumn;
+  cards: PulseCardId[];
+  className?: string;
+  isEditing: boolean;
+  renderCard: (
+    cardId: PulseCardId,
+    index: number,
+    total: number,
+  ) => React.ReactNode;
+}
+
+const DroppableColumn = ({
+  id,
+  cards,
+  className,
+  isEditing,
+  renderCard,
+}: DroppableColumnProps) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `column-${id}`,
+    disabled: !isEditing,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex flex-col gap-6 transition-colors rounded-2xl",
+        isOver && "bg-primary/5 ring-1 ring-primary/20 p-2",
+        className,
+      )}
+    >
+      <SortableContext items={cards} strategy={verticalListSortingStrategy}>
+        {cards.map((cardId, index) => renderCard(cardId, index, cards.length))}
+        {cards.length === 0 && isEditing && (
+          <div className="p-8 rounded-2xl border-2 border-dashed border-outline/20 text-center text-xs text-on-surface-variant font-medium">
+            Drop cards here
+          </div>
+        )}
+      </SortableContext>
+    </div>
+  );
+};
 
 const PulseOffice = () => {
   const mountStart = useRef(performance.now());
@@ -74,11 +154,187 @@ const PulseOffice = () => {
   const { data: dedupeCount } = useDedupeCount();
   const pendingSuggestions = dedupeCount?.count ?? 0;
 
-  const { preferences } = usePreferences();
+  const { preferences, setPreference } = usePreferences();
   const singleKey = useSingleKeyShortcuts();
 
   const completeAction = useCompleteActionItem();
   const updateAction = useUpdateActionItem();
+
+  // Customize mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+
+  const handleToggleCustomize = useCallback(() => {
+    setIsEditing((prev) => {
+      const next = !prev;
+      setAnnouncement(next ? "Layout editing on" : "Layout editing off");
+      return next;
+    });
+  }, []);
+
+  const handleDone = useCallback(() => {
+    setIsEditing(false);
+    setAnnouncement("Layout editing off");
+  }, []);
+
+  // Layout resolution
+  const resolvedLayout = useMemo(() => {
+    return resolveLayout(preferences?.pulseLayout);
+  }, [preferences?.pulseLayout]);
+
+  const handleHideCard = useCallback(
+    (cardId: string) => {
+      const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
+      const next = pulseLayoutReducer(raw, { type: "hide", cardId });
+      setPreference("pulseLayout", next);
+      const title = CARD_TITLES[cardId as PulseCardId] || cardId;
+      setAnnouncement(`Hidden ${title}`);
+    },
+    [preferences?.pulseLayout, setPreference],
+  );
+
+  const handleShowCard = useCallback(
+    (cardId: string, column?: PulseColumn) => {
+      const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
+      const next = pulseLayoutReducer(raw, { type: "show", cardId, column });
+      setPreference("pulseLayout", next);
+      const title = CARD_TITLES[cardId as PulseCardId] || cardId;
+      setAnnouncement(`Restored ${title}`);
+    },
+    [preferences?.pulseLayout, setPreference],
+  );
+
+  const handleMoveToColumn = useCallback(
+    (cardId: string, targetColumn: PulseColumn) => {
+      const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
+      const next = pulseLayoutReducer(raw, {
+        type: "move",
+        cardId,
+        targetColumn,
+      });
+      setPreference("pulseLayout", next);
+      const title = CARD_TITLES[cardId as PulseCardId] || cardId;
+      setAnnouncement(`Moved ${title} to ${COLUMN_NAMES[targetColumn]}`);
+    },
+    [preferences?.pulseLayout, setPreference],
+  );
+
+  const handleMoveStep = useCallback(
+    (cardId: string, direction: -1 | 1) => {
+      const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
+      const resolved = resolveLayout(raw);
+      for (const col of PULSE_COLUMNS) {
+        const idx = resolved.visible[col].indexOf(cardId as PulseCardId);
+        if (idx !== -1) {
+          const targetIdx = idx + direction;
+          if (targetIdx >= 0 && targetIdx < resolved.visible[col].length) {
+            const list = [...resolved.visible[col]];
+            [list[idx], list[targetIdx]] = [list[targetIdx], list[idx]];
+            const next = pulseLayoutReducer(raw, {
+              type: "reorder",
+              column: col,
+              cardIds: list,
+            });
+            setPreference("pulseLayout", next);
+            const title = CARD_TITLES[cardId as PulseCardId] || cardId;
+            setAnnouncement(
+              `Moved ${title} to position ${targetIdx + 1} of ${list.length}`,
+            );
+          }
+          break;
+        }
+      }
+    },
+    [preferences?.pulseLayout, setPreference],
+  );
+
+  const handleResetLayout = useCallback(() => {
+    const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
+    const next = pulseLayoutReducer(raw, { type: "reset" });
+    setPreference("pulseLayout", next);
+    setAnnouncement("Layout reset to default");
+  }, [preferences?.pulseLayout, setPreference]);
+
+  // @dnd-kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+
+      const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
+      const resolved = resolveLayout(raw);
+
+      // Find source column
+      let sourceCol: PulseColumn | null = null;
+      for (const col of PULSE_COLUMNS) {
+        if (resolved.visible[col].includes(activeId as PulseCardId)) {
+          sourceCol = col;
+          break;
+        }
+      }
+      if (!sourceCol) return;
+
+      // Find target column and target index
+      let targetCol: PulseColumn | null = null;
+      let targetIndex = 0;
+
+      if (overId.startsWith("column-")) {
+        targetCol = overId.replace("column-", "") as PulseColumn;
+        targetIndex = resolved.visible[targetCol].length;
+      } else {
+        for (const col of PULSE_COLUMNS) {
+          const idx = resolved.visible[col].indexOf(overId as PulseCardId);
+          if (idx !== -1) {
+            targetCol = col;
+            targetIndex = idx;
+            break;
+          }
+        }
+      }
+
+      if (!targetCol) return;
+
+      if (sourceCol === targetCol) {
+        const colCards = [...resolved.visible[sourceCol]];
+        const fromIdx = colCards.indexOf(activeId as PulseCardId);
+        const toIdx = targetIndex;
+        if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+          const reordered = arrayMove(colCards, fromIdx, toIdx);
+          const next = pulseLayoutReducer(raw, {
+            type: "reorder",
+            column: sourceCol,
+            cardIds: reordered,
+          });
+          setPreference("pulseLayout", next);
+          const title = CARD_TITLES[activeId as PulseCardId] || activeId;
+          setAnnouncement(`Moved ${title} to position ${toIdx + 1}`);
+        }
+      } else {
+        const next = pulseLayoutReducer(raw, {
+          type: "move",
+          cardId: activeId,
+          targetColumn: targetCol,
+          targetIndex,
+        });
+        setPreference("pulseLayout", next);
+        const title = CARD_TITLES[activeId as PulseCardId] || activeId;
+        setAnnouncement(`Moved ${title} to ${COLUMN_NAMES[targetCol]}`);
+      }
+    },
+    [preferences?.pulseLayout, setPreference],
+  );
 
   // Map of contacts for fast lookup (e.g. meeting attendee avatars)
   const contactsMap = useMemo(() => {
@@ -144,7 +400,7 @@ const PulseOffice = () => {
     }
   }, [selectedIndex, highlightedItem, upNext.items.length]);
 
-  // Keyboard navigation (J / K / D / S / L / Enter)
+  // Keyboard navigation (J / K / D / S / L / C / Enter)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e)) return;
@@ -164,7 +420,10 @@ const PulseOffice = () => {
 
       const key = e.key.toLowerCase();
 
-      if (key === "j") {
+      if (key === "c") {
+        e.preventDefault();
+        handleToggleCustomize();
+      } else if (key === "j") {
         e.preventDefault();
         setSelectedIndex((prev) =>
           prev < upNext.items.length - 1 ? prev + 1 : prev,
@@ -202,12 +461,8 @@ const PulseOffice = () => {
     completeAction,
     updateAction,
     navigate,
+    handleToggleCustomize,
   ]);
-
-  // Layout resolution
-  const resolvedLayout = useMemo(() => {
-    return resolveLayout(preferences?.pulseLayout);
-  }, [preferences?.pulseLayout]);
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
   const scrollToUpNext = () => {
@@ -217,6 +472,92 @@ const PulseOffice = () => {
   const scrollToComingUp = () => {
     const el = document.querySelector('[data-card-id="coming-up"]');
     el?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Render individual cards by cardId
+  const renderCardContent = (cardId: PulseCardId) => {
+    switch (cardId) {
+      case "up-next":
+        return (
+          <div ref={upNextCardRef}>
+            <UpNextCard
+              items={upNext.items}
+              groups={upNext.groups}
+              selectedIndex={selectedIndex}
+              onSelectIndex={setSelectedIndex}
+              onComplete={(id) => completeAction.mutate(id)}
+              onLog={(cid) => openQuickNote(cid)}
+              onOpenContact={(cid) => navigate(`/contact/${cid}`)}
+            />
+          </div>
+        );
+      case "completed":
+        return <CompletedCard />;
+      case "activity":
+        return <ActivityCard activity={activity} />;
+      case "momentum":
+        return <MomentumCard />;
+      case "composition":
+        return <CompositionCard dashboard={dashboard} />;
+      case "insight":
+        return (
+          <InsightCard
+            insight={insight}
+            isLoading={isInsightLoading}
+            aiAllowed={aiAllowed}
+          />
+        );
+      case "inbox":
+        return (
+          <InboxCard
+            pendingDuplicates={pendingSuggestions}
+            ghosts={dashboard?.ghosts ?? []}
+            hygiene={dashboard?.hygiene}
+            correspondents={dashboard?.correspondents ?? 0}
+          />
+        );
+      case "coming-up":
+        return (
+          <ComingUpCard
+            birthdays={upcomingBirthdays}
+            meetings={dashboard?.meetings ?? []}
+            contactsMap={contactsMap}
+          />
+        );
+      case "new-people":
+        return (
+          <NewPeopleCard
+            newContacts30d={dashboard?.metrics.newContacts30d ?? 0}
+            recentlyAdded={dashboard?.recentlyAdded ?? []}
+            timeline={dashboard?.networkGrowthTimeline30d ?? []}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const renderSortableCard = (
+    cardId: PulseCardId,
+    index: number,
+    total: number,
+    column: PulseColumn,
+  ) => {
+    return (
+      <SortableCard
+        key={cardId}
+        cardId={cardId}
+        column={column}
+        index={index}
+        totalInColumn={total}
+        isEditing={isEditing}
+        onHide={handleHideCard}
+        onMoveToColumn={handleMoveToColumn}
+        onMoveStep={handleMoveStep}
+      >
+        {renderCardContent(cardId)}
+      </SortableCard>
+    );
   };
 
   if (isError) {
@@ -241,9 +582,9 @@ const PulseOffice = () => {
 
   return (
     <div className="w-full h-full overflow-y-auto bg-surface nice-scrollbar relative">
-      {/* Screen reader live region */}
+      {/* Screen reader live announcements */}
       <div role="status" aria-live="polite" className="sr-only">
-        {liveStatus}
+        {announcement || liveStatus}
       </div>
 
       <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
@@ -254,105 +595,136 @@ const PulseOffice = () => {
           overdueCount={upNext.counts.overdue}
           birthdayCount={upNext.counts.birthdays}
           streak={activity?.streak.current ?? 0}
+          isEditing={isEditing}
+          onToggleCustomize={handleToggleCustomize}
           onScrollToUpNext={scrollToUpNext}
           onScrollToComingUp={scrollToComingUp}
         />
 
-        {/* Content: Welcome Office if 0 contacts, else 3-column Grid */}
+        {/* Hidden Cards Tray in Customize Mode */}
+        {isEditing && (
+          <section
+            aria-label="Hidden cards"
+            data-testid="hidden-cards-tray"
+            className="rounded-2xl bg-surface-container/60 border border-outline/10 p-4 sm:p-5 flex flex-col gap-3 transition-all"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <EyeOff className="w-4 h-4 text-on-surface-variant" />
+                <h2 className="text-sm font-bold text-on-surface">
+                  Hidden cards
+                </h2>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant tabular-nums">
+                  {resolvedLayout.hidden.length}
+                </span>
+              </div>
+              {resolvedLayout.hidden.length === 0 && (
+                <p className="text-xs text-on-surface-variant italic">
+                  No cards are hidden. Use the eye icon on any card to hide it.
+                </p>
+              )}
+            </div>
+
+            {resolvedLayout.hidden.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                {resolvedLayout.hidden.map((cardId) => {
+                  const title = CARD_TITLES[cardId] || cardId;
+                  const defaultCol = getDefaultColumnForCard(cardId);
+                  return (
+                    <div
+                      key={cardId}
+                      data-card-id={cardId}
+                      className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high border border-outline/15 text-xs sm:text-sm font-medium text-on-surface shadow-xs"
+                    >
+                      <span>{title}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleShowCard(cardId)}
+                        aria-label={`Show ${title}`}
+                        title={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
+                        className="hit-area p-1 rounded-lg hover:bg-surface-container-highest text-primary cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Content: Welcome Office if 0 contacts, else 3-column Grid with DndContext */}
         {isZeroContacts ? (
           <WelcomeOffice />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Column 1: Focus (Up next, Completed) */}
-            <div className="order-1 lg:col-span-5 2xl:col-span-4 flex flex-col gap-6">
-              {resolvedLayout.visible.focus.map((cardId) => {
-                if (cardId === "up-next") {
-                  return (
-                    <div key="up-next" ref={upNextCardRef}>
-                      <UpNextCard
-                        items={upNext.items}
-                        groups={upNext.groups}
-                        selectedIndex={selectedIndex}
-                        onSelectIndex={setSelectedIndex}
-                        onComplete={(id) => completeAction.mutate(id)}
-                        onLog={(cid) => openQuickNote(cid)}
-                        onOpenContact={(cid) => navigate(`/contact/${cid}`)}
-                      />
-                    </div>
-                  );
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Column 1: Focus (Up next, Completed) */}
+              <DroppableColumn
+                id="focus"
+                cards={resolvedLayout.visible.focus}
+                className="order-1 lg:col-span-5 2xl:col-span-4"
+                isEditing={isEditing}
+                renderCard={(cardId, index, total) =>
+                  renderSortableCard(cardId, index, total, "focus")
                 }
-                if (cardId === "completed") {
-                  return <CompletedCard key="completed" />;
-                }
-                return null;
-              })}
-            </div>
+              />
 
-            {/* Column 2: Intelligence (Insight, Inbox, Coming up, New people) */}
-            <div className="order-3 lg:col-span-12 2xl:order-2 2xl:col-span-4 flex flex-col gap-6">
-              {resolvedLayout.visible.intel.map((cardId) => {
-                if (cardId === "insight") {
-                  return (
-                    <InsightCard
-                      key="insight"
-                      insight={insight}
-                      isLoading={isInsightLoading}
-                      aiAllowed={aiAllowed}
-                    />
-                  );
+              {/* Column 2: Intelligence (Insight, Inbox, Coming up, New people) */}
+              <DroppableColumn
+                id="intel"
+                cards={resolvedLayout.visible.intel}
+                className="order-3 lg:col-span-12 2xl:order-2 2xl:col-span-4"
+                isEditing={isEditing}
+                renderCard={(cardId, index, total) =>
+                  renderSortableCard(cardId, index, total, "intel")
                 }
-                if (cardId === "inbox") {
-                  return (
-                    <InboxCard
-                      key="inbox"
-                      pendingDuplicates={pendingSuggestions}
-                      ghosts={dashboard.ghosts}
-                      hygiene={dashboard.hygiene}
-                      correspondents={dashboard.correspondents}
-                    />
-                  );
-                }
-                if (cardId === "coming-up") {
-                  return (
-                    <ComingUpCard
-                      key="coming-up"
-                      birthdays={upcomingBirthdays}
-                      meetings={dashboard.meetings}
-                      contactsMap={contactsMap}
-                    />
-                  );
-                }
-                if (cardId === "new-people") {
-                  return (
-                    <NewPeopleCard
-                      key="new-people"
-                      newContacts30d={dashboard.metrics.newContacts30d}
-                      recentlyAdded={dashboard.recentlyAdded}
-                      timeline={dashboard.networkGrowthTimeline30d}
-                    />
-                  );
-                }
-                return null;
-              })}
-            </div>
+              />
 
-            {/* Column 3: Network (Activity, Momentum, Composition) */}
-            <div className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4 flex flex-col gap-6">
-              {resolvedLayout.visible.network.map((cardId) => {
-                if (cardId === "activity") {
-                  return <ActivityCard key="activity" activity={activity} />;
+              {/* Column 3: Network (Activity, Momentum, Composition) */}
+              <DroppableColumn
+                id="network"
+                cards={resolvedLayout.visible.network}
+                className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4"
+                isEditing={isEditing}
+                renderCard={(cardId, index, total) =>
+                  renderSortableCard(cardId, index, total, "network")
                 }
-                if (cardId === "momentum") {
-                  return <MomentumCard key="momentum" />;
-                }
-                if (cardId === "composition") {
-                  return (
-                    <CompositionCard key="composition" dashboard={dashboard} />
-                  );
-                }
-                return null;
-              })}
+              />
             </div>
+          </DndContext>
+        )}
+
+        {/* Floating Bottom Bar in Customize Mode */}
+        {isEditing && (
+          <div
+            role="region"
+            aria-label="Layout customize actions"
+            className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-[60] w-fit max-w-[calc(100%-2rem)] px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200"
+          >
+            <span className="text-xs sm:text-sm font-semibold text-on-surface">
+              Editing layout
+            </span>
+            <div className="h-4 w-px bg-outline/20" />
+            <button
+              type="button"
+              onClick={handleResetLayout}
+              className="btn-secondary hit-area text-xs sm:text-sm px-3 py-1.5 cursor-pointer"
+            >
+              Reset layout
+            </button>
+            <button
+              type="button"
+              onClick={handleDone}
+              className="btn-primary hit-area text-xs sm:text-sm px-4 py-1.5 cursor-pointer"
+            >
+              Done
+            </button>
           </div>
         )}
       </div>

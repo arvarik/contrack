@@ -114,6 +114,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   {
     group: NAMES.pulse.label,
+    keys: ["C"],
+    description: "Toggle customize layout",
+    bareLetter: true,
+    page: "/pulse",
+  },
+  {
+    group: NAMES.pulse.label,
     keys: ["Enter"],
     description: "Open contact",
     bareLetter: false,

@@ -36,7 +36,7 @@ const SLICE_COLORS = [
 ];
 
 export interface CompositionCardProps {
-  dashboard: DashboardPayload;
+  dashboard?: DashboardPayload;
 }
 
 export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
@@ -45,6 +45,7 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
 
   // Extract raw entries based on selected tab
   const rawEntries = useMemo(() => {
+    if (!dashboard) return [];
     if (tab === "industry") return dashboard.industryComposition || [];
     if (tab === "role") return dashboard.roleComposition || [];
     return dashboard.locationComposition || [];
@@ -178,7 +179,7 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
         </div>
       </CardFrame>
 
-      {isModalOpen && (
+      {isModalOpen && dashboard && (
         <Suspense fallback={null}>
           <NetworkCompositionModal
             isOpen={isModalOpen}

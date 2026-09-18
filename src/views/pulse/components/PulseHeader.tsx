@@ -4,6 +4,7 @@ import { PenLine, UserPlus, SlidersHorizontal } from "lucide-react";
 import { PAGE_TITLE } from "../../../lib/styles";
 import { NAMES } from "../../../lib/names";
 import { openQuickNote } from "../../../lib/appEvents";
+import { cn } from "../../../lib/utils";
 import { TodayStrip } from "./TodayStrip";
 
 export interface PulseHeaderProps {
@@ -12,6 +13,8 @@ export interface PulseHeaderProps {
   overdueCount?: number;
   birthdayCount?: number;
   streak?: number;
+  isEditing?: boolean;
+  onToggleCustomize?: () => void;
   onScrollToUpNext?: () => void;
   onScrollToComingUp?: () => void;
 }
@@ -22,6 +25,8 @@ export const PulseHeader = ({
   overdueCount = 0,
   birthdayCount = 0,
   streak = 0,
+  isEditing = false,
+  onToggleCustomize,
   onScrollToUpNext,
   onScrollToComingUp,
 }: PulseHeaderProps) => {
@@ -60,9 +65,15 @@ export const PulseHeader = ({
           </button>
 
           <button
-            disabled
-            title="Coming soon"
-            className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container text-on-surface-variant text-xs sm:text-sm font-medium opacity-50 cursor-not-allowed"
+            type="button"
+            onClick={onToggleCustomize}
+            aria-pressed={isEditing}
+            className={cn(
+              "hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-sm cursor-pointer",
+              isEditing
+                ? "bg-primary text-on-primary hover:bg-primary/90"
+                : "bg-surface-container-high hover:bg-surface-container-highest text-on-surface",
+            )}
           >
             <SlidersHorizontal className="w-4 h-4" />
             <span>Customize</span>

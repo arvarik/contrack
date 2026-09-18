@@ -30,3 +30,7 @@ Welcome to the Contrack documentation. These guides cover everything from gettin
 - [README](../README.md) — Project overview and quick start
 - [Contributing](../CONTRIBUTING.md) — Development standards and PR process
 - [Brand](brand/) — The corvid: the source drawing and the generated mark. Every icon in `public/` is built from `src/assets/corvidPaths.ts` by `npm run brand:icons`
+
+## Screenshots
+
+- `docs/screenshots/pulse-dashboard.png` captures the v2.0 three-column Pulse office layout.

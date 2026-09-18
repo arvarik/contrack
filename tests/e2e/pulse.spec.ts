@@ -203,7 +203,122 @@ test.describe("Pulse Office", () => {
     await expect(scroller).toBeVisible();
   });
 
-  test("page passes automated accessibility scans in light and dark mode", async ({
+  test("customize mode: hides Momentum, Done, reload keeps it hidden, Reset brings it back", async ({
+    page,
+  }) => {
+    await page.goto("/pulse");
+    await expect(page.locator('[data-card-id="momentum"]')).toBeVisible();
+
+    // Click Customize button
+    const customizeBtn = page.getByRole("button", { name: "Customize" });
+    await expect(customizeBtn).toBeVisible();
+    await customizeBtn.click();
+
+    // Verify editing bar and hidden tray are visible
+    await expect(page.getByText("Editing layout")).toBeVisible();
+
+    // Find eye toggle button on Momentum card and hide it
+    const hideMomentumBtn = page.getByRole("button", { name: "Hide Momentum" });
+    await expect(hideMomentumBtn).toBeVisible();
+    await hideMomentumBtn.click();
+
+    // Card is hidden from column, appears in hidden tray
+    await expect(
+      page.locator('.grid [data-card-id="momentum"]'),
+    ).not.toBeVisible();
+    const hiddenTray = page.getByTestId("hidden-cards-tray");
+    await expect(hiddenTray).toBeVisible();
+    await expect(hiddenTray.getByText("Momentum")).toBeVisible();
+
+    // Click Done
+    const doneBtn = page.getByRole("button", { name: "Done", exact: true });
+    await doneBtn.click();
+    await expect(page.getByText("Editing layout")).not.toBeVisible();
+
+    // Reload page, verify Momentum is still hidden
+    await page.reload();
+    await expect(
+      page.locator('.grid [data-card-id="momentum"]'),
+    ).not.toBeVisible();
+
+    // Enter customize mode again and Reset layout
+    await page.getByRole("button", { name: "Customize" }).click();
+    await expect(page.getByText("Editing layout")).toBeVisible();
+
+    const resetBtn = page.getByRole("button", { name: "Reset layout" });
+    await resetBtn.click();
+
+    // Momentum card is restored to visible column
+    await expect(page.locator('[data-card-id="momentum"]')).toBeVisible();
+
+    // Click Done to finish
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(page.getByText("Editing layout")).not.toBeVisible();
+  });
+
+  test("customize mode: reorders cards via keyboard", async ({ page }) => {
+    await page.goto("/pulse");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Pulse" }),
+    ).toBeVisible();
+
+    // Toggle customize via 'c' key
+    await page.keyboard.press("c");
+    await expect(page.getByText("Editing layout")).toBeVisible();
+
+    // Focus drag handle on Momentum card
+    const momentumCard = page.locator('[data-card-id="momentum"]');
+    const handle = momentumCard.getByRole("button", {
+      name: /drag.*reorder/i,
+    });
+    await expect(handle).toBeVisible();
+    await handle.focus();
+
+    // Move using KeyboardSensor (Space to pick up, Arrow to move, Space to drop)
+    await page.keyboard.press("Space");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Space");
+
+    // Done
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(page.getByText("Editing layout")).not.toBeVisible();
+  });
+
+  test("customize mode on phone offers Move up and Move down", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/pulse");
+
+    // Click customize
+    await page.getByRole("button", { name: "Customize" }).click();
+    await expect(page.getByText("Editing layout")).toBeVisible();
+
+    // Check Momentum card has Move up and Move down buttons
+    const momentumCard = page.locator('[data-card-id="momentum"]');
+    await expect(momentumCard).toBeVisible();
+
+    const moveUpBtn = momentumCard.getByRole("button", {
+      name: "Move Momentum up",
+    });
+    const moveDownBtn = momentumCard.getByRole("button", {
+      name: "Move Momentum down",
+    });
+
+    await expect(moveUpBtn).toBeVisible();
+    await expect(moveDownBtn).toBeVisible();
+
+    // Click Move Momentum up
+    await moveUpBtn.click();
+
+    // Now Momentum is first in its column, so Move up should be disabled
+    await expect(moveUpBtn).toBeDisabled();
+
+    // Done
+    await page.getByRole("button", { name: "Done", exact: true }).click();
+  });
+
+  test("page passes automated accessibility scans in light, dark, and customize mode", async ({
     page,
   }, testInfo) => {
     await page.goto("/pulse");
@@ -215,6 +330,12 @@ test.describe("Pulse Office", () => {
     // Dark mode
     await page.emulateMedia({ colorScheme: "dark" });
     await expectPageAccessible(page, testInfo, "pulse-dark");
+
+    // Customize mode accessible scan
+    await page.getByRole("button", { name: "Customize" }).click();
+    await expect(page.getByText("Editing layout")).toBeVisible();
+    await expectPageAccessible(page, testInfo, "pulse-customize");
+    await page.getByRole("button", { name: "Done", exact: true }).click();
 
     await page.goto("/pulse/duplicates");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

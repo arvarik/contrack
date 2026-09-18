@@ -50,6 +50,24 @@ export const DEFAULT_PULSE_LAYOUT: PulseLayout = {
   },
 };
 
+export const COLUMN_NAMES: Record<PulseColumn, string> = {
+  focus: "Focus",
+  network: "Network",
+  intel: "Intelligence",
+};
+
+export const CARD_TITLES: Record<PulseCardId, string> = {
+  "up-next": "Up next",
+  completed: "Completed",
+  activity: "Activity",
+  momentum: "Momentum",
+  composition: "Composition",
+  insight: "Daily insight",
+  inbox: "Inbox",
+  "coming-up": "Coming up",
+  "new-people": "New people",
+};
+
 export function getDefaultColumnForCard(cardId: string): PulseColumn {
   for (const col of PULSE_COLUMNS) {
     if ((DEFAULT_COLUMN_CARDS[col] as readonly string[]).includes(cardId)) {

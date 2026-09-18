@@ -63,9 +63,9 @@ A GitHub-style command center featuring faceted filters (`role:`, `company:`, `t
 
 ### 💓 Pulse
 
-Never let an important connection slip through the cracks again. This proactive dashboard automatically tracks your network health and suggests who you should reach out to next.
+Your daily relationship office. A responsive three-column workspace (Focus, Network, Intelligence) that organizes your morning workflow.
 
-Runs on an automated scoring engine (frequency × recency × depth) to power action item swimlanes and generate daily AI insights.
+Features a ranked Up next queue with one-key keyboard shortcuts, a twelve-week activity heatmap with streak tracking, score momentum monitoring, network composition charts, data cleanup inbox, and account-persisted layout customization.
 
 </td>
 <td width="70%">
