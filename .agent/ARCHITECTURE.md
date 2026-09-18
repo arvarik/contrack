@@ -203,9 +203,9 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/ai/` — AI layer: `aiService.ts` facade, `singleton.ts`, `provider.ts`, `types.ts`
   - `server/ai/adapters/` — Vendor integrations: `gemini.ts` (`@google/genai`), `openai.ts` (`openai`), `anthropic.ts` (`@anthropic-ai/sdk`)
   - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
-- `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`
+- `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`, `imports.ts`, `tags.ts`
 - `server/services/` — Heavy business logic:
-  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`
+  - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
   - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
@@ -238,12 +238,12 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 
 ### Frontend (`src/`)
 
-- `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `index.ts`
+- `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `index.ts`
 - `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`
 - `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
 - `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`
-- `src/components/` — Feature components: `ImportModal.tsx`, `QuickInteractionModal.tsx` (the dialog around the compact composer), `InteractionComposer.tsx` (the one composer, contact page and dialog), `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `ScoreRingAvatar.tsx` (the avatar in its score ring, `HealthRingAvatar.tsx` is its old name for one release), `FloatingContactCard.tsx`
+- `src/components/` — Feature components: `ImportModal.tsx`, `ImportPanel.tsx` (inline dropzone, upload, and progress panel), `QuickInteractionModal.tsx` (the dialog around the compact composer), `InteractionComposer.tsx` (the one composer, contact page and dialog), `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `ScoreRingAvatar.tsx` (the avatar in its score ring, `HealthRingAvatar.tsx` is its old name for one release), `FloatingContactCard.tsx`
 - `src/views/` — Route-driven page components:
   - `src/views/contact-list/` — Network list (left panel)
   - `src/views/contact-detail/` — Contact profile (right panel)
@@ -261,8 +261,9 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
     - `SettingsRail.tsx`: Desktop navigation rail with embedded row search.
     - `SettingsSearch.tsx`: Row-level instant search with deep-link navigation and keyboard controls.
     - `SettingRow.tsx`: Reusable row component with anchor ID, 1.2s flash highlight, modified dot indicator, and reset button.
-    - `SettingsHome.tsx`: Registry-driven mobile/root landing view.
-    - `pages/`: Individual settings pages (`AppearancePage.tsx`, `NetworkPage.tsx`, `DuplicatesPage.tsx`, `EnrichmentPage.tsx`, `ExportPage.tsx`).
+    - `SettingsHome.tsx`: Registry-driven mobile/root landing view with NeedsAttention banner.
+    - `NeedsAttention.tsx`: Action banner presenting up to three urgent tasks across duplicates, enrichment, and failed imports.
+    - `pages/`: Individual settings pages (`AppearancePage.tsx`, `NetworkPage.tsx`, `DuplicatesPage.tsx`, `EnrichmentPage.tsx`, `ImportPage.tsx`, `TagsPage.tsx`, `ExportPage.tsx`).
     - `admin/`: Admin settings views (`GeneralView.tsx`, `AiProvidersView.tsx`, `MailView.tsx`, etc.).
 - `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
 - `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`

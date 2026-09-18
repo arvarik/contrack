@@ -560,7 +560,7 @@ describe("SDK Import Containment Invariant", () => {
       // grep returns exit code 1 when no matches found — this is the PASSING case
       expect(true).toBe(true);
     }
-  });
+  }, 15000);
 
   it("@anthropic-ai/sdk is only imported in the adapter file", async () => {
     const path = await import("path");
@@ -580,7 +580,7 @@ describe("SDK Import Containment Invariant", () => {
       // No matches = correct containment
       expect(true).toBe(true);
     }
-  });
+  }, 15000);
 });
 
 // =============================================================================

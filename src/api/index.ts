@@ -14,4 +14,5 @@ export * from "./suggestions";
 export * from "./aiStats";
 export * from "./aiSettings";
 export * from "./imports";
+export * from "./tags";
 export * from "./searchHistory";

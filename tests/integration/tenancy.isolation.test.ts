@@ -89,6 +89,7 @@ const COVERED = [
   "DELETE /api/lists/:id/members/:contactId",
   "DELETE /api/search/history",
   "DELETE /api/search/history/:id",
+  "DELETE /api/tags/:tag",
   "DELETE /api/trash/:id",
   "GET /api/action-items",
   "GET /api/action-items/completed",
@@ -122,6 +123,7 @@ const COVERED = [
   "GET /api/export/csv",
   "GET /api/export/json",
   "GET /api/export/vcard",
+  "GET /api/imports",
   "GET /api/imports/:id",
   "GET /api/imports/:id/rows",
   "GET /api/industries",
@@ -134,6 +136,7 @@ const COVERED = [
   "GET /api/search/history",
   "GET /api/search/interactions",
   "GET /api/tags",
+  "GET /api/tags/summary",
   "GET /api/timeline",
   "GET /api/trash",
   "PATCH /api/action-items/:id",
@@ -143,6 +146,7 @@ const COVERED = [
   "PATCH /api/interactions/:id",
   "PATCH /api/lists/:id",
   "PATCH /api/search/history/:id",
+  "PATCH /api/tags/:tag",
   "POST /api/ai-search",
   "POST /api/ai-search/:batchId/cancel",
   "POST /api/contacts",
@@ -746,6 +750,24 @@ describe("the record an import leaves", () => {
     expect(snapshotRow("imports", importA)).toEqual(before);
     expect(rowsOwnedBy("contacts", B.user.id)).toBe(beforeB);
     expect(rowsOwnedBy("imports", B.user.id)).toBe(beforeImportsB);
+  });
+
+  it("GET /api/imports lists only the caller's imports, newest first", async () => {
+    const forA = await asUser(A)(request(app).get("/api/imports"));
+    expect(forA.status).toBe(200);
+    expect(
+      (forA.body.imports as { id: string }[]).some((i) => i.id === importA),
+    ).toBe(true);
+
+    const forB = await asUser(B)(request(app).get("/api/imports"));
+    expect(forB.status).toBe(200);
+    expect(
+      (forB.body.imports as { id: string }[]).some((i) => i.id === importA),
+    ).toBe(false);
+
+    const forC = await asUser(C)(request(app).get("/api/imports"));
+    expect(forC.status).toBe(200);
+    expect(forC.body.imports).toEqual([]);
   });
 });
 
@@ -3112,6 +3134,49 @@ describe("the MCP surface answers for the caller's own account", () => {
     expect(forB.body).not.toContain(RARE_TAG);
   });
 
+  it("GET /api/tags/summary: counts only the caller's tags", async () => {
+    const forB = await asUser(B)(request(app).get("/api/tags/summary"));
+    const forA = await asUser(A)(request(app).get("/api/tags/summary"));
+
+    expect(forB.status).toBe(200);
+    expect(forA.status).toBe(200);
+    expect(
+      (forA.body.tags as { tag: string; count: number }[]).some(
+        (t) => t.tag === RARE_TAG,
+      ),
+    ).toBe(true);
+    expect(
+      (forB.body.tags as { tag: string; count: number }[]).some(
+        (t) => t.tag === RARE_TAG,
+      ),
+    ).toBe(false);
+  });
+
+  it("PATCH /api/tags/:tag: cannot rename another account's tag", async () => {
+    const forB = await asUser(B)(
+      request(app)
+        .patch(`/api/tags/${encodeURIComponent(RARE_TAG)}`)
+        .send({ to: "hijacked" }),
+    );
+    expect(forB.status).toBe(200);
+    expect(forB.body.affected).toBe(0);
+
+    const checkA = await asUser(A)(request(app).get("/api/tags"));
+    expect(checkA.body).toContain(RARE_TAG);
+    expect(checkA.body).not.toContain("hijacked");
+  });
+
+  it("DELETE /api/tags/:tag: cannot delete another account's tag", async () => {
+    const forB = await asUser(B)(
+      request(app).delete(`/api/tags/${encodeURIComponent(RARE_TAG)}`),
+    );
+    expect(forB.status).toBe(200);
+    expect(forB.body.affected).toBe(0);
+
+    const checkA = await asUser(A)(request(app).get("/api/tags"));
+    expect(checkA.body).toContain(RARE_TAG);
+  });
+
   it("GET /api/industries: does not carry another account's industry", async () => {
     const forB = await asUser(B)(request(app).get("/api/industries"));
     const forA = await asUser(A)(request(app).get("/api/industries"));
@@ -3252,7 +3317,7 @@ describe("all scoped routes are isolated", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(37);
+    expect(collections).toHaveLength(39);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

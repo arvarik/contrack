@@ -542,3 +542,50 @@ describe("bulkCreateContacts without an import id", () => {
     expect(contactCount()).toBe(0);
   });
 });
+
+describe("GET /api/imports", () => {
+  it("lists newest imports for the caller", async () => {
+    const id1 = crypto.randomUUID();
+    const id2 = crypto.randomUUID();
+
+    await json([{ name: "Import 1 Person" }], id1);
+    await json([{ name: "Import 2 Person" }], id2);
+
+    const res = await request(app).get("/api/imports");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("imports");
+    expect(Array.isArray(res.body.imports)).toBe(true);
+    expect(res.body.imports.length).toBeGreaterThanOrEqual(2);
+    const idx2 = (res.body.imports as { id: string }[]).findIndex(
+      (i) => i.id === id2,
+    );
+    const idx1 = (res.body.imports as { id: string }[]).findIndex(
+      (i) => i.id === id1,
+    );
+    expect(idx2).toBeLessThan(idx1);
+  });
+});
+
+describe("dedupeOnImport preference", () => {
+  it("skips duplicate scan when dedupeOnImport is false", async () => {
+    const { dedupeService } =
+      await import("../../server/services/dedupe/index.ts");
+    const scanSpy = vi.spyOn(dedupeService, "runImportScan");
+
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ dedupeOnImport: false });
+
+    const importId = crypto.randomUUID();
+    await json([{ name: "No Dedupe Person" }], importId);
+    await until(importId, "complete");
+
+    expect(scanSpy).not.toHaveBeenCalled();
+
+    // Reset preference
+    await request(app)
+      .patch("/api/auth/preferences")
+      .send({ dedupeOnImport: true });
+    scanSpy.mockRestore();
+  });
+});

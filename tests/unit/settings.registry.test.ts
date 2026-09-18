@@ -114,4 +114,50 @@ describe("settings registry", () => {
     );
     expect(shortcutHit?.path).toBe("/settings/keyboard#single-key-shortcuts");
   });
+
+  it("registers tools and data pages with their rows", () => {
+    const importPage = SETTINGS_PAGES.find((p) => p.id === "import");
+    expect(importPage).toBeDefined();
+    expect(importPage?.path).toBe("/settings/import");
+    expect(importPage?.group).toBe("tools");
+
+    const tagsPage = SETTINGS_PAGES.find((p) => p.id === "tags");
+    expect(tagsPage).toBeDefined();
+    expect(tagsPage?.path).toBe("/settings/tags");
+    expect(tagsPage?.group).toBe("data");
+
+    const duplicates = SETTINGS_PAGES.find((p) => p.id === "duplicates");
+    expect(duplicates?.rows?.some((r) => r.id === "dedupe-on-create")).toBe(
+      true,
+    );
+    expect(duplicates?.rows?.some((r) => r.id === "dedupe-on-import")).toBe(
+      true,
+    );
+
+    const enrichment = SETTINGS_PAGES.find((p) => p.id === "enrichment");
+    expect(enrichment?.rows?.some((r) => r.id === "auto-enrich")).toBe(true);
+    expect(enrichment?.rows?.some((r) => r.id === "grounding")).toBe(true);
+  });
+
+  it("findRows returns hits for tools and data keywords", () => {
+    const vcardHit = findRows("vcard");
+    expect(vcardHit.some((h) => h.page.id === "import")).toBe(true);
+
+    const tagHit = findRows("rename tag");
+    expect(tagHit.some((h) => h.page.id === "tags")).toBe(true);
+
+    const dedupeImportHit = findRows("dedupe on import");
+    expect(
+      dedupeImportHit.some(
+        (h) => h.id === "dedupe-on-import" || h.row?.id === "dedupe-on-import",
+      ),
+    ).toBe(true);
+
+    const autoEnrichHit = findRows("auto enrich");
+    expect(
+      autoEnrichHit.some(
+        (h) => h.id === "auto-enrich" || h.row?.id === "auto-enrich",
+      ),
+    ).toBe(true);
+  });
 });

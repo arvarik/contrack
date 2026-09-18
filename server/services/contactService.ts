@@ -35,6 +35,10 @@ import { dedupeService } from "./dedupe/index.ts";
 import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
+import { activeProviderName, ai } from "../ai/index.ts";
+import { validateEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
+import { jobQueue } from "./aiSearch/jobQueue.ts";
+import { runWithContext } from "../tenancy/requestContext.ts";
 
 // ---------------------------------------------------------------------------
 // Incremental Dedupe — Debounce Map
@@ -65,7 +69,7 @@ const SEARCH_TRIGGER_FIELDS = [
  * Schedule a debounced incremental dedupe check for a contact.
  * If called multiple times for the same contact within 5s, only the last fires.
  */
-function scheduleIncrementalDedupe(contactId: string) {
+export function scheduleIncrementalDedupe(contactId: string) {
   // Integration tests set this to avoid 5s debounce timers outliving a file.
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
   // Clear any pending timer
@@ -86,6 +90,16 @@ function scheduleIncrementalDedupe(contactId: string) {
   }, DEDUPE_DEBOUNCE_MS);
 
   _dedupeTimers.set(contactId, timer);
+}
+
+function hasGroundingCapacity(): boolean {
+  try {
+    if (activeProviderName !== "gemini") return true;
+    const snapshot = ai.getQuotaSnapshot();
+    return snapshot.grounding.remaining > 0;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -379,8 +393,53 @@ export const contactService = {
 
     scheduleSearchIndex(id);
 
+    const prefs = getPreferences(scope.ownerId);
+
     // Fire-and-forget: incremental dedupe check (debounced)
-    scheduleIncrementalDedupe(id);
+    if (prefs.dedupeOnCreate) {
+      scheduleIncrementalDedupe(id);
+    }
+
+    // Auto-enrich person-created contact (never imports)
+    if (
+      prefs.autoEnrich &&
+      prefs.aiAssist &&
+      !body.isGhost &&
+      !body.isArchived &&
+      hasGroundingCapacity()
+    ) {
+      runWithContext(
+        {
+          requestId: `enrich-${crypto.randomUUID().slice(0, 8)}`,
+          principal: null,
+          scope,
+        },
+        () => {
+          try {
+            const strategy = validateEnrichmentStrategy();
+            const check = jobQueue.canStartBatch(scope);
+            if (check.allowed) {
+              const batch = jobQueue.createBatch(
+                scope,
+                [{ id, name: body.name }],
+                strategy,
+              );
+              jobQueue.processBatch(batch.id).catch((err) => {
+                log.error(
+                  "ContactService",
+                  `Auto-enrich batch ${batch.id} processing error: ${getErrorMessage(err)}`,
+                );
+              });
+            }
+          } catch (err) {
+            log.warn(
+              "ContactService",
+              `Auto-enrich for ${id} failed to schedule: ${getErrorMessage(err)}`,
+            );
+          }
+        },
+      );
+    }
 
     invalidateOwnerCaches(scope);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
@@ -629,7 +688,11 @@ export const contactService = {
       "role",
       "location",
     ];
-    if (dedupeFields.some((f) => body[f] !== undefined)) {
+    const prefs = getPreferences(scope.ownerId);
+    if (
+      prefs.dedupeOnCreate &&
+      dedupeFields.some((f) => body[f] !== undefined)
+    ) {
       scheduleIncrementalDedupe(id);
     }
 
@@ -1059,4 +1122,6 @@ export const contactService = {
     if (!contact) return null;
     return contactRepo.hydrate(contact);
   },
+
+  scheduleIncrementalDedupe,
 };

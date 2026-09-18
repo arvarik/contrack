@@ -99,6 +99,13 @@ that runs a few seconds after you add a contact by hand. All three score a
 pair from the same table, so a shared phone number is worth 95% in an import
 exactly as it is in a scan.
 
+### Automatic deduplication checks
+
+Under **Settings → Duplicates**, two preferences control background duplicate checks:
+
+- **Check new contacts automatically (`dedupeOnCreate`):** When enabled (default `true`), creating a contact by hand schedules an incremental duplicate check a few seconds later.
+- **Check imports automatically (`dedupeOnImport`):** When enabled (default `true`), completing a bulk import triggers a duplicate scan over newly imported records. When disabled, imports skip the background duplicate scan.
+
 ### What weakens a match
 
 Two rules lower a confidence below the table, whichever path produced it.
@@ -181,7 +188,7 @@ Each merge log entry shows:
 
 ## Import-Time Deduplication
 
-When contacts are imported via CSV/vCard, the system automatically runs a targeted deduplication scan:
+When contacts are imported via CSV or vCard, the system automatically runs a targeted deduplication scan if `dedupeOnImport` is enabled (the default):
 
 1. Each imported contact is checked against all existing contacts
 2. **Email overlap** → auto-merge (99% confidence)
@@ -189,7 +196,7 @@ When contacts are imported via CSV/vCard, the system automatically runs a target
 4. **Exact name match** → auto-merge (95% confidence)
 5. **Nickname match** → queued for manual review (88% confidence)
 
-This prevents duplicate inflation during bulk imports.
+This prevents duplicate inflation during bulk imports. The check can be turned off per account in **Settings → Duplicates**.
 
 ---
 

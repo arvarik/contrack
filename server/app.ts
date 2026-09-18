@@ -23,6 +23,7 @@ import { importsRouter } from "./routes/imports.ts";
 import { interactionsRouter } from "./routes/interactions.ts";
 import { dedupeRouter } from "./routes/dedupe/index.ts";
 import { mcpRouter } from "./routes/mcp.ts";
+import { tagsRouter } from "./routes/tags.ts";
 import { actionItemsRouter } from "./routes/actionItems.ts";
 import { dashboardRouter } from "./routes/dashboard.ts";
 import { aiSearchRouter } from "./routes/aiSearch.ts";
@@ -314,6 +315,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // which contactsRouter's GET /contacts/:id would otherwise capture as an
   // id and answer with a 404. Express matches in mount order.
   app.use("/api", mcpRouter);
+  app.use("/api", tagsRouter);
   app.use("/api", contactsRouter);
   app.use("/api", importsRouter);
   app.use("/api", interactionsRouter);

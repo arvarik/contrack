@@ -38,6 +38,15 @@ function requireId(raw: unknown): string {
 }
 
 router.get(
+  "/imports",
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const imports = importService.list(scope, 50);
+    res.json({ imports });
+  }),
+);
+
+router.get(
   "/imports/:id",
   asyncHandler(async (req, res) => {
     const scope = scopeOf(req);

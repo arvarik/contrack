@@ -10,6 +10,7 @@ import { ChevronRight, HardDrive, type LucideIcon } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
 import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
 import { SettingsSearch } from "./SettingsSearch";
+import { NeedsAttention } from "./NeedsAttention";
 import { SETTINGS_GROUPS, SETTINGS_PAGES } from "./registry";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
@@ -90,6 +91,8 @@ export const SettingsHome = () => {
 
       {!isSearching && (
         <div className="space-y-8">
+          <NeedsAttention />
+
           {SETTINGS_GROUPS.map((group, groupIdx) => {
             const pages = SETTINGS_PAGES.filter((page) => {
               if (page.group !== group.id) return false;

@@ -13,6 +13,7 @@
  * @module api/imports
  */
 import { apiJson } from "./client";
+import { useQuery } from "@tanstack/react-query";
 
 /**
  * Where an import is.
@@ -71,6 +72,17 @@ export interface ImportRetryResult {
 }
 
 const path = (id: string) => `/imports/${encodeURIComponent(id)}`;
+
+export const fetchImports = async (): Promise<ImportRecord[]> => {
+  const data = await apiJson<{ imports: ImportRecord[] }>("/imports");
+  return data.imports;
+};
+
+export const useImports = () =>
+  useQuery({
+    queryKey: ["imports"],
+    queryFn: fetchImports,
+  });
 
 export const fetchImport = (id: string): Promise<ImportRecord> =>
   apiJson<ImportRecord>(path(id));

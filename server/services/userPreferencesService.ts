@@ -135,6 +135,9 @@ export const preferenceSchemas = {
   motion: z.enum(["system", "reduced"]),
   singleKeyShortcuts: z.boolean(),
   aiAssist: z.boolean(),
+  dedupeOnCreate: z.boolean(),
+  dedupeOnImport: z.boolean(),
+  autoEnrich: z.boolean(),
 } as const;
 
 export type PreferenceKey = keyof typeof preferenceSchemas;
@@ -171,6 +174,9 @@ const DEFAULTS: Preferences = {
   motion: "system",
   singleKeyShortcuts: true,
   aiAssist: true,
+  dedupeOnCreate: true,
+  dedupeOnImport: true,
+  autoEnrich: false,
 };
 
 /** A PATCH body: any subset, and nothing else. */

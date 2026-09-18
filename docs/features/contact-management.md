@@ -27,7 +27,7 @@ The parsing uses the active AI provider (`POST /api/parse-contact`).
 
 ### Import (CSV, vCard, EML)
 
-Access via the import button on the contact list. Supports:
+Access via the import button on the contact list, or through **Settings → Import** (`/settings/import`), which provides an inline import workbench and displays recent imports with status, counts, and retry options for failed rows. Supports:
 
 - **CSV files** — Automatic column mapping with header detection
 - **vCard (.vcf)** — The format Apple Contacts, Google Contacts, Outlook and
