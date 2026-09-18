@@ -558,14 +558,16 @@ sqlite.exec(`
     fallback        INTEGER NOT NULL DEFAULT 0,
     pinned          INTEGER NOT NULL DEFAULT 0,
     runCount        INTEGER NOT NULL DEFAULT 1,
-    createdAt       TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    lastRunAt       TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    createdAt       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    lastRunAt       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     UNIQUE (ownerId, mode, normalizedQuery)
   );
   CREATE INDEX IF NOT EXISTS idx_search_history_owner_last
     ON search_history (ownerId, lastRunAt DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_search_history_owner_mode_last
+    ON search_history (ownerId, mode, lastRunAt DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_search_history_owner_pinned
-    ON search_history (ownerId, pinned, lastRunAt DESC);
+    ON search_history (ownerId, pinned, lastRunAt DESC, id DESC);
 `);
 
 // =============================================================================

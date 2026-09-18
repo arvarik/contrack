@@ -374,6 +374,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "models",
       "providers",
       "capabilities",
+      "history",
+      "recent",
+      "searches",
     ],
     rows: [
       {
@@ -387,6 +390,11 @@ export const SETTINGS_PAGES: SettingsPage[] = [
           "disable ai",
           "models",
         ],
+      },
+      {
+        id: "search-history",
+        label: "Search history",
+        keywords: ["history", "recent", "searches"],
       },
     ],
     load: () => import("./pages/PrivacyPage"),

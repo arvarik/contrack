@@ -49,6 +49,8 @@ interface PendingDelete {
   send: () => Promise<unknown>;
   timer?: ReturnType<typeof setTimeout>;
   toastId?: string | number;
+  errorMessage?: string;
+  flushUrl?: string;
 }
 
 /**
@@ -122,7 +124,8 @@ function send(
       entries.delete(id);
       publish();
       toast.error(
-        "Could not delete the interaction. It is back on the timeline.",
+        entry.errorMessage ??
+          "Could not delete the interaction. It is back on the timeline.",
       );
     },
   );
@@ -151,8 +154,9 @@ function undo(id: string, entry: PendingDelete): void {
 export function flushPendingDeletes(): void {
   for (const [id, entry] of entries) {
     if (entry.status !== "waiting") continue;
+    const url = entry.flushUrl ?? `/interactions/${encodeURIComponent(id)}`;
     send(id, entry, () =>
-      apiFetch(`/interactions/${encodeURIComponent(id)}`, {
+      apiFetch(url, {
         method: "DELETE",
         keepalive: true,
       }),
@@ -170,6 +174,10 @@ export interface PendingDeleteOptions {
   send: () => Promise<unknown>;
   /** Optional toast message. Defaults to "Interaction deleted". */
   message?: string;
+  /** Optional error toast message. */
+  errorMessage?: string;
+  /** Optional endpoint URL for pagehide keepalive delete. Defaults to `/interactions/${id}`. */
+  flushUrl?: string;
 }
 
 /**
@@ -180,6 +188,8 @@ export function startPendingDelete({
   id,
   send: request,
   message = "Interaction deleted",
+  errorMessage,
+  flushUrl,
 }: PendingDeleteOptions): void {
   if (entries.has(id)) return;
   if (!listening && typeof window !== "undefined") {
@@ -187,7 +197,12 @@ export function startPendingDelete({
     listening = true;
   }
 
-  const entry: PendingDelete = { status: "waiting", send: request };
+  const entry: PendingDelete = {
+    status: "waiting",
+    send: request,
+    errorMessage,
+    flushUrl,
+  };
   entries.set(id, entry);
   // Each callback holds this entry. A late callback of an old toast then
   // cannot end the window of a newer delete of the same id.

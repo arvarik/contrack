@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Satellite,
   RefreshCw,
+  FileText,
 } from "lucide-react";
 import {
   GROUP_HEADING_DEFAULT,
@@ -47,7 +48,7 @@ interface ZeroStateViewProps {
   historyEntries: SearchHistoryEntry[];
   insights: ZeroStateInsight[];
   onSelectContact: (id: string) => void;
-  onSelectHistory: (query: string) => void;
+  onSelectHistory: (query: string, mode?: string) => void;
   onSelectInsight: (insight: ZeroStateInsight) => void;
   onNavigate: (path: string) => void;
 }
@@ -57,9 +58,12 @@ interface ZeroStateViewProps {
 const modeIcon = (mode: string) => {
   switch (mode) {
     case "ai":
+    case "people":
       return <Sparkles className="w-3 h-3 text-primary" />;
     case "action":
       return <Zap className="w-3 h-3 text-success" />;
+    case "notes":
+      return <FileText className="w-3 h-3 text-primary" />;
     default:
       return <Search className="w-3 h-3 text-on-surface-variant" />;
   }
@@ -200,7 +204,7 @@ export const ZeroStateView = ({
             <Command.Item
               key={`history_${i}_${entry.timestamp}`}
               value={`history_${entry.query}`}
-              onSelect={() => onSelectHistory(entry.query)}
+              onSelect={() => onSelectHistory(entry.query, entry.mode)}
               className="flex items-center gap-3 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 transition-colors text-on-surface"
             >
               <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">

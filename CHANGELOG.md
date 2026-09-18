@@ -62,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinning, individual deletion, and clearing history by mode or entirely.
   Legacy search history from user preferences is automatically backfilled on the
   first request for an account with no history rows.
+- **Search history management in Settings.** Settings > Privacy and AI now
+  includes a "Search history" row (`#search-history`) displaying the total
+  number of recorded questions and a "Clear history" action with confirmation
+  dialog. The row is searchable via the settings registry with keywords
+  `history`, `recent`, and `searches`.
 
 - **Settings revamp: registry, two-pane shell, and row search.** Settings is now
   driven by a declarative registry (`src/views/settings/registry.ts`). On wide
@@ -206,6 +211,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Unified command palette search history.** The command palette now reads
+  and writes from the unified `search_history` database table alongside Ask
+  Contrack instead of the `preferences.searchHistory` blob. Palette queries are
+  recorded under the `palette` mode while `?` AI queries map to `people` mode.
+  Terminal-style history navigation (Arrow Up and Arrow Down) recalls recent
+  queries across all modes. The client stops writing to `preferences.searchHistory`,
+  though the server continues to accept the legacy key for one release.
 - **A timeline in one column.** The contact timeline used to zigzag, with
   cards on alternate sides, so at 1440 px each card was 250 px wide and its
   title wrapped to three lines. Entries now sit in one column, newest first,

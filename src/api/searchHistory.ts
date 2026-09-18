@@ -157,10 +157,11 @@ export function useRecordSearch() {
                 e.normalizedQuery === optimisticEntry.normalizedQuery
               ),
           );
+          const exists = filteredEntries.length < firstPage.entries.length;
           const newFirstPage: HistoryListResponse = {
             ...firstPage,
             entries: [optimisticEntry, ...filteredEntries],
-            total: firstPage.total + 1,
+            total: exists ? firstPage.total : firstPage.total + 1,
           };
           return {
             ...old,
