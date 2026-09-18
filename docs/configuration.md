@@ -363,6 +363,18 @@ Passwords are hashed with scrypt (N=2^16, r=8, p=1). The parameters are stored
 alongside each hash, so raising them later upgrades passwords silently on next
 sign-in rather than locking anyone out.
 
+### Signing in
+
+Contrack is designed for fast sign-in and account creation with minimal typing and fewer mistakes:
+
+- **Revealable password fields**: Password inputs provide an accessible reveal toggle button ("Show password" / "Hide password") with a 44px tap target and `aria-pressed` state.
+- **Caps Lock detection**: Typing into a password field with Caps Lock on displays an inline `aria-live="polite"` warning ("Caps Lock is on").
+- **Single password field on creation**: Initial setup, self-registration, and invitation flows use a single password field with the reveal toggle instead of a redundant confirmation field. (Confirmation remains on password change dialogs where the existing credential is being replaced).
+- **Username suggestion**: When creating an account, typing an email suggests a username derived from the address (with a clear notice that it can be edited).
+- **Password strength meter**: When choosing a password during setup, registration, or password reset, a four-segment meter evaluates length, character variety, and common weak passwords, providing visual feedback (Short, OK, Good, Strong) without blocking submission.
+- **Keep me signed in**: The sign-in screen provides a "Keep me signed in on this device" checkbox (checked by default). When unchecked, the session is capped at `min(policy, 1 day)` and set as a session-only cookie without `Max-Age` that ends when the browser closes.
+- **Remembered identifier**: A successful sign-in saves the username in `localStorage` under `contrack.lastIdentifier`. Subsequent visits prefill the identifier, autofocus the password field, and display a "Not you?" button to clear the stored identifier.
+
 **Forgot your password?** Contrack provides three ways to regain access:
 
 1. **Email reset link**: If outgoing mail is configured, click **Forgot your password?** on the sign-in screen. Contrack emails a single-use link valid for 1 hour.

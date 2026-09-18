@@ -74,7 +74,7 @@ export const InboxCard = ({
           {pendingDuplicates > 0 && (
             <Link
               to="/pulse/duplicates"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
+              className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <Copy className="w-4 h-4 text-primary shrink-0 opacity-80" />
@@ -91,7 +91,7 @@ export const InboxCard = ({
           {stale > 0 && (
             <Link
               to="/?q=updated:>6m"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
+              className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 opacity-80" />
@@ -110,7 +110,7 @@ export const InboxCard = ({
               <button
                 type="button"
                 onClick={() => setGhostsExpanded(!ghostsExpanded)}
-                className="w-full flex items-center justify-between cursor-pointer group text-left"
+                className="w-full flex items-center justify-between min-h-[44px] cursor-pointer group text-left"
               >
                 <div className="flex items-center gap-2.5 min-w-0 pr-2">
                   <Ghost className="w-4 h-4 text-on-surface-variant shrink-0" />
@@ -151,7 +151,7 @@ export const InboxCard = ({
           {missingCompany > 0 && (
             <Link
               to="/?q=missing:company"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
+              className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <Building className="w-4 h-4 text-on-surface-variant shrink-0 opacity-80" />
@@ -167,7 +167,7 @@ export const InboxCard = ({
           {missingLocation > 0 && (
             <Link
               to="/?q=missing:location"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
+              className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <MapPin className="w-4 h-4 text-on-surface-variant shrink-0 opacity-80" />
@@ -183,7 +183,7 @@ export const InboxCard = ({
           {missingEmail > 0 && (
             <Link
               to="/?q=missing:email"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
+              className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <Mail className="w-4 h-4 text-on-surface-variant shrink-0 opacity-80" />
@@ -199,7 +199,7 @@ export const InboxCard = ({
           {correspondents > 0 && (
             <Link
               to="/settings/connectors/people"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
+              className="flex items-center justify-between min-h-[44px] p-2.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0 pr-2">
                 <UserCheck className="w-4 h-4 text-primary shrink-0 opacity-80" />

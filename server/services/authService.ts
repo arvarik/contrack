@@ -745,6 +745,7 @@ function sessionKey(secret: string): string {
  */
 export interface CreateSessionOptions {
   method?: string | null;
+  remember?: boolean;
 }
 
 export function createSession(
@@ -753,8 +754,12 @@ export function createSession(
   options?: CreateSessionOptions,
 ): { secret: string; expiresAt: string } {
   const secret = crypto.randomBytes(32).toString("base64url");
+  const ttlDays =
+    options?.remember === false
+      ? Math.min(getSessionTtlDays(), 1)
+      : getSessionTtlDays();
   const expiresAt = new Date(
-    Date.now() + getSessionTtlDays() * 24 * 60 * 60 * 1000,
+    Date.now() + ttlDays * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   sqlite

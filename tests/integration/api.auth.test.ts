@@ -93,10 +93,14 @@ async function setupAccount(overrides: Partial<typeof ACCOUNT> = {}) {
 }
 
 /** Sign in and return the session cookie. */
-async function signIn(identifier: string, password: string) {
+async function signIn(
+  identifier: string,
+  password: string,
+  extra: Record<string, unknown> = {},
+) {
   const res = await request(app)
     .post("/api/auth/login")
-    .send({ identifier, password });
+    .send({ identifier, password, ...extra });
   return { res, cookie: cookieFrom(res) };
 }
 
@@ -297,6 +301,28 @@ describe("sign in", () => {
     __resetAuthRateLimits();
     const { res } = await signIn("theowner", ACCOUNT.password);
     expect(res.status).toBe(200);
+  });
+
+  it("remember false gives a Set-Cookie without Max-Age and a session under one day", async () => {
+    const { res, cookie } = await signIn("theowner", ACCOUNT.password, {
+      remember: false,
+    });
+    expect(res.status).toBe(200);
+    const cookieHeader = cookie.join(";");
+    expect(cookieHeader).toContain("contrack_session=");
+    expect(cookieHeader).not.toContain("Max-Age");
+
+    const secret = decodeURIComponent(
+      cookieHeader.match(/contrack_session=([^;]+)/)![1],
+    );
+    const hash = crypto.createHash("sha256").update(secret).digest("hex");
+    const session = sqlite
+      .prepare("SELECT expiresAt FROM sessions WHERE id = ?")
+      .get(hash) as { expiresAt: string };
+    const expiresMs = new Date(session.expiresAt).getTime();
+    const oneDayFromNow = Date.now() + 24 * 60 * 60 * 1000 + 5000;
+    expect(expiresMs).toBeLessThanOrEqual(oneDayFromNow);
+    expect(expiresMs).toBeGreaterThan(Date.now());
   });
 });
 

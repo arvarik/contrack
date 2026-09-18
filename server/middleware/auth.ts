@@ -203,9 +203,10 @@ function readCookie(req: Request, name: string): string | null {
  * default way this app is run; omitting it entirely would drop the flag on
  * the reverse-proxy deployments where it matters most.
  */
-function cookieAttributes(req: Request, maxAgeSeconds: number): string {
+function cookieAttributes(req: Request, maxAgeSeconds: number | null): string {
   const secure = isHttps(req) ? "; Secure" : "";
-  return `HttpOnly; SameSite=Strict; Path=/${secure}; Max-Age=${maxAgeSeconds}`;
+  const maxAge = maxAgeSeconds !== null ? `; Max-Age=${maxAgeSeconds}` : "";
+  return `HttpOnly; SameSite=Strict; Path=/${secure}${maxAge}`;
 }
 
 function isHttps(req: Request): boolean {
@@ -219,17 +220,24 @@ function isHttps(req: Request): boolean {
   return typeof value === "string" && value.split(",")[0].trim() === "https";
 }
 
+export interface SetSessionCookieOptions {
+  sessionOnly?: boolean;
+}
+
 /** Set the session cookie on a response. */
 export function setSessionCookie(
   req: Request,
   res: Response,
   secret: string,
   expiresAt: string,
+  options?: SetSessionCookieOptions,
 ): void {
-  const maxAge = Math.max(
-    0,
-    Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
-  );
+  const maxAge = options?.sessionOnly
+    ? null
+    : Math.max(
+        0,
+        Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000),
+      );
   res.append(
     "Set-Cookie",
     `${COOKIE_NAME}=${encodeURIComponent(secret)}; ${cookieAttributes(req, maxAge)}`,

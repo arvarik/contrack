@@ -11,7 +11,8 @@
  * Inputs are 16px on small screens because anything smaller makes iOS Safari
  * zoom the viewport on focus, which is disorienting mid-password.
  */
-import React from "react";
+import React, { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { CorvidMark } from "../brand/CorvidMark";
 import { useAuth } from "./AuthGate";
@@ -109,49 +110,146 @@ const InstanceName = () => {
  * fields lose their name the moment you type, which is exactly when a form
  * with four fields needs it most.
  */
-export const AuthField = ({
-  id,
-  label,
-  hint,
-  error,
-  ...props
-}: {
+export interface AuthFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   id: string;
   label: string;
   hint?: string;
   error?: string | null;
-} & React.InputHTMLAttributes<HTMLInputElement>) => (
-  <div className="space-y-1.5">
-    <label htmlFor={id} className="block text-xs font-bold text-on-surface">
-      {label}
-    </label>
-    <input
-      id={id}
-      // Errors are announced by pointing the field at its own message rather
-      // than by a live region, so a screen reader reaching the field hears
-      // what is wrong with it.
-      aria-invalid={error ? true : undefined}
-      aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-      className={cn(
-        "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
-        // 16px on mobile: anything less and iOS Safari zooms on focus.
-        "text-base sm:text-sm",
-        "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        error && "ring-2 ring-error",
-      )}
-      {...props}
-    />
-    {error ? (
-      <p id={`${id}-error`} className="text-xs text-error">
-        {error}
-      </p>
-    ) : hint ? (
-      <p id={`${id}-hint`} className="text-xs text-on-surface-variant">
-        {hint}
-      </p>
-    ) : null}
-  </div>
+  revealable?: boolean;
+  capsLockHint?: boolean;
+  action?: React.ReactNode;
+}
+
+export const AuthField = React.forwardRef<HTMLInputElement, AuthFieldProps>(
+  (
+    {
+      id,
+      label,
+      action,
+      hint,
+      error,
+      revealable = false,
+      capsLockHint = false,
+      type = "text",
+      onKeyDown,
+      onKeyUp,
+      onBlur,
+      ...props
+    },
+    ref,
+  ) => {
+    const [revealed, setRevealed] = useState(false);
+    const [capsLock, setCapsLock] = useState(false);
+
+    const inputType =
+      revealable && type === "password"
+        ? revealed
+          ? "text"
+          : "password"
+        : type;
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (capsLockHint && typeof e.getModifierState === "function") {
+        setCapsLock(e.getModifierState("CapsLock"));
+      }
+      onKeyDown?.(e);
+    };
+
+    const handleKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (capsLockHint && typeof e.getModifierState === "function") {
+        setCapsLock(e.getModifierState("CapsLock"));
+      }
+      onKeyUp?.(e);
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+      if (capsLockHint) {
+        setCapsLock(false);
+      }
+      onBlur?.(e);
+    };
+
+    const describedBy =
+      [
+        error ? `${id}-error` : hint ? `${id}-hint` : null,
+        capsLockHint && capsLock ? `${id}-caps` : null,
+      ]
+        .filter(Boolean)
+        .join(" ") || undefined;
+
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label
+            htmlFor={id}
+            className="block text-xs font-bold text-on-surface"
+          >
+            {label}
+          </label>
+          {action}
+        </div>
+        <div className="relative">
+          <input
+            ref={ref}
+            id={id}
+            type={inputType}
+            // Errors are announced by pointing the field at its own message rather
+            // than by a live region, so a screen reader reaching the field hears
+            // what is wrong with it.
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
+            onBlur={handleBlur}
+            className={cn(
+              "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
+              revealable && "pr-12",
+              // 16px on mobile: anything less and iOS Safari zooms on focus.
+              "text-base sm:text-sm",
+              "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              error && "ring-2 ring-error",
+            )}
+            {...props}
+          />
+          {revealable && (
+            <button
+              type="button"
+              onClick={() => setRevealed((prev) => !prev)}
+              aria-label={revealed ? "Hide password" : "Show password"}
+              aria-pressed={revealed}
+              className="absolute right-0 top-0 bottom-0 w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:text-primary transition-colors cursor-pointer"
+            >
+              {revealed ? (
+                <EyeOff className="w-4 h-4" aria-hidden="true" />
+              ) : (
+                <Eye className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+          )}
+        </div>
+        {capsLockHint && capsLock && (
+          <p
+            id={`${id}-caps`}
+            aria-live="polite"
+            className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1"
+          >
+            Caps Lock is on
+          </p>
+        )}
+        {error ? (
+          <p id={`${id}-error`} className="text-xs text-error">
+            {error}
+          </p>
+        ) : hint ? (
+          <p id={`${id}-hint`} className="text-xs text-on-surface-variant">
+            {hint}
+          </p>
+        ) : null}
+      </div>
+    );
+  },
 );
+AuthField.displayName = "AuthField";
 
 /** The single primary action at the bottom of an auth form. */
 export const AuthSubmit = ({

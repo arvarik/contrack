@@ -23,9 +23,14 @@ const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 /** Every field in `scope` renders at 16px or more. */
 async function expectPhoneSizedFields(scope: Locator, labels: string[]) {
   for (const label of labels) {
-    const size = await scope
-      .getByLabel(label)
-      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const target = scope.getByLabel(label);
+    const element =
+      (await target.count()) > 1
+        ? target.locator("xpath=self::input | self::textarea | self::select")
+        : target;
+    const size = await element.evaluate((el) =>
+      parseFloat(getComputedStyle(el).fontSize),
+    );
     expect(size, `${label} renders at ${size}px`).toBeGreaterThanOrEqual(16);
   }
 }
@@ -123,12 +128,7 @@ gatedTest.describe("gated instance", () => {
         page.getByRole("heading", { name: SETUP_HEADING }),
       ).toBeVisible();
       const form = page.getByRole("main");
-      await expectPhoneSizedFields(form, [
-        "Your name",
-        "Email",
-        "Username",
-        "Confirm password",
-      ]);
+      await expectPhoneSizedFields(form, ["Your name", "Email", "Username"]);
       await expectPageAccessible(page, testInfo, "setup-phone");
 
       // A field's error is attached to the field, so a screen reader hears it
@@ -148,7 +148,6 @@ gatedTest.describe("gated instance", () => {
       await email.fill(ADMIN.email);
       await page.getByLabel("Username").fill(ADMIN.username);
       await page.getByLabel("Password", { exact: true }).fill(ADMIN.password);
-      await page.getByLabel("Confirm password").fill(ADMIN.password);
       await page.getByRole("button", { name: SETUP_HEADING }).click();
 
       // On a phone the account lives at the top of Settings.

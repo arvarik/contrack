@@ -57,7 +57,6 @@ export async function completeSetup(
   await page.getByLabel("Email").fill(account.email);
   await page.getByLabel("Username").fill(account.username);
   await page.getByLabel("Password", { exact: true }).fill(account.password);
-  await page.getByLabel("Confirm password").fill(account.password);
   await page.getByRole("button", { name: SETUP_HEADING }).click();
   await expectSignedIn(page, account);
 }

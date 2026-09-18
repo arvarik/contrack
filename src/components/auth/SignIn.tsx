@@ -41,6 +41,8 @@ const HEADINGS: Record<
   },
 };
 
+export const LAST_IDENTIFIER_KEY = "contrack.lastIdentifier";
+
 export const SignIn = ({
   onSignedIn,
   reason,
@@ -60,14 +62,34 @@ export const SignIn = ({
   const [view, setView] = useState<"signin" | "forgot" | "magic-link">(
     "signin",
   );
-  const [identifier, setIdentifier] = useState("");
+  const [savedIdentifier, setSavedIdentifier] = useState(() => {
+    try {
+      return localStorage.getItem(LAST_IDENTIFIER_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [identifier, setIdentifier] = useState(savedIdentifier);
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
 
+  const identifierRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
   const isPasskeySupported = passkeysSupported();
   const autofillAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (savedIdentifier) {
+      passwordRef.current?.focus();
+    }
+  }, [savedIdentifier]);
+
+  const rememberRef = useRef(remember);
+  rememberRef.current = remember;
 
   useEffect(() => {
     if (!isPasskeySupported) return;
@@ -82,10 +104,16 @@ export const SignIn = ({
         return signInWithPasskey({
           useBrowserAutofill: true,
           signal: controller.signal,
+          remember: rememberRef.current,
         });
       })
       .then((user) => {
         if (user && mounted) {
+          if (user.username) {
+            try {
+              localStorage.setItem(LAST_IDENTIFIER_KEY, user.username);
+            } catch {}
+          }
           onSignedIn();
         }
       })
@@ -116,7 +144,12 @@ export const SignIn = ({
     setPasskeyBusy(true);
     setError(null);
     try {
-      await signInWithPasskey();
+      const user = await signInWithPasskey({ remember });
+      if (user?.username) {
+        try {
+          localStorage.setItem(LAST_IDENTIFIER_KEY, user.username);
+        } catch {}
+      }
       onSignedIn();
     } catch (err: unknown) {
       if ((err as { name?: string })?.name !== "AbortError") {
@@ -128,6 +161,15 @@ export const SignIn = ({
     }
   };
 
+  const handleNotYou = () => {
+    setIdentifier("");
+    setSavedIdentifier("");
+    try {
+      localStorage.removeItem(LAST_IDENTIFIER_KEY);
+    } catch {}
+    identifierRef.current?.focus();
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     abortAutofill();
@@ -135,7 +177,10 @@ export const SignIn = ({
     setBusy(true);
     setError(null);
     try {
-      await signIn({ identifier: identifier.trim(), password });
+      await signIn({ identifier: identifier.trim(), password, remember });
+      try {
+        localStorage.setItem(LAST_IDENTIFIER_KEY, identifier.trim());
+      } catch {}
       onSignedIn();
     } catch (err) {
       setError(
@@ -209,8 +254,20 @@ export const SignIn = ({
     >
       <div className="space-y-4">
         <AuthField
+          ref={identifierRef}
           id="identifier"
           label="Username or email"
+          action={
+            savedIdentifier && identifier === savedIdentifier ? (
+              <button
+                type="button"
+                onClick={handleNotYou}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                Not you?
+              </button>
+            ) : null
+          }
           type="text"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
@@ -220,10 +277,12 @@ export const SignIn = ({
           spellCheck={false}
           required
           // The sign-in screen is the whole page and has one starting point.
+          // Focus password if prefilled; otherwise start on identifier.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus
+          autoFocus={!savedIdentifier}
         />
         <AuthField
+          ref={passwordRef}
           id="password"
           label="Password"
           type="password"
@@ -231,7 +290,18 @@ export const SignIn = ({
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           required
+          revealable
+          capsLockHint
         />
+        <label className="flex items-center gap-2 text-xs font-medium text-on-surface cursor-pointer select-none pt-0.5">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="rounded border-outline text-primary focus:ring-primary w-4 h-4"
+          />
+          Keep me signed in on this device
+        </label>
         {error && <AuthError>{error}</AuthError>}
       </div>
 

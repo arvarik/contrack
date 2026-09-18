@@ -11,6 +11,7 @@ import { expectPageAccessible } from "./fixtures/a11y";
 import {
   ADMIN,
   SETUP_HEADING,
+  completeSetup,
   expectSignedIn,
   signOutFromSidebar,
 } from "./fixtures/accounts";
@@ -48,7 +49,14 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await page.getByLabel("Email").fill(ADMIN.email);
   await page.getByLabel("Username").fill(ADMIN.username);
   await page.getByLabel("Password", { exact: true }).fill(ADMIN.password);
-  await page.getByLabel("Confirm password").fill(ADMIN.password);
+  await expect(page.getByText("Strong")).toBeVisible();
+  const showBtn = page.getByRole("button", { name: "Show password" });
+  await expect(showBtn).toBeVisible();
+  await showBtn.click();
+  await expect(
+    page.getByRole("button", { name: "Hide password" }),
+  ).toBeVisible();
+  await expectPageAccessible(page, testInfo, "setup-meter-and-toggle");
   await page.getByRole("button", { name: SETUP_HEADING }).click();
 
   // 2. The passkey nudge appears
@@ -135,6 +143,10 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(alert).toHaveText(
     "That passkey did not work. Try again, or sign in with your password.",
   );
+  await cdp.send("WebAuthn.setAutomaticPresenceSimulation", {
+    authenticatorId,
+    enabled: false,
+  });
 
   // 8. Forgot password panel without mail configured (shows operator guidance)
   const forgotBtn = page.getByRole("button", {
@@ -160,7 +172,7 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(
     page.getByRole("heading", { name: "Choose a new password" }),
   ).toBeVisible();
-  await page.getByLabel("Password").fill("newPassword123!");
+  await page.getByLabel("Password", { exact: true }).fill("newPassword123!");
   await page.getByRole("button", { name: "Set my password" }).click();
   await expect(
     page.getByRole("heading", { name: "This reset link is no longer valid" }),
@@ -170,4 +182,48 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(
     page.getByRole("heading", { name: "Reset your password" }),
   ).toBeVisible();
+});
+
+test("sign-in front door: password toggle and session-only cookie when remember is unchecked", async ({
+  page,
+  context,
+  gated: _gated,
+}, testInfo) => {
+  // Complete setup first
+  await completeSetup(page, ADMIN);
+
+  // Sign out
+  await signOutFromSidebar(page, ADMIN);
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
+
+  // Test password toggle
+  await page.getByLabel("Username or email").fill(ADMIN.username);
+  await page.getByLabel("Password", { exact: true }).fill(ADMIN.password);
+  const showToggle = page.getByRole("button", { name: "Show password" });
+  await expect(showToggle).toBeVisible();
+  await showToggle.click();
+  const hideToggle = page.getByRole("button", { name: "Hide password" });
+  await expect(hideToggle).toBeVisible();
+  await hideToggle.click();
+  await expect(
+    page.getByRole("button", { name: "Show password" }),
+  ).toBeVisible();
+
+  // Run a11y scan on sign-in
+  await expectPageAccessible(page, testInfo, "sign-in-front-door");
+
+  // Uncheck Keep me signed in and sign in
+  const keepMeSignedIn = page.getByLabel("Keep me signed in on this device");
+  await expect(keepMeSignedIn).toBeChecked();
+  await keepMeSignedIn.uncheck();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expectSignedIn(page, ADMIN);
+
+  // Assert session cookie has expires: -1 (session-only)
+  const cookies = await context.cookies();
+  const sessionCookie = cookies.find((c) => c.name === "contrack_session");
+  expect(sessionCookie).toBeDefined();
+  expect(sessionCookie?.expires).toBe(-1);
 });

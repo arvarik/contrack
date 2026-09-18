@@ -204,6 +204,7 @@ export function setupAccount(input: {
 export function signIn(input: {
   identifier: string;
   password: string;
+  remember?: boolean;
 }): Promise<{ user: AccountUser | null }> {
   return authFetch("/login", {
     method: "POST",
