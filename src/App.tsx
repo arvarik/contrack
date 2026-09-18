@@ -45,8 +45,8 @@ const SettingsShell = React.lazy(() =>
 const SearchView = React.lazy(() =>
   import("./views/SearchView").then((m) => ({ default: m.SearchView })),
 );
-const DashboardView = React.lazy(() =>
-  import("./views/DashboardView").then((m) => ({ default: m.DashboardView })),
+const PulseView = React.lazy(() =>
+  import("./views/pulse").then((m) => ({ default: m.PulseView })),
 );
 
 import { Sidebar } from "./components/layout/Sidebar";
@@ -265,11 +265,11 @@ const ResponsiveLayout = () => {
                 }
               />
               <Route
-                path="/pulse"
+                path="/pulse/*"
                 element={
                   <RouteErrorBoundary viewName="Dashboard">
                     <Suspense fallback={<RouteFallback variant="pulse" />}>
-                      <DashboardView />
+                      <PulseView />
                     </Suspense>
                   </RouteErrorBoundary>
                 }

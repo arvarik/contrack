@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { isTypingTarget } from "../lib/keyboard";
+import { isTypingTarget } from "../../lib/keyboard";
 import {
   useDashboard,
   useDailyInsight,
@@ -7,20 +7,20 @@ import {
   useCompleteActionItem,
   useUpdateActionItem,
   useDedupeCount,
-} from "../api";
+} from "../../api";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import confetti from "canvas-confetti";
-import { DashboardSkeleton } from "./dashboard/DashboardSkeleton";
-import { MetricCard } from "./dashboard/MetricCard";
-import { DailyInsightCard } from "./dashboard/DailyInsightCard";
-import { ActionItemSwimlane } from "./dashboard/ActionItemSwimlane";
-import { NetworkHealthPanel } from "./dashboard/NetworkHealthPanel";
-import { NetworkCompositionModal } from "./dashboard/NetworkCompositionModal";
-import { InteractionVelocityModal } from "./dashboard/InteractionVelocityModal";
-import { NetworkGrowthModal } from "./dashboard/NetworkGrowthModal";
-import { QuickInteractionModal } from "../components/QuickInteractionModal";
-import { EmptyState } from "../components/ui/EmptyState";
-import { useAiAllowed } from "../hooks/useAiAllowed";
+import { DashboardSkeleton } from "./DashboardSkeleton";
+import { MetricCard } from "./MetricCard";
+import { DailyInsightCard } from "./DailyInsightCard";
+import { ActionItemSwimlane } from "./ActionItemSwimlane";
+import { NetworkHealthPanel } from "./NetworkHealthPanel";
+import { NetworkCompositionModal } from "./NetworkCompositionModal";
+import { InteractionVelocityModal } from "./InteractionVelocityModal";
+import { NetworkGrowthModal } from "./NetworkGrowthModal";
+import { QuickInteractionModal } from "../../components/QuickInteractionModal";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { useAiAllowed } from "../../hooks/useAiAllowed";
 import {
   Users,
   HeartPulse,
@@ -40,15 +40,15 @@ import {
   CARD_COMPACT,
   TAB_CONTAINER,
   tabItem,
-} from "../lib/styles";
-import { cn } from "../lib/utils";
-import { tileDelay } from "../lib/motion";
+} from "../../lib/styles";
+import { cn } from "../../lib/utils";
+import { tileDelay } from "../../lib/motion";
 import { motion, AnimatePresence } from "motion/react";
 import { addDays } from "date-fns";
-import { formatDay } from "../lib/datetime";
-import { usePageTitle } from "../hooks/usePageTitle";
-import { NAMES } from "../lib/names";
-import { SuggestionReviewQueue } from "./dedupe/components";
+import { formatDay } from "../../lib/datetime";
+import { usePageTitle } from "../../hooks/usePageTitle";
+import { NAMES } from "../../lib/names";
+import { SuggestionReviewQueue } from "../dedupe/components";
 
 type PulseTab = "pulse" | "suggestions";
 
@@ -118,7 +118,7 @@ const CompletedActionsBar = () => {
   );
 };
 
-export const DashboardView = () => {
+export const PulseView = () => {
   const mountStart = useRef(performance.now());
   useEffect(() => {
     if (import.meta.env.DEV) {

@@ -11,7 +11,7 @@ import { Activity, Coins, Gauge, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
-import { MetricCard } from "../dashboard/MetricCard";
+import { MetricCard } from "../pulse/MetricCard";
 import { FEED_PAGE_SIZE, useAIStatsSummary, useAIStatsFeed } from "../../api";
 import type { FeedQueryParams } from "../../api";
 import { SummaryBar } from "./components/SummaryBar";
