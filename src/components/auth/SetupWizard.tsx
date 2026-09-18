@@ -17,10 +17,15 @@
  */
 import React, { useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { setupAccount } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
-import { AccountFields, useAccountForm } from "./accountForm";
+import {
+  AccountFields,
+  createAccountThenPhoto,
+  useAccountForm,
+} from "./accountForm";
 
 export const SetupWizard = ({
   onCreated,
@@ -49,7 +54,15 @@ export const SetupWizard = ({
     setBusy(true);
     setFormError(null);
     try {
-      await setupAccount(form.payload());
+      const { photoFailed } = await createAccountThenPhoto(
+        () => setupAccount(form.payload()),
+        form.photo,
+      );
+      if (photoFailed) {
+        toast.error(
+          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+        );
+      }
       onCreated();
     } catch (err) {
       setFormError(
