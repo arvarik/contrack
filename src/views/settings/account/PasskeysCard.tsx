@@ -84,7 +84,8 @@ export const PasskeysCard = () => {
       queryClient.invalidateQueries({ queryKey: ["auth", "passkeys"] });
       toast.success("Passkey added");
     } catch (err: unknown) {
-      if ((err as { name?: string })?.name !== "AbortError") {
+      const errName = (err as { name?: string })?.name;
+      if (errName !== "AbortError" && errName !== "NotAllowedError") {
         toast.error(
           err instanceof Error ? err.message : "Failed to add passkey",
         );
@@ -193,7 +194,7 @@ export const PasskeysCard = () => {
                         type="button"
                         onClick={() => submitRename(passkey.id)}
                         disabled={renameMutation.isPending}
-                        className="p-1 text-primary hover:bg-primary/10 rounded"
+                        className="p-1 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center text-primary hover:bg-primary/10 rounded"
                         aria-label="Save name"
                       >
                         <Check className="w-4 h-4" />
@@ -201,7 +202,7 @@ export const PasskeysCard = () => {
                       <button
                         type="button"
                         onClick={() => setEditingId(null)}
-                        className="p-1 text-on-surface-variant hover:bg-surface-container-high rounded"
+                        className="p-1 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high rounded"
                         aria-label="Cancel rename"
                       >
                         <X className="w-4 h-4" />
@@ -233,7 +234,7 @@ export const PasskeysCard = () => {
                 <button
                   type="button"
                   onClick={() => startEditing(passkey)}
-                  className="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors"
+                  className="p-2 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors"
                   aria-label={`Rename ${passkey.name}`}
                 >
                   <Pencil className="w-4 h-4" />
@@ -241,7 +242,7 @@ export const PasskeysCard = () => {
                 <button
                   type="button"
                   onClick={() => setDeleteTarget(passkey)}
-                  className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+                  className="p-2 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-colors"
                   aria-label={`Remove ${passkey.name}`}
                 >
                   <Trash2 className="w-4 h-4" />

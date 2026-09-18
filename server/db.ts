@@ -423,6 +423,7 @@ sqlite.exec(`
     createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     expiresAt TEXT NOT NULL
   );
+  CREATE INDEX IF NOT EXISTS idx_auth_challenges_expires ON auth_challenges(expiresAt);
 
   CREATE TABLE IF NOT EXISTS auth_links (
     id TEXT PRIMARY KEY,
@@ -436,6 +437,7 @@ sqlite.exec(`
     requestIp TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_auth_links_user ON auth_links(userId, createdAt);
+  CREATE INDEX IF NOT EXISTS idx_auth_links_cleanup ON auth_links(expiresAt, usedAt);
 `);
 
 // =============================================================================

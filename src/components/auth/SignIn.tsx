@@ -92,7 +92,7 @@ export const SignIn = ({
   rememberRef.current = remember;
 
   useEffect(() => {
-    if (!isPasskeySupported) return;
+    if (!isPasskeySupported || view !== "signin") return;
 
     let mounted = true;
     const controller = new AbortController();
@@ -128,8 +128,11 @@ export const SignIn = ({
     return () => {
       mounted = false;
       controller.abort();
+      if (autofillAbortRef.current === controller) {
+        autofillAbortRef.current = null;
+      }
     };
-  }, [isPasskeySupported, onSignedIn]);
+  }, [isPasskeySupported, onSignedIn, view]);
 
   const abortAutofill = () => {
     if (autofillAbortRef.current) {
@@ -152,7 +155,8 @@ export const SignIn = ({
       }
       onSignedIn();
     } catch (err: unknown) {
-      if ((err as { name?: string })?.name !== "AbortError") {
+      const errName = (err as { name?: string })?.name;
+      if (errName !== "AbortError" && errName !== "NotAllowedError") {
         setError(
           "That passkey did not work. Try again, or sign in with your password.",
         );
@@ -197,6 +201,7 @@ export const SignIn = ({
       // busywork, and the failure is almost always the other field.
       setPassword("");
       setBusy(false);
+      requestAnimationFrame(() => passwordRef.current?.focus());
       return;
     }
     // Left busy on success: the tree is about to be replaced, and re-enabling
@@ -233,7 +238,7 @@ export const SignIn = ({
           <button
             type="button"
             onClick={() => setView("forgot")}
-            className="text-primary font-bold hover:underline"
+            className="text-primary font-bold hover:underline min-h-[44px] inline-flex items-center py-2"
           >
             Forgot your password?
           </button>
@@ -243,7 +248,7 @@ export const SignIn = ({
               <button
                 type="button"
                 onClick={onRegister}
-                className="text-primary font-bold hover:underline"
+                className="text-primary font-bold hover:underline min-h-[44px] inline-flex items-center py-2"
               >
                 Create one
               </button>
@@ -262,7 +267,7 @@ export const SignIn = ({
               <button
                 type="button"
                 onClick={handleNotYou}
-                className="text-xs text-primary font-medium hover:underline"
+                className="text-xs text-primary font-medium hover:underline inline-flex items-center min-h-[36px] sm:min-h-[44px] py-1"
               >
                 Not you?
               </button>
@@ -270,7 +275,10 @@ export const SignIn = ({
           }
           type="text"
           value={identifier}
-          onChange={(e) => setIdentifier(e.target.value)}
+          onChange={(e) => {
+            if (error) setError(null);
+            setIdentifier(e.target.value);
+          }}
           autoComplete={isPasskeySupported ? "username webauthn" : "username"}
           autoCapitalize="none"
           autoCorrect="off"
@@ -287,13 +295,16 @@ export const SignIn = ({
           label="Password"
           type="password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            if (error) setError(null);
+            setPassword(e.target.value);
+          }}
           autoComplete="current-password"
           required
           revealable
           capsLockHint
         />
-        <label className="flex items-center gap-2 text-xs font-medium text-on-surface cursor-pointer select-none pt-0.5">
+        <label className="flex items-center gap-2 text-xs font-medium text-on-surface cursor-pointer select-none py-2 min-h-[44px]">
           <input
             type="checkbox"
             checked={remember}
@@ -346,7 +357,7 @@ export const SignIn = ({
             <button
               type="button"
               onClick={() => setView("magic-link")}
-              className="text-xs text-primary font-medium hover:underline"
+              className="text-xs text-primary font-medium hover:underline min-h-[44px] inline-flex items-center justify-center py-2 px-3"
             >
               Email me a sign-in link
             </button>
