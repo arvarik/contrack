@@ -68,6 +68,7 @@ import { ForcedPasswordChange } from "./ForcedPasswordChange";
 import { PasskeyNudge } from "./PasskeyNudge";
 import { ResetPassword } from "./ResetPassword";
 import { MagicLinkLanding } from "./MagicLinkLanding";
+import { ForgotPassword } from "./ForgotPassword";
 import { passkeysSupported, listPasskeys } from "../../api/passkeys";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 
@@ -145,6 +146,7 @@ type GateState =
   | "join"
   | "reset"
   | "link"
+  | "forgot"
   | "signin"
   | "register"
   | "password-change"
@@ -502,7 +504,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
             onReset={handleAuthenticated}
             onRequestNewLink={() => {
               clearResetToken();
-              setState("signin");
+              setState("forgot");
             }}
           />
         );
@@ -515,6 +517,13 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
               clearMagicToken();
               setState("signin");
             }}
+          />
+        );
+      case "forgot":
+        return (
+          <ForgotPassword
+            onBack={() => setState("signin")}
+            mailConfigured={mailConfigured}
           />
         );
       case "signin":
