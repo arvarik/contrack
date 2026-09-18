@@ -31,6 +31,7 @@ import {
   ShieldOff,
   Terminal,
   TriangleAlert,
+  Upload,
   UserRound,
 } from "lucide-react";
 import {
@@ -38,14 +39,19 @@ import {
   createApiToken,
   fetchApiTokens,
   fetchSessions,
+  removeAccountAvatar,
   revokeApiToken,
   revokeOtherSessions,
   updateProfile,
+  uploadAccountAvatar,
   type ApiTokenSummary,
   type CreatedApiToken,
   type SessionSummary,
 } from "../../api/auth";
 import { useAuth } from "../../components/auth/AuthGate";
+import { AccountPhotoField } from "../../components/auth/AccountPhotoField";
+import { usePreferences } from "../../contexts/PreferencesContext";
+import { accountAvatarUrl } from "../../lib/avatar";
 import { Modal } from "../../components/ui/Modal";
 import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
@@ -226,6 +232,80 @@ function formatWhen(iso: string): string {
 // ---------------------------------------------------------------------------
 // Cards
 // ---------------------------------------------------------------------------
+
+const PhotoCard = () => {
+  const { user, refresh } = useAuth();
+  const [file, setFile] = useState<File | null>(null);
+  const { preferences, mode } = usePreferences();
+  const theme = preferences.theme === "system" ? undefined : mode;
+  const fallbackUrl = user ? accountAvatarUrl(user.username, theme) : "";
+
+  const upload = useMutation({
+    mutationFn: (f: File) => uploadAccountAvatar(f),
+    onSuccess: async () => {
+      setFile(null);
+      await refresh();
+      toast.success("Photo updated");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => removeAccountAvatar(),
+    onSuccess: async () => {
+      setFile(null);
+      await refresh();
+      toast.success("Photo removed");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const isBusy = upload.isPending || remove.isPending;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (file && !isBusy) upload.mutate(file);
+      }}
+      className={cn(CARD, "p-4 sm:p-6 space-y-4")}
+    >
+      <h3 className="text-base font-bold text-on-surface">Photo</h3>
+      <AccountPhotoField
+        value={file}
+        currentUrl={user?.avatarUrl ?? null}
+        fallbackUrl={fallbackUrl}
+        onChange={setFile}
+        showRemoveCurrent={false}
+        onRemove={() => {
+          if (user?.avatarUrl && !isBusy) {
+            remove.mutate();
+          }
+        }}
+      />
+      <div className="flex items-center justify-end gap-3 pt-2">
+        {user?.avatarUrl && (
+          <button
+            type="button"
+            onClick={() => remove.mutate()}
+            disabled={isBusy}
+            className={cn(
+              "btn-secondary text-sm text-error hover:bg-error/10 hover:text-error",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+            )}
+          >
+            {remove.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Remove photo
+          </button>
+        )}
+        <SaveButton busy={upload.isPending} disabled={!file || isBusy}>
+          <Upload className="w-4 h-4" />
+          Upload
+        </SaveButton>
+      </div>
+    </form>
+  );
+};
 
 const ProfileCard = () => {
   const { user, refresh } = useAuth();
@@ -821,7 +901,10 @@ export const AccountSettings = () => {
     <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
       <section className="tile-enter" style={{ animationDelay: tileDelay(0) }}>
         <GroupHeading>Profile</GroupHeading>
-        <ProfileCard />
+        <div className="space-y-4">
+          <PhotoCard />
+          <ProfileCard />
+        </div>
       </section>
 
       <section className="tile-enter" style={{ animationDelay: tileDelay(1) }}>

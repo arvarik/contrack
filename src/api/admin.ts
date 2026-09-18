@@ -53,6 +53,7 @@ export interface AdminUser {
   /** The account nobody can sign in to, which owns this device's data. */
   isLocalOwner: boolean;
   isSelf: boolean;
+  avatarUrl: string | null;
 }
 
 /** What an account owns, as the delete confirmation reports it. */
