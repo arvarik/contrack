@@ -115,6 +115,8 @@ export const ForcedPasswordChange = ({
           onChange={(e) => setCurrent(e.target.value)}
           autoComplete="current-password"
           required
+          revealable
+          capsLockHint
           // The whole page has one thing to do on it.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
@@ -130,6 +132,8 @@ export const ForcedPasswordChange = ({
           error={touched ? problems.password : undefined}
           autoComplete="new-password"
           required
+          revealable
+          capsLockHint
         />
         <AuthField
           id="confirm-password"
@@ -141,6 +145,8 @@ export const ForcedPasswordChange = ({
           error={touched ? problems.confirm : undefined}
           autoComplete="new-password"
           required
+          revealable
+          capsLockHint
         />
         {formError && <AuthError>{formError}</AuthError>}
       </div>

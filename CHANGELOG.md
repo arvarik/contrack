@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Pulse charts.** Replaced the temporary MetricCard stopgap in Pulse's Network column with three SVG visualizations. ActivityCard renders a twelve-week activity heatmap with quantile scaling, cell titles, today outline, accessible weekly totals, 40 px sparkline with monthly comparisons, streak counter, and interaction type breakdown pills. MomentumCard surfaces rising, cooling, and silent contacts with score delta chips, row links to contact profiles, and a four-week baseline notice. CompositionCard provides an interactive SVG donut chart with dimension switching for Industry, Role, and Location, legend filter pills linking to facet search queries, and modal deep dives. Includes contrast unit tests ensuring WCAG AA non-text contrast across both light and dark palettes.
 
+- **Sign-in front door enhancements.** Streamlined account creation and
+  authentication with revealable password fields, Caps Lock detection hints,
+  automatic username suggestions, and a visual password strength meter. Setup,
+  registration, and invitation acceptance now require only a single password
+  input with an accessible 44px reveal toggle ("Show password" / "Hide password")
+  and inline "Caps Lock is on" alert. Choosing a password presents a non-blocking
+  four-segment strength meter (Short, OK, Good, Strong) evaluating character
+  classes, length, and a 40-word common password blacklist. Sign-in introduces
+  "Keep me signed in on this device" (default true), where unchecking caps the
+  session at `min(policy, 1 day)` with a session-only cookie omitting `Max-Age`.
+  Successful sign-ins persist the username in `localStorage`
+  (`contrack.lastIdentifier`) to automatically prefill returning visits, focus
+  the password field, and display a "Not you?" button to clear the stored account.
+
 - **Password reset and magic-link sign-in.** Self-service password reset and
   passwordless magic-link sign-in backed by single-use hashed auth link tokens.
   Users can request a 1-hour password reset link from the sign-in screen when

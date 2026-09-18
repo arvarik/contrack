@@ -20,6 +20,8 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  Eye,
+  EyeOff,
   KeyRound,
   Loader2,
   LogOut,
@@ -79,40 +81,117 @@ const Field = ({
   label,
   hint,
   error,
+  revealable = false,
+  capsLockHint = false,
+  type = "text",
+  onKeyDown,
+  onKeyUp,
+  onBlur,
   ...props
 }: {
   id: string;
   label: string;
   hint?: string;
   error?: string | null;
-} & React.InputHTMLAttributes<HTMLInputElement>) => (
-  <div className="space-y-1.5">
-    <label htmlFor={id} className="block text-xs font-bold text-on-surface">
-      {label}
-    </label>
-    <input
-      id={id}
-      aria-invalid={error ? true : undefined}
-      aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-      className={cn(
-        "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
-        "text-base sm:text-sm",
-        "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        error && "ring-2 ring-error",
+  revealable?: boolean;
+  capsLockHint?: boolean;
+} & React.InputHTMLAttributes<HTMLInputElement>) => {
+  const [revealed, setRevealed] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+
+  const inputType =
+    revealable && type === "password" ? (revealed ? "text" : "password") : type;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (capsLockHint && typeof e.getModifierState === "function") {
+      setCapsLock(e.getModifierState("CapsLock"));
+    }
+    onKeyDown?.(e);
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (capsLockHint && typeof e.getModifierState === "function") {
+      setCapsLock(e.getModifierState("CapsLock"));
+    }
+    onKeyUp?.(e);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (capsLockHint) {
+      setCapsLock(false);
+    }
+    onBlur?.(e);
+  };
+
+  const describedBy =
+    [
+      error ? `${id}-error` : hint ? `${id}-hint` : null,
+      capsLockHint && capsLock ? `${id}-caps` : null,
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined;
+
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-xs font-bold text-on-surface">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          type={inputType}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          onKeyDown={handleKeyDown}
+          onKeyUp={handleKeyUp}
+          onBlur={handleBlur}
+          className={cn(
+            "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
+            revealable && "pr-12",
+            // 16px on mobile: anything less and iOS Safari zooms on focus.
+            "text-base sm:text-sm",
+            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            error && "ring-2 ring-error",
+          )}
+          {...props}
+        />
+        {revealable && (
+          <button
+            type="button"
+            onClick={() => setRevealed((prev) => !prev)}
+            aria-label={revealed ? "Hide password" : "Show password"}
+            aria-pressed={revealed}
+            className="absolute right-0 top-0 bottom-0 w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:text-primary transition-colors cursor-pointer"
+          >
+            {revealed ? (
+              <EyeOff className="w-4 h-4" aria-hidden="true" />
+            ) : (
+              <Eye className="w-4 h-4" aria-hidden="true" />
+            )}
+          </button>
+        )}
+      </div>
+      {capsLockHint && capsLock && (
+        <p
+          id={`${id}-caps`}
+          aria-live="polite"
+          className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1"
+        >
+          Caps Lock is on
+        </p>
       )}
-      {...props}
-    />
-    {error ? (
-      <p id={`${id}-error`} className="text-xs text-error">
-        {error}
-      </p>
-    ) : hint ? (
-      <p id={`${id}-hint`} className="text-xs text-on-surface-variant">
-        {hint}
-      </p>
-    ) : null}
-  </div>
-);
+      {error ? (
+        <p id={`${id}-error`} className="text-xs text-error">
+          {error}
+        </p>
+      ) : hint ? (
+        <p id={`${id}-hint`} className="text-xs text-on-surface-variant">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+};
 
 const SaveButton = ({
   busy,
@@ -256,6 +335,8 @@ const PasswordCard = () => {
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
         autoComplete="current-password"
+        revealable
+        capsLockHint
       />
       <Field
         id="account-new-password"
@@ -270,6 +351,8 @@ const PasswordCard = () => {
             : undefined
         }
         autoComplete="new-password"
+        revealable
+        capsLockHint
       />
       <Field
         id="account-confirm-password"
@@ -279,6 +362,8 @@ const PasswordCard = () => {
         onChange={(e) => setConfirm(e.target.value)}
         error={mismatch ? "These don't match." : undefined}
         autoComplete="new-password"
+        revealable
+        capsLockHint
       />
       <div className="flex justify-end">
         <SaveButton busy={save.isPending} disabled={!ready}>

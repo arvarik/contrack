@@ -11,6 +11,7 @@
 import React, { useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 import { completePasswordReset } from "../../api/authLinks";
 import { isNetworkError, ApiError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
@@ -97,7 +98,10 @@ export const ResetPassword = ({
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
           required
+          revealable
+          capsLockHint
         />
+        <PasswordStrengthMeter password={password} />
         {error && <AuthError>{error}</AuthError>}
       </div>
 

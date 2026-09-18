@@ -379,10 +379,14 @@ router.post(
       );
     }
 
+    const remember = req.body?.remember !== false;
     const session = createSession(user.id, req.headers["user-agent"] ?? null, {
       method: "password",
+      remember,
     });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    setSessionCookie(req, res, session.secret, session.expiresAt, {
+      sessionOnly: !remember,
+    });
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.success",
@@ -607,10 +611,14 @@ router.post(
       throw new AppError("Account not found or disabled", 404);
     }
 
+    const remember = req.body?.remember !== false;
     const session = createSession(user.id, req.headers["user-agent"] ?? null, {
       method: "email-link",
+      remember,
     });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    setSessionCookie(req, res, session.secret, session.expiresAt, {
+      sessionOnly: !remember,
+    });
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.success",
@@ -955,10 +963,14 @@ router.post(
       );
     }
 
+    const remember = req.body?.remember !== false;
     const session = createSession(user.id, req.headers["user-agent"] ?? null, {
       method: "passkey",
+      remember,
     });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    setSessionCookie(req, res, session.secret, session.expiresAt, {
+      sessionOnly: !remember,
+    });
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.success",
