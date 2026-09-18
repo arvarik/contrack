@@ -88,6 +88,7 @@ import {
   setUserAvatar,
   getSessionTtlDays,
   setSessionTtlDays,
+  type User,
   MIN_SESSION_TTL_DAYS,
   MAX_SESSION_TTL_DAYS,
   DEFAULT_SESSION_TTL_DAYS,
@@ -706,18 +707,26 @@ router.post(
     const avatarUrl = await processProfilePhoto(user.id, req.file.buffer);
 
     const latest = getUserById(user.id) ?? user;
-    if (latest.avatarUrl) {
-      const oldPath = resolveUploadPath(latest.avatarUrl);
-      if (oldPath && fs.existsSync(oldPath)) {
-        try {
-          fs.unlinkSync(oldPath);
-        } catch {
-          // Ignore unlinking errors on replaced photo
-        }
+    const previousUrl = latest.avatarUrl;
+
+    let updated: User;
+    try {
+      updated = setUserAvatar(user.id, avatarUrl);
+    } catch (err) {
+      const newPath = resolveUploadPath(avatarUrl);
+      if (newPath) {
+        await fs.promises.unlink(newPath).catch(() => {});
+      }
+      throw err;
+    }
+
+    if (previousUrl && previousUrl !== avatarUrl) {
+      const oldPath = resolveUploadPath(previousUrl);
+      if (oldPath) {
+        await fs.promises.unlink(oldPath).catch(() => {});
       }
     }
 
-    const updated = setUserAvatar(user.id, avatarUrl);
     res.json({ user: publicUser(updated) });
   }),
 );
@@ -728,18 +737,17 @@ router.delete(
   asyncHandler(async (req, res) => {
     const user = currentUser(req)!;
     const latest = getUserById(user.id) ?? user;
-    if (latest.avatarUrl) {
-      const oldPath = resolveUploadPath(latest.avatarUrl);
-      if (oldPath && fs.existsSync(oldPath)) {
-        try {
-          fs.unlinkSync(oldPath);
-        } catch {
-          // Ignore unlinking errors on removed photo
-        }
+    const previousUrl = latest.avatarUrl;
+
+    const updated = setUserAvatar(user.id, null);
+
+    if (previousUrl) {
+      const oldPath = resolveUploadPath(previousUrl);
+      if (oldPath) {
+        await fs.promises.unlink(oldPath).catch(() => {});
       }
     }
 
-    const updated = setUserAvatar(user.id, null);
     res.json({ user: publicUser(updated) });
   }),
 );

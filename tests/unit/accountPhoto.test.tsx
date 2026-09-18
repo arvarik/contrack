@@ -76,6 +76,30 @@ describe("AccountAvatar", () => {
     expect(img.getAttribute("src")).toContain("/api/avatar/initials");
     expect(img.getAttribute("src")).toContain("carol");
   });
+
+  it("resets error state and attempts to load new image when avatarUrl changes", () => {
+    const user = {
+      username: "bob",
+      displayName: "Bob",
+      avatarUrl: "/old-broken.jpg",
+    };
+    const { rerender, container } = render(
+      <AccountAvatar user={user} size={36} />,
+    );
+
+    const img = container.querySelector("img")!;
+    fireEvent.error(img);
+    expect(img.getAttribute("src")).toContain("/api/avatar/initials");
+
+    rerender(
+      <AccountAvatar
+        user={{ ...user, avatarUrl: "/new-photo.jpg" }}
+        size={36}
+      />,
+    );
+    const newImg = container.querySelector("img")!;
+    expect(newImg.getAttribute("src")).toBe("/new-photo.jpg");
+  });
 });
 
 describe("AccountPhotoField", () => {
@@ -218,6 +242,57 @@ describe("AccountPhotoField", () => {
     fireEvent.click(removeBtn2);
     expect(onChange).toHaveBeenCalledWith(null);
     expect(onRemove).toHaveBeenCalled();
+  });
+
+  it("associates error text with aria-describedby on the dropzone and input", async () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <AccountPhotoField
+        value={null}
+        fallbackUrl="/fallback.png"
+        onChange={onChange}
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]')!;
+    expect(fileInput.getAttribute("aria-describedby")).toBeNull();
+
+    const oversized = new File(["a".repeat(100)], "too-big.png", {
+      type: "image/png",
+    });
+    Object.defineProperty(oversized, "size", { value: 11 * 1024 * 1024 });
+
+    fireEvent.change(fileInput, { target: { files: [oversized] } });
+
+    await waitFor(() => {
+      const errorElem = screen.getByRole("alert");
+      expect(errorElem).toBeTruthy();
+      expect(errorElem.id).toBe("account-photo-error");
+      expect(fileInput.getAttribute("aria-describedby")).toBe(
+        "account-photo-error",
+      );
+    });
+  });
+
+  it("restores focus to Choose photo button when Remove is clicked", async () => {
+    const onChange = vi.fn();
+    const validFile = new File(["bytes"], "me.png", { type: "image/png" });
+
+    render(
+      <AccountPhotoField
+        value={validFile}
+        fallbackUrl="/fallback.png"
+        onChange={onChange}
+      />,
+    );
+
+    const removeBtn = screen.getByRole("button", { name: "Remove" });
+    const chooseBtn = screen.getByRole("button", { name: "Choose photo" });
+    fireEvent.click(removeBtn);
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(chooseBtn);
+    });
   });
 });
 

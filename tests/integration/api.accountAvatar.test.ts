@@ -202,6 +202,31 @@ describe("profile photo access permissions and isolation", () => {
     const newDiskPath = resolveUploadPath(newUrl)!;
     expect(fs.existsSync(newDiskPath)).toBe(true);
   });
+
+  it("handles concurrent avatar uploads gracefully without crashing", async () => {
+    const [res1, res2] = await Promise.all([
+      asUser(userA)(
+        request(app)
+          .post("/api/auth/me/avatar")
+          .attach("avatar", PNG_1X1, "photo1.png"),
+      ),
+      asUser(userA)(
+        request(app)
+          .post("/api/auth/me/avatar")
+          .attach("avatar", PNG_1X1, "photo2.png"),
+      ),
+    ]);
+
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+
+    const meRes = await asUser(userA)(request(app).get("/api/auth/me"));
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.user.avatarUrl).toBeTruthy();
+
+    const currentDiskPath = resolveUploadPath(meRes.body.user.avatarUrl)!;
+    expect(fs.existsSync(currentDiskPath)).toBe(true);
+  });
 });
 
 describe("DELETE /api/auth/me/avatar", () => {
@@ -238,6 +263,25 @@ describe("DELETE /api/auth/me/avatar", () => {
     );
     expect(delRes2.status).toBe(200);
     expect(delRes2.body.user.avatarUrl).toBeNull();
+  });
+
+  it("gracefully handles deleting an avatar when the file is already missing from disk", async () => {
+    const uploadRes = await asUser(userA)(
+      request(app)
+        .post("/api/auth/me/avatar")
+        .attach("avatar", PNG_1X1, "missing.png"),
+    );
+    expect(uploadRes.status).toBe(200);
+    const absPath = resolveUploadPath(uploadRes.body.user.avatarUrl)!;
+    if (fs.existsSync(absPath)) {
+      fs.unlinkSync(absPath);
+    }
+
+    const delRes = await asUser(userA)(
+      request(app).delete("/api/auth/me/avatar"),
+    );
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.user.avatarUrl).toBeNull();
   });
 });
 

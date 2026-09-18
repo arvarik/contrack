@@ -14,7 +14,7 @@
  * the principal is a local owner nobody signs in as, so an avatar, a name and
  * a "Sign out" that cannot sign anyone out would all be fiction.
  */
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useDismissable } from "../../hooks/useDismissable";
@@ -67,6 +67,10 @@ export const AccountAvatar = ({
   const { preferences, mode } = usePreferences();
   const theme = preferences.theme === "system" ? undefined : mode;
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFailedUrl(null);
+  }, [user.avatarUrl]);
 
   const photoAvailable = Boolean(
     user.avatarUrl && user.avatarUrl !== failedUrl,
