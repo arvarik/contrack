@@ -31,6 +31,7 @@ export const mcpService = {
       role?: string;
       company?: string;
       industry?: string;
+      updatedSince?: string;
     },
   ) {
     let q = `SELECT * FROM contacts
@@ -49,6 +50,10 @@ export const mcpService = {
     if (options.industry) {
       q += " AND industry = ?";
       params.push(options.industry);
+    }
+    if (options.updatedSince) {
+      q += " AND updatedAt >= ?";
+      params.push(options.updatedSince);
     }
 
     q += " ORDER BY addedAt DESC LIMIT ? OFFSET ?";

@@ -7,14 +7,62 @@
 // =============================================================================
 
 import { Router } from "express";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { log } from "../utils/logger.ts";
 import { mcpService } from "../services/mcpService.ts";
 import { searchInteractions } from "../services/interactionSearchService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { parseInteractionSearchQuery } from "../utils/validators.ts";
 import { scopeOf } from "../tenancy/scope.ts";
+import { buildMcpServer } from "../mcp/server.ts";
+import { createRateLimiter } from "../middleware/rateLimit.ts";
+
+export const mcpRateLimit = createRateLimiter({
+  windowMs: 60_000,
+  max: 120,
+  name: "MCP",
+  keyBy: (req) => req.principal?.user.id ?? req.ip ?? null,
+});
+
+export function __resetMcpRateLimit(): void {
+  mcpRateLimit.reset();
+}
 
 const router = Router();
+
+router.post(
+  "/mcp",
+  mcpRateLimit,
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const server = buildMcpServer(scope, req);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    res.on("close", () => {
+      transport.close().catch(() => {});
+      server.close().catch(() => {});
+    });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  }),
+);
+
+router.get("/mcp", (_req, res) => {
+  res.setHeader("Allow", "POST");
+  res.status(405).json({
+    error: "Method Not Allowed",
+    message: "MCP server runs in stateless HTTP mode; use POST /api/mcp",
+  });
+});
+
+router.delete("/mcp", (_req, res) => {
+  res.setHeader("Allow", "POST");
+  res.status(405).json({
+    error: "Method Not Allowed",
+    message: "MCP server runs in stateless HTTP mode; use POST /api/mcp",
+  });
+});
 
 router.get(
   "/query/contacts",

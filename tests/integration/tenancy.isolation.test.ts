@@ -87,6 +87,7 @@ const COVERED = [
   "DELETE /api/interactions/:id",
   "DELETE /api/lists/:id",
   "DELETE /api/lists/:id/members/:contactId",
+  "DELETE /api/mcp",
   "DELETE /api/search/history",
   "DELETE /api/search/history/:id",
   "DELETE /api/tags/:tag",
@@ -130,6 +131,7 @@ const COVERED = [
   "GET /api/interactions/search",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
+  "GET /api/mcp",
   "GET /api/query/contacts",
   "GET /api/search",
   "GET /api/search/coverage",
@@ -172,6 +174,7 @@ const COVERED = [
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
+  "POST /api/mcp",
   "POST /api/search/history",
   "POST /api/search/refresh-index",
   "POST /api/search/semantic",
@@ -3240,6 +3243,40 @@ describe("the MCP surface answers for the caller's own account", () => {
     }
   });
 
+  it("GET /api/mcp: answers 405 Method Not Allowed", async () => {
+    const res = await asUser(B)(request(app).get("/api/mcp"));
+    expect(res.status).toBe(405);
+    expect(res.headers["allow"]).toBe("POST");
+  });
+
+  it("DELETE /api/mcp: answers 405 Method Not Allowed", async () => {
+    const res = await asUser(B)(request(app).delete("/api/mcp"));
+    expect(res.status).toBe(405);
+    expect(res.headers["allow"]).toBe("POST");
+  });
+
+  it("POST /api/mcp: caller B cannot access caller A's contact via get_contact", async () => {
+    const res = await asUser(B)(
+      request(app)
+        .post("/api/mcp")
+        .set("Accept", "application/json, text/event-stream")
+        .send({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "get_contact",
+            arguments: { id: zebulonId },
+          },
+        }),
+    );
+    expect(res.status).toBe(200);
+    const dataLine = res.text.split("\n").find((l) => l.startsWith("data: "));
+    const payload = dataLine ? JSON.parse(dataLine.slice(6)) : res.body;
+    expect(payload.error).toBeDefined();
+    expect(payload.error.data?.code).toBe("NOT_FOUND");
+  });
+
   it("answers a personal token for that token's own account", async () => {
     // Inserts an api_token row directly, the way api.auth.test.ts does it.
     const secret = "ctk_" + "m".repeat(43);
@@ -3317,7 +3354,7 @@ describe("all scoped routes are isolated", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(39);
+    expect(collections).toHaveLength(40);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

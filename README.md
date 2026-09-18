@@ -126,6 +126,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ### More Capabilities
 
+- **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 15 tools, prompts (`catch_me_up`, `weekly_review`), and resources for Claude Code, Claude Desktop, and Cursor integration
 - **Magic Paste** — Paste unstructured text, AI extracts a structured contact
 - **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign a model per task from Settings, or just set one key and let it choose
 - **Smart Router** — Automatic Gemini model selection (Lite/Flash/Pro) per use case

@@ -1797,7 +1797,41 @@ Returns the image binary with appropriate content-type headers.
 
 ## MCP (Machine Interface)
 
-Machine-readable query endpoints for programmatic access.
+Machine-readable interfaces for programmatic access and external LLM agents.
+
+### `POST /api/mcp`
+
+The official Model Context Protocol (MCP) server endpoint running Streamable HTTP transport. Accepts standard JSON-RPC 2.0 requests for tool calls, resources, and prompt execution.
+
+**Authentication:** Requires `Authorization: Bearer ctk_...` (or legacy `API_TOKEN`). Gated by account scope; returns 401 when unauthenticated on gated instances.
+
+**Rate Limiting:** 120 requests/minute per authenticated user (`429 RATE_LIMITED`).
+
+**Headers:**
+
+- `Accept: application/json, text/event-stream`
+- `Content-Type: application/json`
+
+**Methods:**
+
+- `POST`: Supported.
+- `GET` / `DELETE`: Returns `405 Method Not Allowed` with `Allow: POST`.
+
+```bash
+curl -X POST http://localhost:3210/api/mcp \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+See [MCP Feature Guide](features/mcp.md) for full tool, prompt, and resource specifications.
+
+---
+
+### Legacy REST Endpoints
+
+The following REST endpoints are preserved for backward compatibility and scripting. For LLM agents, use `POST /api/mcp` above.
 
 ### `GET /api/query/contacts`
 

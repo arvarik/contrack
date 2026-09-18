@@ -839,6 +839,24 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   {
+    method: "DELETE",
+    path: "/api/mcp",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "GET",
+    path: "/api/mcp",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "POST",
+    path: "/api/mcp",
+    class: "scoped",
+    isolated: true,
+  },
+  {
     method: "POST",
     path: "/api/parse-contact",
     class: "instance-read",

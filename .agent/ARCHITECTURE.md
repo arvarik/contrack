@@ -210,6 +210,13 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `server/services/search/` — `hybridRetrieval.ts` (RRF pipeline), `localEmbeddings.ts` (Transformers.js)
   - `server/services/geocoding/` — Mapbox/Nominatim geocoding with retroactive backfill
   - `server/services/aiSearch/` — AI search enrichment: `jobQueue.ts`, `mergeEngine.ts`, `promptTemplate.ts`, `strategies/`, `types.ts`, `index.ts`
+- `server/mcp/` — Model Context Protocol (MCP) server subsystem:
+  - `server.ts` — Per-request `McpServer` factory bound to caller's `Scope`
+  - `errors.ts` — Maps operational `AppError` to JSON-RPC errors with code and status
+  - `resources.ts` — Static resources `contrack://pulse` and `contrack://contacts/{id}`
+  - `prompts.ts` — Workflow prompts `catch_me_up` and `weekly_review`
+  - `tools/` — 15 tools across `contacts.ts`, `search.ts`, `interactions.ts`, `actions.ts`, `pulse.ts`, and `taxonomy.ts`
+- `shared/mcpTools.ts` — Canonical registry of 15 MCP tools and descriptions shared between server and UI
 - `server/repositories/` — Data-access patterns: `contactRepository.ts`, `types.ts`
 - `server/utils/` — Shared utilities: `AppError.ts`, `asyncHandler.ts`, `aiCache.ts`, `paths.ts` (DATA_DIR-aware upload paths + traversal-safe resolution), `logger.ts`, `helpers.ts`, `validators.ts`, `avatarProcessor.ts`, `smartAvatar.ts`, `unionFind.ts`
   - `server/utils/nlp/` — NLP primitives: `names.ts`, `nicknames.ts`, `phonetics.ts` (Double Metaphone), `distances.ts` (Levenshtein, Jaro-Winkler), `company.ts`, `phone.ts`

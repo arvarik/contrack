@@ -25,6 +25,7 @@ import {
   Shield,
   Sparkles,
   Tag,
+  Terminal,
   Trash2,
   UploadCloud,
   UserRound,
@@ -620,6 +621,74 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     group: "data",
     keywords: ["trash", "deleted", "restore", "bin", "recycle"],
     load: () => import("../TrashView").then((m) => ({ default: m.TrashView })),
+  },
+
+  // ── CONNECT ──────────────────────────────────────────────────────────────
+  {
+    id: "mcp",
+    path: "/settings/mcp",
+    title: NAMES.mcp.title,
+    description: NAMES.mcp.description,
+    icon: Terminal,
+    group: "connect",
+    keywords: [
+      "mcp",
+      "api",
+      "claude",
+      "cursor",
+      "tokens",
+      "tools",
+      "streamable http",
+      "model context protocol",
+      "llm",
+    ],
+    rows: [
+      {
+        id: "endpoint",
+        label: "MCP endpoint URL",
+        keywords: ["endpoint", "url", "streamable", "api"],
+      },
+      {
+        id: "token",
+        label: "Personal API token",
+        keywords: ["token", "bearer", "authorization", "auth", "ctk_"],
+      },
+      {
+        id: "claude-code",
+        label: "Claude Code",
+        keywords: ["claude", "code", "cli", "terminal"],
+      },
+      {
+        id: "claude-desktop",
+        label: "Claude Desktop and Cursor",
+        keywords: [
+          "claude",
+          "desktop",
+          "cursor",
+          "json",
+          "config",
+          "mcp-remote",
+        ],
+      },
+      {
+        id: "curl",
+        label: "curl",
+        keywords: ["curl", "initialize", "http", "bash"],
+      },
+      {
+        id: "tools",
+        label: "Tools",
+        keywords: [
+          "tools",
+          "read-only",
+          "search",
+          "contacts",
+          "pulse",
+          "actions",
+        ],
+      },
+    ],
+    load: () => import("./mcp/McpView"),
   },
 
   // ── ADMINISTRATION ───────────────────────────────────────────────────────
