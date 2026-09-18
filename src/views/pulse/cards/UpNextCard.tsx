@@ -53,31 +53,46 @@ export const UpNextCard = ({
       icon={CheckSquare}
       count={items.length}
       headerAction={
-        <span className="hidden sm:inline-block text-[11px] text-on-surface-variant font-medium tracking-tight">
-          <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-            J
-          </kbd>
-          <kbd className="ml-0.5 px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-            K
-          </kbd>{" "}
-          walk ·{" "}
-          <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-            D
-          </kbd>{" "}
-          done ·{" "}
-          <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-            S
-          </kbd>{" "}
-          snooze ·{" "}
-          <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-            L
-          </kbd>{" "}
-          note ·{" "}
-          <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
-            ↵
-          </kbd>{" "}
-          open
-        </span>
+        <>
+          <span className="hidden 2xl:inline-block text-[11px] text-on-surface-variant font-medium tracking-tight">
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              J
+            </kbd>
+            <kbd className="ml-0.5 px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              K
+            </kbd>{" "}
+            walk ·{" "}
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              D
+            </kbd>{" "}
+            done ·{" "}
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              S
+            </kbd>{" "}
+            snooze ·{" "}
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              L
+            </kbd>{" "}
+            note ·{" "}
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              ↵
+            </kbd>{" "}
+            open
+          </span>
+          <span className="hidden xl:inline-block 2xl:hidden text-[11px] text-on-surface-variant font-medium tracking-tight">
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              J
+            </kbd>
+            <kbd className="ml-0.5 px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              K
+            </kbd>{" "}
+            walk ·{" "}
+            <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
+              D
+            </kbd>{" "}
+            done
+          </span>
+        </>
       }
     >
       {items.length === 0 ? (
