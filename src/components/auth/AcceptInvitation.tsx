@@ -13,11 +13,16 @@
  */
 import React, { useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
+import { toast } from "sonner";
 import { acceptInvitation } from "../../api/auth";
 import { isNetworkError, ApiError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
 import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
-import { AccountFields, useAccountForm } from "./accountForm";
+import {
+  AccountFields,
+  createAccountThenPhoto,
+  useAccountForm,
+} from "./accountForm";
 
 export const AcceptInvitation = ({
   token,
@@ -47,7 +52,15 @@ export const AcceptInvitation = ({
     setBusy(true);
     setFormError(null);
     try {
-      await acceptInvitation({ token, ...form.payload() });
+      const { photoFailed } = await createAccountThenPhoto(
+        () => acceptInvitation({ token, ...form.payload() }),
+        form.photo,
+      );
+      if (photoFailed) {
+        toast.error(
+          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+        );
+      }
       onAccepted();
     } catch (err) {
       // 404 is a secret the server does not recognise, 410 is one it used to.

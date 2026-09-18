@@ -10,7 +10,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { gatedTest as test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
-import { ADMIN, completeSetup, accountMenu } from "./fixtures/accounts";
+import {
+  ADMIN,
+  SETUP_HEADING,
+  completeSetup,
+  expectSignedIn,
+  accountMenu,
+} from "./fixtures/accounts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,5 +139,55 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
   await page.waitForTimeout(300);
   await page.screenshot({
     path: "docs/screenshots/account-photo/settings-identity-phone-dark.png",
+  });
+});
+
+test("complete setup with a profile photo", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: SETUP_HEADING }),
+  ).toBeVisible();
+
+  // Choose photo on setup wizard
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles(FIXTURE_PNG);
+
+  // Expect accessible on setup screen with a photo chosen
+  await expectPageAccessible(page, testInfo, "setup-with-photo");
+
+  // Fill in wizard fields
+  await page.getByLabel("Your name").fill(ADMIN.displayName);
+  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Username").fill(ADMIN.username);
+  await page.getByLabel("Password", { exact: true }).fill(ADMIN.password);
+
+  // Submit and verify signed in
+  await page.getByRole("button", { name: SETUP_HEADING }).click();
+  await expectSignedIn(page, ADMIN);
+
+  // Verify sidebar identity image src contains "/profile/"
+  const sidebarAvatar = accountMenu(page, ADMIN).locator("img");
+  await expect(sidebarAvatar).toHaveAttribute("src", /\/profile\//);
+});
+
+test("captures screenshot of setup screen on phone", async ({ page }) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: SETUP_HEADING }),
+  ).toBeVisible();
+
+  // Set phone viewport (390x844)
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "light" });
+
+  // Stage a photo
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles(FIXTURE_PNG);
+  await page.getByLabel("Your name").fill(ADMIN.displayName);
+  await page.getByLabel("Email").fill(ADMIN.email);
+
+  await page.waitForTimeout(300);
+  await page.screenshot({
+    path: "docs/screenshots/account-photo/setup-phone-light.png",
   });
 });

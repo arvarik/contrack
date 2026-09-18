@@ -11,11 +11,16 @@
  */
 import React, { useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { registerAccount } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
 import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
-import { AccountFields, useAccountForm } from "./accountForm";
+import {
+  AccountFields,
+  createAccountThenPhoto,
+  useAccountForm,
+} from "./accountForm";
 
 export const Register = ({
   onRegistered,
@@ -39,7 +44,15 @@ export const Register = ({
     setBusy(true);
     setFormError(null);
     try {
-      await registerAccount(form.payload());
+      const { photoFailed } = await createAccountThenPhoto(
+        () => registerAccount(form.payload()),
+        form.photo,
+      );
+      if (photoFailed) {
+        toast.error(
+          "Your account is ready. The photo did not upload. Add it in Settings > Account.",
+        );
+      }
       onRegistered();
     } catch (err) {
       setFormError(

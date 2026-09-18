@@ -10,6 +10,16 @@ import {
 } from "@testing-library/react";
 import { AccountAvatar } from "../../src/components/auth/AccountIdentity";
 import { AccountPhotoField } from "../../src/components/auth/AccountPhotoField";
+import {
+  AccountFields,
+  createAccountThenPhoto,
+  useAccountForm,
+} from "../../src/components/auth/accountForm";
+import { uploadAccountAvatar } from "../../src/api/auth";
+
+vi.mock("../../src/api/auth", () => ({
+  uploadAccountAvatar: vi.fn(),
+}));
 
 describe("AccountAvatar", () => {
   afterEach(() => {
@@ -208,5 +218,110 @@ describe("AccountPhotoField", () => {
     fireEvent.click(removeBtn2);
     expect(onChange).toHaveBeenCalledWith(null);
     expect(onRemove).toHaveBeenCalled();
+  });
+});
+
+describe("createAccountThenPhoto", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("resolves with photoFailed: false when submit and upload succeed", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true });
+    vi.mocked(uploadAccountAvatar).mockResolvedValue({
+      user: {
+        id: "u1",
+        email: "ada@example.com",
+        username: "ada",
+        displayName: "Ada",
+        role: "admin",
+        status: "active",
+        credentialState: "password",
+        mustChangePassword: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+        avatarUrl: "/uploads/u/u1/profile/profile-1.jpg",
+      },
+    });
+    const photo = new File(["bytes"], "photo.png", { type: "image/png" });
+
+    const result = await createAccountThenPhoto(submit, photo);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(uploadAccountAvatar).toHaveBeenCalledWith(photo);
+    expect(result).toEqual({ photoFailed: false });
+  });
+
+  it("resolves with photoFailed: true when upload throws", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true });
+    vi.mocked(uploadAccountAvatar).mockRejectedValue(
+      new Error("Upload failed"),
+    );
+    const photo = new File(["bytes"], "photo.png", { type: "image/png" });
+
+    const result = await createAccountThenPhoto(submit, photo);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(uploadAccountAvatar).toHaveBeenCalledWith(photo);
+    expect(result).toEqual({ photoFailed: true });
+  });
+
+  it("resolves with photoFailed: false and skips upload when photo is null", async () => {
+    const submit = vi.fn().mockResolvedValue({ ok: true });
+
+    const result = await createAccountThenPhoto(submit, null);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(uploadAccountAvatar).not.toHaveBeenCalled();
+    expect(result).toEqual({ photoFailed: false });
+  });
+
+  it("rethrows error when submit fails and does not attempt upload", async () => {
+    const submit = vi.fn().mockRejectedValue(new Error("Submit failed"));
+    const photo = new File(["bytes"], "photo.png", { type: "image/png" });
+
+    await expect(createAccountThenPhoto(submit, photo)).rejects.toThrow(
+      "Submit failed",
+    );
+    expect(uploadAccountAvatar).not.toHaveBeenCalled();
+  });
+});
+
+describe("AccountFields with photo", () => {
+  it("renders AccountPhotoField and caption above Your name", () => {
+    const FormWrapper = () => {
+      const form = useAccountForm();
+      return <AccountFields form={form} />;
+    };
+
+    render(<FormWrapper />);
+
+    expect(
+      screen.getByText("Optional. You can add or change it later in Settings."),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Choose a profile photo" }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("Your name")).toBeTruthy();
+  });
+
+  it("updates photo in form state when setPhoto is called", async () => {
+    let currentForm!: ReturnType<typeof useAccountForm>;
+    const FormWrapper = () => {
+      const form = useAccountForm();
+      currentForm = form;
+      return <AccountFields form={form} />;
+    };
+
+    const { container } = render(<FormWrapper />);
+    expect(currentForm.photo).toBeNull();
+
+    const photoFile = new File(["img"], "me.png", { type: "image/png" });
+    const fileInput = container.querySelector('input[type="file"]')!;
+    fireEvent.change(fileInput, { target: { files: [photoFile] } });
+
+    await waitFor(() => {
+      expect(currentForm.photo).toBe(photoFile);
+    });
   });
 });

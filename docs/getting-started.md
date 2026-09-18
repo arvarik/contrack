@@ -82,9 +82,10 @@ checkpoints before exit.
 
 ## Account and Profile Photo
 
-When authentication is enabled, each account can customize their profile from **Settings → Account**:
+When authentication is enabled, you can optionally pick a profile photo during initial instance setup, when registering a new account, or when accepting an invitation. You can also add, update, or remove your photo at any time from **Settings → Account**:
 
 - **Profile photo:** Upload a photo in JPEG, PNG, WebP, GIF, or AVIF format (up to 10 MB). The image is automatically normalized to a 512×512 square JPEG stored locally under your account's upload directory.
+- **Photo at setup:** Selecting a photo during account creation is completely optional. If a photo upload fails, your account is still created and authenticated, and you can upload a photo later in Settings.
 - **Where it appears:** Your profile photo appears across the instance in the desktop sidebar footer, the mobile identity header, and the administrator user management table. If no photo is uploaded, or if the photo cannot be loaded, Contrack renders a personalized monogram with your initials.
 - **Removing a photo:** Click **Remove photo** in **Settings → Account** to delete the uploaded image and revert to your monogram initials.
 - **Backups:** Automatic and manual database backups capture database state only and omit uploaded media files. Restoring an instance from a database backup preserves your account settings but falls back to your monogram initials until a new photo is uploaded.

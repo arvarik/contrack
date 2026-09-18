@@ -12,6 +12,9 @@
  * still the authority; this only saves a round trip.
  */
 import React, { useCallback, useMemo, useState } from "react";
+import { uploadAccountAvatar } from "../../api/auth";
+import { accountAvatarUrl } from "../../lib/avatar";
+import { AccountPhotoField } from "./AccountPhotoField";
 import { AuthField } from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 
@@ -95,6 +98,8 @@ function validate(values: Values): Errors {
 
 export interface AccountForm {
   values: Values;
+  photo: File | null;
+  setPhoto: (photo: File | null) => void;
   errors: Errors;
   isValid: boolean;
   isUsernameSuggested: boolean;
@@ -117,6 +122,7 @@ export interface AccountForm {
 
 export function useAccountForm(initial?: Partial<Values>): AccountForm {
   const [values, setValues] = useState<Values>({ ...EMPTY, ...initial });
+  const [photo, setPhoto] = useState<File | null>(null);
   const [usernameEdited, setUsernameEdited] = useState(
     Boolean(initial?.username),
   );
@@ -171,6 +177,8 @@ export function useAccountForm(initial?: Partial<Values>): AccountForm {
 
   return {
     values,
+    photo,
+    setPhoto,
     errors,
     isValid: Object.keys(errors).length === 0,
     isUsernameSuggested,
@@ -188,7 +196,30 @@ export function useAccountForm(initial?: Partial<Values>): AccountForm {
 }
 
 /**
- * The four fields, in the order they are filled in.
+ * Run account creation followed by photo upload when a photo was selected.
+ *
+ * A failure during photo upload does not block account creation: the account
+ * is already created and authenticated, so it resolves with `{ photoFailed: true }`
+ * and lets the caller notify the user.
+ */
+export async function createAccountThenPhoto(
+  submit: () => Promise<unknown>,
+  photo: File | null,
+): Promise<{ photoFailed: boolean }> {
+  await submit();
+  if (!photo) {
+    return { photoFailed: false };
+  }
+  try {
+    await uploadAccountAvatar(photo);
+    return { photoFailed: false };
+  } catch {
+    return { photoFailed: true };
+  }
+}
+
+/**
+ * The fields that create an account, in the order they are filled in.
  *
  * `autoFocus` is on the first field because each of the three screens is the
  * whole page with one thing to do on it.
@@ -208,6 +239,18 @@ export const AccountFields = ({
 
   return (
     <>
+      <div className="space-y-1.5">
+        <AccountPhotoField
+          value={form.photo}
+          fallbackUrl={accountAvatarUrl(
+            form.values.username || form.values.displayName,
+          )}
+          onChange={form.setPhoto}
+        />
+        <p className="text-xs text-on-surface-variant">
+          Optional. You can add or change it later in Settings.
+        </p>
+      </div>
       <AuthField
         id="displayName"
         label="Your name"
