@@ -603,7 +603,7 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NOT NULL
-              AND (date(completedAt) = ? OR date(completedAt, 'localtime') = ?)`,
+              AND (date(completedAt, 'localtime') = ? OR date(completedAt) = ?)`,
         )
         .get(scope.ownerId, todayStr, todayStr) as { count: number }
     ).count;
@@ -613,7 +613,7 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NULL
-              AND (date(dueAt) = ? OR date(dueAt, 'localtime') = ?)`,
+              AND (date(dueAt, 'localtime') = ? OR date(dueAt) = ?)`,
         )
         .get(scope.ownerId, todayStr, todayStr) as { count: number }
     ).count;

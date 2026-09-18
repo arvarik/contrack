@@ -304,6 +304,15 @@ export const InteractionSearchPanel = () => {
     [setSearchParams],
   );
 
+  // Keep text in sync if q changes from external navigation (e.g. clicking history item)
+  const prevQRef = useRef(q);
+  useEffect(() => {
+    if (q !== prevQRef.current) {
+      prevQRef.current = q;
+      setText(q);
+    }
+  }, [q]);
+
   // The debounced input becomes the question in the URL.
   useEffect(() => {
     if (debounced !== q) update({ q: debounced });

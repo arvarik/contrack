@@ -1440,6 +1440,7 @@ describe("deleting an account", () => {
       "dedupe_exclusions",
       "dedupe_merge_log",
       "ai_invocations",
+      "search_history",
     ]) {
       expect(rowsOwnedBy(table, victim.id), table).toBe(0);
     }

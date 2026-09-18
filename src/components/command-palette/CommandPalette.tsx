@@ -386,12 +386,20 @@ export const CommandPalette = () => {
     [navigate, handleClose, recordVisit],
   );
 
+  const isNavigatingHistoryRef = useRef(false);
+
   const handleSelectHistory = useCallback(
-    (query: string) => {
+    (query: string, entryMode?: string) => {
+      if (entryMode === "notes") {
+        const cleanQuery = query.replace(/^\s*\?\s*/, "").trim();
+        navigate(`/search?mode=notes&q=${encodeURIComponent(cleanQuery)}`);
+        handleClose();
+        return;
+      }
       setSearch(query);
       resetNavigation();
     },
-    [resetNavigation],
+    [navigate, handleClose, resetNavigation],
   );
 
   // Commit-on-selection recording for normal-mode contact picks.
@@ -446,20 +454,23 @@ export const CommandPalette = () => {
         return;
       }
 
-      // Only handle ↑/↓ when input is empty (zero-state)
-      if (search.trim() === "" && !hasFilters) {
+      // Handle ↑/↓ when input is empty (zero-state) OR when actively navigating history
+      const isNavigatingHistory = searchHistory.historyIndex >= 0;
+      if (!hasFilters && (search.trim() === "" || isNavigatingHistory)) {
         if (e.key === "ArrowUp") {
           const historyQuery = searchHistory.navigateHistory("up", search);
           if (historyQuery !== null) {
             e.preventDefault();
+            isNavigatingHistoryRef.current = true;
             setSearch(historyQuery);
           }
           return;
         }
-        if (e.key === "ArrowDown" && searchHistory.historyIndex >= 0) {
+        if (e.key === "ArrowDown" && isNavigatingHistory) {
           const historyQuery = searchHistory.navigateHistory("down", search);
           if (historyQuery !== null) {
             e.preventDefault();
+            isNavigatingHistoryRef.current = true;
             setSearch(historyQuery);
           }
           return;
@@ -522,7 +533,9 @@ export const CommandPalette = () => {
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
-      if (historyIndex >= 0) {
+      if (isNavigatingHistoryRef.current) {
+        isNavigatingHistoryRef.current = false;
+      } else if (historyIndex >= 0) {
         resetNavigation();
       }
       // Clear sub-menu if user starts typing again

@@ -76,12 +76,12 @@ These signals are fetched from `GET /api/command-palette/zero-state` and provide
 
 ## Search History
 
-The palette supports terminal-style search history:
+The palette shares a unified search history with Ask Contrack, persisted on the account in the `search_history` database table:
 
-- Press `↑` / `↓` on an empty input to browse past queries
-- Recent queries appear as **clickable pills** below the input
-- History auto-populates after 30 seconds of inactivity
-- History is stored in-memory per session
+- **Unified storage:** Normal searches and action runs are saved as palette queries. AI queries starting with `?` are recorded as People searches with the prefix stripped, so questions asked in the palette appear in the Ask Contrack history pane and vice versa.
+- **Recall & navigation:** Press `↑` / `↓` on an empty input to browse past queries in terminal style. Reopening the palette within 30 seconds restores your last query.
+- **Zero-state display:** The 5 most recent queries across all modes appear under **Recent Searches** in the palette zero state.
+- **Management & clear:** Search history can be cleared across all modes from **Settings → Privacy and AI** or from the Ask Contrack history pane.
 
 ## Deep Profile Peek
 

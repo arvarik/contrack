@@ -188,7 +188,8 @@ The Ask Contrack page retains search questions across sessions so frequent quest
   5. **Months** (e.g. "August 2026")
 - **Row actions & re-running:** Clicking any question entry fills the search box and immediately re-runs the search. Hovering or focusing a row reveals Pin/Unpin and Delete actions. Deleting triggers an undo toast notification before sending a hard delete request.
 - **Filtering & modes:** A quick search filter debounced at 200ms narrows questions in real time. A Segmented control filters between All, People, and Notes questions.
-- **Clear history:** A "Clear" action in the pane header allows deleting all recorded history (or mode-specific history) behind a confirmation dialog.
+- **Palette unification:** Command palette searches read from and write to the same history. AI queries asked in the command palette (`? question`) appear in the Ask Contrack pane with their prefix stripped, and Ask Contrack questions appear under Recent Searches in the palette zero state.
+- **Clear history:** A "Clear" action in the pane header and a "Clear history" button under **Settings → Privacy and AI** allow deleting all recorded history behind a confirmation dialog.
 
 ---
 
