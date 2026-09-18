@@ -402,6 +402,7 @@ test.describe("Settings — Accessibility", () => {
     { name: "tags", path: "/settings/tags" },
     { name: "duplicates", path: "/settings/duplicates" },
     { name: "enrichment", path: "/settings/enrichment" },
+    { name: "mcp", path: "/settings/mcp" },
     { name: "export", path: "/settings/export" },
     { name: "admin general", path: "/settings/admin/general" },
     { name: "admin ai providers", path: "/settings/admin/ai" },

@@ -69,6 +69,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@google/genai": "^2.2.0",
     "@huggingface/transformers": "^4.0.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.2",
