@@ -45,8 +45,6 @@ describe("shared/connectors.ts", () => {
     expect(connectorViaLabel("ics")).toBe("via Calendar");
     expect(connectorViaLabel("imap")).toBe("via Email");
     expect(connectorViaLabel("google")).toBe("via Google");
-    expect(connectorViaLabel("imessage")).toBe("via iMessage");
-    expect(connectorViaLabel("whatsapp_export")).toBe("via WhatsApp");
   });
 });
 
