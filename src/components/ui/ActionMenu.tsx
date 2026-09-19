@@ -35,7 +35,7 @@ import React, {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { MoreVertical, type LucideIcon } from "lucide-react";
+import { MoreVertical, Check, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useClickOutside } from "../../hooks/useClickOutside";
 
@@ -46,6 +46,8 @@ export interface ActionMenuItem {
   label: string;
   /** A 16 px glyph before the label. Decoration only. */
   icon?: LucideIcon;
+  /** Whether the item is currently selected/checked. */
+  checked?: boolean;
   /** What the item does. Runs after the menu closes. */
   onSelect?: () => void;
   /** An in-app route. The item renders as a link to it. */
@@ -73,6 +75,8 @@ export interface ActionMenuProps {
   triggerRef?: React.Ref<HTMLButtonElement>;
   /** Extra classes for the wrapper, which positions the menu. */
   className?: string;
+  /** Custom trigger content replacing the default icon-only trigger. */
+  triggerContent?: React.ReactNode;
 }
 
 /**
@@ -101,6 +105,7 @@ export const ActionMenu = ({
   onOpenChange,
   triggerRef,
   className,
+  triggerContent,
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
   /** Which item takes focus when the menu opens: the first or the last. */
@@ -135,7 +140,7 @@ export const ActionMenu = ({
   const enabledItems = () =>
     Array.from(
       menu.current?.querySelectorAll<HTMLElement>(
-        '[role="menuitem"]:not([aria-disabled="true"])',
+        '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemcheckbox"]:not([aria-disabled="true"])',
       ) ?? [],
     );
 
@@ -236,6 +241,10 @@ export const ActionMenu = ({
 
   const renderItem = (item: ActionMenuItem) => {
     const ItemIcon = item.icon;
+    const isChecked = item.checked === true;
+    const isCheckable = item.checked !== undefined;
+    const role = isCheckable ? "menuitemcheckbox" : "menuitem";
+
     const content = (
       <>
         {ItemIcon && (
@@ -247,7 +256,13 @@ export const ActionMenu = ({
             )}
           />
         )}
-        <span className="min-w-0 truncate">{item.label}</span>
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {isChecked && (
+          <Check
+            aria-hidden="true"
+            className="w-4 h-4 shrink-0 text-primary ml-auto"
+          />
+        )}
       </>
     );
     // The item with focus is tinted on any focus, not only a keyboard one. A
@@ -266,7 +281,8 @@ export const ActionMenu = ({
         <Link
           key={item.id}
           to={item.to}
-          role="menuitem"
+          role={role}
+          aria-checked={isCheckable ? isChecked : undefined}
           tabIndex={-1}
           className={classes}
           onClick={() => {
@@ -282,7 +298,8 @@ export const ActionMenu = ({
       <button
         key={item.id}
         type="button"
-        role="menuitem"
+        role={role}
+        aria-checked={isCheckable ? isChecked : undefined}
         tabIndex={-1}
         aria-disabled={item.disabled || undefined}
         className={classes}
@@ -310,7 +327,9 @@ export const ActionMenu = ({
           triggerClassName,
         )}
       >
-        <Icon aria-hidden="true" className={iconClassName} />
+        {triggerContent ?? (
+          <Icon aria-hidden="true" className={iconClassName} />
+        )}
       </button>
       {open && (
         <div

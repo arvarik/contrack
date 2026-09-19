@@ -120,3 +120,24 @@ export const openQuickNote = (contactId?: string): void => {
     }),
   );
 };
+
+/** Someone asked to open the import contacts modal. */
+export const OPEN_IMPORT_EVENT = "contrack:open-import";
+
+/** Someone asked to open the new contact modal. */
+export const OPEN_NEW_CONTACT_EVENT = "contrack:open-new-contact";
+
+/** Someone asked to open the smart paste text modal. */
+export const OPEN_SMART_PASTE_EVENT = "contrack:open-smart-paste";
+
+export const openImportModal = (): void => {
+  window.dispatchEvent(new Event(OPEN_IMPORT_EVENT));
+};
+
+export const openNewContactModal = (): void => {
+  window.dispatchEvent(new Event(OPEN_NEW_CONTACT_EVENT));
+};
+
+export const openSmartPasteModal = (): void => {
+  window.dispatchEvent(new Event(OPEN_SMART_PASTE_EVENT));
+};

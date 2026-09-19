@@ -107,8 +107,7 @@ export const ConnectorsView: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-on-surface">Connectors</h1>
-          <p className="text-xs text-on-surface-variant mt-1">
+          <p className="text-xs text-on-surface-variant">
             Calendar, mailbox, Google, messages. Sync who you talk to.
           </p>
         </div>

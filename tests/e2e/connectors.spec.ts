@@ -274,7 +274,10 @@ END:VCALENDAR`;
 
       await page.goto("/settings/connectors");
       await expect(
-        page.getByRole("heading", { name: NAMES.connectors.title }),
+        page.getByRole("heading", {
+          name: NAMES.connectors.title,
+          exact: true,
+        }),
       ).toBeVisible();
 
       await expectPageAccessible(page, testInfo, "connectors-phone");

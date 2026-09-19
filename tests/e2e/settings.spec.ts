@@ -246,7 +246,7 @@ test.describe("Settings — Personal preferences", () => {
   }) => {
     // 1. With single-key shortcuts on (default), pressing 'n' on '/' opens New Contact modal
     await page.goto("/");
-    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    await expect(page.getByText("Ada Lovelace").first()).toBeVisible();
     await page.evaluate(() =>
       (document.activeElement as HTMLElement | null)?.blur?.(),
     );
