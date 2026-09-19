@@ -215,3 +215,14 @@ curl -X POST http://localhost:3000/api/contacts/merge-cluster \
   -H "Content-Type: application/json" \
   -d '{"primaryId":"abc123","duplicateIds":["def456","ghi789"]}'
 ```
+
+---
+
+## Responsive Layout on Phones
+
+The dedupe experience is optimized for narrow phone screens:
+
+- **Mode switcher:** A full-width segmented control toggles between Auto scan and Manual merge in sentence case.
+- **Header actions:** On narrow screens below 640 px, Merge activity moves out of the main row into the page header action menu. This prevents clipping and keeps the title row clean.
+- **Form controls:** Scan mode selection cards and manual merge rows place their radio or checkbox on the left beside the icon, avatar, or title, keeping the hit target close to the text.
+- **Content width:** Mode options, lists, and empty states are constrained to a comfortable reading width of 48 rem (max-w-3xl) with centered alignment.

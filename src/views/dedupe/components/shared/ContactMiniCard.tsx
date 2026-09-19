@@ -33,21 +33,6 @@ export const ContactMiniCard = ({
           : "hover:bg-surface-container-low",
     )}
   >
-    <img
-      src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
-      alt={contact.name}
-      className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"
-    />
-    <div className="min-w-0 flex-1">
-      <div className="text-sm font-bold truncate">{contact.name}</div>
-      <div className="text-xs text-on-surface-variant truncate">
-        {[contact.role, contact.company].filter(Boolean).join(" · ") ||
-          [contact.emails?.[0]?.email, contact.phones?.[0]?.phone]
-            .filter(Boolean)
-            .join(" · ") ||
-          "No details"}
-      </div>
-    </div>
     <div
       className={cn(
         "w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all",
@@ -71,6 +56,21 @@ export const ContactMiniCard = ({
           />
         </svg>
       )}
+    </div>
+    <img
+      src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
+      alt={contact.name}
+      className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"
+    />
+    <div className="min-w-0 flex-1">
+      <div className="text-sm font-bold truncate">{contact.name}</div>
+      <div className="text-xs text-on-surface-variant truncate">
+        {[contact.role, contact.company].filter(Boolean).join(" · ") ||
+          [contact.emails?.[0]?.email, contact.phones?.[0]?.phone]
+            .filter(Boolean)
+            .join(" · ") ||
+          "No details"}
+      </div>
     </div>
   </button>
 );

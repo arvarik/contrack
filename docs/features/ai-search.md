@@ -211,3 +211,14 @@ When AI is turned off for an account:
 - The client suppresses AI generation triggers including Dossier briefing buttons, contact enrichment buttons, command palette enrichment actions, and group synthesis buttons.
 - The Dashboard daily insight card displays an informative message explaining that AI is disabled for the account, with a link to Privacy settings.
 - Fast local retrieval remains fully operational: SQLite FTS5 full-text search, local vector embeddings, and direct query filtering continue running entirely on your machine with zero external network requests.
+
+---
+
+## Indexing Coverage and Empty State
+
+When semantic search coverage across your contacts is under 100 percent, Ask Contrack guides the user before their first query:
+
+- **Empty state coverage card:** The "Ask anything" landing empty state renders the complete Semantic Search Coverage card with current percentage, indexed count, missing items, and index triggers.
+- **Indexing explanation:** A clear sentence explains what indexing accomplishes: "Indexing turns contacts into searchable concepts so you can find people by meaning rather than exact words."
+- **Header indicator:** The compact coverage pill in the header remains visible for quick glance status at any time.
+- **Automatic dismissal:** Once coverage reaches 100 percent or a query produces results, the full coverage card hides to keep attention focused on your search.

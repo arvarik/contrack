@@ -13,7 +13,6 @@ import {
   ScanSearch,
   Brain,
   Undo2,
-  HandMetal,
   List,
   Layers,
   Database,
@@ -39,6 +38,8 @@ import { useDedupe } from "../../contexts/DedupeContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Segmented } from "../../components/ui/Segmented";
+import { ActionMenu } from "../../components/ui/ActionMenu";
 
 // =============================================================================
 // DedupeView — The Singularity De-Duplication Engine (Cluster-Based)
@@ -56,7 +57,6 @@ export const DedupeView = ({
 }) => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("auto");
   const [resultView, setResultView] = useState<ResultView>("swipe");
-  const [showActivity, setShowActivity] = useState(false);
   const [selectedMode, setSelectedMode] = useState<DedupeScanMode>("deep");
 
   const {
@@ -68,6 +68,8 @@ export const DedupeView = ({
     reset,
     removeCluster,
     isQueued,
+    showActivity,
+    setShowActivity,
   } = useDedupe();
   const mergeCluster = useMergeCluster();
 
@@ -277,54 +279,70 @@ export const DedupeView = ({
         embedded ? "h-full" : "h-full",
       )}
     >
-      {/* Tab Bar */}
-      <div className="shrink-0 p-4 pb-0 bg-surface flex items-center gap-3">
-        {/*
-          An icon-only link. A `title` gave it a name for a mouse and a screen
-          reader but nothing on touch, so the name lives in `aria-label`.
-        */}
-        {embedded && !hideBackLink && (
-          <Link
-            to="/settings"
-            className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
-            aria-label="Back to Settings"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Link>
-        )}
-        <div className={cn(TAB_CONTAINER, "w-fit")}>
-          <button
-            onClick={() => setActiveTab("auto")}
-            className={cn(
-              tabItem(activeTab === "auto"),
-              "flex items-center gap-2 min-h-[44px] sm:min-h-0",
-            )}
-          >
-            <Zap className="w-4 h-4" />
-            Auto Scan
-          </button>
+      {/* Title row (when parent shell does not render back link) */}
+      {!hideBackLink && (
+        <div className="shrink-0 p-4 pb-0 bg-surface flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/settings"
+              className="hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors shrink-0"
+              aria-label="Back to Settings"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+            <h2 className="text-xl font-headline font-bold text-on-surface">
+              {NAMES.duplicates.label}
+            </h2>
+          </div>
 
+          {/* Merge Activity: button from sm, ActionMenu below sm */}
           <button
-            onClick={() => setActiveTab("manual")}
-            className={cn(
-              tabItem(activeTab === "manual"),
-              "flex items-center gap-2 min-h-[44px] sm:min-h-0",
-            )}
+            onClick={() => setShowActivity(true)}
+            className="hit-area hidden sm:flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
           >
-            <HandMetal className="w-4 h-4" />
-            Manual Merge
+            <History className="w-4 h-4" />
+            Merge Activity
           </button>
+          <div className="sm:hidden shrink-0">
+            <ActionMenu
+              label="Duplicates actions"
+              items={[
+                {
+                  id: "merge-activity",
+                  label: "Merge activity",
+                  icon: History,
+                  onSelect: () => setShowActivity(true),
+                },
+              ]}
+            />
+          </div>
         </div>
+      )}
 
-        {/* Merge Activity button — top right */}
-        <div className="flex-1" />
-        <button
-          onClick={() => setShowActivity(true)}
-          className="hit-area flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
-        >
-          <History className="w-4 h-4" />
-          Merge Activity
-        </button>
+      {/* Segmented Mode Selector */}
+      <div className="shrink-0 p-4 pb-0 bg-surface">
+        <div className="flex items-center justify-between gap-3">
+          <Segmented
+            label="Dedupe mode"
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              { value: "auto", label: "Auto scan" },
+              { value: "manual", label: "Manual merge" },
+            ]}
+            className="w-full sm:w-auto"
+          />
+
+          {hideBackLink && (
+            <button
+              onClick={() => setShowActivity(true)}
+              className="hit-area hidden sm:flex items-center gap-2 px-3 py-2 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-xl transition-colors shrink-0"
+            >
+              <History className="w-4 h-4" />
+              Merge Activity
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -448,12 +466,14 @@ export const DedupeView = ({
             <div className="flex-1 overflow-y-auto p-6 pb-24 lg:pb-6">
               {/* ═══ Phase 1: Pre-scan — mode selector ═══ */}
               {preScan && (
-                <div className={EMPTY_HERO}>
+                <div
+                  className={cn(EMPTY_HERO, "h-auto min-h-full py-4 max-w-3xl")}
+                >
                   <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                    className="p-6 bg-primary/8 rounded-3xl mb-6"
+                    className="p-6 bg-primary/8 rounded-3xl mb-6 shrink-0"
                   >
                     <Brain className="w-16 h-16 text-primary" />
                   </motion.div>
@@ -465,7 +485,7 @@ export const DedupeView = ({
                   </p>
 
                   {/* Scan mode selector */}
-                  <div className="w-full space-y-2 mb-8">
+                  <div className="w-full max-w-3xl mx-auto space-y-2 mb-8">
                     {scanModes.map(({ mode, icon, title, desc }) => (
                       <button
                         key={mode}
@@ -477,6 +497,22 @@ export const DedupeView = ({
                             : "bg-surface-container-lowest shadow-sm hover:bg-surface-container-low",
                         )}
                       >
+                        <div
+                          className={cn(
+                            "w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-all",
+                            selectedMode === mode
+                              ? "bg-primary"
+                              : "bg-surface-container-high",
+                          )}
+                        >
+                          {selectedMode === mode && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="w-2 h-2 bg-white rounded-full"
+                            />
+                          )}
+                        </div>
                         <div
                           className={cn(
                             "shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
@@ -494,22 +530,6 @@ export const DedupeView = ({
                           <div className="text-xs text-on-surface-variant">
                             {desc}
                           </div>
-                        </div>
-                        <div
-                          className={cn(
-                            "w-5 h-5 rounded-full shrink-0 flex items-center justify-center transition-all",
-                            selectedMode === mode
-                              ? "bg-primary"
-                              : "bg-surface-container-high",
-                          )}
-                        >
-                          {selectedMode === mode && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="w-2 h-2 bg-white rounded-full"
-                            />
-                          )}
                         </div>
                       </button>
                     ))}
@@ -786,7 +806,7 @@ export const DedupeView = ({
 
                   {/* Active swipe card */}
                   {currentCluster && (
-                    <div className="max-w-5xl mx-auto">
+                    <div className="max-w-3xl mx-auto">
                       <AnimatePresence mode="wait">
                         <ClusterSwipeCard
                           key={currentCluster.id}
@@ -804,10 +824,12 @@ export const DedupeView = ({
 
               {/* ═══ Phase 3: Results — List view ═══ */}
               {hasResults && resultView === "list" && (
-                <ClusterList
-                  clusters={clusters}
-                  onRemoveCluster={removeCluster}
-                />
+                <div className="max-w-3xl mx-auto">
+                  <ClusterList
+                    clusters={clusters}
+                    onRemoveCluster={removeCluster}
+                  />
+                </div>
               )}
             </div>
           </motion.div>
