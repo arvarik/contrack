@@ -107,6 +107,7 @@ const COVERED = [
   "DELETE /api/interactions/:id",
   "DELETE /api/lists/:id",
   "DELETE /api/lists/:id/members/:contactId",
+  "DELETE /api/map/views/:id",
   "DELETE /api/mcp",
   "DELETE /api/search/history",
   "DELETE /api/search/history/:id",
@@ -155,6 +156,7 @@ const COVERED = [
   "GET /api/interactions/search",
   "GET /api/lists",
   "GET /api/lists/:id/contacts",
+  "GET /api/map/views",
   "GET /api/mcp",
   "GET /api/query/contacts",
   "GET /api/search",
@@ -172,6 +174,7 @@ const COVERED = [
   "PATCH /api/connectors/:id",
   "PATCH /api/interactions/:id",
   "PATCH /api/lists/:id",
+  "PATCH /api/map/views/:id",
   "PATCH /api/search/history/:id",
   "PATCH /api/tags/:tag",
   "POST /api/ai-search",
@@ -203,6 +206,7 @@ const COVERED = [
   "POST /api/lists",
   "POST /api/lists/:id/members",
   "POST /api/lists/:id/members/bulk",
+  "POST /api/map/views",
   "POST /api/mcp",
   "POST /api/search/history",
   "POST /api/search/refresh-index",
@@ -3556,6 +3560,91 @@ describe("connectors isolate by account", () => {
   });
 });
 
+describe("map views isolation", () => {
+  let viewIdA: string;
+  let viewIdB: string;
+
+  beforeAll(async () => {
+    const resA = await asUser(A)(
+      request(app)
+        .post("/api/map/views")
+        .send({
+          name: "Actor A View",
+          query: "London",
+          layer: "pins",
+          bounds: [-0.2, 51.4, 0.0, 51.6],
+        }),
+    );
+    expect(resA.status).toBe(201);
+    viewIdA = resA.body.id;
+
+    const resB = await asUser(B)(
+      request(app)
+        .post("/api/map/views")
+        .send({
+          name: "Actor B View",
+          query: "Paris",
+          layer: "health",
+          bounds: [2.2, 48.8, 2.4, 48.9],
+        }),
+    );
+    expect(resB.status).toBe(201);
+    viewIdB = resB.body.id;
+  });
+
+  it("GET /api/map/views: returns only the caller's map views", async () => {
+    const resA = await asUser(A)(request(app).get("/api/map/views"));
+    expect(resA.status).toBe(200);
+    const idsA = resA.body.views.map((v: { id: string }) => v.id);
+    expect(idsA).toContain(viewIdA);
+    expect(idsA).not.toContain(viewIdB);
+
+    const resB = await asUser(B)(request(app).get("/api/map/views"));
+    expect(resB.status).toBe(200);
+    const idsB = resB.body.views.map((v: { id: string }) => v.id);
+    expect(idsB).toContain(viewIdB);
+    expect(idsB).not.toContain(viewIdA);
+
+    const resC = await asUser(C)(request(app).get("/api/map/views"));
+    expect(resC.status).toBe(200);
+    expect(resC.body.views).toEqual([]);
+  });
+
+  it("PATCH /api/map/views/:id: actor B cannot update actor A's map view", async () => {
+    const res404 = await asUser(B)(
+      request(app)
+        .patch(`/api/map/views/${viewIdA}`)
+        .send({ name: "Hacked View" }),
+    );
+    expect(res404.status).toBe(404);
+
+    const res200 = await asUser(A)(
+      request(app)
+        .patch(`/api/map/views/${viewIdA}`)
+        .send({ name: "Actor A Renamed" }),
+    );
+    expect(res200.status).toBe(200);
+    expect(res200.body.name).toBe("Actor A Renamed");
+  });
+
+  it("DELETE /api/map/views/:id: actor B cannot delete actor A's map view", async () => {
+    const res404 = await asUser(B)(
+      request(app).delete(`/api/map/views/${viewIdA}`),
+    );
+    expect(res404.status).toBe(404);
+
+    const res200 = await asUser(A)(
+      request(app).delete(`/api/map/views/${viewIdA}`),
+    );
+    expect(res200.status).toBe(200);
+    expect(res200.body).toEqual({ success: true });
+
+    const check = await asUser(A)(request(app).get("/api/map/views"));
+    const ids = check.body.views.map((v: { id: string }) => v.id);
+    expect(ids).not.toContain(viewIdA);
+  });
+});
+
 // =============================================================================
 // The matrix and the manifest agree
 // =============================================================================
@@ -3592,7 +3681,7 @@ describe("all scoped routes are isolated", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(42);
+    expect(collections).toHaveLength(43);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

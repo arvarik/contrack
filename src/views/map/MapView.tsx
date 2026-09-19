@@ -15,11 +15,20 @@
  * @module views/map/MapView
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMatch, useNavigate } from "react-router-dom";
+import { useMatch, useNavigate, useSearchParams } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { BarChart3, CalendarPlus, ZoomIn, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMapContacts, useBulkAddToList } from "../../api";
+import {
+  useMapViews,
+  useCreateMapView,
+  useUpdateMapView,
+  useDeleteMapView,
+  type MapLayer,
+  type MapView as MapViewType,
+  type MapBounds,
+} from "../../api/mapViews";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { NAMES } from "../../lib/names";
 import { ContactMap } from "./ContactMap";
@@ -29,6 +38,9 @@ import { useMapFilter } from "./useMapFilter";
 import { MapToolbar } from "./MapToolbar";
 import { StatsStrip } from "./StatsStrip";
 import { MapInsightsPane } from "./MapInsightsPane";
+import { HealthLegend } from "./HealthLegend";
+import { SaveViewModal } from "./SaveViewModal";
+import { RenameViewModal } from "./RenameViewModal";
 import { useMapStats } from "./useMapStats";
 import { isTypingTarget } from "../../lib/keyboard";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
@@ -47,7 +59,29 @@ import { boundsOf } from "./mapMath";
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
-  const filter = useMapFilter(contacts);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { preferences, setPreference } = usePreferences();
+
+  const urlViewId = searchParams.get("view");
+  const urlLayer = searchParams.get("layer") as MapLayer | null;
+  const initialLayer: MapLayer =
+    urlLayer && ["pins", "heat", "health"].includes(urlLayer)
+      ? urlLayer
+      : (preferences.mapLayer ?? "pins");
+
+  const [layer, setLayerState] = useState<MapLayer>(initialLayer);
+
+  useEffect(() => {
+    if (!urlLayer && preferences.mapLayer) {
+      setLayerState(preferences.mapLayer);
+    }
+  }, [preferences.mapLayer, urlLayer]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(urlViewId);
+
+  const filter = useMapFilter(contacts, {
+    activeViewId,
+    onClearActiveView: () => setActiveViewId(null),
+  });
   const navigate = useNavigate();
   const openMatch = useMatch("/map/contact/:id");
   const openId = openMatch?.params.id ?? null;
@@ -57,9 +91,177 @@ export const MapView = () => {
   const singleKeyShortcuts = useSingleKeyShortcuts();
   const isWide = useMediaQuery(WIDE_QUERY);
   const [mobilePaneOpen, setMobilePaneOpen] = useState(false);
-  const { preferences, setPreference } = usePreferences();
   const isDesktopPaneOpen = preferences.mapPaneOpen ?? true;
   const isPaneOpen = isWide ? isDesktopPaneOpen : mobilePaneOpen;
+
+  const { data: mapViews = [] } = useMapViews();
+  const createMapView = useCreateMapView();
+  const updateMapView = useUpdateMapView();
+  const deleteMapView = useDeleteMapView();
+
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [renameTargetView, setRenameTargetView] = useState<MapViewType | null>(
+    null,
+  );
+
+  const handleLayerChange = useCallback(
+    (nextLayer: MapLayer) => {
+      setLayerState(nextLayer);
+      setActiveViewId(null);
+      setPreference("mapLayer", nextLayer);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("view");
+          if (nextLayer !== "pins") next.set("layer", nextLayer);
+          else next.delete("layer");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setPreference, setSearchParams],
+  );
+
+  const handleSelectView = useCallback(
+    (view: MapViewType) => {
+      setActiveViewId(view.id);
+      filter.setRawInput(view.query, { syncUrl: false });
+      setLayerState(view.layer);
+      setPreference("mapLayer", view.layer);
+
+      setSearchParams({ view: view.id }, { replace: true });
+
+      if (map) {
+        const [west, south, east, north] = view.bounds;
+        const padding = paddingFor(
+          measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+        );
+        const reduced = prefersReducedMotion();
+        if (west === east && south === north) {
+          if (reduced) {
+            map.jumpTo({ center: [west, south], zoom: 10, padding });
+          } else {
+            map.flyTo({ center: [west, south], zoom: 10, padding });
+          }
+        } else {
+          map.fitBounds(
+            [
+              [west, south],
+              [east, north],
+            ],
+            { padding, maxZoom: 14, duration: reduced ? 0 : 800 },
+          );
+        }
+      }
+    },
+    [filter, map, openId, setPreference, setSearchParams],
+  );
+
+  // Initial load ?view= resolution:
+  const hasAppliedInitialView = useRef(false);
+  useEffect(() => {
+    if (
+      !urlViewId ||
+      hasAppliedInitialView.current ||
+      mapViews.length === 0 ||
+      !map
+    )
+      return;
+    const matching = mapViews.find((v) => v.id === urlViewId);
+    if (matching) {
+      hasAppliedInitialView.current = true;
+      setActiveViewId(matching.id);
+      filter.setRawInput(matching.query, { syncUrl: false });
+      setLayerState(matching.layer);
+      setPreference("mapLayer", matching.layer);
+
+      const [west, south, east, north] = matching.bounds;
+      const padding = paddingFor(
+        measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+      );
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding, duration: 0, maxZoom: 14 },
+      );
+    }
+  }, [urlViewId, mapViews, map, filter, openId, setPreference]);
+
+  const handleSaveView = useCallback(
+    async (name: string) => {
+      if (!map) throw new Error("Map not ready");
+      const b = map.getBounds();
+      const rawWest = b.getWest();
+      const rawEast = b.getEast();
+      const rawSouth = b.getSouth();
+      const rawNorth = b.getNorth();
+
+      let west = Math.max(-180, Math.min(180, rawWest));
+      let east = Math.max(-180, Math.min(180, rawEast));
+      let south = Math.max(-85, Math.min(85, rawSouth));
+      const north = Math.max(-85, Math.min(85, rawNorth));
+
+      if (rawWest <= -180 && rawEast >= 180) {
+        west = -180;
+        east = 180;
+      }
+      if (south >= north) {
+        south = Math.max(-85, north - 0.01);
+      }
+
+      const bounds: MapBounds = [
+        Number(west.toFixed(6)),
+        Number(south.toFixed(6)),
+        Number(east.toFixed(6)),
+        Number(north.toFixed(6)),
+      ];
+      const created = await createMapView.mutateAsync({
+        name,
+        query: filter.rawInput.trim(),
+        layer,
+        bounds,
+      });
+      toast.success(`View "${created.name}" saved`);
+      setActiveViewId(created.id);
+      setSearchParams({ view: created.id }, { replace: true });
+    },
+    [map, createMapView, filter.rawInput, layer, setSearchParams],
+  );
+
+  const handleRenameView = useCallback(
+    async (id: string, newName: string) => {
+      const updated = await updateMapView.mutateAsync({
+        id,
+        data: { name: newName },
+      });
+      toast.success(`View renamed to "${updated.name}"`);
+    },
+    [updateMapView],
+  );
+
+  const handleDeleteView = useCallback(
+    async (view: MapViewType) => {
+      await deleteMapView.mutateAsync(view.id);
+      toast.success(`View "${view.name}" deleted`);
+      if (activeViewId === view.id) {
+        setActiveViewId(null);
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete("view");
+            if (filter.rawInput.trim()) next.set("q", filter.rawInput.trim());
+            if (layer !== "pins") next.set("layer", layer);
+            return next;
+          },
+          { replace: true },
+        );
+      }
+    },
+    [deleteMapView, activeViewId, setSearchParams, filter.rawInput, layer],
+  );
 
   const { stats, inViewContacts } = useMapStats({
     contacts: filter.filteredContacts,
@@ -367,6 +569,14 @@ export const MapView = () => {
         hasActiveFilter={filter.hasActiveFilter}
         resolveNearFilters={filter.resolveNearFilters}
         clearFilters={filter.clearFilters}
+        layer={layer}
+        onLayerChange={handleLayerChange}
+        views={mapViews}
+        activeViewId={activeViewId}
+        onSelectView={handleSelectView}
+        onOpenSaveModal={() => setIsSaveModalOpen(true)}
+        onStartRename={(v) => setRenameTargetView(v)}
+        onDeleteView={handleDeleteView}
         inputRef={inputRef}
         onFitAll={handleFitAll}
         onToggleInsights={() => toggleInsightsPane(true)}
@@ -411,8 +621,9 @@ export const MapView = () => {
         onMapClick={closeContact}
         onMapReady={setMap}
         initialPadding={initialInsets ? paddingFor(initialInsets) : undefined}
-        rememberView
+        rememberView={!urlViewId}
         reuse
+        layer={layer}
         onLogNote={(id) => setQuickNoteContactId(id)}
         onAddToList={(id) => {
           setSingleListContactId(id);
@@ -423,6 +634,7 @@ export const MapView = () => {
           setIsFollowUpOpen(true);
         }}
       />
+      {layer === "health" && <HealthLegend />}
 
       {/* Map selection floating toolbars */}
       {selection.selectedCount > 0 && (
@@ -514,6 +726,21 @@ export const MapView = () => {
         isOpen={quickNoteContactId !== null}
         onClose={() => setQuickNoteContactId(null)}
         initialContactId={quickNoteContactId ?? undefined}
+      />
+
+      <SaveViewModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={handleSaveView}
+        currentQuery={filter.rawInput}
+        currentLayer={layer}
+      />
+
+      <RenameViewModal
+        view={renameTargetView}
+        isOpen={renameTargetView !== null}
+        onClose={() => setRenameTargetView(null)}
+        onRename={handleRenameView}
       />
     </div>
   );

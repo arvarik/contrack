@@ -19,6 +19,8 @@
 import { memo, useRef, useState } from "react";
 import { Marker } from "react-map-gl/maplibre";
 import type { MapContact } from "../../../shared/geo";
+import { bandFor, contactScore } from "../../../shared/scoreBand";
+import type { MapLayer } from "../../api/mapViews";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { cn } from "../../lib/utils";
 
@@ -53,6 +55,7 @@ interface ContactMarkerProps {
   contact: MapContact;
   selected: boolean;
   multiSelected?: boolean;
+  layer?: MapLayer;
   onSelect: (id: string) => void;
   /** Called with the contact id on hover and focus, and null on leave and blur. */
   onPreview: (id: string | null) => void;
@@ -64,6 +67,7 @@ export const ContactMarker = memo(function ContactMarker({
   contact,
   selected,
   multiSelected = false,
+  layer = "pins",
   onSelect,
   onPreview,
   onPinCard,
@@ -75,6 +79,21 @@ export const ContactMarker = memo(function ContactMarker({
   const touched = useRef(false);
 
   const isHighlighted = selected || multiSelected;
+
+  const score = contactScore(contact);
+  const band = score !== null ? bandFor(score) : "at-risk";
+  const healthRing =
+    band === "strong"
+      ? "ring-success"
+      : band === "fading"
+        ? "ring-warning"
+        : "ring-error";
+
+  const ringClass = isHighlighted
+    ? "ring-4 ring-primary -translate-y-1 shadow-lg"
+    : layer === "health"
+      ? cn("ring-[3px]", healthRing)
+      : "ring-[3px] ring-primary";
 
   return (
     <Marker
@@ -116,9 +135,9 @@ export const ContactMarker = memo(function ContactMarker({
         onBlur={() => onPreview(null)}
         className={cn(
           "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
-          "bg-surface-container-lowest shadow-md ring-[3px] ring-primary",
+          "bg-surface-container-lowest shadow-md",
+          ringClass,
           "transition-transform duration-200 hover:-translate-y-1",
-          isHighlighted && "ring-4 ring-primary -translate-y-1 shadow-lg",
         )}
       >
         <img

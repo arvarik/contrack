@@ -639,6 +639,19 @@ sqlite.exec(`
     codeVerifier TEXT NOT NULL,
     createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
   );
+
+  CREATE TABLE IF NOT EXISTS map_views (
+    id TEXT PRIMARY KEY,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    name TEXT NOT NULL,
+    query TEXT NOT NULL DEFAULT '',
+    layer TEXT NOT NULL DEFAULT 'pins',
+    bounds TEXT NOT NULL,
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
+  CREATE INDEX IF NOT EXISTS idx_map_views_owner ON map_views(ownerId, sortOrder, name);
 `);
 
 // =============================================================================
@@ -680,6 +693,7 @@ export const OWNED_TABLES = [
   "connector_runs",
   "connector_links",
   "upcoming_events",
+  "map_views",
 ] as const;
 
 /** Owned tables with no parent contact. The caller must supply the owner. */
@@ -695,6 +709,7 @@ const OWNER_REQUIRED_TABLES = [
   "connector_runs",
   "connector_links",
   "upcoming_events",
+  "map_views",
 ] as const;
 
 /**
