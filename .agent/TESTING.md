@@ -537,6 +537,11 @@ _List specific bugs discovered during testing._
 | _Map Viewport Stats_           | 2026-09-18    | `mapStats.test.ts` covers pure stats calculation, ranking slices, bounding box filters, empty state                       |
 | _Map Stats Strip_              | 2026-09-18    | `statsStrip.test.tsx` covers chip formatting, facet click filtering, live announcements, empty state                      |
 | _Map Insights Pane_            | 2026-09-18    | `mapInsightsPane.test.tsx` covers tabs (Stats/People), virtualization, fly-to clicks, close handlers                      |
+| _Map Selection Math_           | 2026-09-19    | `mapMath.test.ts` covers pointInPolygon inside, outside, vertex, concave and boundsOf                                     |
+| _Map Selection Hook_           | 2026-09-19    | `useMapSelection.test.ts` covers box, lasso, cluster leaves, and Escape clear                                             |
+| _Map Hover Card_               | 2026-09-19    | `mapHoverCard.test.tsx` covers tooltip mode, pinned mode with 4 actions, local time                                       |
+| _Follow-up Modal_              | 2026-09-19    | `followUpModal.test.tsx` covers date presets, 100 contact cap, and POST requests                                          |
+| _Shared Bulk Actions_          | 2026-09-19    | `useBulkActions.test.tsx` covers delete undo, archive, list, color, field, and CSV                                        |
 
 ### Frontend Component State Matrix
 

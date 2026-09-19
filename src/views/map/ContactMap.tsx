@@ -54,12 +54,8 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { cn } from "../../lib/utils";
 import { ClusterMarker } from "./ClusterMarker";
 import { ContactMarker } from "./ContactMarker";
-import {
-  ContactPopup,
-  STACK_LIMIT,
-  StackPopup,
-  type ContactStack,
-} from "./ContactPopup";
+import { MapHoverCard } from "./MapHoverCard";
+import { STACK_LIMIT, StackPopup, type ContactStack } from "./ContactPopup";
 import { prefersReducedMotion } from "./flyTo";
 import { readLastView, writeLastView } from "./lastView";
 import { collapseAttribution, disableRotation } from "./mapChrome";
@@ -122,6 +118,8 @@ export interface ContactMapProps {
   contacts: MapContact[];
   /** The contact whose detail is open, drawn above the others. */
   selectedId?: string | null;
+  /** IDs of multi-selected contacts. */
+  selectedIds?: Set<string>;
   onSelect: (id: string) => void;
   /** A click on the map itself, not on a pin or a card, and where it landed. */
   onMapClick?: (at: { longitude: number; latitude: number }) => void;
@@ -162,6 +160,9 @@ export interface ContactMapProps {
   /** The contacts are still loading. */
   loading?: boolean;
   className?: string;
+  onLogNote?: (id: string) => void;
+  onAddToList?: (id: string) => void;
+  onFollowUp?: (id: string) => void;
   /**
    * Rendered inside the map, after the pins. A caller that needs one marker
    * of its own, such as the pin a person drags into place, puts it here.
@@ -172,6 +173,7 @@ export interface ContactMapProps {
 export const ContactMap = ({
   contacts,
   selectedId = null,
+  selectedIds,
   onSelect,
   onMapClick,
   interactive = true,
@@ -185,6 +187,9 @@ export const ContactMap = ({
   onMapReady,
   loading = false,
   className,
+  onLogNote,
+  onAddToList,
+  onFollowUp,
   children,
 }: ContactMapProps) => {
   const { mode } = usePreferences();
@@ -236,9 +241,99 @@ export const ContactMap = ({
 
   const features = useClusterFeatures(map, CONTACTS_SOURCE_ID);
 
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  const preview = previewId ? (byId.get(previewId) ?? null) : null;
+  // Hover & pin card state
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePreview = useCallback((id: string | null) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    if (!id) {
+      setHoveredId(null);
+      return;
+    }
+    const delay =
+      typeof process !== "undefined" && process.env?.NODE_ENV === "test"
+        ? 0
+        : 150;
+    if (delay === 0) {
+      setHoveredId(id);
+    } else {
+      hoverTimerRef.current = setTimeout(() => {
+        setHoveredId(id);
+      }, delay);
+    }
+  }, []);
+
+  const handlePinCard = useCallback(
+    (id: string) => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      if (pinnedId === id) {
+        onSelect(id);
+      } else {
+        setPinnedId(id);
+      }
+    },
+    [pinnedId, onSelect],
+  );
+
+  const handleCloseCard = useCallback(() => {
+    setPinnedId(null);
+    setHoveredId(null);
+  }, []);
+
+  const activeCardId = pinnedId ?? (hoverCard ? hoveredId : null);
+  const activeCardContact = activeCardId
+    ? (byId.get(activeCardId) ?? null)
+    : null;
   const [stack, setStack] = useState<ContactStack | null>(null);
+
+  // Per-cluster leaves cache for displaying "X of Y selected"
+  const clusterLeavesCache = useRef<Map<number, string[]>>(new Map());
+  const [clusterLeaves, setClusterLeaves] = useState<Map<number, string[]>>(
+    new Map(),
+  );
+
+  useEffect(() => {
+    const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
+    if (!map || !source) return;
+
+    let isMounted = true;
+    const clusters = features.filter(
+      (f): f is ClusterFeature => f.kind === "cluster",
+    );
+    const missing = clusters.filter(
+      (c) => !clusterLeavesCache.current.has(c.clusterId),
+    );
+
+    if (missing.length === 0) return;
+
+    Promise.all(
+      missing.map(async (c) => {
+        try {
+          const leaves = await source.getClusterLeaves(
+            c.clusterId,
+            Infinity,
+            0,
+          );
+          const ids = leaves
+            .map((l) => l.properties?.id)
+            .filter((id): id is string => typeof id === "string");
+          clusterLeavesCache.current.set(c.clusterId, ids);
+          return [c.clusterId, ids] as const;
+        } catch {
+          return null;
+        }
+      }),
+    ).then(() => {
+      if (!isMounted) return;
+      setClusterLeaves(new Map(clusterLeavesCache.current));
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [map, features]);
 
   // A stack lists who was in the cluster when it opened. New data, or a
   // zoom that dissolves the cluster, makes that list stale.
@@ -273,12 +368,13 @@ export const ContactMap = ({
       // opening a contact must not also close it.
       const target = event.originalEvent.target as Element | null;
       if (target?.closest?.(".maplibregl-marker, .maplibregl-popup")) return;
+      handleCloseCard();
       onMapClick?.({
         longitude: event.lngLat.lng,
         latitude: event.lngLat.lat,
       });
     },
-    [onMapClick],
+    [onMapClick, handleCloseCard],
   );
 
   const expandCluster = useCallback(
@@ -344,8 +440,12 @@ export const ContactMap = ({
         <LiveStatus
           label="Map card"
           message={
-            preview
-              ? [preview.name, preview.company, preview.location]
+            activeCardContact
+              ? [
+                  activeCardContact.name,
+                  activeCardContact.company,
+                  activeCardContact.location,
+                ]
                   .filter(Boolean)
                   .join(". ")
               : ""
@@ -358,6 +458,7 @@ export const ContactMap = ({
         <MapGL
           mapStyle={styleBroken ? BLANK_STYLE : styleUrl}
           workerUrl={MAPLIBRE_WORKER_URL}
+          boxZoom={false}
           initialViewState={{
             longitude: startView.longitude,
             latitude: startView.latitude,
@@ -405,10 +506,16 @@ export const ContactMap = ({
           )}
           {features.map((feature) => {
             if (feature.kind === "cluster") {
+              const leaves = clusterLeaves.get(feature.clusterId) || [];
+              const selectedInCluster = selectedIds
+                ? leaves.filter((id) => selectedIds.has(id)).length
+                : 0;
+
               return (
                 <ClusterMarker
                   key={feature.key}
                   cluster={feature}
+                  selectedCount={selectedInCluster}
                   onExpand={expandCluster}
                 />
               );
@@ -420,12 +527,27 @@ export const ContactMap = ({
                 key={feature.key}
                 contact={contact}
                 selected={contact.id === selectedId}
+                multiSelected={
+                  selectedIds ? selectedIds.has(contact.id) : false
+                }
                 onSelect={onSelect}
-                onPreview={hoverCard ? setPreviewId : noPreview}
+                onPreview={hoverCard ? handlePreview : noPreview}
+                onPinCard={handlePinCard}
+                hasActiveCard={activeCardId === contact.id}
               />
             );
           })}
-          {preview && !stack && <ContactPopup contact={preview} />}
+          {activeCardContact && !stack && (
+            <MapHoverCard
+              contact={activeCardContact}
+              pinned={pinnedId !== null}
+              onClose={handleCloseCard}
+              onOpen={onSelect}
+              onLogNote={onLogNote}
+              onAddToList={onAddToList}
+              onFollowUp={onFollowUp}
+            />
+          )}
           {stack && (
             <StackPopup
               stack={stack}

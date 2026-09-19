@@ -17,8 +17,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMatch, useNavigate } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { BarChart3 } from "lucide-react";
-import { useMapContacts } from "../../api";
+import { BarChart3, CalendarPlus, ZoomIn, X } from "lucide-react";
+import { toast } from "sonner";
+import { useMapContacts, useBulkAddToList } from "../../api";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { NAMES } from "../../lib/names";
 import { ContactMap } from "./ContactMap";
@@ -34,6 +35,15 @@ import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { isValidLatLng, type MapContact } from "../../../shared/geo";
+import { useMapSelection } from "./useMapSelection";
+import { useBulkActions } from "../../components/bulk/useBulkActions";
+import { BulkActionToolbar } from "../contact-list/BulkActionToolbar";
+import { BulkModals } from "../../components/bulk/BulkModals";
+import { FollowUpModal } from "./FollowUpModal";
+import { SelectionOverlay } from "./SelectionOverlay";
+import { QuickInteractionModal } from "../../components/QuickInteractionModal";
+import { LiveStatus } from "../../components/ui/LiveStatus";
+import { boundsOf } from "./mapMath";
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
@@ -56,6 +66,98 @@ export const MapView = () => {
     map,
     totalCount: contacts.length,
   });
+
+  const selection = useMapSelection({
+    contacts,
+    filteredContacts: filter.filteredContacts,
+  });
+
+  const bulkActions = useBulkActions({
+    selectedIds: selection.selectedIds,
+    contacts,
+    onComplete: () => {
+      selection.clear();
+    },
+  });
+
+  const [isLassoMode, setIsLassoMode] = useState(false);
+  const [quickNoteContactId, setQuickNoteContactId] = useState<string | null>(
+    null,
+  );
+  const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
+  const [singleFollowUpContactId, setSingleFollowUpContactId] = useState<
+    string | null
+  >(null);
+  const [singleListContactId, setSingleListContactId] = useState<string | null>(
+    null,
+  );
+  const [isSingleAddToListOpen, setIsSingleAddToListOpen] = useState(false);
+
+  const bulkAddToList = useBulkAddToList();
+
+  const handleAddToListSubmit = useCallback(
+    (listId: string) => {
+      if (isSingleAddToListOpen && singleListContactId) {
+        bulkAddToList.mutate(
+          { listId, contactIds: [singleListContactId] },
+          {
+            onSuccess: ({ count }) => {
+              toast.success(
+                `Added ${count} contact${count !== 1 ? "s" : ""} to list`,
+              );
+              setIsSingleAddToListOpen(false);
+              setSingleListContactId(null);
+            },
+            onError: (err) => {
+              toast.error(
+                `Failed: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            },
+          },
+        );
+      } else {
+        bulkActions.handleBulkAddToList(listId);
+      }
+    },
+    [isSingleAddToListOpen, singleListContactId, bulkAddToList, bulkActions],
+  );
+
+  const followUpIds = useMemo(() => {
+    if (singleFollowUpContactId) return [singleFollowUpContactId];
+    return Array.from(selection.selectedIds);
+  }, [singleFollowUpContactId, selection.selectedIds]);
+
+  const handleZoomToSelection = useCallback(() => {
+    if (!map || selection.selectedIds.size === 0) return;
+    const selectedContacts = contacts.filter((c) =>
+      selection.selectedIds.has(c.id),
+    );
+    const points = selectedContacts
+      .filter((c) => isValidLatLng(c.lat, c.lng))
+      .map((c) => ({ lat: c.lat as number, lng: c.lng as number }));
+    const bounds = boundsOf(points);
+    if (!bounds) return;
+    const [west, south, east, north] = bounds;
+    const padding = paddingFor(
+      measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+    );
+    const reduced = prefersReducedMotion();
+    if (west === east && south === north) {
+      if (reduced) {
+        map.jumpTo({ center: [west, south], zoom: 12, padding });
+      } else {
+        map.flyTo({ center: [west, south], zoom: 12, padding });
+      }
+    } else {
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding, maxZoom: 14, duration: reduced ? 0 : 800 },
+      );
+    }
+  }, [map, selection.selectedIds, contacts, openId]);
 
   usePageTitle(NAMES.map.title);
 
@@ -221,6 +323,13 @@ export const MapView = () => {
         toggleInsightsPane();
         return;
       }
+
+      if (event.key.toLowerCase() === "l") {
+        if (!singleKeyShortcuts) return;
+        event.preventDefault();
+        setIsLassoMode((prev) => !prev);
+        return;
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -232,6 +341,19 @@ export const MapView = () => {
       className="map-page w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden"
     >
       <h1 className="sr-only">{NAMES.map.label}</h1>
+      <LiveStatus label="Map selection" message={selection.announcement} />
+      <SelectionOverlay
+        map={map}
+        containerRef={pageRef}
+        onSelectBox={(bounds) =>
+          selection.selectBox(bounds, filter.filteredContacts)
+        }
+        onSelectLasso={(ring) =>
+          selection.selectLasso(ring, filter.filteredContacts)
+        }
+        isLassoMode={isLassoMode}
+        onExitLassoMode={() => setIsLassoMode(false)}
+      />
       <MapToolbar
         contacts={contacts}
         map={map}
@@ -248,6 +370,11 @@ export const MapView = () => {
         inputRef={inputRef}
         onFitAll={handleFitAll}
         onToggleInsights={() => toggleInsightsPane(true)}
+        onSelectInView={() =>
+          selection.selectInView(map, filter.filteredContacts)
+        }
+        onStartLasso={() => setIsLassoMode(true)}
+        isLassoActive={isLassoMode}
       />
       <StatsStrip
         stats={stats}
@@ -279,12 +406,114 @@ export const MapView = () => {
         contacts={filter.filteredContacts}
         loading={isLoading}
         selectedId={openId}
+        selectedIds={selection.selectedIds}
         onSelect={openContact}
         onMapClick={closeContact}
         onMapReady={setMap}
         initialPadding={initialInsets ? paddingFor(initialInsets) : undefined}
         rememberView
         reuse
+        onLogNote={(id) => setQuickNoteContactId(id)}
+        onAddToList={(id) => {
+          setSingleListContactId(id);
+          setIsSingleAddToListOpen(true);
+        }}
+        onFollowUp={(id) => {
+          setSingleFollowUpContactId(id);
+          setIsFollowUpOpen(true);
+        }}
+      />
+
+      {/* Map selection floating toolbars */}
+      {selection.selectedCount > 0 && (
+        <>
+          <div
+            role="toolbar"
+            aria-label="Map selection actions"
+            className="absolute bottom-44 md:bottom-22 left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
+          >
+            <span className="font-bold text-xs text-on-surface whitespace-nowrap pl-1">
+              {selection.selectedCount} selected
+              {selection.hiddenCount > 0 && (
+                <span className="text-[11px] text-on-surface-variant font-normal ml-1">
+                  ({selection.hiddenCount} hidden by filter)
+                </span>
+              )}
+            </span>
+            <div className="w-px h-4 bg-outline-variant/40 shrink-0" />
+            <button
+              type="button"
+              onClick={() => {
+                setSingleFollowUpContactId(null);
+                setIsFollowUpOpen(true);
+              }}
+              className="hit-area flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0"
+            >
+              <CalendarPlus className="w-3.5 h-3.5" />
+              <span>Add follow-up</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomToSelection}
+              className="hit-area flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer shrink-0"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+              <span>Zoom to selection</span>
+            </button>
+            <div className="w-px h-4 bg-outline-variant/40 shrink-0" />
+            <button
+              type="button"
+              onClick={selection.clear}
+              aria-label="Clear selection"
+              title="Clear selection (Escape)"
+              className="hit-area p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <BulkActionToolbar
+            isPending={bulkActions.isPending}
+            onArchive={bulkActions.handleBulkArchive}
+            onAddToList={bulkActions.openAddToList}
+            onEditField={bulkActions.openBulkEdit}
+            onColorChange={bulkActions.handleBulkColorChange}
+            onExportCSV={bulkActions.handleExportCSV}
+            onDelete={bulkActions.handleBulkDelete}
+          />
+        </>
+      )}
+
+      {/* Bulk & single modals */}
+      <BulkModals
+        selectedCount={isSingleAddToListOpen ? 1 : selection.selectedCount}
+        isAddToListOpen={isSingleAddToListOpen || bulkActions.isAddToListOpen}
+        onCloseAddToList={() => {
+          setIsSingleAddToListOpen(false);
+          setSingleListContactId(null);
+          bulkActions.closeAddToList();
+        }}
+        onBulkAddToList={handleAddToListSubmit}
+        isBulkAddToListPending={bulkActions.isBulkAddToListPending}
+        isBulkEditOpen={bulkActions.isBulkEditOpen}
+        onCloseBulkEdit={bulkActions.closeBulkEdit}
+        onBulkEditApply={bulkActions.handleBulkEditApply}
+        isBulkEditPending={bulkActions.isBulkEditPending}
+      />
+
+      <FollowUpModal
+        isOpen={isFollowUpOpen}
+        onClose={() => {
+          setIsFollowUpOpen(false);
+          setSingleFollowUpContactId(null);
+        }}
+        contactIds={followUpIds}
+      />
+
+      <QuickInteractionModal
+        isOpen={quickNoteContactId !== null}
+        onClose={() => setQuickNoteContactId(null)}
+        initialContactId={quickNoteContactId ?? undefined}
       />
     </div>
   );

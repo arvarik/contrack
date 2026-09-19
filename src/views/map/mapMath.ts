@@ -98,3 +98,62 @@ export function boundsContain(
   }
   return point.lng >= west || point.lng <= east;
 }
+
+export type Point = { lat: number; lng: number } | [lng: number, lat: number];
+
+function getLngLat(p: Point): [number, number] {
+  if (Array.isArray(p)) return [p[0], p[1]];
+  return [p.lng, p.lat];
+}
+
+/**
+ * Ray-casting (even-odd rule) to check if a point is inside a polygon ring.
+ * Also returns true if the point lies directly on a polygon vertex.
+ */
+export function pointInPolygon(point: Point, ring: Point[]): boolean {
+  if (ring.length < 3) return false;
+  const [px, py] = getLngLat(point);
+
+  // Check if exactly on vertex
+  for (let i = 0; i < ring.length; i++) {
+    const [vx, vy] = getLngLat(ring[i]);
+    if (vx === px && vy === py) return true;
+  }
+
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = getLngLat(ring[i]);
+    const [xj, yj] = getLngLat(ring[j]);
+
+    const intersect =
+      yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Calculate the bounding box [west, south, east, north] containing all given points.
+ * Returns null if points array is empty.
+ * Points across the antimeridian are returned as a wide box spanning the range.
+ */
+export function boundsOf(
+  points: Point[],
+): [west: number, south: number, east: number, north: number] | null {
+  if (points.length === 0) return null;
+  const [firstLng, firstLat] = getLngLat(points[0]);
+  let west = firstLng;
+  let east = firstLng;
+  let south = firstLat;
+  let north = firstLat;
+
+  for (let i = 1; i < points.length; i++) {
+    const [lng, lat] = getLngLat(points[i]);
+    if (lng < west) west = lng;
+    if (lng > east) east = lng;
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+  }
+
+  return [west, south, east, north];
+}

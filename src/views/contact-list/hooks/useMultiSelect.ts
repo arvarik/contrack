@@ -2,22 +2,13 @@
  * useMultiSelect — Multi-select state and bulk action handlers for the contact list.
  *
  * Manages the selection lifecycle (enter/exit mode, toggle individual, select all)
- * and all bulk mutation side-effects (delete, archive, add to list, color change,
- * CSV export). Returns a clean API surface that the UI shell wires to buttons.
+ * and delegates bulk mutation side-effects to `useBulkActions`.
  *
  * @param filteredContacts - The currently visible contacts (post-filter/search).
  *        Used by `selectAll` to select only what the user can see.
  */
 import { useState, useCallback, useRef } from "react";
-import { toast } from "sonner";
-import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
-import { toastUndoableDelete } from "../../../lib/undoToast";
-import {
-  useBulkDeleteContacts,
-  useBulkRestoreContacts,
-  useBulkUpdateContacts,
-  useBulkAddToList,
-} from "../../../api";
+import { useBulkActions } from "../../../components/bulk/useBulkActions";
 import type { Contact } from "../../../types";
 
 export function useMultiSelect(filteredContacts: Contact[]) {
@@ -33,12 +24,6 @@ export function useMultiSelect(filteredContacts: Contact[]) {
    */
   const anchorRef = useRef<string | null>(null);
 
-  const bulkDelete = useBulkDeleteContacts();
-  const bulkRestore = useBulkRestoreContacts();
-  const bulkUpdate = useBulkUpdateContacts();
-  const bulkAddToList = useBulkAddToList();
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────
   const enterSelectMode = useCallback(() => {
     setIsSelectMode(true);
     setSelectedIds(new Set());
@@ -48,6 +33,12 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     setIsSelectMode(false);
     setSelectedIds(new Set());
   }, []);
+
+  const bulkActions = useBulkActions({
+    selectedIds,
+    onComplete: exitSelectMode,
+    contacts: filteredContacts,
+  });
 
   /**
    * Toggle one row, or — with `extend` — select everything between the anchor
@@ -100,149 +91,30 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     setSelectedIds(new Set(filteredContacts.map((c) => c.id)));
   }, [filteredContacts]);
 
-  // ── Bulk Actions ──────────────────────────────────────────────────────
-
-  /**
-   * Delete now, offer undo — no confirmation dialog.
-   *
-   * This is a soft delete into a 30-day Trash, so a modal asking "are you
-   * sure?" charges every correct deletion for a mistake that is already
-   * recoverable. See lib/undoToast.
-   */
-  const handleBulkDelete = useCallback(() => {
-    const ids = Array.from(selectedIds) as string[];
-    bulkDelete.mutate(ids, {
-      onSuccess: ({ count }) => {
-        toastUndoableDelete({
-          count,
-          onUndo: () =>
-            bulkRestore.mutate(ids, {
-              onError: (err) =>
-                toast.error(
-                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
-                ),
-            }),
-        });
-        exitSelectMode();
-      },
-      onError: (err) =>
-        toast.error(
-          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
-    });
-  }, [selectedIds, bulkDelete, bulkRestore, exitSelectMode]);
-
-  const handleBulkArchive = useCallback(() => {
-    const ids = Array.from(selectedIds) as string[];
-    bulkUpdate.mutate(
-      { ids, data: { isArchived: true } },
-      {
-        onSuccess: ({ count }) => {
-          toast.success(`Archived ${count} contact${count !== 1 ? "s" : ""}`);
-          exitSelectMode();
-        },
-        onError: (err) =>
-          toast.error(
-            `Archive failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
-      },
-    );
-  }, [selectedIds, bulkUpdate, exitSelectMode]);
-
-  const handleBulkAddToList = useCallback(
-    (listId: string) => {
-      const contactIds = Array.from(selectedIds) as string[];
-      bulkAddToList.mutate(
-        { listId, contactIds },
-        {
-          onSuccess: ({ count }) => {
-            toast.success(
-              `Added ${count} contact${count !== 1 ? "s" : ""} to list`,
-            );
-            exitSelectMode();
-          },
-          onError: (err) =>
-            toast.error(
-              `Failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
-        },
-      );
-    },
-    [selectedIds, bulkAddToList, exitSelectMode],
-  );
-
-  const handleBulkColorChange = useCallback(
-    (vibeId: string) => {
-      const ids = Array.from(selectedIds) as string[];
-      bulkUpdate.mutate(
-        { ids, data: { themeColor: vibeId } },
-        {
-          onSuccess: ({ count }) => {
-            toast.success(
-              `Updated color for ${count} contact${count !== 1 ? "s" : ""}`,
-            );
-            exitSelectMode();
-          },
-          onError: (err) =>
-            toast.error(
-              `Color update failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
-        },
-      );
-    },
-    [selectedIds, bulkUpdate, exitSelectMode],
-  );
-
-  /** Export selected contacts as CSV to clipboard. */
-  const handleExportCSV = useCallback(() => {
-    const selected = filteredContacts.filter((c) => selectedIds.has(c.id));
-    const header = "Name,Role,Company,Location,Email,Phone";
-    const rows = selected.map((c) =>
-      [
-        c.name,
-        c.role || "",
-        c.company || "",
-        c.location || "",
-        c.emails?.[0]?.email || "",
-        c.phones?.[0]?.phone || "",
-      ]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(","),
-    );
-    const csv = [header, ...rows].join("\n");
-
-    copyToClipboard(csv)
-      .then(() => {
-        toast.success(
-          `Copied ${selected.length} contact${selected.length !== 1 ? "s" : ""} as CSV`,
-        );
-        exitSelectMode();
-      })
-      .catch(() => {
-        toast.error(CLIPBOARD_DENIED);
-      });
-  }, [filteredContacts, selectedIds, exitSelectMode]);
-
   const selectedCount = selectedIds.size;
-  const isPending =
-    bulkUpdate.isPending || bulkDelete.isPending || bulkAddToList.isPending;
 
   return {
     isSelectMode,
     selectedIds,
     selectedCount,
-    isPending,
-    isBulkDeletePending: bulkDelete.isPending,
-    isBulkAddToListPending: bulkAddToList.isPending,
+    isPending: bulkActions.isPending,
+    isBulkDeletePending: bulkActions.isBulkDeletePending,
+    isBulkAddToListPending: bulkActions.isBulkAddToListPending,
+    isBulkEditPending: bulkActions.isBulkEditPending,
+    isAddToListOpen: bulkActions.isAddToListOpen,
+    setIsAddToListOpen: bulkActions.setIsAddToListOpen,
+    isBulkEditOpen: bulkActions.isBulkEditOpen,
+    setIsBulkEditOpen: bulkActions.setIsBulkEditOpen,
     enterSelectMode,
     exitSelectMode,
     toggleSelect,
     clearSelection,
     selectAll,
-    handleBulkDelete,
-    handleBulkArchive,
-    handleBulkAddToList,
-    handleBulkColorChange,
-    handleExportCSV,
+    handleBulkDelete: bulkActions.handleBulkDelete,
+    handleBulkArchive: bulkActions.handleBulkArchive,
+    handleBulkAddToList: bulkActions.handleBulkAddToList,
+    handleBulkColorChange: bulkActions.handleBulkColorChange,
+    handleBulkEditApply: bulkActions.handleBulkEditApply,
+    handleExportCSV: bulkActions.handleExportCSV,
   };
 }

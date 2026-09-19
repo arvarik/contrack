@@ -34,6 +34,15 @@ _Agents: Read the corresponding Gemstack topology profiles (`frontend.md`, `back
 - **Map Insights Pane**: `src/views/map/MapInsightsPane.tsx` provides desktop 320px drawer and mobile modal sheet with "Stats" distribution charts and "People" virtualized list.
 - **Preferences**: `mapPaneOpen` (boolean, default true) in `userPreferencesService` and `src/api/preferences.ts` persists desktop drawer open state across sessions.
 
+### Map Selection & Bulk Workflows
+
+- **Geospatial Selection Math**: `src/views/map/mapMath.ts` provides `pointInPolygon` (ray-casting even-odd rule) and `boundsOf` to evaluate contacts against freehand polygons and rectangles without DOM or MapLibre feature rendering dependencies.
+- **Selection State**: `src/views/map/useMapSelection.ts` maintains a reactive `Set<string>` of contact IDs supporting box, lasso, cluster, and in-view selections across filter updates with aria-live announcements.
+- **Drawing Overlay**: `src/views/map/SelectionOverlay.tsx` renders an SVG layer capturing Shift+drag boxes and L-key lasso drawing while suppressing pointer propagation to MapLibre.
+- **Shared Bulk Operations**: `src/components/bulk/useBulkActions.ts` and `src/components/bulk/BulkModals.tsx` extract list mutations (delete, archive, add to list, edit field, color change, and CSV export) so they are shared identically between the Network list and the Map view.
+- **Follow-up Tasks**: `src/views/map/FollowUpModal.tsx` creates action items in bulk with date presets (Tomorrow, 3 days, Next week, custom date picker) and a 100-contact safety cap.
+- **Rich Hover Card**: `src/views/map/MapHoverCard.tsx` provides a non-interactive 150ms tooltip mode on hover or focus, plus a pinned dialog mode on click or Space with four quick actions, avatar score ring, local time lookup, and focus restoration to the pin.
+
 ### Search Pipeline (Ask Contrack v5 — Plan → Filter → Rank → Verify)
 
 The retrieval pipeline is split into four pipeline stages, each enforcing a different
