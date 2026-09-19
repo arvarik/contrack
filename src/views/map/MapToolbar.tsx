@@ -12,7 +12,7 @@
  *
  * @module views/map/MapToolbar
  */
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   Search,
@@ -22,7 +22,9 @@ import {
   X,
   Loader2,
   BarChart3,
+  ChevronDown,
 } from "lucide-react";
+import { toast } from "sonner";
 import { searchPlace } from "../../api/geo";
 import { FacetPills } from "../../components/command-palette/FacetPills";
 import { FacetAutocomplete } from "../../components/command-palette/FacetAutocomplete";
@@ -33,6 +35,7 @@ import type { FacetFilter } from "../../../shared/searchFacets";
 import type { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
 import { prefersReducedMotion } from "./flyTo";
 import { measureInsets, paddingFor } from "./insets";
+import { cn } from "../../lib/utils";
 
 export interface MapToolbarProps {
   contacts: MapContact[];
@@ -50,6 +53,9 @@ export interface MapToolbarProps {
   inputRef?: React.RefObject<HTMLInputElement | null>;
   onFitAll?: () => void;
   onToggleInsights?: () => void;
+  onSelectInView?: () => void;
+  onStartLasso?: () => void;
+  isLassoActive?: boolean;
 }
 
 export const MapToolbar: React.FC<MapToolbarProps> = ({
@@ -68,6 +74,9 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   inputRef: externalInputRef,
   onFitAll: externalFitAll,
   onToggleInsights,
+  onSelectInView,
+  onStartLasso,
+  isLassoActive = false,
 }) => {
   const localInputRef = useRef<HTMLInputElement | null>(null);
   const inputRef = externalInputRef || localInputRef;
@@ -77,6 +86,20 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   const [gotoLoading, setGotoLoading] = useState(false);
   const [gotoError, setGotoError] = useState<string | null>(null);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
+
+  const [selectMenuOpen, setSelectMenuOpen] = useState(false);
+  const selectMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!selectMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!selectMenuRef.current?.contains(e.target as Node)) {
+        setSelectMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [selectMenuOpen]);
 
   // Fit all logic
   const handleFitAll = useCallback(() => {
@@ -275,6 +298,74 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           {mode === "goto" ? "Filter" : "Go to"}
         </button>
 
+        {/* Select Menu (Desktop) */}
+        {!isMobile && (
+          <div className="relative shrink-0" ref={selectMenuRef}>
+            <button
+              type="button"
+              onClick={() => setSelectMenuOpen((v) => !v)}
+              aria-label="Select contacts"
+              aria-expanded={selectMenuOpen}
+              className={cn(
+                "hit-area px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all border",
+                selectMenuOpen || isLassoActive
+                  ? "bg-primary text-on-primary border-primary shadow-sm"
+                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
+              )}
+            >
+              <span>Select</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {selectMenuOpen && (
+              <div
+                role="menu"
+                className="absolute top-full mt-1.5 left-0 z-50 min-w-[190px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant/30 py-1.5 font-body flex flex-col"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setSelectMenuOpen(false);
+                    toast.info("Hold Shift and drag on the map to select");
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
+                >
+                  <span>Box select</span>
+                  <span className="text-[11px] text-on-surface-variant font-mono">
+                    Shift+drag
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setSelectMenuOpen(false);
+                    onStartLasso?.();
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
+                >
+                  <span>Lasso select</span>
+                  <span className="text-[11px] text-on-surface-variant font-mono">
+                    L
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setSelectMenuOpen(false);
+                    onSelectInView?.();
+                  }}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high cursor-pointer hit-area"
+                >
+                  All in view
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Fit All Button */}
         <button
           type="button"
@@ -329,6 +420,22 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
             className="text-primary hover:underline font-semibold cursor-pointer ml-2"
           >
             Clear filters
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Select all in view */}
+      {isMobile && onSelectInView && (
+        <div className="pt-2 border-t border-outline-variant/20">
+          <button
+            type="button"
+            onClick={() => {
+              onSelectInView();
+              setIsMobileSheetOpen(false);
+            }}
+            className="w-full hit-area py-2.5 px-3 rounded-xl text-xs font-semibold bg-surface-container-high hover:bg-surface-container-highest text-on-surface flex items-center justify-center gap-2 cursor-pointer border border-outline-variant/30"
+          >
+            <span>Select all in view</span>
           </button>
         </div>
       )}

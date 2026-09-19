@@ -11,18 +11,23 @@ import { Marker } from "react-map-gl/maplibre";
 import type { ClusterFeature } from "./useClusterFeatures";
 
 /** The cluster's accessible name. */
-export function clusterLabel(count: number, atRisk = 0): string {
+export function clusterLabel(count: number, atRisk = 0, selected = 0): string {
   const word = count === 1 ? "contact" : "contacts";
+  if (selected > 0) {
+    return `${selected} of ${count} selected, ${count} ${word}, ${atRisk} at risk, zoom in`;
+  }
   return `${count} ${word}, ${atRisk} at risk, zoom in`;
 }
 
 interface ClusterMarkerProps {
   cluster: ClusterFeature;
+  selectedCount?: number;
   onExpand: (cluster: ClusterFeature) => void;
 }
 
 export const ClusterMarker = memo(function ClusterMarker({
   cluster,
+  selectedCount = 0,
   onExpand,
 }: ClusterMarkerProps) {
   const size = 48;
@@ -32,6 +37,7 @@ export const ClusterMarker = memo(function ClusterMarker({
   const atRisk = cluster.atRisk ?? 0;
   const count = cluster.count;
   const errorShare = count > 0 ? Math.min(1, Math.max(0, atRisk / count)) : 0;
+  const hasSelected = selectedCount > 0;
 
   return (
     <Marker
@@ -41,9 +47,11 @@ export const ClusterMarker = memo(function ClusterMarker({
     >
       <button
         type="button"
-        aria-label={clusterLabel(cluster.count, atRisk)}
+        aria-label={clusterLabel(cluster.count, atRisk, selectedCount)}
         onClick={() => onExpand(cluster)}
-        className="relative flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-transform duration-200 hover:scale-105"
+        className={`relative flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-transform duration-200 hover:scale-105 ${
+          hasSelected ? "ring-2 ring-primary" : ""
+        }`}
       >
         <svg
           width={size}
@@ -74,7 +82,13 @@ export const ClusterMarker = memo(function ClusterMarker({
             />
           )}
         </svg>
-        <span className="relative z-10">{cluster.count}</span>
+        {hasSelected ? (
+          <span className="relative z-10 text-[11px] leading-tight font-extrabold text-center px-1">
+            {selectedCount} of {cluster.count} selected
+          </span>
+        ) : (
+          <span className="relative z-10">{cluster.count}</span>
+        )}
       </button>
     </Marker>
   );

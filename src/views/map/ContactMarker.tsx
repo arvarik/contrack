@@ -52,34 +52,56 @@ export function pinAvatarSrc(
 interface ContactMarkerProps {
   contact: MapContact;
   selected: boolean;
+  multiSelected?: boolean;
   onSelect: (id: string) => void;
   /** Called with the contact id on hover and focus, and null on leave and blur. */
   onPreview: (id: string | null) => void;
+  onPinCard?: (id: string) => void;
+  hasActiveCard?: boolean;
 }
 
 export const ContactMarker = memo(function ContactMarker({
   contact,
   selected,
+  multiSelected = false,
   onSelect,
   onPreview,
+  onPinCard,
+  hasActiveCard = false,
 }: ContactMarkerProps) {
   const [broken, setBroken] = useState(false);
   const src = broken ? fallbackAvatarUrl(contact.name) : pinAvatarSrc(contact);
   // True between a touch on the pin and the focus that touch may bring.
   const touched = useRef(false);
 
+  const isHighlighted = selected || multiSelected;
+
   return (
     <Marker
       longitude={contact.lng}
       latitude={contact.lat}
       anchor="center"
-      style={{ zIndex: selected ? 2 : 1 }}
+      style={{ zIndex: isHighlighted ? 2 : 1 }}
     >
       <button
         type="button"
         aria-label={contactPinLabel(contact)}
+        aria-describedby={
+          hasActiveCard ? `map-hover-card-${contact.id}` : undefined
+        }
         data-contact-id={contact.id}
-        onClick={() => onSelect(contact.id)}
+        onClick={() => {
+          onSelect(contact.id);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === " ") {
+            event.preventDefault();
+            onPinCard?.(contact.id);
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            onSelect(contact.id);
+          }
+        }}
         onPointerDown={(event) => {
           touched.current = event.pointerType === "touch";
         }}
@@ -96,7 +118,7 @@ export const ContactMarker = memo(function ContactMarker({
           "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
           "bg-surface-container-lowest shadow-md ring-[3px] ring-primary",
           "transition-transform duration-200 hover:-translate-y-1",
-          selected && "ring-4 -translate-y-1",
+          isHighlighted && "ring-4 ring-primary -translate-y-1 shadow-lg",
         )}
       >
         <img

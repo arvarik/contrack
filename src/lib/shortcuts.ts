@@ -290,6 +290,34 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: true,
     page: "/map",
   },
+  {
+    group: NAMES.map.label,
+    keys: ["L"],
+    description: "Lasso select",
+    bareLetter: true,
+    page: "/map",
+  },
+  {
+    group: NAMES.map.label,
+    keys: ["Esc"],
+    description: "Clear selection or close card",
+    bareLetter: false,
+    page: "/map",
+  },
+  {
+    group: NAMES.map.label,
+    keys: ["Enter"],
+    description: "Open contact",
+    bareLetter: false,
+    page: "/map",
+  },
+  {
+    group: NAMES.map.label,
+    keys: ["Space"],
+    description: "Pin card",
+    bareLetter: false,
+    page: "/map",
+  },
 
   // A contact's details. Every value edits in place: it is a button at rest
   // and a field once opened. The pencil after a value is the visible sign.

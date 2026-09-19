@@ -182,6 +182,184 @@ test.describe("map features - filters and place search", () => {
     ).toBeVisible();
     await expectPageAccessible(page, testInfo, "map-toolbar-desktop");
   });
+
+  test("Shift+drag over Virginia pins selects them, adds follow-up, and Escape clears", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    // Zoom into the East Coast cluster (3 contacts) to reveal Margaret and the 2-contact Virginia cluster
+    const cluster3 = page.getByRole("button", {
+      name: "3 contacts, 0 at risk, zoom in",
+    });
+    await expect(cluster3).toBeVisible();
+    await cluster3.click();
+
+    // Zoom into the 2-contact Virginia cluster to split Grace Hopper and Katherine Johnson
+    const cluster2 = page.getByRole("button", {
+      name: "2 contacts, 0 at risk, zoom in",
+    });
+    await expect(cluster2).toBeVisible();
+    await cluster2.click();
+
+    // Locate Grace Hopper (Arlington) and Katherine Johnson (Hampton)
+    const gracePin = map.getByRole("button", { name: /Grace Hopper/ });
+    const katherinePin = map.getByRole("button", { name: /Katherine Johnson/ });
+    await expect(gracePin).toBeVisible();
+    await expect(katherinePin).toBeVisible();
+
+    const graceBox = await gracePin.boundingBox();
+    const katherineBox = await katherinePin.boundingBox();
+    expect(graceBox).not.toBeNull();
+    expect(katherineBox).not.toBeNull();
+
+    if (!graceBox || !katherineBox) return;
+
+    // Calculate bounding rectangle covering both pins
+    const startX = Math.min(graceBox.x, katherineBox.x) - 20;
+    const startY = Math.min(graceBox.y, katherineBox.y) - 20;
+    const endX =
+      Math.max(
+        graceBox.x + graceBox.width,
+        katherineBox.x + katherineBox.width,
+      ) + 20;
+    const endY =
+      Math.max(
+        graceBox.y + graceBox.height,
+        katherineBox.y + katherineBox.height,
+      ) + 20;
+
+    // Perform Shift+drag box selection
+    await page.keyboard.down("Shift");
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(endX, endY, { steps: 5 });
+    await page.mouse.up();
+    await page.keyboard.up("Shift");
+
+    // Toolbar appears showing "2 selected"
+    await expect(page.getByText("2 selected")).toBeVisible();
+
+    // Click "Add follow-up"
+    await page.getByRole("button", { name: "Add follow-up" }).click();
+    const followupDialog = page.getByRole("dialog", {
+      name: "Add Follow-up (2 selected)",
+    });
+    await expect(followupDialog).toBeVisible();
+
+    // Fill title and submit with default "Tomorrow" preset
+    await followupDialog.getByLabel("Task Title *").fill("Virginia catch up");
+    await followupDialog
+      .getByRole("button", { name: "Add to 2 contacts" })
+      .click();
+
+    // Verify success toast
+    await expect(
+      page.getByText("Added follow-up for 2 contacts"),
+    ).toBeVisible();
+
+    // Verify action items created for both contacts via API
+    const graceId = seed.byName("Grace Hopper").id;
+    const katherineId = seed.byName("Katherine Johnson").id;
+    const graceItems = await instance.api<Array<{ title: string }>>(
+      "GET",
+      `/contacts/${graceId}/action-items`,
+    );
+    const katherineItems = await instance.api<Array<{ title: string }>>(
+      "GET",
+      `/contacts/${katherineId}/action-items`,
+    );
+
+    expect(graceItems.some((item) => item.title === "Virginia catch up")).toBe(
+      true,
+    );
+    expect(
+      katherineItems.some((item) => item.title === "Virginia catch up"),
+    ).toBe(true);
+
+    // Press Escape to clear selection
+    await page.keyboard.press("Escape");
+    await expect(page.getByText("2 selected")).toHaveCount(0);
+  });
+
+  test("Tab to a pin shows hover card, Space pins it focusing first button, Escape returns focus", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    const adaPin = map.getByRole("button", {
+      name: "Ada Lovelace, Babbage & Co",
+    });
+    await expect(adaPin).toBeVisible();
+
+    // Focus the pin (simulating Tab navigation)
+    await adaPin.focus();
+
+    // Hover card appears in tooltip mode (no action buttons)
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip.getByText("Ada Lovelace")).toBeVisible();
+    await expect(
+      tooltip.getByRole("button", { name: "Open contact" }),
+    ).toHaveCount(0);
+
+    // Press Space to pin the card
+    await page.keyboard.press("Space");
+
+    // Card enters pinned dialog mode
+    const dialog = page.getByRole("dialog", { name: "Ada Lovelace" });
+    await expect(dialog).toBeVisible();
+
+    // Focus automatically lands on the first button ("Open contact")
+    const openBtn = dialog.getByRole("button", { name: "Open contact" });
+    await expect(openBtn).toBeVisible();
+    await expect(openBtn).toBeFocused();
+
+    // Press Escape to close the card
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("dialog", { name: "Ada Lovelace" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+    // Focus returns to the pin
+    await expect(adaPin).toBeFocused();
+  });
+
+  test("is accessible with card pinned and follow-up modal open", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    const adaPin = map.getByRole("button", {
+      name: "Ada Lovelace, Babbage & Co",
+    });
+    await expect(adaPin).toBeVisible();
+    await adaPin.focus();
+    await page.keyboard.press("Space");
+
+    const dialog = page.getByRole("dialog", { name: "Ada Lovelace" });
+    await expect(dialog).toBeVisible();
+
+    // Check accessibility with card pinned
+    await expectPageAccessible(page, testInfo, "map-hover-card-pinned");
+
+    // Open follow-up modal from hover card
+    await dialog.getByRole("button", { name: "Add follow-up" }).click();
+    const modal = page.getByRole("dialog", { name: "Add Follow-up" });
+    await expect(modal).toBeVisible();
+
+    // Check accessibility with follow-up modal open
+    await expectPageAccessible(page, testInfo, "map-followup-modal");
+  });
 });
 
 const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];

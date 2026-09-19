@@ -97,26 +97,47 @@ A dedicated insights drawer slides in from the right edge on desktop (320px wide
   - **Stats Tab**: Displays summary cards (In view, Avg score, At risk, Overdue) and horizontal distribution bar charts for **Top Industries**, **Top Companies**, and **Top Tags**. Clicking any bar immediately filters the map by that facet. Also lists the distinct time zones present in the viewport.
   - **People Tab**: A virtualized list (powered by `@tanstack/react-virtual`) showing all contacts currently in view, including their avatar, health score ring, name, company, and location. Clicking any contact in the list flies the map camera to their pin and opens their detail panel.
 
+### Selection and Bulk Actions
+
+The map provides geographic multi-selection across placed contacts:
+
+- **Box Selection**: Hold Shift and drag anywhere on the map to draw a selection rectangle. The SVG overlay indicates the bounding box in primary color at 15 percent fill. Pointer events are captured while drawing so the map does not pan.
+- **Lasso Selection**: Press L or choose Lasso select from the Select menu to enter lasso mode. Drag a freehand polygon over any region. The camera remains fixed while drawing and ray-casting tests whether contacts sit inside the closed ring.
+- **Select Menu**: The desktop toolbar includes a Select menu offering Box select (Shift+drag), Lasso select (L), and All in view.
+- **Touch Devices**: Drag selection gestures are disabled on touch devices to avoid interfering with map panning and zooming. The mobile filter sheet offers a full-width Select all in view button instead.
+- **Cluster Selection**: Clicking a cluster selects its member contacts through the leaves cache. Cluster badges update to show the selection ratio (for example, "3 of 12 selected").
+- **Independent from Filters**: The selection set stores contact IDs directly. If a filter changes while contacts are selected, hidden contacts remain selected and the counter indicates how many are hidden by the filter.
+- **Announcements**: Selection changes update an accessible live region announcing the selected count and any hidden contacts.
+
+#### Selection Action Bars
+
+When contacts are selected, two floating bars appear at the bottom center of the map:
+
+1. **Secondary Map Bar**: Positioned directly above the bulk actions toolbar, displaying the selection count, a Zoom to selection button that fits the camera bounds to the selected contacts, an Add follow-up button, and a clear button. Pressing Escape clears the selection.
+2. **Bulk Action Toolbar**: Reuses the network list toolbar providing soft delete with undo, archive, add to list, bulk field editing, color tagging, and CSV export.
+
+#### Follow-up Tasks
+
+The Add follow-up action opens a modal to create action items across selected contacts:
+
+- Accepts a task title
+- Offers quick due date presets: Tomorrow, 3 days, Next week, or a custom date picker
+- Capped at 100 contacts per submission with a warning toast beyond that limit
+- Invalidates the dashboard, action items, and contacts query caches on completion
+
 ### Hover Card
 
-Hover a pin or move focus to it, and a small card opens beside it. The card
-shows the name, the company and the location that placed the pin. A contact
-with several addresses is pinned by one of them, and the card names that one
-before you navigate. The card closes when the pointer leaves or focus moves
-away.
+Pins on the map feature a responsive two-stage hover card:
 
-The card opens above every pin. A pin carries a z-index, so the open
-contact's pin stands above its neighbours, and MapLibre gives its popup none.
-`src/index.css` stacks the card above both, so a card never opens under the
-next pin over. The card names no anchor: MapLibre opens it on the side with
-room, so a pin at the top edge of the map gets its card below it instead of a
-card cut off by the edge.
-
-A finger cannot hover. A tap fires the same enter event a mouse does and
-never the leave, so on a phone the card would open under the contact the tap
-opens and still be there when the contact closes. The pin reads the pointer
-type: a touch opens no card, and the focus some browsers give a tapped button
-opens none either. Focus from a keyboard opens the card on every device.
+- **Tooltip Mode**: Hovering a pin for 150 ms or focusing it with the keyboard opens a compact tooltip card (`role="tooltip"`). It displays the contact name, company, role, location, relationship score, last contact time, and local time. It contains no interactive buttons so hover never traps focus.
+- **Pinned Dialog Mode**: Clicking a pin or pressing Space while focused pins the card into a dialog (`role="dialog"`). Focus automatically moves to its first action button.
+- **Actions in Pinned Mode**: Four icon buttons enable rapid workflows directly from the map:
+  1. Open contact overlay (`/map/contact/:id`)
+  2. Log interaction note via Quick Interaction modal
+  3. Add contact to a list
+  4. Create a follow-up task
+- **Details**: Features a 44 px avatar with score ring, an interactive score badge that opens the score breakdown popover, formatted local time via coordinate lookup, tags, and list memberships.
+- **Keyboard and Dismissal**: Pressing Escape closes the card and returns focus directly to the pin button. Clicking the map background also closes any pinned card. On touch devices, tapping a pin opens the pinned card, and a second tap opens the full contact overlay.
 
 ### Light and Dark Basemaps
 

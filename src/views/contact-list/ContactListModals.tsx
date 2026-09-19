@@ -24,11 +24,11 @@ import type {
 } from "../../types";
 import { Modal } from "../../components/ui/Modal";
 import { ImportModal } from "../../components/ImportModal";
-import { BulkEditFieldModal } from "../../components/BulkEditFieldModal";
+import { BulkModals } from "../../components/bulk/BulkModals";
 import { AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
 import { FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { CreateListModal, ListIcon } from "./CreateListModal";
+import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 
 // =============================================================================
@@ -152,50 +152,18 @@ export const ContactListModals = ({
         toast. See lib/undoToast for why that is the better trade.
       */}
 
-      {/* ── Add to List Modal ──────────────────────────────────────────── */}
-      <Modal
-        isOpen={isAddToListOpen}
-        onClose={onCloseAddToList}
-        title="Add to List"
-      >
-        <div className="space-y-2 pt-2">
-          <p className="text-xs text-on-surface-variant mb-4">
-            Choose a list to add the {selectedCount} selected contact
-            {selectedCount !== 1 ? "s" : ""} to:
-          </p>
-          {lists.length === 0 && (
-            <p className="text-sm text-on-surface-variant text-center py-4">
-              No lists yet. Create one first.
-            </p>
-          )}
-          {lists.map((list) => (
-            <button
-              key={list.id}
-              onClick={() => onBulkAddToList(list.id)}
-              disabled={isBulkAddToListPending}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors text-left disabled:text-on-surface-variant disabled:cursor-not-allowed"
-            >
-              <span className="text-primary">
-                <ListIcon icon={list.icon} className="w-4 h-4" />
-              </span>
-              <span className="font-semibold text-sm text-on-surface">
-                {list.name}
-              </span>
-              <span className="ml-auto text-xs text-on-surface-variant opacity-60">
-                {list.memberCount ?? 0} members
-              </span>
-            </button>
-          ))}
-        </div>
-      </Modal>
-
-      {/* ── Bulk Edit Field Modal ─────────────────────────────────────── */}
-      <BulkEditFieldModal
-        isOpen={isBulkEditOpen}
-        onClose={onCloseBulkEdit}
+      {/* ── Bulk Modals (Add to List, Bulk Edit) ────────────────────────── */}
+      <BulkModals
         selectedCount={selectedCount}
-        onApply={onBulkEditApply}
-        isPending={isBulkEditPending}
+        isAddToListOpen={isAddToListOpen}
+        onCloseAddToList={onCloseAddToList}
+        lists={lists}
+        onBulkAddToList={onBulkAddToList}
+        isBulkAddToListPending={isBulkAddToListPending}
+        isBulkEditOpen={isBulkEditOpen}
+        onCloseBulkEdit={onCloseBulkEdit}
+        onBulkEditApply={onBulkEditApply}
+        isBulkEditPending={isBulkEditPending}
       />
 
       {/* ── New Contact Modal ──────────────────────────────────────────── */}
