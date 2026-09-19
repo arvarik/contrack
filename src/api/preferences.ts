@@ -50,6 +50,7 @@ export interface Preferences {
   pulseLayout: PulseLayout;
   askHistoryOpen: boolean;
   mapPaneOpen: boolean;
+  mapLayer: "pins" | "heat" | "health";
   startPage: StartPage;
   listSort: ListSort;
   defaultCadenceDays: CadenceDays;
@@ -99,6 +100,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   },
   askHistoryOpen: true,
   mapPaneOpen: true,
+  mapLayer: "pins",
   startPage: "network",
   listSort: "name",
   defaultCadenceDays: 90,

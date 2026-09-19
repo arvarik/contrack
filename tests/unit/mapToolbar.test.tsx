@@ -56,9 +56,19 @@ const mockContacts: MapContact[] = [
 function TestComponent({
   contacts = mockContacts,
   map = null,
+  layer = "pins",
+  onLayerChange = () => {},
+  views,
+  onSelectView,
+  onOpenSaveModal,
 }: {
   contacts?: MapContact[];
   map?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  layer?: "pins" | "heat" | "health";
+  onLayerChange?: (next: "pins" | "heat" | "health") => void;
+  views?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onSelectView?: (view: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onOpenSaveModal?: () => void;
 }) {
   const filter = useMapFilter(contacts);
 
@@ -76,6 +86,11 @@ function TestComponent({
       hasActiveFilter={filter.hasActiveFilter}
       resolveNearFilters={filter.resolveNearFilters}
       clearFilters={filter.clearFilters}
+      layer={layer}
+      onLayerChange={onLayerChange}
+      views={views}
+      onSelectView={onSelectView}
+      onOpenSaveModal={onOpenSaveModal}
     />
   );
 }
@@ -130,6 +145,8 @@ describe("MapToolbar and useMapFilter", () => {
             hasActiveFilter={filter.hasActiveFilter}
             resolveNearFilters={filter.resolveNearFilters}
             clearFilters={filter.clearFilters}
+            layer="pins"
+            onLayerChange={() => {}}
           />
           <div data-testid="matches">
             {filter.filteredContacts.map((c) => c.name).join(", ")}
@@ -163,6 +180,8 @@ describe("MapToolbar and useMapFilter", () => {
             hasActiveFilter={filter.hasActiveFilter}
             resolveNearFilters={filter.resolveNearFilters}
             clearFilters={filter.clearFilters}
+            layer="pins"
+            onLayerChange={() => {}}
           />
           <div data-testid="matches">
             {filter.filteredContacts.map((c) => c.name).join(", ")}
@@ -260,5 +279,75 @@ describe("MapToolbar and useMapFilter", () => {
         "Nothing found for that place",
       );
     });
+  });
+
+  describe("client-side validateBounds", () => {
+    it("accepts valid bounds within [-180, 180] and [-90, 90] with south < north", async () => {
+      const { validateBounds } = await import("../../src/api/mapViews");
+      expect(() => validateBounds([-180, -90, 180, 90])).not.toThrow();
+      expect(() => validateBounds([-0.2, 51.4, 0.0, 51.6])).not.toThrow();
+      expect(() => validateBounds([0, 0, 10, 10])).not.toThrow();
+    });
+
+    it("rejects invalid bounds coordinates and order", async () => {
+      const { validateBounds } = await import("../../src/api/mapViews");
+      expect(() => validateBounds(null)).toThrow(/array of 4 coordinates/);
+      expect(() => validateBounds([1, 2, 3])).toThrow(/array of 4 coordinates/);
+      expect(() => validateBounds(["-180", -90, 180, 90])).toThrow(
+        /finite numbers/,
+      );
+      expect(() => validateBounds([-185, 0, 10, 10])).toThrow(/West longitude/);
+      expect(() => validateBounds([0, 0, 185, 10])).toThrow(/East longitude/);
+      expect(() => validateBounds([0, -95, 10, 10])).toThrow(/South latitude/);
+      expect(() => validateBounds([0, 0, 10, 95])).toThrow(/North latitude/);
+      expect(() => validateBounds([0, 50, 10, 40])).toThrow(
+        /South latitude must be less than north latitude/,
+      );
+    });
+  });
+
+  it("switches map layers via the segmented control", () => {
+    const handleLayerChange = vi.fn();
+
+    renderWithProviders(
+      <TestComponent layer="pins" onLayerChange={handleLayerChange} />,
+    );
+
+    const healthOption = screen.getByRole("radio", { name: "Health" });
+    expect(healthOption).toBeTruthy();
+    fireEvent.click(healthOption);
+    expect(handleLayerChange).toHaveBeenCalledWith("health");
+  });
+
+  it("renders ViewsMenu and allows selecting a saved view", () => {
+    const mockViews = [
+      {
+        id: "view-1",
+        name: "London Hub",
+        query: "London",
+        layer: "health" as const,
+        bounds: [-0.5, 51.3, 0.2, 51.7] as [number, number, number, number],
+        sortOrder: 0,
+        createdAt: "2026-09-19T00:00:00.000Z",
+        updatedAt: "2026-09-19T00:00:00.000Z",
+      },
+    ];
+    const handleSelectView = vi.fn();
+
+    renderWithProviders(
+      <TestComponent
+        views={mockViews}
+        onSelectView={handleSelectView}
+        onOpenSaveModal={() => {}}
+      />,
+    );
+
+    const viewsButton = screen.getByRole("button", { name: "Saved views" });
+    fireEvent.click(viewsButton);
+
+    const londonItem = screen.getByRole("menuitem", { name: /London Hub/ });
+    expect(londonItem).toBeTruthy();
+    fireEvent.click(londonItem);
+    expect(handleSelectView).toHaveBeenCalledWith(mockViews[0]);
   });
 });

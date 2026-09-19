@@ -29,6 +29,9 @@ import { searchPlace } from "../../api/geo";
 import { FacetPills } from "../../components/command-palette/FacetPills";
 import { FacetAutocomplete } from "../../components/command-palette/FacetAutocomplete";
 import { Modal } from "../../components/ui/Modal";
+import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
+import type { MapLayer, MapView } from "../../api/mapViews";
+import { ViewsMenu } from "./ViewsMenu";
 import type { MapContact } from "../../../shared/geo";
 import { isValidLatLng } from "../../../shared/geo";
 import type { FacetFilter } from "../../../shared/searchFacets";
@@ -36,6 +39,12 @@ import type { useQueryTokenizer } from "../../hooks/useQueryTokenizer";
 import { prefersReducedMotion } from "./flyTo";
 import { measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
+
+const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
+  { value: "pins", label: "Pins" },
+  { value: "heat", label: "Heat" },
+  { value: "health", label: "Health" },
+];
 
 export interface MapToolbarProps {
   contacts: MapContact[];
@@ -50,6 +59,14 @@ export interface MapToolbarProps {
   hasActiveFilter: boolean;
   resolveNearFilters: () => Promise<void>;
   clearFilters: () => void;
+  layer: MapLayer;
+  onLayerChange: (nextLayer: MapLayer) => void;
+  views?: MapView[];
+  activeViewId?: string | null;
+  onSelectView?: (view: MapView) => void;
+  onOpenSaveModal?: () => void;
+  onStartRename?: (view: MapView) => void;
+  onDeleteView?: (view: MapView) => void;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   onFitAll?: () => void;
   onToggleInsights?: () => void;
@@ -71,6 +88,14 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   hasActiveFilter,
   resolveNearFilters,
   clearFilters,
+  layer,
+  onLayerChange,
+  views = [],
+  activeViewId = null,
+  onSelectView,
+  onOpenSaveModal,
+  onStartRename,
+  onDeleteView,
   inputRef: externalInputRef,
   onFitAll: externalFitAll,
   onToggleInsights,
@@ -298,74 +323,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           {mode === "goto" ? "Filter" : "Go to"}
         </button>
 
-        {/* Select Menu (Desktop) */}
-        {!isMobile && (
-          <div className="relative shrink-0" ref={selectMenuRef}>
-            <button
-              type="button"
-              onClick={() => setSelectMenuOpen((v) => !v)}
-              aria-label="Select contacts"
-              aria-expanded={selectMenuOpen}
-              className={cn(
-                "hit-area px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all border",
-                selectMenuOpen || isLassoActive
-                  ? "bg-primary text-on-primary border-primary shadow-sm"
-                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
-              )}
-            >
-              <span>Select</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-
-            {selectMenuOpen && (
-              <div
-                role="menu"
-                className="absolute top-full mt-1.5 left-0 z-50 min-w-[190px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant/30 py-1.5 font-body flex flex-col"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setSelectMenuOpen(false);
-                    toast.info("Hold Shift and drag on the map to select");
-                  }}
-                  className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
-                >
-                  <span>Box select</span>
-                  <span className="text-[11px] text-on-surface-variant font-mono">
-                    Shift+drag
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setSelectMenuOpen(false);
-                    onStartLasso?.();
-                  }}
-                  className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
-                >
-                  <span>Lasso select</span>
-                  <span className="text-[11px] text-on-surface-variant font-mono">
-                    L
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setSelectMenuOpen(false);
-                    onSelectInView?.();
-                  }}
-                  className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high cursor-pointer hit-area"
-                >
-                  All in view
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Fit All Button */}
         <button
           type="button"
@@ -421,6 +378,135 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           >
             Clear filters
           </button>
+        </div>
+      )}
+
+      {/* Desktop Row 2: Layer Segmented Control + Views Menu + Select Menu */}
+      {!isMobile && (
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-outline-variant/20">
+          <Segmented<MapLayer>
+            options={LAYER_OPTIONS}
+            value={layer}
+            onChange={onLayerChange}
+            label="Map layer"
+          />
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onOpenSaveModal && (
+              <ViewsMenu
+                views={views}
+                activeViewId={activeViewId}
+                onSelectView={onSelectView ?? (() => {})}
+                onOpenSaveModal={onOpenSaveModal}
+                onStartRename={onStartRename ?? (() => {})}
+                onDeleteView={onDeleteView ?? (() => {})}
+              />
+            )}
+
+            <div className="relative shrink-0" ref={selectMenuRef}>
+              <button
+                type="button"
+                onClick={() => setSelectMenuOpen((v) => !v)}
+                aria-label="Select contacts"
+                aria-expanded={selectMenuOpen}
+                className={cn(
+                  "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all border",
+                  selectMenuOpen || isLassoActive
+                    ? "bg-primary text-on-primary border-primary shadow-sm"
+                    : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
+                )}
+              >
+                <span>Select</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {selectMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute top-full mt-1.5 right-0 z-50 min-w-[190px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant/30 py-1.5 font-body flex flex-col"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setSelectMenuOpen(false);
+                      toast.info("Hold Shift and drag on the map to select");
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
+                  >
+                    <span>Box select</span>
+                    <span className="text-[11px] text-on-surface-variant font-mono">
+                      Shift+drag
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setSelectMenuOpen(false);
+                      onStartLasso?.();
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
+                  >
+                    <span>Lasso select</span>
+                    <span className="text-[11px] text-on-surface-variant font-mono">
+                      L
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setSelectMenuOpen(false);
+                      onSelectInView?.();
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high cursor-pointer hit-area"
+                  >
+                    All in view
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Layer Control */}
+      {isMobile && (
+        <div className="pt-2 border-t border-outline-variant/20 flex flex-col gap-1.5">
+          <span className="text-xs font-semibold text-on-surface">
+            Map layer
+          </span>
+          <Segmented<MapLayer>
+            options={LAYER_OPTIONS}
+            value={layer}
+            onChange={onLayerChange}
+            label="Map layer"
+          />
+        </div>
+      )}
+
+      {/* Mobile Views Menu */}
+      {isMobile && onOpenSaveModal && (
+        <div className="pt-2 border-t border-outline-variant/20 flex items-center justify-between">
+          <span className="text-xs font-semibold text-on-surface">
+            Saved views
+          </span>
+          <ViewsMenu
+            isMobile
+            views={views}
+            activeViewId={activeViewId}
+            onSelectView={(v) => {
+              onSelectView?.(v);
+              setIsMobileSheetOpen(false);
+            }}
+            onOpenSaveModal={() => {
+              setIsMobileSheetOpen(false);
+              onOpenSaveModal();
+            }}
+            onStartRename={onStartRename ?? (() => {})}
+            onDeleteView={onDeleteView ?? (() => {})}
+          />
         </div>
       )}
 

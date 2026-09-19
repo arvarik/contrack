@@ -537,6 +537,97 @@ curl "http://localhost:3210/api/geo/search?q=London"
 
 ---
 
+## Map Views
+
+Saved map configurations pairing camera bounds, search filter query, and active layer. Capped at 100 views per owner.
+
+### `GET /api/map/views`
+
+List all saved map views for the authenticated user, ordered by sort order ascending then name ascending.
+
+```bash
+curl http://localhost:3210/api/map/views
+```
+
+```json
+[
+  {
+    "id": "view_123",
+    "name": "Virginia",
+    "query": "company:Navy",
+    "layer": "health",
+    "bounds": [-77.2, 38.8, -76.3, 39.1],
+    "sortOrder": 0,
+    "createdAt": "2026-09-19T12:00:00.000Z",
+    "updatedAt": "2026-09-19T12:00:00.000Z"
+  }
+]
+```
+
+---
+
+### `POST /api/map/views`
+
+Create a saved map view. Maximum 100 saved views per account.
+
+```bash
+curl -X POST http://localhost:3210/api/map/views \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Virginia",
+    "query": "company:Navy",
+    "layer": "health",
+    "bounds": [-77.2, 38.8, -76.3, 39.1]
+  }'
+```
+
+**Parameters:**
+
+- `name` (string, required): 1 to 60 characters
+- `query` (string, optional, default empty string): 0 to 200 characters
+- `layer` (enum: "pins", "heat", "health", optional, default "pins")
+- `bounds` (array of 4 numbers `[west, south, east, north]`, required): `west` and `east` in `[-180, 180]`, `south` and `north` in `[-90, 90]`, `south < north`
+
+**Error codes:**
+
+- `400 VALIDATION_ERROR`: Invalid bounds, missing name, or layer not one of pins, heat, health
+- `409 TOO_MANY_VIEWS`: Account already reached the 100-view ceiling
+
+---
+
+### `PATCH /api/map/views/:id`
+
+Update a saved map view. Supports updating name, query, layer, bounds, or sortOrder.
+
+```bash
+curl -X PATCH http://localhost:3210/api/map/views/view_123 \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Virginia Tech"}'
+```
+
+**Error codes:**
+
+- `400 VALIDATION_ERROR`: Validation failed on updated fields
+- `404 NOT_FOUND`: View not found or belongs to another user
+
+---
+
+### `DELETE /api/map/views/:id`
+
+Delete a saved map view.
+
+```bash
+curl -X DELETE http://localhost:3210/api/map/views/view_123
+```
+
+Returns `{"success": true}`.
+
+**Error codes:**
+
+- `404 NOT_FOUND`: View not found or belongs to another user
+
+---
+
 ### `POST /api/contacts/:id/avatar`
 
 Upload an avatar image. Uses `multipart/form-data`.

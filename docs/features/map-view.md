@@ -31,7 +31,7 @@ The filter input supports full facet search with locked facet pills and autocomp
 - `industry:<sector>`
 - `tag:<tag>` (autocompletes from slim contact tags)
 - `list:<name|id>` (autocompletes from contact lists)
-- `near:<place>/<km>` (default 25 km, e.g. `near:London/50km` or `near:Paris`). While resolving, the pill shows `resolving…` and matches all contacts; pressing `Enter` resolves the place's coordinates via `GET /api/geo/search` and applies client-side haversine distance filtering. A failed resolution displays the pill in error styling.
+- `near:<place>/<km>` (default 25 km, e.g. `near:London/50km` or `near:Paris`). While resolving, the pill shows `resolving…` and matches all contacts, and pressing `Enter` resolves the place coordinates via `GET /api/geo/search` and applies client-side haversine distance filtering. A failed resolution displays the pill in error styling.
 - `missing:<company|location|email|phone>`
 - Free text matches across contact names, companies, roles, emails, and phone digits.
 
@@ -138,6 +138,30 @@ Pins on the map feature a responsive two-stage hover card:
   4. Create a follow-up task
 - **Details**: Features a 44 px avatar with score ring, an interactive score badge that opens the score breakdown popover, formatted local time via coordinate lookup, tags, and list memberships.
 - **Keyboard and Dismissal**: Pressing Escape closes the card and returns focus directly to the pin button. Clicking the map background also closes any pinned card. On touch devices, tapping a pin opens the pinned card, and a second tap opens the full contact overlay.
+
+### Layers and Saved Views
+
+The map toolbar provides layer switching and a saved views dropdown for quick navigation and state sharing:
+
+#### Map Layers
+
+A segmented toggle control (`aria-label="Map layer"`) lets users switch between three visual representations:
+
+- **Pins**: The standard view showing contact avatars and cluster markers.
+- **Heat**: Renders a client-side MapLibre heatmap layer with radius 30 and zoom-based weight calculated from each contact's interaction count. Pin markers are hidden above zoom level 9 while the heat layer is active.
+- **Health**: Pin markers display ring borders tinted by relationship health score bands using theme color tokens: `ring-success` for Strong (scores >= 70), `ring-warning` for Fading (scores 40 to 69), and `ring-error` for At risk (scores < 40). A floating legend chip in the bottom-right corner displays text labels alongside colored dots to ensure color is never the only signal.
+
+Changing the layer updates the `?layer=` URL parameter and persists to the user's `mapLayer` account preference.
+
+#### Saved Views
+
+Users can save their current viewport bounds, active filter query, and selected layer to return to them anytime or share the link with colleagues.
+
+- **Storage and Multi-Tenancy**: Saved views are stored in the `map_views` table with strict owner isolation, index seeks, and owner purge cascade. Accounts are capped at 100 views, returning `409 TOO_MANY_VIEWS` beyond that limit.
+- **Views Menu**: A dropdown in the map toolbar lists saved views, highlights the active view, and provides quick actions to rename or delete views.
+- **Saving a View**: Clicking "Save current view…" opens a modal dialog to name the view. View coordinates are normalized and validated before storage.
+- **Restoring a View**: Selecting a saved view smoothly fits the viewport to its saved bounds (or uses `jumpTo` when reduced motion is preferred), applies its search filter query, and sets the active layer.
+- **URL Coordination**: While a saved view is active, the URL contains `?view=<id>`. When the map loads, a `?view=` parameter takes precedence over the locally remembered camera in `lastView.ts`. Modifying search filters or changing layers clears the active view ID and switches back to `?q=` and `?layer=`.
 
 ### Light and Dark Basemaps
 
@@ -599,7 +623,9 @@ a 390 pixel phone for the tap-target and text-size floors. See
 | `/`       | Focus the map filter search input                    |
 | `F`       | Fit all matching contacts within the viewport        |
 | `i` / `I` | Toggle the Map insights pane open or closed          |
-| `Escape`  | Close the open contact overlay or active modal sheet |
+| `L`       | Activate freehand lasso selection mode               |
+| `Space`   | Pin hover card into dialog mode when pin is focused  |
+| `Escape`  | Close card or clear selection or dismiss modal sheet |
 
 ---
 
