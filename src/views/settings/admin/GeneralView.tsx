@@ -14,8 +14,12 @@ import { toast } from "sonner";
 import {
   Archive,
   Check,
+  Copy,
   DoorOpen,
+  Eye,
+  EyeOff,
   Globe,
+  Key,
   Mail,
   MapPin,
   Tag,
@@ -684,17 +688,26 @@ export const IntegrationsCard = () => {
 
   const [mapboxInput, setMapboxInput] = useState("");
   const [searxngInput, setSearxngInput] = useState<string | null>(null);
+  const [googleClientId, setGoogleClientId] = useState("");
+  const [googleClientSecret, setGoogleClientSecret] = useState("");
+  const [showGoogleSecret, setShowGoogleSecret] = useState(false);
+  const [copiedRedirect, setCopiedRedirect] = useState(false);
 
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   const mapbox = data?.mapbox;
   const searxng = data?.searxng;
+  const googleOAuth = data?.googleOAuth;
 
   const isMapboxEnv = mapbox?.source === "env";
   const isMapboxConfigured = mapbox?.configured === true;
 
   const isSearxngEnv = searxng?.source === "env";
   const searxngVal = searxngInput ?? searxng?.url ?? "";
+
+  const isGoogleEnv = googleOAuth?.source === "env";
+  const isGoogleConfigured = googleOAuth?.configured === true;
+  const redirectUri = `${typeof window !== "undefined" ? window.location.origin : ""}/api/connectors/google/callback`;
 
   return (
     <div id="integrations" className={cn(CARD, "space-y-6 scroll-mt-20")}>
@@ -879,6 +892,231 @@ export const IntegrationsCard = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Google OAuth */}
+      <div className="border-t border-outline-variant/30 pt-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Key className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-sm text-on-surface">
+              Google OAuth client
+            </h3>
+          </div>
+          {isGoogleConfigured && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Check className="w-3.5 h-3.5" />
+              Configured
+            </span>
+          )}
+        </div>
+
+        <p className="text-sm text-on-surface-variant text-pretty">
+          Enables members to connect Google Workspace accounts to sync contacts,
+          mail, and calendar events.
+        </p>
+
+        {/* Redirect URI copy box */}
+        <div className="space-y-1.5">
+          <span className="text-xs font-semibold text-on-surface block">
+            Authorized redirect URI
+          </span>
+          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
+            <span className="flex-1 min-w-0">{redirectUri}</span>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(redirectUri);
+                setCopiedRedirect(true);
+                toast.success("Redirect URI copied to clipboard");
+                setTimeout(() => setCopiedRedirect(false), 2000);
+              }}
+              className="hit-area p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors shrink-0"
+              title="Copy redirect URI"
+              aria-label="Copy redirect URI"
+            >
+              {copiedRedirect ? (
+                <Check className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-on-surface-variant">
+            Paste this exact URI into your Google Cloud Console under Authorized
+            redirect URIs.
+          </p>
+        </div>
+
+        {isGoogleEnv ? (
+          <p className="text-xs rounded-xl bg-surface-container-high/60 p-3 text-on-surface-variant">
+            Set by GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in the
+            environment.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {isGoogleConfigured && (
+              <div className="text-xs text-on-surface-variant bg-surface-container-high/40 p-3 rounded-xl space-y-1">
+                <p>
+                  <strong>Client ID:</strong>{" "}
+                  <span className="font-mono text-on-surface">
+                    {googleOAuth?.clientId}
+                  </span>
+                </p>
+                <p>
+                  <strong>Client Secret:</strong>{" "}
+                  <span className="font-mono text-on-surface">
+                    {googleOAuth?.clientSecretPreview}
+                  </span>
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div>
+                <label
+                  htmlFor="google-client-id"
+                  className="block text-xs font-semibold text-on-surface mb-1"
+                >
+                  Client ID
+                </label>
+                <input
+                  id="google-client-id"
+                  type="text"
+                  aria-label="Google OAuth Client ID"
+                  value={googleClientId}
+                  disabled={isLoading || update.isPending}
+                  onChange={(e) => setGoogleClientId(e.target.value)}
+                  placeholder={
+                    isGoogleConfigured
+                      ? "Enter new client ID to replace…"
+                      : "123456789-...apps.googleusercontent.com"
+                  }
+                  className={cn(
+                    "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl",
+                    "bg-surface-container-highest text-sm font-mono outline-none",
+                    "focus:ring-2 focus:ring-primary/40",
+                  )}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="google-client-secret"
+                  className="block text-xs font-semibold text-on-surface mb-1"
+                >
+                  Client Secret
+                </label>
+                <div className="relative">
+                  <input
+                    id="google-client-secret"
+                    type={showGoogleSecret ? "text" : "password"}
+                    aria-label="Google OAuth Client Secret"
+                    value={googleClientSecret}
+                    disabled={isLoading || update.isPending}
+                    onChange={(e) => setGoogleClientSecret(e.target.value)}
+                    placeholder={
+                      isGoogleConfigured
+                        ? "Enter new client secret to replace…"
+                        : "GOCSPX-..."
+                    }
+                    className={cn(
+                      "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 pr-10 rounded-xl",
+                      "bg-surface-container-highest text-sm font-mono outline-none",
+                      "focus:ring-2 focus:ring-primary/40",
+                    )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleSecret(!showGoogleSecret)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-1"
+                    title={showGoogleSecret ? "Hide secret" : "Show secret"}
+                    aria-label={
+                      showGoogleSecret ? "Hide secret" : "Show secret"
+                    }
+                  >
+                    {showGoogleSecret ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={
+                    !googleClientId.trim() ||
+                    !googleClientSecret.trim() ||
+                    update.isPending
+                  }
+                  onClick={() =>
+                    update.mutate(
+                      {
+                        googleOAuth: {
+                          clientId: googleClientId.trim(),
+                          clientSecret: googleClientSecret.trim(),
+                        },
+                      },
+                      {
+                        onSuccess: () => {
+                          setGoogleClientId("");
+                          setGoogleClientSecret("");
+                          toast.success("Google OAuth credentials saved");
+                        },
+                        onError: (err: Error) => toast.error(err.message),
+                      },
+                    )
+                  }
+                  className="btn-primary shrink-0"
+                >
+                  Save
+                </button>
+
+                {isGoogleConfigured && (
+                  <button
+                    type="button"
+                    disabled={update.isPending}
+                    onClick={() =>
+                      update.mutate(
+                        { googleOAuth: null },
+                        {
+                          onSuccess: () => {
+                            setGoogleClientId("");
+                            setGoogleClientSecret("");
+                            toast.success("Google OAuth credentials removed");
+                          },
+                          onError: (err: Error) => toast.error(err.message),
+                        },
+                      )
+                    }
+                    className="btn-secondary shrink-0 text-danger hover:bg-danger/10"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-xl bg-surface-container-high/30 p-3 text-xs text-on-surface-variant space-y-1">
+          <p className="font-semibold text-on-surface">
+            Publishing status in Google Cloud:
+          </p>
+          <p>
+            • <strong>Google Workspace domains:</strong> Create an{" "}
+            <em>Internal</em> OAuth app. No Google verification needed.
+          </p>
+          <p>
+            • <strong>Personal Gmail:</strong> Create an <em>External</em> app
+            and set it to <em>In production</em> (supports up to 100 users).
+            Google will show an unverified app warning when signing in, which is
+            normal for self-hosted instances.
+          </p>
+        </div>
       </div>
     </div>
   );

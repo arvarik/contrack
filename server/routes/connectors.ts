@@ -8,19 +8,27 @@
  * @module server/routes/connectors
  */
 
+import crypto from "node:crypto";
+import { google } from "googleapis";
 import { Router } from "express";
 import { z } from "zod";
+import { sqlite } from "../db.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
 import { requireSession } from "../middleware/auth.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
+import * as secretBox from "../utils/secretBox.ts";
+import { publicOrigin } from "../utils/publicOrigin.ts";
 import { isDocker, kindsFor } from "../connectors/registry.ts";
+import { getGoogleOAuthCredentials } from "../services/integrationSettings.ts";
+import type { GoogleSecret } from "../connectors/adapters/google.ts";
 import {
   createConnector,
   deleteConnector,
   getConnector,
+  ignoreCorrespondent,
   listConnectors,
   listCorrespondents,
   listRuns,
@@ -38,7 +46,8 @@ connectorsRouter.get(
   asyncHandler(async (req, res) => {
     const platform = process.platform;
     const docker = isDocker();
-    const kinds = kindsFor(platform, docker);
+    const googleConfigured = Boolean(getGoogleOAuthCredentials());
+    const kinds = kindsFor(platform, docker, { googleConfigured });
     res.json({ platform, docker, kinds });
   }),
 );
@@ -115,6 +124,258 @@ connectorsRouter.get(
       : 50;
     const correspondents = listCorrespondents(scope, limit);
     res.json({ correspondents });
+  }),
+);
+
+// ── POST /correspondents/ignore ────────────────────────────────────────────
+// Marks a correspondent as ignored so they do not become a ghost contact.
+const ignoreCorrespondentSchema = z.object({
+  connectorId: z.string().min(1, "connectorId is required"),
+  externalId: z.string().min(1, "externalId is required"),
+});
+
+connectorsRouter.post(
+  "/correspondents/ignore",
+  requireSession,
+  validateBody(ignoreCorrespondentSchema),
+  asyncHandler(async (req, res) => {
+    const scope = scopeOf(req);
+    const updated = ignoreCorrespondent(
+      scope,
+      req.body.connectorId,
+      req.body.externalId,
+    );
+    res.json({ ok: true, updated });
+  }),
+);
+
+// ── GET /google/start ──────────────────────────────────────────────────────
+// Initiates Google OAuth authorization with PKCE.
+connectorsRouter.get(
+  "/google/start",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const creds = getGoogleOAuthCredentials();
+    if (!creds) {
+      throw new AppError("Google OAuth client is not configured", 400, {
+        code: "GOOGLE_NOT_CONFIGURED",
+      });
+    }
+
+    const codeVerifier = crypto.randomBytes(32).toString("base64url");
+    const codeChallenge = crypto
+      .createHash("sha256")
+      .update(codeVerifier)
+      .digest("base64url");
+    const state = crypto.randomUUID();
+
+    sqlite
+      .prepare(
+        `INSERT INTO oauth_states (state, ownerId, kind, codeVerifier, createdAt)
+         VALUES (?, ?, 'google', ?, CURRENT_TIMESTAMP)`,
+      )
+      .run(state, req.principal!.user.id, codeVerifier);
+
+    const redirectUri = `${publicOrigin(req)}/api/connectors/google/callback`;
+    const wantSummaries = req.query.summaries === "true";
+
+    const scopes = [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/contacts.readonly",
+      "https://www.googleapis.com/auth/calendar.events.readonly",
+      wantSummaries
+        ? "https://www.googleapis.com/auth/gmail.readonly"
+        : "https://www.googleapis.com/auth/gmail.metadata",
+    ];
+
+    const oauth2Client = new google.auth.OAuth2(
+      creds.clientId,
+      creds.clientSecret,
+      redirectUri,
+    );
+
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      prompt: "consent",
+      scope: scopes,
+      state,
+      code_challenge: codeChallenge,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- googleapis GenerateAuthUrlOpts type mismatch
+      code_challenge_method: "S256" as any,
+    });
+
+    res.redirect(authUrl);
+  }),
+);
+
+// ── GET /google/callback ───────────────────────────────────────────────────
+// Handles the redirect back from Google OAuth consent screen.
+connectorsRouter.get(
+  "/google/callback",
+  requireSession,
+  asyncHandler(async (req, res) => {
+    const { code, state, error } = req.query as {
+      code?: string;
+      state?: string;
+      error?: string;
+    };
+
+    if (error) {
+      return res.redirect(
+        `/settings/connectors?error=${encodeURIComponent(error)}`,
+      );
+    }
+
+    if (!code || !state) {
+      throw new AppError("Missing OAuth code or state", 400, {
+        code: "INVALID_STATE",
+      });
+    }
+
+    const stateRow = sqlite
+      .prepare("SELECT * FROM oauth_states WHERE state = ?")
+      .get(state) as
+      | {
+          state: string;
+          ownerId: string;
+          kind: string;
+          codeVerifier: string;
+          createdAt: string;
+        }
+      | undefined;
+
+    if (!stateRow) {
+      throw new AppError("Invalid or expired OAuth state", 400, {
+        code: "INVALID_STATE",
+      });
+    }
+
+    // Immediately consume the state
+    sqlite.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
+
+    if (stateRow.ownerId !== req.principal!.user.id) {
+      throw new AppError("OAuth state owner mismatch", 403, {
+        code: "FORBIDDEN",
+      });
+    }
+
+    const ageMs = Date.now() - new Date(stateRow.createdAt).getTime();
+    if (ageMs > 15 * 60 * 1000) {
+      throw new AppError("OAuth state has expired", 400, {
+        code: "EXPIRED_STATE",
+      });
+    }
+
+    const creds = getGoogleOAuthCredentials();
+    if (!creds) {
+      throw new AppError("Google OAuth client is not configured", 500);
+    }
+
+    const redirectUri = `${publicOrigin(req)}/api/connectors/google/callback`;
+    const oauth2Client = new google.auth.OAuth2(
+      creds.clientId,
+      creds.clientSecret,
+      redirectUri,
+    );
+
+    let tokens;
+    try {
+      const tokenRes = await oauth2Client.getToken({
+        code,
+        codeVerifier: stateRow.codeVerifier,
+      });
+      tokens = tokenRes.tokens;
+      oauth2Client.setCredentials(tokens);
+    } catch (tokenErr: unknown) {
+      log.error("Connectors", "Google token exchange failed", {
+        error: tokenErr,
+      });
+      return res.redirect(
+        `/settings/connectors?error=${encodeURIComponent((tokenErr as Error).message)}`,
+      );
+    }
+
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    let userEmail: string | undefined;
+    try {
+      const userInfoRes = await oauth2.userinfo.get();
+      userEmail = userInfoRes.data.email || undefined;
+    } catch (userErr) {
+      log.warn("Connectors", "Could not fetch user email in Google callback", {
+        error: userErr,
+      });
+    }
+
+    const scope = scopeOf(req);
+    const existing = listConnectors(scope).find((c) => c.kind === "google");
+    const hasGmailReadonly = (tokens.scope || "").includes("gmail.readonly");
+
+    if (existing) {
+      const nextSecret: GoogleSecret = {
+        refreshToken: tokens.refresh_token || "",
+        accessToken: tokens.access_token || undefined,
+        expiryDate: tokens.expiry_date || undefined,
+        email: userEmail,
+      };
+
+      if (!nextSecret.refreshToken) {
+        const row = sqlite
+          .prepare("SELECT secret FROM connectors WHERE id = ? AND ownerId = ?")
+          .get(existing.id, scope.ownerId) as
+          { secret: string | null } | undefined;
+        if (row?.secret) {
+          try {
+            const opened = JSON.parse(secretBox.open(row.secret));
+            nextSecret.refreshToken = opened.refreshToken;
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      await updateConnector(
+        scope,
+        existing.id,
+        {
+          status: "active",
+          secret: nextSecret,
+          config: {
+            ...(existing.config as Record<string, unknown>),
+            summaries: hasGmailReadonly,
+          },
+        },
+        req.ip,
+      );
+    } else {
+      await createConnector(
+        scope,
+        {
+          kind: "google",
+          name: userEmail ? `Google (${userEmail})` : "Google Workspace",
+          config: {
+            syncContacts: true,
+            syncEmail: true,
+            syncCalendar: true,
+            summaries: hasGmailReadonly,
+            lookbackDays: 90,
+            rollup: true,
+            ghostThreshold: 3,
+            maxMessagesPerRun: 5000,
+            aliases: [],
+          },
+          secret: {
+            refreshToken: tokens.refresh_token || "",
+            accessToken: tokens.access_token || undefined,
+            expiryDate: tokens.expiry_date || undefined,
+            email: userEmail,
+          },
+          intervalMinutes: 30,
+        },
+        req.ip,
+      );
+    }
+
+    res.redirect("/settings/connectors?connected=google");
   }),
 );
 

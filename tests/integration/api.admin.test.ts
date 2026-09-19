@@ -2051,6 +2051,12 @@ describe("instance lifecycle and integration settings (P4)", () => {
     expect(initial.body).toEqual({
       mapbox: { configured: false, source: "none" },
       searxng: { url: null, source: "none" },
+      googleOAuth: {
+        configured: false,
+        source: "none",
+        clientId: null,
+        clientSecretPreview: null,
+      },
     });
 
     // 2. PUT Mapbox key and SearXNG URL
@@ -2069,6 +2075,12 @@ describe("instance lifecycle and integration settings (P4)", () => {
         url: "https://searxng.internal.example.com",
         source: "setting",
       },
+      googleOAuth: {
+        configured: false,
+        source: "none",
+        clientId: null,
+        clientSecretPreview: null,
+      },
     });
 
     // CRITICAL: The secret key must NEVER be in the response body (raw or sealed)
@@ -2084,6 +2096,12 @@ describe("instance lifecycle and integration settings (P4)", () => {
       searxng: {
         url: "https://searxng.internal.example.com",
         source: "setting",
+      },
+      googleOAuth: {
+        configured: false,
+        source: "none",
+        clientId: null,
+        clientSecretPreview: null,
       },
     });
     const getJson = JSON.stringify(getRes.body);

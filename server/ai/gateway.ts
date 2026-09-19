@@ -11,6 +11,7 @@
 // =============================================================================
 
 import type { AIGenerateOptions, AIGenerateResult } from "./types.ts";
+export type { AIGenerateResult } from "./types.ts";
 import type { AICapability } from "./capabilities.ts";
 import { resolveCapability } from "./capabilities.ts";
 import { getProviderConfigs } from "./providerRegistry.ts";

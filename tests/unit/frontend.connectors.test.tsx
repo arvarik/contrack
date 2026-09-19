@@ -68,6 +68,12 @@ describe("Frontend Connectors Components", () => {
       description: "Sync contacts, mail and calendar with Google.",
       capabilities: { schedule: true },
     },
+    {
+      kind: "imessage",
+      label: "iMessage",
+      description: "Sync conversations from the local macOS Messages database.",
+      capabilities: { schedule: true },
+    },
   ];
 
   const createMockConnector = (
@@ -116,6 +122,11 @@ describe("Frontend Connectors Components", () => {
       data: [],
       isLoading: false,
     } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
+
+    vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof connectorsApi.useCorrespondents>);
 
     vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
       mutateAsync: vi.fn().mockResolvedValue({ id: "created-conn-1" }),
@@ -281,12 +292,17 @@ describe("Frontend Connectors Components", () => {
         />,
       );
 
-      const imapBtn = screen.getByRole("button", { name: /Mailbox \(IMAP\)/i });
-      expect((imapBtn as HTMLButtonElement).disabled).toBe(true);
+      const imessageBtn = screen.getByRole("button", { name: /iMessage/i });
+      expect((imessageBtn as HTMLButtonElement).disabled).toBe(true);
       expect(screen.getAllByText("Coming soon").length).toBeGreaterThan(0);
 
-      fireEvent.click(imapBtn);
+      fireEvent.click(imessageBtn);
       expect(onSelectKindMock).not.toHaveBeenCalled();
+
+      const imapBtn = screen.getByRole("button", { name: /Mailbox \(IMAP\)/i });
+      expect((imapBtn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(imapBtn);
+      expect(onSelectKindMock).toHaveBeenCalledWith("imap");
     });
   });
 
@@ -1362,8 +1378,8 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      const connectBtn = screen.getByRole("button", { name: "Connect" });
-      fireEvent.click(connectBtn);
+      const connectBtns = screen.getAllByRole("button", { name: "Connect" });
+      fireEvent.click(connectBtns[0]);
 
       expect(
         screen.getByRole("heading", { name: "Connect Calendar" }),

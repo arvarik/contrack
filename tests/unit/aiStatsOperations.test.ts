@@ -19,6 +19,7 @@ describe("AI_OPERATIONS canonical list", () => {
       "searchExpansion",
       "dailyInsight",
       "emlSummary",
+      "connectorSummary",
       "bulkParse",
       "aiSearchGrounding",
       "aiSearchExtraction",

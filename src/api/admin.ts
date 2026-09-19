@@ -520,11 +520,18 @@ export interface IntegrationsConfig {
     url: string | null;
     source: "setting" | "env" | "none";
   };
+  googleOAuth: {
+    configured: boolean;
+    source: "setting" | "env" | "none";
+    clientId: string | null;
+    clientSecretPreview: string | null;
+  };
 }
 
 export interface UpdateIntegrationsInput {
   mapboxKey?: string;
   searxngUrl?: string;
+  googleOAuth?: { clientId: string; clientSecret: string } | null;
 }
 
 export const useIntegrations = () =>

@@ -657,6 +657,27 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       })),
   },
   {
+    id: "correspondents",
+    path: "/settings/connectors/people",
+    title: NAMES.correspondents.title,
+    description: NAMES.correspondents.description,
+    icon: Users,
+    group: "connect",
+    keywords: [
+      "correspondents",
+      "people",
+      "connectors",
+      "unmatched",
+      "contacts",
+      "review",
+      "inbox",
+    ],
+    load: () =>
+      import("./connectors/CorrespondentsView").then((m) => ({
+        default: m.CorrespondentsView,
+      })),
+  },
+  {
     id: "mcp",
     path: "/settings/mcp",
     title: NAMES.mcp.title,

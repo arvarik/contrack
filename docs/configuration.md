@@ -490,13 +490,14 @@ Every personal preference can be changed in Settings and is stored in user prefe
 
 Instance-wide policies can be managed by administrators in **Settings → Administration → General** or overridden by environment variables:
 
-| Setting               | Env Variable            | Default | Range / Format        | Notes                                                  |
-| --------------------- | ----------------------- | ------- | --------------------- | ------------------------------------------------------ |
-| `trashRetentionDays`  | `TRASH_RETENTION_DAYS`  | `30`    | `1` to `365` days     | Days deleted contacts remain before automated purge    |
-| `backupIntervalHours` | `BACKUP_INTERVAL_HOURS` | `24`    | `0` to `168` hours    | Snapshot frequency (`0` disables scheduled backups)    |
-| `backupKeep`          | `BACKUP_KEEP`           | `7`     | `1` to `50` snapshots | Maximum number of rotated snapshots kept on disk       |
-| `mapboxKey`           | `MAPBOX_API_KEY`        | —       | string (`pk.ey...`)   | Write-only geocoding key sealed with AES-256-GCM       |
-| `searxngUrl`          | `SEARXNG_URL`           | —       | URL (`http://...`)    | Self-hosted SearXNG instance for web research fallback |
+| Setting               | Env Variable                                            | Default | Range / Format        | Notes                                                                      |
+| --------------------- | ------------------------------------------------------- | ------- | --------------------- | -------------------------------------------------------------------------- |
+| `trashRetentionDays`  | `TRASH_RETENTION_DAYS`                                  | `30`    | `1` to `365` days     | Days deleted contacts remain before automated purge                        |
+| `backupIntervalHours` | `BACKUP_INTERVAL_HOURS`                                 | `24`    | `0` to `168` hours    | Snapshot frequency (`0` disables scheduled backups)                        |
+| `backupKeep`          | `BACKUP_KEEP`                                           | `7`     | `1` to `50` snapshots | Maximum number of rotated snapshots kept on disk                           |
+| `mapboxKey`           | `MAPBOX_API_KEY`                                        | —       | string (`pk.ey...`)   | Write-only geocoding key sealed with AES-256-GCM                           |
+| `searxngUrl`          | `SEARXNG_URL`                                           | —       | URL (`http://...`)    | Self-hosted SearXNG instance for web research fallback                     |
+| `googleOAuth`         | `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | —       | Client ID & Secret    | OAuth credentials for Google Workspace connectors, sealed with AES-256-GCM |
 
 **Environment overrides:** when an environment variable is defined, it takes precedence and locks the setting in the UI as read-only ("Set by `<VAR>` in the environment."). Changes to the backup interval restart the recurring backup timer immediately.
 

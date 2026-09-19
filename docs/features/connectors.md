@@ -71,14 +71,102 @@ The Calendar connector connects to any feed publishing an iCalendar (ICS) URL.
 
 ---
 
-## 5. Operations & Troubleshooting
+## 5. Mailbox (IMAP) Setup Guide
+
+The Mailbox connector connects directly to any IMAP server over TLS/SSL (port 993) to sync incoming and outgoing correspondence.
+
+### App Passwords & Security
+
+Always use an **app-specific password** rather than your primary account password. Most providers require this when 2-Factor Authentication (2FA) is enabled:
+
+- **Fastmail**: Settings → Password & Security → **New App Password** (select "Mail (IMAP/POP)").
+- **Gmail / Google Workspace**: Google Account → Security → 2-Step Verification → **App Passwords**.
+- **Apple iCloud**: appleid.apple.com → Sign-In and Security → **App-Specific Passwords**.
+- **Generic IMAP / Self-hosted**: Ensure port 993 (SSL/TLS) is open and accessible from your Contrack host.
+
+### Configuration Options
+
+- **IMAP Host & Port**: Hostname (e.g. `imap.fastmail.com`, `imap.gmail.com`) and port (default: `993`).
+- **Folders**: List of folders to monitor (default: `INBOX`, `Sent`). Contrack tracks message UIDs per folder to sync only new arrivals.
+- **My Aliases**: List your personal email addresses and aliases. Any message matching these will be recognized as outgoing from you.
+- **Roll up emails per contact per day**: Enabled by default. Groups multiple emails exchanged with the same contact on the same date into a single timeline interaction with a bulleted digest. This prevents high-frequency email threads from drowning your timeline.
+- **Generate AI summaries**: Disabled by default. When enabled, Contrack reads message bodies and invokes the quick AI model (`connectorSummary` task) to generate a concise 1–2 sentence summary of the thread. Summaries are capped at 50 per sync run to manage AI token budgets and rate limits. All untrusted email body content is strictly shielded before AI evaluation.
+
+---
+
+## 6. Google Workspace Setup Guide
+
+The Google Workspace connector syncs contacts, emails, and calendar events via Google OAuth 2.0 and official Google APIs (Google People API, Gmail API, Google Calendar API).
+
+### Google Cloud Console Setup
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project (e.g. `Contrack CRM`).
+2. Navigate to **APIs & Services → Library** and enable:
+   - **Google People API**
+   - **Gmail API**
+   - **Google Calendar API**
+3. Navigate to **APIs & Services → OAuth consent screen**:
+   - **User Type**:
+     - For Google Workspace organizations: choose **Internal** (recommended — no verification needed, any org member can connect).
+     - For personal `@gmail.com` accounts: choose **External**. Under **Test users**, add your Gmail address.
+4. Navigate to **APIs & Services → Credentials**:
+   - Click **Create Credentials → OAuth client ID**.
+   - Application type: **Web application**.
+   - Authorized redirect URIs: Add your Contrack instance callback URL:
+     ```
+     https://your-contrack-domain.com/api/connectors/google/callback
+     ```
+     _(For local development: `http://localhost:3210/api/connectors/google/callback`)_.
+   - Copy the generated **Client ID** and **Client Secret**.
+
+### Configuring OAuth in Contrack
+
+1. Log in to Contrack as an administrator.
+2. Go to **Settings → Administration → General** (`/settings/admin/general#integrations`).
+3. Under **Google OAuth Integration**, paste your Client ID and Client Secret, then click **Save Google OAuth Configuration**.
+   - Alternatively, you can set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in your server `.env` file.
+4. Once saved, all users on the instance can add Google Workspace connectors from **Settings → Connect → Connectors**.
+
+### Bypassing "Google hasn't verified this app"
+
+If using an External app in Testing status:
+
+1. When clicking **Connect Google Workspace**, Google will display a warning: _"Google hasn't verified this app"_.
+2. Click **Advanced** at the bottom of the prompt.
+3. Click **Go to Contrack (unsafe)** to complete the authorization flow.
+4. Grant the requested scopes.
+
+### Scopes & Privacy
+
+Contrack requests the minimum necessary scopes:
+
+- `https://www.googleapis.com/auth/contacts.readonly`: Imports names, email addresses, and phone numbers.
+- `https://www.googleapis.com/auth/calendar.events.readonly`: Imports meeting titles, dates, and attendee lists.
+- **Gmail Access**:
+  - _Standard Mode (AI summaries OFF)_: Requests `https://www.googleapis.com/auth/gmail.metadata`. Contrack never downloads or accesses email message bodies.
+  - _Summary Mode (AI summaries ON)_: Requests `https://www.googleapis.com/auth/gmail.readonly` to read email bodies solely for generating local 1–2 sentence meeting/email digests. Capped at 50 summaries per sync run.
+
+---
+
+## 7. Unconfirmed Correspondents & Ghost Contacts
+
+As connectors sync emails and calendar meetings, they discover people you communicate with who are not yet in your contacts:
+
+1. **Correspondents Review**: Access **Settings → Connect → Correspondents** (`/settings/connectors/people`) to review all discovered correspondents.
+2. **One-Click Add**: Click **Add as contact** to create a contact immediately with their name, email, and phone pre-populated.
+3. **Ignore**: Click **Ignore** to dismiss a correspondent (e.g. automated notification senders, newsletters). Ignored senders will not appear in correspondents review again.
+4. **Automatic Ghost Contacts**: When an unknown correspondent reaches the configured **Ghost threshold** (default: 3 interactions), Contrack automatically suggests a ghost contact in your contact list so they seamlessly appear in your relationship network.
+
+---
+
+## 8. Operations & Troubleshooting
 
 ### Connector States
 
 - `active`: Functioning normally and syncing on schedule.
 - `paused`: Sync schedule is paused. Can be manually triggered or resumed at any time.
 - `error`: The last sync attempt failed (e.g., DNS error, network timeout). Exponential backoff delays the next run up to 4 hours. Click **Retry now** to trigger an immediate run.
-- `needs_reauth`: The remote server returned an authentication error (`401` / `403` / invalid token). Click **Reconnect** to re-enter feed credentials.
+- `needs_reauth`: The remote server returned an authentication error (`401` / `403` / invalid token). Click **Reconnect** to re-authenticate.
 
 ### Run History
 
@@ -86,4 +174,4 @@ Click **Run history** from any connector card to view the last 20 sync runs, inc
 
 ### Backups
 
-Because credentials are encrypted with `$DATA_DIR/secret.key`, always keep a backup of `secret.key` alongside your SQLite database snapshots (`contrack.db`). Restoring a database without its corresponding `secret.key` will prevent connectors from reading their stored secrets.
+Because credentials and OAuth refresh tokens are encrypted with `$DATA_DIR/secret.key`, always keep a backup of `secret.key` alongside your SQLite database snapshots (`contrack.db`). Restoring a database without its corresponding `secret.key` will prevent connectors from reading their stored secrets.
