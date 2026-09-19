@@ -160,6 +160,16 @@ Handled natively using lightweight `cheerio` HTML parsers for OpenGraph extracti
 | `dedupe_merge_log`      | Full audit trail for merge/undo operations (soft + hard merges) with `duplicateSnapshot` JSON blob                    |
 | `dedupe_embedding_meta` | Tracks `embeddedAt` timestamp per contact for staleness detection                                                     |
 
+### Connector Tables
+
+| Table             | Purpose                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connectors`      | Configured sync integrations (`kind`, `name`, `status`, `config`, `secret`, `intervalMinutes`, `nextRunAt`, `lastRunAt`, `lastError`, `lastRunStats`) |
+| `connector_runs`  | Execution logs for sync runs (`trigger`, `status`, `startedAt`, `finishedAt`, `stats`, `error`)                                                       |
+| `connector_links` | Deduplication links between external entities and Contrack (`connectorId`, `externalId`, `contactId`, `interactionId`, `actionItemId`)                |
+| `upcoming_events` | Future meetings for Pulse/Dashboard (`connectorId`, `externalId`, `title`, `startsAt`, `endsAt`, `location`, `attendeeCount`)                         |
+| `oauth_states`    | Short-lived OAuth CSRF state verification tokens (`token`, `connectorId`, `redirectUrl`, `expiresAt`)                                                 |
+
 ### Virtual Tables (NOT managed by Drizzle — defined in `server/db.ts`)
 
 | Table                | Engine | Dimensions | Purpose                                                                                                                            |
@@ -211,7 +221,8 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 - `server/ai/` — AI layer: `aiService.ts` facade, `singleton.ts`, `provider.ts`, `types.ts`
   - `server/ai/adapters/` — Vendor integrations: `gemini.ts` (`@google/genai`), `openai.ts` (`openai`), `anthropic.ts` (`@anthropic-ai/sdk`)
   - `server/ai/routing/` — `SmartRouter.ts`, `QuotaTracker.ts`, `ParallelQueue.ts`, `registry.ts`
-- `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`, `imports.ts`, `tags.ts`
+- `server/routes/` — Thin Express controllers: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `ai.ts`, `dedupe/`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `linkPreview.ts`, `mcp.ts`, `imports.ts`, `tags.ts`, `connectors.ts`
+- `server/connectors/` — Connectors subsystem: `service.ts` (CRUD, secrets, backoff), `scheduler.ts` (polling loop, concurrency), `ingest.ts` (idempotent stream commit, ghost promotion), `matching.ts` (participant contact resolution), `registry.ts` (adapter catalog), `adapters/ics.ts` (Calendar)
 - `server/services/` — Heavy business logic:
   - `contactService.ts`, `interactionService.ts`, `searchService.ts`, `searchHistoryService.ts`, `listService.ts`, `actionItemService.ts`, `dashboardService.ts`, `relationshipService.ts`, `linkPreviewService.ts`, `mcpService.ts`, `zeroStateService.ts`, `tagService.ts`, `importService.ts`
   - `server/services/dedupe/` — Multi-pass deduplication engine (14 files): `engine.ts`, `passes.ts`, `blocking.ts`, `scoring.ts`, `clustering.ts`, `merging.ts`, `suggestions.ts`, `embeddings.ts`, `normalization.ts`, `ai.ts`, `context.ts`, `jobQueue.ts`, `types.ts`, `index.ts`
@@ -259,7 +270,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 
 ### Frontend (`src/`)
 
-- `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `index.ts`
+- `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `connectors.ts`, `index.ts`
 - `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`
 - `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`

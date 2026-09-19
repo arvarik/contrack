@@ -36,6 +36,7 @@ import {
   DEAD_INVITATION_RETENTION_DAYS,
   IMPORT_RETENTION_DAYS,
   AUTH_LINK_RETENTION_DAYS,
+  CONNECTOR_RUN_RETENTION_DAYS,
 } from "../../server/services/maintenanceService.ts";
 
 /** A timestamp `days` in the past, in the format the columns store. */
@@ -68,6 +69,9 @@ function clearAll(): void {
     DELETE FROM ai_invocations;
     DELETE FROM imports;
     DELETE FROM score_snapshots;
+    DELETE FROM oauth_states;
+    DELETE FROM connector_runs;
+    DELETE FROM connectors;
   `);
 }
 
@@ -204,12 +208,47 @@ function insertScoreSnapshot(
     .run(ownerId, contactId, weekStart, score);
 }
 
-function ids(table: string): string[] {
+function insertOAuthState(
+  state: string,
+  createdAt: string,
+  ownerId: string,
+): void {
+  sqlite
+    .prepare(
+      `INSERT INTO oauth_states (state, ownerId, kind, codeVerifier, createdAt)
+       VALUES (?, ?, 'google', 'verifier', ?)`,
+    )
+    .run(state, ownerId, createdAt);
+}
+
+function insertConnectorRun(
+  id: string,
+  startedAt: string,
+  ownerId: string,
+): void {
+  const connId = `conn-${id}`;
+  sqlite
+    .prepare(
+      `INSERT OR IGNORE INTO connectors (id, ownerId, kind, name)
+       VALUES (?, ?, 'ics', 'Test Connector')`,
+    )
+    .run(connId, ownerId);
+  sqlite
+    .prepare(
+      `INSERT INTO connector_runs (id, connectorId, ownerId, trigger, status, startedAt)
+       VALUES (?, ?, ?, 'schedule', 'ok', ?)`,
+    )
+    .run(id, connId, ownerId, startedAt);
+}
+
+function ids(table: string, col = "id"): string[] {
   return (
-    sqlite.prepare(`SELECT id FROM ${table} ORDER BY id`).all() as {
-      id: string;
+    sqlite
+      .prepare(`SELECT ${col} AS pk FROM ${table} ORDER BY ${col}`)
+      .all() as {
+      pk: string;
     }[]
-  ).map((r) => r.id);
+  ).map((r) => r.pk);
 }
 
 let owner: string;
@@ -462,7 +501,33 @@ describe("the daily sweep", () => {
     expect(remaining.map((r) => r.weekStart)).toEqual([recentWeek]);
   });
 
-  it("sweeps all eight tables in one pass", () => {
+  it("sweeps oauth states older than 15 minutes", () => {
+    insertOAuthState("oa-old", shift("-20 minutes"), owner);
+    insertOAuthState("oa-new", shift("-5 minutes"), owner);
+
+    const counts = runDailyMaintenance();
+    expect(counts.expiredOAuthStates).toBe(1);
+    expect(ids("oauth_states", "state")).toEqual(["oa-new"]);
+  });
+
+  it("sweeps connector runs older than retention limit", () => {
+    insertConnectorRun(
+      "cr-old",
+      daysAgo(CONNECTOR_RUN_RETENTION_DAYS + 1),
+      owner,
+    );
+    insertConnectorRun(
+      "cr-new",
+      daysAgo(CONNECTOR_RUN_RETENTION_DAYS - 1),
+      owner,
+    );
+
+    const counts = runDailyMaintenance();
+    expect(counts.oldConnectorRuns).toBe(1);
+    expect(ids("connector_runs")).toEqual(["cr-new"]);
+  });
+
+  it("sweeps all ten tables in one pass", () => {
     insertAudit("a", daysAgo(AUDIT_RETENTION_DAYS + 1));
     insertSession("s", daysAgo(1), owner);
     insertChallenge("c", daysAgo(1));
@@ -479,6 +544,8 @@ describe("the daily sweep", () => {
     insertAuthLink("l", owner, {
       expiresAt: daysAgo(AUTH_LINK_RETENTION_DAYS + 1),
     });
+    insertOAuthState("oa", shift("-30 minutes"), owner);
+    insertConnectorRun("cr", daysAgo(CONNECTOR_RUN_RETENTION_DAYS + 1), owner);
 
     const contactId = crypto.randomUUID();
     sqlite
@@ -498,6 +565,8 @@ describe("the daily sweep", () => {
       oldInvocations: 1,
       oldImports: 1,
       prunedScoreSnapshots: 1,
+      expiredOAuthStates: 1,
+      oldConnectorRuns: 1,
       // The sweep also checkpoints the write-ahead log, and how many pages
       // that moves depends on everything written before this test ran.
       // `expect.any` keeps the shape exhaustive, so a field added later still
@@ -513,9 +582,11 @@ describe("the daily sweep", () => {
       "invitations",
       "ai_invocations",
       "imports",
+      "connector_runs",
     ]) {
       expect(ids(table), table).toEqual([]);
     }
+    expect(ids("oauth_states", "state"), "oauth_states").toEqual([]);
     expect(
       sqlite.prepare("SELECT COUNT(*) as n FROM score_snapshots").get(),
     ).toEqual({ n: 0 });
@@ -533,6 +604,8 @@ describe("the daily sweep", () => {
       oldInvocations: 0,
       oldImports: 0,
       prunedScoreSnapshots: 0,
+      expiredOAuthStates: 0,
+      oldConnectorRuns: 0,
       walPagesCheckpointed: expect.any(Number),
     });
     expect(ids("audit_log")).toEqual(["new"]);

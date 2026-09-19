@@ -40,6 +40,25 @@ vi.mock("../../server/ai/aiService.ts", async (importActual) => {
     }),
   };
 });
+vi.mock("../../server/connectors/adapters/ics.ts", async (importActual) => {
+  const actual =
+    await importActual<
+      typeof import("../../server/connectors/adapters/ics.ts")
+    >();
+  return {
+    ...actual,
+    icsAdapter: {
+      ...actual.icsAdapter,
+      test: async () => ({
+        ok: true as const,
+        detail: "Connected successfully (test mock)",
+      }),
+      sync: async function* () {
+        // Yield nothing in isolation test
+      },
+    },
+  };
+});
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -84,6 +103,7 @@ const app = makeTestApp();
 const COVERED = [
   "DELETE /api/action-items/:id",
   "DELETE /api/contacts/:id",
+  "DELETE /api/connectors/:id",
   "DELETE /api/interactions/:id",
   "DELETE /api/lists/:id",
   "DELETE /api/lists/:id/members/:contactId",
@@ -100,6 +120,10 @@ const COVERED = [
   "GET /api/ai/stats/feed",
   "GET /api/ai/stats/summary",
   "GET /api/command-palette/zero-state",
+  "GET /api/connectors",
+  "GET /api/connectors/:id",
+  "GET /api/connectors/:id/runs",
+  "GET /api/connectors/correspondents",
   "GET /api/contacts",
   "GET /api/contacts/:id",
   "GET /api/contacts/:id/action-items",
@@ -145,6 +169,7 @@ const COVERED = [
   "PATCH /api/action-items/:id/complete",
   "PATCH /api/contacts/:id",
   "PATCH /api/contacts/:id/location",
+  "PATCH /api/connectors/:id",
   "PATCH /api/interactions/:id",
   "PATCH /api/lists/:id",
   "PATCH /api/search/history/:id",
@@ -165,6 +190,9 @@ const COVERED = [
   "POST /api/contacts/merge-batch",
   "POST /api/contacts/merge-cluster",
   "POST /api/contacts/merge-clusters",
+  "POST /api/connectors",
+  "POST /api/connectors/:id/sync",
+  "POST /api/connectors/test",
   "POST /api/dedupe/merge-log/:id/undo",
   "POST /api/dedupe/scan",
   "POST /api/dedupe/suggestions/:id/dismiss",
@@ -3318,6 +3346,163 @@ describe("the MCP surface answers for the caller's own account", () => {
   });
 });
 
+describe("connectors isolate by account", () => {
+  let idA: string;
+  let idB: string;
+
+  it("POST /api/connectors and POST /api/connectors/test: validates credentials and seals for caller", async () => {
+    const testRes = await asUser(A)(
+      request(app)
+        .post("/api/connectors/test")
+        .send({ kind: "ics", config: { url: "https://example.com/test.ics" } }),
+    );
+    expect(testRes.status).toBe(200);
+    expect(testRes.body.ok).toBe(true);
+
+    const resA = await asUser(A)(
+      request(app)
+        .post("/api/connectors")
+        .send({
+          kind: "ics",
+          name: "A Calendar",
+          config: { url: "https://example.com/calA.ics" },
+        }),
+    );
+    expect(resA.status).toBe(201);
+    idA = resA.body.id;
+
+    const resB = await asUser(B)(
+      request(app)
+        .post("/api/connectors")
+        .send({
+          kind: "ics",
+          name: "B Calendar",
+          config: { url: "https://example.com/calB.ics" },
+        }),
+    );
+    expect(resB.status).toBe(201);
+    idB = resB.body.id;
+  });
+
+  it("GET /api/connectors: returns only the caller's connectors", async () => {
+    const resA = await asUser(A)(request(app).get("/api/connectors"));
+    expect(resA.status).toBe(200);
+    const idsA = resA.body.connectors.map((c: { id: string }) => c.id);
+    expect(idsA).toContain(idA);
+    expect(idsA).not.toContain(idB);
+
+    const resB = await asUser(B)(request(app).get("/api/connectors"));
+    expect(resB.status).toBe(200);
+    const idsB = resB.body.connectors.map((c: { id: string }) => c.id);
+    expect(idsB).toContain(idB);
+    expect(idsB).not.toContain(idA);
+
+    const resC = await asUser(C)(request(app).get("/api/connectors"));
+    expect(resC.status).toBe(200);
+    expect(resC.body.connectors).toEqual([]);
+  });
+
+  it("GET /api/connectors/:id: actor B cannot read actor A's connector", async () => {
+    const res404 = await asUser(B)(request(app).get(`/api/connectors/${idA}`));
+    expect(res404.status).toBe(404);
+
+    const res200 = await asUser(A)(request(app).get(`/api/connectors/${idA}`));
+    expect(res200.status).toBe(200);
+    expect(res200.body.id).toBe(idA);
+  });
+
+  it("PATCH /api/connectors/:id: actor B cannot update actor A's connector", async () => {
+    const res404 = await asUser(B)(
+      request(app).patch(`/api/connectors/${idA}`).send({ name: "Hacked" }),
+    );
+    expect(res404.status).toBe(404);
+
+    const res200 = await asUser(A)(
+      request(app)
+        .patch(`/api/connectors/${idA}`)
+        .send({ name: "A Calendar Renamed" }),
+    );
+    expect(res200.status).toBe(200);
+    expect(res200.body.name).toBe("A Calendar Renamed");
+  });
+
+  it("POST /api/connectors/:id/sync: actor B cannot trigger sync on actor A's connector", async () => {
+    const res404 = await asUser(B)(
+      request(app).post(`/api/connectors/${idA}/sync`),
+    );
+    expect(res404.status).toBe(404);
+
+    const res202 = await asUser(A)(
+      request(app).post(`/api/connectors/${idA}/sync`),
+    );
+    expect(res202.body).toEqual({ runId: expect.any(String) });
+    expect(res202.status).toBe(202);
+    expect(res202.body.runId).toBeDefined();
+  });
+
+  it("GET /api/connectors/:id/runs: actor B cannot read actor A's runs", async () => {
+    const res404 = await asUser(B)(
+      request(app).get(`/api/connectors/${idA}/runs`),
+    );
+    expect(res404.status).toBe(404);
+
+    const res200 = await asUser(A)(
+      request(app).get(`/api/connectors/${idA}/runs`),
+    );
+    expect(res200.status).toBe(200);
+    expect(Array.isArray(res200.body.runs)).toBe(true);
+  });
+
+  it("GET /api/connectors/correspondents: returns only the caller's correspondents", async () => {
+    // Seed a correspondent link for A
+    sqlite
+      .prepare(
+        `INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt)
+         VALUES (?, ?, 'correspondent', 'stranger@example.com', NULL, 1, ?)`,
+      )
+      .run(idA, A.user.id, new Date().toISOString());
+
+    const resA = await asUser(A)(
+      request(app).get("/api/connectors/correspondents"),
+    );
+    expect(resA.status).toBe(200);
+    const emailsA = resA.body.correspondents.map(
+      (c: { email: string | null }) => c.email,
+    );
+    expect(emailsA).toContain("stranger@example.com");
+
+    const resB = await asUser(B)(
+      request(app).get("/api/connectors/correspondents"),
+    );
+    expect(resB.status).toBe(200);
+    const emailsB = resB.body.correspondents.map(
+      (c: { email: string | null }) => c.email,
+    );
+    expect(emailsB).not.toContain("stranger@example.com");
+
+    const resC = await asUser(C)(
+      request(app).get("/api/connectors/correspondents"),
+    );
+    expect(resC.status).toBe(200);
+    expect(resC.body.correspondents).toEqual([]);
+  });
+
+  it("DELETE /api/connectors/:id: actor B cannot delete actor A's connector", async () => {
+    const res404 = await asUser(B)(
+      request(app).delete(`/api/connectors/${idA}`),
+    );
+    expect(res404.status).toBe(404);
+
+    const res204 = await asUser(A)(
+      request(app).delete(`/api/connectors/${idA}`),
+    );
+    expect(res204.status).toBe(204);
+
+    const check = await asUser(A)(request(app).get(`/api/connectors/${idA}`));
+    expect(check.status).toBe(404);
+  });
+});
+
 // =============================================================================
 // The matrix and the manifest agree
 // =============================================================================
@@ -3354,7 +3539,7 @@ describe("all scoped routes are isolated", () => {
       .map(key);
     // Every one of them is covered above. The number is here so that adding a
     // collection route shows up in the diff of this file.
-    expect(collections).toHaveLength(40);
+    expect(collections).toHaveLength(42);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });

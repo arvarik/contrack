@@ -11,6 +11,7 @@ import {
   Activity,
   Archive,
   Brain,
+  Cable,
   Copy,
   DatabaseBackup,
   Download,
@@ -624,6 +625,37 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   },
 
   // ── CONNECT ──────────────────────────────────────────────────────────────
+  {
+    id: "connectors",
+    path: "/settings/connectors",
+    title: NAMES.connectors.title,
+    description: NAMES.connectors.description,
+    icon: Cable,
+    group: "connect",
+    keywords: [
+      "connectors",
+      "calendar",
+      "ics",
+      "sync",
+      "google",
+      "mailbox",
+      "imap",
+      "messages",
+      "imessage",
+      "whatsapp",
+    ],
+    rows: [
+      {
+        id: "gallery",
+        label: "Available connectors",
+        keywords: ["calendar", "mail", "google", "imessage", "whatsapp"],
+      },
+    ],
+    load: () =>
+      import("./connectors/ConnectorsView").then((m) => ({
+        default: m.ConnectorsView,
+      })),
+  },
   {
     id: "mcp",
     path: "/settings/mcp",

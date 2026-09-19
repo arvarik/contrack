@@ -72,6 +72,11 @@ export const NAMES = {
     title: "MCP and API",
     description: "Let Claude, Cursor and scripts use your CRM.",
   },
+  connectors: {
+    label: "Connectors",
+    title: "Connectors",
+    description: "Calendar, mailbox, Google, messages. Sync who you talk to.",
+  },
 } as const satisfies Record<string, DestinationName>;
 
 export type DestinationKey = keyof typeof NAMES;

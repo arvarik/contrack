@@ -47,7 +47,7 @@ export const ComingUpCard = ({
             <p>
               <Link
                 to="/settings/connectors"
-                className="text-primary hover:underline font-medium"
+                className="text-primary hover:underline font-medium hit-area inline-block"
               >
                 Connect a calendar
               </Link>{" "}

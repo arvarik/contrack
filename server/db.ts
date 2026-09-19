@@ -572,6 +572,73 @@ sqlite.exec(`
     ON search_history (ownerId, mode, lastRunAt DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_search_history_owner_pinned
     ON search_history (ownerId, pinned, lastRunAt DESC, id DESC);
+
+  CREATE TABLE IF NOT EXISTS connectors (
+    id TEXT PRIMARY KEY,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    config TEXT NOT NULL DEFAULT '{}',
+    secret TEXT,
+    cursor TEXT,
+    intervalMinutes INTEGER NOT NULL DEFAULT 30,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    nextRunAt TEXT,
+    lastRunAt TEXT,
+    lastError TEXT,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    updatedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
+  CREATE INDEX IF NOT EXISTS idx_connectors_owner ON connectors(ownerId, createdAt);
+  CREATE INDEX IF NOT EXISTS idx_connectors_due ON connectors(status, nextRunAt);
+
+  CREATE TABLE IF NOT EXISTS connector_runs (
+    id TEXT PRIMARY KEY,
+    connectorId TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    trigger TEXT NOT NULL,
+    status TEXT NOT NULL,
+    startedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    finishedAt TEXT,
+    stats TEXT,
+    error TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_connector_runs_conn ON connector_runs(connectorId, startedAt DESC);
+
+  CREATE TABLE IF NOT EXISTS connector_links (
+    connectorId TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    kind TEXT NOT NULL,
+    externalId TEXT NOT NULL,
+    localId TEXT,
+    seenCount INTEGER NOT NULL DEFAULT 1,
+    lastSeenAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    ignoredAt TEXT,
+    PRIMARY KEY (connectorId, kind, externalId)
+  );
+  CREATE INDEX IF NOT EXISTS idx_connector_links_local ON connector_links(localId);
+
+  CREATE TABLE IF NOT EXISTS upcoming_events (
+    connectorId TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    externalId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    startsAt TEXT NOT NULL,
+    endsAt TEXT NOT NULL,
+    participants TEXT NOT NULL,
+    contactIds TEXT NOT NULL,
+    PRIMARY KEY (connectorId, externalId)
+  );
+  CREATE INDEX IF NOT EXISTS idx_upcoming_owner_start ON upcoming_events(ownerId, startsAt);
+
+  CREATE TABLE IF NOT EXISTS oauth_states (
+    state TEXT PRIMARY KEY,
+    ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    codeVerifier TEXT NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+  );
 `);
 
 // =============================================================================
@@ -609,6 +676,10 @@ export const OWNED_TABLES = [
   "imports",
   "score_snapshots",
   "search_history",
+  "connectors",
+  "connector_runs",
+  "connector_links",
+  "upcoming_events",
 ] as const;
 
 /** Owned tables with no parent contact. The caller must supply the owner. */
@@ -620,6 +691,10 @@ const OWNER_REQUIRED_TABLES = [
   "imports",
   "score_snapshots",
   "search_history",
+  "connectors",
+  "connector_runs",
+  "connector_links",
+  "upcoming_events",
 ] as const;
 
 /**

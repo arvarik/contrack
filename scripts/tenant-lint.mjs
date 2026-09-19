@@ -37,6 +37,10 @@ export const OWNED_TABLES = [
   "imports",
   "score_snapshots",
   "search_history",
+  "connectors",
+  "connector_runs",
+  "connector_links",
+  "upcoming_events",
 ];
 
 /** Virtual tables partitioned by owner. FTS uses a token, not a column. */
@@ -58,6 +62,10 @@ export const OWNED_SCHEMA_KEYS = [
   "dedupeMergeLog",
   "scoreSnapshots",
   "searchHistory",
+  "connectors",
+  "connectorRuns",
+  "connectorLinks",
+  "upcomingEvents",
 ];
 
 /** The only reasons an allow comment may give. */

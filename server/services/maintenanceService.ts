@@ -36,6 +36,7 @@ export const DEAD_INVITATION_RETENTION_DAYS = 30;
 export const IMPORT_RETENTION_DAYS = 30;
 export const AUTH_LINK_RETENTION_DAYS = 30;
 export const SCORE_SNAPSHOT_RETENTION_WEEKS = 26;
+export const CONNECTOR_RUN_RETENTION_DAYS = 90;
 
 export interface MaintenanceCounts {
   auditRows: number;
@@ -49,6 +50,10 @@ export interface MaintenanceCounts {
   oldImports: number;
   /** Pruned score snapshots older than 26 weeks. */
   prunedScoreSnapshots: number;
+  /** Swept oauth_states older than 15 minutes. */
+  expiredOAuthStates: number;
+  /** Pruned connector runs older than 90 days. */
+  oldConnectorRuns: number;
   /** Pages the checkpoint moved back into the database. */
   walPagesCheckpointed: number;
 }
@@ -80,6 +85,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
     oldInvocations: 0,
     oldImports: 0,
     prunedScoreSnapshots: 0,
+    expiredOAuthStates: 0,
+    oldConnectorRuns: 0,
     walPagesCheckpointed: 0,
   };
 
@@ -160,6 +167,20 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `DELETE FROM score_snapshots WHERE weekStart < ?`,
       )
       .run(cutoffWeek).changes;
+
+    counts.expiredOAuthStates = sqlite
+      .prepare(
+        // tenant-lint: allow instance sweep
+        `DELETE FROM oauth_states WHERE createdAt < datetime('now', '-15 minutes')`,
+      )
+      .run().changes;
+
+    counts.oldConnectorRuns = sqlite
+      .prepare(
+        // tenant-lint: allow instance sweep
+        `DELETE FROM connector_runs WHERE startedAt < datetime('now', ?)`,
+      )
+      .run(`-${CONNECTOR_RUN_RETENTION_DAYS} days`).changes;
   } catch (err) {
     log.warn(
       "Maintenance",
@@ -181,7 +202,9 @@ export function runDailyMaintenance(): MaintenanceCounts {
     counts.deadInvitations +
     counts.oldInvocations +
     counts.oldImports +
-    counts.prunedScoreSnapshots;
+    counts.prunedScoreSnapshots +
+    counts.expiredOAuthStates +
+    counts.oldConnectorRuns;
   if (total > 0) {
     log.info(
       "Maintenance",
@@ -193,7 +216,9 @@ export function runDailyMaintenance(): MaintenanceCounts {
         `${counts.deadInvitations} dead invitations, ` +
         `${counts.oldInvocations} old AI invocations, ` +
         `${counts.oldImports} old imports, ` +
-        `${counts.prunedScoreSnapshots} old score snapshots`,
+        `${counts.prunedScoreSnapshots} old score snapshots, ` +
+        `${counts.expiredOAuthStates} expired oauth states, ` +
+        `${counts.oldConnectorRuns} old connector runs`,
     );
   }
   return counts;

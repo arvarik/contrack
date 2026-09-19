@@ -555,17 +555,42 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 Archived
               </div>
             )}
-            {contact.isGhost ? (
-              <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">
-                <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
-                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
-                  <strong className="block text-primary mb-0.5">
-                    Ghost Profile
-                  </strong>
-                  Created automatically from a mention. Waiting to be populated.
-                </div>
-              </div>
-            ) : null}
+            {contact.isGhost
+              ? (() => {
+                  const connectorSource = contact.sources?.find((s) =>
+                    [
+                      "calendar",
+                      "email",
+                      "google",
+                      "imessage",
+                      "whatsapp",
+                    ].includes(s.platform),
+                  );
+                  const count = contact.interactionCount ?? 1;
+                  const sourceName = connectorSource
+                    ? connectorSource.platform === "calendar"
+                      ? "calendar"
+                      : connectorSource.platform === "email"
+                        ? "mail"
+                        : connectorSource.platform
+                    : null;
+                  const ghostText = sourceName
+                    ? `Seen ${count} time${count === 1 ? "" : "s"} in your ${sourceName}. Waiting to be populated.`
+                    : "Created automatically from a mention. Waiting to be populated.";
+
+                  return (
+                    <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">
+                      <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
+                        <strong className="block text-primary mb-0.5">
+                          Ghost Profile
+                        </strong>
+                        {ghostText}
+                      </div>
+                    </div>
+                  );
+                })()
+              : null}
           </div>
 
           {/* Identity */}

@@ -31,6 +31,7 @@ import {
   useCreateBackup,
   type BackupVerification,
 } from "../../../api/admin";
+import { useConnectors } from "../../../api/connectors";
 import { Badge } from "../../../components/ui/Badge";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { cn } from "../../../lib/utils";
@@ -99,6 +100,7 @@ const VerificationBadge = ({
 
 export const BackupsView = () => {
   const { data: backups, isLoading, isError, refetch } = useBackups();
+  const { data: connectors } = useConnectors();
   const create = useCreateBackup();
   const [latest, setLatest] = useState<string | null>(null);
 
@@ -157,13 +159,24 @@ export const BackupsView = () => {
           </div>
         }
         footer={
-          <p className="text-xs text-on-surface-variant text-pretty">
-            A verified snapshot opened cleanly, passed SQLite&rsquo;s integrity
-            check, and holds rows in every table this database does. Snapshots
-            live in the server&rsquo;s data directory, and copying them
-            somewhere else is what makes them a backup, which Contrack cannot do
-            for you.
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-on-surface-variant text-pretty">
+              A verified snapshot opened cleanly, passed SQLite&rsquo;s
+              integrity check, and holds rows in every table this database does.
+              Snapshots live in the server&rsquo;s data directory, and copying
+              them somewhere else is what makes them a backup, which Contrack
+              cannot do for you.
+            </p>
+            {connectors && connectors.length > 0 && (
+              <p className="text-xs text-on-surface-variant text-pretty">
+                Connector credentials are sealed with{" "}
+                <code className="font-mono text-on-surface">
+                  DATA_DIR/secret.key
+                </code>
+                . Keep it with your backups.
+              </p>
+            )}
+          </div>
         }
       >
         {backups?.map((backup) => (

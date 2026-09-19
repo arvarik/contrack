@@ -895,6 +895,124 @@ export const searchHistory = sqliteTable(
   ],
 );
 
+export const connectors = sqliteTable(
+  "connectors",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("active"),
+    config: text("config").notNull().default("{}"),
+    secret: text("secret"),
+    cursor: text("cursor"),
+    intervalMinutes: integer("intervalMinutes").notNull().default(30),
+    attempts: integer("attempts").notNull().default(0),
+    nextRunAt: text("nextRunAt"),
+    lastRunAt: text("lastRunAt"),
+    lastError: text("lastError"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updatedAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => [
+    index("idx_connectors_owner").on(table.ownerId, table.createdAt),
+    index("idx_connectors_due").on(table.status, table.nextRunAt),
+  ],
+);
+
+export const connectorRuns = sqliteTable(
+  "connector_runs",
+  {
+    id: text("id").primaryKey(),
+    connectorId: text("connectorId")
+      .notNull()
+      .references(() => connectors.id, { onDelete: "cascade" }),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    trigger: text("trigger").notNull(),
+    status: text("status").notNull(),
+    startedAt: text("startedAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    finishedAt: text("finishedAt"),
+    stats: text("stats"),
+    error: text("error"),
+  },
+  (table) => [
+    index("idx_connector_runs_conn").on(table.connectorId, table.startedAt),
+  ],
+);
+
+export const connectorLinks = sqliteTable(
+  "connector_links",
+  {
+    connectorId: text("connectorId")
+      .notNull()
+      .references(() => connectors.id, { onDelete: "cascade" }),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    kind: text("kind").notNull(),
+    externalId: text("externalId").notNull(),
+    localId: text("localId"),
+    seenCount: integer("seenCount").notNull().default(1),
+    lastSeenAt: text("lastSeenAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    ignoredAt: text("ignoredAt"),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.connectorId, table.kind, table.externalId],
+    }),
+    idxLocal: index("idx_connector_links_local").on(table.localId),
+  }),
+);
+
+export const upcomingEvents = sqliteTable(
+  "upcoming_events",
+  {
+    connectorId: text("connectorId")
+      .notNull()
+      .references(() => connectors.id, { onDelete: "cascade" }),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    externalId: text("externalId").notNull(),
+    title: text("title").notNull(),
+    startsAt: text("startsAt").notNull(),
+    endsAt: text("endsAt").notNull(),
+    participants: text("participants").notNull(),
+    contactIds: text("contactIds").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.connectorId, table.externalId] }),
+    idxOwnerStart: index("idx_upcoming_owner_start").on(
+      table.ownerId,
+      table.startsAt,
+    ),
+  }),
+);
+
+export const oauthStates = sqliteTable("oauth_states", {
+  state: text("state").primaryKey(),
+  ownerId: text("ownerId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  codeVerifier: text("codeVerifier").notNull(),
+  createdAt: text("createdAt")
+    .notNull()
+    .default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 /** Tables that carry `ownerId`. Mirrored from server/db.ts. */
 export const OWNED_TABLES = [
   "contacts",
@@ -908,6 +1026,10 @@ export const OWNED_TABLES = [
   "imports",
   "score_snapshots",
   "search_history",
+  "connectors",
+  "connector_runs",
+  "connector_links",
+  "upcoming_events",
 ] as const;
 
 // =============================================================================

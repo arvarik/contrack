@@ -471,6 +471,7 @@ export function requireSession(
   next: NextFunction,
 ): void {
   if (req.principal?.via === "session") return next();
+  if (!isAuthRequired() && req.principal?.via === "implicit") return next();
   if (req.principal) {
     return next(
       new AppError(
