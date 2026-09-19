@@ -113,10 +113,7 @@ export const CorrespondentsView: React.FC = () => {
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-on-surface">
-              Correspondents
-            </h1>
-            <p className="text-xs text-on-surface-variant mt-1">
+            <p className="text-xs text-on-surface-variant">
               People you talk to who are not in Contrack yet. Add them as
               contacts or ignore them.
             </p>

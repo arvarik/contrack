@@ -178,15 +178,17 @@ describe("StartPanel", () => {
       expect(screen.getByText("Review notes")).toBeDefined();
 
       // Completing an action triggers callback
-      const completeBtn = screen.getByRole("button", {
-        name: /Mark "Follow up on analytical engine draft" done/,
-      });
-      fireEvent.click(completeBtn);
-
-      // ActionRow sets a short timeout before firing complete
-      setTimeout(() => {
+      vi.useFakeTimers();
+      try {
+        const completeBtn = screen.getByRole("button", {
+          name: /Mark "Follow up on analytical engine draft" done/,
+        });
+        fireEvent.click(completeBtn);
+        vi.advanceTimersByTime(300);
         expect(onComplete).toHaveBeenCalledWith("action-1");
-      }, 350);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("renders recently viewed contacts with name, role and company", () => {
