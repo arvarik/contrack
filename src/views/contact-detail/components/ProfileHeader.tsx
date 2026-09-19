@@ -558,13 +558,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             {contact.isGhost
               ? (() => {
                   const connectorSource = contact.sources?.find((s) =>
-                    [
-                      "calendar",
-                      "email",
-                      "google",
-                      "imessage",
-                      "whatsapp",
-                    ].includes(s.platform),
+                    ["calendar", "email", "google"].includes(s.platform),
                   );
                   const count = contact.interactionCount ?? 1;
                   const sourceName = connectorSource

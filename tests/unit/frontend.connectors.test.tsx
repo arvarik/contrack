@@ -117,6 +117,11 @@ describe("Frontend Connectors Components", () => {
       isLoading: false,
     } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
 
+    vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as unknown as ReturnType<typeof connectorsApi.useCorrespondents>);
+
     vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
       mutateAsync: vi.fn().mockResolvedValue({ id: "created-conn-1" }),
       isPending: false,
@@ -160,33 +165,7 @@ describe("Frontend Connectors Components", () => {
   // 1. AddConnectorSheet
   // =========================================================================
   describe("AddConnectorSheet", () => {
-    it("hides iMessage when not returned by server (e.g. non-darwin or Docker)", () => {
-      const nonDarwinKinds: KindInfo[] = [
-        {
-          kind: "ics",
-          label: "Calendar",
-          description: "Sync meetings",
-          capabilities: { schedule: true },
-        },
-        {
-          kind: "imap",
-          label: "Mailbox (IMAP)",
-          description: "Sync emails",
-          capabilities: { schedule: true },
-        },
-        {
-          kind: "google",
-          label: "Google Workspace",
-          description: "Sync Google",
-          capabilities: { schedule: true },
-        },
-      ];
-
-      vi.mocked(connectorsApi.useConnectorKinds).mockReturnValue({
-        data: nonDarwinKinds,
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorKinds>);
-
+    it("renders all supported connector kinds", () => {
       renderWithClient(
         <AddConnectorSheet
           isOpen={true}
@@ -197,46 +176,10 @@ describe("Frontend Connectors Components", () => {
 
       expect(screen.getByText("Calendar")).toBeTruthy();
       expect(screen.getByText("Mailbox (IMAP)")).toBeTruthy();
-      expect(screen.queryByText("iMessage")).toBeNull();
+      expect(screen.getByText("Google Workspace")).toBeTruthy();
     });
 
-    it("displays iMessage when host is darwin (and marks it appropriately)", () => {
-      const darwinKinds: KindInfo[] = [
-        {
-          kind: "ics",
-          label: "Calendar",
-          description: "Sync meetings",
-          capabilities: { schedule: true },
-        },
-        {
-          kind: "imessage",
-          label: "iMessage",
-          description: "Sync iMessage conversations from this Mac",
-          capabilities: { schedule: true, localOnly: "darwin" },
-        },
-      ];
-
-      vi.mocked(connectorsApi.useConnectorKinds).mockReturnValue({
-        data: darwinKinds,
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorKinds>);
-
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={vi.fn()}
-          onSelectKind={vi.fn()}
-        />,
-      );
-
-      expect(screen.getByText("Calendar")).toBeTruthy();
-      expect(screen.getByText("iMessage")).toBeTruthy();
-      expect(
-        screen.getByText(/Runs on the Mac that hosts Contrack/i),
-      ).toBeTruthy();
-    });
-
-    it("selecting an available kind (e.g. 'ics') calls onSelectKind('ics')", () => {
+    it("selecting Calendar calls onSelectKind('ics')", () => {
       const onSelectKindMock = vi.fn();
 
       renderWithClient(
@@ -251,6 +194,42 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(calendarBtn);
 
       expect(onSelectKindMock).toHaveBeenCalledWith("ics");
+    });
+
+    it("selecting Mailbox (IMAP) calls onSelectKind('imap')", () => {
+      const onSelectKindMock = vi.fn();
+
+      renderWithClient(
+        <AddConnectorSheet
+          isOpen={true}
+          onClose={vi.fn()}
+          onSelectKind={onSelectKindMock}
+        />,
+      );
+
+      const imapBtn = screen.getByRole("button", { name: /Mailbox \(IMAP\)/i });
+      fireEvent.click(imapBtn);
+
+      expect(onSelectKindMock).toHaveBeenCalledWith("imap");
+    });
+
+    it("selecting Google Workspace calls onSelectKind('google')", () => {
+      const onSelectKindMock = vi.fn();
+
+      renderWithClient(
+        <AddConnectorSheet
+          isOpen={true}
+          onClose={vi.fn()}
+          onSelectKind={onSelectKindMock}
+        />,
+      );
+
+      const googleBtn = screen.getByRole("button", {
+        name: /Google Workspace/i,
+      });
+      fireEvent.click(googleBtn);
+
+      expect(onSelectKindMock).toHaveBeenCalledWith("google");
     });
 
     it("cancel button calls onClose", () => {
@@ -268,25 +247,6 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(cancelBtn);
 
       expect(onCloseMock).toHaveBeenCalledTimes(1);
-    });
-
-    it("disables unavailable kinds and shows Coming soon badge", () => {
-      const onSelectKindMock = vi.fn();
-
-      renderWithClient(
-        <AddConnectorSheet
-          isOpen={true}
-          onClose={vi.fn()}
-          onSelectKind={onSelectKindMock}
-        />,
-      );
-
-      const imapBtn = screen.getByRole("button", { name: /Mailbox \(IMAP\)/i });
-      expect((imapBtn as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getAllByText("Coming soon").length).toBeGreaterThan(0);
-
-      fireEvent.click(imapBtn);
-      expect(onSelectKindMock).not.toHaveBeenCalled();
     });
   });
 
@@ -1362,8 +1322,8 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      const connectBtn = screen.getByRole("button", { name: "Connect" });
-      fireEvent.click(connectBtn);
+      const connectBtns = screen.getAllByRole("button", { name: "Connect" });
+      fireEvent.click(connectBtns[0]);
 
       expect(
         screen.getByRole("heading", { name: "Connect Calendar" }),

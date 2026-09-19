@@ -29,9 +29,23 @@ export interface SearxngIntegrationStatus {
   source: IntegrationSource;
 }
 
+export interface GoogleOAuthIntegrationStatus {
+  configured: boolean;
+  source: IntegrationSource;
+  clientId: string | null;
+  clientSecretPreview: string | null;
+}
+
+export interface GoogleOAuthCredentials {
+  clientId: string;
+  clientSecret: string;
+  source: "setting" | "env";
+}
+
 export interface IntegrationsStatus {
   mapbox: MapboxIntegrationStatus;
   searxng: SearxngIntegrationStatus;
+  googleOAuth: GoogleOAuthIntegrationStatus;
 }
 
 export function isMapboxEnvSet(): boolean {
@@ -42,6 +56,17 @@ export function isMapboxEnvSet(): boolean {
 export function isSearxngEnvSet(): boolean {
   const raw = process.env.SEARXNG_URL?.trim();
   return raw !== undefined && raw !== "";
+}
+
+export function isGoogleOAuthEnvSet(): boolean {
+  const id = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+  const secret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  return Boolean(id && secret);
+}
+
+function redact(secret: string | null | undefined): string | null {
+  if (!secret) return null;
+  return secret.length <= 4 ? "••••" : `••••${secret.slice(-4)}`;
 }
 
 /**
@@ -118,10 +143,82 @@ export function getIntegrationsStatus(): IntegrationsStatus {
     searxngStatus = { url: null, source: "none" };
   }
 
+  const googleCreds = getGoogleOAuthCredentials();
+  const googleOAuthStatus: GoogleOAuthIntegrationStatus = googleCreds
+    ? {
+        configured: true,
+        source: googleCreds.source,
+        clientId: googleCreds.clientId,
+        clientSecretPreview: redact(googleCreds.clientSecret),
+      }
+    : {
+        configured: false,
+        source: "none",
+        clientId: null,
+        clientSecretPreview: null,
+      };
+
   return {
     mapbox: mapboxStatus,
     searxng: searxngStatus,
+    googleOAuth: googleOAuthStatus,
   };
+}
+
+/**
+ * Returns the unsealed Google OAuth credentials.
+ * Checks environment overrides (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET)
+ * before falling back to sealed database setting.
+ */
+export function getGoogleOAuthCredentials(): GoogleOAuthCredentials | null {
+  const envId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+  const envSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+  if (envId && envSecret) {
+    return {
+      clientId: envId,
+      clientSecret: envSecret,
+      source: "env",
+    };
+  }
+
+  const sealed = getSetting<string>(SETTING_KEYS.googleOAuth);
+  if (typeof sealed === "string" && sealed.startsWith("v1:")) {
+    try {
+      const raw = open(sealed);
+      const parsed = JSON.parse(raw);
+      if (parsed?.clientId && parsed?.clientSecret) {
+        return {
+          clientId: parsed.clientId,
+          clientSecret: parsed.clientSecret,
+          source: "setting",
+        };
+      }
+    } catch (err) {
+      log.warn(
+        "Integrations",
+        `Failed to unseal Google OAuth credentials: ${getErrorMessage(err)}`,
+      );
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Sets or clears the Google OAuth credentials. Stored sealed using secretBox.
+ */
+export function setGoogleOAuthCredentials(
+  creds: { clientId: string; clientSecret: string } | null,
+): void {
+  if (!creds || !creds.clientId?.trim() || !creds.clientSecret?.trim()) {
+    deleteSetting(SETTING_KEYS.googleOAuth);
+    return;
+  }
+  const payload = JSON.stringify({
+    clientId: creds.clientId.trim(),
+    clientSecret: creds.clientSecret.trim(),
+  });
+  setSetting(SETTING_KEYS.googleOAuth, seal(payload));
 }
 
 /**

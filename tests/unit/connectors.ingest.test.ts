@@ -363,4 +363,130 @@ describe("connectors ingestStream", () => {
       .get(ownerId) as { count: number };
     expect(savedCount.count).toBe(5);
   });
+
+  it("rolls up multiple emails for the same contact on the same day into one interaction", async () => {
+    const matcher = buildContactMatcher(scope);
+    const selfAddresses = { emails: ["me@example.com"], phones: [] };
+
+    const email1: SyncEvent = {
+      kind: "interaction",
+      externalId: "email-001",
+      type: "email",
+      title: "First email",
+      content: "First email content",
+      date: "2026-03-15T09:00:00Z",
+      participants: [
+        { email: "me@example.com" },
+        { email: "alice@example.com" },
+      ],
+    };
+
+    const email2: SyncEvent = {
+      kind: "interaction",
+      externalId: "email-002",
+      type: "email",
+      title: "Second email",
+      content: "Second email content",
+      date: "2026-03-15T15:00:00Z",
+      participants: [
+        { email: "me@example.com" },
+        { email: "alice@example.com" },
+      ],
+    };
+
+    async function* makeStream() {
+      yield email1;
+      yield email2;
+    }
+
+    const res = await ingestStream(
+      scope,
+      { id: connectorId, ownerId, kind: "imap", config: { rollup: true } },
+      makeStream(),
+      matcher,
+      selfAddresses,
+    );
+
+    expect(res.stats.interactions).toBe(2);
+    expect(res.stats.emails).toBe(2);
+
+    // Check that only 1 interaction record was created in the database
+    const interactions = sqlite
+      .prepare("SELECT * FROM interactions WHERE ownerId = ?")
+      .all(ownerId) as Array<{ id: string; title: string; content: string }>;
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0].title).toBe("2 emails with Known Alice");
+    expect(interactions[0].content).toContain("First email content");
+    expect(interactions[0].content).toContain("Second email content");
+
+    // Both email externalIds should exist in connector_links
+    const emailLinks = sqlite
+      .prepare(
+        "SELECT * FROM connector_links WHERE connectorId = ? AND kind = 'interaction'",
+      )
+      .all(connectorId) as Array<{ externalId: string; localId: string }>;
+    expect(emailLinks).toHaveLength(2);
+    expect(emailLinks[0].localId).toBe(interactions[0].id);
+    expect(emailLinks[1].localId).toBe(interactions[0].id);
+
+    // Rollup link should also exist
+    const rollupLink = sqlite
+      .prepare(
+        "SELECT * FROM connector_links WHERE connectorId = ? AND kind = 'rollup'",
+      )
+      .get(connectorId) as {
+      externalId: string;
+      seenCount: number;
+      localId: string;
+    };
+    expect(rollupLink.externalId).toBe(`${contactId}:2026-03-15`);
+    expect(rollupLink.seenCount).toBe(2);
+    expect(rollupLink.localId).toBe(interactions[0].id);
+  });
+
+  it("creates and updates contacts when receiving contact events", async () => {
+    const matcher = buildContactMatcher(scope);
+    const selfAddresses = { emails: ["me@example.com"], phones: [] };
+
+    const contactEvent: SyncEvent = {
+      kind: "contact",
+      externalId: "google-person-123",
+      contact: {
+        name: "Bob Builder",
+        emails: [{ email: "bob@builder.com", label: "work" }],
+        phones: [{ phone: "+14155550199", label: "mobile" }],
+      },
+    };
+
+    async function* makeStream() {
+      yield contactEvent;
+    }
+
+    const res = await ingestStream(
+      scope,
+      { id: connectorId, ownerId, kind: "google", config: {} },
+      makeStream(),
+      matcher,
+      selfAddresses,
+    );
+
+    expect(res.stats.contacts).toBe(1);
+
+    // Check contact exists
+    const contactRow = sqlite
+      .prepare(
+        "SELECT * FROM contacts WHERE name = 'Bob Builder' AND ownerId = ?",
+      )
+      .get(ownerId) as { id: string; name: string };
+    expect(contactRow).toBeDefined();
+
+    // Check link exists
+    const link = sqlite
+      .prepare(
+        "SELECT * FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = ?",
+      )
+      .get(connectorId, "google-person-123") as { localId: string };
+    expect(link).toBeDefined();
+    expect(link.localId).toBe(contactRow.id);
+  });
 });

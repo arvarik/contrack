@@ -196,3 +196,22 @@ export function useCorrespondents(limit = 200) {
     staleTime: 60 * 1000,
   });
 }
+
+export function useIgnoreCorrespondent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { connectorId: string; externalId: string }) =>
+      apiJson<{ ok: true; updated: boolean }>(
+        "/connectors/correspondents/ignore",
+        {
+          method: "POST",
+          ...jsonBody(data),
+        },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["connectors", "correspondents"],
+      });
+    },
+  });
+}

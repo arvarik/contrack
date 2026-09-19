@@ -21,6 +21,7 @@ import type {
   ConnectorStatus,
   ConnectorSummary,
   Correspondent,
+  Participant,
   RunStats,
 } from "../../shared/connectors.ts";
 import { getAdapter } from "./registry.ts";
@@ -573,6 +574,8 @@ export async function runNow(
     ).toISOString();
   }
 
+  const matcher = buildContactMatcher(scope);
+
   const signal = explicitSignal ?? new AbortController().signal;
   const ctx: SyncContext<unknown, unknown> = {
     config,
@@ -582,9 +585,10 @@ export async function runNow(
     selfAddresses: { emails: selfEmails, phones: selfPhones },
     signal,
     log: (msg: string) => log.info("Connectors", `[${connector.name}] ${msg}`),
+    accountId: scope.ownerId,
+    isContactParticipant: (p: Participant) =>
+      Boolean(matcher.resolveContactId(p)),
   };
-
-  const matcher = buildContactMatcher(scope);
 
   try {
     const gen = adapter.sync(ctx);
@@ -778,10 +782,10 @@ export function listRuns(
 export function listCorrespondents(
   scope: Scope,
   limit: number = 50,
+  includeIgnored: boolean = false,
 ): Correspondent[] {
-  const rows = sqlite
-    .prepare(
-      `SELECT
+  const sql = includeIgnored
+    ? `SELECT
          cl.connectorId,
          c.name AS connectorName,
          cl.kind,
@@ -794,9 +798,29 @@ export function listCorrespondents(
        JOIN connectors c ON c.id = cl.connectorId
        WHERE cl.ownerId = ? AND cl.kind = 'correspondent'
        ORDER BY cl.seenCount DESC, cl.lastSeenAt DESC
-       LIMIT ?`,
-    )
-    .all(scope.ownerId, limit) as Array<{
+       LIMIT ?`
+    : `SELECT
+         cl.connectorId,
+         c.name AS connectorName,
+         cl.kind,
+         cl.externalId,
+         cl.localId,
+         cl.seenCount,
+         cl.lastSeenAt,
+         cl.ignoredAt
+       FROM connector_links cl
+       JOIN connectors c ON c.id = cl.connectorId
+        WHERE cl.ownerId = ? AND cl.kind = 'correspondent' AND cl.ignoredAt IS NULL AND cl.localId IS NULL
+          AND cl.externalId NOT IN (
+            SELECT LOWER(ce.email)
+            FROM contact_emails ce
+            JOIN contacts c2 ON c2.id = ce.contactId
+            WHERE c2.ownerId = cl.ownerId AND c2.deletedAt IS NULL
+          )
+        ORDER BY cl.seenCount DESC, cl.lastSeenAt DESC
+        LIMIT ?`;
+
+  const rows = sqlite.prepare(sql).all(scope.ownerId, limit) as Array<{
     connectorId: string;
     connectorName: string;
     kind: string;
@@ -835,4 +859,23 @@ export function listCorrespondents(
       ignoredAt: row.ignoredAt,
     };
   });
+}
+
+/**
+ * Sets ignoredAt on a correspondent link so it no longer appears in review or becomes a ghost.
+ */
+export function ignoreCorrespondent(
+  scope: Scope,
+  connectorId: string,
+  externalId: string,
+): boolean {
+  const result = sqlite
+    .prepare(
+      `UPDATE connector_links
+       SET ignoredAt = CURRENT_TIMESTAMP
+       WHERE connectorId = ? AND kind = 'correspondent' AND externalId = ? AND ownerId = ?`,
+    )
+    .run(connectorId, externalId, scope.ownerId);
+
+  return result.changes > 0;
 }

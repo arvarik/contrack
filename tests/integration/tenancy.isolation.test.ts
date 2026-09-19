@@ -195,6 +195,7 @@ const COVERED = [
   "POST /api/contacts/merge-clusters",
   "POST /api/connectors",
   "POST /api/connectors/:id/sync",
+  "POST /api/connectors/correspondents/ignore",
   "POST /api/connectors/test",
   "POST /api/dedupe/merge-log/:id/undo",
   "POST /api/dedupe/scan",
@@ -3504,6 +3505,58 @@ describe("connectors isolate by account", () => {
 
     const check = await asUser(A)(request(app).get(`/api/connectors/${idA}`));
     expect(check.status).toBe(404);
+  });
+
+  it("POST /api/connectors/correspondents/ignore: actor B cannot ignore actor A's correspondent", async () => {
+    const connA = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO connectors (id, ownerId, kind, name, status, config, intervalMinutes, attempts, createdAt, updatedAt)
+         VALUES (?, ?, 'imap', 'Test Connector', 'active', '{}', 30, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      )
+      .run(connA, A.user.id);
+
+    // Seed a correspondent link for A
+    const strangerA = "ignore-target-" + crypto.randomUUID() + "@example.com";
+    sqlite
+      .prepare(
+        `INSERT INTO connector_links (connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt)
+         VALUES (?, ?, 'correspondent', ?, NULL, 1, ?)`,
+      )
+      .run(connA, A.user.id, strangerA, new Date().toISOString());
+
+    // Actor B attempts to ignore A's correspondent
+    const resB = await asUser(B)(
+      request(app)
+        .post("/api/connectors/correspondents/ignore")
+        .send({ connectorId: connA, externalId: strangerA }),
+    );
+    expect(resB.status).toBe(200);
+    expect(resB.body.updated).toBe(false);
+
+    // Verify row for A was NOT ignored
+    const row = sqlite
+      .prepare(
+        `SELECT ignoredAt FROM connector_links WHERE connectorId = ? AND externalId = ?`,
+      )
+      .get(connA, strangerA) as { ignoredAt: string | null } | undefined;
+    expect(row?.ignoredAt).toBeNull();
+
+    // Actor A ignores their own correspondent
+    const resA = await asUser(A)(
+      request(app)
+        .post("/api/connectors/correspondents/ignore")
+        .send({ connectorId: connA, externalId: strangerA }),
+    );
+    expect(resA.status).toBe(200);
+    expect(resA.body.updated).toBe(true);
+
+    const rowAfter = sqlite
+      .prepare(
+        `SELECT ignoredAt FROM connector_links WHERE connectorId = ? AND externalId = ?`,
+      )
+      .get(connA, strangerA) as { ignoredAt: string | null } | undefined;
+    expect(rowAfter?.ignoredAt).not.toBeNull();
   });
 });
 

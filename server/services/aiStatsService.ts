@@ -42,6 +42,7 @@ export const AI_OPERATIONS = [
   "searchExpansion",
   "dailyInsight",
   "emlSummary",
+  "connectorSummary",
   "bulkParse",
   "aiSearchGrounding",
   "aiSearchExtraction",

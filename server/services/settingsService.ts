@@ -90,4 +90,6 @@ export const SETTING_KEYS = {
   backupKeep: "backup.keep",
   /** string (sealed) — Mapbox access token encrypted with secretBox */
   mapboxKey: "geo.mapboxKey",
+  /** string (sealed) — Google OAuth clientId and clientSecret encrypted with secretBox */
+  googleOAuth: "connectors.googleOAuth",
 } as const;

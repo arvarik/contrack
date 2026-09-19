@@ -55,6 +55,8 @@ export interface SyncContext<C = unknown, S = unknown> {
   selfAddresses: { emails: string[]; phones: string[] };
   signal: AbortSignal;
   log: (msg: string) => void;
+  accountId?: string;
+  isContactParticipant?: (p: Participant) => boolean;
 }
 
 export interface ConnectorAdapter<C = unknown, S = unknown> {

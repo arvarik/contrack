@@ -32,6 +32,7 @@ const OP_LABELS: Record<string, string> = {
   searchExpansion: "Search Expansion",
   dailyInsight: "Daily Insight",
   emlSummary: "Email Summary",
+  connectorSummary: "Connector Summary",
   bulkParse: "Bulk Parse",
   queryParse: "Query Parse",
   hyde: "Query Expansion",

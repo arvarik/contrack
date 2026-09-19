@@ -640,20 +640,41 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "google",
       "mailbox",
       "imap",
-      "messages",
-      "imessage",
-      "whatsapp",
+      "email",
+      "gmail",
+      "outlook",
     ],
     rows: [
       {
         id: "gallery",
         label: "Available connectors",
-        keywords: ["calendar", "mail", "google", "imessage", "whatsapp"],
+        keywords: ["calendar", "mail", "google", "imap", "email"],
       },
     ],
     load: () =>
       import("./connectors/ConnectorsView").then((m) => ({
         default: m.ConnectorsView,
+      })),
+  },
+  {
+    id: "correspondents",
+    path: "/settings/connectors/people",
+    title: NAMES.correspondents.title,
+    description: NAMES.correspondents.description,
+    icon: Users,
+    group: "connect",
+    keywords: [
+      "correspondents",
+      "people",
+      "connectors",
+      "unmatched",
+      "contacts",
+      "review",
+      "inbox",
+    ],
+    load: () =>
+      import("./connectors/CorrespondentsView").then((m) => ({
+        default: m.CorrespondentsView,
       })),
   },
   {
