@@ -65,6 +65,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const onPointerDown = (e: PointerEvent) => {
       // Touch devices never draw selection
       if (e.pointerType === "touch") return;
+      // Only primary mouse button initiates selection
+      if (e.button !== 0) return;
 
       const isShift = e.shiftKey;
       const isLasso = isLassoModeRef.current;
@@ -136,8 +138,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const minY = Math.min(boxStart.y, boxCurrent.y);
         const maxY = Math.max(boxStart.y, boxCurrent.y);
 
-        // Require at least a 4px drag
-        if (maxX - minX > 4 || maxY - minY > 4) {
+        // Require at least a 4px drag in both dimensions
+        if (maxX - minX > 4 && maxY - minY > 4) {
           const nw = map.unproject([minX, minY]);
           const se = map.unproject([maxX, maxY]);
           const west = Math.min(nw.lng, se.lng);
