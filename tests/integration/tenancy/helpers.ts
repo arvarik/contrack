@@ -260,6 +260,7 @@ export function resetAccounts(): void {
     DELETE FROM interactions;
     DELETE FROM lists;
     DELETE FROM contacts;
+    DELETE FROM map_views;
     DELETE FROM sessions;
     DELETE FROM api_tokens;
     DELETE FROM users;

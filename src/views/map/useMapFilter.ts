@@ -29,7 +29,14 @@ interface NearResolution {
   error?: string;
 }
 
-export function useMapFilter(contacts: MapContact[]) {
+export function useMapFilter(
+  contacts: MapContact[],
+  options?: {
+    activeViewId?: string | null;
+    onClearActiveView?: () => void;
+    onFilterChange?: () => void;
+  },
+) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Local input state initialized from URL
@@ -72,8 +79,12 @@ export function useMapFilter(contacts: MapContact[]) {
         setSearchParams(
           (prev) => {
             const next = new URLSearchParams(prev);
-            if (val.trim()) next.set("q", val);
-            else next.delete("q");
+            if (val.trim()) {
+              next.set("q", val);
+              next.delete("view");
+            } else {
+              next.delete("q");
+            }
             return next;
           },
           { replace: true },
@@ -84,11 +95,20 @@ export function useMapFilter(contacts: MapContact[]) {
   );
 
   const setRawInput = useCallback(
-    (val: string) => {
+    (val: string, optionsOverride?: { syncUrl?: boolean } | boolean) => {
       setRawInputState(val);
+      const shouldSync =
+        typeof optionsOverride === "boolean"
+          ? optionsOverride
+          : (optionsOverride?.syncUrl ?? true);
+      if (!shouldSync) {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        return;
+      }
+      (options?.onClearActiveView ?? options?.onFilterChange)?.();
       syncQueryToUrl(val);
     },
-    [syncQueryToUrl],
+    [syncQueryToUrl, options],
   );
 
   // Tokenizer
@@ -187,11 +207,13 @@ export function useMapFilter(contacts: MapContact[]) {
   const clearFilters = useCallback(() => {
     setRawInputState("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    (options?.onClearActiveView ?? options?.onFilterChange)?.();
     isInternalUpdateRef.current = true;
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
         next.delete("q");
+        next.delete("view");
         return next;
       },
       { replace: true },
@@ -200,7 +222,13 @@ export function useMapFilter(contacts: MapContact[]) {
     for (let i = parsed.filters.length - 1; i >= 0; i--) {
       removeFilter(i);
     }
-  }, [parsed.filters.length, removeFilter, setSearchParams]);
+  }, [
+    parsed.filters.length,
+    removeFilter,
+    setSearchParams,
+    options?.onClearActiveView,
+    options?.onFilterChange,
+  ]);
 
   const hasActiveFilter = Boolean(
     rawInput.trim() || parsed.filters.length > 0 || parsed.freeText,

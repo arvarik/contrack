@@ -17,3 +17,4 @@ export * from "./imports";
 export * from "./tags";
 export * from "./searchHistory";
 export * from "./connectors";
+export * from "./mapViews";

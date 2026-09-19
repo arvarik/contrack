@@ -21,6 +21,7 @@
  */
 import React, { useEffect, useRef, useMemo } from "react";
 import { Popup } from "react-map-gl/maplibre";
+import type { Map as MapLibreMap } from "maplibre-gl";
 import { formatDistanceToNow } from "date-fns";
 import {
   ExternalLink,
@@ -87,6 +88,7 @@ export interface MapHoverCardProps {
   onLogNote?: (id: string) => void;
   onAddToList?: (id: string) => void;
   onFollowUp?: (id: string) => void;
+  map?: MapLibreMap | null;
 }
 
 export const MapHoverCard: React.FC<MapHoverCardProps> = ({
@@ -97,6 +99,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
   onLogNote,
   onAddToList,
   onFollowUp,
+  map,
 }) => {
   const firstActionRef = useRef<HTMLButtonElement>(null);
 
@@ -147,11 +150,23 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
           ? "bg-rose-500/10 text-error border-rose-500/20"
           : "bg-surface-container-high text-on-surface-variant border-outline-variant/30";
 
+  const anchor = useMemo(() => {
+    if (!map) return undefined;
+    try {
+      const pt = map.project([contact.lng, contact.lat]);
+      if (pt.y < 280) return "top";
+    } catch {
+      // ignore
+    }
+    return undefined;
+  }, [map, contact.lng, contact.lat]);
+
   return (
     <Popup
       longitude={contact.lng}
       latitude={contact.lat}
       offset={PIN_CLEARANCE}
+      anchor={anchor}
       closeButton={false}
       closeOnClick={false}
       focusAfterOpen={false}
