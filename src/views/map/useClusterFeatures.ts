@@ -23,6 +23,9 @@ export interface ClusterFeature {
   key: string;
   clusterId: number;
   count: number;
+  atRisk: number;
+  overdue: number;
+  scoreSum: number;
   longitude: number;
   latitude: number;
 }
@@ -84,6 +87,9 @@ export function toVisibleFeatures(
         key,
         clusterId,
         count: Number(properties.point_count) || 0,
+        atRisk: Number(properties.atRisk) || 0,
+        overdue: Number(properties.overdue) || 0,
+        scoreSum: Number(properties.scoreSum) || 0,
         ...point,
       });
     } else {

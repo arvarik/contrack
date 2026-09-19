@@ -813,6 +813,13 @@ html[data-text-scale="large"] {
   }
 }
 
+@media (min-width: 1024px) {
+  .map-page:has([aria-label="Map insights"]) .maplibregl-ctrl-bottom-right {
+    right: 20.5rem;
+    transition: right 0.2s ease-in-out;
+  }
+}
+
 /* Tiptap Customizations */
 .custom-tiptap .tiptap p.is-editor-empty:first-child::before {
   color: var(--color-on-surface-variant);

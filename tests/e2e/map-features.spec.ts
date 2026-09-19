@@ -121,12 +121,65 @@ test.describe("map features - filters and place search", () => {
     );
   });
 
-  test("is accessible on desktop with toolbar open", async ({
+  test("at-risk stats chip applies score:<40 and shows pill", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    // The at-risk chip is in the stats strip
+    const statsStrip = page.getByRole("region", {
+      name: "Map viewport statistics",
+    });
+    const atRiskChip = statsStrip.getByRole("button", { name: /at risk/i });
+    await expect(atRiskChip).toBeVisible();
+    await atRiskChip.click();
+
+    // Filter pill appears for score:<40
+    const scorePill = page.getByRole("button", { name: /score.*40/i });
+    await expect(scorePill).toBeVisible();
+
+    // Map now shows only the at-risk contact (Edsger Dijkstra)
+    await expect(
+      map.getByRole("button", { name: "Edsger Dijkstra, UT Austin" }),
+    ).toBeVisible();
+    await expect(
+      map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toHaveCount(0);
+  });
+
+  test("pane toggle with i persists across reload", async ({ page }) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    const pane = page.getByRole("complementary", { name: "Map insights" });
+    await expect(pane).toBeVisible();
+
+    // Press "i" to close
+    await page.keyboard.press("i");
+    await expect(pane).toHaveCount(0);
+
+    // Reload and verify pane remains closed
+    await page.reload();
+    await expect(map).toBeVisible();
+    await expect(pane).toHaveCount(0);
+
+    // Press "i" to reopen
+    await page.keyboard.press("i");
+    await expect(pane).toBeVisible();
+  });
+
+  test("is accessible on desktop with toolbar and insights pane open", async ({
     page,
   }, testInfo) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
+    await expect(
+      page.getByRole("complementary", { name: "Map insights" }),
+    ).toBeVisible();
     await expectPageAccessible(page, testInfo, "map-toolbar-desktop");
   });
 });
@@ -158,5 +211,25 @@ test.describe("map features on phone", () => {
 
     // Check accessibility with filter sheet open
     await expectPageAccessible(page, testInfo, "map-filter-sheet-mobile");
+  });
+
+  test("opens mobile insights sheet and is accessible", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    // Click Insights button on mobile toolbar
+    const insightsBtn = page.getByRole("button", { name: "Insights" });
+    await expect(insightsBtn).toBeVisible();
+    await insightsBtn.tap();
+
+    // Modal sheet appears
+    const sheet = page.getByRole("dialog", { name: "Map insights" });
+    await expect(sheet).toBeVisible();
+
+    // Check accessibility with insights sheet open
+    await expectPageAccessible(page, testInfo, "map-insights-sheet-mobile");
   });
 });

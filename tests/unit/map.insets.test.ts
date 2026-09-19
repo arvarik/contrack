@@ -193,4 +193,36 @@ describe("measureInsets", () => {
       bottom: 0,
     });
   });
+
+  it("takes the widest open right cover between the insights pane and contact", () => {
+    const map = sized(document.createElement("div"), {
+      x: 0,
+      y: 0,
+      width: 1440,
+      height: 900,
+    });
+
+    const insightsPane = document.createElement("aside");
+    insightsPane.setAttribute(COVERS_MAP_ATTR, "right");
+    insightsPane.setAttribute("aria-label", "Map insights");
+    sized(insightsPane, { x: 1120, y: 0, width: 320, height: 900 });
+
+    const contactPanel = document.createElement("section");
+    contactPanel.setAttribute(COVERS_MAP_ATTR, "right");
+    sized(contactPanel, { x: 580, y: 0, width: 860, height: 900 });
+
+    document.body.append(map, insightsPane, contactPanel);
+
+    // When contact is open, contact is 860px > insights 320px -> 860px
+    expect(measureInsets(map, { contactOpen: true })).toEqual({
+      right: 860,
+      bottom: 0,
+    });
+
+    // When contact is closed, closing contact ignored, insights pane is 320px -> 320px
+    expect(measureInsets(map, { contactOpen: false })).toEqual({
+      right: 320,
+      bottom: 0,
+    });
+  });
 });

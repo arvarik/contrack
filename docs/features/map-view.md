@@ -64,8 +64,9 @@ MapLibre groups nearby contacts into clusters. The map's GeoJSON source sets
 - Large clusters break into smaller groups
 - Individual pins appear at high zoom levels
 - Cluster badges show the number of contacts in each group
+- An outer SVG ring renders a proportional red error arc when the cluster contains at-risk contacts (health score < 40)
 
-A cluster is a button named `"<n> contacts, zoom in"`. A click zooms to the
+A cluster is a button named `"<n> contacts, <m> at risk, zoom in"`. A click zooms to the
 level where that cluster splits.
 
 Some clusters never split. The geocoder gives every contact in one city the
@@ -73,6 +74,28 @@ same coordinates, so their pins sit on one point at every zoom. A click on
 such a cluster opens a list of the people instead, up to fifty of them, and
 each name in the list is a button. Escape closes the list. A stacked pin stays
 reachable this way.
+
+### Stats Strip
+
+Floating at the bottom-left corner of the map, the **Stats Strip** aggregates live metrics for contacts currently in the viewport (debounced 150ms on camera movement):
+
+- **In view**: Count of contacts placed within the visible bounding box.
+- **At risk**: Count of contacts with health scores < 40. Clicking this chip appends `score:<40` to the active search filter.
+- **Overdue**: Count of contacts past their follow-up cadence. Clicking this chip filters by overdue contacts.
+- **Average score**: Mean relationship health score of in-view contacts.
+- **Time zones**: Number of distinct time zones spanned by in-view contacts.
+
+When no contacts fall within the visible bounds, the strip displays a compact empty state ("No contacts in this area") with a **Fit all** button. Updates to the strip are announced to screen readers via an accessible live status region (`role="status"`).
+
+### Map Insights Pane
+
+A dedicated insights drawer slides in from the right edge on desktop (320px wide) or opens as an accessible modal sheet on mobile:
+
+- **Desktop & Mobile**: Toggled via the **Insights** toolbar button or keyboard shortcut `i` / `I`. Its open/closed state on desktop persists across visits through the `mapPaneOpen` account preference (defaults to `true`).
+- **Map Control Insets**: The drawer carries `data-covers-map="right"`, automatically offsetting MapLibre's zoom and attribution controls on wide viewports (`@media (min-width: 1024px)`) so they stay completely visible and unobstructed.
+- **Tabs**:
+  - **Stats Tab**: Displays summary cards (In view, Avg score, At risk, Overdue) and horizontal distribution bar charts for **Top Industries**, **Top Companies**, and **Top Tags**. Clicking any bar immediately filters the map by that facet. Also lists the distinct time zones present in the viewport.
+  - **People Tab**: A virtualized list (powered by `@tanstack/react-virtual`) showing all contacts currently in view, including their avatar, health score ring, name, company, and location. Clicking any contact in the list flies the map camera to their pin and opens their detail panel.
 
 ### Hover Card
 
@@ -526,9 +549,11 @@ What makes the map fast to open, in the order a visit meets it:
   contact is a region named "Location map"
 - The page carries a visually hidden `h1`, "Map"
 - Every pin is a real `<button>` named `"<name>, <company>"`
-- Every cluster is a real `<button>` named `"<n> contacts, zoom in"`
+- Every cluster is a real `<button>` named `"<n> contacts, <m> at risk, zoom in"`
 - Tab reaches a pin, focus from a keyboard opens its hover card on any
   device, and Enter opens the contact
+- The stats strip includes a live status announcement region (`role="status"`) so screen reader users hear viewport summary updates on camera movements
+- Map insights pane tabs follow standard tab navigation, and virtualized contact rows support keyboard activation
 - The zoom buttons sit in MapLibre's navigation control
 - In the Adjust pin dialog the pin is a `<button>` that the arrow keys move,
   and the coordinates line is a live region, so the dialog works with no
@@ -543,6 +568,30 @@ its pin for the same reason. `tests/e2e/map.spec.ts` scans the page again
 with the Adjust pin dialog open. `tests/e2e/metrics.spec.ts` scans `/map` on
 a 390 pixel phone for the tap-target and text-size floors. See
 [Accessibility](../accessibility.md).
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut  | Description                                          |
+| --------- | ---------------------------------------------------- |
+| `/`       | Focus the map filter search input                    |
+| `F`       | Fit all matching contacts within the viewport        |
+| `i` / `I` | Toggle the Map insights pane open or closed          |
+| `Escape`  | Close the open contact overlay or active modal sheet |
+
+---
+
+## Screenshots
+
+### Map Stats and Insights
+
+| View               | Mode  | Screenshot                                         |
+| ------------------ | ----- | -------------------------------------------------- |
+| Desktop (1440x900) | Light | `docs/screenshots/map-stats/map-desktop-light.png` |
+| Desktop (1440x900) | Dark  | `docs/screenshots/map-stats/map-desktop-dark.png`  |
+| Phone (390x844)    | Light | `docs/screenshots/map-stats/map-phone-light.png`   |
+| Phone (390x844)    | Dark  | `docs/screenshots/map-stats/map-phone-dark.png`    |
 
 ---
 

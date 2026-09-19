@@ -14,25 +14,26 @@
  *
  * @module views/map/MapView
  */
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMatch, useNavigate } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
+import { BarChart3 } from "lucide-react";
 import { useMapContacts } from "../../api";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { NAMES } from "../../lib/names";
 import { ContactMap } from "./ContactMap";
-import { flyToContact, settlePadding } from "./flyTo";
+import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
 import { measureInsets, paddingFor, type Insets } from "./insets";
 import { useMapFilter } from "./useMapFilter";
 import { MapToolbar } from "./MapToolbar";
+import { StatsStrip } from "./StatsStrip";
+import { MapInsightsPane } from "./MapInsightsPane";
+import { useMapStats } from "./useMapStats";
 import { isTypingTarget } from "../../lib/keyboard";
+import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
+import { usePreferences } from "../../contexts/PreferencesContext";
+import { isValidLatLng, type MapContact } from "../../../shared/geo";
 
 export const MapView = () => {
   const { data: contacts = [], isLoading } = useMapContacts();
@@ -44,45 +45,105 @@ export const MapView = () => {
   const pageRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const singleKeyShortcuts = useSingleKeyShortcuts();
+  const isWide = useMediaQuery(WIDE_QUERY);
+  const [mobilePaneOpen, setMobilePaneOpen] = useState(false);
+  const { preferences, setPreference } = usePreferences();
+  const isDesktopPaneOpen = preferences.mapPaneOpen ?? true;
+  const isPaneOpen = isWide ? isDesktopPaneOpen : mobilePaneOpen;
+
+  const { stats, inViewContacts } = useMapStats({
+    contacts: filter.filteredContacts,
+    map,
+    totalCount: contacts.length,
+  });
 
   usePageTitle(NAMES.map.title);
 
-  /**
-   * What covers the map at mount, measured before the map exists.
-   *
-   * A layout effect runs after the page is in the document and before it is
-   * painted, and a child's runs before its parent's. `ContactMap` measures
-   * its size in one and renders the map only after, so the padding measured
-   * here reaches the map as a creation prop, and the map's first frame is
-   * centred in the open part of the page. On a phone that part ends at the
-   * tab bar.
-   */
-  const [initialInsets, setInitialInsets] = useState<Insets | null>(null);
-  useLayoutEffect(() => {
-    if (pageRef.current) {
-      setInitialInsets(
-        measureInsets(pageRef.current, { contactOpen: openId !== null }),
+  const toggleInsightsPane = useCallback(
+    (open?: boolean) => {
+      if (isWide) {
+        const next = open !== undefined ? open : !isDesktopPaneOpen;
+        setPreference("mapPaneOpen", next);
+      } else {
+        setMobilePaneOpen((prev) => (open !== undefined ? open : !prev));
+      }
+    },
+    [isWide, isDesktopPaneOpen, setPreference],
+  );
+
+  const handleApplyFacet = useCallback(
+    (facetQuery: string) => {
+      const trimmed = facetQuery.trim();
+      const current = filter.rawInput.trim();
+      if (!current.includes(trimmed)) {
+        filter.setRawInput(current ? `${current} ${trimmed} ` : `${trimmed} `);
+      }
+    },
+    [filter],
+  );
+
+  const handleFitAll = useCallback(() => {
+    if (!map || filter.filteredContacts.length === 0) return;
+    const valid = filter.filteredContacts.filter((c) =>
+      isValidLatLng(c.lat, c.lng),
+    );
+    if (valid.length === 0) return;
+    let west = 180;
+    let south = 90;
+    let east = -180;
+    let north = -90;
+    for (const c of valid) {
+      const lat = c.lat as number;
+      const lng = c.lng as number;
+      if (lng < west) west = lng;
+      if (lng > east) east = lng;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+    const padding = paddingFor(
+      measureInsets(map.getContainer(), { contactOpen: openId !== null }),
+    );
+    const reduced = prefersReducedMotion();
+    if (west === east && south === north) {
+      if (reduced) {
+        map.jumpTo({ center: [west, south], zoom: 10, padding });
+      } else {
+        map.flyTo({ center: [west, south], zoom: 10, padding });
+      }
+    } else {
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding, maxZoom: 14, duration: reduced ? 0 : 1000 },
       );
     }
-    // Once, by design. The effects below own every later change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [map, filter.filteredContacts, openId]);
+
+  const handleSelectContactFromPane = useCallback(
+    (contact: MapContact) => {
+      if (!map || !isValidLatLng(contact.lat, contact.lng)) return;
+      const padding = paddingFor(
+        measureInsets(map.getContainer(), { contactOpen: false }),
+      );
+      flyToContact(
+        map,
+        { longitude: contact.lng as number, latitude: contact.lat as number },
+        { padding },
+      );
+    },
+    [map],
+  );
 
   /**
-   * Fly to the contact the URL names, into the part of the map nothing
-   * covers.
-   *
-   * After the map's load event, never at mount: the view a map is born with
-   * is a creation prop (see `ContactMap.tsx`), and an animation started
-   * before the map has a style leaves the pins in the ocean. The effect
-   * therefore waits for the map, which arrives through `onMapReady`.
-   *
-   * The open contact covers the right of the map on a wide screen, and a pin
-   * centred in the whole map would sit under it. So the covers are measured
-   * each time and go with the move as padding, and the pin lands in the open
-   * part. With no contact open the same effect eases the padding back, so a
-   * closing contact hands its pin to the centre of the whole map.
+   * What covers the map at mount, measured before the map exists.
    */
+  const initialInsets = useMemo<Insets>(() => {
+    const right = isWide && isDesktopPaneOpen ? 320 : 0;
+    return { right, bottom: 0 };
+  }, [isWide, isDesktopPaneOpen]);
+
   const open = contacts.find((contact) => contact.id === openId) ?? null;
   const openLat = open?.lat ?? null;
   const openLng = open?.lng ?? null;
@@ -96,14 +157,8 @@ export const MapView = () => {
     } else {
       settlePadding(map, padding);
     }
-  }, [map, openId, openLat, openLng]);
+  }, [map, openId, openLat, openLng, isPaneOpen]);
 
-  /**
-   * The covers change with the window: the contact is narrower at the
-   * tablet width than on a desktop, and a turned phone has another bar. A
-   * resize measures again and sets the padding without an animation, the
-   * way the map already answers a resize.
-   */
   useEffect(() => {
     if (!map) return;
     const onResize = () =>
@@ -114,7 +169,7 @@ export const MapView = () => {
       );
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [map, openId]);
+  }, [map, openId, isPaneOpen]);
 
   const openContact = useCallback(
     (id: string) => navigate(`/map/contact/${id}`),
@@ -125,12 +180,7 @@ export const MapView = () => {
   }, [navigate, openId]);
 
   /**
-   * Escape closes the contact, like every other layer in the app.
-   *
-   * On the window, because the contact over the map is a region and not a
-   * dialog, so nothing else is listening for it. Anything inside the contact
-   * that answers Escape first stops the event or marks it handled, and a
-   * dialog or a menu on top of the contact owns the key while it is open.
+   * Escape closes the contact.
    */
   useEffect(() => {
     if (!openId) return;
@@ -144,33 +194,43 @@ export const MapView = () => {
   }, [navigate, openId]);
 
   /**
-   * "/" focuses the filter input on this page.
+   * Single-key shortcuts: "/", "F", "I".
    */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === "/" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey
-      ) {
-        if (isTypingTarget(event)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isTypingTarget(event)) return;
+
+      if (event.key === "/") {
         if (!singleKeyShortcuts) return;
         event.preventDefault();
         inputRef.current?.focus();
+        return;
+      }
+
+      if (event.key.toLowerCase() === "f") {
+        if (!singleKeyShortcuts) return;
+        event.preventDefault();
+        handleFitAll();
+        return;
+      }
+
+      if (event.key.toLowerCase() === "i") {
+        if (!singleKeyShortcuts) return;
+        event.preventDefault();
+        toggleInsightsPane();
+        return;
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [singleKeyShortcuts]);
+  }, [singleKeyShortcuts, handleFitAll, toggleInsightsPane]);
 
   return (
     <div
       ref={pageRef}
-      className="map-page w-full h-full relative bg-surface-container-lowest z-0"
+      className="map-page w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden"
     >
-      {/* The page has no visible title, since the map is the page, but a
-          screen reader user navigating by heading still needs to land here. */}
       <h1 className="sr-only">{NAMES.map.label}</h1>
       <MapToolbar
         contacts={contacts}
@@ -186,7 +246,35 @@ export const MapView = () => {
         resolveNearFilters={filter.resolveNearFilters}
         clearFilters={filter.clearFilters}
         inputRef={inputRef}
+        onFitAll={handleFitAll}
+        onToggleInsights={() => toggleInsightsPane(true)}
       />
+      <StatsStrip
+        stats={stats}
+        onApplyFacet={handleApplyFacet}
+        onFitAll={handleFitAll}
+      />
+      <MapInsightsPane
+        isOpen={isPaneOpen}
+        onToggle={toggleInsightsPane}
+        stats={stats}
+        inViewContacts={inViewContacts}
+        onApplyFacet={handleApplyFacet}
+        onSelectContact={handleSelectContactFromPane}
+      />
+      {/* Desktop floating button to reopen insights pane when closed */}
+      {!isPaneOpen && (
+        <button
+          type="button"
+          onClick={() => toggleInsightsPane(true)}
+          aria-label="Map insights"
+          aria-expanded={false}
+          className="hidden lg:flex items-center gap-2 absolute top-4 right-4 z-10 glass-panel shadow-lg rounded-2xl px-3 py-2 text-sm font-medium text-on-surface hover:text-primary transition-colors cursor-pointer border border-outline-variant/30 hit-area"
+        >
+          <BarChart3 className="w-4 h-4 text-primary" />
+          <span>Insights</span>
+        </button>
+      )}
       <ContactMap
         contacts={filter.filteredContacts}
         loading={isLoading}
