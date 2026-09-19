@@ -78,7 +78,7 @@ test.describe("map", () => {
     ).toBeVisible();
 
     // A click on the map itself, away from every pin and card.
-    await page.mouse.click(120, 700);
+    await page.mouse.click(120, 500);
     await expect(page).toHaveURL(/\/map$/);
     await expect(overlay).toHaveCount(0);
   });
@@ -127,7 +127,9 @@ test.describe("map", () => {
     // Three people on the east coast of the United States at world zoom.
     const pins = page.getByRole("button", { name: /, / });
     const before = await pins.count();
-    const cluster = page.getByRole("button", { name: "3 contacts, zoom in" });
+    const cluster = page.getByRole("button", {
+      name: "3 contacts, 0 at risk, zoom in",
+    });
     await expect(cluster).toBeVisible();
     await cluster.click();
 
@@ -159,13 +161,22 @@ test.describe("map", () => {
     await stubBasemap(page);
     await page.goto("/map");
 
-    await page.getByRole("button", { name: "2 contacts, zoom in" }).click();
+    // Close insights pane so Tokyo cluster on the right edge is unobstructed
+    const pane = page.getByRole("complementary", { name: "Map insights" });
+    await pane.getByRole("button", { name: "Close insights" }).click();
+    await expect(pane).toHaveCount(0);
+
+    await page
+      .getByRole("button", { name: "2 contacts, 0 at risk, zoom in" })
+      .click();
     const list = page.getByRole("list", { name: "People at this place" });
     await expect(list.getByRole("button")).toHaveCount(2);
     await list
       .getByRole("button", { name: "Alan Turing, Same Place Ltd" })
       .click();
     await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+    // Restore pane preference for subsequent tests
+    await page.keyboard.press("i");
   });
 
   test("opens the map from a contact, on that contact", async ({
@@ -436,17 +447,21 @@ test.describe("map", () => {
       )
       .toBeLessThan(40);
 
-    // Closed, the pin glides to the middle of the whole map.
-    await page.mouse.click(120, 700);
+    // Closed, the pin glides to the middle of the open map.
+    await page.mouse.click(120, 500);
     await expect(page).toHaveURL(/\/map$/);
+    const paneCount = await page
+      .getByRole("complementary", { name: "Map insights" })
+      .count();
+    const rightCover = paneCount > 0 ? 320 : 0;
     await expect
       .poll(
         async () => {
           const mapBox = await map.boundingBox();
           const pinBox = await pin.boundingBox();
           if (!mapBox || !pinBox) return Number.POSITIVE_INFINITY;
-          const dx =
-            pinBox.x + pinBox.width / 2 - (mapBox.x + mapBox.width / 2);
+          const openCenter = mapBox.x + (mapBox.width - rightCover) / 2;
+          const dx = pinBox.x + pinBox.width / 2 - openCenter;
           const dy =
             pinBox.y + pinBox.height / 2 - (mapBox.y + mapBox.height / 2);
           return Math.round(Math.hypot(dx, dy));

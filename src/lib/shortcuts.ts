@@ -283,6 +283,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: true,
     page: "/map",
   },
+  {
+    group: NAMES.map.label,
+    keys: ["I"],
+    description: "Toggle insights pane",
+    bareLetter: true,
+    page: "/map",
+  },
 
   // A contact's details. Every value edits in place: it is a button at rest
   // and a field once opened. The pencil after a value is the visible sign.

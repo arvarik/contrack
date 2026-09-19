@@ -162,12 +162,17 @@ describe("ContactMap", () => {
         key: "cluster:7",
         clusterId: 7,
         count: 12,
+        atRisk: 3,
+        overdue: 1,
+        scoreSum: 600,
         longitude: -0.12,
         latitude: 51.5,
       },
     ]);
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
-    const button = screen.getByRole("button", { name: "12 contacts, zoom in" });
+    const button = screen.getByRole("button", {
+      name: "12 contacts, 3 at risk, zoom in",
+    });
     expect(button.textContent).toBe("12");
   });
 

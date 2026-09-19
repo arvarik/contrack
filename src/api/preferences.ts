@@ -49,6 +49,7 @@ export interface Preferences {
   searchHistory: SearchHistoryEntry[];
   pulseLayout: PulseLayout;
   askHistoryOpen: boolean;
+  mapPaneOpen: boolean;
   startPage: StartPage;
   listSort: ListSort;
   defaultCadenceDays: CadenceDays;
@@ -97,6 +98,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
     order: {},
   },
   askHistoryOpen: true,
+  mapPaneOpen: true,
   startPage: "network",
   listSort: "name",
   defaultCadenceDays: 90,

@@ -89,9 +89,18 @@ export function measureInsets(
 ): Insets {
   const rect = container.getBoundingClientRect();
   const doc = container.ownerDocument;
-  const panel = options.contactOpen
-    ? doc.querySelector<HTMLElement>(`[${COVERS_MAP_ATTR}="right"]`)
-    : null;
+  const rightCovers = Array.from(
+    doc.querySelectorAll<HTMLElement>(`[${COVERS_MAP_ATTR}="right"]`),
+  );
+  const rightWidths = rightCovers.map((panel) => {
+    const isInsightsPane = panel.getAttribute("aria-label") === "Map insights";
+    if (isInsightsPane) {
+      return panel.offsetWidth > 0 ? panel.offsetWidth : 0;
+    }
+    return options.contactOpen && panel.offsetWidth > 0 ? panel.offsetWidth : 0;
+  });
+  const maxRight = rightWidths.length > 0 ? Math.max(0, ...rightWidths) : 0;
+
   const bar = doc.querySelector<HTMLElement>(`[${COVERS_MAP_ATTR}="bottom"]`);
   const barHeight =
     bar && bar.offsetHeight > 0
@@ -100,7 +109,7 @@ export function measureInsets(
   return insetsFor({
     mapWidth: rect.width,
     mapHeight: rect.height,
-    panelWidth: panel?.offsetWidth ?? 0,
+    panelWidth: maxRight,
     barHeight,
   });
 }
