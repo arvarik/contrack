@@ -43,6 +43,7 @@ import {
 import DOMPurify from "dompurify";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { weekStartsOn } from "../../../../shared/dates";
+import { connectorViaLabel } from "../../../../shared/connectors";
 
 import type { Interaction } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
@@ -295,6 +296,9 @@ const InteractionContent = React.memo(({ html }: { html: string }) => {
 const KEBAB_TRIGGER =
   "opacity-0 transition group-hover/entry:opacity-100 group-focus-within/entry:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100";
 
+const SOURCE_BADGE =
+  "inline-flex items-center rounded-md bg-surface-container-high px-2 py-0.5 text-[11px] font-medium text-on-surface-variant";
+
 interface TimelineEntryProps {
   entry: DatedEntry;
   /** The position on the whole timeline, for the entrance stagger. */
@@ -355,15 +359,22 @@ const TimelineEntry = React.memo(
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <h3 className="min-w-0 flex-1 pt-1 font-bold text-on-surface break-words">
-                <button
-                  type="button"
-                  className="hit-area text-left hover:underline"
-                  onClick={() => onOpen(item, false)}
-                >
-                  {item.title}
-                </button>
-              </h3>
+              <div className="min-w-0 flex-1 pt-1 flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-on-surface break-words">
+                  <button
+                    type="button"
+                    className="hit-area text-left hover:underline"
+                    onClick={() => onOpen(item, false)}
+                  >
+                    {item.title}
+                  </button>
+                </h3>
+                {item.source && connectorViaLabel(item.source) && (
+                  <span className={SOURCE_BADGE}>
+                    {connectorViaLabel(item.source)}
+                  </span>
+                )}
+              </div>
               <ActionMenu
                 label={`Actions for ${item.title}`}
                 className="-mr-2 -mt-1 shrink-0"

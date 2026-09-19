@@ -592,7 +592,7 @@ export const dashboardService = {
     // Streak: all interactions with type != 'import' and source IS NULL
     const streakRows = sqlite
       .prepare(
-        `SELECT DISTINCT substr(date, 1, 10) as date FROM interactions
+        `SELECT DISTINCT date(date, 'localtime') as date FROM interactions
           WHERE ownerId = ? AND (type != 'import' OR type IS NULL) AND source IS NULL
           ORDER BY date ASC`,
       )

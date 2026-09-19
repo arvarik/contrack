@@ -225,6 +225,16 @@ Contrack uses a highly normalized Drizzle ORM schema on SQLite with WAL mode.
 | `dedupe_exclusions`  | User-dismissed pairs (never suggest again)       |
 | `merge_log`          | Audit trail for merge operations (supports undo) |
 
+### Connector Tables
+
+| Table             | Purpose                                                              |
+| ----------------- | -------------------------------------------------------------------- |
+| `connectors`      | Configured sync integrations (kind, name, status, config, interval)  |
+| `connector_runs`  | Historical sync run execution logs, duration, error text, and stats  |
+| `connector_links` | Deduplication links mapping external feed items to internal entities |
+| `upcoming_events` | Future meetings synced from calendar feeds for Pulse and dashboard   |
+| `oauth_states`    | Ephemeral cryptographic states for OAuth handshakes (15-min TTL)     |
+
 Schema definition: [`src/db/schema.ts`](../src/db/schema.ts). Virtual tables and triggers: [`server/db.ts`](../server/db.ts).
 
 ---

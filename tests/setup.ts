@@ -28,5 +28,10 @@ vi.mock("../server/db.ts", () => ({
     "ai_invocations",
     "imports",
     "search_history",
+    "connectors",
+    "connector_runs",
+    "connector_links",
+    "upcoming_events",
+    "oauth_states",
   ],
 }));

@@ -655,6 +655,11 @@ export function purgeOwner(ownerId: string): void {
       // record outlives the contacts it made, on purpose.
       "imports",
       "search_history",
+      "upcoming_events",
+      "connector_links",
+      "connector_runs",
+      "connectors",
+      "oauth_states",
     ]) {
       sqlite.prepare(`DELETE FROM ${table} WHERE ownerId = ?`).run(ownerId);
     }

@@ -38,9 +38,20 @@ import {
 import { initSearchIndexQueue } from "./server/services/search/indexQueue.ts";
 import { validatePublicUrl } from "./server/utils/publicOrigin.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
+import {
+  startConnectorScheduler,
+  stopConnectorScheduler,
+} from "./server/connectors/scheduler.ts";
 
 validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
+
+if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
+  log.warn(
+    "Connectors",
+    "CONNECTORS_ALLOW_PRIVATE_HOSTS is enabled: private IP checks for connectors are disabled",
+  );
+}
 
 // ── AI posture at boot ───────────────────────────────────────────────────────
 // This used to check only the key matching AI_PROVIDER (default gemini), so
@@ -167,6 +178,7 @@ async function startServer() {
   }
 
   startRetroactiveGeocoding();
+  startConnectorScheduler();
 
   // ── Data lifecycle: scheduled DB snapshots + trash retention ─────────────
   startBackupSchedule();
@@ -328,6 +340,13 @@ function registerShutdownHandlers(server: import("http").Server): void {
     }
     shuttingDown = true;
     log.info("Server", `${signal} received — draining connections`);
+
+    stopConnectorScheduler().catch((err) => {
+      log.warn(
+        "Server",
+        `Connector scheduler shutdown error: ${getErrorMessage(err)}`,
+      );
+    });
 
     // Refuse new connections, let in-flight requests finish, drop idle
     // keep-alive sockets so they can't hold the close open for 65 seconds.

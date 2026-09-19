@@ -71,6 +71,7 @@ interface CreateInteractionPayload {
   duration?: string | null;
   source?: string | null;
   actionItem?: { title: string; dueAt: string };
+  skipMentions?: boolean;
 }
 
 /** Payload for updating an existing interaction. Only title and content are mutable. */
@@ -394,7 +395,11 @@ export const interactionService = {
     // The scope is captured here and passed in. AsyncLocalStorage does survive
     // a timer, but rule 7 wants the owner to be an argument of the job rather
     // than a property of whatever context happens to be current when it runs.
-    if (content && process.env.DISABLE_BACKGROUND_JOBS !== "true") {
+    if (
+      content &&
+      !body.skipMentions &&
+      process.env.DISABLE_BACKGROUND_JOBS !== "true"
+    ) {
       setTimeout(() => {
         runWithContext(
           { requestId: `mentions-${id}`, principal: null, scope },

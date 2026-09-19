@@ -19,6 +19,7 @@ import { linkPreviewRouter } from "./routes/linkPreview.ts";
 import { searchRouter } from "./routes/search.ts";
 import { listsRouter } from "./routes/lists.ts";
 import { contactsRouter } from "./routes/contacts.ts";
+import { connectorsRouter } from "./routes/connectors.ts";
 import { importsRouter } from "./routes/imports.ts";
 import { interactionsRouter } from "./routes/interactions.ts";
 import { dedupeRouter } from "./routes/dedupe/index.ts";
@@ -318,6 +319,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use("/api", mcpRouter);
   app.use("/api", tagsRouter);
   app.use("/api", contactsRouter);
+  app.use("/api/connectors", connectorsRouter);
   app.use("/api", importsRouter);
   app.use("/api", interactionsRouter);
   app.use("/api", dedupeRouter);

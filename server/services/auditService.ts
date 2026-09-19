@@ -64,6 +64,11 @@ export const AUDIT_ACTIONS = [
   "mail.settings.changed",
   "mail.test.sent",
   "integrations.changed",
+  "connector.created",
+  "connector.updated",
+  "connector.deleted",
+  "connector.reauth",
+  "connector.run.failed",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -76,7 +81,8 @@ export type AuditTargetType =
   | "backup"
   | "passkey"
   | "mail"
-  | "integration";
+  | "integration"
+  | "connector";
 
 export interface AuditEntry {
   id: string;
