@@ -1013,6 +1013,34 @@ export const oauthStates = sqliteTable("oauth_states", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
+export const mapViews = sqliteTable(
+  "map_views",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("ownerId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    query: text("query").notNull().default(""),
+    layer: text("layer").notNull().default("pins"),
+    bounds: text("bounds").notNull(),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    updatedAt: text("updatedAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+  },
+  (table) => ({
+    idxOwnerSortName: index("idx_map_views_owner").on(
+      table.ownerId,
+      table.sortOrder,
+      table.name,
+    ),
+  }),
+);
+
 /** Tables that carry `ownerId`. Mirrored from server/db.ts. */
 export const OWNED_TABLES = [
   "contacts",
@@ -1030,6 +1058,7 @@ export const OWNED_TABLES = [
   "connector_runs",
   "connector_links",
   "upcoming_events",
+  "map_views",
 ] as const;
 
 // =============================================================================
@@ -1045,6 +1074,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   apiTokens: many(apiTokens),
   userSettings: many(userSettings),
   searchHistory: many(searchHistory),
+  mapViews: many(mapViews),
 }));
 
 export const apiTokensRelations = relations(apiTokens, ({ one }) => ({
@@ -1301,6 +1331,13 @@ export const scoreSnapshotsRelations = relations(scoreSnapshots, ({ one }) => ({
 export const searchHistoryRelations = relations(searchHistory, ({ one }) => ({
   user: one(users, {
     fields: [searchHistory.ownerId],
+    references: [users.id],
+  }),
+}));
+
+export const mapViewsRelations = relations(mapViews, ({ one }) => ({
+  owner: one(users, {
+    fields: [mapViews.ownerId],
     references: [users.id],
   }),
 }));

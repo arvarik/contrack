@@ -52,6 +52,7 @@ import { useAuth } from "../../components/auth/AuthGate";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { cn } from "../../lib/utils";
+import type { MapLayer } from "../../api/mapViews";
 import { ClusterMarker } from "./ClusterMarker";
 import { ContactMarker } from "./ContactMarker";
 import { MapHoverCard } from "./MapHoverCard";
@@ -89,6 +90,44 @@ const PRESENCE_LAYER: LayerProps = {
     "circle-radius": 1,
     "circle-opacity": 0,
     "circle-stroke-opacity": 0,
+  },
+};
+
+const HEATMAP_LAYER: LayerProps = {
+  id: "contacts-heatmap",
+  type: "heatmap",
+  paint: {
+    "heatmap-weight": [
+      "interpolate",
+      ["linear"],
+      ["get", "weight"],
+      0,
+      0,
+      1,
+      1,
+      10,
+      2,
+    ],
+    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 3],
+    "heatmap-color": [
+      "interpolate",
+      ["linear"],
+      ["heatmap-density"],
+      0,
+      "rgba(0, 106, 145, 0)",
+      0.2,
+      "rgba(71, 190, 253, 0.2)",
+      0.4,
+      "rgba(0, 106, 145, 0.4)",
+      0.6,
+      "rgba(0, 106, 145, 0.6)",
+      0.8,
+      "rgba(0, 106, 145, 0.8)",
+      1,
+      "rgba(0, 106, 145, 1)",
+    ],
+    "heatmap-radius": 30,
+    "heatmap-opacity": 0.85,
   },
 };
 
@@ -163,6 +202,7 @@ export interface ContactMapProps {
   onLogNote?: (id: string) => void;
   onAddToList?: (id: string) => void;
   onFollowUp?: (id: string) => void;
+  layer?: MapLayer;
   /**
    * Rendered inside the map, after the pins. A caller that needs one marker
    * of its own, such as the pin a person drags into place, puts it here.
@@ -190,6 +230,7 @@ export const ContactMap = ({
   onLogNote,
   onAddToList,
   onFollowUp,
+  layer = "pins",
   children,
 }: ContactMapProps) => {
   const { mode } = usePreferences();
@@ -202,10 +243,13 @@ export const ContactMap = ({
     rememberView && !initialView ? readLastView() : null,
   );
   const startView = initialView ?? remembered ?? DEFAULT_VIEW;
-  const remember = useCallback(
-    (event: ViewStateChangeEvent) => writeLastView(event.viewState),
-    [],
+  const [currentZoom, setCurrentZoom] = useState<number>(
+    () => startView.zoom ?? 1,
   );
+  const remember = useCallback((event: ViewStateChangeEvent) => {
+    setCurrentZoom(event.viewState.zoom);
+    writeLastView(event.viewState);
+  }, []);
 
   // Measure before the map exists. useLayoutEffect runs after layout and
   // before paint, so the map still appears on the first painted frame, with
@@ -487,6 +531,7 @@ export const ContactMap = ({
             setMap(loaded);
             onMapReady?.(loaded);
           }}
+          onMove={(event) => setCurrentZoom(event.viewState.zoom)}
           onMoveEnd={rememberView ? remember : undefined}
           onError={handleError}
           onClick={handleClick}
@@ -506,11 +551,15 @@ export const ContactMap = ({
             }}
           >
             <Layer {...PRESENCE_LAYER} />
+            {layer === "heat" && <Layer {...HEATMAP_LAYER} />}
           </Source>
           {interactive && (
             <NavigationControl position="bottom-right" showCompass={false} />
           )}
           {features.map((feature) => {
+            if (layer === "heat" && currentZoom > 9) {
+              return null;
+            }
             if (feature.kind === "cluster") {
               const leaves = clusterLeaves.get(feature.clusterId) || [];
               const selectedInCluster = selectedIds
@@ -536,6 +585,7 @@ export const ContactMap = ({
                 multiSelected={
                   selectedIds ? selectedIds.has(contact.id) : false
                 }
+                layer={layer}
                 onSelect={onSelect}
                 onPreview={hoverCard ? handlePreview : noPreview}
                 onPinCard={handlePinCard}
@@ -552,6 +602,7 @@ export const ContactMap = ({
               onLogNote={onLogNote}
               onAddToList={onAddToList}
               onFollowUp={onFollowUp}
+              map={map}
             />
           )}
           {stack && (

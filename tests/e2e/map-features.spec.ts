@@ -360,6 +360,115 @@ test.describe("map features - filters and place search", () => {
     // Check accessibility with follow-up modal open
     await expectPageAccessible(page, testInfo, "map-followup-modal");
   });
+
+  test("layer Health shows the legend and ?layer=health reloads with it on", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    // Health legend is not visible initially
+    await expect(
+      page.getByRole("group", { name: "Health legend" }),
+    ).toHaveCount(0);
+
+    // Switch to Health layer
+    const healthRadio = page.getByRole("radio", { name: "Health" });
+    await expect(healthRadio).toBeVisible();
+    await healthRadio.click();
+
+    // Health legend is now visible
+    const legend = page.getByRole("group", { name: "Health legend" });
+    await expect(legend).toBeVisible();
+    await expect(legend.getByText("Strong")).toBeVisible();
+    await expect(legend.getByText("Fading")).toBeVisible();
+    await expect(legend.getByText("At risk")).toBeVisible();
+
+    // URL contains ?layer=health
+    await expect(page).toHaveURL(/layer=health/);
+
+    // Reloading preserves the health layer and legend
+    await page.reload();
+    await expect(map).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: "Health legend" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/layer=health/);
+
+    // Switch back to Pins
+    const pinsRadio = page.getByRole("radio", { name: "Pins" });
+    await expect(pinsRadio).toBeVisible();
+    await pinsRadio.click();
+    await expect(
+      page.getByRole("group", { name: "Health legend" }),
+    ).toHaveCount(0);
+    await expect(page).not.toHaveURL(/layer=/);
+  });
+
+  test("saves a view named Virginia, reloads, and choosing it restores filter and updates URL", async ({
+    page,
+  }) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    // Type a filter
+    const filterInput = page.getByRole("textbox", { name: "Filter contacts" });
+    await filterInput.fill("Virginia");
+
+    // Open Views menu and click Save current view
+    await page.getByRole("button", { name: "Saved views" }).click();
+    const saveMenuItem = page.getByRole("menuitem", {
+      name: "Save current view…",
+    });
+    await expect(saveMenuItem).toBeVisible();
+    await saveMenuItem.click();
+
+    // Fill view name in the dialog and submit
+    const saveModal = page.getByRole("dialog", { name: "Save current view" });
+    await expect(saveModal).toBeVisible();
+    await saveModal.getByLabel("View name").fill("Virginia");
+    await saveModal.getByRole("button", { name: "Save view" }).click();
+
+    // Modal closes
+    await expect(saveModal).toHaveCount(0);
+
+    // Reload /map fresh
+    await page.goto("/map");
+    await expect(map).toBeVisible();
+    await expect(filterInput).toHaveValue("");
+
+    // Open Saved views menu and select Virginia
+    await page.getByRole("button", { name: "Saved views" }).click();
+    const virginiaItem = page.getByRole("menuitem", { name: "Virginia" });
+    await expect(virginiaItem).toBeVisible();
+    await virginiaItem.click();
+
+    // URL now contains ?view= and filter input shows the saved query
+    await expect(page).toHaveURL(/[?&]view=/);
+    await expect(filterInput).toHaveValue("Virginia");
+  });
+
+  test("is accessible with views menu open and save view modal open", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toBeVisible();
+
+    // Open Saved views menu and check accessibility
+    await page.getByRole("button", { name: "Saved views" }).click();
+    const menu = page.getByRole("menu", { name: "Saved views" });
+    await expect(menu).toBeVisible();
+    await expectPageAccessible(page, testInfo, "map-views-menu");
+
+    // Open Save view modal and check accessibility
+    await page.getByRole("menuitem", { name: "Save current view…" }).click();
+    const modal = page.getByRole("dialog", { name: "Save current view" });
+    await expect(modal).toBeVisible();
+    await expectPageAccessible(page, testInfo, "map-save-view-modal");
+  });
 });
 
 const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];

@@ -122,6 +122,7 @@ export const preferenceSchemas = {
   pulseLayout: pulseLayoutSchema,
   askHistoryOpen: z.boolean(),
   mapPaneOpen: z.boolean(),
+  mapLayer: z.enum(["pins", "heat", "health"]),
   startPage: z.enum(["network", "pulse"]),
   listSort: z.enum(["name", "recent", "score"]),
   defaultCadenceDays: z.union([
@@ -167,6 +168,7 @@ const DEFAULTS: Preferences = {
   },
   askHistoryOpen: true,
   mapPaneOpen: true,
+  mapLayer: "pins",
   startPage: "network",
   listSort: "name",
   defaultCadenceDays: 90,

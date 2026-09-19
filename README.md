@@ -81,7 +81,7 @@ Features a ranked Up next queue with one-key keyboard shortcuts, a twelve-week a
 
 Visualize your network geographically to plan trips or coordinate local meetups. See exactly where your connections are clustered around the globe at a glance.
 
-Interactive cluster map powered by MapLibre GL JS on OpenFreeMap vector tiles, with no API key to obtain. Mapbox and Nominatim geocode the addresses on the backend, and a pin opens the contact as an overlay.
+Interactive cluster map powered by MapLibre GL JS on OpenFreeMap vector tiles, with no API key to obtain. Switch between pins, heat maps, and relationship health rings. Save custom views, select contacts with box or lasso tools, search places, and filter by facets.
 
 </td>
 <td width="70%">

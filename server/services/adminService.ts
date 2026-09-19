@@ -650,6 +650,7 @@ export function purgeOwner(ownerId: string): void {
       "action_items",
       "interactions",
       "lists",
+      "map_views",
       // Cascades import_rows. Placed with the others rather than after
       // contacts because a row's contactId carries no foreign key: an import
       // record outlives the contacts it made, on purpose.

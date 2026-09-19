@@ -47,6 +47,12 @@ export const STALE_TIMES = {
   mapData: 5 * 60_000,
 
   /**
+   * Saved map views.
+   * WHY 60s: Views change only on explicit save/rename/delete.
+   */
+  mapViews: 60_000,
+
+  /**
    * Contact lists (sidebar list panel).
    * WHY 60s: Lists change only on explicit create/reorder/delete, which
    * all fire invalidateQueries. 60s prevents list refetch on sidebar toggle.
