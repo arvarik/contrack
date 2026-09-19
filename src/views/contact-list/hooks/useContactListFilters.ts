@@ -24,8 +24,58 @@ import { usePreferences } from "../../../contexts/PreferencesContext";
 import { scoreContactMatch } from "../../../lib/contactMatch";
 import type { Contact } from "../../../types";
 
-type SortField = "name" | "date" | "score";
-type SortDir = "asc" | "desc";
+export type SortField = "name" | "date" | "score";
+export type SortDir = "asc" | "desc";
+
+export type SortOption =
+  "name-asc" | "name-desc" | "date-desc" | "date-asc" | "score-desc";
+
+export interface SortChoice {
+  id: SortOption;
+  label: string;
+  field: SortField;
+  dir: SortDir;
+}
+
+export const SORT_CHOICES: readonly SortChoice[] = [
+  { id: "name-asc", label: "Name A to Z", field: "name", dir: "asc" },
+  { id: "name-desc", label: "Name Z to A", field: "name", dir: "desc" },
+  { id: "date-desc", label: "Newest first", field: "date", dir: "desc" },
+  { id: "date-asc", label: "Oldest first", field: "date", dir: "asc" },
+  { id: "score-desc", label: "Score", field: "score", dir: "desc" },
+] as const;
+
+export function getSortChoice(sortBy: SortField, sortDir: SortDir): SortChoice {
+  if (sortBy === "name") {
+    return sortDir === "desc" ? SORT_CHOICES[1] : SORT_CHOICES[0];
+  }
+  if (sortBy === "date") {
+    return sortDir === "asc" ? SORT_CHOICES[3] : SORT_CHOICES[2];
+  }
+  return SORT_CHOICES[4];
+}
+
+export const SESSION_SORT_KEY = "contrack.network_sort";
+
+function getSessionSort(): SortOption | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_SORT_KEY);
+    if (raw && SORT_CHOICES.some((c) => c.id === raw)) {
+      return raw as SortOption;
+    }
+  } catch {
+    // sessionStorage unavailable
+  }
+  return null;
+}
+
+function saveSessionSort(option: SortOption): void {
+  try {
+    sessionStorage.setItem(SESSION_SORT_KEY, option);
+  } catch {
+    // sessionStorage unavailable
+  }
+}
 
 export function useContactListFilters(contacts: Contact[]) {
   const { preferences } = usePreferences();
@@ -118,20 +168,30 @@ export function useContactListFilters(contacts: Contact[]) {
 
   // ── Sort state ────────────────────────────────────────────────────────
   const [sortBy, setSortBy] = useState<SortField>(() => {
+    const saved = getSessionSort();
+    if (saved) {
+      const match = SORT_CHOICES.find((c) => c.id === saved);
+      if (match) return match.field;
+    }
     if (preferences.listSort === "recent") return "date";
     if (preferences.listSort === "score") return "score";
     return "name";
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => {
+    const saved = getSessionSort();
+    if (saved) {
+      const match = SORT_CHOICES.find((c) => c.id === saved);
+      if (match) return match.dir;
+    }
     if (preferences.listSort === "recent" || preferences.listSort === "score")
       return "desc";
     return "asc";
   });
 
-  const userHasChangedSort = useRef(false);
+  const userHasChangedSort = useRef(Boolean(getSessionSort()));
 
   useEffect(() => {
-    if (!userHasChangedSort.current) {
+    if (!userHasChangedSort.current && !getSessionSort()) {
       if (preferences.listSort === "recent") {
         setSortBy("date");
         setSortDir("desc");
@@ -145,25 +205,23 @@ export function useContactListFilters(contacts: Contact[]) {
     }
   }, [preferences.listSort]);
 
-  const cycleSortMode = useCallback(() => {
+  const setSortOption = useCallback((option: SortOption) => {
     userHasChangedSort.current = true;
-    if (sortBy === "name" && sortDir === "asc") {
-      setSortDir("desc");
-    } else if (sortBy === "name" && sortDir === "desc") {
-      setSortBy("date");
-      setSortDir("desc");
-    } else if (sortBy === "date" && sortDir === "desc") {
-      setSortDir("asc");
-    } else if (sortBy === "date" && sortDir === "asc") {
-      setSortBy("score");
-      setSortDir("desc");
-    } else if (sortBy === "score" && sortDir === "desc") {
-      setSortDir("asc");
-    } else {
-      setSortBy("name");
-      setSortDir("asc");
-    }
-  }, [sortBy, sortDir]);
+    saveSessionSort(option);
+    const choice = SORT_CHOICES.find((c) => c.id === option);
+    if (!choice) return;
+    setSortBy(choice.field);
+    setSortDir(choice.dir);
+  }, []);
+
+  const setSort = useCallback((field: SortField, dir?: SortDir) => {
+    userHasChangedSort.current = true;
+    const resolvedDir = dir ?? (field === "name" ? "asc" : "desc");
+    const choice = getSortChoice(field, resolvedDir);
+    saveSessionSort(choice.id);
+    setSortBy(field);
+    setSortDir(resolvedDir);
+  }, []);
 
   // ── Filtered + sorted contacts ────────────────────────────────────────
   const filteredContacts = useMemo(() => {
@@ -222,7 +280,9 @@ export function useContactListFilters(contacts: Contact[]) {
     // Sort
     sortBy,
     sortDir,
-    cycleSortMode,
+    currentSort: getSortChoice(sortBy, sortDir),
+    setSort,
+    setSortOption,
     // Results
     filteredContacts,
   };

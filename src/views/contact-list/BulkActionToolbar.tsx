@@ -26,11 +26,13 @@ const BulkActionBtn = ({
   className?: string;
 }) => (
   <button
+    type="button"
     onClick={onClick}
     disabled={disabled}
     title={label}
+    aria-label={label}
     className={cn(
-      "flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors disabled:opacity-40 shrink-0",
+      "flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors disabled:opacity-40 shrink-0 cursor-pointer",
       className,
     )}
   >
@@ -100,7 +102,11 @@ export const BulkActionToolbar = ({
         and a ring plus a stronger shadow separate it from the list rather than
         relying on transparency to imply layering.
       */}
-      <div className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide">
+      <div
+        role="toolbar"
+        aria-label="Bulk actions"
+        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide"
+      >
         {/* Action buttons */}
         <BulkActionBtn
           icon={<Archive className="w-4 h-4" />}

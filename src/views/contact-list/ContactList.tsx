@@ -18,27 +18,20 @@ import React, {
   useMemo,
   useEffect,
 } from "react";
-import { useClickOutside } from "../../hooks/useClickOutside";
 import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
   Search,
-  Plus,
   Users,
   Upload,
   UserPlus,
   ListPlus,
-  CheckSquare,
   Square,
   FileText,
   SearchX,
-  ArrowDownAZ,
-  ArrowUpAZ,
-  CalendarArrowDown,
-  CalendarArrowUp,
   Clock,
   Archive,
   Copy,
-  Activity,
+  ChevronDown,
 } from "lucide-react";
 import {
   useContacts,
@@ -53,14 +46,9 @@ import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
 import { AlphabetRail, bucketFor } from "./AlphabetRail";
 import type { Contact, ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import {
-  ICON_BTN,
-  SEARCH_INPUT,
-  filterPill,
-  PAGE_TITLE,
-} from "../../lib/styles";
+import { SEARCH_INPUT, filterPill, PAGE_TITLE } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
@@ -78,12 +66,21 @@ import { ContactListItem } from "./ContactListItem";
 import { BulkActionToolbar } from "./BulkActionToolbar";
 import { ListIcon } from "./CreateListModal";
 import { ContactListModals } from "./ContactListModals";
-import { useContactListFilters } from "./hooks/useContactListFilters";
+import {
+  useContactListFilters,
+  SORT_CHOICES,
+} from "./hooks/useContactListFilters";
 import { useMultiSelect } from "./hooks/useMultiSelect";
 import { useContactListKeyboard } from "./hooks/useContactListKeyboard";
 import { useRovingList, type RovingItemProps } from "./useRovingList";
 import { useRecent } from "../../contexts/SessionContext";
 import { NAMES } from "../../lib/names";
+import { ActionMenu } from "../../components/ui/ActionMenu";
+import {
+  OPEN_IMPORT_EVENT,
+  OPEN_NEW_CONTACT_EVENT,
+  OPEN_SMART_PASTE_EVENT,
+} from "../../lib/appEvents";
 
 // ---------------------------------------------------------------------------
 // FilterButton — Pill-style filter tab for the contact list header
@@ -132,6 +129,7 @@ interface ContactRowWrapperProps {
   isSelectMode: boolean;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
+  onEnterSelectMode: () => void;
   handleContextMenu: ReturnType<typeof useContextMenu>["handleContextMenu"];
   recordVisit: (id: string) => void;
   archiveContact: (contact: { id: string; name: string }) => Promise<void>;
@@ -151,6 +149,7 @@ const ContactRowWrapper = React.memo(
     isSelectMode,
     isSelected,
     onToggleSelect,
+    onEnterSelectMode,
     handleContextMenu,
     recordVisit,
     archiveContact,
@@ -189,13 +188,11 @@ const ContactRowWrapper = React.memo(
       [contact.id, contact.name, contact.emails, navigate, archiveContact],
     );
 
-    const longPress = useLongPress(({ clientX, clientY }) => {
-      const syntheticEvent = {
-        preventDefault: () => {},
-        clientX,
-        clientY,
-      } as unknown as React.MouseEvent;
-      handleContextMenu(syntheticEvent, contextItems);
+    const longPress = useLongPress(() => {
+      if (!isSelectMode) {
+        onEnterSelectMode();
+      }
+      onToggleSelect(contact.id);
     });
 
     return (
@@ -307,12 +304,26 @@ export const ContactList = () => {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSmartPasteOpen, setIsSmartPasteOpen] = useState(false);
   const [isCreateListOpen, setIsCreateListOpen] = useState(false);
-  const [showAddMenu, setShowAddMenu] = useState(false);
   const [isAddToListOpen, setIsAddToListOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
 
   const createList = useCreateList();
   const reorderLists = useReorderLists();
+
+  // Listen to window events from StartPanel or other components
+  useEffect(() => {
+    const onOpenNew = () => setIsModalOpen(true);
+    const onOpenImport = () => setIsImportOpen(true);
+    const onOpenSmartPaste = () => setIsSmartPasteOpen(true);
+    window.addEventListener(OPEN_NEW_CONTACT_EVENT, onOpenNew);
+    window.addEventListener(OPEN_IMPORT_EVENT, onOpenImport);
+    window.addEventListener(OPEN_SMART_PASTE_EVENT, onOpenSmartPaste);
+    return () => {
+      window.removeEventListener(OPEN_NEW_CONTACT_EVENT, onOpenNew);
+      window.removeEventListener(OPEN_IMPORT_EVENT, onOpenImport);
+      window.removeEventListener(OPEN_SMART_PASTE_EVENT, onOpenSmartPaste);
+    };
+  }, []);
 
   // Support ?new=1 query param (e.g. from Pulse "New contact" button)
   useEffect(() => {
@@ -346,9 +357,6 @@ export const ContactList = () => {
   // ── Drag-to-reorder lists ───────────────────────────────────────────
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const addMenuRef = useRef<HTMLDivElement>(null);
-
-  useClickOutside(addMenuRef, () => setShowAddMenu(false), showAddMenu);
 
   const handleDragStart = (idx: number) => setDragIdx(idx);
   const handleDragOver = (e: React.DragEvent, idx: number) => {
@@ -383,8 +391,8 @@ export const ContactList = () => {
     filterMode,
     setFilterMode,
     sortBy,
-    sortDir,
-    cycleSortMode,
+    currentSort,
+    setSortOption,
   } = filters;
   const {
     isSelectMode,
@@ -397,6 +405,41 @@ export const ContactList = () => {
     selectAll,
     isPending,
   } = multiSelect;
+
+  const sortMenuItems = useMemo(
+    () =>
+      SORT_CHOICES.map((choice) => ({
+        id: choice.id,
+        label: choice.label,
+        checked: currentSort.id === choice.id,
+        onSelect: () => setSortOption(choice.id),
+      })),
+    [currentSort.id, setSortOption],
+  );
+
+  const newMenuItems = useMemo(
+    () => [
+      {
+        id: "new-contact",
+        label: "New contact",
+        icon: UserPlus,
+        onSelect: () => setIsModalOpen(true),
+      },
+      {
+        id: "add-from-text",
+        label: "Add from text",
+        icon: FileText,
+        onSelect: () => setIsSmartPasteOpen(true),
+      },
+      {
+        id: "new-list",
+        label: "New list",
+        icon: ListPlus,
+        onSelect: () => setIsCreateListOpen(true),
+      },
+    ],
+    [],
+  );
 
   /**
    * Cmd/Ctrl+A selects every visible contact while in select mode.
@@ -612,112 +655,69 @@ export const ContactList = () => {
       {" "}
       <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
         <div className="flex justify-between items-center">
-          <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
-          <div className="flex items-center gap-3">
-            {/* Multi-select toggle */}
-            <button
-              onClick={isSelectMode ? exitSelectMode : enterSelectMode}
-              className={cn(
-                ICON_BTN,
-                isSelectMode && "text-primary bg-primary/10",
-              )}
-              // A name that stays put, with the state in aria-pressed. The
-              // title alone named it for a pointer and for nobody else.
-              aria-label="Select"
-              aria-pressed={isSelectMode}
-              title="Select"
-            >
-              {isSelectMode ? (
-                <CheckSquare className="w-5 h-5" />
-              ) : (
-                <Square className="w-5 h-5" />
-              )}
-            </button>
-
-            {!isSelectMode && (
-              <>
+          {isSelectMode ? (
+            <>
+              <TitleTag className={PAGE_TITLE}>
+                {selectedCount} selected
+              </TitleTag>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={
+                    selectedCount === filteredContacts.length
+                      ? clearSelection
+                      : selectAll
+                  }
+                  className="hit-area text-xs md:text-sm font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
+                >
+                  {selectedCount === filteredContacts.length
+                    ? "Deselect all"
+                    : "Select all"}
+                </button>
+                <button
+                  onClick={exitSelectMode}
+                  className="hit-area text-xs md:text-sm font-medium text-on-surface px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest transition-colors whitespace-nowrap"
+                >
+                  Done
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={enterSelectMode}
+                  className="hit-area flex items-center justify-center gap-1.5 rounded-xl transition-colors font-medium text-xs md:text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high p-2 md:px-3 md:py-1.5"
+                  aria-label="Select"
+                >
+                  <Square className="w-4 h-4 md:hidden" aria-hidden="true" />
+                  <span className="hidden md:inline">Select</span>
+                </button>
                 <button
                   onClick={() => setIsImportOpen(true)}
-                  className={ICON_BTN}
-                  title="Import Contacts"
-                  aria-label="Import contacts"
+                  className="hit-area flex items-center justify-center gap-1.5 rounded-xl transition-colors font-medium text-xs md:text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high p-2 md:px-3 md:py-1.5"
+                  aria-label="Import"
                 >
-                  <Upload className="w-5 h-5" />
+                  <Upload className="w-4 h-4 md:hidden" aria-hidden="true" />
+                  <span className="hidden md:inline">Import</span>
                 </button>
-                <div className="relative" ref={addMenuRef}>
-                  <button
-                    onClick={() => setShowAddMenu(!showAddMenu)}
-                    className="hit-area p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
-                    title="Add New..."
-                    aria-label="Add new contact or list"
-                    aria-expanded={showAddMenu}
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                  <AnimatePresence>
-                    {showAddMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 4, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                        className="absolute top-full right-0 mt-1 glass-panel rounded-xl shadow-xl z-50 overflow-hidden min-w-[190px]"
-                      >
-                        <button
-                          onClick={() => {
-                            setIsModalOpen(true);
-                            setShowAddMenu(false);
-                          }}
-                          className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
-                        >
-                          <UserPlus className="w-4 h-4 text-primary shrink-0" />
-                          Add Contact
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsSmartPasteOpen(true);
-                            setShowAddMenu(false);
-                          }}
-                          className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
-                        >
-                          <FileText className="w-4 h-4 text-primary shrink-0" />
-                          Add from Text
-                          <span className="ml-auto text-[11px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                            AI
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsCreateListOpen(true);
-                            setShowAddMenu(false);
-                          }}
-                          className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
-                        >
-                          <ListPlus className="w-4 h-4 text-primary shrink-0" />
-                          Create List
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </>
-            )}
-
-            {/* Select mode: select all / deselect count badge */}
-            {isSelectMode && (
-              <button
-                onClick={
-                  selectedCount === filteredContacts.length
-                    ? clearSelection
-                    : selectAll
-                }
-                className="hit-area text-xs font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
-              >
-                {selectedCount === filteredContacts.length
-                  ? "Deselect All"
-                  : "Select All"}
-              </button>
-            )}
-          </div>
+                <ActionMenu
+                  label="+ New"
+                  triggerClassName="hit-area px-2.5 py-1.5 md:px-3 md:py-1.5 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors font-bold text-xs md:text-sm"
+                  triggerContent={
+                    <span className="inline-flex items-center gap-1">
+                      + New{" "}
+                      <ChevronDown
+                        className="w-3.5 h-3.5 opacity-70"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  }
+                  items={newMenuItems}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex gap-1.5 items-center">
@@ -752,34 +752,28 @@ export const ContactList = () => {
               </button>
             )}
           </div>
-          {/* Sort toggle */}
-          <button
-            onClick={cycleSortMode}
-            className={cn(
-              "hit-area p-2 rounded-xl transition-all shrink-0 flex items-center justify-center group relative",
-              "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
-            )}
-            title={`Sort: ${sortBy === "name" ? "Name" : sortBy === "score" ? "Relationship Score" : "Date Added"} ${sortDir === "asc" ? "↑" : "↓"}`}
-            aria-label={`Sort by ${sortBy === "name" ? "name" : sortBy === "score" ? "relationship score" : "date added"}, ${sortDir === "asc" ? "ascending" : "descending"}`}
-          >
-            {sortBy === "name" ? (
-              sortDir === "asc" ? (
-                <ArrowDownAZ className="w-4 h-4" />
-              ) : (
-                <ArrowUpAZ className="w-4 h-4" />
-              )
-            ) : sortBy === "score" ? (
-              <Activity className="w-4 h-4" />
-            ) : sortDir === "desc" ? (
-              <CalendarArrowDown className="w-4 h-4" />
-            ) : (
-              <CalendarArrowUp className="w-4 h-4" />
-            )}
-          </button>
+          {/* Sort ActionMenu */}
+          <ActionMenu
+            label={currentSort.label}
+            triggerClassName="hit-area px-2.5 py-1.5 rounded-xl transition-all shrink-0 flex items-center justify-center gap-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+            triggerContent={
+              <span className="flex items-center gap-1 text-xs md:text-sm font-medium">
+                <span className="truncate max-w-[120px] sm:max-w-[160px]">
+                  {currentSort.label}
+                </span>
+                <ChevronDown
+                  className="w-3.5 h-3.5 opacity-70 shrink-0"
+                  aria-hidden="true"
+                />
+              </span>
+            }
+            align="end"
+            items={sortMenuItems}
+          />
         </div>
 
-        {/* Filter tabs — horizontal scroll row, hidden in select mode */}
-        {!isSelectMode && (
+        {/* Filter tabs — horizontal scroll row, hidden in select mode, only when at least one list exists */}
+        {!isSelectMode && lists.length > 0 && (
           <div className="relative">
             <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
             <div
@@ -996,6 +990,7 @@ export const ContactList = () => {
                     isSelectMode={isSelectMode}
                     isSelected={selectedIds.has(contact.id)}
                     onToggleSelect={toggleSelect}
+                    onEnterSelectMode={enterSelectMode}
                     handleContextMenu={handleContextMenu}
                     recordVisit={recordVisit}
                     archiveContact={handleArchiveContact}
@@ -1023,7 +1018,7 @@ export const ContactList = () => {
         )}
       </div>
       <AnimatePresence>
-        {isSelectMode && selectedCount > 0 && (
+        {isSelectMode && (
           <BulkActionToolbar
             isPending={isPending}
             onArchive={multiSelect.handleBulkArchive}

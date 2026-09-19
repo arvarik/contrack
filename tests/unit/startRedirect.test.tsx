@@ -29,6 +29,10 @@ vi.mock("../../src/contexts/PreferencesContext", () => ({
   }),
 }));
 
+vi.mock("../../src/components/layout/StartPanel", () => ({
+  StartPanel: () => <div data-testid="start-panel" />,
+}));
+
 describe("StartRedirect", () => {
   beforeEach(() => {
     sessionStorage.clear();

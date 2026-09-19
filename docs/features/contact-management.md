@@ -63,6 +63,41 @@ other is a name pulled out of a note with no card to write.
 
 ---
 
+## Network Header and Start Panel
+
+The Network view (`/`) provides a clear, accessible header for search, sort, and contact operations, paired with a rich start panel on desktop viewports when no contact is selected.
+
+### Header Controls
+
+```
+Desktop:
+Network                              [ Select ] [ Import ] [ + New ▾ ]
+[ 🔍 Search...                                        ] [ Sort ▾ ]
+[ All 30 ]  <- only when at least one list exists
+
+Phone:
+Network                                  [ ▢ ] [ ⭳ ] [ + New ▾ ]
+[ 🔍 Search...                                        ] [ Sort ▾ ]
+```
+
+1. **Select**: Toggles multi-selection mode. When active, the header displays the count of selected contacts (for example, "3 selected"), along with "Select all" and "Done" buttons. The floating bulk action toolbar appears at the bottom with options to archive, delete, add to list, edit fields, assign colors, or export CSV. On touch screens, long pressing any contact row also enters selection mode.
+2. **Import**: Opens the contact import dialog directly from the network header. On screens below 768 px, this renders as a 44 px touch target with an upload icon and accessible name.
+3. **+ New ▾**: An ActionMenu dropdown providing quick access to create a single contact, add from text via smart paste, or create a new list. The "+ New" text and caret remain visible across desktop and phone screens.
+4. **Sort menu**: An ActionMenu button whose trigger label reflects the current sort choice. Offers five explicit sorting choices: Name A to Z, Name Z to A, Newest first, Oldest first, and Score. The active choice is marked with a checkmark. Initialized from the `listSort` account preference, and selections persist for the browsing session.
+5. **List filter row**: The horizontal scrolling pill bar appears only when at least one contact list exists. When no lists exist, the filter row is hidden to keep the header clean and compact.
+
+### The Start Panel
+
+When no contact is selected on desktop, the right pane displays the Start Panel (`src/components/layout/StartPanel.tsx`) rather than an empty placeholder.
+
+- **Header**: Features the Corvid mark at 64 px with "No Contact Selected" and guidance text.
+- **Up next**: Displays the top 3 actionable items from the Pulse queue (`buildUpNextQueue` in `src/views/pulse/lib/upNext.ts`) rendered with `ActionRow`. Supports checking off items, snoozing, or logging quick notes. Shows an accessible empty state ("Nothing due") when all follow-ups are clear.
+- **Recently viewed**: Displays recently visited contacts from `useRecentContacts` with avatar score rings, contact names, and roles or companies, linking directly to each profile. Shows an accessible empty state when no contacts have been viewed in the session.
+- **Add people**: Provides dedicated action cards for Import, New contact, and Add from text.
+- **Accessibility**: Each column is rendered as a labelled landmark region (`aria-label="Up next"`, `aria-label="Recently viewed"`, `aria-label="Add people"`) with strict `h2` and `h3` heading hierarchy.
+
+---
+
 ## Contact Profile
 
 Each contact has a profile page. The page has two layouts. The width of the contact's own pane chooses the layout, not the width of the window.

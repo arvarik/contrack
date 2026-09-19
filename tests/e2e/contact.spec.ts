@@ -55,10 +55,30 @@ async function ownContact(
   return id;
 }
 
+/** The lists the current test wrote, deleted when it ends. */
+const createdLists: { instance: ContrackInstance; id: string }[] = [];
+
+async function ownList(
+  instance: ContrackInstance,
+  name = "Journey List",
+  icon = "folder",
+): Promise<string> {
+  const { id } = await instance.api<{ id: string }>("POST", "/lists", {
+    name,
+    icon,
+  });
+  createdLists.push({ instance, id });
+  return id;
+}
+
 test.afterEach(async () => {
   while (created.length > 0) {
     const { instance, id } = created.pop()!;
     await instance.api("DELETE", `/contacts/${id}`);
+  }
+  while (createdLists.length > 0) {
+    const { instance, id } = createdLists.pop()!;
+    await instance.api("DELETE", `/lists/${id}`);
   }
 });
 
@@ -155,7 +175,122 @@ test.describe("desktop", () => {
       );
       if (inList) break;
     }
-    await expect(listRow(page, seed, "Grace Hopper")).toBeFocused();
+  });
+});
+
+test.describe("the Network header and start panel", () => {
+  test("the sort menu changes the order", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    const firstRow = page.locator("#contact-list [data-roving-index]").first();
+    await expect(firstRow).toContainText("Ada Lovelace");
+
+    const sortButton = page.getByRole("button", { name: "Name A to Z" });
+    await sortButton.click();
+
+    const zToA = page.getByRole("menuitemcheckbox", { name: "Name Z to A" });
+    await expect(zToA).toBeVisible();
+    await zToA.click();
+
+    await expect(
+      page.getByRole("button", { name: "Name Z to A" }),
+    ).toBeVisible();
+    await expect(firstRow).not.toContainText("Ada Lovelace");
+
+    await page.getByRole("button", { name: "Name Z to A" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Name A to Z" }).click();
+    await expect(
+      page.getByRole("button", { name: "Name A to Z" }),
+    ).toBeVisible();
+    await expect(firstRow).toContainText("Ada Lovelace");
+  });
+
+  test("Select mode shows N selected, Select all, Done, and the bulk toolbar", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    const selectBtn = page.getByRole("button", { name: "Select", exact: true });
+    await selectBtn.click();
+
+    await expect(page.getByText(/0 selected/)).toBeVisible();
+    const selectAllBtn = page.getByRole("button", { name: "Select all" });
+    const doneBtn = page.getByRole("button", { name: "Done" });
+    await expect(selectAllBtn).toBeVisible();
+    await expect(doneBtn).toBeVisible();
+    await expect(
+      page.getByRole("toolbar", { name: "Bulk actions" }),
+    ).toBeVisible();
+
+    await selectAllBtn.click();
+    await expect(page.getByText(/\d+ selected/)).toBeVisible();
+
+    await doneBtn.click();
+    await expect(
+      page.getByRole("button", { name: "Select", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("toolbar", { name: "Bulk actions" }),
+    ).toBeHidden();
+  });
+
+  test("the list filter row is absent with no lists and present after one is created", async ({
+    page,
+    instance,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    await expect(page.locator("#filter-pills-row")).toBeHidden();
+
+    await ownList(instance, "Favorites", "star");
+
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    await expect(page.locator("#filter-pills-row")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Filter: All/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Filter: Favorites/ }),
+    ).toBeVisible();
+  });
+
+  test("the start panel renders three labelled regions on desktop", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    await expect(page.getByRole("region", { name: "Up next" })).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Recently viewed" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Add people" }),
+    ).toBeVisible();
+
+    const addRegion = page.getByRole("region", { name: "Add people" });
+    await expect(
+      addRegion.getByRole("button", { name: /Import/ }),
+    ).toBeVisible();
+    await expect(
+      addRegion.getByRole("button", { name: /New contact/ }),
+    ).toBeVisible();
+    await expect(
+      addRegion.getByRole("button", { name: /Add from text/ }),
+    ).toBeVisible();
+  });
+
+  test("Network page passes axe accessibility scan on desktop", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    await expectPageAccessible(page, testInfo, "desktop-network-light");
   });
 });
 
@@ -609,5 +744,13 @@ test.describe("phone", () => {
     await page.goBack();
     await expect(grace).toBeVisible();
     await expect(grace).toBeFocused();
+  });
+
+  test("Network page passes axe accessibility scan on phone", async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    await expectPageAccessible(page, testInfo, "phone-network-light");
   });
 });

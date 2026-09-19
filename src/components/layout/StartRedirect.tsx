@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePreferences } from "../../contexts/PreferencesContext";
-import { EmptyState } from "./EmptyState";
+import { StartPanel } from "./StartPanel";
 
 export const START_PAGE_SESSION_KEY = "contrack.started";
 
@@ -26,5 +26,5 @@ export function StartRedirect() {
     }
   }, [isLoaded, preferences.startPage, navigate]);
 
-  return <EmptyState />;
+  return <StartPanel />;
 }
