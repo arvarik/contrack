@@ -12,7 +12,6 @@ import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, Cable, Loader2, Users } from "lucide-react";
-import { Badge } from "../../../components/ui/Badge";
 import {
   useConnectors,
   useConnectorKinds,
@@ -198,58 +197,39 @@ export const ConnectorsView: React.FC = () => {
                   Get started with Connectors
                 </h2>
                 <p className="text-xs text-on-surface-variant">
-                  Contrack learns who you talk to from your calendar, mail and
-                  messages. Nothing leaves this server unless you turn on AI
-                  summaries.
+                  Contrack learns who you talk to from your calendar and email.
+                  Nothing leaves this server unless you turn on AI summaries.
                 </p>
               </div>
             </div>
           </div>
 
           <div className="grid gap-3 pt-2">
-            {(kinds ?? []).map((k) => {
-              const isAvailable =
-                k.kind === "ics" || k.kind === "imap" || k.kind === "google";
-              return (
-                <div
-                  key={k.kind}
-                  className={`flex items-start justify-between gap-4 p-4 rounded-xl border transition-all ${
-                    isAvailable
-                      ? "bg-surface-container-low border-surface-container-high hover:border-primary/40"
-                      : "bg-surface-container-low border-surface-container-high/40"
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-on-surface">
-                        {k.label}
-                      </h3>
-                      {!isAvailable && (
-                        <Badge tone="neutral">Coming soon</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-on-surface-variant mt-1">
-                      {k.description}
-                    </p>
-                    {k.kind === "imessage" && (
-                      <p className="text-[11px] text-primary mt-1 font-medium">
-                        Runs on the Mac that hosts Contrack
-                      </p>
-                    )}
+            {(kinds ?? []).map((k) => (
+              <div
+                key={k.kind}
+                className="flex items-start justify-between gap-4 p-4 rounded-xl border transition-all bg-surface-container-low border-surface-container-high hover:border-primary/40"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-on-surface">
+                      {k.label}
+                    </h3>
                   </div>
-
-                  {isAvailable && (
-                    <button
-                      type="button"
-                      onClick={() => handleSelectKind(k.kind)}
-                      className="hit-area shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
-                    >
-                      Connect
-                    </button>
-                  )}
+                  <p className="text-xs text-on-surface-variant mt-1">
+                    {k.description}
+                  </p>
                 </div>
-              );
-            })}
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectKind(k.kind)}
+                  className="hit-area shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                >
+                  Connect
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

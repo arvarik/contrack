@@ -14,12 +14,9 @@ import {
   Globe,
   Loader2,
   Mail,
-  MessageCircle,
-  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
-import { Badge } from "../../../components/ui/Badge";
 import { useConnectorKinds } from "../../../api/connectors";
 import type { ConnectorKind, KindInfo } from "../../../../shared/connectors";
 
@@ -33,8 +30,6 @@ const KIND_ICONS: Record<ConnectorKind, LucideIcon> = {
   ics: Calendar,
   imap: Mail,
   google: Globe,
-  imessage: MessageSquare,
-  whatsapp_export: MessageCircle,
 };
 
 export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
@@ -67,20 +62,12 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
           <div className="grid gap-2">
             {kinds.map((k) => {
               const Icon = KIND_ICONS[k.kind] ?? Calendar;
-              const isAvailable =
-                k.kind === "ics" || k.kind === "imap" || k.kind === "google";
-
               return (
                 <button
                   key={k.kind}
                   type="button"
                   onClick={() => handleChoose(k)}
-                  disabled={!isAvailable}
-                  className={`hit-area w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-all ${
-                    isAvailable
-                      ? "bg-surface-container hover:bg-surface-container-high border-surface-container-high cursor-pointer"
-                      : "bg-surface-container/70 border-surface-container-high/40 cursor-not-allowed"
-                  }`}
+                  className="hit-area w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-all bg-surface-container hover:bg-surface-container-high border-surface-container-high cursor-pointer"
                 >
                   <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
                     <Icon className="w-5 h-5" aria-hidden="true" />
@@ -90,25 +77,15 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
                       <span className="text-sm font-semibold text-on-surface">
                         {k.label}
                       </span>
-                      {!isAvailable && (
-                        <Badge tone="neutral">Coming soon</Badge>
-                      )}
                     </div>
                     <p className="text-xs text-on-surface-variant mt-0.5 leading-normal">
                       {k.description}
                     </p>
-                    {k.kind === "imessage" && (
-                      <p className="text-[11px] text-primary mt-1 font-medium">
-                        Runs on the Mac that hosts Contrack
-                      </p>
-                    )}
                   </div>
-                  {isAvailable && (
-                    <ChevronRight
-                      className="w-4 h-4 text-on-surface-variant shrink-0 mt-2"
-                      aria-hidden="true"
-                    />
-                  )}
+                  <ChevronRight
+                    className="w-4 h-4 text-on-surface-variant shrink-0 mt-2"
+                    aria-hidden="true"
+                  />
                 </button>
               );
             })}

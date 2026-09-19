@@ -1970,12 +1970,27 @@ curl http://localhost:3210/api/connectors/kinds
 
 ```json
 {
+  "platform": "darwin",
+  "docker": false,
   "kinds": [
     {
       "kind": "ics",
       "label": "Calendar",
       "description": "Sync meetings and see what is coming up from a private ICS URL.",
       "capabilities": { "schedule": true }
+    },
+    {
+      "kind": "imap",
+      "label": "Mailbox (IMAP)",
+      "description": "Sync sent and received mail headers from any IMAP account.",
+      "capabilities": { "schedule": true, "summaries": true }
+    },
+    {
+      "kind": "google",
+      "label": "Google Workspace",
+      "description": "Sync contacts, mail and calendar with Google.",
+      "configured": true,
+      "capabilities": { "schedule": true, "oauth": true, "summaries": true }
     }
   ]
 }
