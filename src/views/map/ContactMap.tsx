@@ -246,6 +246,12 @@ export const ContactMap = ({
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
+
   const handlePreview = useCallback((id: string | null) => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     if (!id) {

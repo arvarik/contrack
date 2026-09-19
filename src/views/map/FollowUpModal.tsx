@@ -102,10 +102,6 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
         }),
       );
 
-      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-
       toast.success(
         `Added follow-up for ${targetIds.length} contact${targetIds.length !== 1 ? "s" : ""}`,
       );
@@ -115,6 +111,9 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
       const message = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to add follow-up: ${message}`);
     } finally {
+      queryClient.invalidateQueries({ queryKey: ["actionItems"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
       setIsSubmitting(false);
     }
   };
