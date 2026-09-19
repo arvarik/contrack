@@ -22,6 +22,7 @@ export interface RunStats {
   interactions?: number;
   meetings?: number;
   messages?: number;
+  emails?: number;
   upcoming?: number;
   contacts?: number;
   ghosts?: number;

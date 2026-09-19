@@ -16,6 +16,8 @@ import crypto from "node:crypto";
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { interactionService } from "../services/interactionService.ts";
+import { contactService } from "../services/contactService.ts";
+import type { NewContactPayload } from "../repositories/types.ts";
 import { normalizePhone } from "../utils/nlp/phone.ts";
 import type { ContactMatcher } from "./matching.ts";
 import type { SyncEvent } from "./types.ts";
@@ -58,6 +60,9 @@ export async function ingestStream(
   const stats: RunStats = {
     fetched: 0,
     interactions: 0,
+    meetings: 0,
+    messages: 0,
+    emails: 0,
     upcoming: 0,
     contacts: 0,
     ghosts: 0,
@@ -146,26 +151,52 @@ export async function ingestStream(
       );
 
       if (match.primaryContactId) {
-        const rollupKey = (event as { rollupKey?: string }).rollupKey;
+        const isEmailOrMessage =
+          event.type === "email" || event.type === "message";
+        const doRollup =
+          connector.config.rollup !== false &&
+          connector.config.granularity !== "message";
+        const dateStr = event.date
+          ? event.date.slice(0, 10)
+          : nowIso.slice(0, 10);
+        const rollupKey =
+          (event as { rollupKey?: string }).rollupKey ??
+          (isEmailOrMessage && doRollup
+            ? `${match.primaryContactId}:${dateStr}`
+            : undefined);
 
         if (rollupKey) {
           const rollupRow = sqlite
             .prepare(
-              `SELECT localId
+              `SELECT localId, seenCount
                FROM connector_links
                WHERE connectorId = ? AND ownerId = ? AND kind = 'rollup' AND externalId = ?`,
             )
             .get(connector.id, scope.ownerId, rollupKey) as
-            { localId: string | null } | undefined;
+            { localId: string | null; seenCount: number } | undefined;
 
           if (rollupRow && rollupRow.localId) {
             // Rollup exists: update the existing day interaction
             const existingId = rollupRow.localId;
-            const appendContent = event.content ? `\n\n${event.content}` : "";
+            const newSeenCount = (rollupRow.seenCount ?? 1) + 1;
+            const contactRow = sqlite
+              .prepare(`SELECT name FROM contacts WHERE id = ? AND ownerId = ?`)
+              .get(match.primaryContactId, scope.ownerId) as
+              { name: string } | undefined;
+            const contactName = contactRow?.name;
+            const typeLabel = event.type === "email" ? "emails" : "messages";
+            const updatedTitle = contactName
+              ? `${newSeenCount} ${typeLabel} with ${contactName}`
+              : `${newSeenCount} ${typeLabel}`;
+
+            const appendContent = event.content
+              ? `\n\n---\n\n${event.content}`
+              : "";
             sqlite
               .prepare(
                 `UPDATE interactions
-                 SET content = CASE
+                 SET title = ?,
+                     content = CASE
                    WHEN content IS NULL OR content = '' THEN ?
                    ELSE content || ?
                  END,
@@ -173,6 +204,7 @@ export async function ingestStream(
                  WHERE id = ? AND ownerId = ?`,
               )
               .run(
+                updatedTitle,
                 event.content ?? "",
                 appendContent,
                 nowIso,
@@ -195,6 +227,27 @@ export async function ingestStream(
                 nowIso,
               );
 
+            sqlite
+              .prepare(
+                `UPDATE connector_links
+                 SET seenCount = ?, lastSeenAt = ?
+                 WHERE connectorId = ? AND ownerId = ? AND kind = 'rollup' AND externalId = ?`,
+              )
+              .run(
+                newSeenCount,
+                nowIso,
+                connector.id,
+                scope.ownerId,
+                rollupKey,
+              );
+
+            if (event.type === "meeting" || connector.kind === "ics") {
+              stats.meetings = (stats.meetings ?? 0) + 1;
+            } else if (event.type === "message") {
+              stats.messages = (stats.messages ?? 0) + 1;
+            } else if (event.type === "email" || connector.kind === "imap") {
+              stats.emails = (stats.emails ?? 0) + 1;
+            }
             stats.interactions = (stats.interactions ?? 0) + 1;
             return;
           }
@@ -260,6 +313,8 @@ export async function ingestStream(
           stats.meetings = (stats.meetings ?? 0) + 1;
         } else if (event.type === "message") {
           stats.messages = (stats.messages ?? 0) + 1;
+        } else if (event.type === "email" || connector.kind === "imap") {
+          stats.emails = (stats.emails ?? 0) + 1;
         }
         stats.interactions = (stats.interactions ?? 0) + 1;
       } else {
@@ -436,7 +491,6 @@ export async function ingestStream(
     }
 
     if (event.kind === "contact") {
-      // For future Google People sync
       const existingLink = sqlite
         .prepare(
           `SELECT localId
@@ -446,7 +500,32 @@ export async function ingestStream(
         .get(connector.id, scope.ownerId, event.externalId) as
         { localId: string | null } | undefined;
 
-      if (existingLink) {
+      const cPayload = { ...(event.contact as unknown as NewContactPayload) };
+      const cEmails: string[] = Array.isArray(cPayload.emails)
+        ? cPayload.emails
+            .map((e: unknown) =>
+              typeof e === "string" ? e : (e as { email?: string })?.email,
+            )
+            .filter((e): e is string => typeof e === "string" && Boolean(e))
+        : [];
+      const cPhones: string[] = Array.isArray(cPayload.phones)
+        ? cPayload.phones
+            .map((p: unknown) =>
+              typeof p === "string" ? p : (p as { phone?: string })?.phone,
+            )
+            .filter((p): p is string => typeof p === "string" && Boolean(p))
+        : [];
+
+      if (event.photoUrl && !cPayload.avatarUrl) {
+        cPayload.avatarUrl = event.photoUrl;
+      }
+
+      if (existingLink && existingLink.localId) {
+        try {
+          contactService.updateContact(scope, existingLink.localId, cPayload);
+        } catch {
+          // ignore if contact was removed or update failed
+        }
         sqlite
           .prepare(
             `UPDATE connector_links
@@ -455,13 +534,73 @@ export async function ingestStream(
           )
           .run(nowIso, connector.id, scope.ownerId, event.externalId);
       } else {
-        sqlite
-          .prepare(
-            `INSERT INTO connector_links (
-              connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
-            ) VALUES (?, ?, 'contact', ?, NULL, 1, ?)`,
-          )
-          .run(connector.id, scope.ownerId, event.externalId, nowIso);
+        let matchedContactId: string | null = null;
+        for (const em of cEmails) {
+          matchedContactId = matcher.resolveContactId({ email: em });
+          if (matchedContactId) break;
+        }
+        if (!matchedContactId) {
+          for (const ph of cPhones) {
+            matchedContactId = matcher.resolveContactId({ phone: ph });
+            if (matchedContactId) break;
+          }
+        }
+
+        let contactId = matchedContactId;
+        if (!contactId) {
+          if (!cPayload.name) {
+            cPayload.name = cEmails[0] || cPhones[0] || "Unknown";
+          }
+          cPayload.sources = [
+            {
+              platform: connector.kind,
+              externalId: event.externalId,
+              connectedOn: nowIso,
+            },
+          ];
+          const created = contactService.createContact(
+            scope,
+            cPayload,
+            connector.kind,
+          );
+          if (created) {
+            contactId = created.id;
+          }
+        }
+
+        if (contactId) {
+          matcher.registerContact(contactId, cEmails, cPhones);
+
+          if (existingLink) {
+            sqlite
+              .prepare(
+                `UPDATE connector_links
+                 SET localId = ?, seenCount = seenCount + 1, lastSeenAt = ?
+                 WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+              )
+              .run(
+                contactId,
+                nowIso,
+                connector.id,
+                scope.ownerId,
+                event.externalId,
+              );
+          } else {
+            sqlite
+              .prepare(
+                `INSERT INTO connector_links (
+                  connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
+                ) VALUES (?, ?, 'contact', ?, ?, 1, ?)`,
+              )
+              .run(
+                connector.id,
+                scope.ownerId,
+                event.externalId,
+                contactId,
+                nowIso,
+              );
+          }
+        }
       }
       stats.contacts = (stats.contacts ?? 0) + 1;
     }

@@ -112,7 +112,7 @@ END:VCALENDAR`;
       await expectPageAccessible(page, testInfo, "connectors-empty");
 
       // 2. Choose Calendar from empty state gallery
-      const connectBtn = page.getByRole("button", { name: "Connect" });
+      const connectBtn = page.getByRole("button", { name: "Connect" }).first();
       await expect(connectBtn).toBeVisible();
       await connectBtn.click();
 
@@ -162,9 +162,25 @@ END:VCALENDAR`;
       await expect(galleryDialog).toBeVisible();
       await expectPageAccessible(page, testInfo, "add-connector-gallery");
 
-      // Close gallery sheet
-      await galleryDialog.getByRole("button", { name: /cancel/i }).click();
-      await expect(galleryDialog).toBeHidden();
+      // Select IMAP from gallery to test IMAP form opening
+      await galleryDialog
+        .getByRole("button", { name: /Mailbox \(IMAP\)/i })
+        .click();
+      const imapDialog = page.getByRole("dialog", {
+        name: /Connect Mailbox \(IMAP\)/i,
+      });
+      await expect(imapDialog).toBeVisible();
+      await expectPageAccessible(page, testInfo, "imap-form");
+      await imapDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(imapDialog).toBeHidden();
+
+      // 4b. Test Correspondents page
+      await page.goto("/settings/connectors/people");
+      await expect(
+        page.getByRole("heading", { name: "Correspondents", level: 1 }),
+      ).toBeVisible();
+      await expectPageAccessible(page, testInfo, "correspondents-empty");
+      await page.goto("/settings/connectors");
 
       // 5. Trigger Sync now
       const actionMenuTrigger = card.getByRole("button", {

@@ -425,6 +425,13 @@ export const adminIntegrationsSchema = z
       })
       .or(z.literal(""))
       .optional(),
+    googleOAuth: z
+      .object({
+        clientId: z.string().trim().min(1, "Client ID is required"),
+        clientSecret: z.string().trim().min(1, "Client Secret is required"),
+      })
+      .nullable()
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "Send an integration to change",

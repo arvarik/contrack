@@ -42,8 +42,10 @@ import {
   getIntegrationsStatus,
   setMapboxApiKey,
   setSearxngUrl,
+  setGoogleOAuthCredentials,
   isMapboxEnvSet,
   isSearxngEnvSet,
+  isGoogleOAuthEnvSet,
 } from "../services/integrationSettings.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
 import {
@@ -500,6 +502,18 @@ router.put(
       changed.push("searxngUrl");
     }
 
+    if (req.body.googleOAuth !== undefined) {
+      if (isGoogleOAuthEnvSet()) {
+        throw new AppError(
+          "Google OAuth credentials are set by environment variables GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setGoogleOAuthCredentials(req.body.googleOAuth);
+      changed.push("googleOAuth");
+    }
+
     const ctx = adminContext(req);
     for (const key of changed) {
       auditService.record({
@@ -507,6 +521,7 @@ router.put(
         action: "integrations.changed",
         targetType: "integration",
         targetId: key,
+        details: { key },
         ip: ctx.ip,
       });
     }

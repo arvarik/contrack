@@ -77,6 +77,11 @@ export const NAMES = {
     title: "Connectors",
     description: "Calendar, mailbox, Google, messages. Sync who you talk to.",
   },
+  correspondents: {
+    label: "Correspondents",
+    title: "Correspondents",
+    description: "People you talk to who are not in Contrack yet.",
+  },
 } as const satisfies Record<string, DestinationName>;
 
 export type DestinationKey = keyof typeof NAMES;

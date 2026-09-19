@@ -11,6 +11,8 @@ import fs from "node:fs";
 import type { ConnectorKind, KindInfo } from "../../shared/connectors.ts";
 import type { ConnectorAdapter } from "./types.ts";
 import { icsAdapter } from "./adapters/ics.ts";
+import { imapAdapter } from "./adapters/imap.ts";
+import { googleAdapter } from "./adapters/google.ts";
 
 const adapters = new Map<ConnectorKind, ConnectorAdapter<unknown, unknown>>();
 
@@ -20,8 +22,10 @@ export function registerAdapter(
   adapters.set(adapter.kind, adapter);
 }
 
-// Register Prompt 2 adapter
+// Register Prompt 2 & 3 adapters
 registerAdapter(icsAdapter as unknown as ConnectorAdapter<unknown, unknown>);
+registerAdapter(imapAdapter as unknown as ConnectorAdapter<unknown, unknown>);
+registerAdapter(googleAdapter as unknown as ConnectorAdapter<unknown, unknown>);
 
 export function getAdapter(
   kind: ConnectorKind | string,

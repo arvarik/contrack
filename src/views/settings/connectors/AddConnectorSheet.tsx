@@ -67,7 +67,8 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
           <div className="grid gap-2">
             {kinds.map((k) => {
               const Icon = KIND_ICONS[k.kind] ?? Calendar;
-              const isAvailable = k.kind === "ics";
+              const isAvailable =
+                k.kind === "ics" || k.kind === "imap" || k.kind === "google";
 
               return (
                 <button

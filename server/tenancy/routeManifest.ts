@@ -515,6 +515,24 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
+    method: "POST",
+    path: "/api/connectors/correspondents/ignore",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "GET",
+    path: "/api/connectors/google/callback",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/connectors/google/start",
+    class: "session-self",
+    isolated: false,
+  },
+  {
     method: "GET",
     path: "/api/connectors/kinds",
     class: "instance-read",
