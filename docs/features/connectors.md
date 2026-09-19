@@ -10,7 +10,7 @@ Manage connectors in Contrack under **Settings → Connect → Connectors** (`/s
 
 Connectors run in-process on the Contrack server and poll external services on configurable schedules (15m, 30m, hourly, daily):
 
-- **Pluggable Adapters**: Built on a unified streaming adapter interface (`server/connectors/types.ts`). Currently supports **Calendar (ICS)** feeds, with IMAP, Google Workspace, iMessage, and WhatsApp export support planned.
+- **Pluggable Adapters**: Built on a unified streaming adapter interface (`server/connectors/types.ts`). Supports **Calendar (ICS)**, **Mailbox (IMAP)**, and **Google Workspace** (Google People, Gmail, and Google Calendar).
 - **Background Scheduler**: A single 60-second tick checks due connectors, running at most one connector per account per tick to prevent resource hogging. Overall server concurrency is controlled by `CONNECTOR_SYNC_CONCURRENCY` (default: 2).
 - **Graceful Shutdown**: All active sync runs listen to an `AbortSignal` wired to process termination (`SIGINT` / `SIGTERM`), cleanly wrapping up transactions.
 - **Manual Sync**: The "Sync now" button triggers immediate execution, operating synchronously when background workers are disabled (`DISABLE_BACKGROUND_JOBS=true`).
@@ -36,7 +36,7 @@ Incoming events are matched against your existing network:
 2. **Self Address Exclusion**: Your own email addresses (and aliases) are recognized and excluded from becoming contacts.
 3. **Primary Ownership & Mentions**: The first matched non-self participant becomes the primary contact for the interaction. Any additional matched attendees are recorded as mentions.
 4. **Correspondents & Ghosts**: Unmatched attendees are tracked as correspondents. When an unknown person reaches the configured ghost threshold (default: 3 interactions), a ghost contact is automatically suggested so you can promote them with one click.
-5. **Timeline Attribution**: Interactions imported by connectors display a "via Calendar" badge on the contact's timeline.
+5. **Timeline Attribution**: Interactions imported by connectors display provenance badges (e.g. "via Calendar", "via Email", "via Google") on the contact's timeline.
 
 ---
 

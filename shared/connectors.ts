@@ -6,8 +6,7 @@
  * @module shared/connectors
  */
 
-export type ConnectorKind =
-  "ics" | "imap" | "google" | "imessage" | "whatsapp_export";
+export type ConnectorKind = "ics" | "imap" | "google";
 
 export type ConnectorStatus = "active" | "paused" | "error" | "needs_reauth";
 
@@ -72,7 +71,6 @@ export interface KindInfo {
     schedule: boolean;
     upload?: { accept: string[]; maxBytes: number };
     oauth?: boolean;
-    localOnly?: "darwin";
     summaries?: boolean;
   };
 }
@@ -114,16 +112,6 @@ export const CONNECTOR_KINDS: Record<
     label: "Google Workspace",
     description: "Sync contacts, mail and calendar with Google.",
     viaLabel: "via Google",
-  },
-  imessage: {
-    label: "iMessage",
-    description: "Sync iMessage conversations from this Mac.",
-    viaLabel: "via iMessage",
-  },
-  whatsapp_export: {
-    label: "WhatsApp",
-    description: "Import chats from a WhatsApp export file.",
-    viaLabel: "via WhatsApp",
   },
 };
 

@@ -640,15 +640,15 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "google",
       "mailbox",
       "imap",
-      "messages",
-      "imessage",
-      "whatsapp",
+      "email",
+      "gmail",
+      "outlook",
     ],
     rows: [
       {
         id: "gallery",
         label: "Available connectors",
-        keywords: ["calendar", "mail", "google", "imessage", "whatsapp"],
+        keywords: ["calendar", "mail", "google", "imap", "email"],
       },
     ],
     load: () =>

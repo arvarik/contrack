@@ -18,8 +18,6 @@ import {
   KeyRound,
   Loader2,
   Mail,
-  MessageCircle,
-  MessageSquare,
   Pause,
   Pencil,
   Play,
@@ -53,8 +51,6 @@ const KIND_ICONS: Record<ConnectorKind, LucideIcon> = {
   ics: Calendar,
   imap: Mail,
   google: Globe,
-  imessage: MessageSquare,
-  whatsapp_export: MessageCircle,
 };
 
 function statusBadgeInfo(status: ConnectorStatus): {

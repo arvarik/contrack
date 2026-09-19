@@ -1,8 +1,7 @@
 /**
  * server/connectors/registry.ts — Registry of connector adapters and available kinds.
  *
- * Maps connector kinds to adapters and computes available kinds based on platform
- * and environment (e.g. iMessage only available on macOS outside Docker).
+ * Maps connector kinds to adapters and computes available kinds based on configuration.
  *
  * @module server/connectors/registry
  */
@@ -22,7 +21,7 @@ export function registerAdapter(
   adapters.set(adapter.kind, adapter);
 }
 
-// Register Prompt 2 & 3 adapters
+// Register connector adapters
 registerAdapter(icsAdapter as unknown as ConnectorAdapter<unknown, unknown>);
 registerAdapter(imapAdapter as unknown as ConnectorAdapter<unknown, unknown>);
 registerAdapter(googleAdapter as unknown as ConnectorAdapter<unknown, unknown>);
@@ -50,8 +49,8 @@ export function isDocker(): boolean {
  * Returns available connector kinds for a given platform and Docker state.
  */
 export function kindsFor(
-  platform: string = process.platform,
-  isDockerEnv: boolean = isDocker(),
+  _platform: string = process.platform,
+  _isDockerEnv: boolean = isDocker(),
   options: { googleConfigured?: boolean } = {},
 ): KindInfo[] {
   const kinds: KindInfo[] = [
@@ -85,32 +84,6 @@ export function kindsFor(
       },
     },
   ];
-
-  if (platform === "darwin" && !isDockerEnv) {
-    kinds.push({
-      kind: "imessage",
-      label: "iMessage",
-      description: "Sync iMessage conversations from this Mac.",
-      capabilities: {
-        schedule: true,
-        localOnly: "darwin",
-        summaries: true,
-      },
-    });
-  }
-
-  kinds.push({
-    kind: "whatsapp_export",
-    label: "WhatsApp",
-    description: "Import chats from a WhatsApp export file.",
-    capabilities: {
-      schedule: false,
-      upload: {
-        accept: [".txt", ".zip"],
-        maxBytes: 50 * 1024 * 1024,
-      },
-    },
-  });
 
   return kinds;
 }
