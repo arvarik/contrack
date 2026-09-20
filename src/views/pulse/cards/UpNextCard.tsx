@@ -6,6 +6,7 @@ import { ActionRow } from "./ActionRow";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { openQuickNote } from "../../../lib/appEvents";
+import { flyCorvid } from "../../../lib/corvid";
 import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
 export interface UpNextCardProps {
@@ -42,6 +43,11 @@ export const UpNextCard = ({
         origin: { y: 0.6 },
         colors: ["#009EDB", "#10B981", "#F59E0B"],
       });
+      // And the bird takes a lap of honour across the top of the page. The
+      // overlay decides whether it actually flies: it runs the swoop only at
+      // level "full", and reduced motion, from the account or the operating
+      // system, is already "off" by the time it reads the level.
+      flyCorvid({ kind: "swoop" });
     }
     prevItemCountRef.current = items.length;
 

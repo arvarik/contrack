@@ -31,9 +31,8 @@ import { SidebarIdentity } from "../auth/AccountIdentity";
 import { CorvidMark } from "../brand/CorvidMark";
 import { perchProps } from "../brand/CorvidFlight";
 import { HOP_CLASS, HOP_MS, playCorvidBeat } from "../../hooks/useCorvidIdle";
-import { flyCorvid, motionLevel } from "../../lib/corvid";
-import { usePreferences } from "../../contexts/PreferencesContext";
-import { useReducedMotion } from "motion/react";
+import { useCorvidLevel } from "../../hooks/useCorvidLevel";
+import { flyCorvid } from "../../lib/corvid";
 import { NAMES } from "../../lib/names";
 
 // ---------------------------------------------------------------------------
@@ -109,15 +108,8 @@ const SidebarTooltip = ({
  * needs no overlay at all.
  */
 const CorvidPerch = () => {
-  const { preferences } = usePreferences();
-  const prefersReducedMotion = useReducedMotion();
   const markRef = useRef<HTMLSpanElement>(null);
-
-  const level = motionLevel(
-    preferences.mascotMotion,
-    Boolean(prefersReducedMotion),
-    preferences.motion,
-  );
+  const level = useCorvidLevel();
 
   // Enter and Space already reach this through the button's own click, so
   // there is no key handler here to get out of step with the pointer.

@@ -18,6 +18,7 @@ import {
   flightBox,
   flightSeconds,
   motionLevel,
+  offscreenStart,
   supportsOffsetPath,
   type FlightViewport,
 } from "../../src/lib/corvid";
@@ -184,6 +185,39 @@ describe("buildFlightPath", () => {
       expect(point[0]).toBeCloseTo(box.left, 1);
       expect(point[1]).toBeCloseTo(box.top, 1);
     }
+  });
+});
+
+describe("offscreenStart", () => {
+  // Pulse fires a swoop when the last follow-up clears, and on a phone that
+  // page carries no perch: the sidebar's is in the DOM but CSS-hidden, so
+  // its rectangle is all zeros. A flight built from that comes out of the
+  // top left corner of the window. This is where it comes from instead.
+  it("is off the left edge, in the band the swoop crosses", () => {
+    const start = offscreenStart(LAPTOP);
+    const box = flightBox(LAPTOP);
+    expect(start.x).toBeLessThan(0);
+    expect(start.y).toBeGreaterThan(box.top);
+    expect(start.y).toBeLessThan(box.top + (box.bottom - box.top) / 3);
+  });
+
+  it("keeps the whole swoop in the top third of a phone", () => {
+    const start = offscreenStart(PHONE);
+    const box = flightBox(PHONE);
+    const third = box.top + (box.bottom - box.top) / 3;
+    for (const { point, segment } of samples(
+      buildFlightPath(PHONE, start, "swoop"),
+    )) {
+      if (segment <= 0) continue;
+      expect(point[1]).toBeLessThanOrEqual(third);
+    }
+  });
+
+  it("starts and ends off screen, so the bird arrives and leaves", () => {
+    const start = offscreenStart(LAPTOP);
+    const points = samples(buildFlightPath(LAPTOP, start, "swoop"));
+    expect(points[0]!.point[0]).toBeLessThan(0);
+    expect(points[points.length - 1]!.point[0]).toBeLessThan(0);
   });
 });
 

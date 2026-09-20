@@ -26,9 +26,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { CorvidMark } from "./CorvidMark";
-import { usePreferences } from "../../contexts/PreferencesContext";
+import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import {
   BLINK_CLASS,
   BLINK_MS,
@@ -38,10 +38,11 @@ import {
 } from "../../hooks/useCorvidIdle";
 import {
   CORVID_FLY_EVENT,
+  FLIGHT_SIZE,
   buildFlightPath,
   buildHomePath,
   flightSeconds,
-  motionLevel,
+  offscreenStart,
   supportsOffsetPath,
   HOMING_SECONDS,
   type CorvidFlyDetail,
@@ -54,8 +55,29 @@ export const PERCH_ATTRIBUTE = "data-corvid-perch";
 /** Spread this on the element the overlay should hide while the bird is out. */
 export const perchProps = { [PERCH_ATTRIBUTE]: "" } as const;
 
-/** The flying bird's size. The perch is 32, so it grows on the way out. */
-const FLIGHT_SIZE = 48;
+/**
+ * The perch that is actually on screen.
+ *
+ * There is more than one. The sidebar's stays in the DOM below `md`, hidden
+ * by CSS rather than unmounted, and the Settings footer carries a second one
+ * that only exists below `md`. A plain `querySelector` would hand back the
+ * sidebar's on a phone: a rectangle of zeros, so the bird would leave from
+ * the top left corner and land back there, and the perch a person pressed
+ * would never go dark.
+ *
+ * A hidden element has no layout box, so its width is the test. Exported for
+ * the test that holds this rule.
+ */
+export function findPerch(): HTMLElement | null {
+  const perches = [
+    ...document.querySelectorAll<HTMLElement>(`[${PERCH_ATTRIBUTE}]`),
+  ];
+  return (
+    perches.find((perch) => perch.getBoundingClientRect().width > 0) ??
+    perches[0] ??
+    null
+  );
+}
 
 /** How long the bird takes to grow to size and to shrink back, in seconds. */
 const RESIZE_SECONDS = 0.3;
@@ -73,8 +95,7 @@ interface Flight {
 }
 
 export const CorvidFlight = () => {
-  const { preferences } = usePreferences();
-  const prefersReducedMotion = useReducedMotion();
+  const level = useCorvidLevel();
   const location = useLocation();
   const [flight, setFlight] = useState<Flight | null>(null);
   const [flapping, setFlapping] = useState(false);
@@ -84,12 +105,6 @@ export const CorvidFlight = () => {
   const birdRef = useRef<HTMLDivElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const nextId = useRef(0);
-
-  const level = motionLevel(
-    preferences.mascotMotion,
-    Boolean(prefersReducedMotion),
-    preferences.motion,
-  );
 
   const clearTimers = useCallback(() => {
     for (const timer of timers.current) clearTimeout(timer);
@@ -116,7 +131,12 @@ export const CorvidFlight = () => {
       const detail = (event as CustomEvent<CorvidFlyDetail>).detail ?? {
         kind: "loop" as const,
       };
-      const perch = document.querySelector<HTMLElement>(`[${PERCH_ATTRIBUTE}]`);
+      const found = findPerch();
+      const foundRect = found?.getBoundingClientRect();
+      // A perch that CSS has hidden has no layout box. The sidebar's stays
+      // in the DOM below `md`, so "there is a perch" and "the perch is on
+      // screen" are two different questions.
+      const perch = foundRect && foundRect.width > 0 ? found : null;
 
       if (level === "off") return;
 
@@ -128,17 +148,22 @@ export const CorvidFlight = () => {
         return;
       }
 
-      const rect = detail.from ?? perch?.getBoundingClientRect();
-      if (!rect) return;
-      const centre = {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2,
-      };
       const viewport = {
         width: window.innerWidth,
         height: window.innerHeight,
       };
-      const perchSize = Math.max(rect.width, 1);
+      const rect = detail.from ?? (perch ? foundRect : undefined);
+
+      // No rectangle to leave from. A loop has nowhere to go and nothing to
+      // land on, so it does not happen. A swoop is a flypast rather than a
+      // bird leaving a perch, so it comes in from off screen instead: that
+      // is Pulse on a phone, where the page carries no perch at all.
+      if (!rect && detail.kind !== "swoop") return;
+
+      const centre = rect
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        : offscreenStart(viewport);
+      const perchSize = rect ? Math.max(rect.width, 1) : FLIGHT_SIZE;
 
       // Already out: a second call asks the bird home rather than sending it
       // round again. It leaves from wherever it is on screen right now.

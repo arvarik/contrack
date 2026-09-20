@@ -6,6 +6,41 @@
  */
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible } from "./fixtures/a11y";
+import type { ContrackInstance } from "./fixtures/instance";
+
+/**
+ * The follow-ups these tests create, so they can be taken away again.
+ *
+ * The instance is shared by every spec in the worker, and "Up next" is a
+ * list of whatever is open on it. A test that leaves its own items behind
+ * changes what the next test sees: the second one here reads the item at
+ * index 1, which is only "Task Two Today" when nothing else is queued.
+ */
+const created: string[] = [];
+
+/** Add a follow-up and remember it for the cleanup. */
+async function addActionItem(
+  instance: ContrackInstance,
+  contactId: string,
+  title: string,
+  dueAt: Date,
+): Promise<{ id: string }> {
+  const item = await instance.api<{ id: string }>(
+    "POST",
+    `/contacts/${contactId}/action-items`,
+    { title, dueAt: dueAt.toISOString() },
+  );
+  created.push(item.id);
+  return item;
+}
+
+test.afterEach(async ({ instance }) => {
+  const ids = created.splice(0);
+  for (const id of ids) {
+    // Already completed or already gone is the same outcome as deleted.
+    await instance.api("DELETE", `/action-items/${id}`).catch(() => {});
+  }
+});
 
 test.describe("Pulse Office", () => {
   test("shows Pulse heading, Today strip, and Up next with seeded overdue item first", async ({
@@ -22,15 +57,13 @@ test.describe("Pulse Office", () => {
 
     const todayDate = new Date();
 
-    await instance.api("POST", `/contacts/${ada.id}/action-items`, {
-      title: "Send Apollo blueprints",
-      dueAt: overdueDate.toISOString(),
-    });
-
-    await instance.api("POST", `/contacts/${grace.id}/action-items`, {
-      title: "Review compiler draft",
-      dueAt: todayDate.toISOString(),
-    });
+    await addActionItem(
+      instance,
+      ada.id,
+      "Send Apollo blueprints",
+      overdueDate,
+    );
+    await addActionItem(instance, grace.id, "Review compiler draft", todayDate);
 
     await page.goto("/pulse");
 
@@ -65,18 +98,13 @@ test.describe("Pulse Office", () => {
 
     const todayDate = new Date();
 
-    await instance.api("POST", `/contacts/${ada.id}/action-items`, {
-      title: "Task One Overdue",
-      dueAt: overdueDate.toISOString(),
-    });
+    await addActionItem(instance, ada.id, "Task One Overdue", overdueDate);
 
-    const item2 = await instance.api<{ id: string }>(
-      "POST",
-      `/contacts/${grace.id}/action-items`,
-      {
-        title: "Task Two Today",
-        dueAt: todayDate.toISOString(),
-      },
+    const item2 = await addActionItem(
+      instance,
+      grace.id,
+      "Task Two Today",
+      todayDate,
     );
 
     await page.goto("/pulse");

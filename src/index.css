@@ -761,6 +761,56 @@
   .corvid-flying {
     will-change: transform;
   }
+
+  /*
+   * Thinking: the same head tilt as the idle beat, but it keeps going for as
+   * long as the answer takes. Slower and smaller than a blink, so it reads as
+   * attention rather than as a spinner in a bird suit. The pause at each end
+   * is most of the cycle: a head that never stops moving is a twitch.
+   */
+  @keyframes corvid-thinking {
+    0%,
+    15%,
+    100% {
+      transform: rotate(0deg);
+    }
+    35%,
+    55% {
+      transform: rotate(-8deg);
+    }
+    75%,
+    88% {
+      transform: rotate(5deg);
+    }
+  }
+  .corvid-thinking {
+    transform-box: fill-box;
+    transform-origin: 50% 60%;
+    animation: corvid-thinking 2.4s ease-in-out infinite;
+  }
+
+  /*
+   * No. Two hundred milliseconds of it, on the sign-in card, when the
+   * password was wrong. It is the one place the bird answers a person rather
+   * than decorating a screen, so it is short and it happens once.
+   */
+  @keyframes corvid-shake {
+    0%,
+    100% {
+      transform: translateX(0) rotate(0deg);
+    }
+    25% {
+      transform: translateX(-3px) rotate(-4deg);
+    }
+    75% {
+      transform: translateX(3px) rotate(4deg);
+    }
+  }
+  .corvid-shake {
+    transform-box: fill-box;
+    transform-origin: 50% 60%;
+    animation: corvid-shake 200ms ease-in-out;
+  }
 }
 
 /* =====================================================================
@@ -804,6 +854,8 @@ html[data-text-scale="large"] {
   .corvid-blink [data-part="eye"],
   .corvid-tilt,
   .corvid-hop,
+  .corvid-shake,
+  .corvid-thinking,
   .corvid-flapping [data-part="wing"] {
     animation: none !important;
     transform: none !important;
@@ -813,6 +865,8 @@ html[data-text-scale="large"] {
 :root[data-motion="reduced"] .corvid-blink [data-part="eye"],
 :root[data-motion="reduced"] .corvid-tilt,
 :root[data-motion="reduced"] .corvid-hop,
+:root[data-motion="reduced"] .corvid-shake,
+:root[data-motion="reduced"] .corvid-thinking,
 :root[data-motion="reduced"] .corvid-flapping [data-part="wing"] {
   animation: none !important;
   transform: none !important;

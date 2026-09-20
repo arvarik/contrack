@@ -23,8 +23,14 @@
  * `.corvid-flying [data-part="wing"]` reaches the wing of whichever bird is
  * flying, which is what the keyframes in `index.css` need.
  */
-import React, { useId, useRef } from "react";
-import { useCorvidIdle } from "../../hooks/useCorvidIdle";
+import React, { useEffect, useId, useRef } from "react";
+import {
+  HOP_CLASS,
+  HOP_MS,
+  playCorvidBeat,
+  useCorvidIdle,
+} from "../../hooks/useCorvidIdle";
+import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import {
   CORVID_EYE,
   CORVID_PART_ORDER,
@@ -47,6 +53,12 @@ export interface CorvidMarkProps extends Omit<
   variant?: CorvidVariant;
   /** `true` hides the SVG from assistive tech. `false` names it "Contrack". */
   decorative?: boolean;
+  /**
+   * What a named mark is called. "Contrack" unless the bird is standing for
+   * something else, as `CorvidThinking` does with "Thinking". Ignored while
+   * the mark is decorative, which is the default.
+   */
+  label?: string;
   /** A native tooltip, for a mark that stands where a word used to. */
   title?: string;
   /** The stem of every part's id. Unique per instance when not given. */
@@ -57,6 +69,11 @@ export interface CorvidMarkProps extends Omit<
    * 24 px ignores this, because a blink is invisible at that size.
    */
   idle?: boolean;
+  /**
+   * One hop when the mark appears, for a bird that is the good news itself:
+   * the "All reviewed" state of the duplicates queue.
+   */
+  hop?: boolean;
 }
 
 /** React's ids carry punctuation that a CSS selector would have to escape. */
@@ -66,9 +83,11 @@ export const CorvidMark = ({
   size = 32,
   variant = "mark",
   decorative = true,
+  label = "Contrack",
   title,
   idPrefix,
   idle = false,
+  hop = false,
   className,
   ...rest
 }: CorvidMarkProps) => {
@@ -82,7 +101,18 @@ export const CorvidMark = ({
   const stroke = variant === "glyph" ? GLYPH_STROKE : MARK_STROKE;
   const eyeRadius = variant === "glyph" ? GLYPH_EYE_R : CORVID_EYE.r;
 
-  useCorvidIdle(svgRef, { enabled: idle, size });
+  // The level is read here rather than by each caller, so a surface that
+  // asks for motion cannot forget that the account, or the operating system,
+  // may have asked for none.
+  const level = useCorvidLevel();
+  const moves = level !== "off";
+
+  useCorvidIdle(svgRef, { enabled: idle && moves, size });
+
+  useEffect(() => {
+    if (!hop || !moves) return;
+    return playCorvidBeat(svgRef.current, HOP_CLASS, HOP_MS);
+  }, [hop, moves]);
 
   return (
     <svg
@@ -98,7 +128,7 @@ export const CorvidMark = ({
       focusable="false"
       aria-hidden={decorative ? "true" : undefined}
       role={decorative ? undefined : "img"}
-      aria-label={decorative ? undefined : "Contrack"}
+      aria-label={decorative ? undefined : label}
       data-variant={variant}
       className={className}
       {...rest}

@@ -14,6 +14,7 @@
 import React from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Clock, RefreshCw } from "lucide-react";
+import { CorvidThinking } from "../brand/CorvidThinking";
 import {
   bandFor,
   describeScore,
@@ -164,13 +165,23 @@ export const StaleChip = ({
           title={tooltip}
           onClick={handleClick}
           disabled={disabled}
-          className={`hit-area inline-flex items-center justify-center w-3.5 h-3.5 rounded transition-colors ${
+          className={`hit-area inline-flex items-center justify-center w-4 h-4 rounded transition-colors ${
             disabled
               ? "text-on-surface-variant/30 cursor-not-allowed"
               : "text-warning hover:text-warning hover:bg-amber-500/20 cursor-pointer"
-          } ${isThisEnriching ? "animate-spin" : ""}`}
+          }`}
         >
-          <RefreshCw className="w-2.5 h-2.5" />
+          {/*
+            The bird thinks while this contact refreshes. Decorative, because
+            the button's own title already says "Refreshing…". The icon box
+            grew from 14 to 16 px so the glyph still reads as a bird; the tap
+            box is unchanged at 44 px, from `hit-area`.
+          */}
+          {isThisEnriching ? (
+            <CorvidThinking decorative size={16} />
+          ) : (
+            <RefreshCw className="w-2.5 h-2.5" />
+          )}
         </button>
       )}
     </span>

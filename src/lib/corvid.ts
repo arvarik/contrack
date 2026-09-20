@@ -260,6 +260,29 @@ export function buildHomePath(
   );
 }
 
+/**
+ * Where a swoop starts when there is no perch to leave from.
+ *
+ * A celebration is a flypast, not a bird leaving its perch: Pulse fires one
+ * when the last follow-up clears, and on a phone there is no perch on that
+ * page at all. The sidebar's is in the DOM but CSS-hidden, so its rectangle
+ * is all zeros, and a flight built from that would come out of the top left
+ * corner of the window and go back into it.
+ *
+ * This is a point just outside the left edge, on the band the swoop uses, so
+ * the bird comes in from off screen, crosses, and leaves the same way.
+ */
+export function offscreenStart(viewport: FlightViewport): FlightPerch {
+  const box = flightBox(viewport);
+  return {
+    x: box.left - FLIGHT_SIZE,
+    y: box.top + (box.bottom - box.top) * 0.14,
+  };
+}
+
+/** The flying bird's size. The overlay renders the mark at this. */
+export const FLIGHT_SIZE = 48;
+
 /** How long a full flight takes, in seconds. */
 export const FLIGHT_SECONDS = 4.5;
 

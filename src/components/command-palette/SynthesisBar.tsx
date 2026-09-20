@@ -15,7 +15,8 @@ import { z } from "zod";
  * @module components/command-palette/SynthesisBar
  */
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { Sparkles, X, Loader2, AlertTriangle } from "lucide-react";
+import { Sparkles, X, AlertTriangle } from "lucide-react";
+import { CorvidThinking } from "../brand/CorvidThinking";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,9 +201,11 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           style={{ minHeight: compact ? "60px" : "80px" }}
         >
           <div className={`flex items-center gap-2 ${textSize} text-primary`}>
-            <Loader2
-              className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} animate-spin`}
-            />
+            {/*
+              Decorative: "Synthesizing…" is right beside it and says the
+              same thing, so a screen reader should hear it once.
+            */}
+            <CorvidThinking decorative size={compact ? 14 : 16} />
             <span className="font-semibold">Synthesizing…</span>
           </div>
           <div className="space-y-1.5">
