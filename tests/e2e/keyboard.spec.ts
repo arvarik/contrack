@@ -42,6 +42,9 @@ const LIST_ROW = "#contact-list [data-roving-index]";
 
 /** The sidebar, in Tab order, after the skip link. */
 const SIDEBAR_STOPS = [
+  // The corvid mark. It goes nowhere: it sends the bird round the window and
+  // gives focus straight back. It is first because it sits on top of the nav.
+  { role: "button", name: "Contrack" },
   { role: "link", name: "Network" },
   { role: "link", name: /^Pulse/ },
   { role: "link", name: "Map" },
@@ -204,9 +207,13 @@ test("on a contact page the skip link lands on the contact's name", async ({
  * and thirteen letter buttons. The budget is what the page costs now, and a
  * change that adds stops in front of the content fails here rather than in a
  * keyboard user's afternoon.
+ *
+ * Both budgets went up by exactly one when the corvid mark became a button.
+ * It is the seventh sidebar stop, and it stands in front of the content on
+ * every page, so a keyboard user pays for it once per page.
  */
 test.describe("Tab budget", () => {
-  test("a contact's name is within 16 Tabs of the top of the page", async ({
+  test("a contact's name is within 17 Tabs of the top of the page", async ({
     page,
     seed,
   }) => {
@@ -216,19 +223,19 @@ test.describe("Tab budget", () => {
     ).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, "#contact-heading", 16);
-    expect(presses).toBeLessThanOrEqual(16);
+    const presses = await tabsToReach(page, "#contact-heading", 17);
+    expect(presses).toBeLessThanOrEqual(17);
   });
 
-  test("the first row on Network is within 14 Tabs, and the list is one stop", async ({
+  test("the first row on Network is within 15 Tabs, and the list is one stop", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, LIST_ROW, 14);
-    expect(presses).toBeLessThanOrEqual(14);
+    const presses = await tabsToReach(page, LIST_ROW, 15);
+    expect(presses).toBeLessThanOrEqual(15);
     await expect(
       page
         .locator("#contact-list")

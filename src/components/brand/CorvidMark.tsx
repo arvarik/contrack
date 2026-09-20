@@ -17,8 +17,14 @@
  * stylesheet can move one feather without touching the rest. The prefix is
  * unique per instance unless the caller sets it: the sidebar perch passes
  * `idPrefix="corvid"`, which is the one the motion keyframes target.
+ *
+ * Every part also carries `data-part`, which is the same name without the
+ * prefix. An id is unique per instance and so cannot appear in a stylesheet;
+ * `.corvid-flying [data-part="wing"]` reaches the wing of whichever bird is
+ * flying, which is what the keyframes in `index.css` need.
  */
-import React, { useId } from "react";
+import React, { useId, useRef } from "react";
+import { useCorvidIdle } from "../../hooks/useCorvidIdle";
 import {
   CORVID_EYE,
   CORVID_PART_ORDER,
@@ -34,7 +40,7 @@ export type CorvidVariant = "mark" | "glyph";
 
 export interface CorvidMarkProps extends Omit<
   React.SVGProps<SVGSVGElement>,
-  "width" | "height" | "viewBox" | "role" | "aria-hidden" | "aria-label"
+  "width" | "height" | "viewBox" | "role" | "aria-hidden" | "aria-label" | "ref"
 > {
   /** Rendered width and height, in CSS pixels. */
   size?: number;
@@ -45,6 +51,12 @@ export interface CorvidMarkProps extends Omit<
   title?: string;
   /** The stem of every part's id. Unique per instance when not given. */
   idPrefix?: string;
+  /**
+   * Blink now and then. Off by default: most marks on a page are furniture,
+   * and one timer each would be a lot of timers for nothing. A mark under
+   * 24 px ignores this, because a blink is invisible at that size.
+   */
+  idle?: boolean;
 }
 
 /** React's ids carry punctuation that a CSS selector would have to escape. */
@@ -56,9 +68,11 @@ export const CorvidMark = ({
   decorative = true,
   title,
   idPrefix,
+  idle = false,
   className,
   ...rest
 }: CorvidMarkProps) => {
+  const svgRef = useRef<SVGSVGElement>(null);
   const generated = useId();
   const prefix = idPrefix ?? `corvid-${cleanId(generated)}`;
   const parts =
@@ -68,8 +82,11 @@ export const CorvidMark = ({
   const stroke = variant === "glyph" ? GLYPH_STROKE : MARK_STROKE;
   const eyeRadius = variant === "glyph" ? GLYPH_EYE_R : CORVID_EYE.r;
 
+  useCorvidIdle(svgRef, { enabled: idle, size });
+
   return (
     <svg
+      ref={svgRef}
       viewBox={CORVID_VIEWBOX}
       width={size}
       height={size}
@@ -88,10 +105,16 @@ export const CorvidMark = ({
     >
       {title && <title>{title}</title>}
       {parts.map((part) => (
-        <path key={part} id={`${prefix}-${part}`} d={CORVID_PATHS[part]} />
+        <path
+          key={part}
+          id={`${prefix}-${part}`}
+          data-part={part}
+          d={CORVID_PATHS[part]}
+        />
       ))}
       <circle
         id={`${prefix}-eye`}
+        data-part="eye"
         cx={CORVID_EYE.cx}
         cy={CORVID_EYE.cy}
         r={eyeRadius}

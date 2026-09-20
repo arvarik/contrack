@@ -29,6 +29,11 @@ import { useRecent } from "../../contexts/SessionContext";
 import { openKeyboardShortcuts } from "../../lib/appEvents";
 import { SidebarIdentity } from "../auth/AccountIdentity";
 import { CorvidMark } from "../brand/CorvidMark";
+import { perchProps } from "../brand/CorvidFlight";
+import { HOP_CLASS, HOP_MS, playCorvidBeat } from "../../hooks/useCorvidIdle";
+import { flyCorvid, motionLevel } from "../../lib/corvid";
+import { usePreferences } from "../../contexts/PreferencesContext";
+import { useReducedMotion } from "motion/react";
 import { NAMES } from "../../lib/names";
 
 // ---------------------------------------------------------------------------
@@ -92,6 +97,69 @@ const SidebarTooltip = ({
 };
 
 // ---------------------------------------------------------------------------
+// CorvidPerch — the mark, as the one button that navigates nowhere
+// ---------------------------------------------------------------------------
+
+/**
+ * The corvid's perch.
+ *
+ * Level "full" hops and then flies, "subtle" hops and stays, "off" does
+ * neither, and either reduced-motion input forces "off" whatever the account
+ * chose. The hop is played here rather than in the overlay so that "subtle"
+ * needs no overlay at all.
+ */
+const CorvidPerch = () => {
+  const { preferences } = usePreferences();
+  const prefersReducedMotion = useReducedMotion();
+  const markRef = useRef<HTMLSpanElement>(null);
+
+  const level = motionLevel(
+    preferences.mascotMotion,
+    Boolean(prefersReducedMotion),
+    preferences.motion,
+  );
+
+  // Enter and Space already reach this through the button's own click, so
+  // there is no key handler here to get out of step with the pointer.
+  const onClick = useCallback(() => {
+    if (level === "off") return;
+    if (level === "subtle") {
+      playCorvidBeat(markRef.current, HOP_CLASS, HOP_MS);
+      return;
+    }
+    flyCorvid({ kind: "loop" });
+  }, [level]);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      /*
+        The nav link's padding, so the hit box is 48 px like every other stop,
+        and the focus ring every control gets from `index.css`. Not its hover
+        wash: while the bird is away this button is empty, and a filled grey
+        box where the mark used to be reads as something still loading.
+      */
+      className={navLink(
+        false,
+        "mb-1 text-primary hover:text-primary hover:bg-transparent",
+      )}
+      aria-label="Contrack"
+      title="Let the corvid fly"
+    >
+      {/*
+        The perch attribute sits on this wrapper, not on the svg. The overlay
+        hides the perch while the bird is out, and hiding a wrapper leaves the
+        button's own box alone, so the sidebar does not shift by a pixel.
+      */}
+      <span ref={markRef} {...perchProps} className="flex">
+        <CorvidMark size={32} idPrefix="corvid" idle={level !== "off"} />
+      </span>
+    </button>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Sidebar
 // ---------------------------------------------------------------------------
 
@@ -146,18 +214,22 @@ export const Sidebar = () => {
       )}
     >
       {/*
-        The corvid, on its perch. It is decoration: the page title already
-        names the app, and a picture that repeats it is noise to a screen
-        reader, so the SVG is aria-hidden and takes no Tab stop. The title
-        gives a mouse the name. On `text-primary` it follows the accent.
+        The corvid, on its perch, and the only control here that goes nowhere.
 
-        `idPrefix="corvid"` makes this the one mark whose parts are
-        `#corvid-wing`, `#corvid-eye` and so on: the perch that the motion
-        keyframes will target when the bird learns to fly.
+        It was a decorative span until the bird learned to fly. A click sends
+        it round the window and back, so it is a real button with a real name:
+        the drawing stays `aria-hidden`, and "Contrack" comes from the button
+        instead. That adds one Tab stop in front of the content, which is why
+        the budgets in `keyboard.spec.ts` went up by one.
+
+        The title says what the button does rather than what it is. "Contrack"
+        is already the accessible name, and a tooltip that repeats it would
+        tell a mouse user nothing they cannot see.
+
+        `idPrefix="corvid"` and the perch attribute make this the one mark the
+        flight overlay measures, hides and gives back.
       */}
-      <div className="flex items-center justify-center mb-1 text-primary">
-        <CorvidMark size={32} title="Contrack" idPrefix="corvid" />
-      </div>
+      <CorvidPerch />
 
       <SidebarTooltip label={NAMES.network.label} shortcut="⌘⇧H">
         <Link

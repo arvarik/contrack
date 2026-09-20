@@ -666,6 +666,101 @@
   .fade-enter {
     animation: resultCardIn 0.2s ease-out both;
   }
+
+  /* ── The corvid ───────────────────────────────────────────────────────
+   * Four keyframes, all `transform` only, so every one of them runs on the
+   * compositor and none of them costs a layout.
+   *
+   * They reach the bird through `data-part`, not through an id. `CorvidMark`
+   * gives every instance its own id prefix, so `#corvid-eye` is one specific
+   * bird and a stylesheet cannot name the rest. `data-part` is the same name
+   * on every bird, which is what a shared keyframe needs.
+   *
+   * `transform-box: fill-box` makes `transform-origin` percentages read
+   * against the part's own bounding box rather than the whole svg, so the eye
+   * closes about its own centre and the wing turns about its shoulder.
+   * ------------------------------------------------------------------- */
+
+  /** The eyelid. 140 ms, closed for about a sixth of it. */
+  @keyframes corvid-blink {
+    0%,
+    100% {
+      transform: scaleY(1);
+    }
+    45%,
+    55% {
+      transform: scaleY(0.08);
+    }
+  }
+  .corvid-blink [data-part="eye"] {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: corvid-blink 140ms ease-in-out;
+  }
+
+  /** One blink in five is this instead: a two-degree look and back. */
+  @keyframes corvid-tilt {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    40% {
+      transform: rotate(-2deg);
+    }
+    70% {
+      transform: rotate(1deg);
+    }
+  }
+  .corvid-tilt {
+    transform-box: fill-box;
+    transform-origin: 50% 60%;
+    animation: corvid-tilt 420ms ease-in-out;
+  }
+
+  /** The perch answers a click even when it is not going anywhere. */
+  @keyframes corvid-hop {
+    0%,
+    100% {
+      transform: translateY(0) scale(1);
+    }
+    45% {
+      transform: translateY(-2px) scale(1.1);
+    }
+  }
+  .corvid-hop {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: corvid-hop 120ms ease-out;
+  }
+
+  /*
+   * The wing, about the shoulder, five times a second.
+   *
+   * The origin is where the wing path meets the body: its leftmost point,
+   * (36.2, 49.4) in the 100-unit box, which is 0 percent across and about
+   * 25 percent down the wing's own bounding box. `brand.paths.test.ts`
+   * measures the path again and fails if an edit moves the shoulder away
+   * from this number.
+   */
+  @keyframes corvid-flap {
+    0%,
+    100% {
+      transform: rotate(-22deg);
+    }
+    50% {
+      transform: rotate(22deg);
+    }
+  }
+  .corvid-flapping [data-part="wing"] {
+    transform-box: fill-box;
+    transform-origin: 0% 25%;
+    animation: corvid-flap 200ms ease-in-out infinite;
+  }
+
+  /** The flying bird rides `offset-path`, so it owns its own layer. */
+  .corvid-flying {
+    will-change: transform;
+  }
 }
 
 /* =====================================================================
@@ -693,6 +788,34 @@ html[data-text-scale="large"] {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+ * The corvid, twice over.
+ *
+ * The rules above already collapse its keyframes, but an idle blink that
+ * lasts 0.01ms is still a timer firing every few seconds and a flap that
+ * repeats once is still a wing at a strange angle. `motionLevel()` in
+ * `lib/corvid.ts` returns "off" for both of the inputs below, so no class is
+ * added in the first place. These rules are the belt to that pair of braces,
+ * for a mark rendered before the preferences arrive.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .corvid-blink [data-part="eye"],
+  .corvid-tilt,
+  .corvid-hop,
+  .corvid-flapping [data-part="wing"] {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+:root[data-motion="reduced"] .corvid-blink [data-part="eye"],
+:root[data-motion="reduced"] .corvid-tilt,
+:root[data-motion="reduced"] .corvid-hop,
+:root[data-motion="reduced"] .corvid-flapping [data-part="wing"] {
+  animation: none !important;
+  transform: none !important;
 }
 
 :root[data-motion="reduced"] *,

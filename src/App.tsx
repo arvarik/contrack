@@ -18,6 +18,7 @@ import { isTypingTarget } from "./lib/keyboard";
 import { whenIdle } from "./lib/idle";
 import { useGlobalNavShortcuts } from "./hooks/useGlobalNavShortcuts";
 import { Toaster } from "sonner";
+import { CorvidFlight } from "./components/brand/CorvidFlight";
 import React, { useState, useEffect, Suspense } from "react";
 
 import { ContactList } from "./views/contact-list";
@@ -537,6 +538,13 @@ export default function App() {
             setQuickNoteContactId(undefined);
           }}
         />
+        {/*
+          The corvid's flight layer. One overlay for the whole app, beside the
+          toasts for the same reason they are here: both are owned by nobody
+          in particular and both have to outlive whatever route asked for
+          them. It renders nothing until somebody calls `flyCorvid()`.
+        */}
+        <CorvidFlight />
         <Toaster
           theme="light"
           position="bottom-right"

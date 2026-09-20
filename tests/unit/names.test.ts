@@ -28,6 +28,13 @@ vi.mock("../../src/api", () => ({
 vi.mock("../../src/contexts/SessionContext", () => ({
   useRecent: () => ({ lastContactId: null }),
 }));
+// The perch reads the account's motion preferences. The provider sits far
+// above the sidebar and pulls in React Query, so it is stubbed here too.
+vi.mock("../../src/contexts/PreferencesContext", () => ({
+  usePreferences: () => ({
+    preferences: { mascotMotion: "full", motion: "system" },
+  }),
+}));
 vi.mock("../../src/components/auth/AccountIdentity", () => ({
   SidebarIdentity: () => null,
 }));
@@ -98,8 +105,18 @@ describe("every surface uses the same name", () => {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
 
-    // The wordmark is decoration and is hidden, so it names nothing.
-    expect(document.querySelector("[title]")).toBeNull();
+    // The corvid mark is the one control here that is not a link. It carries
+    // the app's name, and its tooltip says what pressing it does rather than
+    // repeating that name. The drawing itself stays hidden.
+    const perch = screen.getByRole("button", { name: "Contrack" });
+    expect(perch.getAttribute("title")).toBe("Let the corvid fly");
+    expect(perch.querySelector("svg")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
+    // Nothing else leans on a native tooltip for its name.
+    expect(
+      [...document.querySelectorAll("[title]")].filter((el) => el !== perch),
+    ).toEqual([]);
 
     const text = document.body.innerHTML;
     for (const old of OLD_NAMES) {
