@@ -23,6 +23,8 @@ export type CadenceDays = 30 | 60 | 90 | 180;
 export type WeekStart = "monday" | "sunday";
 export type TextScale = "default" | "large";
 export type MotionPreference = "system" | "reduced";
+/** How much the corvid moves. `off` is the static mark. */
+export type MascotMotion = "full" | "subtle" | "off";
 
 export interface SearchHistoryEntry {
   query: string;
@@ -58,6 +60,7 @@ export interface Preferences {
   showWeather: boolean;
   textScale: TextScale;
   motion: MotionPreference;
+  mascotMotion: MascotMotion;
   singleKeyShortcuts: boolean;
   aiAssist: boolean;
   dedupeOnCreate: boolean;
@@ -108,6 +111,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showWeather: false,
   textScale: "default",
   motion: "system",
+  mascotMotion: "full",
   singleKeyShortcuts: true,
   aiAssist: true,
   dedupeOnCreate: true,

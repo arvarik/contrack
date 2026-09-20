@@ -390,21 +390,21 @@ second drawing anywhere.
 
 ### Sizes
 
-| Surface                          | Variant       | Size       | Colour                           |
-| -------------------------------- | ------------- | ---------- | -------------------------------- |
-| Tab strip favicon                | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
-| PWA and touch icons              | glyph on tile | 180 to 512 | same                             |
-| Sidebar perch                    | mark          | 32         | `text-primary`, eye token        |
-| Auth card                        | mark          | 40         | `text-primary`                   |
-| Empty states                     | mark          | 64 to 96   | `text-primary/60`                |
-| Crash screen footer              | mark          | 20         | `text-on-surface-variant`        |
-| README header                    | PNG           | 96         | fixed brand colours              |
-| Settings footer (phone, Phase 2) | mark          | 20         | `text-on-surface-variant`        |
-| Thinking indicator (Phase 2)     | glyph         | 20         | `text-primary`                   |
-| Flight overlay (Phase 2)         | flying        | 48         | `text-primary`                   |
+| Surface                           | Variant       | Size       | Colour                           |
+| --------------------------------- | ------------- | ---------- | -------------------------------- |
+| Tab strip favicon                 | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
+| PWA and touch icons               | glyph on tile | 180 to 512 | same                             |
+| Sidebar perch                     | mark          | 32         | `text-primary`, eye token        |
+| Auth card                         | mark          | 40         | `text-primary`                   |
+| Empty states                      | mark          | 64 to 96   | `text-primary/60`                |
+| Crash screen footer               | mark          | 20         | `text-on-surface-variant`        |
+| README header                     | PNG           | 96         | fixed brand colours              |
+| Flight overlay                    | mark          | 48         | `text-primary`                   |
+| Settings footer (phone, Prompt 3) | mark          | 20         | `text-on-surface-variant`        |
+| Thinking indicator (Prompt 3)     | glyph         | 20         | `text-primary`                   |
 
-The last three rows are reserved for the motion phase and have no surface
-yet.
+The last two rows are reserved for the rest of the motion phase and have no
+surface yet.
 
 - ✅ Width equals height. The `size` prop sets both. Never stretch the mark.
 - ✅ An empty state passes the mark through the `illustration` slot of
@@ -430,3 +430,48 @@ yet.
   and `public/` holds only what the script writes.
 - The icon links in `index.html` and the manifest carry `?v=corvid`. Browsers
   pin a favicon hard. Change the query when the tile changes.
+
+### The motion
+
+Three levels, one account preference, `mascotMotion`, on the Appearance page
+under "Corvid motion".
+
+| Level    | What the bird does                                |
+| -------- | ------------------------------------------------- |
+| `full`   | Blinks, tilts its head, hops, and flies. Default. |
+| `subtle` | Blinks, tilts and hops. No flights, no swoops.    |
+| `off`    | Nothing. The static mark.                         |
+
+- **Reduced motion wins.** `motionLevel(mascotMotion, prefersReducedMotion,
+motionPreference)` in `src/lib/corvid.ts` is the only place that decides,
+  and it answers `off` when the operating system asks for reduced motion or
+  when the Motion row is set to Reduced, whatever the account chose. Read the
+  level through that function. Never read `mascotMotion` on its own.
+- **What idles.** Pass `idle` to `<CorvidMark>` and `useCorvidIdle` schedules
+  a blink 4 to 9 seconds out, with one beat in five a two-degree head tilt
+  instead. It holds still while the tab is hidden, and a mark under 24 px
+  never gets a timer: there is one timer per idling mark, so only the marks a
+  person actually looks at ask for one. The sidebar perch idles. The empty
+  states and the crash screen do not.
+- **The keyframes are CSS, and select on `data-part`.** `corvid-blink`,
+  `corvid-tilt`, `corvid-hop` and `corvid-flap` live in `src/index.css`. They
+  reach the bird through `[data-part="eye"]` and `[data-part="wing"]`, never
+  through an id: `CorvidMark` gives every instance its own id prefix, so
+  `#corvid-eye` is one specific bird. All four are `transform` only, and the
+  reduced-motion blocks switch them off outright.
+- **The event API.** Anything that wants a flight calls `flyCorvid({ kind })`
+  from `src/lib/corvid.ts` and forgets about it. `kind` is `"loop"` (the
+  circuit of the window, 4.5 s) or `"swoop"` (one pass across the top, 2 s).
+  Pass `from` to leave from a rectangle other than the sidebar perch.
+  `CorvidFlight`, mounted once in `App` beside the `Toaster`, is the only
+  listener: it measures the perch, hides it, flies, lands and gives it back.
+- ❌ Never animate the bird in a view. One overlay, one event. Two birds in
+  the air at once is a bug, and a per-view animation cannot be cancelled when
+  the route changes.
+- ❌ Never let the bird take a pointer event or a Tab stop. The flight layer
+  is `aria-hidden`, `pointer-events-none` and `z-[60]`, under the contact
+  overlay and the palette (`z-[100]`) and under `Modal` (`z-[200]`).
+- The sidebar perch is the one mark that is a control: a `<button>` named
+  "Contrack", titled "Let the corvid fly", with `navLink(false)` padding. It
+  is the seventh sidebar Tab stop and the reason both budgets in
+  `keyboard.spec.ts` are one higher than the controls on the page.

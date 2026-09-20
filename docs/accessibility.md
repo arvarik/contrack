@@ -153,14 +153,18 @@ a desktop:
 
 | Page          | Reaches                   | Within | Made of                                                                     |
 | ------------- | ------------------------- | ------ | --------------------------------------------------------------------------- |
-| A contact     | the contact's name (`h1`) | 16     | skip link, 6 sidebar stops, 6 list controls, the list, the avatar, the name |
-| Network (`/`) | the first row of the list | 14     | skip link, 6 sidebar stops, 6 list controls, the list                       |
+| A contact     | the contact's name (`h1`) | 17     | skip link, 7 sidebar stops, 6 list controls, the list, the avatar, the name |
+| Network (`/`) | the first row of the list | 15     | skip link, 7 sidebar stops, 6 list controls, the list                       |
 
 The list and the letter rail are one stop each however many people they hold.
 Before this rule the first control in a contact was stop 42. A change that
 needs a new stop in front of the content raises the budget in the spec and
-says why in the pull request. The corvid plan's sidebar button is the next
-expected one.
+says why in the pull request.
+
+Both budgets went up by one when the corvid mark on top of the sidebar became
+a button. It is the seventh sidebar stop. It navigates nowhere: it sends the
+bird on a lap of the window and leaves focus exactly where it was, so a
+keyboard user who lands on it by accident loses nothing but one Tab press.
 
 ### Phones
 
@@ -234,6 +238,31 @@ Firefox or Chrome on Windows. Do the search page on both.
    and need no horizontal scrolling.
 2. With "reduce motion" on in the OS, dialogs and result cards appear without
    animation.
+3. With "reduce motion" on in the OS, the corvid on top of the sidebar does
+   not blink and does not fly when you click it, whatever "Corvid motion" on
+   the Appearance page is set to.
+
+### The corvid
+
+The mark in the sidebar moves. Settings > Appearance > "Corvid motion" sets
+how much:
+
+| Choice | What it does                                                            |
+| ------ | ----------------------------------------------------------------------- |
+| Full   | The bird blinks now and then, and flies a lap of the window on a click. |
+| Subtle | The blinks and a hop on a click. No flights.                            |
+| Off    | Nothing moves.                                                          |
+
+Two things override the choice, and the row says so when either is on:
+"reduce motion" in the operating system, and the "Motion" row directly above
+it set to Reduced. Either one means the bird holds still on Full.
+
+Nothing the bird does is announced, and nothing it does can get in the way.
+The drawing is `aria-hidden`; its button carries the name "Contrack" and the
+tooltip "Let the corvid fly". The flight is a fixed layer that ignores
+pointer events and sits under every dialog, panel and menu, so a bird passing
+over a button never swallows the click. Escape lands it at once, and changing
+page cancels it.
 
 ### A phone
 

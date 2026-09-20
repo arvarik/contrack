@@ -4,8 +4,10 @@
  * The paths are hand-traced numbers, so the checks are the ones a number can
  * fail: every string parses as the two commands the parser accepts, the
  * glyph is a subset of the mark's parts, the ink keeps its padding inside
- * the box, and the glyph lands inside the tile with the inset clear.
+ * the box, the glyph lands inside the tile with the inset clear, and the
+ * wing's flap keyframe still turns about the shoulder.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   BRAND,
@@ -22,6 +24,38 @@ import {
   parsePath,
   pathBounds,
 } from "../../src/assets/corvidPaths";
+import type { Point } from "../../src/assets/corvidPaths";
+
+/** Where a path reaches furthest left. For the wing, that is the shoulder. */
+function leftmostPoint(d: string): Point {
+  const cubic = (p0: Point, c1: Point, c2: Point, p1: Point, t: number) => {
+    const mt = 1 - t;
+    const a = mt * mt * mt;
+    const b = 3 * mt * mt * t;
+    const c = 3 * mt * t * t;
+    const e = t * t * t;
+    return [
+      a * p0[0] + b * c1[0] + c * c2[0] + e * p1[0],
+      a * p0[1] + b * c1[1] + c * c2[1] + e * p1[1],
+    ] as Point;
+  };
+  let current: Point = [0, 0];
+  let best: Point = [Infinity, 0];
+  for (const { cmd, points } of parsePath(d)) {
+    if (cmd === "M") {
+      current = points[0]!;
+      if (current[0] < best[0]) best = current;
+      continue;
+    }
+    const [c1, c2, p1] = points as [Point, Point, Point];
+    for (let s = 1; s <= 200; s++) {
+      const point = cubic(current, c1, c2, p1, s / 200);
+      if (point[0] < best[0]) best = point;
+    }
+    current = p1;
+  }
+  return best;
+}
 
 const ALL_PATHS = CORVID_PART_ORDER.map((part) => CORVID_PATHS[part]);
 
@@ -112,6 +146,28 @@ describe("the corvid's paths", () => {
     // The wider axis fills the room, and the glyph is centred on the other.
     expect(right - left).toBeCloseTo(TILE.box - 2 * TILE.glyphInset, 1);
     expect(top + bottom).toBeCloseTo(TILE.box, 1);
+  });
+
+  it("turns the wing about the shoulder in the flap keyframe", () => {
+    // `transform-box: fill-box` reads `transform-origin` against the wing's
+    // own bounding box, so the number in the stylesheet is a fraction of that
+    // box, not of the 100-unit drawing. Redrawing the wing moves the
+    // shoulder, and a stale origin makes the bird flap about its wingtip.
+    const box = pathBounds([CORVID_PATHS.wing]);
+    const shoulder = leftmostPoint(CORVID_PATHS.wing);
+    const wantX = ((shoulder[0] - box.minX) / (box.maxX - box.minX)) * 100;
+    const wantY = ((shoulder[1] - box.minY) / (box.maxY - box.minY)) * 100;
+
+    const css = readFileSync("src/index.css", "utf8");
+    const rule = css.match(
+      /\.corvid-flapping \[data-part="wing"\]\s*\{[^}]*transform-origin:\s*([\d.]+)% ([\d.]+)%/,
+    );
+    expect(rule, "no transform-origin on the flap rule").toBeTruthy();
+    // Three percentage points of the wing's box is under two units of the
+    // drawing: close enough that no eye sees the difference, tight enough
+    // that a redrawn wing fails here.
+    expect(Math.abs(Number(rule![1]) - wantX)).toBeLessThan(3);
+    expect(Math.abs(Number(rule![2]) - wantY)).toBeLessThan(3);
   });
 
   it("copies the brand literals from the light palette", () => {

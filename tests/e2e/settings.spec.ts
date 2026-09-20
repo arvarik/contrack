@@ -273,7 +273,10 @@ test.describe("Settings — Personal preferences", () => {
 
     // 3. Navigate to '/' and press 'n', modal does not open
     await page.goto("/");
-    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+    // `.first()`, like step 1: the start panel's "Up next" can hold the same
+    // person as the list, and which follow-ups are still open depends on what
+    // else ran against this worker's instance.
+    await expect(page.getByText("Ada Lovelace").first()).toBeVisible();
     await page.evaluate(() =>
       (document.activeElement as HTMLElement | null)?.blur?.(),
     );

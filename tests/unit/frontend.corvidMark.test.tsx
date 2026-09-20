@@ -6,10 +6,13 @@
  * asked to speak, it never takes focus, its eye wears the token rather than
  * the stroke, the glyph drops the chest and the tail, and two birds on one
  * page do not share an id.
+ *
+ * The motion phase added two more: every part carries `data-part`, which is
+ * what the shared keyframes select on, and `idle` starts the blink timer.
  */
 import React from "react";
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { CorvidMark } from "../../src/components/brand/CorvidMark";
 import { CorvidTile } from "../../src/components/brand/CorvidTile";
 import { Wordmark } from "../../src/components/brand/Wordmark";
@@ -20,6 +23,12 @@ import {
   MARK_STROKE,
   TILE,
 } from "../../src/assets/corvidPaths";
+import {
+  BLINK_CLASS,
+  IDLE_MAX_MS,
+  IDLE_MIN_MS,
+  IDLE_MIN_SIZE,
+} from "../../src/hooks/useCorvidIdle";
 
 afterEach(() => {
   cleanup();
@@ -88,6 +97,19 @@ describe("CorvidMark", () => {
       expect(id).toMatch(/^corvid-[A-Za-z0-9_-]+-[a-z0-9]+$/);
   });
 
+  it("marks every part and the eye with data-part", () => {
+    const { container } = render(<CorvidMark />);
+    const svg = svgOf(container);
+    const parts = [...svg.querySelectorAll("[data-part]")].map((el) =>
+      el.getAttribute("data-part"),
+    );
+    expect(parts).toEqual([...CORVID_PART_ORDER, "eye"]);
+    // The keyframes reach the wing and the eye through this attribute,
+    // because an id is unique per instance and cannot be in a stylesheet.
+    expect(svg.querySelector('[data-part="wing"]')?.tagName).toBe("path");
+    expect(svg.querySelector('[data-part="eye"]')?.tagName).toBe("circle");
+  });
+
   it("omits the chest and the tail in the glyph, at the heavier stroke", () => {
     const { container } = render(<CorvidMark variant="glyph" idPrefix="g" />);
     const svg = svgOf(container);
@@ -100,6 +122,40 @@ describe("CorvidMark", () => {
     expect(document.getElementById("g-tail2")).toBeNull();
     expect(svg.getAttribute("stroke-width")).toBe(String(GLYPH_STROKE));
     expect(svg.getAttribute("data-variant")).toBe("glyph");
+  });
+});
+
+describe("CorvidMark, idling", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("holds still by default", () => {
+    render(<CorvidMark size={32} />);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("blinks when asked, on the eye the keyframe selects", () => {
+    const { container } = render(<CorvidMark size={32} idle />);
+    const svg = svgOf(container);
+    expect(svg.classList.contains(BLINK_CLASS)).toBe(false);
+
+    act(() => {
+      vi.advanceTimersByTime(IDLE_MIN_MS + 0.5 * (IDLE_MAX_MS - IDLE_MIN_MS));
+    });
+    expect(svg.classList.contains(BLINK_CLASS)).toBe(true);
+    expect(svg.querySelector('[data-part="eye"]')).toBeTruthy();
+  });
+
+  it("does not idle at a size where a blink would be invisible", () => {
+    render(<CorvidMark size={IDLE_MIN_SIZE - 1} idle />);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 

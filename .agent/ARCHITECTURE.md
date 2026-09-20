@@ -280,7 +280,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 ### Frontend (`src/`)
 
 - `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `connectors.ts`, `index.ts`
-- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`
+- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`, `useCorvidIdle.ts` (the mark's blink and head tilt, and `playCorvidBeat` for one-off beats)
 - `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
 - `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`
@@ -307,7 +307,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
     - `pages/`: Individual settings pages (`AppearancePage.tsx`, `NetworkPage.tsx`, `DuplicatesPage.tsx`, `EnrichmentPage.tsx`, `ImportPage.tsx`, `TagsPage.tsx`, `ExportPage.tsx`).
     - `admin/`: Admin settings views (`GeneralView.tsx`, `AiProvidersView.tsx`, `MailView.tsx`, etc.).
 - `src/contexts/` — React Context providers: `AISearchContext.tsx`, `DedupeContext.tsx`
-- `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`
+- `src/lib/` — Shared frontend utilities: `styles.ts` (token definitions), `queryConfig.ts` (React Query staleTime presets), `importers.ts` (CSV/LinkedIn/Apple parsers), `keyboard.ts`, `avatar.ts`, `safeParse.ts`, `utils.ts`, `corvid.ts` (the `contrack:corvid-fly` event, `flyCorvid()`, the pure `buildFlightPath()` and `motionLevel()`)
 - `src/db/` — `schema.ts` (Drizzle ORM schema definitions)
 - `src/types.ts` — Shared TypeScript type definitions
 
