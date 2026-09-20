@@ -213,6 +213,41 @@ describe("CorvidFlight", () => {
     expect(perch.style.visibility).toBe("");
   });
 
+  it("does not fly a loop when no perch is on screen", () => {
+    // Below `md` the sidebar's perch is in the DOM with no layout box, and
+    // the page may carry no other. A loop has nowhere to leave from and
+    // nothing to land on.
+    const hidden = mountPerch();
+    hidden.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 0, height: 0 }) as DOMRect;
+    mount();
+    fly();
+    expect(overlay()).toBeNull();
+  });
+
+  it("swoops in from off screen when no perch is on screen", () => {
+    // Pulse fires this when the last follow-up clears, and on a phone that
+    // page has no perch at all. The bird is a flypast here, not a bird
+    // leaving a perch, so it comes in from beyond the left edge rather than
+    // out of the top left corner.
+    const hidden = mountPerch();
+    hidden.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 0, height: 0 }) as DOMRect;
+    mount();
+    act(() => {
+      flyCorvid({ kind: "swoop" });
+      vi.advanceTimersByTime(200);
+    });
+
+    const bird = overlay()!.firstElementChild as HTMLElement;
+    const startX = Number(
+      /^path\("M(-?[\d.]+) /.exec(bird.style.offsetPath)?.[1],
+    );
+    expect(startX).toBeLessThan(0);
+    // The hidden perch was never hidden again: there was nothing to hide.
+    expect(hidden.style.visibility).toBe("");
+  });
+
   it("flies from a rectangle the caller passes instead of the perch", () => {
     mount();
     act(() => {

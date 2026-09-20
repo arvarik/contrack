@@ -4,7 +4,7 @@
  * Driven directly by the settings registry. Renders the identity row at top,
  * the search box, the registry groups and destination cards, and the storage footer.
  */
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, HardDrive, type LucideIcon } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
@@ -15,6 +15,11 @@ import { SETTINGS_GROUPS, SETTINGS_PAGES } from "./registry";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
+import { CorvidMark } from "../../components/brand/CorvidMark";
+import { perchProps } from "../../components/brand/CorvidFlight";
+import { HOP_CLASS, HOP_MS, playCorvidBeat } from "../../hooks/useCorvidIdle";
+import { useCorvidLevel } from "../../hooks/useCorvidLevel";
+import { flyCorvid } from "../../lib/corvid";
 
 const GroupHeading = ({ children }: { children: React.ReactNode }) => (
   <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
@@ -67,6 +72,47 @@ const SettingsLink = ({
       </span>
       <ChevronRight className="w-4 h-4 text-on-surface-variant shrink-0 mt-1 group-hover:text-primary group-hover:translate-x-0.5 transition-[color,transform]" />
     </Link>
+  );
+};
+
+/**
+ * The corvid's perch on a phone.
+ *
+ * There is no sidebar below `md`, so the one mark a person can press lives
+ * here, at the end of the line that closes the page. It behaves exactly like
+ * the sidebar perch: the same name, the same tooltip, the same three levels,
+ * and the same flight, which leaves from this rectangle instead of that one.
+ *
+ * `md:hidden`, because above the breakpoint the sidebar perch is on screen
+ * and two birds that both fly would be two birds in the air.
+ */
+const PhonePerch = () => {
+  const markRef = useRef<HTMLSpanElement>(null);
+  const level = useCorvidLevel();
+
+  const onClick = useCallback(() => {
+    if (level === "off") return;
+    if (level === "subtle") {
+      playCorvidBeat(markRef.current, HOP_CLASS, HOP_MS);
+      return;
+    }
+    flyCorvid({ kind: "loop" });
+  }, [level]);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      // `hit-area` rather than padding: the line is 12 px tall and a 44 px
+      // box drawn in the layout would push the sentence off its baseline.
+      className="hit-area md:hidden ml-auto shrink-0 rounded-lg text-primary transition-opacity hover:opacity-70"
+      aria-label="Contrack"
+      title="Let the corvid fly"
+    >
+      <span ref={markRef} {...perchProps} className="flex">
+        <CorvidMark size={20} />
+      </span>
+    </button>
   );
 };
 
@@ -136,6 +182,7 @@ export const SettingsHome = () => {
       <p className="flex items-center gap-1.5 text-xs text-on-surface-variant px-1">
         <HardDrive className="w-3.5 h-3.5" />
         Everything here is stored on this machine.
+        <PhonePerch />
       </p>
     </div>
   );

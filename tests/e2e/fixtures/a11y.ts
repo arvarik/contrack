@@ -75,17 +75,42 @@ export async function expectNoViolations(
  * rule the settled page passes. Spinners and pulses run forever and are
  * left alone. Bounded, because a page is not held hostage by an animation
  * that never resolves.
+ *
+ * It looks again after each wait rather than taking one snapshot. A page
+ * that is still arriving starts animations in waves: the Duplicates page
+ * fades its pane in, then its scan card, then the card's contents, and the
+ * whole run lasts about a second. One snapshot catches the first wave,
+ * returns, and hands axe a page that is still moving. That was a rare
+ * failure on a fast machine and a regular one under load.
+ *
+ * Two quiet frames end it, because an animation that a commit is about to
+ * start does not exist yet on the frame that commit happened.
  */
 export async function settleAnimations(page: Page): Promise<void> {
-  const settled = page.evaluate(async () => {
-    const pending = document.getAnimations().filter((animation) => {
-      const iterations = animation.effect?.getTiming().iterations;
-      return animation.playState !== "finished" && iterations !== Infinity;
-    });
-    await Promise.all(
-      pending.map((animation) => animation.finished.catch(() => undefined)),
-    );
-  });
+  const settled = page.evaluate(async (budgetMs: number) => {
+    const nextFrame = () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const running = () =>
+      document.getAnimations().filter((animation) => {
+        const iterations = animation.effect?.getTiming().iterations;
+        return animation.playState !== "finished" && iterations !== Infinity;
+      });
+
+    const deadline = Date.now() + budgetMs;
+    let quietFrames = 0;
+    while (quietFrames < 2 && Date.now() < deadline) {
+      const pending = running();
+      if (pending.length === 0) {
+        quietFrames += 1;
+        await nextFrame();
+        continue;
+      }
+      quietFrames = 0;
+      await Promise.all(
+        pending.map((animation) => animation.finished.catch(() => undefined)),
+      );
+    }
+  }, 4_000);
   await Promise.race([settled, new Promise((r) => setTimeout(r, 5_000))]);
 }
 

@@ -390,21 +390,18 @@ second drawing anywhere.
 
 ### Sizes
 
-| Surface                           | Variant       | Size       | Colour                           |
-| --------------------------------- | ------------- | ---------- | -------------------------------- |
-| Tab strip favicon                 | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
-| PWA and touch icons               | glyph on tile | 180 to 512 | same                             |
-| Sidebar perch                     | mark          | 32         | `text-primary`, eye token        |
-| Auth card                         | mark          | 40         | `text-primary`                   |
-| Empty states                      | mark          | 64 to 96   | `text-primary/60`                |
-| Crash screen footer               | mark          | 20         | `text-on-surface-variant`        |
-| README header                     | PNG           | 96         | fixed brand colours              |
-| Flight overlay                    | mark          | 48         | `text-primary`                   |
-| Settings footer (phone, Prompt 3) | mark          | 20         | `text-on-surface-variant`        |
-| Thinking indicator (Prompt 3)     | glyph         | 20         | `text-primary`                   |
-
-The last two rows are reserved for the rest of the motion phase and have no
-surface yet.
+| Surface                       | Variant       | Size       | Colour                           |
+| ----------------------------- | ------------- | ---------- | -------------------------------- |
+| Tab strip favicon             | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
+| PWA and touch icons           | glyph on tile | 180 to 512 | same                             |
+| Sidebar perch                 | mark          | 32         | `text-primary`, eye token        |
+| Auth card                     | mark          | 40         | `text-primary`                   |
+| Empty states                  | mark          | 64 to 96   | `text-primary/60`                |
+| Crash screen footer           | mark          | 20         | `text-on-surface-variant`        |
+| README header                 | PNG           | 96         | fixed brand colours              |
+| Flight overlay                | mark          | 48         | `text-primary`                   |
+| Settings footer (phone perch) | mark          | 20         | `text-primary`                   |
+| Thinking indicator            | glyph         | 16 to 20   | inherits the slot's colour       |
 
 - ✅ Width equals height. The `size` prop sets both. Never stretch the mark.
 - ✅ An empty state passes the mark through the `illustration` slot of
@@ -475,3 +472,37 @@ motionPreference)` in `src/lib/corvid.ts` is the only place that decides,
   "Contrack", titled "Let the corvid fly", with `navLink(false)` padding. It
   is the seventh sidebar Tab stop and the reason both budgets in
   `keyboard.spec.ts` are one higher than the controls on the page.
+
+### Where the bird lives
+
+One row per surface. A new one goes here, and nowhere else gets a bird
+without a reason a person could state.
+
+| Surface                                     | What it does                        | Component            |
+| ------------------------------------------- | ----------------------------------- | -------------------- |
+| Sidebar perch, 32 px                        | Idles, hops, flies on a click       | `Sidebar.tsx`        |
+| Settings footer on a phone, 20 px           | The same, where there is no sidebar | `SettingsHome.tsx`   |
+| Sign-in and setup card, 40 px               | Idles, shakes at a wrong password   | `AuthShell.tsx`      |
+| Synthesis bar, enrich badge, briefing card  | Tilts its head while AI works       | `CorvidThinking.tsx` |
+| Pulse, when the last follow-up clears       | One swoop, under the confetti       | `UpNextCard.tsx`     |
+| Duplicates, "All reviewed"                  | One hop when it arrives             | `DedupeView.tsx`     |
+| Empty network, Trash, Archived, start panel | Still, as the illustration          | `EmptyState` callers |
+| Crash screen footer, 20 px                  | Still                               | `ErrorBoundary.tsx`  |
+
+- **One rule, one hook.** `useCorvidLevel()` answers "how much may this bird
+  move", and every surface above reads it, directly or through `CorvidMark`.
+  A surface that animates without asking is a bug: reduced motion, from the
+  operating system or from the Motion row, has to reach every one of them.
+- **`CorvidMark` gates its own `idle` and `hop`.** A caller may pass either
+  without checking the level first.
+- **Two perches, one bird.** The sidebar's perch stays in the DOM below `md`,
+  hidden by CSS, and the Settings footer carries the phone's. `findPerch()`
+  in `CorvidFlight.tsx` picks the one with a layout box. A third perch goes
+  through the same function or the bird leaves from the wrong rectangle.
+- **The thinking bird never carries the meaning alone.** Every surface that
+  shows it also says what it is waiting for in text, and where that text is
+  beside the bird the bird is `decorative`. A person who cannot see it loses
+  nothing, and a person who can hears the sentence once.
+- ❌ No bird on a crash, a destructive confirmation or an error, except the
+  head shake at a wrong password, which is the bird saying no rather than
+  the bird being cheerful.

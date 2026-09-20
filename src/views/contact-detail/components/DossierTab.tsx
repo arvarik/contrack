@@ -34,6 +34,7 @@ import {
 } from "../../../lib/styles";
 import { parseBriefingPoints } from "../../../lib/safeParse";
 import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
+import { CorvidThinking } from "../../../components/brand/CorvidThinking";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -173,13 +174,25 @@ function BriefingCard({
       )}
 
       {/* Always in the page, so a screen reader announces the text when it
-          arrives. Empty, it takes no space. */}
-      <p
-        role="status"
-        className="mt-3 empty:mt-0 text-sm font-medium text-on-surface-variant"
-      >
-        {pending ? "Writing the briefing…" : ""}
-      </p>
+          arrives. The margin is conditional rather than `empty:mt-0`: the
+          row always holds the `<p>` element, so `:empty` never matches it
+          and the gap would never collapse.
+
+          The bird sits beside the live region rather than inside it: a named
+          image within a `role="status"` would be read out as part of every
+          announcement. It is decorative here, because the sentence next to it
+          already says what is happening. */}
+      <div className={cn("flex items-center gap-2", pending && "mt-3")}>
+        {pending && (
+          <CorvidThinking decorative size={20} className="shrink-0" />
+        )}
+        <p
+          role="status"
+          className="text-sm font-medium text-on-surface-variant"
+        >
+          {pending ? "Writing the briefing…" : ""}
+        </p>
+      </div>
 
       {failed && !pending && (
         <p role="alert" className="mt-3 text-sm font-medium text-error">

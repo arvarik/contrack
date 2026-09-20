@@ -38,6 +38,7 @@ import { useDedupe } from "../../contexts/DedupeContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { CorvidMark } from "../../components/brand/CorvidMark";
 import { Segmented } from "../../components/ui/Segmented";
 import { ActionMenu } from "../../components/ui/ActionMenu";
 
@@ -780,7 +781,18 @@ export const DedupeView = ({
                       className="flex flex-col items-center justify-center h-full"
                     >
                       <EmptyState
-                        icon={CheckCircle2}
+                        /*
+                          The one empty state in the app that is a reward
+                          rather than a gap, so the bird stands in for the
+                          check mark and hops once when it arrives.
+                        */
+                        illustration={
+                          <CorvidMark
+                            size={96}
+                            hop
+                            className="text-primary/60"
+                          />
+                        }
                         title="All reviewed"
                         body={
                           <>
