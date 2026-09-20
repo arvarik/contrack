@@ -57,7 +57,7 @@ export const InteractionVelocityModal = ({
         <button
           onClick={onClose}
           aria-label="Close"
-          className="hit-area p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+          className="hit-area p-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
         >
           <X className="w-5 h-5" />
         </button>

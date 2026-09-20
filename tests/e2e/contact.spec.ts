@@ -259,30 +259,47 @@ test.describe("the Network header and start panel", () => {
     ).toBeVisible();
   });
 
-  test("the start panel renders three labelled regions on desktop", async ({
+  test("the header holds three icon buttons, and + opens the New menu", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
-    await expect(page.getByRole("region", { name: "Up next" })).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Recently viewed" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Add people" }),
-    ).toBeVisible();
+    // Named for a screen reader, titled for a pointer, no visible text.
+    for (const name of ["Select", "Import", "New"]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await expect(button).toBeVisible();
+      await expect(button).toHaveAttribute("title", name);
+      await expect(button).toHaveText("");
+    }
 
-    const addRegion = page.getByRole("region", { name: "Add people" });
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const menu = page.getByRole("menu", { name: "New" });
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "New contact",
+      "Add from text",
+      "New list",
+    ]);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+  });
+
+  test("the start panel is the mark and one line, with nothing to act on", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    const main = page.locator("#main-content");
     await expect(
-      addRegion.getByRole("button", { name: /Import/ }),
+      main.getByRole("heading", { level: 2, name: "No contact selected" }),
     ).toBeVisible();
-    await expect(
-      addRegion.getByRole("button", { name: /New contact/ }),
-    ).toBeVisible();
-    await expect(
-      addRegion.getByRole("button", { name: /Add from text/ }),
-    ).toBeVisible();
+    await expect(main.getByRole("region")).toHaveCount(0);
+    await expect(main.getByRole("button")).toHaveCount(0);
+    await expect(main.getByRole("link")).toHaveCount(0);
+    await expect(page.getByText("Up next")).toHaveCount(0);
+    await expect(page.getByText("Recently viewed")).toHaveCount(0);
+    await expect(page.getByText("Add people")).toHaveCount(0);
   });
 
   test("Network page passes axe accessibility scan on desktop", async ({
@@ -295,13 +312,14 @@ test.describe("the Network header and start panel", () => {
 });
 
 /**
- * The header's one primary action and its menu.
+ * The header's menu.
  *
  * The header used to show a palette icon and an archive icon at the same rank
  * as the name, with delete in a menu and an unlabelled sparkle beside the
- * company. It now shows "Log interaction", and every other action is in the
- * "Contact actions" menu, which behaves as a menu: focus inside on open, the
- * arrows and Home and End move, Escape returns to the button.
+ * company. Every action is now in the "Contact actions" menu, which behaves
+ * as a menu: focus inside on open, the arrows and Home and End move, Escape
+ * returns to the button. There is no button to log: the composer is the first
+ * thing in the Timeline column.
  */
 test.describe("the contact header", () => {
   test("the menu lists the actions in order, and the keys work inside it", async ({
@@ -368,20 +386,18 @@ test.describe("the contact header", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("Log interaction puts focus in the composer", async ({
+  test("the wide header has no Log interaction button, and the composer is on the page", async ({
     page,
     instance,
   }) => {
     const id = await ownContact(instance, "Zane Focus");
     await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zane Focus")).toBeVisible();
 
-    // From the Dossier tab too: the press brings the Timeline back first.
-    await page
-      .getByRole("radiogroup", { name: "Contact sections" })
-      .getByRole("radio", { name: "Dossier" })
-      .click();
-    await page.getByRole("button", { name: "Log interaction" }).click();
-    await expect(page.getByRole("textbox", { name: "Note" })).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Log interaction" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Note" })).toBeVisible();
   });
 });
 

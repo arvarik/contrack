@@ -126,30 +126,39 @@ keyboard chips.
 
 ### Radius System
 
-| Token                       | Value                    | Usage                                       |
-| --------------------------- | ------------------------ | ------------------------------------------- |
-| Default                     | `1rem` (16px)            | Standard rounding                           |
-| `lg`                        | `1.5rem` (24px)          | Cards, large containers                     |
-| `xl`                        | `2rem` (32px)            | Prominent containers                        |
-| Buttons (primary/secondary) | `0.75rem` (`rounded-xl`) | CSS `.btn-primary` / `.btn-secondary` class |
-| Pills                       | `9999px`                 | Chips, filter pills and `Segmented` only    |
+One tight scale. A control is 6 px, a card is 8 px, a dialog is 12 px and a
+chip is 4 px. `rounded-full` is for circles only: avatars, dots, rings and
+switch tracks. A chip, a badge, a filter pill or a `Segmented` option is
+`rounded-md`.
+
+| Token                       | Value                     | Usage                                              |
+| --------------------------- | ------------------------- | -------------------------------------------------- |
+| `sm`                        | `0.1875rem` (3px)         | Keyboard chips, the smallest badges                |
+| `md`                        | `0.25rem` (4px)           | Chips, badges, filter pills, menu items            |
+| `lg`                        | `0.375rem` (6px)          | Inner controls: tab items, "+ Add", chip tap boxes |
+| `xl`                        | `0.375rem` (6px)          | Controls: buttons, inputs, list rows, icon buttons |
+| `2xl`                       | `0.5rem` (8px)            | Cards, panels, popovers, `.menu-panel`             |
+| `3xl`                       | `0.75rem` (12px)          | Dialogs, sheets, the auth card                     |
+| Buttons (primary/secondary) | `0.375rem` (`rounded-xl`) | CSS `.btn-primary` / `.btn-secondary` class        |
+| Circles                     | `9999px`                  | Avatars, dots, rings, switch tracks. Never a label |
 
 ## 2. Component CSS Classes (defined in `src/index.css`)
 
 These reusable atomic classes are the blessed patterns. Use them instead of ad-hoc utilities.
 
-| Class                | Pattern                                                                                 | Usage                                                                    |
-| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, dropdowns, Command Palette, floating nav                         |
-| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (the tile behind the glyph). ⚠️ NEVER for buttons/CTAs |
-| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                  |
-| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                           |
-| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                              |
-| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                                |
-| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                         |
-| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                      |
-| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                    |
-| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                             |
+| Class                | Pattern                                                                                 | Usage                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, the Command Palette, floating nav. Not menus                      |
+| `menu-panel`         | Solid card surface, hairline ring, soft shadow, 120 ms entrance                         | Dropdown menus, context menus, comboboxes (`ActionMenu`, `DROPDOWN_MENU`) |
+| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (the tile behind the glyph). ⚠️ NEVER for buttons/CTAs  |
+| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                   |
+| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                            |
+| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                               |
+| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                                 |
+| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                          |
+| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                       |
+| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                     |
+| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                              |
 
 ### Buttons
 
@@ -159,10 +168,11 @@ These reusable atomic classes are the blessed patterns. Use them instead of ad-h
 - ✅ One disabled look for both: a `surface-container-high` fill with an
   `on-surface-variant` label. No `disabled:opacity-*` at the call site, because
   fading a filled button fades its label into its own fill.
-- ❌ `rounded-full` on a filled `bg-primary` button. Pills are chips, filter
-  pills and `Segmented`. `tests/unit/styles.floor.test.ts` fails on a class
-  string with a solid `bg-primary`, `rounded-full` and `px-2` or more outside
-  its allow-list.
+- ❌ `rounded-full` on a filled `bg-primary` button, and on any chip, badge,
+  filter pill or `Segmented` option: those are `rounded-md`. Circles are for
+  avatars, dots, rings and switch tracks. `tests/unit/styles.floor.test.ts`
+  fails on a class string with a solid `bg-primary`, `rounded-full` and
+  `px-2` or more outside its allow-list.
 
 ## 3. Component Patterns
 

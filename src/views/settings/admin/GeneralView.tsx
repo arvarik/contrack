@@ -721,7 +721,7 @@ export const IntegrationsCard = () => {
             </h3>
           </div>
           {isMapboxConfigured && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <Check className="w-3.5 h-3.5" />
               Configured
             </span>
@@ -904,7 +904,7 @@ export const IntegrationsCard = () => {
             </h3>
           </div>
           {isGoogleConfigured && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <Check className="w-3.5 h-3.5" />
               Configured
             </span>

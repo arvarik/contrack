@@ -153,7 +153,7 @@ describe("the button shape", () => {
       return css.slice(start, css.indexOf("}", start));
     };
     const shared = block(".btn-primary,\n  .btn-secondary");
-    expect(shared).toContain("border-radius: 0.75rem");
+    expect(shared).toContain("border-radius: 0.375rem");
     expect(shared).toContain("min-height: 44px");
     expect(css).toContain(".btn-primary:disabled,\n  .btn-secondary:disabled");
     expect(css).not.toMatch(/\.btn-(?:primary|secondary)[^{]*\{[^}]*9999px/);

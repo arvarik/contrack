@@ -79,7 +79,7 @@ export const ContactPicker = ({
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
                 layout
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-md"
               >
                 <img
                   src={c.avatarUrl || fallbackAvatarUrl(c.name)}

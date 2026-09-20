@@ -89,7 +89,7 @@ export const BirthdayField = ({
         <EditHint />
       </button>
       {upcomingDays !== null && (
-        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-warning shrink-0">
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-warning shrink-0">
           {upcomingDays === 0 ? "🎂 Today!" : `🎂 in ${upcomingDays}d`}
         </span>
       )}

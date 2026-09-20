@@ -90,7 +90,7 @@ export const KeyboardPage = () => {
                       {isAffected && (
                         <span
                           className={cn(
-                            "text-[11px] font-semibold px-2 py-0.5 rounded-full",
+                            "text-[11px] font-semibold px-2 py-0.5 rounded-md",
                             singleKeysEnabled
                               ? "bg-surface-container text-on-surface-variant"
                               : "bg-error/10 text-error",
@@ -100,7 +100,7 @@ export const KeyboardPage = () => {
                         </span>
                       )}
                       {s.alwaysOn && (
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant">
                           Always on
                         </span>
                       )}

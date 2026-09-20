@@ -221,7 +221,7 @@ export const TagsPage = () => {
                           {item.tag}
                         </span>
                         <span
-                          className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0"
+                          className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0"
                           aria-label={`${item.count} ${item.count === 1 ? "contact" : "contacts"}`}
                         >
                           {item.count}

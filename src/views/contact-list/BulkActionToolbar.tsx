@@ -154,7 +154,7 @@ export const BulkActionToolbar = ({
                 initial={{ opacity: 0, scale: 0.9, y: 6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 6 }}
-                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 glass-panel rounded-xl shadow-xl p-3 z-50 grid grid-cols-4 gap-2 w-[120px] place-items-center"
+                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 menu-panel p-3 z-50 grid grid-cols-4 gap-2 w-[120px] place-items-center"
               >
                 {VIBES.map((vibe) => (
                   <button

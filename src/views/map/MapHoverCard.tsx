@@ -225,7 +225,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
                 <ScoreBreakdown contactId={contact.id} score={score}>
                   <span
                     className={cn(
-                      "inline-flex items-center px-2 py-0.5 rounded-full font-bold border text-[11px] cursor-pointer hit-area",
+                      "inline-flex items-center px-2 py-0.5 rounded-md font-bold border text-[11px] cursor-pointer hit-area",
                       scoreBadgeBg,
                     )}
                   >
@@ -235,7 +235,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
               ) : (
                 <span
                   className={cn(
-                    "inline-flex items-center px-2 py-0.5 rounded-full font-bold border text-[11px]",
+                    "inline-flex items-center px-2 py-0.5 rounded-md font-bold border text-[11px]",
                     scoreBadgeBg,
                   )}
                 >
@@ -268,7 +268,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
             {lists.map((l) => (
               <span
                 key={l.id}
-                className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-secondary/10 text-secondary"
                 title={l.name}
               >
                 {l.name}

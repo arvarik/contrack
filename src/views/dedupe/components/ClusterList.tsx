@@ -158,7 +158,7 @@ export const ClusterList = ({
               allSelected ? "Deselect all clusters" : "Select all clusters"
             }
             className={cn(
-              "hit-area flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+              "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
               allSelected
                 ? "bg-primary/15 text-on-primary-wash"
                 : "bg-surface-container-low text-on-surface-variant hover:text-on-surface",
@@ -290,18 +290,18 @@ export const ClusterList = ({
 
                   {/* Stats */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-on-surface-variant bg-surface-container-low px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <span className="text-xs font-bold text-on-surface-variant bg-surface-container-low px-2.5 py-1 rounded-md flex items-center gap-1">
                       <Users className="w-3 h-3" />
                       {cluster.size}
                     </span>
                     {cluster.hasWeakLink && (
-                      <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-full">
+                      <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-md">
                         Weak
                       </span>
                     )}
                     <span
                       className={cn(
-                        "text-xs font-bold px-2.5 py-1 rounded-full tabular-nums",
+                        "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
                         cluster.aggregateConfidence >= 0.9
                           ? "text-success bg-emerald-500/10"
                           : cluster.aggregateConfidence >= 0.7
@@ -325,7 +325,7 @@ export const ClusterList = ({
                       });
                     }}
                     aria-label={`Skip cluster ${primary.name}`}
-                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-full transition-colors"
+                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-lg transition-colors"
                   >
                     Skip
                   </button>
@@ -338,7 +338,7 @@ export const ClusterList = ({
                     }}
                     disabled={mergeCluster.isPending}
                     aria-label={`Merge ${cluster.size} contacts in this cluster`}
-                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-lg transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
                   >
                     Merge
                   </button>

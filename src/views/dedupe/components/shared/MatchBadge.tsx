@@ -53,7 +53,7 @@ export const MatchBadge = ({ type, confidence }: MatchBadgeProps) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${config.color}`}
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold ${config.color}`}
     >
       {config.icon}
       {config.label} · {pct}%

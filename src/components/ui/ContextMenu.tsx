@@ -92,7 +92,7 @@ export const ContextMenu = ({
           exit={{ opacity: 0, scale: 0.95, y: -4 }}
           transition={{ duration: 0.1 }}
           style={{ position: "fixed", left: adjustedPos.x, top: adjustedPos.y }}
-          className="z-[300] min-w-[180px] glass-panel rounded-xl shadow-2xl py-1 overflow-hidden"
+          className="z-[300] min-w-[180px] menu-panel p-1"
           onContextMenu={(e) => e.preventDefault()}
         >
           {items.map((item) => {
@@ -100,7 +100,7 @@ export const ContextMenu = ({
               return (
                 <div
                   key={item.id}
-                  className="my-1 h-px bg-surface-container-high mx-2"
+                  className="my-1 h-px bg-outline-variant/50 mx-1"
                 />
               );
             }
@@ -115,7 +115,7 @@ export const ContextMenu = ({
                 className={[
                   // A long press opens this on a phone, so rows are 44 px
                   // tall there and 36 px under a pointer.
-                  "w-full flex items-center gap-2.5 px-3.5 py-3 sm:py-2 text-sm transition-colors text-left",
+                  "w-full flex items-center gap-2.5 px-2.5 py-3 sm:py-2 rounded-md text-sm transition-colors text-left",
                   item.danger
                     ? "text-error hover:bg-rose-500/10 disabled:opacity-40"
                     : "text-on-surface hover:bg-surface-container-low disabled:text-on-surface-variant disabled:cursor-not-allowed",

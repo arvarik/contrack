@@ -133,7 +133,7 @@ export const SettingsRail = () => {
                           badgeCount > 0 && (
                             <span
                               aria-hidden="true"
-                              className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-primary/20 text-on-primary-wash"
+                              className="px-1.5 py-0.5 rounded-md text-xs font-bold bg-primary/20 text-on-primary-wash"
                             >
                               {badgeCount}
                             </span>

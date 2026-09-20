@@ -81,13 +81,8 @@ test.describe("open instance", () => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
-    await page
-      .getByRole("button", { name: /Add new contact or list|\+ New/ })
-      .click();
-    await page
-      .getByRole("menuitem", { name: "New contact" })
-      .or(page.getByRole("button", { name: "Add Contact" }))
-      .click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New contact" }).click();
 
     const dialog = page.getByRole("dialog", { name: "New Contact" });
     await expect(dialog).toBeVisible();

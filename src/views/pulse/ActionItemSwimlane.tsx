@@ -55,7 +55,7 @@ const SnoozeDropdown = ({
       />
       <div
         className={cn(
-          "absolute z-50 mt-1 w-36 overflow-hidden rounded-xl glass-panel py-1 shadow-xl outline-none",
+          "absolute z-50 mt-1 w-36 menu-panel menu-enter p-1 outline-none",
         )}
         style={{ top, left: Math.max(10, left) }}
       >

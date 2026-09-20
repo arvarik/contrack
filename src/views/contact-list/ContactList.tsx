@@ -26,6 +26,7 @@ import {
   UserPlus,
   ListPlus,
   Square,
+  Plus,
   FileText,
   SearchX,
   Clock,
@@ -48,7 +49,12 @@ import type { Contact, ContactUpdateData } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { SEARCH_INPUT, filterPill, PAGE_TITLE } from "../../lib/styles";
+import {
+  SEARCH_INPUT,
+  filterPill,
+  ICON_BTN,
+  PAGE_TITLE,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
@@ -684,35 +690,34 @@ export const ContactList = () => {
           ) : (
             <>
               <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
-              <div className="flex items-center gap-2">
+              {/*
+                Three icon buttons at every width. Each is named for a screen
+                reader and titled for a pointer, so the row costs one word of
+                space per action and still says what it does. The gap keeps
+                the three 44 px tap boxes apart.
+              */}
+              <div className="flex items-center gap-3">
                 <button
                   onClick={enterSelectMode}
-                  className="hit-area flex items-center justify-center gap-1.5 rounded-xl transition-colors font-medium text-xs md:text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high p-2 md:px-3 md:py-1.5"
+                  className={ICON_BTN}
                   aria-label="Select"
+                  title="Select"
                 >
-                  <Square className="w-4 h-4 md:hidden" aria-hidden="true" />
-                  <span className="hidden md:inline">Select</span>
+                  <Square className="w-5 h-5" aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => setIsImportOpen(true)}
-                  className="hit-area flex items-center justify-center gap-1.5 rounded-xl transition-colors font-medium text-xs md:text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high p-2 md:px-3 md:py-1.5"
+                  className={ICON_BTN}
                   aria-label="Import"
+                  title="Import"
                 >
-                  <Upload className="w-4 h-4 md:hidden" aria-hidden="true" />
-                  <span className="hidden md:inline">Import</span>
+                  <Upload className="w-5 h-5" aria-hidden="true" />
                 </button>
                 <ActionMenu
-                  label="+ New"
-                  triggerClassName="hit-area px-2.5 py-1.5 md:px-3 md:py-1.5 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors font-bold text-xs md:text-sm"
-                  triggerContent={
-                    <span className="inline-flex items-center gap-1">
-                      + New{" "}
-                      <ChevronDown
-                        className="w-3.5 h-3.5 opacity-70"
-                        aria-hidden="true"
-                      />
-                    </span>
-                  }
+                  label="New"
+                  title="New"
+                  icon={Plus}
+                  triggerClassName="hit-area p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
                   items={newMenuItems}
                 />
               </div>
@@ -832,39 +837,55 @@ export const ContactList = () => {
         and maps pointer positions against a box thousands of pixels tall.
       */}
       <div className="relative flex-1 min-h-0">
+        {/*
+          The scroller is right-to-left and its content is left-to-right
+          again. That one trick moves the scrollbar to the left edge, away
+          from the letter rail on the right: the two used to share the same
+          strip, and a thumb aimed at "M" landed on the bar. Only the box
+          flips. The `dir="ltr"` child puts every row back the way it reads.
+
+          With the rail on screen the scroller keeps a 2 rem gutter on the
+          right. Rows end before it, so a selected row's ring and a hover tint
+          stop short of the letters instead of running under them.
+        */}
         <div
           ref={listScrollRef}
           id="contact-list"
+          dir="rtl"
           {...roving.containerProps}
-          className="h-full overflow-y-auto p-4 space-y-2 pb-24 md:pb-4 overscroll-contain outline-none"
-        >
-          {/* Pull-to-refresh indicator — mobile only */}
-          <PullIndicator
-            isPulling={isPulling}
-            isRefreshing={isRefreshing}
-            progress={pullProgress}
-            pullDistance={pullDistance}
-          />
-
-          {isLoading && (
-            <div className="px-2 py-3 space-y-1">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
-                  style={{ animationDelay: `${i * 60}ms` }}
-                >
-                  <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
-                    <div className="h-3 bg-surface-container rounded-full w-2/5" />
-                  </div>
-                </div>
-              ))}
-            </div>
+          className={cn(
+            "h-full overflow-y-auto nice-scrollbar p-4 pb-24 md:pb-4 overscroll-contain outline-none",
+            showAlphabetRail && "pr-8",
           )}
+        >
+          <div dir="ltr" className="space-y-2">
+            {/* Pull-to-refresh indicator — mobile only */}
+            <PullIndicator
+              isPulling={isPulling}
+              isRefreshing={isRefreshing}
+              progress={pullProgress}
+              pullDistance={pullDistance}
+            />
 
-          {/*
+            {isLoading && (
+              <div className="px-2 py-3 space-y-1">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 p-3 rounded-xl animate-pulse"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-surface-container-high shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="h-3.5 bg-surface-container-high rounded-full w-3/5" />
+                      <div className="h-3 bg-surface-container rounded-full w-2/5" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/*
           Empty state: 0 contacts total (onboarding).
 
           Gated on `!isError` because a failed fetch also produces zero
@@ -872,141 +893,141 @@ export const ContactList = () => {
           merely went away is the most alarming thing this app could say. The
           ConnectionBanner explains that case instead.
         */}
-          {/*
+            {/*
             Import leads. Nobody builds a personal CRM by typing four hundred
             people in by hand: they arrive with an export from Apple, Google
             or LinkedIn. Adding one by hand stays on the header's + button.
           */}
-          {!isLoading && !isError && activeContactCount === 0 && (
-            <EmptyState
-              illustration={
-                <CorvidMark size={64} className="text-primary/60" />
-              }
-              title="Your network is empty"
-              body="Bring in the people you already have, or add one by hand."
-              action={{
-                label: "Import",
-                icon: Upload,
-                onClick: () => setIsImportOpen(true),
-              }}
-              level={id ? 3 : 2}
-            />
-          )}
-
-          {/* Empty state: search/filter has no results */}
-          {!isLoading &&
-            activeContactCount > 0 &&
-            filteredContacts.length === 0 &&
-            (searchQuery ? (
+            {!isLoading && !isError && activeContactCount === 0 && (
               <EmptyState
-                icon={SearchX}
-                title={`Nobody matches "${searchQuery}"`}
-                body="Try fewer letters, or search a company or a tag."
+                illustration={
+                  <CorvidMark size={64} className="text-primary/60" />
+                }
+                title="Your network is empty"
+                body="Bring in the people you already have, or add one by hand."
                 action={{
-                  label: "Clear search",
-                  onClick: () => setSearchQuery(""),
+                  label: "Import",
+                  icon: Upload,
+                  onClick: () => setIsImportOpen(true),
                 }}
                 level={id ? 3 : 2}
               />
-            ) : (
-              <EmptyState
-                icon={ListPlus}
-                title="No contacts in this list"
-                body="Add people from their contact page, or select several and choose List."
-                level={id ? 3 : 2}
-              />
-            ))}
-
-          {/* ── Recent contacts strip ─────────────────────────────────────── */}
-          {!isLoading &&
-            !searchQuery &&
-            filterMode === "all" &&
-            recentContacts.length > 0 && (
-              <div className="mb-3">
-                <div className="flex items-center gap-1.5 px-1 mb-1.5">
-                  <Clock className="w-3 h-3 text-on-surface-variant" />
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Recent
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {recentContacts.map((contact, index) => {
-                    const item = roving.getItemProps(index);
-                    return (
-                      <ContactListItem
-                        key={`recent-${contact.id}`}
-                        idPrefix="recent-contact"
-                        contact={contact}
-                        density={density}
-                        active={id === contact.id}
-                        isSelectMode={isSelectMode}
-                        isSelected={selectedIds.has(contact.id)}
-                        onToggleSelect={toggleSelect}
-                        rovingIndex={index}
-                        tabIndex={item.tabIndex}
-                        onRowKeyDown={item.onKeyDown}
-                        onRowFocus={item.onFocus}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
-              </div>
             )}
 
-          <div
-            ref={virtualListRef}
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: "100%",
-              position: "relative",
-              // Keep rows clear of the rail rather than letting it sit on top of
-              // a truncated name.
-              paddingRight: showAlphabetRail ? "1.5rem" : undefined,
-            }}
-          >
-            {virtualItems.map((virtualItem) => {
-              const contact = filteredContacts[virtualItem.index];
-              const item = roving.getItemProps(recentCount + virtualItem.index);
-              return (
-                <div
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  ref={rowVirtualizer.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: showAlphabetRail ? "calc(100% - 1.5rem)" : "100%",
-                    transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                    paddingBottom: "8px", // Replaces space-y-2
+            {/* Empty state: search/filter has no results */}
+            {!isLoading &&
+              activeContactCount > 0 &&
+              filteredContacts.length === 0 &&
+              (searchQuery ? (
+                <EmptyState
+                  icon={SearchX}
+                  title={`Nobody matches "${searchQuery}"`}
+                  body="Try fewer letters, or search a company or a tag."
+                  action={{
+                    label: "Clear search",
+                    onClick: () => setSearchQuery(""),
                   }}
-                >
-                  <ContactRowWrapper
-                    contact={contact}
-                    density={density}
-                    active={id === contact.id}
-                    isFlashing={flashId === contact.id}
-                    isSelectMode={isSelectMode}
-                    isSelected={selectedIds.has(contact.id)}
-                    onToggleSelect={toggleSelect}
-                    onEnterSelectMode={enterSelectMode}
-                    handleContextMenu={handleContextMenu}
-                    recordVisit={recordVisit}
-                    archiveContact={handleArchiveContact}
-                    navigate={navigate}
-                    rovingIndex={recentCount + virtualItem.index}
-                    tabIndex={item.tabIndex}
-                    onRowKeyDown={item.onKeyDown}
-                    onRowFocus={item.onFocus}
-                  />
-                </div>
-              );
-            })}
-          </div>
+                  level={id ? 3 : 2}
+                />
+              ) : (
+                <EmptyState
+                  icon={ListPlus}
+                  title="No contacts in this list"
+                  body="Add people from their contact page, or select several and choose List."
+                  level={id ? 3 : 2}
+                />
+              ))}
 
-          {/* Context menu — portal-rendered, shared across all rows */}
-          <ContextMenu {...contextMenu} onClose={closeContextMenu} />
+            {/* ── Recent contacts strip ─────────────────────────────────────── */}
+            {!isLoading &&
+              !searchQuery &&
+              filterMode === "all" &&
+              recentContacts.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                    <Clock className="w-3 h-3 text-on-surface-variant" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Recent
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {recentContacts.map((contact, index) => {
+                      const item = roving.getItemProps(index);
+                      return (
+                        <ContactListItem
+                          key={`recent-${contact.id}`}
+                          idPrefix="recent-contact"
+                          contact={contact}
+                          density={density}
+                          active={id === contact.id}
+                          isSelectMode={isSelectMode}
+                          isSelected={selectedIds.has(contact.id)}
+                          onToggleSelect={toggleSelect}
+                          rovingIndex={index}
+                          tabIndex={item.tabIndex}
+                          onRowKeyDown={item.onKeyDown}
+                          onRowFocus={item.onFocus}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 mb-1 h-px bg-surface-container-high mx-1" />
+                </div>
+              )}
+
+            <div
+              ref={virtualListRef}
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualItems.map((virtualItem) => {
+                const contact = filteredContacts[virtualItem.index];
+                const item = roving.getItemProps(
+                  recentCount + virtualItem.index,
+                );
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+                      paddingBottom: "8px", // Replaces space-y-2
+                    }}
+                  >
+                    <ContactRowWrapper
+                      contact={contact}
+                      density={density}
+                      active={id === contact.id}
+                      isFlashing={flashId === contact.id}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(contact.id)}
+                      onToggleSelect={toggleSelect}
+                      onEnterSelectMode={enterSelectMode}
+                      handleContextMenu={handleContextMenu}
+                      recordVisit={recordVisit}
+                      archiveContact={handleArchiveContact}
+                      navigate={navigate}
+                      rovingIndex={recentCount + virtualItem.index}
+                      tabIndex={item.tabIndex}
+                      onRowKeyDown={item.onKeyDown}
+                      onRowFocus={item.onFocus}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Context menu — portal-rendered, shared across all rows */}
+            <ContextMenu {...contextMenu} onClose={closeContextMenu} />
+          </div>
         </div>
 
         {showAlphabetRail && (

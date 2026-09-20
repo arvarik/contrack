@@ -622,7 +622,7 @@ const PulseOffice = () => {
                 <h2 className="text-sm font-bold text-on-surface">
                   Hidden cards
                 </h2>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant tabular-nums">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-surface-container-highest text-on-surface-variant tabular-nums">
                   {resolvedLayout.hidden.length}
                 </span>
               </div>

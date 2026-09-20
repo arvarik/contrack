@@ -142,7 +142,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
       <div className="flex items-center justify-center gap-3 flex-wrap">
         {duplicates.map((dup) => (
           <div key={dup.id} className="flex items-center gap-2">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low rounded-full">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-container-low rounded-md">
               <img
                 src={dup.avatarUrl || fallbackAvatarUrl(dup.name)}
                 alt={dup.name}
@@ -155,7 +155,7 @@ export const MergePreview = ({ primary, duplicates }: MergePreviewProps) => {
             <ArrowRight className="w-4 h-4 text-on-surface-variant" />
           </div>
         ))}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-full ring-2 ring-emerald-500/30">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-md ring-2 ring-emerald-500/30">
           <img
             src={primary.avatarUrl || fallbackAvatarUrl(primary.name)}
             alt={primary.name}

@@ -216,7 +216,7 @@ export const AIStatsView = () => {
             <Loader2 className="w-3 h-3 animate-spin text-primary" />
           )}
           {!feedLoading && (
-            <span className="text-[11px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-full tabular-nums">
+            <span className="text-[11px] font-bold text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded-md tabular-nums">
               {feedItems.length < totalCount
                 ? `${feedItems.length} of ${totalCount}`
                 : totalCount}

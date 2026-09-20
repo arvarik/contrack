@@ -412,7 +412,7 @@ export const SearchView = () => {
                       tabIndex={query.length > 0 ? 0 : -1}
                       aria-hidden={query.length === 0}
                       className={cn(
-                        "hit-area p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
+                        "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
                         query.length === 0 && "opacity-0 pointer-events-none",
                       )}
                       aria-label="Clear search"
@@ -505,7 +505,7 @@ export const SearchView = () => {
                               : "Keyword results"
                             : "Search results"}
                         </span>
-                        <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
+                        <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
                           {results.length} match
                           {results.length !== 1 ? "es" : ""}
                         </span>

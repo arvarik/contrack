@@ -101,7 +101,7 @@ export const ManualMerge = () => {
                 }
               }}
               className={cn(
-                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
                 stage === s
                   ? "bg-primary/10 text-primary"
                   : "text-on-surface-variant hover:text-on-surface",

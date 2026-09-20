@@ -125,7 +125,7 @@ const RowMenu = ({
         aria-label={`Actions for ${user.username}`}
         className={cn(
           "inline-flex items-center justify-center min-w-[44px] min-h-[44px]",
-          "rounded-full transition-colors outline-none",
+          "rounded-lg transition-colors outline-none",
           "focus-visible:ring-2 focus-visible:ring-primary",
           open
             ? "bg-surface-container-high text-on-surface"

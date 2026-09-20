@@ -168,24 +168,6 @@ export const ContactProfile = ({
    * Details tab chosen on a phone shows the timeline once the pane widens.
    */
   const mainTab: Section = activeTab === "dossier" ? "dossier" : "timeline";
-  /**
-   * True from a "Log interaction" press until the composer has taken focus.
-   *
-   * A request that waits, and not a call into the composer, because the
-   * composer may not be there yet: the press switches to the Timeline tab,
-   * and the composer arrives in its own chunk. It focuses its editor when it
-   * mounts with the request open, then clears it, so a later visit to the
-   * tab does not take focus again and a second press works.
-   */
-  const [composerFocusRequested, setComposerFocusRequested] = useState(false);
-  const logInteraction = useCallback(() => {
-    setActiveTab("timeline");
-    setComposerFocusRequested(true);
-  }, []);
-  const composerFocused = useCallback(
-    () => setComposerFocusRequested(false),
-    [],
-  );
 
   // ── Dropzone (file uploads & .eml ingestion) ──────────────────────────
   const onDrop = useCallback(
@@ -331,7 +313,6 @@ export const ContactProfile = ({
             onDelete={handleDeleteContact}
             onClose={onClose}
             onOpenAvatarPicker={() => setIsAvatarPickerOpen(true)}
-            onLogInteraction={logInteraction}
             showNetworkButton={showNetworkButton}
             layout={wide ? "wide" : "narrow"}
             backLabel={backLabel}
@@ -433,8 +414,6 @@ export const ContactProfile = ({
                   ) : (
                     <TimelineTab
                       contactId={id}
-                      composerFocusRequested={composerFocusRequested}
-                      onComposerFocused={composerFocused}
                       composerCollapsible={!wide}
                       timeline={timeline}
                       timelineLoading={timelineLoading}

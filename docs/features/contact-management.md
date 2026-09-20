@@ -65,36 +65,33 @@ other is a name pulled out of a note with no card to write.
 
 ## Network Header and Start Panel
 
-The Network view (`/`) provides a clear, accessible header for search, sort, and contact operations, paired with a rich start panel on desktop viewports when no contact is selected.
+The Network view (`/`) has a compact header for search, sort and the contact operations, and a quiet start panel on desktop when no contact is selected.
 
 ### Header Controls
 
 ```
-Desktop:
-Network                              [ Select ] [ Import ] [ + New ▾ ]
+Network                                          [ ▢ ] [ ⭳ ] [ + ]
 [ 🔍 Search...                                        ] [ Sort ▾ ]
 [ All 30 ]  <- only when at least one list exists
-
-Phone:
-Network                                  [ ▢ ] [ ⭳ ] [ + New ▾ ]
-[ 🔍 Search...                                        ] [ Sort ▾ ]
 ```
 
-1. **Select**: Toggles multi-selection mode. When active, the header displays the count of selected contacts (for example, "3 selected"), along with "Select all" and "Done" buttons. The floating bulk action toolbar appears at the bottom with options to archive, delete, add to list, edit fields, assign colors, or export CSV. On touch screens, long pressing any contact row also enters selection mode.
-2. **Import**: Opens the contact import dialog directly from the network header. On screens below 768 px, this renders as a 44 px touch target with an upload icon and accessible name.
-3. **+ New ▾**: An ActionMenu dropdown providing quick access to create a single contact, add from text via smart paste, or create a new list. The "+ New" text and caret remain visible across desktop and phone screens.
-4. **Sort menu**: An ActionMenu button whose trigger label reflects the current sort choice. Offers five explicit sorting choices: Name A to Z, Name Z to A, Newest first, Oldest first, and Score. The active choice is marked with a checkmark. Initialized from the `listSort` account preference, and selections persist for the browsing session.
-5. **List filter row**: The horizontal scrolling pill bar appears only when at least one contact list exists. When no lists exist, the filter row is hidden to keep the header clean and compact.
+The three actions are icon buttons at every width. Each has an accessible name and a tooltip, and a 44 px tap box.
+
+1. **Select** (the empty square): enters selection mode. The header then shows the count of selected contacts (for example, "3 selected") with "Select all" and "Done". The floating bulk action toolbar appears at the bottom with archive, delete, add to list, edit fields, colour and CSV export. On a touch screen, a long press on any contact row also enters selection mode.
+2. **Import** (the upload arrow): opens the contact import dialog.
+3. **+** (named "New"): opens a menu with New contact, Add from text (smart paste) and New list.
+4. **Sort menu**: a menu button whose label is the current sort choice. Five choices: Name A to Z, Name Z to A, Newest first, Oldest first, and Score. The active choice carries a check mark. It starts from the `listSort` account preference, and a choice holds for the browsing session.
+5. **List filter row**: the horizontal row of filter chips appears only when at least one contact list exists.
+
+### The List
+
+- The scrollbar sits on the **left** edge of the list. The letter rail sits on the right, and the two no longer share a strip: a thumb on "M" reaches "M".
+- When the letter rail shows (an alphabetical list of 15 or more people), the rows stop 2 rem short of the right edge. A selected row's ring and a hover tint end before the letters.
+- The current row is a light primary wash with a 1 px inset ring. Keyboard focus draws its own ring on top.
 
 ### The Start Panel
 
-When no contact is selected on desktop, the right pane displays the Start Panel (`src/components/layout/StartPanel.tsx`) rather than an empty placeholder.
-
-- **Header**: Features the Corvid mark at 64 px with "No Contact Selected" and guidance text.
-- **Up next**: Displays the top 3 actionable items from the Pulse queue (`buildUpNextQueue` in `src/views/pulse/lib/upNext.ts`) rendered with `ActionRow`. Supports checking off items, snoozing, or logging quick notes. Shows an accessible empty state ("Nothing due") when all follow-ups are clear.
-- **Recently viewed**: Displays recently visited contacts from `useRecentContacts` with avatar score rings, contact names, and roles or companies, linking directly to each profile. Shows an accessible empty state when no contacts have been viewed in the session.
-- **Add people**: Provides dedicated action cards for Import, New contact, and Add from text.
-- **Accessibility**: Each column is rendered as a labelled landmark region (`aria-label="Up next"`, `aria-label="Recently viewed"`, `aria-label="Add people"`) with strict `h2` and `h3` heading hierarchy.
+When no contact is selected on desktop, the right pane shows the start panel (`src/components/layout/StartPanel.tsx`): the Corvid mark at 144 px, the heading "No contact selected" and one line. It holds nothing to act on. Pulse is the dashboard, and the list beside the pane is where a person is picked.
 
 ---
 
@@ -109,11 +106,11 @@ The pane decides, not the window, because the sidebar and the 350 px contact lis
 
 ### Profile Header
 
-The header names the person, says the facts you need before you talk, and offers one primary action.
+The header names the person and says the facts you need before you talk. It has no primary button: the composer is the first thing in the Timeline column, so a note starts there.
 
 ```
 Wide:
-(avatar 96) Thomas Walker (they/them)               [ Log interaction ] ⋮
+(avatar 96) Thomas Walker (they/them)                                   ⋮
             UX Researcher at Umbrella Corp
             Sydney · 2:45 AM · 13°C · ThomasWalker ↗ · @Thomas_Walker ↗
             [tech-lead ×] [advisor ×] [+ tag]
@@ -129,9 +126,8 @@ Narrow:
 2. **The meta line** is plain text: the location, the person's local time, and the weather. Facts are not controls, so they do not wear pills. Social links and the website follow as links with a `↗` glyph. Each link opens in a new tab and has its own small menu with **Copy link** and **Remove link**.
 3. **The weather** makes a request to Open-Meteo with the contact's coordinates. It shows only when it is allowed. When it is not shown, no request is made. The settings revamp adds the switch for it.
 4. **Tags** are chips. **+ tag** adds one. Removing a tag offers **Undo** for 7 seconds. List memberships sit on the same row.
-5. **Log interaction** is the one primary button. It opens the Timeline tab and puts focus in the composer's editor.
-6. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
-7. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
+5. **Contact actions** (the ⋮ menu) holds everything else, in this order: **Change colour**, **Change avatar**, **Copy basic details**, **Copy full details**, **Archive** (or **Unarchive**), and **Delete**. Delete is last, on its own surface tone. The menu follows the menu pattern: focus moves into it when it opens, the arrow keys, Home and End move, a letter jumps to the next item with that letter, and Escape closes it and returns focus to the button.
+6. **Change colour** opens the colour picker under the menu button. It is a radiogroup named "Contact colour": the arrow keys move and choose, and Escape closes it and returns focus to the menu button. The colour replaces the primary colour on this contact's page only.
 
 A ghost contact also shows **Promote to contact** beside **Log interaction**. In the narrow header, the button sits under the meta line.
 

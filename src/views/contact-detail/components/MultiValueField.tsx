@@ -14,7 +14,8 @@
  *    drags it by pointer or touch. From the keyboard, Alt+ArrowUp and
  *    Alt+ArrowDown move the row that has focus, and a polite live region says
  *    where it went.
- * 5. "+ Add" opens a label select and an input under the rows.
+ * 5. "+ Add" opens a label select and an input under the rows, and under
+ *    `afterRows` when the field has one.
  *
  * Focus does not fall to the page. The rows change only when the server
  * answers, and the answer can give every row a new id, which mounts new rows.
@@ -305,6 +306,12 @@ export interface MultiValueFieldProps {
    * "Map pin" status.
    */
   mapHref?: string;
+  /**
+   * Something that belongs to the rows and shows under them: the mini map
+   * and its caption, for addresses. The add control stays last, so a new
+   * value goes in under it.
+   */
+  afterRows?: React.ReactNode;
 }
 
 export const MultiValueField = ({
@@ -316,6 +323,7 @@ export const MultiValueField = ({
   inputPlaceholder,
   isAddress = false,
   mapHref,
+  afterRows,
 }: MultiValueFieldProps) => {
   const firstLabel = labelOptions[0] || "work";
   const [adding, setAdding] = useState(false);
@@ -553,6 +561,8 @@ export const MultiValueField = ({
           </SortableContext>
         </DndContext>
       )}
+
+      {afterRows}
 
       {adding ? (
         <div

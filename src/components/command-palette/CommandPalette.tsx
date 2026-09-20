@@ -673,7 +673,7 @@ export const CommandPalette = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ duration: 0.15 }}
-            className="w-full max-w-2xl glass-panel shadow-2xl rounded-2xl overflow-hidden flex flex-col font-body"
+            className="w-full max-w-2xl glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
           >
             {/* ── Facet pills (Feature 5) ── */}
             <FacetPills filters={parsed.filters} onRemove={removeFilter} />

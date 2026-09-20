@@ -22,8 +22,13 @@
  *    trigger to return focus to.
  *
  * Items are 44 px tall on a phone and 36 px from `sm`. A `danger` item
- * (Delete) sits last, on its own surface tone, which is the design system's
- * separator: a surface shift, not a line.
+ * (Delete) sits last, under a hairline.
+ *
+ * The panel is solid (`.menu-panel`): the sort menu used to be glass over
+ * the contact list, and rows showed through the items. It opens where it
+ * fits. It drops up when the space below runs out, and it slides in from the
+ * window's edge when the trigger sits closer to that edge than the menu is
+ * wide, so a menu on the last column of a page is never cut off.
  *
  * @module components/ui/ActionMenu
  */
@@ -77,6 +82,8 @@ export interface ActionMenuProps {
   className?: string;
   /** Custom trigger content replacing the default icon-only trigger. */
   triggerContent?: React.ReactNode;
+  /** A tooltip for a pointer, for a trigger that shows a glyph and no text. */
+  title?: string;
 }
 
 /**
@@ -87,7 +94,7 @@ export interface ActionMenuProps {
  * so an outside ring would be cut off.
  */
 const ITEM =
-  "w-full min-h-[44px] sm:min-h-[36px] flex items-center gap-2.5 px-3.5 text-sm font-medium text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
+  "w-full min-h-[44px] sm:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
 
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
   if (!ref) return;
@@ -106,12 +113,18 @@ export const ActionMenu = ({
   triggerRef,
   className,
   triggerContent,
+  title,
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
   /** Which item takes focus when the menu opens: the first or the last. */
   const [openAt, setOpenAt] = useState<"first" | "last">("first");
   /** True when the menu opens upwards because the space below is too small. */
   const [dropUp, setDropUp] = useState(false);
+  /**
+   * The edge the menu lines up with once measured. Starts as `align`, and
+   * flips when that edge would push the menu past the side of the window.
+   */
+  const [edge, setEdge] = useState<"start" | "end">(align);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
@@ -150,12 +163,26 @@ export const ActionMenu = ({
   useLayoutEffect(() => {
     if (!open) {
       setDropUp(false);
+      setEdge(align);
       return;
     }
     const box = menu.current?.getBoundingClientRect();
     const anchor = trigger.current?.getBoundingClientRect();
-    if (box && anchor && box.bottom > window.innerHeight) {
-      setDropUp(anchor.top > box.height + 8);
+    if (box && anchor) {
+      if (box.bottom > window.innerHeight) {
+        setDropUp(anchor.top > box.height + 8);
+      }
+      // Off the left of the window: line up with the trigger's left edge
+      // instead. Off the right: with its right edge. Measured once, on
+      // open, from wherever `align` first put it.
+      if (box.left < 8 && anchor.left + box.width <= window.innerWidth - 8) {
+        setEdge("start");
+      } else if (
+        box.right > window.innerWidth - 8 &&
+        anchor.right - box.width >= 8
+      ) {
+        setEdge("end");
+      }
     }
     const list = enabledItems();
     const target = openAt === "last" ? list[list.length - 1] : list[0];
@@ -273,7 +300,7 @@ export const ActionMenu = ({
       ITEM,
       item.danger
         ? "text-error hover:bg-error/10 focus:bg-error/10"
-        : "text-on-surface hover:bg-primary/10 focus:bg-primary/10",
+        : "text-on-surface hover:bg-surface-container-high focus:bg-surface-container-high",
       item.disabled && "opacity-50 cursor-not-allowed",
     );
     if (item.to && !item.disabled) {
@@ -316,6 +343,7 @@ export const ActionMenu = ({
         ref={setTrigger}
         type="button"
         aria-label={label}
+        title={title}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -341,21 +369,28 @@ export const ActionMenu = ({
           // container takes it only if every item is disabled.
           tabIndex={-1}
           onKeyDown={onMenuKeyDown}
+          style={
+            {
+              "--menu-origin": `${dropUp ? "bottom" : "top"} ${
+                edge === "end" ? "right" : "left"
+              }`,
+            } as React.CSSProperties
+          }
           className={cn(
-            "absolute z-50 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] py-1.5 glass-panel rounded-xl shadow-xl overflow-hidden",
-            align === "end" ? "right-0" : "left-0",
+            "absolute z-50 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto nice-scrollbar p-1 menu-panel menu-enter",
+            edge === "end" ? "right-0" : "left-0",
             dropUp ? "bottom-full mb-1" : "top-full mt-1",
           )}
         >
           {regular.map(renderItem)}
           {danger.length > 0 && (
-            // The separator is a surface shift, not a rule: the destructive
-            // items sit on their own tone at the end of the menu.
+            // A hairline before the destructive items, so a thumb aimed at
+            // the last safe item has a gap to miss into.
             <div
               role="none"
               className={cn(
-                "bg-surface-container-low",
-                regular.length > 0 && "mt-1.5 -mb-1.5 pb-1.5 pt-1",
+                regular.length > 0 &&
+                  "mt-1 pt-1 border-t border-outline-variant/50",
               )}
             >
               {danger.map(renderItem)}

@@ -40,7 +40,7 @@ export const Badge = ({
   <span
     className={cn(
       "inline-flex items-center gap-1 shrink-0 whitespace-nowrap",
-      "rounded-full px-2 py-0.5",
+      "rounded-md px-2 py-0.5",
       // The label tracking from lib/styles, so 11 px does not widen every row.
       "text-[11px] font-bold uppercase tracking-[0.08em]",
       TONES[tone],

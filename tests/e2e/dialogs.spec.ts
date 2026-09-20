@@ -108,8 +108,9 @@ test("a search result opens a contact dialog that returns focus to the result", 
   await expect(
     dialog.getByRole("button", { name: "Close contact details" }),
   ).toBeFocused();
+  // The contact's own header, with its actions menu, is inside the dialog.
   await expect(
-    dialog.getByRole("button", { name: "Log interaction" }),
+    dialog.getByRole("button", { name: "Contact actions" }),
   ).toBeVisible();
 
   await expectFocusStaysWithin(page, dialog, 6);

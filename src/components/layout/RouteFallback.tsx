@@ -80,8 +80,8 @@ export const RouteFallback = ({
             </div>
             <div className="flex items-center gap-3">
               <Bar className="h-4 w-28" />
-              <Block className="w-16 h-5 rounded-full" />
-              <Block className="w-20 h-5 rounded-full" />
+              <Block className="w-16 h-5 rounded-md" />
+              <Block className="w-20 h-5 rounded-md" />
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

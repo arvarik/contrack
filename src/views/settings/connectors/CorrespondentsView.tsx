@@ -178,7 +178,7 @@ export const CorrespondentsView: React.FC = () => {
                         {primaryLabel}
                       </span>
                       {c.connectorName && (
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-medium">
+                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant font-medium">
                           {c.connectorName}
                         </span>
                       )}

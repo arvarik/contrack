@@ -582,7 +582,7 @@ export const InteractionSearchPanel = () => {
             {total} note{total === 1 ? "" : "s"}
           </span>
           {result.query.range && (
-            <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-full">
+            <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
               <CalendarDays className="w-3 h-3 text-primary" aria-hidden />
               {result.query.phrase && result.query.range.source === "phrase"
                 ? `“${result.query.phrase}” → `

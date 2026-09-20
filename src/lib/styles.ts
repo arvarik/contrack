@@ -142,7 +142,7 @@ export const DANGER_BTN =
 
 /** Tag pill — used in contact tags, filter indicators */
 export const TAG_PILL =
-  "text-[11px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full";
+  "text-[11px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md";
 
 /** Micro badge — tiny inline status labels (e.g. "Current", "work", "personal") */
 export const MICRO_BADGE =
@@ -154,7 +154,7 @@ export const STATUS_BADGE_SUCCESS =
 
 /** Source badge */
 export const SOURCE_BADGE =
-  "text-[11px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full";
+  "text-[11px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-md";
 
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
@@ -178,7 +178,7 @@ export const KBD_SM =
 
 // ─── Filter Tabs ─────────────────────────────────────────────────────────────
 
-/** Tab container — pill-style tab bar background */
+/** Tab container — the trough behind a row of tab items */
 export const TAB_CONTAINER =
   "flex gap-1 bg-surface-container-low p-1 rounded-xl";
 
@@ -196,7 +196,7 @@ export const tabItem = (active: boolean) =>
 /** Filter pill button — returns className based on active state */
 export const filterPill = (active: boolean) =>
   cn(
-    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
     active
       ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
       : "text-on-surface-variant hover:bg-surface-container-high",
@@ -204,12 +204,19 @@ export const filterPill = (active: boolean) =>
 
 // ─── List Items ──────────────────────────────────────────────────────────────
 
-/** Contact list row — returns className based on active state */
+/**
+ * Contact list row — returns className based on active state.
+ *
+ * The current row is a wash and a 1 px inset ring in the primary at half
+ * strength. It used to be a 2 px solid ring with a shadow, which read as a
+ * focus ring on every visit, and the keyboard focus ring on top of it made
+ * two rings. `z-10` keeps the ring above the next row's hover tint.
+ */
 export const listRow = (active: boolean) =>
   cn(
-    "flex items-center gap-3 p-3 rounded-xl transition-all relative",
+    "flex items-center gap-3 p-3 rounded-xl transition-colors relative",
     active
-      ? "bg-primary/8 ring-2 ring-inset ring-primary z-10 shadow-sm"
+      ? "bg-primary/10 ring-1 ring-inset ring-primary/50 z-10"
       : "hover:bg-surface-container-low",
   );
 
@@ -248,13 +255,16 @@ export const EMPTY_HERO =
 
 // ─── Dropdowns ───────────────────────────────────────────────────────────────
 
-/** Dropdown container — floats above other elements, scrollable, glass-panel styled */
+/**
+ * Dropdown container. Solid (`.menu-panel` in index.css), floats above
+ * other elements, scrolls past about six rows.
+ */
 export const DROPDOWN_MENU =
-  "absolute z-50 mt-1 max-h-72 sm:max-h-56 w-max min-w-full overflow-y-auto rounded-xl glass-panel py-1.5 shadow-xl outline-none nice-scrollbar";
+  "absolute z-50 mt-1 max-h-72 sm:max-h-56 w-max min-w-full overflow-y-auto menu-panel p-1 outline-none nice-scrollbar";
 
 /** Dropdown standard item. 44 px tall on a phone, 36 px from `sm`. */
 export const DROPDOWN_ITEM =
-  "min-h-[44px] sm:min-h-0 cursor-pointer px-4 py-2 text-sm font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors flex items-center";
+  "min-h-[44px] sm:min-h-0 cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-container-high transition-colors flex items-center";
 
 // ─── Form Inputs ─────────────────────────────────────────────────────────────
 

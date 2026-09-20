@@ -53,8 +53,8 @@ export const PulseSkeleton = () => {
         </div>
         <div className="flex items-center gap-3">
           <SkeletonLine width="w-28" className="h-5" />
-          <SkeletonBox className="w-16 h-5 rounded-full" />
-          <SkeletonBox className="w-20 h-5 rounded-full" />
+          <SkeletonBox className="w-16 h-5 rounded-md" />
+          <SkeletonBox className="w-20 h-5 rounded-md" />
         </div>
       </div>
 
@@ -65,7 +65,7 @@ export const PulseSkeleton = () => {
           <div className={cn(CARD, "p-5 flex flex-col gap-4 min-h-[400px]")}>
             <div className="flex items-center justify-between pb-3 border-b border-outline/10">
               <SkeletonLine width="w-24" className="h-5" />
-              <SkeletonBox className="w-8 h-4 rounded-full" />
+              <SkeletonBox className="w-8 h-4 rounded-md" />
             </div>
             {[1, 2, 3, 4].map((i) => (
               <div

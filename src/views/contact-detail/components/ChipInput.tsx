@@ -115,7 +115,7 @@ export const ChipInput = ({
         <span
           key={chip.id}
           className={cn(
-            "max-w-full flex items-center gap-1 text-xs font-bold py-1 pl-2.5 pr-1 rounded-full border",
+            "max-w-full flex items-center gap-1 text-xs font-bold py-1 pl-2.5 pr-1 rounded-md border",
             chip.ai
               ? "bg-ai/10 text-on-ai-wash border-ai/20"
               : "bg-surface-container text-on-surface-variant border-transparent",
@@ -175,7 +175,7 @@ export const ChipInput = ({
           }}
           // A field draws no `::after`, so the 44 px floor on a phone is the
           // field's own height. 16 px text there stops iOS zooming in.
-          className="min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-full bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       ) : (
         <button

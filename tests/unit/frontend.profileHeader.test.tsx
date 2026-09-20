@@ -3,9 +3,9 @@
 // The contact header and the briefing card
 // =============================================================================
 // The header had a palette button, an archive button, a kebab and an unnamed
-// sparkle at the same rank as the name. It now has one primary action, "Log
-// interaction", and a kebab with everything else. Links on the meta line say
-// that they open a new tab. The weather asks a third party for the contact's
+// sparkle at the same rank as the name. It now has no primary button, only a
+// kebab with everything in it: a note starts in the composer under the tabs.
+// Links on the meta line say that they open a new tab. The weather asks a third party for the contact's
 // coordinates, so it must not ask when it is not allowed to.
 //
 // The briefing moved from a modal behind the sparkle to a card at the top of
@@ -122,7 +122,6 @@ function makeProps(
     onUpdate: vi.fn(),
     onDelete: vi.fn(),
     onOpenAvatarPicker: vi.fn(),
-    onLogInteraction: vi.fn(),
     archiveContact: { mutate: vi.fn(), isPending: false },
     unarchiveContact: { mutate: vi.fn(), isPending: false },
     updateContact: { mutate: vi.fn() },
@@ -200,14 +199,14 @@ describe("the contact header", () => {
     expect(heading.textContent).toContain("(they/them)");
   });
 
-  it("has exactly one Log interaction button, and it logs", () => {
-    const props = makeProps();
-    mount(<ProfileHeader {...props} />);
-    const buttons = screen.getAllByRole("button", { name: "Log interaction" });
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0].className).toContain("btn-primary");
-    fireEvent.click(buttons[0]);
-    expect(props.onLogInteraction).toHaveBeenCalledTimes(1);
+  it("has no Log interaction button, and keeps the kebab", () => {
+    mount(<ProfileHeader {...makeProps()} />);
+    expect(
+      screen.queryByRole("button", { name: "Log interaction" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Contact actions" }),
+    ).toBeTruthy();
   });
 
   it("has no top-level colour, archive, avatar or briefing buttons", () => {

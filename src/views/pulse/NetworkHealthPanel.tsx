@@ -75,7 +75,7 @@ export const NetworkHealthPanel = ({ payload, delay }: NetworkHealthProps) => {
               <Link
                 key={g.id}
                 to={`/contact/${g.id}`}
-                className="hit-area flex items-center gap-2 bg-surface-container-lowest pr-4 pl-1.5 py-1.5 rounded-full hover:bg-surface hover:ring-1 hover:ring-primary/20 transition-all group shadow-sm"
+                className="hit-area flex items-center gap-2 bg-surface-container-lowest pr-4 pl-1.5 py-1.5 rounded-lg hover:bg-surface hover:ring-1 hover:ring-primary/20 transition-all group shadow-sm"
               >
                 <Avatar
                   url={g.avatarUrl}

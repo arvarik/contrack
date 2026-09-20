@@ -92,7 +92,7 @@ export const SnoozeMenu = ({
       style={style}
       role="menu"
       aria-label="Snooze item"
-      className="z-50 w-40 overflow-hidden rounded-xl glass-panel bg-surface-container-highest/95 border border-outline/20 py-1 shadow-xl outline-none text-xs animate-in fade-in zoom-in-95 duration-100"
+      className="z-50 w-40 menu-panel menu-enter p-1 outline-none text-xs"
     >
       <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
         Snooze until

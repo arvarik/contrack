@@ -125,10 +125,31 @@
   */
   --color-outline-variant: #c9d3d9;
 
-  /* ── Radii ─────────────────────────────────────────────────────── */
-  --radius-DEFAULT: 1rem;
-  --radius-lg: 1.5rem;
-  --radius-xl: 2rem;
+  /* ── Radii ───────────────────────────────────────────────────────
+   * One tight scale, and every `rounded-*` utility in the app reads it.
+   * The old values (`lg` 24 px, `xl` 32 px) made a 36 px button a pill
+   * and a list row a capsule, and nothing on screen said which surface
+   * was a control and which was a card. The scale below is what a
+   * professional tool draws: a control is 6 px, a card is 8 px, a dialog
+   * is 12 px, and a chip is 4 px. Circles (`rounded-full`) stay for
+   * avatars, dots, rings and switches, and for nothing with a label in it.
+   *
+   *   sm   3 px  keyboard chips, the smallest badges
+   *   md   4 px  chips, badges, filter pills, menu items
+   *   lg   6 px  inner controls: tab items, the "+ Add" button, chips' tap box
+   *   xl   6 px  controls: buttons, inputs, list rows, icon buttons
+   *   2xl  8 px  cards, panels, popovers
+   *   3xl 12 px  dialogs, sheets, the auth card
+   *   4xl 16 px  reserved
+   */
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.1875rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.5rem;
+  --radius-3xl: 0.75rem;
+  --radius-4xl: 1rem;
 }
 
 /* =====================================================================
@@ -406,6 +427,46 @@
     -webkit-backdrop-filter: blur(20px);
   }
 
+  /* ── Menu panel (dropdown menus, context menus, comboboxes) ────────
+   * Solid, not glass. A menu opens over the thing it acts on, and the
+   * sort menu opened over the contact list read as transparent: rows,
+   * avatars and the letter rail showed through the items. A menu has to
+   * be the one opaque thing on screen, so it paints the card surface with
+   * a hairline ring and a soft shadow. The ring is a 1 px line, which the
+   * no-line rule otherwise forbids: a floating panel has no neighbouring
+   * surface to shift against, so the line is what marks its edge in both
+   * palettes.
+   *
+   * `.menu-enter` is the entrance, 120 ms of opacity and a 2 percent scale
+   * from the anchoring edge (`--menu-origin`), and the reduced-motion block
+   * below collapses it. It is a second class because a panel that Motion
+   * already animates (the context menu) must not run a CSS animation on the
+   * same properties at the same time. */
+  .menu-panel {
+    background-color: var(--color-surface-container-lowest);
+    color: var(--color-on-surface);
+    border-radius: var(--radius-2xl);
+    box-shadow:
+      0 0 0 1px
+        color-mix(in srgb, var(--color-outline-variant) 70%, transparent),
+      0 10px 24px -8px rgb(0 0 0 / 0.18),
+      0 2px 6px rgb(0 0 0 / 0.06);
+  }
+  .menu-enter {
+    transform-origin: var(--menu-origin, top);
+    animation: menu-enter 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes menu-enter {
+    from {
+      opacity: 0;
+      transform: scale(0.98) translateY(-2px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
   /* ── Signature Gradient (BRANDING ONLY — sidebar logo text) ─────── */
   /* For buttons use bg-primary text-on-primary instead.               */
   .signature-gradient {
@@ -447,7 +508,7 @@
     gap: 0.5rem;
     min-height: 44px;
     padding: 0.5rem 1.25rem;
-    border-radius: 0.75rem;
+    border-radius: 0.375rem;
     font-size: 0.875rem;
     font-weight: 700;
     line-height: 1.25rem;
@@ -569,6 +630,33 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /**
+   * nice-scrollbar: a thin bar in the palette's own colours.
+   *
+   * Referenced by a dozen scrollers and by DROPDOWN_MENU, but never
+   * defined, so every one of them drew the browser's default bar. The
+   * thumb is the hairline token, so it reads on the page and on a card in
+   * both palettes, and it sits inside the padding rather than on top of
+   * the content.
+   */
+  .nice-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-outline-variant) transparent;
+  }
+  .nice-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .nice-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .nice-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-outline-variant);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 
   /** Fade-in for transient confirmations (e.g. EditableField save ✓) */
@@ -899,7 +987,7 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-group,
 .contact-map .maplibregl-ctrl-group:not(:empty) {
   overflow: hidden;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   background: var(--color-surface-container-lowest);
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
 }
@@ -951,7 +1039,7 @@ html[data-text-scale="large"] {
 }
 .contact-map .maplibregl-popup-content {
   padding: 0.5rem 0.75rem;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   background: var(--color-surface-container-lowest);
   color: var(--color-on-surface);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);

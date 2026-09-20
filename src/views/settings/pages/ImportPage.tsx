@@ -129,7 +129,7 @@ export const ImportPage = () => {
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border",
+                          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold border",
                           badge.tone,
                         )}
                       >

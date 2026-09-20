@@ -102,7 +102,7 @@ export const ContactListsSection = ({
       {contactLists.map((list) => (
         <span
           key={list.id}
-          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-on-primary-wash px-2.5 py-1 rounded-full group/listpill transition-colors hover:bg-primary/20"
+          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-on-primary-wash px-2.5 py-1 rounded-md group/listpill transition-colors hover:bg-primary/20"
         >
           <DetailListIcon icon={list.icon} className="w-3 h-3" />
           {list.name}
@@ -127,7 +127,7 @@ export const ContactListsSection = ({
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="hit-area flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-full hover:bg-primary/10 transition-colors"
+            className="hit-area flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-md hover:bg-primary/10 transition-colors"
             title="Add to a list"
             aria-label="Add to a list"
             aria-expanded={showAdd}
@@ -140,7 +140,7 @@ export const ContactListsSection = ({
                 initial={{ opacity: 0, y: 4, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                className="absolute top-full left-0 mt-1 glass-panel rounded-xl shadow-xl z-50 py-1 min-w-[160px]"
+                className="absolute top-full left-0 mt-1 menu-panel menu-enter z-50 p-1 min-w-[160px]"
               >
                 {availableLists.map((list) => (
                   <button

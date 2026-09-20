@@ -62,7 +62,7 @@ const ContactRow = ({
         </span>
       </div>
       <span
-        className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badgeClasses[badgeVariant]}`}
+        className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${badgeClasses[badgeVariant]}`}
       >
         {badge}
       </span>

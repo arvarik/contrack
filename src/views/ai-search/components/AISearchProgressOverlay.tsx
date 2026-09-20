@@ -87,7 +87,7 @@ export function AISearchProgressOverlay({
         <button
           onClick={() => setIsMinimized(false)}
           className={cn(
-            "hit-area flex items-center gap-2 px-4 py-2.5 rounded-full shadow-xl",
+            "hit-area flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl",
             "bg-surface-container-lowest ring-1 ring-surface-container-highest/30",
             "hover:shadow-2xl transition-all cursor-pointer",
             "text-sm font-semibold",
