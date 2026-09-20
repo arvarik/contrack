@@ -234,4 +234,44 @@ describe("ViewsMenu actions", () => {
     fireEvent.click(saveMenuItem);
     expect(handleOpenSave).toHaveBeenCalled();
   });
+
+  // `role="menu"` promises the arrows. They move between the items, wrap at
+  // the ends, and Escape goes back to the button.
+  it("moves between the items with the arrows and wraps at the ends", () => {
+    render(
+      <ViewsMenu
+        views={mockViews}
+        activeViewId={null}
+        onSelectView={vi.fn()}
+        onOpenSaveModal={vi.fn()}
+        onStartRename={vi.fn()}
+        onDeleteView={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Saved views" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const alpha = screen.getByRole("menuitem", { name: "Alpha View" });
+    const save = screen.getByRole("menuitem", { name: "Save current view…" });
+
+    // From the trigger, ArrowDown starts at the first item.
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(alpha);
+
+    fireEvent.keyDown(alpha, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(save);
+
+    // Past the last item, ArrowDown wraps to the first.
+    fireEvent.keyDown(save, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(alpha);
+
+    // Before the first item, ArrowUp wraps to the last.
+    fireEvent.keyDown(alpha, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(save);
+
+    fireEvent.keyDown(save, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
 });

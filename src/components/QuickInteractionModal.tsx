@@ -33,6 +33,8 @@ import { X, Search, PenLine } from "lucide-react";
 import { useContactNames } from "../api";
 import type { ContactSlim } from "../api/contacts";
 import { fallbackAvatarUrl } from "../lib/avatar";
+import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../lib/styles";
+import { cn } from "../lib/utils";
 import { Modal } from "./ui/Modal";
 import { IconButton } from "./ui/IconButton";
 import { ComposerPlaceholder } from "./ComposerPlaceholder";
@@ -290,24 +292,31 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                 <AnimatePresence>
                   {dropdownOpen && (
                     <motion.div
+                      role="listbox"
+                      aria-label="Matching contacts"
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
                       transition={{ duration: 0.12 }}
-                      className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest rounded-xl shadow-lg z-10 overflow-hidden max-h-[200px] overflow-y-auto"
+                      // Motion draws the entrance, so the panel's own CSS
+                      // entrance is taken off.
+                      className={cn(
+                        MENU_PANEL,
+                        "menu-enter-none absolute top-full left-0 right-0 mt-1 z-10 min-w-0 max-h-[200px]",
+                      )}
                     >
                       {filteredContacts.map((contact, i) => (
                         <button
                           key={contact.id}
                           type="button"
+                          role="option"
+                          aria-selected={i === highlightIndex}
                           onClick={() => selectContact(contact)}
                           onMouseEnter={() => setHighlightIndex(i)}
-                          // py-3 keeps every option 44 px tall on touch.
-                          className={`w-full flex items-center gap-2.5 px-3 py-3 text-left transition-colors ${
-                            i === highlightIndex
-                              ? "bg-primary/10 text-primary"
-                              : "text-on-surface hover:bg-surface-container-low"
-                          }`}
+                          className={cn(
+                            MENU_ITEM,
+                            i === highlightIndex && MENU_ITEM_SELECTED,
+                          )}
                         >
                           <img
                             src={
@@ -317,9 +326,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                             alt=""
                             className="w-7 h-7 rounded-full object-cover"
                           />
-                          <span className="text-sm font-medium truncate">
-                            {contact.name}
-                          </span>
+                          <span className="truncate">{contact.name}</span>
                         </button>
                       ))}
                     </motion.div>

@@ -253,18 +253,64 @@ export const EMPTY_STATE =
 export const EMPTY_HERO =
   "flex flex-col items-center justify-center h-full text-center max-w-md mx-auto";
 
-// ─── Dropdowns ───────────────────────────────────────────────────────────────
+// ─── Menus and dropdowns ─────────────────────────────────────────────────────
+//
+// One look for everything that opens under a control: `ActionMenu`, `Select`,
+// `ContextMenu`, the combobox, the snooze menus, the mention list. The panel
+// is `.menu-panel` (index.css): solid, a hairline ring, a soft shadow, and
+// `.menu-enter` for the 120 ms entrance. The rows below are the only row
+// styles a menu may use, so every menu in the app reads the same.
 
 /**
- * Dropdown container. Solid (`.menu-panel` in index.css), floats above
- * other elements, scrolls past about six rows.
+ * The floating panel. Scrolls past about ten rows, and never runs wider
+ * than the window.
  */
-export const DROPDOWN_MENU =
-  "absolute z-50 mt-1 max-h-72 sm:max-h-56 w-max min-w-full overflow-y-auto menu-panel p-1 outline-none nice-scrollbar";
+export const MENU_PANEL =
+  "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto nice-scrollbar";
 
-/** Dropdown standard item. 44 px tall on a phone, 36 px from `sm`. */
-export const DROPDOWN_ITEM =
-  "min-h-[44px] sm:min-h-0 cursor-pointer rounded-md px-3 py-2 text-sm font-medium text-on-surface hover:bg-surface-container-high transition-colors flex items-center";
+/**
+ * One row. 44 px tall on a phone, 36 px from `sm`. The keyboard ring is
+ * drawn inside the row, because the rows touch and an outside ring would be
+ * cut off by the panel's edge. The tint on `:focus` (not only
+ * `:focus-visible`) is what shows where the arrow keys start after a click
+ * opened the menu, since the browser draws no ring for that.
+ */
+export const MENU_ITEM =
+  "w-full min-h-[44px] sm:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high focus:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
+
+/** A destructive row: the error colour, on its own tint. */
+export const MENU_ITEM_DANGER =
+  "text-error hover:bg-error/10 focus:bg-error/10";
+
+/** A row that is the current choice. */
+export const MENU_ITEM_SELECTED = "bg-primary/10 text-primary";
+
+/** A heading over a group of rows ("Snooze until", a provider's name). */
+export const MENU_HEADING =
+  "px-2.5 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant";
+
+/** The line between two groups of rows. */
+export const MENU_SEPARATOR = "my-1 h-px bg-outline-variant/50";
+
+/** A hint at the end of a row: a shortcut, a count. */
+export const MENU_HINT =
+  "ml-auto pl-3 shrink-0 text-[11px] font-medium text-on-surface-variant tabular-nums";
+
+/** The glyph before a row's label. */
+export const MENU_ICON = "w-4 h-4 shrink-0 text-on-surface-variant";
+
+/**
+ * Dropdown container, positioned under its control and at least as wide.
+ * `Combobox` and the users' row menu use it.
+ */
+export const DROPDOWN_MENU = cn(
+  "absolute z-50 mt-1 w-max outline-none",
+  MENU_PANEL,
+  "min-w-full",
+);
+
+/** Dropdown standard item: the menu row. */
+export const DROPDOWN_ITEM = cn(MENU_ITEM, "cursor-pointer");
 
 // ─── Form Inputs ─────────────────────────────────────────────────────────────
 

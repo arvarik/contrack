@@ -61,6 +61,8 @@ function TestComponent({
   views,
   onSelectView,
   onOpenSaveModal,
+  onStartLasso,
+  onSelectInView,
 }: {
   contacts?: MapContact[];
   map?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -69,6 +71,8 @@ function TestComponent({
   views?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   onSelectView?: (view: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
   onOpenSaveModal?: () => void;
+  onStartLasso?: () => void;
+  onSelectInView?: () => void;
 }) {
   const filter = useMapFilter(contacts);
 
@@ -91,6 +95,8 @@ function TestComponent({
       views={views}
       onSelectView={onSelectView}
       onOpenSaveModal={onOpenSaveModal}
+      onStartLasso={onStartLasso}
+      onSelectInView={onSelectInView}
     />
   );
 }
@@ -349,5 +355,36 @@ describe("MapToolbar and useMapFilter", () => {
     expect(londonItem).toBeTruthy();
     fireEvent.click(londonItem);
     expect(handleSelectView).toHaveBeenCalledWith(mockViews[0]);
+  });
+
+  // The Select menu is an `ActionMenu`: a menu button that opens a named
+  // menu, and choosing an item closes it before the item runs.
+  it("opens the Select menu and runs lasso and all-in-view from its items", () => {
+    const handleLasso = vi.fn();
+    const handleInView = vi.fn();
+
+    renderWithProviders(
+      <TestComponent
+        onStartLasso={handleLasso}
+        onSelectInView={handleInView}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Select contacts" });
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu", { name: "Select contacts" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Box select" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Lasso select" }));
+    expect(handleLasso).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "All in view" }));
+    expect(handleInView).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

@@ -9,10 +9,12 @@
  * - "Fit all" button with bounds fitting and reduced motion support
  * - Mobile filter sheet via Modal below `lg` breakpoint
  * - "0 of N match" empty state with "Clear filters" button
+ * - "Select" menu (box, lasso, all in view) as an `ActionMenu`, so it reads
+ *   and behaves like every other menu in the app
  *
  * @module views/map/MapToolbar
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   Search,
@@ -29,6 +31,10 @@ import { searchPlace } from "../../api/geo";
 import { FacetPills } from "../../components/command-palette/FacetPills";
 import { FacetAutocomplete } from "../../components/command-palette/FacetAutocomplete";
 import { Modal } from "../../components/ui/Modal";
+import {
+  ActionMenu,
+  type ActionMenuItem,
+} from "../../components/ui/ActionMenu";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
 import { ViewsMenu } from "./ViewsMenu";
@@ -112,19 +118,29 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   const [gotoError, setGotoError] = useState<string | null>(null);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
 
+  // `ActionMenu` owns the Select menu. This mirrors its open state so the
+  // trigger keeps its active look while the menu is open.
   const [selectMenuOpen, setSelectMenuOpen] = useState(false);
-  const selectMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!selectMenuOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!selectMenuRef.current?.contains(e.target as Node)) {
-        setSelectMenuOpen(false);
-      }
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [selectMenuOpen]);
+  const selectItems: ActionMenuItem[] = [
+    {
+      id: "box",
+      label: "Box select",
+      hint: "Shift+drag",
+      onSelect: () => toast.info("Hold Shift and drag on the map to select"),
+    },
+    {
+      id: "lasso",
+      label: "Lasso select",
+      hint: "L",
+      onSelect: () => onStartLasso?.(),
+    },
+    {
+      id: "in-view",
+      label: "All in view",
+      onSelect: () => onSelectInView?.(),
+    },
+  ];
 
   // Fit all logic
   const handleFitAll = useCallback(() => {
@@ -403,70 +419,25 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               />
             )}
 
-            <div className="relative shrink-0" ref={selectMenuRef}>
-              <button
-                type="button"
-                onClick={() => setSelectMenuOpen((v) => !v)}
-                aria-label="Select contacts"
-                aria-expanded={selectMenuOpen}
-                className={cn(
-                  "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all border",
-                  selectMenuOpen || isLassoActive
-                    ? "bg-primary text-on-primary border-primary shadow-sm"
-                    : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
-                )}
-              >
-                <span>Select</span>
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-
-              {selectMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute top-full mt-1.5 right-0 z-50 min-w-[190px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant/30 py-1.5 font-body flex flex-col"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setSelectMenuOpen(false);
-                      toast.info("Hold Shift and drag on the map to select");
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
-                  >
-                    <span>Box select</span>
-                    <span className="text-[11px] text-on-surface-variant font-mono">
-                      Shift+drag
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setSelectMenuOpen(false);
-                      onStartLasso?.();
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high flex items-center justify-between cursor-pointer hit-area"
-                  >
-                    <span>Lasso select</span>
-                    <span className="text-[11px] text-on-surface-variant font-mono">
-                      L
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setSelectMenuOpen(false);
-                      onSelectInView?.();
-                    }}
-                    className="w-full px-3 py-2 text-left text-xs font-medium text-on-surface hover:bg-surface-container-high cursor-pointer hit-area"
-                  >
-                    All in view
-                  </button>
-                </div>
+            <ActionMenu
+              label="Select contacts"
+              align="end"
+              className="shrink-0"
+              items={selectItems}
+              onOpenChange={setSelectMenuOpen}
+              triggerContent={
+                <>
+                  <span>Select</span>
+                  <ChevronDown aria-hidden="true" className="w-3.5 h-3.5" />
+                </>
+              }
+              triggerClassName={cn(
+                "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all border",
+                selectMenuOpen || isLassoActive
+                  ? "bg-primary text-on-primary border-primary shadow-sm"
+                  : "bg-surface-container-high/60 hover:bg-surface-container-high text-on-surface border-outline-variant/30",
               )}
-            </div>
+            />
           </div>
         </div>
       )}

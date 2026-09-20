@@ -475,11 +475,11 @@ describe("the quick interaction dialog", () => {
     await waitFor(() => {
       fireEvent.change(picker, { target: { value: "gra" } });
       expect(
-        within(dialog).getByRole("button", { name: "Grace Kelly" }),
+        within(dialog).getByRole("option", { name: "Grace Kelly" }),
       ).toBeTruthy();
     });
     expect(
-      within(dialog).queryByRole("button", { name: "Grace Ghost" }),
+      within(dialog).queryByRole("option", { name: "Grace Ghost" }),
     ).toBeNull();
 
     fireEvent.keyDown(picker, { key: "ArrowDown" });
@@ -509,14 +509,14 @@ describe("the quick interaction dialog", () => {
     fireEvent.change(again, { target: { value: "grace" } });
     await waitFor(() =>
       expect(
-        within(dialog).getByRole("button", { name: "Grace Hopper" }),
+        within(dialog).getByRole("option", { name: "Grace Hopper" }),
       ).toBeTruthy(),
     );
     fireEvent.keyDown(again, { key: "Escape" });
     // The list leaves once its exit animation has run.
     await waitFor(() =>
       expect(
-        within(dialog).queryByRole("button", { name: "Grace Hopper" }),
+        within(dialog).queryByRole("option", { name: "Grace Hopper" }),
       ).toBeNull(),
     );
     expect((again as HTMLInputElement).value).toBe("grace");

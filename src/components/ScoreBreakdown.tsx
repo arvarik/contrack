@@ -216,7 +216,7 @@ export const ScoreBreakdown = ({
             panelBox.placement === "above"
               ? "bottom-full mb-2"
               : "top-full mt-2",
-            "bg-surface-container-lowest rounded-2xl shadow-xl ring-1 ring-black/5",
+            "menu-panel menu-enter",
             "p-4 space-y-3 text-left cursor-default",
             // Scrolls inside rather than spilling out of the window.
             "overflow-y-auto overscroll-contain",

@@ -26,7 +26,6 @@ import {
   Download,
   KeyRound,
   MailPlus,
-  MoreVertical,
   Pencil,
   ShieldCheck,
   Trash2,
@@ -54,13 +53,15 @@ import {
   AccountAvatar,
   RoleBadge,
 } from "../../../components/auth/AccountIdentity";
+import {
+  ActionMenu,
+  type ActionMenuItem,
+} from "../../../components/ui/ActionMenu";
 import { Badge } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
-import { useDismissable } from "../../../hooks/useDismissable";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
-import { DROPDOWN_ITEM, DROPDOWN_MENU } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import {
   AdminButton,
@@ -78,12 +79,6 @@ const COLUMNS =
 // Row menu
 // ---------------------------------------------------------------------------
 
-/**
- * One menu item. 44 px tall on a phone, the touch floor, so the five items
- * need the menu's height cap lifted there.
- */
-const ITEM = "w-full gap-2.5 rounded-lg min-h-[44px] sm:min-h-0";
-
 interface RowActions {
   onEdit: () => void;
   onReset: () => void;
@@ -92,6 +87,11 @@ interface RowActions {
   onDelete: () => void;
 }
 
+/**
+ * The ⋮ menu on a row. `ActionMenu` owns the keys, the outside click and
+ * the focus return to the button, so this only decides which items a row
+ * offers.
+ */
 const RowMenu = ({
   user,
   actions,
@@ -99,134 +99,61 @@ const RowMenu = ({
   user: AdminUser;
   actions: RowActions;
 }) => {
-  const [open, setOpen] = useState(false);
-  const trigger = React.useRef<HTMLButtonElement>(null);
-  // Closing returns focus to the ⋮ button. Escape otherwise unmounts the
-  // focused item and the browser resets to <body>, so the next Tab restarts
-  // from the top of the document. `SidebarIdentity` does the same.
-  const close = React.useCallback(() => {
-    setOpen(false);
-    trigger.current?.focus({ preventScroll: true });
-  }, []);
-  const ref = useDismissable<HTMLDivElement>(open, close);
-  const run = (action: () => void) => () => {
-    setOpen(false);
-    action();
-  };
+  const items: ActionMenuItem[] = [
+    { id: "edit", label: "Edit", icon: Pencil, onSelect: actions.onEdit },
+  ];
+  // Not the local owner, which has no password to reset, and not your own
+  // account. A reset deletes every session of its target, so an admin
+  // resetting themselves is signed out by their own click, with the only
+  // copy of the new password inside the dialog that unmounts with them.
+  // Your own password is changed in Account settings, which keeps the
+  // session it is made on. The server refuses this too.
+  if (!user.isLocalOwner && !user.isSelf) {
+    items.push({
+      id: "reset",
+      label: "Reset password",
+      icon: KeyRound,
+      onSelect: actions.onReset,
+    });
+  }
+  items.push({
+    id: "export",
+    label: "Export data",
+    icon: Download,
+    onSelect: actions.onExport,
+  });
+  if (!user.isSelf) {
+    items.push(
+      user.status === "disabled"
+        ? {
+            id: "enable",
+            label: "Enable",
+            icon: UserRoundCheck,
+            onSelect: actions.onToggleEnabled,
+          }
+        : {
+            id: "disable",
+            label: "Disable",
+            icon: UserRoundX,
+            onSelect: actions.onToggleEnabled,
+          },
+      {
+        id: "delete",
+        label: "Delete",
+        icon: Trash2,
+        onSelect: actions.onDelete,
+        danger: true,
+      },
+    );
+  }
 
   return (
-    <div ref={ref} className="relative sm:justify-self-end">
-      <button
-        ref={trigger}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`Actions for ${user.username}`}
-        className={cn(
-          "inline-flex items-center justify-center min-w-[44px] min-h-[44px]",
-          "rounded-lg transition-colors outline-none",
-          "focus-visible:ring-2 focus-visible:ring-primary",
-          open
-            ? "bg-surface-container-high text-on-surface"
-            : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
-        )}
-      >
-        <MoreVertical className="w-5 h-5" />
-      </button>
-      {open && (
-        <ul
-          role="menu"
-          className={cn(
-            DROPDOWN_MENU,
-            "right-0 w-56 mt-1 p-1 max-h-none sm:max-h-56",
-          )}
-        >
-          <li>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={run(actions.onEdit)}
-              className={cn(DROPDOWN_ITEM, ITEM)}
-            >
-              <Pencil className="w-4 h-4" />
-              Edit
-            </button>
-          </li>
-          {/*
-            Not the local owner, which has no password to reset, and not your
-            own account. A reset deletes every session of its target, so an
-            admin resetting themselves is signed out by their own click, with
-            the only copy of the new password inside the dialog that unmounts
-            with them. Your own password is changed in Account settings, which
-            keeps the session it is made on. The server refuses this too.
-          */}
-          {!user.isLocalOwner && !user.isSelf && (
-            <li>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={run(actions.onReset)}
-                className={cn(DROPDOWN_ITEM, ITEM)}
-              >
-                <KeyRound className="w-4 h-4" />
-                Reset password
-              </button>
-            </li>
-          )}
-          <li>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={run(actions.onExport)}
-              className={cn(DROPDOWN_ITEM, ITEM)}
-            >
-              <Download className="w-4 h-4" />
-              Export data
-            </button>
-          </li>
-          {!user.isSelf && (
-            <>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={run(actions.onToggleEnabled)}
-                  className={cn(DROPDOWN_ITEM, ITEM)}
-                >
-                  {user.status === "disabled" ? (
-                    <>
-                      <UserRoundCheck className="w-4 h-4" />
-                      Enable
-                    </>
-                  ) : (
-                    <>
-                      <UserRoundX className="w-4 h-4" />
-                      Disable
-                    </>
-                  )}
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={run(actions.onDelete)}
-                  className={cn(
-                    DROPDOWN_ITEM,
-                    ITEM,
-                    "text-error hover:bg-error/10 hover:text-error",
-                  )}
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </button>
-              </li>
-            </>
-          )}
-        </ul>
-      )}
-    </div>
+    <ActionMenu
+      label={`Actions for ${user.username}`}
+      items={items}
+      className="sm:justify-self-end"
+      triggerClassName="min-w-[44px] min-h-[44px]"
+    />
   );
 };
 

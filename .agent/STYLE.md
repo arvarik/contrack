@@ -146,19 +146,19 @@ switch tracks. A chip, a badge, a filter pill or a `Segmented` option is
 
 These reusable atomic classes are the blessed patterns. Use them instead of ad-hoc utilities.
 
-| Class                | Pattern                                                                                 | Usage                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, the Command Palette, floating nav. Not menus                      |
-| `menu-panel`         | Solid card surface, hairline ring, soft shadow, 120 ms entrance                         | Dropdown menus, context menus, comboboxes (`ActionMenu`, `DROPDOWN_MENU`) |
-| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (the tile behind the glyph). ⚠️ NEVER for buttons/CTAs  |
-| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                   |
-| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                            |
-| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                               |
-| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                                 |
-| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                          |
-| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                       |
-| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                     |
-| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                              |
+| Class                | Pattern                                                                                 | Usage                                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, the Command Palette, floating nav. Not menus                                                                                 |
+| `menu-panel`         | Solid card surface, hairline ring, soft shadow                                          | Every list that opens under a control. Add `menu-enter` for the 120 ms entrance, or `menu-enter-none` when Motion animates the panel |
+| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (the tile behind the glyph). ⚠️ NEVER for buttons/CTAs                                                             |
+| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                                                                              |
+| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                                                                                       |
+| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                                                                                          |
+| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                                                                                            |
+| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                                                                                     |
+| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                                                                                  |
+| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                                                                                |
+| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                                                                                         |
 
 ### Buttons
 
@@ -173,6 +173,27 @@ These reusable atomic classes are the blessed patterns. Use them instead of ad-h
   avatars, dots, rings and switch tracks. `tests/unit/styles.floor.test.ts`
   fails on a class string with a solid `bg-primary`, `rounded-full` and
   `px-2` or more outside its allow-list.
+
+### Menus and dropdowns
+
+One look, three components, no native `<select>`:
+
+- `ActionMenu` (`src/components/ui/ActionMenu.tsx`): a button that opens a
+  list of actions. `role="menu"`, arrow keys, Home and End, a letter, Escape
+  back to the button. Items take `icon`, `checked`, `hint`, `danger`, `to`.
+- `Select` (`src/components/ui/Select.tsx`): a button that opens a list of
+  values. `role="combobox"` over a `role="listbox"`, the same keys. Three
+  forms: `field` (a form box), `chip` (the uppercase label on a value, via
+  `CustomSelect`) and `ghost` (a toolbar trigger). Options take `icon`,
+  `description` and `group`.
+- `ContextMenu`: the right-click menu, positioned by the pointer.
+
+A list that none of these can draw (the saved views menu has rename and
+delete buttons in each row, the snooze menus are portals positioned from a
+trigger rect) composes the same constants from `src/lib/styles.ts`:
+`MENU_PANEL`, `MENU_ITEM`, `MENU_ITEM_DANGER`, `MENU_ITEM_SELECTED`,
+`MENU_HEADING`, `MENU_SEPARATOR`, `MENU_HINT`, `MENU_ICON`. Nothing that opens
+under a control uses `glass-panel`, a `border`, or its own row classes.
 
 ## 3. Component Patterns
 

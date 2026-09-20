@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { ListPlus, X } from "lucide-react";
+import React from "react";
+import { ListPlus, X, type LucideIcon } from "lucide-react";
 import {
   Star,
   Heart,
@@ -26,11 +25,12 @@ import {
   Sun,
 } from "lucide-react";
 import { useLists, useAddToList, useRemoveFromList } from "../../../api";
+import {
+  ActionMenu,
+  type ActionMenuItem,
+} from "../../../components/ui/ActionMenu";
 
-const LIST_ICON_MAP: Record<
-  string,
-  React.ComponentType<{ className?: string }>
-> = {
+const LIST_ICON_MAP: Record<string, LucideIcon> = {
   star: Star,
   heart: Heart,
   crown: Crown,
@@ -76,26 +76,18 @@ export const ContactListsSection = ({
   const { data: allLists = [] } = useLists();
   const addToList = useAddToList();
   const removeFromList = useRemoveFromList();
-  const [showAdd, setShowAdd] = useState(false);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showAdd) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setShowAdd(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showAdd]);
 
   const memberOfIds = new Set(contactLists.map((l) => l.id));
   const availableLists = allLists.filter((l) => !memberOfIds.has(l.id));
+
+  // One row per list the contact is not on yet. `ActionMenu` draws the
+  // panel, closes it, and returns focus to the button before the mutation.
+  const addItems: ActionMenuItem[] = availableLists.map((list) => ({
+    id: list.id,
+    label: list.name,
+    icon: LIST_ICON_MAP[list.icon] || Star,
+    onSelect: () => addToList.mutate({ listId: list.id, contactId }),
+  }));
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -122,46 +114,17 @@ export const ContactListsSection = ({
         </span>
       ))}
 
-      {/* Add to list dropdown */}
+      {/* Add to list menu */}
       {availableLists.length > 0 && (
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="hit-area flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-md hover:bg-primary/10 transition-colors"
-            title="Add to a list"
-            aria-label="Add to a list"
-            aria-expanded={showAdd}
-          >
-            <ListPlus className="w-3.5 h-3.5" />
-          </button>
-          <AnimatePresence>
-            {showAdd && (
-              <motion.div
-                initial={{ opacity: 0, y: 4, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                className="absolute top-full left-0 mt-1 menu-panel menu-enter z-50 p-1 min-w-[160px]"
-              >
-                {availableLists.map((list) => (
-                  <button
-                    key={list.id}
-                    onClick={() => {
-                      addToList.mutate({ listId: list.id, contactId });
-                      setShowAdd(false);
-                    }}
-                    className="flex items-center gap-2 w-full min-h-[44px] sm:min-h-0 px-3 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors text-left"
-                  >
-                    <DetailListIcon
-                      icon={list.icon}
-                      className="w-3.5 h-3.5 shrink-0"
-                    />
-                    <span className="truncate">{list.name}</span>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <ActionMenu
+          label="Add to a list"
+          title="Add to a list"
+          icon={ListPlus}
+          iconClassName="w-3.5 h-3.5"
+          align="start"
+          items={addItems}
+          triggerClassName="hit-area flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-md hover:bg-primary/10 transition-colors"
+        />
       )}
     </div>
   );

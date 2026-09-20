@@ -43,6 +43,16 @@ import { Link } from "react-router-dom";
 import { MoreVertical, Check, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useClickOutside } from "../../hooks/useClickOutside";
+import { usePanelPlacement } from "../../hooks/usePanelPlacement";
+import {
+  MENU_HEADING,
+  MENU_HINT,
+  MENU_ICON,
+  MENU_ITEM,
+  MENU_ITEM_DANGER,
+  MENU_PANEL,
+  MENU_SEPARATOR,
+} from "../../lib/styles";
 
 export interface ActionMenuItem {
   /** Stable key for the item. */
@@ -60,6 +70,8 @@ export interface ActionMenuItem {
   /** Destructive: drawn in the error colour on its own surface tone. */
   danger?: boolean;
   disabled?: boolean;
+  /** A hint at the end of the row: a shortcut ("L"), a count. */
+  hint?: string;
 }
 
 export interface ActionMenuProps {
@@ -84,17 +96,9 @@ export interface ActionMenuProps {
   triggerContent?: React.ReactNode;
   /** A tooltip for a pointer, for a trigger that shows a glyph and no text. */
   title?: string;
+  /** A heading over the rows, for example "Snooze until". */
+  heading?: string;
 }
-
-/**
- * Row height: 44 px on a phone, where a thumb taps it, 36 px from `sm`.
- *
- * The keyboard ring is drawn inside the row. The app's ring sits 2 px
- * outside a control, and here the rows touch and the panel clips its edges,
- * so an outside ring would be cut off.
- */
-const ITEM =
-  "w-full min-h-[44px] sm:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
 
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
   if (!ref) return;
@@ -114,21 +118,21 @@ export const ActionMenu = ({
   className,
   triggerContent,
   title,
+  heading,
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
   /** Which item takes focus when the menu opens: the first or the last. */
   const [openAt, setOpenAt] = useState<"first" | "last">("first");
-  /** True when the menu opens upwards because the space below is too small. */
-  const [dropUp, setDropUp] = useState(false);
-  /**
-   * The edge the menu lines up with once measured. Starts as `align`, and
-   * flips when that edge would push the menu past the side of the window.
-   */
-  const [edge, setEdge] = useState<"start" | "end">(align);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const placement = usePanelPlacement({
+    open,
+    align,
+    trigger,
+    panel: menu,
+  });
 
   const setTrigger = useCallback(
     (el: HTMLButtonElement | null) => {
@@ -157,33 +161,10 @@ export const ActionMenu = ({
       ) ?? [],
     );
 
-  // Opening moves focus into the menu. Before the browser paints, the menu
-  // is measured: when it would run past the bottom of the window and there is
-  // room above the trigger, it opens upwards instead.
+  // Opening moves focus into the menu. `usePanelPlacement` has already
+  // measured it in its own layout effect, declared above this one.
   useLayoutEffect(() => {
-    if (!open) {
-      setDropUp(false);
-      setEdge(align);
-      return;
-    }
-    const box = menu.current?.getBoundingClientRect();
-    const anchor = trigger.current?.getBoundingClientRect();
-    if (box && anchor) {
-      if (box.bottom > window.innerHeight) {
-        setDropUp(anchor.top > box.height + 8);
-      }
-      // Off the left of the window: line up with the trigger's left edge
-      // instead. Off the right: with its right edge. Measured once, on
-      // open, from wherever `align` first put it.
-      if (box.left < 8 && anchor.left + box.width <= window.innerWidth - 8) {
-        setEdge("start");
-      } else if (
-        box.right > window.innerWidth - 8 &&
-        anchor.right - box.width >= 8
-      ) {
-        setEdge("end");
-      }
-    }
+    if (!open) return;
     const list = enabledItems();
     const target = openAt === "last" ? list[list.length - 1] : list[0];
     (target ?? menu.current)?.focus({ preventScroll: true });
@@ -277,13 +258,15 @@ export const ActionMenu = ({
         {ItemIcon && (
           <ItemIcon
             aria-hidden="true"
-            className={cn(
-              "w-4 h-4 shrink-0",
-              item.danger ? "text-error" : "text-on-surface-variant",
-            )}
+            className={cn(MENU_ICON, item.danger && "text-error")}
           />
         )}
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {item.hint && !isChecked && (
+          <span aria-hidden="true" className={MENU_HINT}>
+            {item.hint}
+          </span>
+        )}
         {isChecked && (
           <Check
             aria-hidden="true"
@@ -292,15 +275,9 @@ export const ActionMenu = ({
         )}
       </>
     );
-    // The item with focus is tinted on any focus, not only a keyboard one. A
-    // menu opened by a click puts focus on its first item, and the browser
-    // draws no focus ring after a click, so the tint is what shows where the
-    // arrow keys start.
     const classes = cn(
-      ITEM,
-      item.danger
-        ? "text-error hover:bg-error/10 focus:bg-error/10"
-        : "text-on-surface hover:bg-surface-container-high focus:bg-surface-container-high",
+      MENU_ITEM,
+      item.danger && MENU_ITEM_DANGER,
       item.disabled && "opacity-50 cursor-not-allowed",
     );
     if (item.to && !item.disabled) {
@@ -369,30 +346,22 @@ export const ActionMenu = ({
           // container takes it only if every item is disabled.
           tabIndex={-1}
           onKeyDown={onMenuKeyDown}
-          style={
-            {
-              "--menu-origin": `${dropUp ? "bottom" : "top"} ${
-                edge === "end" ? "right" : "left"
-              }`,
-            } as React.CSSProperties
-          }
-          className={cn(
-            "absolute z-50 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto nice-scrollbar p-1 menu-panel menu-enter",
-            edge === "end" ? "right-0" : "left-0",
-            dropUp ? "bottom-full mb-1" : "top-full mt-1",
-          )}
+          style={placement.style}
+          className={cn("absolute z-50", MENU_PANEL, placement.className)}
         >
+          {heading && (
+            <div role="presentation" className={MENU_HEADING}>
+              {heading}
+            </div>
+          )}
           {regular.map(renderItem)}
           {danger.length > 0 && (
             // A hairline before the destructive items, so a thumb aimed at
             // the last safe item has a gap to miss into.
-            <div
-              role="none"
-              className={cn(
-                regular.length > 0 &&
-                  "mt-1 pt-1 border-t border-outline-variant/50",
+            <div role="none">
+              {regular.length > 0 && (
+                <div role="none" className={MENU_SEPARATOR} />
               )}
-            >
               {danger.map(renderItem)}
             </div>
           )}

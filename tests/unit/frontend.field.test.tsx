@@ -228,10 +228,12 @@ describe("DetailsCard", () => {
 
   it("gives each row a named label chip and a named kebab", () => {
     drawCard();
+    // A Select, not a native select: a button that opens a listbox.
     const chip = screen.getByRole("combobox", {
       name: "Label for ada@example.com",
     });
-    expect(chip.tagName).toBe("SELECT");
+    expect(chip.tagName).toBe("BUTTON");
+    expect(chip.getAttribute("aria-haspopup")).toBe("listbox");
     const kebab = screen.getByRole("button", {
       name: "Actions for ada@example.com",
     });
@@ -501,10 +503,16 @@ describe("MultiValueField", () => {
 
   it("saves a new label from the chip", () => {
     const { onSave } = drawEmails();
-    fireEvent.change(
+    fireEvent.click(
       screen.getByRole("combobox", { name: "Label for a@x.com" }),
-      { target: { value: "other" } },
     );
+    const list = screen.getByRole("listbox", { name: "Label for a@x.com" });
+    expect(
+      within(list)
+        .getByRole("option", { name: "work" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    fireEvent.click(within(list).getByRole("option", { name: "other" }));
     expect(onSave).toHaveBeenCalledWith([
       { value: "a@x.com", label: "other" },
       { value: "b@x.com", label: "personal" },

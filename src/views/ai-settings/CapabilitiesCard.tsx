@@ -46,6 +46,7 @@ import {
 } from "../../api/aiSettings";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { Select, type SelectOption } from "../../components/ui/Select";
 
 // ---------------------------------------------------------------------------
 // Capability metadata
@@ -151,13 +152,13 @@ const GROUPS: CapabilityGroup[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Encode an assignment as a `<select>` value. */
+/** Encode an assignment as a `Select` value. */
 const toSelectValue = (assignment: CapabilityAssignment): string =>
   assignment.mode === "pinned" && assignment.providerId && assignment.model
     ? `${assignment.providerId}::${assignment.model}`
     : assignment.mode;
 
-/** Decode a `<select>` value back into an assignment. */
+/** Decode a `Select` value back into an assignment. */
 const fromSelectValue = (value: string): CapabilityAssignment =>
   value.includes("::")
     ? {
@@ -198,6 +199,26 @@ const CapabilityRow = ({
 
   const resolved = state?.resolved;
   const modelCount = groups.reduce((n, g) => n + g.models.length, 0);
+
+  // The concrete model lives on the status line below, not in here —
+  // repeating it in both made the row read twice.
+  const options: SelectOption[] = [
+    ...(meta.key !== "embeddings"
+      ? [{ value: "auto", label: "Automatic — pick the best available" }]
+      : []),
+    ...(meta.specialMode
+      ? [{ value: meta.specialMode.mode, label: meta.specialMode.label }]
+      : []),
+    ...groups.flatMap((group) =>
+      group.models.map((model) => ({
+        value: `${group.providerId}::${model.id}`,
+        label:
+          model.label +
+          (model.capabilityConfidence === "guessed" ? " (?)" : ""),
+        group: group.providerLabel,
+      })),
+    ),
+  ];
 
   const handleSave = () => {
     if (!isDirty) return;
@@ -298,39 +319,17 @@ const CapabilityRow = ({
 
       {/* Control + actions */}
       <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
-        <label htmlFor={`capability-${meta.key}`} className="flex-1 min-w-0">
-          <span className="sr-only">{meta.label} model</span>
-          <select
+        <div className="flex-1 min-w-0">
+          <Select
             id={`capability-${meta.key}`}
+            label={`${meta.label} model`}
+            variant="field"
             value={value}
-            onChange={(e) => setDraft(e.target.value)}
-            className="w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm outline-none focus:ring-2 focus:ring-primary/40"
-          >
-            {/* The concrete model lives on the status line below, not in
-                here — repeating it in both made the row read twice. */}
-            {meta.key !== "embeddings" && (
-              <option value="auto">Automatic — pick the best available</option>
-            )}
-            {meta.specialMode && (
-              <option value={meta.specialMode.mode}>
-                {meta.specialMode.label}
-              </option>
-            )}
-            {groups.map((group) => (
-              <optgroup key={group.providerId} label={group.providerLabel}>
-                {group.models.map((model) => (
-                  <option
-                    key={`${group.providerId}::${model.id}`}
-                    value={`${group.providerId}::${model.id}`}
-                  >
-                    {model.label}
-                    {model.capabilityConfidence === "guessed" ? " (?)" : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </label>
+            onChange={(next) => setDraft(next)}
+            options={options}
+            placeholder={modelsLoading ? "Loading models…" : "Choose a model"}
+          />
+        </div>
 
         {isDirty && (
           <div className="flex items-center gap-2 shrink-0">

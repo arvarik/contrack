@@ -10,6 +10,13 @@ import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useSlimContactsForSearch } from "../../api/contacts";
 import type { FacetField, FacetFilter } from "../../hooks/useQueryTokenizer";
+import {
+  MENU_HEADING,
+  MENU_ITEM,
+  MENU_ITEM_SELECTED,
+  MENU_PANEL,
+} from "../../lib/styles";
+import { cn } from "../../lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,30 +216,26 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
         transition={{ duration: 0.1 }}
-        className="mx-4 mb-1 rounded-xl bg-surface-container-lowest shadow-lg ring-1 ring-black/5 overflow-hidden"
+        // Motion draws the entrance, so the panel's own CSS entrance is
+        // taken off.
+        className={cn(MENU_PANEL, "menu-enter-none mx-4 mb-1 min-w-0")}
       >
-        <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant bg-surface-container-low/50">
-          {field} values
-        </div>
-        <div className="py-1 max-h-[200px] overflow-y-auto">
+        <div className={MENU_HEADING}>{field} values</div>
+        <div className="max-h-[200px] overflow-y-auto">
           {suggestions.map((s, i) => (
             <button
               key={`${s.filter.field}-${s.filter.value}-${i}`}
               onClick={() => onSelect(s.filter)}
               onMouseDown={(e) => e.preventDefault()}
-              className={`
-                w-full min-h-[44px] sm:min-h-0 text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2
-                ${
-                  i === selectedIndex
-                    ? "bg-primary/10 text-primary"
-                    : "text-on-surface hover:bg-surface-container-low"
-                }
-              `}
+              className={cn(
+                MENU_ITEM,
+                i === selectedIndex && MENU_ITEM_SELECTED,
+              )}
             >
               <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant w-16 shrink-0">
                 {field}:
               </span>
-              <span className="truncate font-medium">{s.label}</span>
+              <span className="truncate">{s.label}</span>
             </button>
           ))}
         </div>
