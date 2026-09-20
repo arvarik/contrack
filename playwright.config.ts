@@ -58,6 +58,16 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: /.*phone-pages\.spec\.ts$/,
+    },
+    {
+      name: "phone",
+      use: {
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+      testMatch: /.*phone-pages\.spec\.ts$/,
     },
   ],
 });

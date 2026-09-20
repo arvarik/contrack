@@ -12,7 +12,7 @@ import {
   RotateCw,
   SearchX,
 } from "lucide-react";
-import { useSemanticSearch } from "../api";
+import { useSemanticSearch, useSearchCoverage } from "../api";
 import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
@@ -99,6 +99,7 @@ export const SearchView = () => {
     setPhase: setLastAISearchPhase,
   });
   const { submittedQuery, isPending, mutate, reset } = semanticSearch;
+  const { data: coverage } = useSearchCoverage();
 
   const [floatingContactId, setFloatingContactId] = useState<string | null>(
     null,
@@ -309,7 +310,7 @@ export const SearchView = () => {
     isError: semanticSearch.isError,
     hasSearched,
     count: results.length,
-    query: answeredQuery || submittedQuery,
+    query: answeredQuery || submittedQuery || "",
     fallback: isFallback,
   });
 
@@ -437,7 +438,20 @@ export const SearchView = () => {
                       title="Ask anything"
                       body="Semantic search reads names, roles, notes and interests."
                       className="py-4"
-                    />
+                    >
+                      {mode === "people" &&
+                        coverage &&
+                        coverage.coverage < 100 && (
+                          <div className="w-full max-w-md pt-2 text-left space-y-2">
+                            <p className="text-xs text-on-surface-variant">
+                              Indexing turns contacts into searchable concepts
+                              so you can find people by meaning rather than
+                              exact words.
+                            </p>
+                            <SearchCoverageBar />
+                          </div>
+                        )}
+                    </EmptyState>
                     <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                       Try asking...
                     </p>
