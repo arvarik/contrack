@@ -1,14 +1,16 @@
-import { ChevronDown } from "lucide-react";
-import { cn } from "../../lib/utils";
-
 /**
- * Native selection supports touch, keyboard arrows, and Escape inside dialogs.
+ * CustomSelect: the label chip on a value ("WORK", "MOBILE", "HOME").
  *
- * `className` styles the `<select>` itself, the element that takes the tap.
- * Below `sm` that element is at least 44 px tall. `hit-area` cannot do this
- * job here: a native select draws no `::after`, so the box would never take
- * a tap. A caller can still pass its own `min-h-*` to override the floor.
+ * A `Select` in its chip form, for a caller that has a list of strings and
+ * no need for icons or groups. It used to wrap a native `<select>`, which
+ * drew the operating system's popup beside rows that open a `.menu-panel`.
+ * Now the chip opens the same panel as every other menu on the page.
+ *
+ * `hit-area` on the chip gives it a 44 px tap box on a phone around its 32 px
+ * body, so the row keeps its height.
  */
+import { Select } from "./Select";
+
 export function CustomSelect({
   value,
   onChange,
@@ -23,27 +25,13 @@ export function CustomSelect({
   ariaLabel?: string;
 }) {
   return (
-    <span className="relative inline-flex items-center">
-      <select
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(
-          "min-h-[44px] sm:min-h-0",
-          className,
-          "appearance-none cursor-pointer pr-5",
-        )}
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        aria-hidden
-        className="absolute right-1 w-2.5 h-2.5 opacity-60 pointer-events-none"
-      />
-    </span>
+    <Select
+      variant="chip"
+      value={value}
+      onChange={onChange}
+      options={options.map((option) => ({ value: option, label: option }))}
+      label={ariaLabel}
+      className={className}
+    />
   );
 }

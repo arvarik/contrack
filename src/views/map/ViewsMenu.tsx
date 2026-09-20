@@ -9,6 +9,14 @@ import {
 } from "lucide-react";
 import type { MapView } from "../../api/mapViews";
 import { cn } from "../../lib/utils";
+import {
+  MENU_HEADING,
+  MENU_ICON,
+  MENU_ITEM,
+  MENU_ITEM_SELECTED,
+  MENU_PANEL,
+  MENU_SEPARATOR,
+} from "../../lib/styles";
 
 export interface ViewsMenuProps {
   views: MapView[];
@@ -21,6 +29,13 @@ export interface ViewsMenuProps {
   isMobile?: boolean;
 }
 
+/**
+ * The saved-views menu. It is not an `ActionMenu` because each row holds
+ * three buttons (select, rename, delete), and an `ActionMenu` row is one
+ * item. It paints the same panel and rows, and it keeps the promise
+ * `role="menu"` makes: the arrows move between the items and wrap, and
+ * Escape goes back to the button.
+ */
 export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   views,
   activeViewId,
@@ -47,7 +62,28 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
         e.stopPropagation();
         setIsOpen(false);
         triggerRef.current?.focus();
+        return;
       }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      // The arrows move between the items and wrap at the ends. From the
+      // trigger (or a rename or delete button), ArrowDown starts at the
+      // first item and ArrowUp at the last.
+      const items = Array.from(
+        containerRef.current?.querySelectorAll<HTMLElement>(
+          '[role="menuitem"]',
+        ) ?? [],
+      );
+      if (items.length === 0) return;
+      e.preventDefault();
+      const index = items.indexOf(document.activeElement as HTMLElement);
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      const next =
+        index === -1
+          ? step === 1
+            ? 0
+            : items.length - 1
+          : (index + step + items.length) % items.length;
+      items[next]?.focus();
     };
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
@@ -87,17 +123,18 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
           role="menu"
           aria-label="Saved views"
           className={cn(
-            "absolute mt-1.5 z-50 min-w-[220px] max-w-[320px] bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant/30 py-1.5 font-body flex flex-col",
+            MENU_PANEL,
+            "absolute mt-1 z-50 min-w-[14rem] max-w-[20rem]",
             isMobile ? "left-0" : "right-0 lg:left-0",
           )}
         >
-          <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/70">
+          <div role="presentation" className={MENU_HEADING}>
             Saved views
           </div>
 
-          <div className="max-h-60 overflow-y-auto nice-scrollbar py-0.5">
+          <div className="max-h-60 overflow-y-auto nice-scrollbar">
             {views.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-on-surface-variant/70 italic">
+              <div className="px-2.5 py-2 text-sm text-on-surface-variant">
                 No saved views yet
               </div>
             ) : (
@@ -107,8 +144,8 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                   <div
                     key={view.id}
                     className={cn(
-                      "group flex items-center justify-between px-2 py-1.5 hover:bg-surface-container-high transition-colors",
-                      isActive && "bg-surface-container-high/70",
+                      "group flex items-center rounded-md",
+                      isActive && MENU_ITEM_SELECTED,
                     )}
                   >
                     <button
@@ -118,26 +155,24 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         onSelectView(view);
                         setIsOpen(false);
                       }}
-                      className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer hit-area pr-2"
+                      className={cn(
+                        MENU_ITEM,
+                        "min-w-0 flex-1",
+                        isActive && "text-primary",
+                      )}
                     >
                       <span className="w-4 flex items-center justify-center shrink-0">
                         {isActive ? (
-                          <Check className="w-3.5 h-3.5 text-primary" />
+                          <Check
+                            aria-hidden="true"
+                            className={cn(MENU_ICON, "text-primary")}
+                          />
                         ) : null}
                       </span>
-                      <span
-                        className={cn(
-                          "text-xs truncate",
-                          isActive
-                            ? "font-bold text-primary"
-                            : "font-medium text-on-surface",
-                        )}
-                      >
-                        {view.name}
-                      </span>
+                      <span className="truncate">{view.name}</span>
                     </button>
 
-                    <div className="flex items-center gap-0.5 opacity-80 group-hover:opacity-100 shrink-0">
+                    <div className="flex items-center gap-0.5 pr-1 opacity-80 group-hover:opacity-100 shrink-0">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -171,20 +206,22 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
             )}
           </div>
 
-          <div className="border-t border-outline-variant/20 mt-1 pt-1">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setIsOpen(false);
-                onOpenSaveModal();
-              }}
-              className="w-full px-3 py-2 text-left text-xs font-semibold text-primary hover:bg-surface-container-high flex items-center gap-2 cursor-pointer hit-area"
-            >
-              <BookmarkPlus className="w-3.5 h-3.5" />
-              <span>Save current view…</span>
-            </button>
-          </div>
+          <div role="none" className={MENU_SEPARATOR} />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsOpen(false);
+              onOpenSaveModal();
+            }}
+            className={cn(MENU_ITEM, "text-primary")}
+          >
+            <BookmarkPlus
+              aria-hidden="true"
+              className={cn(MENU_ICON, "text-primary")}
+            />
+            <span>Save current view…</span>
+          </button>
         </div>
       )}
     </div>

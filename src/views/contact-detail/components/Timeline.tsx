@@ -403,7 +403,7 @@ const TimelineEntry = React.memo(
             {item.isViaName && (
               <button
                 type="button"
-                className="hit-area mt-1 mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
+                className="hit-area mt-1 mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
                 onClick={() => navigate(`/contact/${item.isViaId}`)}
                 title="Navigate to Original Interaction"
               >
@@ -443,7 +443,7 @@ const TimelineEntry = React.memo(
                         })
                       }
                       title={`Promote ${mention.name} to Contact`}
-                      className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
+                      className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
                     >
                       <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
                         {mention.name.charAt(0)}
@@ -456,7 +456,7 @@ const TimelineEntry = React.memo(
                     <Link
                       key={idx}
                       to={`/contact/${mention.contactId}`}
-                      className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                      className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
                     >
                       <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-on-primary-wash">
                         {mention.name.charAt(0)}
@@ -512,7 +512,7 @@ const TimelineEntry = React.memo(
                   <div
                     key={action.id}
                     className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all text-xs font-semibold select-none",
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-xs font-semibold select-none",
                       action.completedAt
                         ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60"
                         : "bg-surface-container-lowest text-on-surface border-surface-container-high shadow-sm",

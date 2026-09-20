@@ -196,7 +196,7 @@ export const Sparkline = ({ weekTotals, streak, thisWeek }: SparklineProps) => {
             return (
               <span
                 key={type}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface-container text-on-surface-variant"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-surface-container text-on-surface-variant"
               >
                 <Icon className="w-3 h-3 text-primary opacity-85" />
                 <span>

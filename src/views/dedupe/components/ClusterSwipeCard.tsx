@@ -215,11 +215,11 @@ export const ClusterSwipeCard = ({
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-full tabular-nums">
+              <span className="text-xs font-bold text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-md tabular-nums">
                 {cluster.size} contacts
               </span>
               {cluster.hasWeakLink && (
-                <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-full">
+                <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-md">
                   Weak link
                 </span>
               )}

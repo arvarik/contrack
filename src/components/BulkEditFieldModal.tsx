@@ -1,19 +1,20 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Pencil, ChevronDown, Check } from "lucide-react";
+import React, { useState } from "react";
+import { Pencil } from "lucide-react";
 import { Modal } from "./ui/Modal";
+import { Select } from "./ui/Select";
 import { cn } from "../lib/utils";
 import { LABEL } from "../lib/styles";
 
 // ---------------------------------------------------------------------------
 // BulkEditFieldModal — pick a field + value to apply to many selected contacts.
 //
-// Phase-3 fixes:
-//   1. The field-selector dropdown previously used a hard-coded dark palette
-//      (`bg-[#242424] text-gray-200`) that clashed with the light design
-//      system. Replaced with design-token surfaces and click-outside dismissal.
-//   2. Every interactive control now meets the 44-px touch-target minimum
+//   1. The field picker is the shared `Select`, so it opens the same solid
+//      panel as every other dropdown in the app and carries the keys, the
+//      outside click and the focus return once. It used to be a hand-written
+//      listbox with its own click-outside listener.
+//   2. Every interactive control meets the 44-px touch-target minimum
 //      (Apple HIG / WCAG 2.5.5 AAA), preventing tap-target misses on phones.
-//   3. The input now uses `text-base` on mobile to suppress iOS Safari's
+//   3. The input uses `text-base` on mobile to suppress iOS Safari's
 //      auto-zoom-on-focus behaviour that would jolt the modal layout.
 // ---------------------------------------------------------------------------
 
@@ -74,21 +75,13 @@ export const BulkEditFieldModal = ({
 }: Props) => {
   const [selectedField, setSelectedField] = useState<Field>(EDITABLE_FIELDS[0]);
   const [value, setValue] = useState("");
-  const [fieldDropdownOpen, setFieldDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Click-outside to close the dropdown. Without this the dropdown stayed
-  // visible while the user clicked into the value input — confusing UX.
-  useEffect(() => {
-    if (!fieldDropdownOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!dropdownRef.current?.contains(e.target as Node)) {
-        setFieldDropdownOpen(false);
-      }
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [fieldDropdownOpen]);
+  const chooseField = (key: string) => {
+    const field = EDITABLE_FIELDS.find((f) => f.key === key);
+    if (!field) return;
+    setSelectedField(field);
+    setValue("");
+  };
 
   const handleApply = () => {
     if (!value.trim()) return;
@@ -100,7 +93,6 @@ export const BulkEditFieldModal = ({
   const handleClose = () => {
     setValue("");
     setSelectedField(EDITABLE_FIELDS[0]);
-    setFieldDropdownOpen(false);
     onClose();
   };
 
@@ -115,65 +107,20 @@ export const BulkEditFieldModal = ({
 
         {/* Field selector */}
         <div>
+          {/* The visible caption. The Select carries its own name. */}
           <span id="bulk-edit-field-label" className={cn(LABEL, "block mb-2")}>
             Field to Edit
           </span>
-          <div className="relative" ref={dropdownRef}>
-            <button
-              type="button"
-              onClick={() => setFieldDropdownOpen((v) => !v)}
-              aria-haspopup="listbox"
-              aria-expanded={fieldDropdownOpen}
-              aria-labelledby="bulk-edit-field-label"
-              // min-h-[44px] keeps this control touch-safe.
-              className="w-full min-h-[44px] flex items-center justify-between px-4 py-2.5 rounded-xl bg-surface-container-low text-sm font-semibold text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest transition-colors"
-            >
-              <span>{selectedField.label}</span>
-              <ChevronDown
-                className={cn(
-                  "w-4 h-4 text-on-surface-variant transition-transform",
-                  fieldDropdownOpen && "rotate-180",
-                )}
-              />
-            </button>
-
-            {fieldDropdownOpen && (
-              <div
-                role="listbox"
-                // Design-system surface tokens (was hard-coded `bg-[#242424]`).
-                // glass-panel + ring keeps the dropdown legible on top of the
-                // modal's translucent backdrop.
-                className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl bg-surface-container-lowest shadow-xl ring-1 ring-black/5 py-1 overflow-hidden"
-              >
-                {EDITABLE_FIELDS.map((field) => {
-                  const isActive = field.key === selectedField.key;
-                  return (
-                    <button
-                      key={field.key}
-                      type="button"
-                      role="option"
-                      aria-selected={isActive}
-                      onClick={() => {
-                        setSelectedField(field);
-                        setValue("");
-                        setFieldDropdownOpen(false);
-                      }}
-                      // min-h-[44px] for touch; px-4 keeps the icon and label aligned.
-                      className={cn(
-                        "min-h-[44px] flex items-center justify-between w-full px-4 py-2.5 text-sm text-left transition-colors",
-                        isActive
-                          ? "text-primary font-bold bg-primary/10"
-                          : "text-on-surface hover:bg-surface-container-low",
-                      )}
-                    >
-                      <span>{field.label}</span>
-                      {isActive && <Check className="w-4 h-4 text-primary" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <Select
+            variant="field"
+            label="Field to edit"
+            value={selectedField.key}
+            onChange={chooseField}
+            options={EDITABLE_FIELDS.map((field) => ({
+              value: field.key,
+              label: field.label,
+            }))}
+          />
         </div>
 
         {/* Value input */}

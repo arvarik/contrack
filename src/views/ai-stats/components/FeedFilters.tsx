@@ -50,7 +50,7 @@ export const FeedFilters = ({
       <button
         onClick={() => onSortChange(sort === "newest" ? "oldest" : "newest")}
         className={cn(
-          "hit-area ml-auto flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-bold",
+          "hit-area ml-auto flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-bold",
           "bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors",
         )}
       >

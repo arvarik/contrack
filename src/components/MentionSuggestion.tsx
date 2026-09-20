@@ -14,6 +14,8 @@ import React, {
 import { ScoreRingAvatar } from "./ScoreRingAvatar";
 import { contactScore, describeScore } from "../../shared/scoreBand";
 import type { ContactSlim } from "../api/contacts";
+import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../lib/styles";
+import { cn } from "../lib/utils";
 
 interface MentionListProps {
   items: ContactSlim[];
@@ -54,14 +56,16 @@ export const MentionList = forwardRef<
   }));
 
   return (
-    <div className="bg-surface-container-lowest border border-surface-container-highest shadow-xl rounded-xl z-50 overflow-hidden flex flex-col py-1 w-64 animate-in fade-in zoom-in-95 duration-200">
+    <div className={cn(MENU_PANEL, "z-50 flex flex-col w-64 min-w-0")}>
       {props.items.length ? (
         props.items.map((item: ContactSlim, index: number) => {
           const score = contactScore(item);
           return (
             <button
-              className={`flex items-center gap-3 min-h-[44px] sm:min-h-0 px-3 py-2 text-sm transition-colors text-left w-full
-            ${index === selectedIndex ? "bg-surface-container-low text-primary" : "bg-transparent text-on-surface hover:bg-surface-container"}`}
+              className={cn(
+                MENU_ITEM,
+                index === selectedIndex && MENU_ITEM_SELECTED,
+              )}
               key={item.id}
               onClick={() => {
                 props.command({ id: item.id, label: item.name });
@@ -82,7 +86,7 @@ export const MentionList = forwardRef<
                   decorative
                 />
               </div>
-              <span className="font-semibold truncate">{item.name}</span>
+              <span className="truncate">{item.name}</span>
               {/* The ring is hidden, so the button's name says the score in
                   words after the person's name. */}
               <span className="sr-only">
@@ -97,7 +101,7 @@ export const MentionList = forwardRef<
           );
         })
       ) : (
-        <div className="px-3 py-2 text-sm text-on-surface-variant">
+        <div className="px-2.5 py-2 text-sm text-on-surface-variant">
           No results...
         </div>
       )}

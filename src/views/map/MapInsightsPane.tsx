@@ -274,7 +274,7 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
                     {band && (
                       <span
                         className={cn(
-                          "px-2 py-0.5 rounded-full text-[11px] font-bold tabular-nums shrink-0",
+                          "px-2 py-0.5 rounded-md text-[11px] font-bold tabular-nums shrink-0",
                           band.token === "success" &&
                             "bg-success/15 text-success",
                           band.token === "warning" &&

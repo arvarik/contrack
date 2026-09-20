@@ -61,7 +61,7 @@ export const TodayStrip = ({
           type="button"
           onClick={onScrollToUpNext}
           className={cn(
-            "hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer text-xs",
+            "hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer text-xs",
             dueToday + overdueCount > 0
               ? overdueCount > 0
                 ? "bg-error/10 text-error hover:bg-error/20"
@@ -84,7 +84,7 @@ export const TodayStrip = ({
           <button
             type="button"
             onClick={onScrollToComingUp}
-            className="hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition-colors cursor-pointer text-xs"
+            className="hit-area inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition-colors cursor-pointer text-xs"
           >
             <Cake className="w-3 h-3" />
             <span>
@@ -96,7 +96,7 @@ export const TodayStrip = ({
         {/* Streak chip */}
         <div
           className={cn(
-            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs",
+            "inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-medium text-xs",
             streak > 0
               ? "bg-amber-500/10 text-amber-800 dark:text-amber-300"
               : "bg-surface-container-high text-on-surface-variant",

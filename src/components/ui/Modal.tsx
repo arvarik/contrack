@@ -51,8 +51,8 @@ export function Modal({
   }
   wasOpen.current = isOpen;
   const position = disableMobileSheet
-    ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] rounded-2xl"
-    : "inset-x-0 bottom-0 rounded-t-2xl sm:rounded-2xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
+    ? "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] rounded-3xl"
+    : "inset-x-0 bottom-0 rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
   return (
     <Dialog.Root
       open={isOpen}
@@ -85,7 +85,7 @@ export function Modal({
               </Dialog.Title>
               <Dialog.Close
                 ref={closeButton}
-                className="-mr-2 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full hover:bg-surface-container-high transition-colors"
+                className="-mr-2 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-container-high transition-colors"
                 aria-label="Close dialog"
               >
                 <X className="w-5 h-5" />

@@ -1,10 +1,10 @@
 /**
- * ProfileHeader: who this contact is, and the one thing to do next.
+ * ProfileHeader: who this contact is.
  *
  * Wide (the contact pane is 768 px or more):
  *
  * ```
- * (avatar 96) Thomas Walker (they/them)          [ Log interaction ] ⋮
+ * (avatar 96) Thomas Walker (they/them)                              ⋮
  *             UX Researcher at Umbrella Corp
  *             Sydney · 2:45 AM · 13°C · in ThomasWalker ↗ · @Thomas_Walker ↗
  *             [tech-lead ×] [advisor ×] [+ tag]
@@ -24,9 +24,10 @@
  *    The contact's own colour is the page accent, not the ring.
  * 3. The meta line is text. Facts (place, local time, weather) are plain,
  *    and links look like links, with ↗ because they open a new tab.
- * 4. "Log interaction" is the only primary button. Colour, avatar, copy,
- *    archive and delete sit in the kebab beside it. The narrow layout has no
- *    button: the composer is the first thing under the tabs.
+ * 4. The header has no primary button. Colour, avatar, copy, archive and
+ *    delete sit in the kebab. A note starts in the composer under the tabs,
+ *    which is the first thing in the Timeline column, so a button for it
+ *    here said the same thing twice.
  * 5. The narrow header keeps to about 140 px. The headline, the summary and
  *    the tags move to the Details tab (`ContactIntro`, `ContactTags`), and
  *    the weather stays off.
@@ -42,7 +43,6 @@ import {
   ArrowUpRight,
   CalendarClock,
   Copy,
-  NotebookPen,
   Trash2,
 } from "lucide-react";
 import { isPast, isToday } from "date-fns";
@@ -86,8 +86,6 @@ export interface ProfileHeaderProps {
   onDelete: () => void;
   onClose?: () => void;
   onOpenAvatarPicker: () => void;
-  /** Opens the Timeline tab and focuses the composer. */
-  onLogInteraction: () => void;
   showNetworkButton?: boolean;
   /** Which form to draw. Defaults to wide. */
   layout?: ContactLayout;
@@ -344,7 +342,6 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   onDelete,
   onClose,
   onOpenAvatarPicker,
-  onLogInteraction,
   showNetworkButton = false,
   layout = "wide",
   backLabel,
@@ -550,7 +547,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               ring="header"
             />
             {!!contact.isArchived && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap z-20">
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap z-20">
                 <Archive aria-hidden="true" className="w-2.5 h-2.5" />
                 Archived
               </div>
@@ -646,17 +643,6 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     {promoteGhost.isPending
                       ? "Promoting…"
                       : "Promote to contact"}
-                  </button>
-                )}
-
-                {!narrow && (
-                  <button
-                    type="button"
-                    onClick={onLogInteraction}
-                    className="btn-primary"
-                  >
-                    <NotebookPen aria-hidden="true" className="w-4 h-4" />
-                    Log interaction
                   </button>
                 )}
 

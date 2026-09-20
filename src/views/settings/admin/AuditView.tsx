@@ -241,7 +241,7 @@ export const AuditView = () => {
           aria-pressed={group === null}
           onClick={() => setGroup(null)}
           className={cn(
-            "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-full text-xs font-bold transition-colors",
+            "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
             group === null
               ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
               : "text-on-surface-variant hover:bg-surface-container-high",
@@ -256,7 +256,7 @@ export const AuditView = () => {
             aria-pressed={group === option.key}
             onClick={() => setGroup(option.key)}
             className={cn(
-              "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-full text-xs font-bold transition-colors",
+              "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
               group === option.key
                 ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
                 : "text-on-surface-variant hover:bg-surface-container-high",

@@ -3,6 +3,13 @@ import { createPortal } from "react-dom";
 import { Clock, CalendarDays, Calendar } from "lucide-react";
 import { addDays } from "date-fns";
 import { useUpdateActionItem } from "../../../api";
+import { cn } from "../../../lib/utils";
+import {
+  MENU_HEADING,
+  MENU_ICON,
+  MENU_ITEM,
+  MENU_PANEL,
+} from "../../../lib/styles";
 
 export interface SnoozeMenuProps {
   itemId: string;
@@ -10,6 +17,9 @@ export interface SnoozeMenuProps {
   onClose: () => void;
   triggerRect?: DOMRect | null;
 }
+
+/** The panel's width in px (`w-44`), so its right edge meets the trigger's. */
+const MENU_WIDTH = 176;
 
 export const SnoozeMenu = ({
   itemId,
@@ -81,7 +91,10 @@ export const SnoozeMenu = ({
         top: triggerRect.bottom + 4,
         left: Math.max(
           10,
-          Math.min(window.innerWidth - 170, triggerRect.right - 150),
+          Math.min(
+            window.innerWidth - MENU_WIDTH - 10,
+            triggerRect.right - MENU_WIDTH,
+          ),
         ),
       }
     : {};
@@ -92,42 +105,46 @@ export const SnoozeMenu = ({
       style={style}
       role="menu"
       aria-label="Snooze item"
-      className="z-50 w-40 overflow-hidden rounded-xl glass-panel bg-surface-container-highest/95 border border-outline/20 py-1 shadow-xl outline-none text-xs animate-in fade-in zoom-in-95 duration-100"
+      className={cn(MENU_PANEL, "z-50 w-44 min-w-0")}
     >
-      <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+      <div role="presentation" className={MENU_HEADING}>
         Snooze until
       </div>
       <button
         type="button"
         role="menuitem"
         onClick={() => handleSnooze(1)}
-        className="w-full justify-start flex items-center px-3 py-2 min-h-[44px] sm:min-h-[36px] hit-area font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer focus:bg-primary/10 focus:outline-none"
+        className={MENU_ITEM}
       >
-        <Clock className="w-3.5 h-3.5 mr-2 opacity-70" /> Tomorrow
+        <Clock aria-hidden="true" className={MENU_ICON} />
+        Tomorrow
       </button>
       <button
         type="button"
         role="menuitem"
         onClick={() => handleSnooze(3)}
-        className="w-full justify-start flex items-center px-3 py-2 min-h-[44px] sm:min-h-[36px] hit-area font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer focus:bg-primary/10 focus:outline-none"
+        className={MENU_ITEM}
       >
-        <CalendarDays className="w-3.5 h-3.5 mr-2 opacity-70" /> In 3 days
+        <CalendarDays aria-hidden="true" className={MENU_ICON} />
+        In 3 days
       </button>
       <button
         type="button"
         role="menuitem"
         onClick={() => handleSnooze(7)}
-        className="w-full justify-start flex items-center px-3 py-2 min-h-[44px] sm:min-h-[36px] hit-area font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer focus:bg-primary/10 focus:outline-none"
+        className={MENU_ITEM}
       >
-        <Calendar className="w-3.5 h-3.5 mr-2 opacity-70" /> Next week
+        <Calendar aria-hidden="true" className={MENU_ICON} />
+        Next week
       </button>
       <button
         type="button"
         role="menuitem"
         onClick={() => handleSnooze(30)}
-        className="w-full justify-start flex items-center px-3 py-2 min-h-[44px] sm:min-h-[36px] hit-area font-medium text-on-surface hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer focus:bg-primary/10 focus:outline-none"
+        className={MENU_ITEM}
       >
-        <Calendar className="w-3.5 h-3.5 mr-2 opacity-70" /> Next month
+        <Calendar aria-hidden="true" className={MENU_ICON} />
+        Next month
       </button>
     </div>,
     document.body,

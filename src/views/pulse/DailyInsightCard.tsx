@@ -58,7 +58,7 @@ export const DailyInsightCard = ({
           Network Intelligence
         </span>
         {insight && (
-          <span className="text-[11px] text-primary sm:ml-auto uppercase tracking-widest font-bold bg-primary/5 px-2 py-0.5 rounded-full ring-1 ring-primary/20 max-w-full truncate">
+          <span className="text-[11px] text-primary sm:ml-auto uppercase tracking-widest font-bold bg-primary/5 px-2 py-0.5 rounded-md ring-1 ring-primary/20 max-w-full truncate">
             {insight.category}
           </span>
         )}

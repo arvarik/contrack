@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { cn } from "../../lib/utils";
-import { DROPDOWN_MENU, DROPDOWN_ITEM, EDITABLE_INPUT } from "../../lib/styles";
+import {
+  DROPDOWN_MENU,
+  DROPDOWN_ITEM,
+  EDITABLE_INPUT,
+  MENU_ITEM_SELECTED,
+} from "../../lib/styles";
 import { activateOnKey } from "../../lib/a11y";
 
 export const Combobox = ({
@@ -65,7 +70,11 @@ export const Combobox = ({
                 setIsOpen(false);
                 setTimeout(() => onSave(), 10);
               })}
-              className={cn(DROPDOWN_ITEM, "min-h-[44px] sm:min-h-0")}
+              className={cn(
+                DROPDOWN_ITEM,
+                "min-h-[44px] sm:min-h-0",
+                opt === value && MENU_ITEM_SELECTED,
+              )}
               onMouseDown={(e) => {
                 // Prevent input blur so we can process the click securely
                 e.preventDefault();

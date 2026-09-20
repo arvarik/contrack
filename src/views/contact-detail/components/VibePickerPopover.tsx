@@ -127,7 +127,7 @@ const VibePickerPanel = ({
       }}
       // `w-max`: the wrapper it hangs from is only as wide as the menu
       // button, and without it the label wrapped and the swatches overlapped.
-      className="absolute right-0 top-full mt-2 z-50 w-max glass-panel rounded-xl shadow-xl p-3 origin-top-right"
+      className="absolute right-0 top-full mt-2 z-50 w-max menu-panel menu-enter p-3 [--menu-origin:top_right]"
     >
       <p id={labelId} className={cn(FIELD_LABEL, "mb-2")}>
         Contact colour

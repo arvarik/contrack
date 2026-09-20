@@ -123,7 +123,7 @@ export const ConnectorsView: React.FC = () => {
             />
             <span>Correspondents</span>
             {correspondentCount > 0 && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-primary text-on-primary">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-bold bg-primary text-on-primary">
                 {correspondentCount}
               </span>
             )}

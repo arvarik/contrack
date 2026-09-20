@@ -66,11 +66,17 @@ export const CompletedCard = () => {
                 <span className="font-medium text-on-surface line-through opacity-70 truncate">
                   {item.title}
                 </span>
+                {/* A 16 px name in a row, so `hit-area` gives it the 44 px
+                    tap box. The clip for a long name sits on the inner span,
+                    because an `overflow: hidden` on the link itself would
+                    cut that box away. */}
                 <Link
                   to={`/contact/${item.contactId}`}
-                  className="text-on-surface-variant hover:text-primary transition-colors truncate max-w-[120px]"
+                  className="hit-area inline-flex min-w-0 text-on-surface-variant hover:text-primary transition-colors"
                 >
-                  ({item.contactName})
+                  <span className="truncate max-w-[120px]">
+                    ({item.contactName})
+                  </span>
                 </Link>
               </div>
               <span className="text-[11px] text-on-surface-variant shrink-0 tabular-nums">

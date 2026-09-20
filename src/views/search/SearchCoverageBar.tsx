@@ -72,7 +72,7 @@ export function SearchCoverageBar({
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending}
             title={`${coverage.pending} contact(s) pending indexing`}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary hover:opacity-80 transition-opacity"
+            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary hover:opacity-80 transition-opacity"
           >
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             <span>
@@ -82,7 +82,7 @@ export function SearchCoverageBar({
         ) : coverage.failed > 0 ? (
           <button
             onClick={() => setShowInspectModal(true)}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
+            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
             title={`${coverage.failed} contact(s) failed indexing — click to inspect`}
           >
             <AlertCircle className="w-3.5 h-3.5 text-error" />
@@ -92,7 +92,7 @@ export function SearchCoverageBar({
           <button
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-warning hover:bg-amber-500/20 transition-colors"
+            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/10 text-warning hover:bg-amber-500/20 transition-colors"
             title={`${coverage.missing} contact(s) missing search vectors — click to index`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-warning" />
@@ -101,7 +101,7 @@ export function SearchCoverageBar({
         ) : (
           <div
             title={`Semantic search coverage: 100% (${coverage.indexed}/${coverage.total} contacts)`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>100% indexed</span>
@@ -174,7 +174,7 @@ export function SearchCoverageBar({
               </h2>
               <span
                 className={cn(
-                  "text-xs font-semibold px-2 py-0.5 rounded-full",
+                  "text-xs font-semibold px-2 py-0.5 rounded-md",
                   isComplete
                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     : "bg-primary/10 text-primary",
@@ -376,7 +376,7 @@ function FailedInspectModal({
               >
                 <div className="flex items-center justify-between font-bold text-on-surface">
                   <span>{item.name}</span>
-                  <span className="text-[11px] text-rose-500 font-mono bg-rose-500/10 px-2 py-0.5 rounded-full">
+                  <span className="text-[11px] text-rose-500 font-mono bg-rose-500/10 px-2 py-0.5 rounded-md">
                     {item.attempts} attempts
                   </span>
                 </div>

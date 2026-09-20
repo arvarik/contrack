@@ -53,7 +53,7 @@ export const NetworkGrowthModal = ({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="hit-area p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+            className="hit-area p-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
           >
             <X className="w-5 h-5" />
           </button>
@@ -63,7 +63,7 @@ export const NetworkGrowthModal = ({
         <div className="p-6 sm:p-8 overflow-y-auto nice-scrollbar bg-surface-container-lowest relative">
           <div className="mb-6 flex items-center gap-2">
             <span className={SECTION_HEADING}>Recently Added Contacts</span>
-            <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-xs font-mono font-bold text-on-surface-variant">
+            <span className="px-2.5 py-0.5 rounded-md bg-surface-container-high text-xs font-mono font-bold text-on-surface-variant">
               {totalCount} Total
             </span>
           </div>

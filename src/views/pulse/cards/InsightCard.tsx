@@ -16,7 +16,7 @@ export const InsightCard = ({
   aiAllowed = true,
 }: InsightCardProps) => {
   const categoryBadge = insight?.category ? (
-    <span className="text-[11px] text-primary uppercase tracking-wider font-bold bg-primary/10 px-2 py-0.5 rounded-full ring-1 ring-primary/20 max-w-[160px] truncate">
+    <span className="text-[11px] text-primary uppercase tracking-wider font-bold bg-primary/10 px-2 py-0.5 rounded-md ring-1 ring-primary/20 max-w-[160px] truncate">
       {insight.category}
     </span>
   ) : null;

@@ -201,7 +201,7 @@ const ResponsiveLayout = () => {
               whole tab, so the current tab is legible at a glance. */}
           <span
             className={cn(
-              "flex items-center justify-center w-10 h-6 rounded-full transition-colors",
+              "flex items-center justify-center w-10 h-6 rounded-lg transition-colors",
               active && "bg-primary/15",
             )}
           >

@@ -1,5 +1,5 @@
 /**
- * ContactActionsMenu: the kebab beside "Log interaction" in the contact
+ * ContactActionsMenu: the kebab at the end of the name row in the contact
  * header.
  *
  * The header had a palette button and an archive button at the same rank as

@@ -214,7 +214,7 @@ export const ActivityFeed = () => {
                     <button
                       onClick={() => handleUndo(entry.id, entry.duplicateName)}
                       disabled={undoMerge.isPending}
-                      className="hit-area shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      className="hit-area shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-lg transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
                     >
                       <Undo2 className="w-3 h-3" />
                       Undo

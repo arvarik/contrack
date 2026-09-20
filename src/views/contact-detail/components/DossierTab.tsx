@@ -16,6 +16,7 @@ import {
   FileText,
   RefreshCw,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
@@ -432,45 +433,64 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
 
 export const DossierTab = React.memo(DossierTabInner);
 
-// ─── AboutSection — click-to-expand replaces hover pattern ───────────────────
+// ─── AboutSection ────────────────────────────────────────────────────────────
 
+/**
+ * The contact's bio, as a card like Briefing, Experience and Education.
+ *
+ * It had a 4 px primary bar down its left edge and a sparkle in its heading.
+ * No other card wears a bar, and in this design the sparkle means "a model
+ * wrote this", which a bio need not be. So the card is plain: a heading with
+ * a neutral icon, the text at a readable measure, and Show more when the
+ * text runs past about ten lines.
+ */
 function AboutSection({ about }: { about: string }) {
+  const headingId = useId();
   const [expanded, setExpanded] = useState(false);
   const needsTruncation = about.length > 500;
+  const collapsed = needsTruncation && !expanded;
 
   return (
-    <div className={cn(CARD, "relative overflow-hidden")}>
-      <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
-      <h3 className={SECTION_HEADING_SPACED}>
-        <Sparkles className="w-4 h-4 text-primary" /> About
+    <section aria-labelledby={headingId} className={cn(CARD, "min-w-0")}>
+      <h3 id={headingId} className={SECTION_HEADING_SPACED}>
+        <UserRound aria-hidden="true" className="w-4 h-4" /> About
       </h3>
       <div className="relative">
         <p
           className={cn(
-            "whitespace-pre-wrap text-on-surface-variant text-sm leading-relaxed transition-all duration-300",
-            !expanded && needsTruncation && "max-h-64 overflow-hidden",
+            "max-w-prose text-sm leading-relaxed text-on-surface whitespace-pre-wrap",
+            // Ten lines, in the paragraph's own line height.
+            collapsed && "max-h-[10lh] overflow-hidden",
           )}
         >
           {about}
         </p>
-        {!expanded && needsTruncation && (
-          <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-surface-container-lowest to-transparent pointer-events-none" />
+        {/* The fade is the card's own surface, so the cut reads as the
+            text running on, not as a box drawn over it. */}
+        {collapsed && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface-container-lowest to-transparent"
+          />
         )}
       </div>
       {needsTruncation && (
         <button
-          onClick={() => setExpanded(!expanded)}
-          className="hit-area mt-2 text-[11px] uppercase font-bold text-primary flex items-center gap-1 hover:underline transition-colors"
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((open) => !open)}
+          className="hit-area mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary"
         >
           {expanded ? "Show less" : "Show more"}
           <ChevronDown
+            aria-hidden="true"
             className={cn(
-              "w-3.5 h-3.5 transition-transform duration-300",
+              "w-4 h-4 transition-transform duration-300",
               expanded && "rotate-180",
             )}
           />
         </button>
       )}
-    </div>
+    </section>
   );
 }

@@ -186,7 +186,7 @@ export const HistoryPane = ({
                 filterInputRef.current?.focus();
               }}
               aria-label="Clear filter text"
-              className="absolute right-2 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="absolute right-2 p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <X className="w-3.5 h-3.5" />
             </button>

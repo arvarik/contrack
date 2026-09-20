@@ -30,8 +30,7 @@ interface Screen {
   ready: (page: Page, seed: Seed) => Promise<void>;
   /**
    * The same promise on a phone, where it differs. The narrow contact page
-   * opens on its Timeline tab, with no Log interaction button and the mini
-   * map on the Details tab.
+   * opens on its Timeline tab, with the mini map on the Details tab.
    */
   phoneReady?: (page: Page, seed: Seed) => Promise<void>;
   /** The best-practice structure rules this screen is held to. Omitted means all four. */
@@ -51,7 +50,7 @@ const SCREENS: Screen[] = [
     path: (seed) => `/contact/${seed.byName("Ada Lovelace").id}`,
     ready: async (page) => {
       await expect(
-        page.getByRole("button", { name: "Log interaction" }),
+        page.getByRole("button", { name: "Contact actions" }),
       ).toBeVisible();
       // Ada has coordinates, so the page draws her mini map. Her pin exists
       // only once that map has loaded, so it is the proof the scan sees the

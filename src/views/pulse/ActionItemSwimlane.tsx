@@ -2,18 +2,11 @@ import React, { useState } from "react";
 import { cn } from "../../lib/utils";
 import { SECTION_HEADING } from "../../lib/styles";
 import { ActionItem } from "../../types";
-import {
-  Check,
-  Clock,
-  CalendarDays,
-  MoreVertical,
-  Keyboard,
-} from "lucide-react";
+import { Check, MoreVertical, Keyboard } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { useCompleteActionItem, useUpdateActionItem } from "../../api";
-import { addDays } from "date-fns";
+import { useCompleteActionItem } from "../../api";
+import { SnoozeMenu } from "./cards/SnoozeMenu";
 import { formatWhen } from "../../lib/datetime";
-import { createPortal } from "react-dom";
 
 interface SwimlaneProps {
   title: string;
@@ -23,68 +16,6 @@ interface SwimlaneProps {
   delay?: string;
   firstActionItemId?: string;
 }
-
-const SnoozeDropdown = ({
-  item,
-  onClose,
-  triggerRect,
-}: {
-  item: ActionItem;
-  onClose: () => void;
-  triggerRect: DOMRect;
-}) => {
-  const update = useUpdateActionItem();
-
-  const handleSnooze = (days: number) => {
-    const newDate = addDays(new Date(), days).toISOString();
-    update.mutate({ id: item.id, data: { dueAt: newDate } });
-    onClose();
-  };
-
-  const top = triggerRect.bottom + window.scrollY;
-  const left = triggerRect.right - 150; // align right roughly
-
-  return createPortal(
-    <>
-      {/* Click-outside catcher. Presentational — Escape is the keyboard path
-          (see the effect above), so this needs no tab stop. */}
-      <div
-        role="presentation"
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-      />
-      <div
-        className={cn(
-          "absolute z-50 mt-1 w-36 overflow-hidden rounded-xl glass-panel py-1 shadow-xl outline-none",
-        )}
-        style={{ top, left: Math.max(10, left) }}
-      >
-        <div className="px-3 py-1.5 bg-surface-container-high text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-          Snooze
-        </div>
-        <button
-          onClick={() => handleSnooze(1)}
-          className="w-full justify-start flex items-center px-3 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
-        >
-          <Clock className="w-3 h-3 mr-2 opacity-80" /> Tomorrow
-        </button>
-        <button
-          onClick={() => handleSnooze(3)}
-          className="w-full justify-start flex items-center px-3 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
-        >
-          <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> In 3 days
-        </button>
-        <button
-          onClick={() => handleSnooze(7)}
-          className="w-full justify-start flex items-center px-3 py-1.5 min-h-[44px] sm:min-h-0 text-xs font-semibold text-on-surface hover:bg-primary/15 hover:text-on-primary-wash transition-colors"
-        >
-          <CalendarDays className="w-3 h-3 mr-2 opacity-80" /> Next week
-        </button>
-      </div>
-    </>,
-    document.body,
-  );
-};
 
 const ActionCard = ({
   item,
@@ -196,13 +127,14 @@ const ActionCard = ({
         </button>
       </div>
 
-      {showSnooze && triggerRect && (
-        <SnoozeDropdown
-          item={item}
-          onClose={() => setShowSnooze(false)}
-          triggerRect={triggerRect}
-        />
-      )}
+      {/* The same menu as the Pulse rows: a portal with the arrow keys,
+          Escape and a click outside. */}
+      <SnoozeMenu
+        itemId={item.id}
+        isOpen={showSnooze && triggerRect !== null}
+        onClose={() => setShowSnooze(false)}
+        triggerRect={triggerRect}
+      />
     </div>
   );
 };

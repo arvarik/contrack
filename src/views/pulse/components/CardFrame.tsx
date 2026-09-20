@@ -102,7 +102,7 @@ export const CardFrame = ({
           {count !== undefined && (
             <span
               className={cn(
-                "inline-flex items-center justify-center text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums",
+                "inline-flex items-center justify-center text-xs font-semibold px-2 py-0.5 rounded-md tabular-nums",
                 count > 0
                   ? "bg-primary/10 text-primary"
                   : "bg-surface-container-high text-on-surface-variant",

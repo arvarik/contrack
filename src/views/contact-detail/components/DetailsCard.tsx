@@ -73,8 +73,8 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
 }) => {
   /**
    * The addresses, from the address list or from the single legacy
-   * `location` field. The mini map below reads the same list, so a contact
-   * with no address at all gets no map block and no caption.
+   * `location` field. The mini map under the rows reads the same list, so a
+   * contact with no address at all gets no map block and no caption.
    */
   const addressItems =
     contact.addresses && contact.addresses.length > 0
@@ -143,7 +143,9 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <h2 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h2>
 
       {/* The list fields draw their own "+ Add" under their rows, so the
-          Field gets no `onAdd`. */}
+          Field gets no `onAdd`. Location puts the mini map and its caption
+          between the rows and "+ Add": the rows, then the pin they place,
+          then the way to add another. */}
       <Field label="Location">
         <MultiValueField
           items={addressItems}
@@ -165,10 +167,12 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
           inputPlaceholder="San Francisco, CA"
           isAddress
           mapHref={isPlaced ? `/map/contact/${contactId}` : undefined}
-        />
-        <LocationMiniMap
-          contact={contact}
-          hasAddress={addressItems.length > 0}
+          afterRows={
+            <LocationMiniMap
+              contact={contact}
+              hasAddress={addressItems.length > 0}
+            />
+          }
         />
       </Field>
 

@@ -6,7 +6,7 @@
  *
  * 1. The value edits in place (`EditableField`). A save replaces that one row
  *    and saves the whole list, because the server keeps the list in order.
- * 2. The label chip is a native select.
+ * 2. The label chip is a `Select` in its chip form (`CustomSelect`).
  * 3. The kebab holds "Make primary", "Show on map" (addresses) and "Remove".
  *    The first row is the primary one, so it has no "Make primary". For
  *    addresses the primary one places the map pin.
@@ -14,7 +14,8 @@
  *    drags it by pointer or touch. From the keyboard, Alt+ArrowUp and
  *    Alt+ArrowDown move the row that has focus, and a polite live region says
  *    where it went.
- * 5. "+ Add" opens a label select and an input under the rows.
+ * 5. "+ Add" opens a label select and an input under the rows, and under
+ *    `afterRows` when the field has one.
  *
  * Focus does not fall to the page. The rows change only when the server
  * answers, and the answer can give every row a new id, which mounts new rows.
@@ -62,22 +63,10 @@ export const PHONE_LABELS = ["mobile", "work", "home", "other"] as const;
 export const ADDR_LABELS = ["home", "work", "other"] as const;
 
 /**
- * A 44 px tap box for the label select on a phone, around a 32 px chip.
- *
- * `hit-area` cannot do this: browsers draw no `::after` on a `<select>`, and
- * a tap beside the select does not open it. So the select itself is 44 px
- * tall, and 6 px of transparent border above and below, with the fill
- * clipped to the padding box, leave 32 px of visible chip. From `sm` a
- * pointer needs no tap box, and the chip is 32 px with no border.
+ * The label chip: `CustomSelect` draws it as a 32 px chip with a 44 px tap
+ * box from `hit-area`. It does not shrink beside a long value.
  */
-const LABEL_SELECT_TAP_BOX =
-  "min-h-[44px] border-y-[6px] border-transparent bg-clip-padding rounded-lg sm:min-h-[32px] sm:border-y-0";
-
-/** The label chip. Uppercase like every chip, at the 11 px floor. */
-const LABEL_CHIP = cn(
-  "text-[11px] uppercase tracking-widest bg-surface-container hover:bg-surface-container-high px-2 py-0.5 font-bold text-on-surface-variant focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 shrink-0 cursor-pointer",
-  LABEL_SELECT_TAP_BOX,
-);
+const LABEL_CHIP = "shrink-0";
 
 /**
  * An address as far as its first two parts, "1 Main St, Springfield", which
@@ -96,7 +85,7 @@ type FocusPart = "value" | "label" | "menu";
 
 const PART_SELECTOR: Record<FocusPart, string> = {
   value: "[data-row-value] button",
-  label: "select",
+  label: "[role='combobox']",
   menu: "[data-row-menu] [aria-haspopup='menu']",
 };
 
@@ -305,6 +294,12 @@ export interface MultiValueFieldProps {
    * "Map pin" status.
    */
   mapHref?: string;
+  /**
+   * Something that belongs to the rows and shows under them: the mini map
+   * and its caption, for addresses. The add control stays last, so a new
+   * value goes in under it.
+   */
+  afterRows?: React.ReactNode;
 }
 
 export const MultiValueField = ({
@@ -316,6 +311,7 @@ export const MultiValueField = ({
   inputPlaceholder,
   isAddress = false,
   mapHref,
+  afterRows,
 }: MultiValueFieldProps) => {
   const firstLabel = labelOptions[0] || "work";
   const [adding, setAdding] = useState(false);
@@ -501,14 +497,19 @@ export const MultiValueField = ({
       ref={wrapper}
       className="flex flex-col gap-1"
       // Capture, so the kebab does not also open on Alt+ArrowDown. The
-      // select and the inputs keep their own arrow keys, and so does an
-      // open menu.
+      // inputs keep their own arrow keys, and so do an open menu and an
+      // open label list.
       onKeyDownCapture={(event) => {
         if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
           return;
         if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
         const target = event.target as HTMLElement;
-        if (target.closest("input, select, textarea, [role='menu']")) return;
+        if (
+          target.closest(
+            "input, select, textarea, [role='menu'], [role='listbox']",
+          )
+        )
+          return;
         const row = target.closest<HTMLElement>("[data-row-index]");
         if (!row) return;
         event.preventDefault();
@@ -553,6 +554,8 @@ export const MultiValueField = ({
           </SortableContext>
         </DndContext>
       )}
+
+      {afterRows}
 
       {adding ? (
         <div

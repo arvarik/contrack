@@ -78,16 +78,13 @@ export const ContactCard = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span
-          className={cn(
-            SECTION_HEADING,
-            `px-3 py-1 rounded-full ${labelColor}`,
-          )}
+          className={cn(SECTION_HEADING, `px-3 py-1 rounded-md ${labelColor}`)}
         >
           {label}
         </span>
         <div className="flex items-center gap-2">
           {(contact.interactionCount ?? 0) > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-md">
               <MessageSquare className="w-3 h-3" />
               {contact.interactionCount}
             </span>

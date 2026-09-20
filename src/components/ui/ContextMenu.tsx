@@ -13,6 +13,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
+import { cn } from "../../lib/utils";
+import {
+  MENU_ITEM,
+  MENU_ITEM_DANGER,
+  MENU_PANEL,
+  MENU_SEPARATOR,
+} from "../../lib/styles";
 
 export interface ContextMenuItem {
   id: string;
@@ -92,17 +99,13 @@ export const ContextMenu = ({
           exit={{ opacity: 0, scale: 0.95, y: -4 }}
           transition={{ duration: 0.1 }}
           style={{ position: "fixed", left: adjustedPos.x, top: adjustedPos.y }}
-          className="z-[300] min-w-[180px] glass-panel rounded-xl shadow-2xl py-1 overflow-hidden"
+          // The panel without `menu-enter`: Motion animates this one.
+          className={cn(MENU_PANEL, "menu-enter-none z-[300] min-w-[180px]")}
           onContextMenu={(e) => e.preventDefault()}
         >
           {items.map((item) => {
             if (item.separator) {
-              return (
-                <div
-                  key={item.id}
-                  className="my-1 h-px bg-surface-container-high mx-2"
-                />
-              );
+              return <div key={item.id} className={MENU_SEPARATOR} />;
             }
             return (
               <button
@@ -112,14 +115,13 @@ export const ContextMenu = ({
                   onClose();
                   item.onClick?.();
                 }}
-                className={[
-                  // A long press opens this on a phone, so rows are 44 px
-                  // tall there and 36 px under a pointer.
-                  "w-full flex items-center gap-2.5 px-3.5 py-3 sm:py-2 text-sm transition-colors text-left",
-                  item.danger
-                    ? "text-error hover:bg-rose-500/10 disabled:opacity-40"
-                    : "text-on-surface hover:bg-surface-container-low disabled:text-on-surface-variant disabled:cursor-not-allowed",
-                ].join(" ")}
+                // A long press opens this on a phone, so rows are 44 px
+                // tall there and 36 px under a pointer (MENU_ITEM).
+                className={cn(
+                  MENU_ITEM,
+                  item.danger && MENU_ITEM_DANGER,
+                  "disabled:opacity-40 disabled:cursor-not-allowed",
+                )}
               >
                 {item.icon && (
                   <span

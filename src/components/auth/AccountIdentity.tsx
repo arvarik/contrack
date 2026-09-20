@@ -20,6 +20,7 @@ import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { useDismissable } from "../../hooks/useDismissable";
 import { Badge } from "../ui/Badge";
 import { accountAvatarUrl } from "../../lib/avatar";
+import { MENU_ITEM, MENU_ITEM_DANGER, MENU_SEPARATOR } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useAuth } from "./AuthGate";
 import type { AccountUser } from "../../api/auth";
@@ -112,11 +113,6 @@ export function accountLabel(user: AccountUser): string {
 // Desktop: the sidebar avatar and its menu
 // ---------------------------------------------------------------------------
 
-const MENU_ITEM = cn(
-  "flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-left",
-  "text-on-surface hover:bg-primary/10 hover:text-primary transition-colors",
-);
-
 /**
  * The signed-in account at the foot of the sidebar.
  *
@@ -172,9 +168,12 @@ export const SidebarIdentity = () => {
       {open && (
         <div
           aria-label="Account"
+          // The panel sits up and to the right of the avatar, so the
+          // entrance grows from its bottom left corner.
+          style={{ "--menu-origin": "bottom left" } as React.CSSProperties}
           className={cn(
             "absolute left-full bottom-0 ml-3 z-50 w-60 p-2",
-            "glass-panel rounded-2xl shadow-xl",
+            "menu-panel menu-enter",
           )}
         >
           <div className="px-3 py-2">
@@ -196,7 +195,7 @@ export const SidebarIdentity = () => {
             </p>
             <RoleBadge role={isAdmin ? "admin" : "member"} className="mt-2" />
           </div>
-          <div className="h-px bg-surface-container-high my-1" />
+          <div className={MENU_SEPARATOR} />
           <Link
             to="/settings/account"
             onClick={() => setOpen(false)}
@@ -211,7 +210,7 @@ export const SidebarIdentity = () => {
               setOpen(false);
               void signOut();
             }}
-            className={cn(MENU_ITEM, "text-error hover:bg-error/10")}
+            className={cn(MENU_ITEM, MENU_ITEM_DANGER)}
           >
             <LogOut className="w-4 h-4" />
             Sign out

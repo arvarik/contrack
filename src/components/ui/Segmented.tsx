@@ -1,5 +1,5 @@
 /**
- * Segmented — the app's pill-in-a-trough toggle.
+ * Segmented — the app's tab-in-a-trough toggle.
  *
  * It lived as a private component inside SettingsHome, which is where every
  * second copy of a control comes from: the next page that needs one either
@@ -78,7 +78,7 @@ export const Segmented = <T extends string | number>({
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "flex bg-surface-container rounded-full p-1 shadow-inner h-auto sm:h-9 w-full sm:w-auto",
+        "flex bg-surface-container rounded-lg p-1 h-auto sm:h-9 w-full sm:w-auto",
         className,
       )}
     >
@@ -96,7 +96,7 @@ export const Segmented = <T extends string | number>({
             onKeyDown={onKeyDown}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:min-h-0 sm:h-full rounded-full text-xs font-bold",
+              "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:min-h-0 sm:h-full rounded-md text-xs font-bold",
               "flex items-center justify-center whitespace-nowrap transition-colors",
               // A glyph alone is narrower than a thumb, so it gets the width
               // floor as well as the height.

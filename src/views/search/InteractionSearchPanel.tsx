@@ -48,6 +48,7 @@ import { noteSearchStatus } from "../../lib/searchAnnouncements";
 import { cn } from "../../lib/utils";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Select } from "../../components/ui/Select";
 import type { HighlightRange, InteractionSearchHit } from "../../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -503,21 +504,17 @@ export const InteractionSearchPanel = () => {
         >
           Custom
         </button>
-        <label className="ml-auto flex items-center gap-2 text-xs font-bold text-on-surface-variant">
+        <div className="ml-auto flex items-center gap-2 text-xs font-bold text-on-surface-variant">
           <span className="sr-only sm:not-sr-only">Kind</span>
-          <select
+          <Select
+            variant="ghost"
+            label="Kind of note"
+            align="end"
             value={type}
-            onChange={(e) => update({ type: e.target.value })}
-            aria-label="Kind of note"
-            className="bg-surface-container-low rounded-xl px-3 py-2 text-xs font-bold text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[44px] sm:min-h-[36px]"
-          >
-            {TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={(next) => update({ type: next })}
+            options={TYPES}
+          />
+        </div>
       </div>
 
       {period === "custom" && (
@@ -582,7 +579,7 @@ export const InteractionSearchPanel = () => {
             {total} note{total === 1 ? "" : "s"}
           </span>
           {result.query.range && (
-            <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-full">
+            <span className="inline-flex items-center gap-1.5 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-md">
               <CalendarDays className="w-3 h-3 text-primary" aria-hidden />
               {result.query.phrase && result.query.range.source === "phrase"
                 ? `“${result.query.phrase}” → `

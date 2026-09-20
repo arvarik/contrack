@@ -386,7 +386,7 @@ export const DedupeView = ({
                     {dismissHistory.length > 0 && (
                       <button
                         onClick={handleUndoDismiss}
-                        className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-low hover:bg-primary/10 rounded-full transition-all"
+                        className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-low hover:bg-primary/10 rounded-lg transition-all"
                         title="Undo last dismiss (⌘Z)"
                       >
                         <Undo2 className="w-3.5 h-3.5" />
@@ -454,7 +454,7 @@ export const DedupeView = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleNewScan}
-                    className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-full transition-colors"
+                    className="hit-area flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-lg transition-colors"
                   >
                     <ScanSearch className="w-3.5 h-3.5" />
                     New Scan
