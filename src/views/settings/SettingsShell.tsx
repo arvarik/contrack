@@ -13,7 +13,14 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { ChevronLeft, Loader2, Settings as SettingsIcon } from "lucide-react";
+import {
+  ChevronLeft,
+  History,
+  Loader2,
+  Settings as SettingsIcon,
+} from "lucide-react";
+import { ActionMenu } from "../../components/ui/ActionMenu";
+import { useDedupeOptional } from "../../contexts/DedupeContext";
 import {
   SETTINGS_PAGES,
   REDIRECTS,
@@ -119,6 +126,8 @@ export const SettingsShell = () => {
   const backLabel = isWide ? "Back to Network" : "Back to Settings";
   const backDestination = isWide ? "/" : "/settings";
 
+  const dedupe = useDedupeOptional();
+
   return (
     <div className="h-full flex overflow-hidden bg-surface text-on-surface">
       {/* ── 240px Left Navigation Rail on desktop ── */}
@@ -129,31 +138,50 @@ export const SettingsShell = () => {
       {/* ── Content Area (Header + Outlet) ── */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         <header className="px-4 sm:px-6 py-4 sm:py-5 bg-surface-container-low shrink-0 border-b border-surface-container/30">
-          <div className="flex items-center gap-3 sm:gap-4">
-            {showBackButton && (
-              <button
-                type="button"
-                onClick={() => navigate(backDestination)}
-                className={cn(
-                  ICON_BTN,
-                  "inline-flex items-center justify-center min-w-[44px] min-h-[44px]",
-                )}
-                aria-label={backLabel}
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-            )}
-            <h1 className={cn(PAGE_TITLE, "flex items-center gap-3 min-w-0")}>
-              <span className="p-2 bg-primary/10 rounded-xl shrink-0">
-                <Icon
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              {showBackButton && (
+                <button
+                  type="button"
+                  onClick={() => navigate(backDestination)}
                   className={cn(
-                    "w-5 h-5 sm:w-6 sm:h-6",
-                    currentSubpage?.tone ?? "text-primary",
+                    ICON_BTN,
+                    "inline-flex items-center justify-center min-w-[44px] min-h-[44px]",
                   )}
+                  aria-label={backLabel}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
+              <h1 className={cn(PAGE_TITLE, "flex items-center gap-3 min-w-0")}>
+                <span className="p-2 bg-primary/10 rounded-xl shrink-0">
+                  <Icon
+                    className={cn(
+                      "w-5 h-5 sm:w-6 sm:h-6",
+                      currentSubpage?.tone ?? "text-primary",
+                    )}
+                  />
+                </span>
+                <span className="truncate">{title}</span>
+              </h1>
+            </div>
+
+            {/* Below sm, Merge activity moves into an ActionMenu in the header for Duplicates */}
+            {currentSubpage?.id === "duplicates" && (
+              <div className="sm:hidden shrink-0">
+                <ActionMenu
+                  label="Duplicates actions"
+                  items={[
+                    {
+                      id: "merge-activity",
+                      label: "Merge activity",
+                      icon: History,
+                      onSelect: () => dedupe?.setShowActivity(true),
+                    },
+                  ]}
                 />
-              </span>
-              <span className="truncate">{title}</span>
-            </h1>
+              </div>
+            )}
           </div>
         </header>
 

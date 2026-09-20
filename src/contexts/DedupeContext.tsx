@@ -52,6 +52,8 @@ interface DedupeContextValue {
   reset: () => void;
   /** Remove a cluster from the local list (after merge or dismiss) */
   removeCluster: (id: string) => void;
+  showActivity: boolean;
+  setShowActivity: (show: boolean) => void;
 }
 
 const DedupeContext = createContext<DedupeContextValue | null>(null);
@@ -60,6 +62,10 @@ export function useDedupe() {
   const ctx = useContext(DedupeContext);
   if (!ctx) throw new Error("useDedupe must be used within DedupeProvider");
   return ctx;
+}
+
+export function useDedupeOptional() {
+  return useContext(DedupeContext);
 }
 
 /**
@@ -76,6 +82,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const [scan, setScan] = useState<DedupeScanProgress | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
   const [clusters, setClusters] = useState<DedupeCluster[]>([]);
+  const [showActivity, setShowActivity] = useState(false);
   // The run lock is global for 2.0, so one account at a time scans and the
   // rest wait. `queued` is that wait, and it is deliberately not a scan: the
   // scan record exists on the server but nothing is happening in it.
@@ -316,6 +323,8 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
       isQueued: queued,
       reset,
       removeCluster,
+      showActivity,
+      setShowActivity,
     }),
     [
       startScan,
@@ -326,6 +335,8 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
       queued,
       reset,
       removeCluster,
+      showActivity,
+      setShowActivity,
     ],
   );
 

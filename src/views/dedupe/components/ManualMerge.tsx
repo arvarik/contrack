@@ -79,7 +79,7 @@ export const ManualMerge = () => {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full max-w-3xl mx-auto w-full">
       {/* Stage indicator */}
       <div className="flex items-center gap-2 mb-6 px-1">
         {(["select", "compare", "preview"] as Stage[]).map((s, i) => (

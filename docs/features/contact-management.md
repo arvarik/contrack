@@ -27,21 +27,21 @@ The parsing uses the active AI provider (`POST /api/parse-contact`).
 
 ### Import (CSV, vCard, EML)
 
-Access via the import button on the contact list, or through **Settings → Import** (`/settings/import`), which provides an inline import workbench and displays recent imports with status, counts, and retry options for failed rows. Supports:
+Access via the import button on the contact list, or through **Settings → Import** (`/settings/import`), which provides an inline import workbench and displays recent imports with status, counts, and retry options for failed rows.
 
-- **CSV files** — Automatic column mapping with header detection
-- **vCard (.vcf)** — The format Apple Contacts, Google Contacts, Outlook and
-  every phone export. Long lines are unfolded, quoted-printable is decoded, and
-  both spellings of a parameter are understood, so a file from an older Android
-  or Outlook arrives with its accents and its labels intact
-- **EML files** — Email message parsing
+The import panel prioritizes fast workflows across both modal dialogs and the dedicated settings page:
+
+- **Drop zone first:** The upload zone appears immediately above instructions so returning users can drag and drop or select their file without scrolling past export guides.
+- **Export guides in a disclosure:** Detailed export walkthroughs for Apple Contacts, LinkedIn, Google Contacts, and Facebook sit inside a collapsible disclosure below the drop zone.
+- **Source memory:** Contrack remembers your last chosen import source in browser storage and restores it on future visits.
+- **Supported formats:** CSV files with automatic column mapping, vCard (.vcf) from Apple, Google, and mobile exports, and EML email message files.
 
 The import pipeline runs in 4 SSE-streamed phases:
 
-1. **Importing** — Creating contact records
-2. **Embedding** — Generating contact fingerprints for deduplication
-3. **Scanning** — Checking for duplicates against existing contacts
-4. **Summary** — Final counts (imported, auto-merged, needs review, new unique)
+1. **Importing:** Creating contact records
+2. **Embedding:** Generating contact fingerprints for deduplication
+3. **Scanning:** Checking for duplicates against existing contacts
+4. **Summary:** Final counts (imported, auto-merged, needs review, new unique)
 
 <!-- Screenshot: import-modal.png -->
 

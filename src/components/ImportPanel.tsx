@@ -23,6 +23,7 @@ import {
   ArrowRight,
   RotateCw,
   WifiOff,
+  ChevronDown,
 } from "lucide-react";
 import {
   parseVCard,
@@ -76,6 +77,34 @@ export type ImportPhaseState =
 
 const STREAM_PHASES = ["importing", "embedding", "scanning"] as const;
 
+export const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
+const VALID_SOURCES: readonly ImportTab[] = [
+  "apple",
+  "linkedin",
+  "google",
+  "facebook",
+];
+
+export function readInitialSource(): ImportTab {
+  try {
+    const saved = localStorage.getItem(IMPORT_LAST_SOURCE_KEY);
+    if (saved && (VALID_SOURCES as readonly string[]).includes(saved)) {
+      return saved as ImportTab;
+    }
+  } catch {
+    // localStorage might throw
+  }
+  return "apple";
+}
+
+export function persistSource(source: ImportTab) {
+  try {
+    localStorage.setItem(IMPORT_LAST_SOURCE_KEY, source);
+  } catch {
+    // Gracefully handle storage errors
+  }
+}
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -86,7 +115,12 @@ export const ImportPanel = ({
 }: ImportPanelProps) => {
   const { user } = useAuth();
   const accountId = user?.id ?? null;
-  const [activeTab, setActiveTab] = useState<ImportTab>("apple");
+  const [activeTab, setActiveTabState] = useState<ImportTab>(readInitialSource);
+
+  const handleTabChange = useCallback((tab: ImportTab) => {
+    setActiveTabState(tab);
+    persistSource(tab);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<ImportPhaseState>("idle");
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -517,12 +551,18 @@ export const ImportPanel = ({
       />
       {/* Tab bar */}
       {showUploadChrome && (
-        <div className={cn(TAB_CONTAINER, "mb-4")}>
+        <div
+          className={cn(TAB_CONTAINER, "mb-4")}
+          role="tablist"
+          aria-label="Import sources"
+        >
           {(["apple", "linkedin", "google", "facebook"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              role="tab"
+              aria-selected={activeTab === tab}
+              onClick={() => handleTabChange(tab)}
               className={cn(
                 tabItem(activeTab === tab),
                 "min-h-[44px] sm:min-h-0",
@@ -531,109 +571,6 @@ export const ImportPanel = ({
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
-        </div>
-      )}
-
-      {/* Instructions */}
-      {showUploadChrome && (
-        <div className="bg-surface-container-low p-5 sm:p-6 rounded-xl text-sm text-on-surface-variant">
-          <h3 className="font-bold text-on-surface mb-2 flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            How to export from{" "}
-            {activeTab === "apple"
-              ? "Apple Contacts"
-              : activeTab === "linkedin"
-                ? "LinkedIn"
-                : activeTab === "google"
-                  ? "Google Contacts"
-                  : "Facebook"}
-          </h3>
-          {activeTab === "apple" && (
-            <ol className="list-decimal list-inside space-y-1 ml-1">
-              <li>
-                Open the <strong>Contacts</strong> app on your Mac.
-              </li>
-              <li>
-                Select the contacts you want to export (or Cmd+A for all).
-              </li>
-              <li>
-                Go to <strong>File &gt; Export &gt; Export vCard...</strong>
-              </li>
-              <li>
-                Save the <strong>.vcf</strong> file and upload it below.
-              </li>
-            </ol>
-          )}
-          {activeTab === "linkedin" && (
-            <ol className="list-decimal list-inside space-y-1 ml-1">
-              <li>
-                Go to LinkedIn <strong>Settings & Privacy</strong>.
-              </li>
-              <li>
-                Select <strong>Data Privacy</strong> &gt;{" "}
-                <strong>Get a copy of your data</strong>.
-              </li>
-              <li>
-                Choose <strong>Connections</strong> and request archive.
-              </li>
-              <li>
-                Download the archive, extract it, and upload the{" "}
-                <strong>Connections.csv</strong> file below.
-              </li>
-              <li className="text-xs text-on-surface-variant mt-1">
-                Fields imported: Name, Company, Position, Email, Profile URL,
-                Connection Date
-              </li>
-            </ol>
-          )}
-          {activeTab === "google" && (
-            <ol className="list-decimal list-inside space-y-1 ml-1">
-              <li>
-                Go to <strong>contacts.google.com</strong>.
-              </li>
-              <li>
-                Click <strong>Export</strong> in the left sidebar.
-              </li>
-              <li>
-                Select <strong>Google CSV</strong> format and click{" "}
-                <strong>Export</strong>.
-              </li>
-              <li>
-                Upload the downloaded <strong>.csv</strong> file below.
-              </li>
-              <li className="text-xs text-on-surface-variant mt-1">
-                Fields imported: Name, multiple Emails & Phones, Company, Role,
-                Address, Birthday, Notes, Website
-              </li>
-            </ol>
-          )}
-          {activeTab === "facebook" && (
-            <ol className="list-decimal list-inside space-y-1 ml-1">
-              <li>
-                Go to Facebook <strong>Settings & Privacy</strong> &gt;{" "}
-                <strong>Settings</strong>.
-              </li>
-              <li>
-                Navigate to <strong>Accounts Center</strong> &gt;{" "}
-                <strong>Your information and permissions</strong>.
-              </li>
-              <li>
-                Select <strong>Download your information</strong>.
-              </li>
-              <li>
-                Choose <strong>JSON</strong> format and select the{" "}
-                <strong>Friends and Followers</strong> category.
-              </li>
-              <li>
-                Download, extract, and upload the <strong>friends.json</strong>{" "}
-                file below.
-              </li>
-              <li className="text-xs text-on-surface-variant mt-1">
-                Note: Facebook only exports friend names and connection dates —
-                no emails or phone numbers.
-              </li>
-            </ol>
-          )}
         </div>
       )}
 
@@ -1021,6 +958,114 @@ export const ImportPanel = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Instructions disclosure under the drop zone */}
+      {showUploadChrome && (
+        <details className="group bg-surface-container-low p-4 sm:p-5 rounded-xl text-sm text-on-surface-variant">
+          <summary className="font-bold text-on-surface flex items-center justify-between cursor-pointer list-none select-none">
+            <span className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary shrink-0" />
+              How to export from{" "}
+              {activeTab === "apple"
+                ? "Apple Contacts"
+                : activeTab === "linkedin"
+                  ? "LinkedIn"
+                  : activeTab === "google"
+                    ? "Google Contacts"
+                    : "Facebook"}
+            </span>
+            <ChevronDown className="w-4 h-4 text-on-surface-variant transition-transform group-open:rotate-180 shrink-0" />
+          </summary>
+          <div className="mt-3 pt-3 border-t border-surface-container-high/60">
+            {activeTab === "apple" && (
+              <ol className="list-decimal list-inside space-y-1 ml-1">
+                <li>
+                  Open the <strong>Contacts</strong> app on your Mac.
+                </li>
+                <li>
+                  Select the contacts you want to export (or Cmd+A for all).
+                </li>
+                <li>
+                  Go to <strong>File &gt; Export &gt; Export vCard...</strong>
+                </li>
+                <li>
+                  Save the <strong>.vcf</strong> file and upload it above.
+                </li>
+              </ol>
+            )}
+            {activeTab === "linkedin" && (
+              <ol className="list-decimal list-inside space-y-1 ml-1">
+                <li>
+                  Go to LinkedIn <strong>Settings & Privacy</strong>.
+                </li>
+                <li>
+                  Select <strong>Data Privacy</strong> &gt;{" "}
+                  <strong>Get a copy of your data</strong>.
+                </li>
+                <li>
+                  Choose <strong>Connections</strong> and request archive.
+                </li>
+                <li>
+                  Download the archive, extract it, and upload the{" "}
+                  <strong>Connections.csv</strong> file above.
+                </li>
+                <li className="text-xs text-on-surface-variant mt-1">
+                  Fields imported: Name, Company, Position, Email, Profile URL,
+                  Connection Date
+                </li>
+              </ol>
+            )}
+            {activeTab === "google" && (
+              <ol className="list-decimal list-inside space-y-1 ml-1">
+                <li>
+                  Go to <strong>contacts.google.com</strong>.
+                </li>
+                <li>
+                  Click <strong>Export</strong> in the left sidebar.
+                </li>
+                <li>
+                  Select <strong>Google CSV</strong> format and click{" "}
+                  <strong>Export</strong>.
+                </li>
+                <li>
+                  Upload the downloaded <strong>.csv</strong> file above.
+                </li>
+                <li className="text-xs text-on-surface-variant mt-1">
+                  Fields imported: Name, multiple Emails & Phones, Company,
+                  Role, Address, Birthday, Notes, Website
+                </li>
+              </ol>
+            )}
+            {activeTab === "facebook" && (
+              <ol className="list-decimal list-inside space-y-1 ml-1">
+                <li>
+                  Go to Facebook <strong>Settings & Privacy</strong> &gt;{" "}
+                  <strong>Settings</strong>.
+                </li>
+                <li>
+                  Navigate to <strong>Accounts Center</strong> &gt;{" "}
+                  <strong>Your information and permissions</strong>.
+                </li>
+                <li>
+                  Select <strong>Download your information</strong>.
+                </li>
+                <li>
+                  Choose <strong>JSON</strong> format and select the{" "}
+                  <strong>Friends and Followers</strong> category.
+                </li>
+                <li>
+                  Download, extract, and upload the{" "}
+                  <strong>friends.json</strong> file above.
+                </li>
+                <li className="text-xs text-on-surface-variant mt-1">
+                  Note: Facebook only exports friend names and connection dates
+                  — no emails or phone numbers.
+                </li>
+              </ol>
+            )}
+          </div>
+        </details>
+      )}
 
       {error && phase === "idle" && (
         <div className="p-4 bg-red-500/10 text-error rounded-xl flex items-center gap-3 text-sm font-medium">
