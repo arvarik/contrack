@@ -452,7 +452,7 @@ second drawing anywhere.
 | ----------------------------- | ------------- | ---------- | -------------------------------- |
 | Tab strip favicon             | glyph on tile | 16 to 32   | white on gradient, eye `#47befd` |
 | PWA and touch icons           | glyph on tile | 180 to 512 | same                             |
-| Sidebar perch                 | mark          | 32         | `text-primary`, eye token        |
+| Sidebar perch                 | mark          | 40         | `text-primary`, eye token        |
 | Auth card                     | mark          | 40         | `text-primary`                   |
 | Empty states                  | mark          | 64 to 96   | `text-primary/60`                |
 | Crash screen footer           | mark          | 20         | `text-on-surface-variant`        |
@@ -538,7 +538,7 @@ without a reason a person could state.
 
 | Surface                                     | What it does                        | Component            |
 | ------------------------------------------- | ----------------------------------- | -------------------- |
-| Sidebar perch, 32 px                        | Idles, hops, flies on a click       | `Sidebar.tsx`        |
+| Sidebar perch, 40 px                        | Idles, hops, flies on a click       | `Sidebar.tsx`        |
 | Settings footer on a phone, 20 px           | The same, where there is no sidebar | `SettingsHome.tsx`   |
 | Sign-in and setup card, 40 px               | Idles, shakes at a wrong password   | `AuthShell.tsx`      |
 | Synthesis bar, enrich badge, briefing card  | Tilts its head while AI works       | `CorvidThinking.tsx` |

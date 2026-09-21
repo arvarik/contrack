@@ -4,9 +4,11 @@
  *
  * It is empty on purpose. A version of this pane carried three cards (what
  * is due, recent people, ways to add people), and the page read as a second
- * dashboard beside the list. Pulse is the dashboard. This pane's one job is to
- * say that nothing is selected and to leave the eye on the list, so it shows
- * the mark, large and quiet, and one line.
+ * dashboard beside the list. Pulse is the dashboard. This pane's one job is
+ * to say that nothing is selected and to leave the eye on the list, so it
+ * holds two things and nothing else: the mark, large and quiet, and the
+ * words "No contact selected". A line under them telling a reader to pick
+ * somebody was saying what the empty pane already says.
  *
  * The heading is an h2: the list's title is the page's h1.
  */
@@ -19,8 +21,5 @@ export const StartPanel: React.FC = () => (
     <h2 className="mt-6 text-lg font-headline font-semibold text-on-surface">
       No contact selected
     </h2>
-    <p className="mt-1.5 text-sm text-on-surface-variant">
-      Pick a person from the list to open their profile.
-    </p>
   </div>
 );

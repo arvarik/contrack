@@ -80,7 +80,7 @@ The three actions are icon buttons at every width. Each has an accessible name a
 1. **Select** (the empty square): enters selection mode. The header then shows the count of selected contacts (for example, "3 selected") with "Select all" and "Done". The floating bulk action toolbar appears at the bottom with archive, delete, add to list, edit fields, colour and CSV export. On a touch screen, a long press on any contact row also enters selection mode.
 2. **Import** (the upload arrow): opens the contact import dialog.
 3. **+** (named "New"): opens a menu with New contact, Add from text (smart paste) and New list.
-4. **Sort menu**: a menu button whose label is the current sort choice. Five choices: Name A to Z, Name Z to A, Newest first, Oldest first, and Score. The active choice carries a check mark. It starts from the `listSort` account preference, and a choice holds for the browsing session.
+4. **Sort menu**: a menu button whose label is the current sort choice, named "Sort: A to Z" for a screen reader. The list orders by one of two things, each read both ways, which is the whole menu: **A to Z**, **Z to A**, **Newest**, **Oldest**. The active choice carries a check mark. It starts from the `listSort` account preference (Name or Recent), and a choice holds for the browsing session. A fifth choice ordered by the relationship score. It needed a sentence to explain it, the score is already on every row as the ring around the avatar, and Pulse ranks by score for a reader who wants that.
 5. **List filter row**: the horizontal row of filter chips appears only when at least one contact list exists.
 
 ### The List
@@ -91,7 +91,7 @@ The three actions are icon buttons at every width. Each has an accessible name a
 
 ### The Start Panel
 
-When no contact is selected on desktop, the right pane shows the start panel (`src/components/layout/StartPanel.tsx`): the Corvid mark at 144 px, the heading "No contact selected" and one line. It holds nothing to act on. Pulse is the dashboard, and the list beside the pane is where a person is picked.
+When no contact is selected on desktop, the right pane shows the start panel (`src/components/layout/StartPanel.tsx`): the Corvid mark at 144 px and the heading "No contact selected". That is everything. It holds nothing to act on and says nothing else, because an empty pane beside a list of people already tells a reader what to do. Pulse is the dashboard.
 
 ---
 

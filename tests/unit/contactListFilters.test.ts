@@ -77,18 +77,22 @@ describe("useContactListFilters", () => {
     ]);
   });
 
-  it("initializes sortBy with 'score' when listSort preference is 'score'", () => {
-    mockPreferences = { listSort: "score" };
+  // The menu sorts by name or by the day a contact was added, and nothing
+  // else. A "score" left in storage by an older release is not one of them,
+  // so the list falls back to the name order rather than to no order.
+  it("falls back to the name order for a listSort it no longer knows", () => {
+    mockPreferences = { listSort: "score" as unknown as "name" };
     const { result } = renderHook(() =>
       useContactListFilters(sampleContacts as Contact[]),
     );
 
-    expect(result.current.sortBy).toBe("score");
-    expect(result.current.sortDir).toBe("desc");
+    expect(result.current.sortBy).toBe("name");
+    expect(result.current.sortDir).toBe("asc");
+    expect(result.current.currentSort.label).toBe("A to Z");
     expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
       "Alice",
-      "Charlie",
       "Bob",
+      "Charlie",
     ]);
   });
 
@@ -100,14 +104,14 @@ describe("useContactListFilters", () => {
 
     expect(result.current.sortBy).toBe("name");
     expect(result.current.sortDir).toBe("asc");
-    expect(result.current.currentSort.label).toBe("Name A to Z");
+    expect(result.current.currentSort.label).toBe("A to Z");
 
     act(() => {
       result.current.setSortOption("name-desc");
     });
     expect(result.current.sortBy).toBe("name");
     expect(result.current.sortDir).toBe("desc");
-    expect(result.current.currentSort.label).toBe("Name Z to A");
+    expect(result.current.currentSort.label).toBe("Z to A");
     expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
       "Charlie",
       "Bob",
@@ -119,7 +123,7 @@ describe("useContactListFilters", () => {
     });
     expect(result.current.sortBy).toBe("date");
     expect(result.current.sortDir).toBe("desc");
-    expect(result.current.currentSort.label).toBe("Newest first");
+    expect(result.current.currentSort.label).toBe("Newest");
     expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
       "Bob",
       "Alice",
@@ -131,22 +135,10 @@ describe("useContactListFilters", () => {
     });
     expect(result.current.sortBy).toBe("date");
     expect(result.current.sortDir).toBe("asc");
-    expect(result.current.currentSort.label).toBe("Oldest first");
+    expect(result.current.currentSort.label).toBe("Oldest");
     expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
       "Charlie",
       "Alice",
-      "Bob",
-    ]);
-
-    act(() => {
-      result.current.setSortOption("score-desc");
-    });
-    expect(result.current.sortBy).toBe("score");
-    expect(result.current.sortDir).toBe("desc");
-    expect(result.current.currentSort.label).toBe("Score");
-    expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
-      "Alice",
-      "Charlie",
       "Bob",
     ]);
 
@@ -155,12 +147,12 @@ describe("useContactListFilters", () => {
     });
     expect(result.current.sortBy).toBe("name");
     expect(result.current.sortDir).toBe("asc");
-    expect(result.current.currentSort.label).toBe("Name A to Z");
+    expect(result.current.currentSort.label).toBe("A to Z");
 
     act(() => {
-      result.current.setSort("score");
+      result.current.setSort("date");
     });
-    expect(result.current.sortBy).toBe("score");
+    expect(result.current.sortBy).toBe("date");
     expect(result.current.sortDir).toBe("desc");
 
     act(() => {
@@ -177,9 +169,9 @@ describe("useContactListFilters", () => {
     );
 
     act(() => {
-      result.current.setSortOption("score-desc");
+      result.current.setSortOption("date-asc");
     });
-    expect(result.current.currentSort.label).toBe("Score");
+    expect(result.current.currentSort.label).toBe("Oldest");
 
     unmount();
 
@@ -188,8 +180,8 @@ describe("useContactListFilters", () => {
       useContactListFilters(sampleContacts as Contact[]),
     );
 
-    expect(remounted.current.sortBy).toBe("score");
-    expect(remounted.current.sortDir).toBe("desc");
-    expect(remounted.current.currentSort.label).toBe("Score");
+    expect(remounted.current.sortBy).toBe("date");
+    expect(remounted.current.sortDir).toBe("asc");
+    expect(remounted.current.currentSort.label).toBe("Oldest");
   });
 });

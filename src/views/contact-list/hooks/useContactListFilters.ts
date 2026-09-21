@@ -24,11 +24,10 @@ import { usePreferences } from "../../../contexts/PreferencesContext";
 import { scoreContactMatch } from "../../../lib/contactMatch";
 import type { Contact } from "../../../types";
 
-export type SortField = "name" | "date" | "score";
+export type SortField = "name" | "date";
 export type SortDir = "asc" | "desc";
 
-export type SortOption =
-  "name-asc" | "name-desc" | "date-desc" | "date-asc" | "score-desc";
+export type SortOption = "name-asc" | "name-desc" | "date-desc" | "date-asc";
 
 export interface SortChoice {
   id: SortOption;
@@ -37,22 +36,28 @@ export interface SortChoice {
   dir: SortDir;
 }
 
+/**
+ * The list orders by one of two things: the name, or the day the contact was
+ * added. Each reads both ways, which is four choices and the whole menu.
+ *
+ * A fifth choice ordered by the relationship score. It was the only one that
+ * needed a sentence to explain it, the score is already on every row as the
+ * ring around the avatar, and Pulse ranks by score for the reader who wants
+ * that. The labels are the shortest words that still say the order, because
+ * the menu's trigger shows the current one.
+ */
 export const SORT_CHOICES: readonly SortChoice[] = [
-  { id: "name-asc", label: "Name A to Z", field: "name", dir: "asc" },
-  { id: "name-desc", label: "Name Z to A", field: "name", dir: "desc" },
-  { id: "date-desc", label: "Newest first", field: "date", dir: "desc" },
-  { id: "date-asc", label: "Oldest first", field: "date", dir: "asc" },
-  { id: "score-desc", label: "Score", field: "score", dir: "desc" },
+  { id: "name-asc", label: "A to Z", field: "name", dir: "asc" },
+  { id: "name-desc", label: "Z to A", field: "name", dir: "desc" },
+  { id: "date-desc", label: "Newest", field: "date", dir: "desc" },
+  { id: "date-asc", label: "Oldest", field: "date", dir: "asc" },
 ] as const;
 
 export function getSortChoice(sortBy: SortField, sortDir: SortDir): SortChoice {
   if (sortBy === "name") {
     return sortDir === "desc" ? SORT_CHOICES[1] : SORT_CHOICES[0];
   }
-  if (sortBy === "date") {
-    return sortDir === "asc" ? SORT_CHOICES[3] : SORT_CHOICES[2];
-  }
-  return SORT_CHOICES[4];
+  return sortDir === "asc" ? SORT_CHOICES[3] : SORT_CHOICES[2];
 }
 
 export const SESSION_SORT_KEY = "contrack.network_sort";
@@ -174,7 +179,6 @@ export function useContactListFilters(contacts: Contact[]) {
       if (match) return match.field;
     }
     if (preferences.listSort === "recent") return "date";
-    if (preferences.listSort === "score") return "score";
     return "name";
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => {
@@ -183,8 +187,7 @@ export function useContactListFilters(contacts: Contact[]) {
       const match = SORT_CHOICES.find((c) => c.id === saved);
       if (match) return match.dir;
     }
-    if (preferences.listSort === "recent" || preferences.listSort === "score")
-      return "desc";
+    if (preferences.listSort === "recent") return "desc";
     return "asc";
   });
 
@@ -194,9 +197,6 @@ export function useContactListFilters(contacts: Contact[]) {
     if (!userHasChangedSort.current && !getSessionSort()) {
       if (preferences.listSort === "recent") {
         setSortBy("date");
-        setSortDir("desc");
-      } else if (preferences.listSort === "score") {
-        setSortBy("score");
         setSortDir("desc");
       } else {
         setSortBy("name");
@@ -254,8 +254,6 @@ export function useContactListFilters(contacts: Contact[]) {
         let cmp = 0;
         if (sortBy === "name") {
           cmp = (a.name || "").localeCompare(b.name || "");
-        } else if (sortBy === "score") {
-          cmp = (a.relationshipScore ?? 0) - (b.relationshipScore ?? 0);
         } else {
           // Date added — newer first by default (desc). ISO strings sort lexicographically without Date allocations.
           const da = a.addedAt || "";

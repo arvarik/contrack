@@ -186,22 +186,22 @@ test.describe("the Network header and start panel", () => {
     const firstRow = page.locator("#contact-list [data-roving-index]").first();
     await expect(firstRow).toContainText("Ada Lovelace");
 
-    const sortButton = page.getByRole("button", { name: "Name A to Z" });
+    const sortButton = page.getByRole("button", { name: "Sort: A to Z" });
     await sortButton.click();
 
-    const zToA = page.getByRole("menuitemcheckbox", { name: "Name Z to A" });
+    const zToA = page.getByRole("menuitemcheckbox", { name: "Z to A" });
     await expect(zToA).toBeVisible();
     await zToA.click();
 
     await expect(
-      page.getByRole("button", { name: "Name Z to A" }),
+      page.getByRole("button", { name: "Sort: Z to A" }),
     ).toBeVisible();
     await expect(firstRow).not.toContainText("Ada Lovelace");
 
-    await page.getByRole("button", { name: "Name Z to A" }).click();
-    await page.getByRole("menuitemcheckbox", { name: "Name A to Z" }).click();
+    await page.getByRole("button", { name: "Sort: Z to A" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "A to Z" }).click();
     await expect(
-      page.getByRole("button", { name: "Name A to Z" }),
+      page.getByRole("button", { name: "Sort: A to Z" }),
     ).toBeVisible();
     await expect(firstRow).toContainText("Ada Lovelace");
   });
@@ -217,12 +217,12 @@ test.describe("the Network header and start panel", () => {
     await expect(
       page.getByRole("button", { name: "Contact actions" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Name A to Z" }).click();
+    await page.getByRole("button", { name: "Sort: A to Z" }).click();
 
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect(menu).toHaveAttribute("popover", "manual");
-    const item = page.getByRole("menuitemcheckbox", { name: "Newest first" });
+    const item = page.getByRole("menuitemcheckbox", { name: "Newest" });
     const onTop = await item.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(

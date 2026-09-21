@@ -999,6 +999,25 @@ html[data-text-scale="large"] {
  * a Tailwind layer loses to any unlayered rule.
  * ===================================================================== */
 
+/*
+ * Nothing of MapLibre's own chrome is drawn until the map has loaded.
+ *
+ * The attribution control is born expanded: as soon as the style's
+ * attributions arrive, MapLibre lays the full credit strip across the map,
+ * and it stays until something collapses it. `ContactMap` collapses it, but
+ * only once the map has loaded, so the strip flashed over the picture on
+ * every map that opened. The class it carries cannot tell that state from
+ * the one a reader opens, so it is CSS, not JavaScript, that covers the one
+ * moment the chrome is wrong. `visibility` and not `display`: the control
+ * keeps its box, so nothing moves when it appears.
+ *
+ * By the time this lifts, the collapse has run and the credit sits behind
+ * the "i" button, which is where MapLibre itself leaves it after a drag.
+ */
+.contact-map[data-map-ready="false"] .maplibregl-control-container {
+  visibility: hidden;
+}
+
 .contact-map .maplibregl-ctrl-group,
 .contact-map .maplibregl-ctrl-group:not(:empty) {
   overflow: hidden;

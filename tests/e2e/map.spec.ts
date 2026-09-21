@@ -499,6 +499,71 @@ test.describe("map", () => {
     await expect(credit).toContainText("Test Basemap");
   });
 
+  test("draws none of its own chrome until it has loaded", async ({ page }) => {
+    // The style never answers, so the map never loads. That holds open the
+    // one moment the chrome is wrong: MapLibre lays the full credit strip
+    // across the map as soon as a style's attributions arrive, and the
+    // collapse runs on load. The strip used to flash over the picture every
+    // time a map opened, which on the contact page is every person a reader
+    // steps to. The rule that covers it is CSS, keyed on the wrapper.
+    let answer: (() => void) | null = null;
+    const stalled = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    await page.route(OPENFREEMAP_ROUTE, async (route) => {
+      await stalled;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(CREDITED_STYLE),
+      });
+    });
+
+    await page.goto("/map");
+    const map = page.getByRole("region", { name: "Contact map" });
+    await expect(map).toHaveAttribute("data-map-ready", "false");
+    await expect
+      .poll(async () =>
+        map.evaluate((el) => {
+          const chrome = el.querySelector(".maplibregl-control-container");
+          return chrome ? getComputedStyle(chrome).visibility : "no chrome";
+        }),
+      )
+      .toBe("hidden");
+
+    // Let the style through: the map loads, and the chrome appears in the
+    // state the collapse left it in.
+    answer!();
+    await expect(map).toHaveAttribute("data-map-ready", "true");
+    await expect(map.locator(".maplibregl-ctrl-attrib-button")).toBeVisible();
+    await expect(map.locator(".maplibregl-ctrl-attrib-inner")).toBeHidden();
+  });
+
+  test("the contact's mini map waits, then arrives loaded", async ({
+    page,
+    seed,
+  }) => {
+    await stubBasemap(page);
+    const ada = seed.byName("Ada Lovelace");
+    await page.goto(`/contact/${ada.id}`);
+
+    // Nothing of the map is on screen until it has loaded: the frame holds
+    // one colour, and the map fades up through it.
+    const mini = page.getByRole("region", { name: "Location map" });
+    await expect(mini).toHaveAttribute("data-map-ready", "true");
+    await expect(
+      mini.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeVisible();
+    await expect
+      .poll(async () =>
+        mini.evaluate((el) => {
+          const fader = el.closest("[class*='opacity-']");
+          return fader ? getComputedStyle(fader).opacity : "no fader";
+        }),
+      )
+      .toBe("1");
+  });
+
   test("opens the hover card above the pins", async ({ page }) => {
     await stubBasemap(page);
     await page.goto("/map");
