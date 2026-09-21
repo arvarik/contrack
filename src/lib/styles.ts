@@ -109,6 +109,22 @@ export const navLink = (active: boolean, extra?: string) =>
 export const ICON_BTN =
   "hit-area p-2 rounded-xl text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors";
 
+/**
+ * A quiet text button beside a control: "Reset", "Show more", "Clear".
+ * Small, the variant text colour, the accent on hover, and a 44 px tap box.
+ * It never competes with the control it sits beside.
+ */
+export const BTN_QUIET =
+  "hit-area inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors whitespace-nowrap";
+
+/**
+ * The mark on a setting that is not at its default: a 6 px accent dot after
+ * the title. `SettingRow` draws it with a name for a screen reader and a
+ * tooltip, and puts a `BTN_QUIET` "Reset" beside the control.
+ */
+export const CHANGED_MARK =
+  "inline-block w-1.5 h-1.5 rounded-full bg-primary shrink-0";
+
 /** Icon button, active/selected variant */
 export const ICON_BTN_ACTIVE =
   "p-2 rounded-lg bg-primary text-on-primary shadow-sm transition-all";

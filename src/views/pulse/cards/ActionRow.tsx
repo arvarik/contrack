@@ -144,12 +144,18 @@ export const ActionRow = memo(
         {/* Main details */}
         <div className="flex flex-col flex-1 min-w-0 pr-2">
           <div className="flex items-center gap-2">
+            {/*
+              A 16 px text link with a 44 px tap box. The clip for a long
+              name sits on an inner span so the box is not cut away with it.
+            */}
             <Link
               to={`/contact/${item.contactId}`}
               onClick={(e) => e.stopPropagation()}
-              className="text-xs font-semibold text-on-surface hover:text-primary transition-colors truncate max-w-[180px] sm:max-w-none"
+              className="hit-area inline-flex min-w-0 text-xs font-semibold text-on-surface hover:text-primary transition-colors"
             >
-              {item.contactName}
+              <span className="truncate max-w-[180px] sm:max-w-none">
+                {item.contactName}
+              </span>
             </Link>
 
             {/* Due chip */}

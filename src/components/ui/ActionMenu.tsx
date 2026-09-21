@@ -25,10 +25,14 @@
  * (Delete) sits last, under a hairline.
  *
  * The panel is solid (`.menu-panel`): the sort menu used to be glass over
- * the contact list, and rows showed through the items. It opens where it
- * fits. It drops up when the space below runs out, and it slides in from the
- * window's edge when the trigger sits closer to that edge than the menu is
- * wide, so a menu on the last column of a page is never cut off.
+ * the contact list, and rows showed through the items. It opens in the
+ * browser's top layer through `usePanelPlacement`, so nothing later in the
+ * page can paint over it: the same sort menu once opened under the selected
+ * contact row, because the Network header and the row were both `z-10`. It
+ * opens where it fits. It drops up when the space below runs out, and it
+ * slides in from the window's edge when the trigger sits closer to that
+ * edge than the menu is wide, so a menu on the last column of a page is
+ * never cut off.
  *
  * @module components/ui/ActionMenu
  */
@@ -127,12 +131,6 @@ export const ActionMenu = ({
   const menu = useRef<HTMLDivElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const placement = usePanelPlacement({
-    open,
-    align,
-    trigger,
-    panel: menu,
-  });
 
   const setTrigger = useCallback(
     (el: HTMLButtonElement | null) => {
@@ -151,6 +149,13 @@ export const ActionMenu = ({
   );
 
   const close = useCallback(() => change(false), [change]);
+  const placement = usePanelPlacement({
+    open,
+    align,
+    trigger,
+    panel: menu,
+    onClose: close,
+  });
   useClickOutside(wrapper, close, open);
 
   /** The enabled items in the open menu, in order. */
@@ -346,8 +351,8 @@ export const ActionMenu = ({
           // container takes it only if every item is disabled.
           tabIndex={-1}
           onKeyDown={onMenuKeyDown}
-          style={placement.style}
-          className={cn("absolute z-50", MENU_PANEL, placement.className)}
+          {...placement.panelProps}
+          className={cn(placement.panelProps.className, MENU_PANEL)}
         >
           {heading && (
             <div role="presentation" className={MENU_HEADING}>

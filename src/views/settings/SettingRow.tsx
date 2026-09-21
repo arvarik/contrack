@@ -2,14 +2,27 @@
  * SettingRow — an addressable row for one setting or preference.
  *
  * Each setting sits in a SettingRow with an id. Hash links scroll to the row
- * and flash its background once for 1.2 seconds. A preference with a stored
- * key shows a changed indicator and a Reset button.
+ * and flash its background once for 1.2 seconds.
+ *
+ * A preference with a stored key is not at its default. The row says so in
+ * two quiet places instead of a line of its own under the description, which
+ * used to change the row's height and read like a footnote:
+ *
+ * 1. A 6 px accent dot after the title (`CHANGED_MARK`), named "Changed from
+ *    the default" for a screen reader and a pointer.
+ * 2. A "Reset" text button (`BTN_QUIET`) at the start of the control cluster,
+ *    so the control itself keeps its place on the row's right edge whether
+ *    the button is there or not.
+ *
+ * That pair is the app's one way of showing a value that is off its default.
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { RotateCcw } from "lucide-react";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import type { Preferences } from "../../api/preferences";
 import { cn } from "../../lib/utils";
+import { BTN_QUIET, CHANGED_MARK } from "../../lib/styles";
 
 export interface SettingRowProps {
   /** Stable kebab-case fragment id. */
@@ -22,6 +35,8 @@ export interface SettingRowProps {
   prefKey?: keyof Preferences;
   className?: string;
 }
+
+export const CHANGED_LABEL = "Changed from the default";
 
 export const SettingRow = ({
   id,
@@ -37,7 +52,7 @@ export const SettingRow = ({
   const [flashing, setFlashing] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
 
-  const isStored = prefKey ? stored.includes(prefKey) : false;
+  const isChanged = prefKey ? stored.includes(prefKey) : false;
   const controlNode = control ?? children;
 
   useEffect(() => {
@@ -68,36 +83,38 @@ export const SettingRow = ({
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-sm text-on-surface">{title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-sm text-on-surface">{title}</h3>
+            {isChanged && (
+              <span
+                role="img"
+                aria-label={CHANGED_LABEL}
+                title={CHANGED_LABEL}
+                className={CHANGED_MARK}
+              />
+            )}
+          </div>
           <div className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
             {description}
           </div>
         </div>
-        {controlNode && <div className="shrink-0 sm:ml-4">{controlNode}</div>}
+        {(controlNode || isChanged) && (
+          <div className="shrink-0 sm:ml-4 flex items-center gap-2">
+            {isChanged && prefKey && (
+              <button
+                type="button"
+                onClick={() => resetPreference(prefKey)}
+                className={BTN_QUIET}
+                title={`Reset ${title} to default`}
+              >
+                <RotateCcw aria-hidden="true" className="w-3.5 h-3.5" />
+                Reset
+              </button>
+            )}
+            {controlNode}
+          </div>
+        )}
       </div>
-
-      {isStored && prefKey && (
-        <div className="flex items-center gap-2 mt-2 pt-1">
-          <span
-            className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant"
-            title="Changed from the default"
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"
-              aria-hidden="true"
-            />
-            <span>Changed from the default</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => resetPreference(prefKey)}
-            className="hit-area text-xs font-semibold text-primary hover:underline ml-2"
-            title={`Reset ${title} to default`}
-          >
-            Reset
-          </button>
-        </div>
-      )}
     </div>
   );
 };

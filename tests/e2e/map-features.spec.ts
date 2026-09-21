@@ -441,7 +441,11 @@ test.describe("map features - filters and place search", () => {
 
     // Open Saved views menu and select Virginia
     await page.getByRole("button", { name: "Saved views" }).click();
-    const virginiaItem = page.getByRole("menuitem", { name: "Virginia" });
+    // Exact: "Rename Virginia" and "Delete Virginia" are items too.
+    const virginiaItem = page.getByRole("menuitem", {
+      name: "Virginia",
+      exact: true,
+    });
     await expect(virginiaItem).toBeVisible();
     await virginiaItem.click();
 

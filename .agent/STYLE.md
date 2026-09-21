@@ -195,6 +195,33 @@ trigger rect) composes the same constants from `src/lib/styles.ts`:
 `MENU_HEADING`, `MENU_SEPARATOR`, `MENU_HINT`, `MENU_ICON`. Nothing that opens
 under a control uses `glass-panel`, a `border`, or its own row classes.
 
+`ActionMenu` and `Select` open their panel in the browser's top layer through
+`usePanelPlacement` (`src/hooks/usePanelPlacement.ts`): `popover="manual"`,
+`showPopover()`, then a fixed position measured from the trigger. The top
+layer paints above every stacking context and every `overflow: hidden`, and
+the panel stays in the DOM under its trigger, so a click inside it is inside
+the trigger's wrapper and a dialog's focus trap still sees its rows. The
+selected contact row is `z-10` and comes after the `sticky z-10` Network
+header, and the sort menu used to open under it. A scroll that moves the
+trigger closes the panel. Do not give a panel a `z-index` and hope: put it
+in the top layer, or in a portal at `document.body` like `ContextMenu`.
+
+### Switches, and a value off its default
+
+- ✅ `Switch` (`src/components/ui/Switch.tsx`) for every on/off setting. A
+  44 by 24 px track that is the button itself, with `hit-area` for the tap
+  box. Off: the highest container tone inside a hairline, a 16 px knob in
+  `on-surface-variant`. On: the accent, a 20 px knob in `on-primary` with a
+  check in it. Never a hand-rolled `role="switch"`.
+- ✅ A setting that is not at its default says so in two quiet places, and
+  nowhere else: a 6 px accent dot after the title (`CHANGED_MARK`, named
+  "Changed from the default" for a screen reader and a pointer) and a
+  "Reset" text button (`BTN_QUIET`, a `RotateCcw` glyph and the word) at the
+  start of the control cluster, so the control keeps its place on the row's
+  right edge. `SettingRow` draws both from `prefKey`.
+- ❌ A line of text under the description for the changed state, a coloured
+  bar down the row's left edge, or a "Reset" link with an underline.
+
 ## 3. Component Patterns
 
 ### Grid & Overflow Restrictions

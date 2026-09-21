@@ -23,6 +23,10 @@
  * 3. Choosing closes the list, returns focus to the trigger, and then calls
  *    `onChange` when the value changed.
  *
+ * The list opens in the browser's top layer through `usePanelPlacement`, so
+ * nothing on the page can paint over it and no scroller can clip it, and it
+ * drops up or slides in from the window's edge when it would not fit.
+ *
  * Three forms of the trigger, one panel:
  *
  *   field  a full-width box on the form surface, in a dialog or a settings row
@@ -105,9 +109,12 @@ const TRIGGER: Record<SelectVariant, string> = {
     "hit-area gap-1 rounded-xl px-2.5 py-1.5 text-sm font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
 };
 
-/** The panel's width: a field's list is as wide as the field. */
+/**
+ * The panel's width floor. A field's list is as wide as the field, which
+ * `usePanelPlacement` measures and sets inline.
+ */
 const PANEL: Record<SelectVariant, string> = {
-  field: "min-w-full",
+  field: "",
   chip: "min-w-[10rem]",
   ghost: "min-w-[12rem]",
 };
@@ -139,14 +146,15 @@ export function Select<T extends string = string>({
   const wrapper = useRef<HTMLDivElement>(null);
   const generatedId = useId();
   const listId = `${id ?? generatedId}-listbox`;
+  const close = useCallback(() => setOpen(false), []);
   const placement = usePanelPlacement({
     open,
     align,
     trigger,
     panel: list,
+    matchWidth: variant === "field",
+    onClose: close,
   });
-
-  const close = useCallback(() => setOpen(false), []);
   useClickOutside(wrapper, close, open);
 
   const selected = options.find((option) => option.value === value);
@@ -298,12 +306,12 @@ export function Select<T extends string = string>({
           // Focusable by script only: focus lives on the rows.
           tabIndex={-1}
           onKeyDown={onListKeyDown}
-          style={placement.style}
+          {...placement.panelProps}
           className={cn(
-            "absolute z-50 outline-none",
+            placement.panelProps.className,
+            "outline-none",
             MENU_PANEL,
             PANEL[variant],
-            placement.className,
           )}
         >
           {groups.map((group) => (

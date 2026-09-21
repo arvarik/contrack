@@ -176,6 +176,14 @@ test.describe("desktop", () => {
     ).toHaveAttribute("aria-checked", "true");
     await expect(page.getByText("Find what was said, and when")).toBeVisible();
     await expectPageAccessible(page, testInfo, "ask-history-notes");
+
+    // The pane's open state is an account preference on the worker's shared
+    // instance. Put it back, so the next journey finds the pane it expects.
+    await page.goto("/search");
+    const reopen = page.getByRole("button", { name: "Search history" });
+    await expect(reopen).toHaveAttribute("aria-pressed", "false");
+    await reopen.click();
+    await expect(reopen).toHaveAttribute("aria-pressed", "true");
   });
 
   test("palette and Ask Contrack pane share unified search history", async ({
@@ -185,8 +193,16 @@ test.describe("desktop", () => {
     const ada = personMatch(seed.byName("Ada Lovelace"));
     await answerPeopleSearch(page, [ada]);
 
-    // 1. Ask a question on the /search page
+    // 1. Ask a question on the /search page, with the history pane open.
+    // Its open state is an account preference, so another journey on the
+    // same instance may have closed it.
     await page.goto("/search");
+    const historyToggle = page.getByRole("button", { name: "Search history" });
+    await expect(historyToggle).toHaveAttribute("aria-pressed", /true|false/);
+    if ((await historyToggle.getAttribute("aria-pressed")) === "false") {
+      await historyToggle.click();
+      await expect(historyToggle).toHaveAttribute("aria-pressed", "true");
+    }
     const searchInput = page.getByRole("textbox", {
       name: "Ask anything about your network",
     });

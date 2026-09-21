@@ -45,7 +45,9 @@ describe("SettingRow", () => {
     expect(screen.getByText("Test Setting")).toBeTruthy();
     expect(screen.getByText("A description of the test setting")).toBeTruthy();
     expect(screen.getByText("Control")).toBeTruthy();
-    expect(screen.queryByText("Changed from the default")).toBeNull();
+    expect(
+      screen.queryByRole("img", { name: "Changed from the default" }),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: "Reset" })).toBeNull();
   });
 
@@ -64,9 +66,15 @@ describe("SettingRow", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Changed from the default")).toBeTruthy();
+    const mark = screen.getByRole("img", { name: "Changed from the default" });
+    expect(mark.getAttribute("title")).toBe("Changed from the default");
     const resetButton = screen.getByRole("button", { name: "Reset" });
     expect(resetButton).toBeTruthy();
+    // The reset sits in the control cluster, before the control.
+    expect(
+      resetButton.compareDocumentPosition(screen.getByText("Control")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     fireEvent.click(resetButton);
     expect(mockResetPreference).toHaveBeenCalledWith("theme");

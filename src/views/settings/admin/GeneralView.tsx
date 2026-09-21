@@ -35,6 +35,7 @@ import {
 } from "../../../api/admin";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { Switch } from "../../../components/ui/Switch";
 import { tileDelay } from "../../../lib/motion";
 
 const GroupHeading = ({ children }: { children: React.ReactNode }) => (
@@ -175,13 +176,11 @@ export const RegistrationCard = () => {
             accounts are always members and start empty.
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={open}
-          aria-label="Anyone can create an account"
+        <Switch
+          checked={open}
+          label="Anyone can create an account"
           disabled={isLoading || save.isPending || !data}
-          onClick={() =>
+          onChange={() =>
             save.mutate(
               { registrationOpen: !open },
               {
@@ -195,29 +194,7 @@ export const RegistrationCard = () => {
               },
             )
           }
-          className={cn(
-            "shrink-0 inline-flex items-center justify-center",
-            "min-w-[44px] min-h-[44px] rounded-full",
-            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "relative block w-14 h-8 rounded-full transition-colors",
-              open ? "bg-primary" : "bg-surface-container-high",
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
-                "transition-transform",
-                open ? "translate-x-7" : "translate-x-1",
-              )}
-            />
-          </span>
-        </button>
+        />
       </div>
 
       {open && (
@@ -241,13 +218,11 @@ export const RegistrationCard = () => {
               their email address.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={magicLink}
-            aria-label="Sign in by emailed link"
+          <Switch
+            checked={magicLink}
+            label="Sign in by emailed link"
             disabled={isLoading || save.isPending || !data || !mailReady}
-            onClick={() =>
+            onChange={() =>
               save.mutate(
                 { magicLinkSignIn: !magicLink },
                 {
@@ -261,29 +236,7 @@ export const RegistrationCard = () => {
                 },
               )
             }
-            className={cn(
-              "shrink-0 inline-flex items-center justify-center",
-              "min-w-[44px] min-h-[44px] rounded-full",
-              "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "relative block w-14 h-8 rounded-full transition-colors",
-                magicLink ? "bg-primary" : "bg-surface-container-high",
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
-                  "transition-transform",
-                  magicLink ? "translate-x-7" : "translate-x-1",
-                )}
-              />
-            </span>
-          </button>
+          />
         </div>
 
         {!mailReady && (

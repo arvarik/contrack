@@ -206,6 +206,36 @@ test.describe("the Network header and start panel", () => {
     await expect(firstRow).toContainText("Ada Lovelace");
   });
 
+  test("the sort menu opens above the selected row", async ({ page }) => {
+    await page.goto("/");
+    const rows = page.locator("#contact-list [data-roving-index]");
+    await expect(rows.first()).toContainText("Ada Lovelace");
+
+    // The selected row is `z-10` and comes after the `sticky z-10` header,
+    // so a menu drawn inside the header used to open under it.
+    await rows.nth(1).click();
+    await expect(
+      page.getByRole("button", { name: "Contact actions" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Name A to Z" }).click();
+
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveAttribute("popover", "manual");
+    const item = page.getByRole("menuitemcheckbox", { name: "Newest first" });
+    const onTop = await item.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        r.left + r.width / 2,
+        r.top + r.height / 2,
+      );
+      return hit !== null && el.contains(hit);
+    });
+    expect(onTop).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+  });
+
   test("Select mode shows N selected, Select all, Done, and the bulk toolbar", async ({
     page,
   }) => {
