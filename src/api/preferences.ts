@@ -19,7 +19,8 @@ export type MergePreset = "conservative" | "default" | "aggressive";
 export type TempUnit = "celsius" | "fahrenheit";
 export type StartPage = "network" | "pulse";
 export type ListSort = "name" | "recent";
-export type CadenceDays = 30 | 60 | 90 | 180;
+export type { CadenceDays } from "../../shared/cadence";
+import type { CadenceDays } from "../../shared/cadence";
 export type WeekStart = "monday" | "sunday";
 export type TextScale = "default" | "large";
 export type MotionPreference = "system" | "reduced";
@@ -56,6 +57,8 @@ export interface Preferences {
   startPage: StartPage;
   listSort: ListSort;
   defaultCadenceDays: CadenceDays;
+  /** Contacts added by hand start tracked. Imports and connectors never do. */
+  trackNewContacts: boolean;
   weekStart: WeekStart;
   showWeather: boolean;
   textScale: TextScale;
@@ -107,6 +110,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   startPage: "network",
   listSort: "name",
   defaultCadenceDays: 90,
+  trackNewContacts: false,
   weekStart: "monday",
   showWeather: false,
   textScale: "default",

@@ -136,6 +136,18 @@ export const PEOPLE: readonly SeedPerson[] = [
   },
 ];
 
+/**
+ * The people a test account keeps up with. Four of six: Edsger (400 days
+ * quiet, so At risk), Ada, Grace and Katherine (scored). Linus (no notes)
+ * and Margaret stay untracked, so every spec has both states to look at.
+ */
+export const TRACKED: ReadonlySet<string> = new Set([
+  "Ada Lovelace",
+  "Grace Hopper",
+  "Edsger Dijkstra",
+  "Katherine Johnson",
+]);
+
 export interface SeededContact {
   id: string;
   name: string;
@@ -178,6 +190,13 @@ export async function seedInstance(instance: ContrackInstance): Promise<Seed> {
         title: note.title,
         content: note.content,
         date: daysAgoIso(note.daysAgo),
+      });
+    }
+    // Tracked last, after the notes, so the score the route computes on the
+    // flip reads the interactions it has.
+    if (TRACKED.has(person.name)) {
+      await instance.api("PATCH", `/contacts/${created.id}`, {
+        isTracked: true,
       });
     }
   }

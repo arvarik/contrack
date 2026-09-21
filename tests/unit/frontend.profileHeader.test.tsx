@@ -73,6 +73,8 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
     avatarUrl: null,
     isGhost: false,
     isArchived: false,
+    isTracked: false,
+    trackedAt: null,
     addedAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     cadenceDays: 30,

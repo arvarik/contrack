@@ -317,7 +317,7 @@ export const searchService = {
     if (filters.length) {
       const rows = sqlite
         .prepare(
-          `SELECT c.id, c.role, c.company, c.location, c.industry, c.relationshipScore, c.updatedAt,
+          `SELECT c.id, c.role, c.company, c.location, c.industry, c.relationshipScore, c.isTracked, c.updatedAt,
         (SELECT json_group_array(json_object('tag', tag)) FROM contact_tags WHERE contactId = c.id) AS tagsJson
         FROM contacts c WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}`,
         )
@@ -328,6 +328,7 @@ export const searchService = {
         location: string | null;
         industry: string | null;
         relationshipScore: number | null;
+        isTracked: number;
         updatedAt: string;
         tagsJson: string;
       }[];
@@ -335,7 +336,14 @@ export const searchService = {
         rows
           .filter((row) =>
             filters.every((filter) =>
-              matchesFacet({ ...row, tags: JSON.parse(row.tagsJson) }, filter),
+              matchesFacet(
+                {
+                  ...row,
+                  isTracked: !!row.isTracked,
+                  tags: JSON.parse(row.tagsJson),
+                },
+                filter,
+              ),
             ),
           )
           .map((row) => row.id),

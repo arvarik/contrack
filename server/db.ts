@@ -285,6 +285,12 @@ if (readTenancyVersion() < 1) {
 //
 // `geoSource` is not indexed by anything. It lives in this loop because it is
 // the one place a contacts column is added once, by name, and guarded.
+//
+// `isTracked` says a person chose to keep up with this contact. Only a
+// tracked contact is scored, appears on Pulse, or is tinted on the map.
+// `trackedAt` is the moment the flag last turned on, written by the two
+// `contacts_track_stamp_*` triggers in §4 and by nothing else. It is the
+// clock for a tracked contact nobody has logged a note on yet.
 // =============================================================================
 
 for (const column of [
@@ -295,6 +301,8 @@ for (const column of [
   "phoneticHash TEXT",
   "relationshipScore INTEGER DEFAULT 50",
   "geoSource TEXT",
+  "isTracked INTEGER NOT NULL DEFAULT 0",
+  "trackedAt TEXT",
 ]) {
   const name = column.split(" ")[0];
   const columns = sqlite.pragma("table_info(contacts)") as { name: string }[];
@@ -1582,6 +1590,45 @@ sqlite.exec(`
 sqlite.exec(
   `CREATE INDEX IF NOT EXISTS idx_contacts_score_dirty
      ON contacts(ownerId) WHERE scoreDirty = 1`,
+);
+
+// `trackedAt` is stamped here, in the database, so a route, an MCP tool, a
+// merge and an import all record the moment the same way and none of them
+// can forget. A flag that turns on takes the time; a flag that turns off
+// clears it. A row born tracked takes the time on insert.
+//
+// `isTracked` is an edit column, so the two triggers above already stamp
+// `updatedAt` and mark the row for scoring when it flips. These two only add
+// the clock.
+// tenant-lint: allow boot migration
+sqlite.exec(`
+  DROP TRIGGER IF EXISTS contacts_track_stamp_ins;
+  CREATE TRIGGER contacts_track_stamp_ins
+  AFTER INSERT ON contacts
+  FOR EACH ROW
+  WHEN NEW.isTracked = 1 AND NEW.trackedAt IS NULL
+  BEGIN
+    UPDATE contacts SET trackedAt = datetime('now') WHERE id = NEW.id;
+  END;
+
+  DROP TRIGGER IF EXISTS contacts_track_stamp_upd;
+  CREATE TRIGGER contacts_track_stamp_upd
+  AFTER UPDATE OF isTracked ON contacts
+  FOR EACH ROW
+  WHEN NEW.isTracked != OLD.isTracked
+  BEGIN
+    UPDATE contacts
+       SET trackedAt = CASE WHEN NEW.isTracked = 1 THEN datetime('now') ELSE NULL END
+     WHERE id = NEW.id;
+  END;
+`);
+
+// Every reader of the score, Pulse and the map's health layer asks for one
+// account's tracked contacts. The partial index holds only those rows.
+// tenant-lint: allow boot migration
+sqlite.exec(
+  `CREATE INDEX IF NOT EXISTS idx_contacts_owner_tracked
+     ON contacts(ownerId) WHERE isTracked = 1`,
 );
 
 // =============================================================================

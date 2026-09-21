@@ -161,7 +161,17 @@ router.get(
     // this line ran first.
     contactRepo.requireOwned(scopeOf(req), id);
     const breakdown = relationshipService.explainScore(id);
-    if (!breakdown) throw new NotFoundError("Contact");
+    // Only a tracked contact has a score. The client never asks for an
+    // untracked one, so this answer is for a script or a stale tab.
+    if (!breakdown)
+      throw new AppError(
+        "This contact is not tracked, so it has no score.",
+        404,
+        {
+          code: "NOT_TRACKED",
+          details: { entity: "Contact", id },
+        },
+      );
     res.json(breakdown);
   }),
 );
@@ -443,11 +453,17 @@ router.put(
   ),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
+    const scope = scopeOf(req);
     const count = contactService.bulkUpdateContacts(
-      scopeOf(req),
+      scope,
       req.body.ids,
       req.body.data,
     );
+    // Contacts that just became tracked are scored before the answer goes
+    // out, so the ring is right on the next read and not an hour later.
+    if (req.body.data.isTracked === true) {
+      await relationshipService.scoreContacts(scope.ownerId, req.body.ids);
+    }
     log.info(
       "API",
       `[${rid}] PUT /api/contacts/bulk-update → ${count} updated`,

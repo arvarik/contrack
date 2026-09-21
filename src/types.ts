@@ -142,6 +142,13 @@ export interface Contact {
   avatarUrl: string | null;
   isGhost: boolean;
   isArchived: boolean;
+  /**
+   * A person chose to keep up with this contact. Only a tracked contact has
+   * a score, a place on Pulse and a tint on the map.
+   */
+  isTracked: boolean;
+  /** When `isTracked` last turned on. Null while untracked. */
+  trackedAt: string | null;
   addedAt: string;
   updatedAt: string;
   cadenceDays: number;

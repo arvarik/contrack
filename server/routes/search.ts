@@ -61,6 +61,7 @@ router.get(
                 "tag",
                 "score",
                 "updated",
+                "tracked",
               ]),
               value: z.string().trim().min(1).max(100),
               operator: z.enum([">", "<"]).optional(),

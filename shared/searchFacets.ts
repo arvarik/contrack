@@ -10,7 +10,8 @@ export type FacetField =
   | "updated"
   | "missing"
   | "list"
-  | "near";
+  | "near"
+  | "tracked";
 
 export interface FacetFilter {
   field: FacetField;
@@ -34,6 +35,8 @@ export interface FacetContact {
   industry?: string | null;
   tags?: ({ tag: string } | string)[];
   relationshipScore?: number | null;
+  /** A person chose to keep up with this contact. */
+  isTracked?: boolean;
   updatedAt?: string | null;
   emails?: { email: string }[];
   phones?: { phone: string }[];
@@ -64,6 +67,8 @@ export function matchesFacet(
       );
     case "score":
       return matchesScoreFilter(contact.relationshipScore ?? null, filter);
+    case "tracked":
+      return matchesTrackedFilter(contact.isTracked ?? false, v);
     case "updated":
       return matchesDateFilter(contact.updatedAt ?? null, filter);
     case "missing":
@@ -91,6 +96,17 @@ export function matchesFacet(
     default:
       return true;
   }
+}
+
+/**
+ * Tracked check: `tracked:yes` for the people a person keeps up with,
+ * `tracked:no` for everyone else. Any other value matches nobody, so a typo
+ * shows an empty list rather than the whole one.
+ */
+function matchesTrackedFilter(isTracked: boolean, value: string): boolean {
+  if (value === "yes" || value === "true" || value === "1") return isTracked;
+  if (value === "no" || value === "false" || value === "0") return !isTracked;
+  return false;
 }
 
 /** Missing field check: missing:company, missing:location, missing:email, missing:phone */

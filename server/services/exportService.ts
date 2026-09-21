@@ -117,6 +117,9 @@ export function buildContactsCsv(scope: Scope): string {
     "Phones",
     "Tags",
     "Archived",
+    "Tracked",
+    "Cadence Days",
+    "Tracked At",
     "Added At",
     "Last Contacted At",
   ];
@@ -135,6 +138,9 @@ export function buildContactsCsv(scope: Scope): string {
       (c.phones ?? []).map((p) => p.phone).join("; "),
       (c.tags ?? []).map((t) => t.tag).join("; "),
       c.isArchived ? "yes" : "no",
+      c.isTracked ? "yes" : "no",
+      c.cadenceDays,
+      c.trackedAt,
       c.addedAt,
       c.lastContactedAt,
     ]

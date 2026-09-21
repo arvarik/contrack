@@ -32,6 +32,8 @@ export const mcpService = {
       company?: string;
       industry?: string;
       updatedSince?: string;
+      /** True for the people the account keeps up with, false for the rest. */
+      tracked?: boolean;
     },
   ) {
     let q = `SELECT * FROM contacts
@@ -54,6 +56,10 @@ export const mcpService = {
     if (options.updatedSince) {
       q += " AND updatedAt >= ?";
       params.push(options.updatedSince);
+    }
+    if (options.tracked !== undefined) {
+      q += " AND isTracked = ?";
+      params.push(options.tracked ? 1 : 0);
     }
 
     q += " ORDER BY addedAt DESC LIMIT ? OFFSET ?";
@@ -86,8 +92,8 @@ export const mcpService = {
         AND (
           nextFollowUpAt <= ?
           OR (
-             lastContactedAt IS NOT NULL AND cadenceDays > 0 AND
-             datetime(lastContactedAt, '+' || cadenceDays || ' days') <= ?
+             isTracked = 1 AND cadenceDays > 0 AND
+             datetime(COALESCE(lastContactedAt, trackedAt), '+' || cadenceDays || ' days') <= ?
           )
         )
       ORDER BY lastContactedAt ASC

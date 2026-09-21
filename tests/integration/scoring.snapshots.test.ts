@@ -28,10 +28,11 @@ function addContact(
   }> = {},
 ): string {
   const id = `snap-c-${++seq}`;
+  // Tracked: only a tracked contact is scored, so only one is snapshotted.
   sqlite
     .prepare(
-      `INSERT INTO contacts (id, ownerId, name, relationshipScore, isArchived, isGhost, deletedAt, canonicalId)
-       VALUES (?, ?, 'Contact', ?, ?, ?, ?, ?)`,
+      `INSERT INTO contacts (id, ownerId, name, relationshipScore, isArchived, isGhost, deletedAt, canonicalId, isTracked)
+       VALUES (?, ?, 'Contact', ?, ?, ?, ?, ?, 1)`,
     )
     .run(
       id,

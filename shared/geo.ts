@@ -43,6 +43,8 @@ export interface MapContact {
   lng: number;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
+  /** A person chose to keep up with this contact. Only then is it scored. */
+  isTracked?: boolean;
   nextFollowUpAt?: string | null;
   cadenceDays?: number | null;
   interactionCount?: number;
