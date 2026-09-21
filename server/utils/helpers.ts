@@ -43,6 +43,8 @@ const UPDATABLE_CONTACT_FIELDS = [
   "industry",
   "website",
   "isArchived",
+  // `trackedAt` is deliberately absent: only the database triggers write it.
+  "isTracked",
   "aiBriefing",
   "aiBriefingAt",
   "aiBackground",

@@ -45,14 +45,15 @@ export type ContactSourceRow = typeof schema.contactSources.$inferSelect;
  * Integer booleans from SQLite (0/1) are converted to JS booleans for:
  * - `isPrimary` on emails, phones, addresses
  * - `isCurrent` on experience
- * - `isGhost`, `isArchived` on the contact itself
+ * - `isGhost`, `isArchived`, `isTracked` on the contact itself
  */
 export interface HydratedContact extends Omit<
   ContactRow,
-  "isGhost" | "isArchived"
+  "isGhost" | "isArchived" | "isTracked"
 > {
   isGhost: boolean;
   isArchived: boolean;
+  isTracked: boolean;
   emails: Array<{
     id: string;
     email: string;
@@ -146,6 +147,7 @@ export interface ContactScalarPayload {
   themeColor?: string | null;
   isGhost?: boolean;
   isArchived?: boolean;
+  isTracked?: boolean;
   nextFollowUpAt?: string | null;
   aiSummary?: string | null;
   aiBackground?: string | null;

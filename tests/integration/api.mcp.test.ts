@@ -29,6 +29,7 @@ import request from "supertest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { makeTestApp } from "./helpers.ts";
+import { sqlite } from "../../server/db.ts";
 import {
   createActor,
   resetAccounts,
@@ -184,6 +185,116 @@ describe("MCP Server (/api/mcp)", () => {
       .structuredContent;
     expect(structured?.contacts.length).toBeGreaterThan(0);
 
+    await client.close();
+  });
+
+  it("get_contact has no score explanation for an untracked contact, and writes nothing", async () => {
+    const client = await makeConnectedClient(tokenA);
+    const contactId = seedA.contactIds[1];
+    const snapshot = () =>
+      sqlite
+        .prepare(
+          `SELECT relationshipScore, scoreDirty, updatedAt FROM contacts WHERE id = ?`,
+        )
+        .get(contactId);
+    const before = snapshot();
+
+    const res = await client.callTool({
+      name: "get_contact",
+      arguments: { id: contactId },
+    });
+
+    expect(res.isError).toBeFalsy();
+    const structured = (
+      res as {
+        structuredContent?: {
+          contact: { isTracked: boolean };
+          scoreExplanation: unknown;
+        };
+      }
+    ).structuredContent;
+    expect(structured?.contact.isTracked).toBe(false);
+    expect(structured?.scoreExplanation).toBeNull();
+    expect(snapshot()).toEqual(before);
+
+    await client.close();
+  });
+
+  it("update_contact can track a contact, and get_contact then explains its score", async () => {
+    const client = await makeConnectedClient(tokenA);
+    const contactId = seedA.contactIds[1];
+
+    const updated = await client.callTool({
+      name: "update_contact",
+      arguments: {
+        id: contactId,
+        fields: { isTracked: true, cadenceDays: 30 },
+      },
+    });
+    expect(updated.isError).toBeFalsy();
+    const contact = (
+      updated as {
+        structuredContent?: {
+          isTracked: boolean;
+          cadenceDays: number;
+          trackedAt: string | null;
+        };
+      }
+    ).structuredContent;
+    expect(contact?.isTracked).toBe(true);
+    expect(contact?.cadenceDays).toBe(30);
+    expect(typeof contact?.trackedAt).toBe("string");
+
+    const res = await client.callTool({
+      name: "get_contact",
+      arguments: { id: contactId },
+    });
+    const structured = (
+      res as { structuredContent?: { scoreExplanation: { score: number } } }
+    ).structuredContent;
+    expect(typeof structured?.scoreExplanation?.score).toBe("number");
+
+    // Back to untracked, so the other tests see the seed they expect.
+    await client.callTool({
+      name: "update_contact",
+      arguments: { id: contactId, fields: { isTracked: false } },
+    });
+    await client.close();
+  });
+
+  it("list_contacts filters by tracked", async () => {
+    const client = await makeConnectedClient(tokenA);
+    const contactId = seedA.contactIds[2];
+    await client.callTool({
+      name: "update_contact",
+      arguments: { id: contactId, fields: { isTracked: true } },
+    });
+
+    const tracked = await client.callTool({
+      name: "list_contacts",
+      arguments: { tracked: true },
+    });
+    const trackedRows = (
+      tracked as {
+        structuredContent?: { contacts: { id: string; isTracked: number }[] };
+      }
+    ).structuredContent?.contacts;
+    expect(trackedRows?.map((c) => c.id)).toEqual([contactId]);
+
+    const untracked = await client.callTool({
+      name: "list_contacts",
+      arguments: { tracked: false },
+    });
+    const untrackedRows = (
+      untracked as { structuredContent?: { contacts: { id: string }[] } }
+    ).structuredContent?.contacts;
+    expect(untrackedRows?.some((c) => c.id === contactId)).toBe(false);
+    expect(untrackedRows?.length).toBeGreaterThan(0);
+
+    await client.callTool({
+      name: "update_contact",
+      arguments: { id: contactId, fields: { isTracked: false } },
+    });
     await client.close();
   });
 

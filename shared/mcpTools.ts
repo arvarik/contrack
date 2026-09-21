@@ -23,13 +23,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     name: "get_contact",
     description:
-      "Retrieve a contact's full profile and relationship score explanation by contact ID.",
+      "Retrieve a contact's full profile by contact ID, with the relationship score explanation when the contact is tracked (isTracked). An untracked contact has no score.",
     readOnly: true,
   },
   {
     name: "list_contacts",
     description:
-      "Page through contacts with optional filtering by role, company, industry, or update timestamp.",
+      "Page through contacts with optional filtering by role, company, industry, update timestamp, or tracked (true for the people the account keeps up with).",
     readOnly: true,
   },
   {
@@ -74,7 +74,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: "update_contact",
-    description: "Update fields on an existing contact profile.",
+    description:
+      "Update fields on an existing contact profile, including isTracked (keep up with this person) and cadenceDays (how often).",
     readOnly: false,
   },
   {

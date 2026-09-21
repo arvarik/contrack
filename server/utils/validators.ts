@@ -200,6 +200,8 @@ export const contactCreateSchema = z
     cadenceDays: z.number().int().positive().nullable().optional(),
     isGhost: stringToBool,
     isArchived: stringToBool,
+    /** A person chose to keep up with this contact. See server/db.ts §2z-0. */
+    isTracked: stringToBool,
     nextFollowUpAt: dateSchema.nullable().optional(),
   })
   .merge(childRecordsSchema);

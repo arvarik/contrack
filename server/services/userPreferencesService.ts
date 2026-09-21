@@ -63,8 +63,7 @@ export type SearchHistoryEntry = z.infer<typeof searchHistoryEntrySchema>;
  * defaults live in their own object below, where they cannot leak into a
  * request body.
  */
-export const CADENCE_DAYS = [30, 60, 90, 180] as const;
-export type CadenceDays = (typeof CADENCE_DAYS)[number];
+export { CADENCE_DAYS, type CadenceDays } from "../../shared/cadence.ts";
 
 export const PULSE_COLUMNS = ["focus", "network", "intel"] as const;
 export type PulseColumn = (typeof PULSE_COLUMNS)[number];
@@ -130,7 +129,13 @@ export const preferenceSchemas = {
     z.literal(60),
     z.literal(90),
     z.literal(180),
+    z.literal(365),
   ]),
+  /**
+   * Contacts a person creates by hand start tracked. Imports and connectors
+   * never do, whatever this says.
+   */
+  trackNewContacts: z.boolean(),
   weekStart: z.enum(["monday", "sunday"]),
   showWeather: z.boolean(),
   textScale: z.enum(["default", "large"]),
@@ -173,6 +178,7 @@ const DEFAULTS: Preferences = {
   startPage: "network",
   listSort: "name",
   defaultCadenceDays: 90,
+  trackNewContacts: false,
   weekStart: "monday",
   showWeather: false,
   textScale: "default",

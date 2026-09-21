@@ -53,15 +53,17 @@ function addContact(
     lastContactedAt: string | null;
     isArchived: number;
     isGhost: number;
+    isTracked: number;
   }> = {},
 ): string {
   const id = `sc-${++seq}`;
+  // Tracked unless a test says otherwise: only a tracked contact is scored.
   sqlite
     .prepare(
       `INSERT INTO contacts
          (id, ownerId, name, cadenceDays, lastContactedAt, isGhost, isArchived,
-          relationshipScore, addedAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          isTracked, relationshipScore, addedAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -71,6 +73,7 @@ function addContact(
       overrides.lastContactedAt ?? LAST_CONTACTED,
       overrides.isGhost ?? 0,
       overrides.isArchived ?? 0,
+      overrides.isTracked ?? 1,
       UNSCORED,
       new Date().toISOString(),
       new Date().toISOString(),

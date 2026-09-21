@@ -243,6 +243,7 @@ export const contactRepo = {
       ...row,
       isGhost: !!row.isGhost,
       isArchived: !!row.isArchived,
+      isTracked: !!row.isTracked,
       emails: (stmts.emails.all(row.id) as Array<Record<string, unknown>>).map(
         (e) => ({
           ...e,
@@ -514,6 +515,7 @@ export const contactRepo = {
           ...row,
           isGhost: !!row.isGhost,
           isArchived: !!row.isArchived,
+          isTracked: !!row.isTracked,
           emails: (emailsMap.get(row.id) ?? []).map(({ contactId, ...e }) => ({
             ...e,
             isPrimary: !!e.isPrimary,

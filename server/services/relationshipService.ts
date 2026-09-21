@@ -50,6 +50,12 @@ interface ContactScoreRow {
   lastContactedAt: string | null;
 }
 
+/** The row a single-contact read takes: the score inputs plus the two gates. */
+interface ContactScoreTarget extends ContactScoreRow {
+  ownerId?: string | null;
+  isTracked: number;
+}
+
 interface InteractionStatsRow {
   total90d: number;
   total30d: number;
@@ -295,8 +301,19 @@ export interface SweepResult {
  */
 const BATCH_SIZE = 200;
 
-/** A contact is scored when it is neither a ghost nor archived. */
-const ELIGIBLE = "isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)";
+/**
+ * The most ids one request scores inline. Past this the rows stay marked and
+ * the hourly sweep finishes the job.
+ */
+export const INLINE_SCORE_LIMIT = 10_000;
+
+/**
+ * A contact is scored when a person tracks it, and it is neither a ghost nor
+ * archived. An untracked contact's stored score is a placeholder that no
+ * reader shows (see `scoreView` in shared/scoreBand).
+ */
+const ELIGIBLE =
+  "isTracked = 1 AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)";
 
 /** One account's remaining work in the current sweep. */
 interface OwnerQueue {
@@ -450,11 +467,13 @@ export const relationshipService = {
     const contact = sqlite
       .prepare(
         // tenant-lint: allow owner-checked by caller
-        `SELECT id, ownerId, cadenceDays, lastContactedAt FROM contacts WHERE id = ?`,
+        `SELECT id, ownerId, cadenceDays, lastContactedAt, isTracked
+           FROM contacts WHERE id = ?`,
       )
-      .get(contactId) as
-      (ContactScoreRow & { ownerId?: string | null }) | undefined;
-    if (!contact) return null;
+      .get(contactId) as ContactScoreTarget | undefined;
+    // An untracked contact has no score to explain, and nothing is written:
+    // MCP reads a contact through here, and a read must not score.
+    if (!contact || !contact.isTracked) return null;
 
     const defaultCadence = contact.ownerId
       ? (getPreferences(contact.ownerId).defaultCadenceDays ?? 90)
@@ -481,18 +500,18 @@ export const relationshipService = {
    * Compute and persist the relationship score for a single contact.
    * Called after each interaction creation for immediate feedback.
    */
-  computeScore(contactId: string): number {
+  computeScore(contactId: string): number | null {
     const contact = sqlite
       .prepare(
         // tenant-lint: allow owner-checked by caller
-        `
-      SELECT id, ownerId, cadenceDays, lastContactedAt FROM contacts WHERE id = ?
-    `,
+        `SELECT id, ownerId, cadenceDays, lastContactedAt, isTracked
+           FROM contacts WHERE id = ?`,
       )
-      .get(contactId) as
-      (ContactScoreRow & { ownerId?: string | null }) | undefined;
+      .get(contactId) as ContactScoreTarget | undefined;
 
-    if (!contact) return 50;
+    // Only a tracked contact is scored. An interaction logged on anybody
+    // else changes `lastContactedAt` and nothing more.
+    if (!contact || !contact.isTracked) return null;
 
     const defaultCadence = contact.ownerId
       ? (getPreferences(contact.ownerId).defaultCadenceDays ?? 90)
@@ -528,6 +547,49 @@ export const relationshipService = {
     return runSweep({ full: false });
   },
 
+  /**
+   * Score the named contacts of one owner now, in the sweep's own batches.
+   *
+   * For the routes that turn tracking on. A person who tracks somebody sees
+   * the ring on the next read, not after the hourly sweep. Ids that are not
+   * the owner's, not tracked, ghosts or archived are left alone. Above
+   * `INLINE_SCORE_LIMIT` ids the rows stay marked for the sweep instead, so
+   * one request cannot hold the process for a whole address book.
+   */
+  async scoreContacts(ownerId: string, ids: string[]): Promise<number> {
+    if (ids.length === 0 || ids.length > INLINE_SCORE_LIMIT) return 0;
+    const defaultCadence = getPreferences(ownerId).defaultCadenceDays ?? 90;
+    const updateStmt = sqlite.prepare(
+      "UPDATE contacts SET relationshipScore = ?, scoreDirty = 0 WHERE id = ? AND ownerId = ?",
+    );
+    let scored = 0;
+    for (let start = 0; start < ids.length; start += BATCH_SIZE) {
+      const slice = ids.slice(start, start + BATCH_SIZE);
+      const rows = sqlite
+        .prepare(
+          `SELECT id, cadenceDays, lastContactedAt FROM contacts
+            WHERE ownerId = ? AND ${ELIGIBLE}
+              AND id IN (${slice.map(() => "?").join(", ")})`,
+        )
+        .all(ownerId, ...slice) as ContactScoreRow[];
+      const txn = sqlite.transaction(() => {
+        for (const contact of rows) {
+          updateStmt.run(
+            computeScoreForContact(contact, defaultCadence),
+            contact.id,
+            ownerId,
+          );
+          scored++;
+        }
+      });
+      txn();
+      if (start + BATCH_SIZE < ids.length) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+    return scored;
+  },
+
   snapshotScores,
   ensureWeeklySnapshot,
 };
@@ -541,8 +603,8 @@ export function snapshotScores(ownerId: string, weekStart: string): number {
     .prepare(
       `INSERT OR IGNORE INTO score_snapshots (ownerId, contactId, weekStart, score)
        SELECT ownerId, id, ?, relationshipScore FROM contacts
-        WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
-          AND (isArchived = 0 OR isArchived IS NULL)`,
+        WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isTracked = 1
+          AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
     )
     .run(weekStart, ownerId).changes;
 }

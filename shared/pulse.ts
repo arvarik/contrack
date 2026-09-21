@@ -37,6 +37,31 @@ export interface ContactCard {
   avatarUrl: string | null;
   themeColor: string | null;
   relationshipScore: number;
+  /**
+   * The newest interaction, so a ring can tell "no interactions yet" from a
+   * score. Every Pulse card names a tracked contact.
+   */
+  lastContactedAt: string | null;
+}
+
+/** A tracked contact whose clock is past its cadence. */
+export interface CatchUpCard extends ContactCard {
+  cadenceDays: number;
+  /** Days since `lastContactedAt`, or since `trackedAt` when there is none. */
+  daysSince: number;
+  /** `daysSince - cadenceDays`, always above zero. */
+  overshootDays: number;
+}
+
+/** The state of the people an account tracks. */
+export interface TrackingSummary {
+  count: number;
+  bands: { strong: number; fading: number; atRisk: number; unscored: number };
+  catchUpCount: number;
+  startedLast30d: number;
+  snapshotWeeks: number;
+  rising: MomentumCard[];
+  cooling: MomentumCard[];
 }
 
 export interface MomentumCard extends ContactCard {

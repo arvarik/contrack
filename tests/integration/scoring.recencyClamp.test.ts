@@ -36,7 +36,11 @@ function lastContactedAt(contactId: string): string | null {
 
 /** A contact with nothing else about it. */
 async function makeContact(name = "Anton Kovacs"): Promise<string> {
-  const contact = await contactService.createContact(scope, { name });
+  // Tracked, because only a tracked contact is scored.
+  const contact = await contactService.createContact(scope, {
+    name,
+    isTracked: true,
+  });
   if (!contact) throw new Error(`createContact returned nothing for ${name}`);
   return contact.id;
 }

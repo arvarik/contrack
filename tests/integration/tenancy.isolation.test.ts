@@ -417,7 +417,19 @@ describe("GET /api/contacts/:id/score", () => {
     expect(snapshotRow("contacts", seedA.contactIds[1])).toEqual(before);
   });
 
-  it("serves the breakdown to its owner", async () => {
+  it("serves the breakdown to its owner, once the contact is tracked", async () => {
+    // Only a tracked contact has a score to explain.
+    const untracked = await asUser(A)(
+      request(app).get(`/api/contacts/${seedA.contactIds[1]}/score`),
+    );
+    expect(untracked.status).toBe(404);
+    expect(untracked.body.error.code).toBe("NOT_TRACKED");
+
+    await asUser(A)(
+      request(app)
+        .patch(`/api/contacts/${seedA.contactIds[1]}`)
+        .send({ isTracked: true }),
+    );
     const res = await asUser(A)(
       request(app).get(`/api/contacts/${seedA.contactIds[1]}/score`),
     );

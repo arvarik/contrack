@@ -309,6 +309,18 @@ export const contacts = sqliteTable("contacts", {
   isGhost: integer("isGhost").default(0),
   isArchived: integer("isArchived").default(0),
   relationshipScore: integer("relationshipScore").default(50),
+  /**
+   * A person chose to keep up with this contact. Only a tracked contact is
+   * scored, appears on Pulse, or is tinted on the map. Off for everyone
+   * until a person says so.
+   */
+  isTracked: integer("isTracked").notNull().default(0),
+  /**
+   * When `isTracked` last turned on, written by the `contacts_track_stamp_*`
+   * triggers in server/db.ts and cleared when it turns off. The clock for a
+   * tracked contact with no interaction yet.
+   */
+  trackedAt: text("trackedAt"),
   // Dedupe infrastructure
   canonicalId: text("canonicalId"), // Soft merge: points to primary contact's id. NULL = active contact.
   deletedAt: text("deletedAt"), // Trash: soft-delete timestamp. NULL = not deleted. Purged after TRASH_RETENTION_DAYS.

@@ -81,6 +81,12 @@ export function registerContactTools(
           .string()
           .optional()
           .describe("Filter contacts updated at or after this ISO timestamp"),
+        tracked: z
+          .boolean()
+          .optional()
+          .describe(
+            "true for the people the account keeps up with, false for everyone else",
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -96,6 +102,7 @@ export function registerContactTools(
         company: params.company,
         industry: params.industry,
         updatedSince: params.updatedSince,
+        tracked: params.tracked,
       });
       const nextCursor =
         contacts.length === limit ? String(offset + contacts.length) : null;
@@ -188,6 +195,18 @@ export function registerContactTools(
             about: z.string().optional(),
             industry: z.string().optional(),
             themeColor: z.string().optional(),
+            isTracked: z
+              .boolean()
+              .optional()
+              .describe("Keep up with this person (true) or stop (false)"),
+            cadenceDays: z
+              .number()
+              .int()
+              .positive()
+              .optional()
+              .describe(
+                "How often to keep up, in days: 30, 60, 90, 180 or 365",
+              ),
           })
           .describe("Fields to update on the contact"),
       },

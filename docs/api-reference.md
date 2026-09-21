@@ -110,10 +110,15 @@ curl http://localhost:3210/api/contacts/abc123
   "tags": [{ "id": "t1", "tag": "investor" }],
   "lists": [{ "id": "l1", "name": "Board Members", "icon": "👥" }],
   "interactionCount": 12,
+  "isTracked": true,
+  "trackedAt": "2026-09-01 10:12:44",
+  "cadenceDays": 90,
   "relationshipScore": 85,
   "...": "all other fields"
 }
 ```
+
+**Tracking.** `isTracked` says a person chose to keep up with this contact. Only a tracked contact has a score, a place on Pulse and a tint on the map. Every contact starts untracked. `trackedAt` is the moment the flag last turned on, written by the database and null while untracked. `cadenceDays` is set at the moment of tracking: from the request when it names one, else from the account's `defaultCadenceDays` preference (30, 60, 90, 180 or 365). `relationshipScore` on an untracked contact is a placeholder and never shown.
 
 ---
 
@@ -177,6 +182,14 @@ Partial scalar update. Does **not** support child arrays — use `PUT` for those
 curl -X PATCH http://localhost:3210/api/contacts/abc123 \
   -H "Content-Type: application/json" \
   -d '{"company":"NewCo","role":"CTO"}'
+```
+
+Track a contact, or stop. A flip to `true` sets `cadenceDays` from the account's default unless the body names one, stamps `trackedAt`, and scores the contact before the response, so the answer carries a fresh `relationshipScore`. A flip to `false` clears `trackedAt` and leaves the score alone.
+
+```bash
+curl -X PATCH http://localhost:3210/api/contacts/abc123 \
+  -H "Content-Type: application/json" \
+  -d '{"isTracked":true,"cadenceDays":30}'
 ```
 
 ---
@@ -421,6 +434,14 @@ Bulk update shared fields across multiple contacts.
 curl -X PUT http://localhost:3210/api/contacts/bulk-update \
   -H "Content-Type: application/json" \
   -d '{"ids":["abc123","def456"],"data":{"company":"NewCo"}}'
+```
+
+Track many at once. Each contact that was untracked takes the account's default cadence unless `data` names one, and every contact that became tracked is scored before the response, in batches that yield between them. Above 10,000 ids the rows stay marked for the hourly sweep instead.
+
+```bash
+curl -X PUT http://localhost:3210/api/contacts/bulk-update \
+  -H "Content-Type: application/json" \
+  -d '{"ids":["abc123","def456"],"data":{"isTracked":true}}'
 ```
 
 ---
@@ -2818,22 +2839,22 @@ contacts rather than nearly.
 
 Smaller surfaces, documented compactly. Shapes follow the conventions above.
 
-| Endpoint                                    | What it does                                                                           |
-| ------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `GET /api/contacts/:id/score`               | The contact's relationship-score breakdown (the five signals behind the number)        |
-| `GET /api/contacts/:id/relationships`       | The contact's @mention relationship graph                                              |
-| `GET /api/avatar/:style`                    | Generated avatar SVG for a style + seed (query `seed=`, `bg=1`, `theme=light\|dark`)   |
-| `POST /api/contacts/merge-batch`            | Merge many independent pairs in one call                                               |
-| `POST /api/contacts/merge-clusters`         | Merge many clusters in one call (auto-merge flow)                                      |
-| `GET /api/dedupe/stream`                    | SSE progress stream for a running scan (query `scanId=`)                               |
-| `GET /api/dedupe/active`                    | The in-progress scan, if any (page-refresh recovery)                                   |
-| `GET /api/dedupe/status`                    | Status of a scan by id (query `scanId=`)                                               |
-| `GET /api/dedupe/suggestion-for/:contactId` | Pending duplicate suggestion involving a contact                                       |
-| `POST /api/dedupe/backfill-embeddings`      | Kick off dedupe-embedding backfill (rate-limited)                                      |
-| `GET /api/dedupe/embedding-status`          | Embedding coverage for the dedupe index                                                |
-| `POST /api/trash/bulk-restore`              | Restore many trashed contacts (`{"ids": [...]}`)                                       |
-| `GET /api/auth/session-policy`              | Current session lifetime in days _(account session required)_                          |
-| `PUT /api/auth/session-policy`              | Set session lifetime, 1–365 days; applies to new sign-ins _(account session required)_ |
+| Endpoint                                    | What it does                                                                                                                            |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/contacts/:id/score`               | The contact's relationship-score breakdown (the five signals behind the number). `404` with code `NOT_TRACKED` for an untracked contact |
+| `GET /api/contacts/:id/relationships`       | The contact's @mention relationship graph                                                                                               |
+| `GET /api/avatar/:style`                    | Generated avatar SVG for a style + seed (query `seed=`, `bg=1`, `theme=light\|dark`)                                                    |
+| `POST /api/contacts/merge-batch`            | Merge many independent pairs in one call                                                                                                |
+| `POST /api/contacts/merge-clusters`         | Merge many clusters in one call (auto-merge flow)                                                                                       |
+| `GET /api/dedupe/stream`                    | SSE progress stream for a running scan (query `scanId=`)                                                                                |
+| `GET /api/dedupe/active`                    | The in-progress scan, if any (page-refresh recovery)                                                                                    |
+| `GET /api/dedupe/status`                    | Status of a scan by id (query `scanId=`)                                                                                                |
+| `GET /api/dedupe/suggestion-for/:contactId` | Pending duplicate suggestion involving a contact                                                                                        |
+| `POST /api/dedupe/backfill-embeddings`      | Kick off dedupe-embedding backfill (rate-limited)                                                                                       |
+| `GET /api/dedupe/embedding-status`          | Embedding coverage for the dedupe index                                                                                                 |
+| `POST /api/trash/bulk-restore`              | Restore many trashed contacts (`{"ids": [...]}`)                                                                                        |
+| `GET /api/auth/session-policy`              | Current session lifetime in days _(account session required)_                                                                           |
+| `PUT /api/auth/session-policy`              | Set session lifetime, 1–365 days; applies to new sign-ins _(account session required)_                                                  |
 
 ---
 

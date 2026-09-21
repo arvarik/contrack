@@ -109,7 +109,7 @@ export const dashboardService = {
       SELECT
         (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
         (SELECT ROUND(AVG(CAST(julianday('now') - julianday(lastContactedAt) AS REAL))) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL) as avgDaysSinceInteraction,
-        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND relationshipScore < ${FADING_MIN} AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
+        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND isTracked = 1 AND relationshipScore < ${FADING_MIN} AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as atRiskCount,
         (SELECT COUNT(*) FROM interactions WHERE ownerId = ? AND date >= date('now', '-30 days') AND contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND COALESCE(isArchived, 0) = 0)) as totalInteractions30d,
         (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
     `,
@@ -135,7 +135,8 @@ export const dashboardService = {
              CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
              (SELECT title FROM interactions WHERE contactId = c.id AND ownerId = c.ownerId ORDER BY date DESC LIMIT 1) as lastInteractionTitle
       FROM contacts c
-      WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
+      WHERE c.ownerId = ? AND c.isTracked = 1
+        AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
         AND (c.isArchived = 0 OR c.isArchived IS NULL)
         AND c.relationshipScore < ${FADING_MIN}
         AND c.lastContactedAt IS NOT NULL
@@ -433,7 +434,7 @@ export const dashboardService = {
           .prepare(
             `
           SELECT name FROM contacts
-          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+          WHERE ownerId = ? AND isTracked = 1 AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
             AND lastContactedAt < date('now', '-60 days')
           LIMIT 10
         `,
@@ -455,7 +456,8 @@ export const dashboardService = {
           .prepare(
             `
           SELECT name FROM contacts
-          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+          WHERE ownerId = ? AND isTracked = 1 AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+            AND lastContactedAt IS NOT NULL
           ORDER BY relationshipScore DESC
           LIMIT 3
         `,
@@ -466,7 +468,7 @@ export const dashboardService = {
           .prepare(
             `
           SELECT name FROM contacts
-          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
+          WHERE ownerId = ? AND isTracked = 1 AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND lastContactedAt IS NOT NULL
           ORDER BY relationshipScore ASC
           LIMIT 3
         `,
@@ -686,15 +688,17 @@ export const dashboardService = {
 
       const diffRows = sqlite
         .prepare(
-          `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor,
+          `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.lastContactedAt,
                   curr.score as currentScore,
                   (curr.score - base.score) as delta
              FROM score_snapshots curr
              JOIN score_snapshots base ON curr.contactId = base.contactId AND base.weekStart = ? AND base.ownerId = curr.ownerId
              JOIN contacts c ON c.id = curr.contactId AND c.ownerId = curr.ownerId
             WHERE curr.ownerId = ? AND curr.weekStart = ?
+              AND c.isTracked = 1
               AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
               AND (c.isArchived = 0 OR c.isArchived IS NULL)
+              AND date(c.trackedAt) <= base.weekStart
               AND abs(curr.score - base.score) >= 3`,
         )
         .all(baselineWeek, scope.ownerId, currentWeek) as {
@@ -703,6 +707,7 @@ export const dashboardService = {
         company: string | null;
         avatarUrl: string | null;
         themeColor: string | null;
+        lastContactedAt: string | null;
         currentScore: number;
         delta: number;
       }[];
@@ -713,6 +718,7 @@ export const dashboardService = {
         company: r.company,
         avatarUrl: r.avatarUrl,
         themeColor: r.themeColor,
+        lastContactedAt: r.lastContactedAt,
         relationshipScore: r.currentScore,
         score: r.currentScore,
         delta: Math.round(r.delta * 10) / 10,
@@ -734,11 +740,11 @@ export const dashboardService = {
     const silentRows = sqlite
       .prepare(
         `SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.relationshipScore,
-                c.cadenceDays,
+                c.lastContactedAt, c.cadenceDays,
                 CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
                 (CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) - c.cadenceDays) as overshootDays
            FROM contacts c
-          WHERE c.ownerId = ?
+          WHERE c.ownerId = ? AND c.isTracked = 1
             AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0
             AND (c.isArchived = 0 OR c.isArchived IS NULL)
             AND c.cadenceDays IS NOT NULL AND c.cadenceDays > 0
@@ -755,6 +761,7 @@ export const dashboardService = {
       avatarUrl: string | null;
       themeColor: string | null;
       relationshipScore: number;
+      lastContactedAt: string | null;
       cadenceDays: number;
       daysSinceContact: number;
       overshootDays: number;
@@ -767,6 +774,7 @@ export const dashboardService = {
       avatarUrl: c.avatarUrl,
       themeColor: c.themeColor,
       relationshipScore: c.relationshipScore,
+      lastContactedAt: c.lastContactedAt,
       cadenceDays: c.cadenceDays,
       daysSinceContact: c.daysSinceContact,
       overshootDays: c.overshootDays,

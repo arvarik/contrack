@@ -68,6 +68,7 @@ export interface ContactSlim {
   avatarUrl: string | null;
   themeColor: string;
   isGhost: boolean;
+  isTracked: boolean;
   relationshipScore: number | null;
   lastContactedAt: string | null;
 }
@@ -84,6 +85,7 @@ export const useContactNames = () => {
         avatarUrl: c.avatarUrl,
         themeColor: c.themeColor,
         isGhost: c.isGhost,
+        isTracked: c.isTracked,
         relationshipScore: c.relationshipScore ?? null,
         lastContactedAt: c.lastContactedAt,
       })),
@@ -110,6 +112,9 @@ export interface SlimSearchContact {
   updatedAt: string;
   lastContactedAt: string | null;
   relationshipScore: number | null;
+  isTracked: boolean;
+  cadenceDays: number;
+  trackedAt: string | null;
   tags: { tag: string }[];
   lists?: { id: string; name: string }[];
   approximate?: boolean;
@@ -135,6 +140,9 @@ export const useSlimContactsForSearch = () => {
           updatedAt: c.updatedAt,
           lastContactedAt: c.lastContactedAt,
           relationshipScore: c.relationshipScore ?? null,
+          isTracked: c.isTracked,
+          cadenceDays: c.cadenceDays,
+          trackedAt: c.trackedAt,
           tags: c.tags ?? [],
           lists: c.lists ?? [],
         })),
@@ -176,6 +184,7 @@ export const useMapContacts = () => {
           lng: c.lng as number,
           relationshipScore: c.relationshipScore ?? null,
           lastContactedAt: c.lastContactedAt,
+          isTracked: c.isTracked,
           nextFollowUpAt: c.nextFollowUpAt,
           cadenceDays: c.cadenceDays,
           interactionCount: c.interactionCount ?? 0,

@@ -59,6 +59,7 @@ const stmts = {
            CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSince
     FROM contacts c
     WHERE c.ownerId = ?
+      AND c.isTracked = 1
       AND c.isGhost = 0
       AND (c.isArchived = 0 OR c.isArchived IS NULL)
       AND c.relationshipScore < ${FADING_MIN}

@@ -14,7 +14,9 @@ import {
   describeScore,
   FADING_MIN,
   NO_SCORE_TEXT,
+  NOT_TRACKED_TEXT,
   SCORE_BANDS,
+  scoreView,
   STRONG_MIN,
 } from "../../shared/scoreBand";
 
@@ -94,5 +96,51 @@ describe("contactScore", () => {
     expect(
       contactScore({ relationshipScore: null, lastContactedAt: at }),
     ).toBeNull();
+  });
+});
+
+describe("scoreView", () => {
+  const at = "2026-09-10T05:33:50.000Z";
+
+  it("is untracked for a contact nobody chose to keep up with, whatever the column holds", () => {
+    expect(
+      scoreView({
+        isTracked: false,
+        relationshipScore: 72,
+        lastContactedAt: at,
+      }),
+    ).toEqual({ kind: "untracked" });
+    expect(NOT_TRACKED_TEXT).toBe("Not tracked");
+  });
+
+  it("is unscored for a tracked contact with no logged interaction", () => {
+    expect(
+      scoreView({
+        isTracked: true,
+        relationshipScore: 50,
+        lastContactedAt: null,
+      }),
+    ).toEqual({ kind: "unscored" });
+  });
+
+  it("is scored, with the band, for a tracked contact with an interaction", () => {
+    expect(
+      scoreView({
+        isTracked: true,
+        relationshipScore: 72.4,
+        lastContactedAt: at,
+      }),
+    ).toEqual({ kind: "scored", score: 72, band: SCORE_BANDS.strong });
+    expect(
+      scoreView({
+        isTracked: true,
+        relationshipScore: 12,
+        lastContactedAt: at,
+      }),
+    ).toMatchObject({
+      kind: "scored",
+      score: 12,
+      band: SCORE_BANDS["at-risk"],
+    });
   });
 });

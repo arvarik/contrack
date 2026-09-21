@@ -90,15 +90,50 @@ export function describeScore(
   return sentence ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
+/** Said of a contact nobody chose to keep up with. It has no score at all. */
+export const NOT_TRACKED_TEXT = "Not tracked";
+
+/**
+ * What a surface shows for a contact's score, in three states.
+ *
+ * - `untracked`: nobody chose to keep up with this contact. No ring, no
+ *   words, no band. The stored score is a placeholder.
+ * - `unscored`: tracked, but no interaction logged yet. The empty track and
+ *   "No interactions yet".
+ * - `scored`: tracked with a score, clamped to 0 to 100, and its band.
+ *
+ * Every reader of the score on the client goes through this, so the ring, the
+ * palette, the map and Pulse can never disagree about who has a score.
+ */
+export type ScoreView =
+  | { kind: "untracked" }
+  | { kind: "unscored" }
+  | { kind: "scored"; score: number; band: ScoreBandInfo };
+
+export function scoreView(contact: {
+  isTracked: boolean;
+  relationshipScore?: number | null;
+  lastContactedAt?: string | null;
+}): ScoreView {
+  if (!contact.isTracked) return { kind: "untracked" };
+  const score = contactScore({ ...contact, isTracked: true });
+  if (score === null) return { kind: "unscored" };
+  return { kind: "scored", score, band: bandInfo(score) };
+}
+
 /**
  * The score to show for a contact, or null when there is none to show.
  *
  * Every contact row carries a score, because the column defaults to 50. A
  * contact with no logged interaction has never been scored against anything,
  * so its 50 is a placeholder and not a judgement. That contact shows no arc
- * and "No interactions yet".
+ * and "No interactions yet". A contact that is not tracked has no score
+ * either, whatever the column holds: `scoreView` is the reader that asks
+ * about the flag, and every surface moves to it in its own step. This
+ * function keeps answering the way it always has until then.
  */
 export function contactScore(contact: {
+  isTracked?: boolean;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
 }): number | null {

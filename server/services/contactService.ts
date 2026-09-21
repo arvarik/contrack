@@ -35,6 +35,7 @@ import { dedupeService } from "./dedupe/index.ts";
 import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
+import { relationshipService } from "./relationshipService.ts";
 import { activeProviderName, ai } from "../ai/index.ts";
 import { validateEnrichmentStrategy } from "./aiSearch/strategies/index.ts";
 import { jobQueue } from "./aiSearch/jobQueue.ts";
@@ -112,7 +113,19 @@ function hasGroundingCapacity(): boolean {
  * Centralised here so createContact + bulkCreateContacts stay DRY.
  * Any field not listed here will never reach the database.
  */
-function buildInsertValues(scope: Scope, body: NewContactPayload, id: string) {
+function buildInsertValues(
+  scope: Scope,
+  body: NewContactPayload,
+  id: string,
+  options: { manual: boolean },
+) {
+  // Every contact starts untracked unless the body says otherwise, or a
+  // person adds it by hand under the `trackNewContacts` preference. Imports
+  // and connectors never track: a file of two thousand people is not a
+  // choice about any one of them.
+  const isTracked =
+    body.isTracked ??
+    (options.manual && getPreferences(scope.ownerId).trackNewContacts);
   return {
     id,
     // The owner comes from the caller's scope, not from the request context.
@@ -143,6 +156,7 @@ function buildInsertValues(scope: Scope, body: NewContactPayload, id: string) {
     themeColor: body.themeColor ?? "brand",
     isGhost: body.isGhost ? 1 : 0,
     isArchived: body.isArchived ? 1 : 0,
+    isTracked: isTracked ? 1 : 0,
     nextFollowUpAt: body.nextFollowUpAt ?? null,
     aiSummary: body.aiSummary ?? null,
     aiBackground: body.aiBackground ?? null,
@@ -150,6 +164,35 @@ function buildInsertValues(scope: Scope, body: NewContactPayload, id: string) {
     aiBriefingAt: body.aiBriefingAt ?? null,
     phoneticHash: body.name ? doubleMetaphone(body.name).primary : null,
   };
+}
+
+/**
+ * What turning tracking on means, beyond the flag.
+ *
+ * Cadence is the second half of Track: it is set at the moment a contact is
+ * tracked, from the body when it names one, else from the owner's default.
+ * Only rows that are untracked now take the default, so tracking somebody
+ * twice, or with a cadence of their own, changes nothing. Runs inside the
+ * caller's transaction, before the flag itself is written.
+ *
+ * `trackedAt` needs no code here: the `contacts_track_stamp_*` triggers in
+ * server/db.ts write it.
+ */
+function applyTrackingRules(
+  scope: Scope,
+  ids: string[],
+  body: Record<string, unknown>,
+): void {
+  if (body.isTracked !== true || ids.length === 0) return;
+  if (typeof body.cadenceDays === "number") return;
+  const cadence = getPreferences(scope.ownerId).defaultCadenceDays ?? 90;
+  sqlite
+    .prepare(
+      `UPDATE contacts SET cadenceDays = ?
+        WHERE ownerId = ? AND isTracked = 0
+          AND id IN (${ids.map(() => "?").join(", ")})`,
+    )
+    .run(cadence, scope.ownerId, ...ids);
 }
 
 /**
@@ -341,6 +384,8 @@ type SlimContactRow = Pick<
   | "lat"
   | "lng"
   | "relationshipScore"
+  | "isTracked"
+  | "trackedAt"
   | "aiHydratedAt"
   | "birthday"
 >;
@@ -352,7 +397,9 @@ export const contactService = {
     source: string = "manual",
   ) {
     const id = crypto.randomUUID();
-    const values = buildInsertValues(scope, body, id);
+    const values = buildInsertValues(scope, body, id, {
+      manual: source === "manual",
+    });
 
     // Smart avatar: if no avatar was provided, generate a gender-aware one
     if (!values.avatarUrl && body.name) {
@@ -492,7 +539,8 @@ export const contactService = {
       /** One row. A savepoint when nested in the batch below. */
       const insertOne = sqlite.transaction((c: NewContactPayload) => {
         const id = crypto.randomUUID();
-        const values = buildInsertValues(scope, c, id);
+        // An import, so never tracked by the preference.
+        const values = buildInsertValues(scope, c, id, { manual: false });
 
         // Smart avatar: gender-aware DiceBear URL if no avatar was provided
         if (!values.avatarUrl && c.name) {
@@ -593,6 +641,7 @@ export const contactService = {
       // (see utils/helpers.ts). Interpolating those key names into SQL is safe
       // because no user-supplied string reaches the SET clause — only column names.
       const updateFn = sqlite.transaction(() => {
+        applyTrackingRules(scope, owned, data);
         const setClauses = Object.keys(update)
           .map((k) => `${k} = ?`)
           .join(", ");
@@ -625,6 +674,7 @@ export const contactService = {
     }
 
     const txn = sqlite.transaction(() => {
+      applyTrackingRules(scope, [id], body as Record<string, unknown>);
       db.update(schema.contacts)
         .set(updateData)
         .where(
@@ -648,6 +698,10 @@ export const contactService = {
       }
     });
     txn();
+
+    // A contact that just became tracked is scored now, so the ring is right
+    // on the read that follows and not after the hourly sweep.
+    if (body.isTracked === true) relationshipService.computeScore(id);
 
     const updated = contactRepo.hydrate(contactRepo.findOwned(scope, id));
     if (!updated) return null;
@@ -705,15 +759,20 @@ export const contactService = {
     assertOwnedContact(scope, id);
     const pinBefore = pinStateOf(scope, id);
     const update = buildContactUpdate(body);
-    db.update(schema.contacts)
-      .set(update)
-      .where(
-        and(
-          eq(schema.contacts.id, id),
-          eq(schema.contacts.ownerId, scope.ownerId),
-        ),
-      )
-      .run();
+    const write = sqlite.transaction(() => {
+      applyTrackingRules(scope, [id], body);
+      db.update(schema.contacts)
+        .set(update)
+        .where(
+          and(
+            eq(schema.contacts.id, id),
+            eq(schema.contacts.ownerId, scope.ownerId),
+          ),
+        )
+        .run();
+    });
+    write();
+    if (body.isTracked === true) relationshipService.computeScore(id);
 
     // A PATCH carries no child arrays, so `location` is the one address
     // field it can move.
@@ -972,7 +1031,7 @@ export const contactService = {
              themeColor, isGhost, isArchived, addedAt, updatedAt,
              role, headline, location, industry, pronouns,
              cadenceDays, lastContactedAt, nextFollowUpAt,
-             lat, lng, relationshipScore, aiHydratedAt, birthday
+             lat, lng, relationshipScore, isTracked, trackedAt, aiHydratedAt, birthday
       FROM contacts
       WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL
       ORDER BY addedAt DESC
@@ -1078,6 +1137,7 @@ export const contactService = {
       ...r,
       isGhost: !!r.isGhost,
       isArchived: !!r.isArchived,
+      isTracked: !!r.isTracked,
       tags: tagsByContact.get(r.id) || [],
       lists: listsByContact.get(r.id) || [],
       interactionCount: interactionMap.get(r.id) || 0,

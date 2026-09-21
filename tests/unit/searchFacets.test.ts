@@ -242,4 +242,30 @@ describe("searchFacets matchesFacet", () => {
       expect(matchesFacet(oxfordContact, filter100km)).toBe(true);
     });
   });
+
+  describe("tracked: facet", () => {
+    const tracked: FacetContact = { isTracked: true };
+    const untracked: FacetContact = { isTracked: false };
+    const unknown: FacetContact = {};
+
+    it("tracked:yes matches the people a person keeps up with", () => {
+      const filter = { field: "tracked" as const, value: "yes" };
+      expect(matchesFacet(tracked, filter)).toBe(true);
+      expect(matchesFacet(untracked, filter)).toBe(false);
+      expect(matchesFacet(unknown, filter)).toBe(false);
+    });
+
+    it("tracked:no matches everyone else", () => {
+      const filter = { field: "tracked" as const, value: "no" };
+      expect(matchesFacet(tracked, filter)).toBe(false);
+      expect(matchesFacet(untracked, filter)).toBe(true);
+      expect(matchesFacet(unknown, filter)).toBe(true);
+    });
+
+    it("any other value matches nobody", () => {
+      const filter = { field: "tracked" as const, value: "maybe" };
+      expect(matchesFacet(tracked, filter)).toBe(false);
+      expect(matchesFacet(untracked, filter)).toBe(false);
+    });
+  });
 });

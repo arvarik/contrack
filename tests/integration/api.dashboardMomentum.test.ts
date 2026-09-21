@@ -35,8 +35,8 @@ describe("GET /api/dashboard/momentum", () => {
     ).toISOString();
     sqlite
       .prepare(
-        `INSERT INTO contacts (id, name, ownerId, cadenceDays, lastContactedAt, relationshipScore, isGhost, isArchived)
-         VALUES (?, 'Silent Person', ?, 10, ?, 75, 0, 0)`,
+        `INSERT INTO contacts (id, name, ownerId, cadenceDays, lastContactedAt, relationshipScore, isGhost, isArchived, isTracked)
+         VALUES (?, 'Silent Person', ?, 10, ?, 75, 0, 0, 1)`,
       )
       .run(silentId, actor.user.id, twentyFiveDaysAgo);
 
@@ -44,8 +44,8 @@ describe("GET /api/dashboard/momentum", () => {
     const atRiskId = crypto.randomUUID();
     sqlite
       .prepare(
-        `INSERT INTO contacts (id, name, ownerId, cadenceDays, lastContactedAt, relationshipScore, isGhost, isArchived)
-         VALUES (?, 'At Risk Person', ?, 10, ?, 20, 0, 0)`,
+        `INSERT INTO contacts (id, name, ownerId, cadenceDays, lastContactedAt, relationshipScore, isGhost, isArchived, isTracked)
+         VALUES (?, 'At Risk Person', ?, 10, ?, 20, 0, 0, 1)`,
       )
       .run(atRiskId, actor.user.id, twentyFiveDaysAgo);
 
@@ -79,8 +79,10 @@ describe("GET /api/dashboard/momentum", () => {
       risingIds.push(id);
       sqlite
         .prepare(
-          `INSERT INTO contacts (id, name, ownerId, relationshipScore, isGhost, isArchived)
-           VALUES (?, ?, ?, 80, 0, 0)`,
+          // Tracked since before the baseline week, or the baseline would not
+          // count: a contact tracked after it is neither rising nor cooling.
+          `INSERT INTO contacts (id, name, ownerId, relationshipScore, isGhost, isArchived, isTracked, trackedAt)
+           VALUES (?, ?, ?, 80, 0, 0, 1, '2020-01-01 00:00:00')`,
         )
         .run(id, `Rising ${i}`, actor.user.id);
 
@@ -109,8 +111,8 @@ describe("GET /api/dashboard/momentum", () => {
     const coolingId = crypto.randomUUID();
     sqlite
       .prepare(
-        `INSERT INTO contacts (id, name, ownerId, relationshipScore, isGhost, isArchived)
-         VALUES (?, 'Cooling Person', ?, 50, 0, 0)`,
+        `INSERT INTO contacts (id, name, ownerId, relationshipScore, isGhost, isArchived, isTracked, trackedAt)
+         VALUES (?, 'Cooling Person', ?, 50, 0, 0, 1, '2020-01-01 00:00:00')`,
       )
       .run(coolingId, actor.user.id);
 
