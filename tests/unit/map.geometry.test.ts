@@ -34,6 +34,7 @@ const person = (over: Partial<MapContact> = {}): MapContact => ({
   company: "Babbage & Co",
   avatarUrl: null,
   location: "London, UK",
+  isTracked: true,
   lat: 51.5074,
   lng: -0.1278,
   ...over,
@@ -129,14 +130,15 @@ describe("toFeatureCollection", () => {
   });
 
   it("leaves an empty field out rather than sending null", () => {
+    // The fixture has no interaction, so it has no score either. The key is
+    // absent, which is how the worker reads "nothing here".
     const [feature] = toFeatureCollection([
       person({ company: null, avatarUrl: null, location: null }),
     ]).features;
     expect(feature.properties).toEqual({
       id: "c1",
       name: "Ada Lovelace",
-      score: 0,
-      atRisk: 1,
+      atRisk: 0,
       overdue: 0,
       weight: 0,
     });
@@ -152,8 +154,7 @@ describe("toFeatureCollection", () => {
       company: "Babbage & Co",
       avatarUrl: "/api/avatar/avataaars?seed=ada",
       location: "London, UK",
-      score: 0,
-      atRisk: 1,
+      atRisk: 0,
       overdue: 0,
       weight: 0,
     });
@@ -163,6 +164,7 @@ describe("toFeatureCollection", () => {
     const [feature] = toFeatureCollection([
       person({
         relationshipScore: 85,
+        lastContactedAt: "2026-09-01T10:00:00.000Z",
         interactionCount: 7,
         nextFollowUpAt: new Date(Date.now() - 60_000).toISOString(),
       }),
@@ -171,6 +173,32 @@ describe("toFeatureCollection", () => {
     expect(feature.properties.atRisk).toBe(0);
     expect(feature.properties.overdue).toBe(1);
     expect(feature.properties.weight).toBe(7);
+  });
+
+  it("gives a contact nobody tracks no score, and never calls it at risk", () => {
+    // The column holds 12, which would have painted the pin red and counted
+    // it in the cluster's At risk share. Nobody chose to keep up with this
+    // contact, so there is no score to paint.
+    const [feature] = toFeatureCollection([
+      person({
+        isTracked: false,
+        relationshipScore: 12,
+        lastContactedAt: "2026-09-01T10:00:00.000Z",
+      }),
+    ]).features;
+    expect(feature.properties.score).toBeUndefined();
+    expect(feature.properties.atRisk).toBe(0);
+  });
+
+  it("counts a tracked contact under the band as at risk", () => {
+    const [feature] = toFeatureCollection([
+      person({
+        relationshipScore: 12,
+        lastContactedAt: "2026-09-01T10:00:00.000Z",
+      }),
+    ]).features;
+    expect(feature.properties.score).toBe(12);
+    expect(feature.properties.atRisk).toBe(1);
   });
 });
 

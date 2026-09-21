@@ -11,6 +11,7 @@ describe("computeMapStats", () => {
     industry: "Computing",
     location: "London, UK",
     avatarUrl: null,
+    isTracked: true,
     lat: 51.5074,
     lng: -0.1278,
     relationshipScore: 85,
@@ -85,11 +86,35 @@ describe("computeMapStats", () => {
     expect(stats.inView).toBe(4);
     expect(stats.matching).toBe(4);
     expect(stats.total).toBe(10);
-    expect(stats.atRisk).toBe(2); // IDs 2 and 3
+    // ID 3 was never contacted, so its stored 20 is not a score and the pin
+    // is not At risk. It used to be counted, which read as a failing
+    // relationship with somebody nobody had met.
+    expect(stats.atRisk).toBe(1); // ID 2
     expect(stats.overdue).toBe(1); // ID 2
     expect(stats.neverContacted).toBe(1); // ID 3
-    // avgScore: (80 + 30 + 20 + 60) / 4 = 190 / 4 = 47.5 -> 48
-    expect(stats.avgScore).toBe(48);
+    // avgScore: (80 + 30 + 60) / 3 = 170 / 3 = 56.67 -> 57
+    expect(stats.avgScore).toBe(57);
+  });
+
+  it("leaves a contact nobody tracks out of At risk and out of the average", () => {
+    const now = new Date("2026-09-15T00:00:00Z");
+    const stats = computeMapStats(
+      [
+        { ...baseContact, id: "1", relationshipScore: 80 },
+        {
+          ...baseContact,
+          id: "2",
+          isTracked: false,
+          relationshipScore: 10,
+        },
+      ],
+      null,
+      now,
+      2,
+    );
+    expect(stats.inView).toBe(2);
+    expect(stats.atRisk).toBe(0);
+    expect(stats.avgScore).toBe(80);
   });
 
   it("sorts top lists by count descending then name ascending and caps at five", () => {

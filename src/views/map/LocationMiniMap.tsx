@@ -55,6 +55,8 @@ export interface MiniMapContact {
   company: string | null;
   avatarUrl: string | null;
   location: string | null;
+  /** Carried so the one pin reads the same as the pin on the whole map. */
+  isTracked: boolean;
   lat: number | null;
   lng: number | null;
   geoSource?: GeoSource;
@@ -163,6 +165,7 @@ export const LocationMiniMap = ({
     company: contact.company,
     avatarUrl: contact.avatarUrl,
     location: contact.location,
+    isTracked: contact.isTracked,
     lat: contact.lat as number,
     lng: contact.lng as number,
   };

@@ -574,7 +574,7 @@ export const ContactMap = ({
             clusterProperties={{
               atRisk: ["+", ["get", "atRisk"]],
               overdue: ["+", ["get", "overdue"]],
-              scoreSum: ["+", ["get", "score"]],
+              scoreSum: ["+", ["coalesce", ["get", "score"], 0]],
             }}
           >
             <Layer {...PRESENCE_LAYER} />

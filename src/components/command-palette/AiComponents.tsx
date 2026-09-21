@@ -71,10 +71,7 @@ export const AIResultCard = ({
         {/* Name + Score Dot + Fallback Badge */}
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm truncate">{match.name}</span>
-          <ScoreDot
-            score={match.relationshipScore ?? null}
-            lastContactedAt={match.lastContactedAt}
-          />
+          <ScoreDot contact={match} />
           {match.approximate ? (
             <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
               Approximate

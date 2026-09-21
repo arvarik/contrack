@@ -402,6 +402,8 @@ test.describe("map features - filters and place search", () => {
     await expect(legend.getByText("Strong")).toBeVisible();
     await expect(legend.getByText("Fading")).toBeVisible();
     await expect(legend.getByText("At risk")).toBeVisible();
+    // The fourth swatch: a pin with no score takes the neutral ring.
+    await expect(legend.getByText("Not tracked")).toBeVisible();
 
     // URL contains ?layer=health
     await expect(page).toHaveURL(/layer=health/);

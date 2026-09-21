@@ -1,12 +1,13 @@
 import React from "react";
-import { SCORE_BANDS } from "../../../shared/scoreBand";
+import { NOT_TRACKED_TEXT, SCORE_BANDS } from "../../../shared/scoreBand";
 
 /**
  * HealthLegend — Bottom-right legend chip for the health map layer.
  *
- * Shows the three relationship score bands: Strong, Fading, and At risk
- * with their corresponding theme color tokens and visible text labels so
- * color is never the only signal.
+ * Shows the three relationship score bands, Strong, Fading and At risk, with
+ * their theme colour tokens and a visible text label each, so colour is never
+ * the only signal. A fourth swatch names the neutral ring: a pin nobody
+ * tracks has no score and no band.
  *
  * @module views/map/HealthLegend
  */
@@ -37,6 +38,13 @@ export const HealthLegend: React.FC = () => {
           aria-hidden="true"
         />
         <span className="font-medium">{SCORE_BANDS["at-risk"].label}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span
+          className="w-2.5 h-2.5 rounded-full bg-outline-variant ring-1 ring-black/10 shrink-0"
+          aria-hidden="true"
+        />
+        <span className="font-medium">{NOT_TRACKED_TEXT}</span>
       </div>
     </div>
   );

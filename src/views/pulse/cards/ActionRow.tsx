@@ -135,7 +135,9 @@ export const ActionRow = memo(
             contact={{
               name: item.contactName,
               avatarUrl: item.contactAvatarUrl,
+              isTracked: item.isTracked,
               relationshipScore: item.relationshipScore,
+              lastContactedAt: item.lastContactedAt,
             }}
             size={32}
           />

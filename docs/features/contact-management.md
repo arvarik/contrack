@@ -151,12 +151,17 @@ The ring around a contact's avatar shows the relationship score. The ring used t
 | **Fading**  | 40 to 69  | `warning`    |
 | **At risk** | under 40  | `error`      |
 
-- **No interactions yet.** A contact with no logged interaction has no score to show. The ring shows the track with no arc, and the tooltip says "No interactions yet".
-- **Not by colour alone.** The tooltip says the score in words: "Score 72, strong". In the contact list, each row's accessible name ends with the same words: "Betty Clark, Global Dynamics, score 72, strong".
+- **No ring for a contact nobody tracks.** The score belongs to the people you chose to keep up with. For anybody else there is no ring and no track, and the picture fills the whole box. Nothing is said about the score, in the tooltip or in the row's name.
+- **No interactions yet.** A tracked contact with no logged interaction has no score to show. The ring shows the track with no arc, and the tooltip says "No interactions yet".
+- **Not by colour alone.** The tooltip says the score in words: "Score 72, strong". In the contact list, each row's accessible name ends with the same words: "Betty Clark, Global Dynamics, score 72, strong". An untracked row's name stops after the company: "Betty Clark, Global Dynamics".
 - **Width.** The ring is 2 px in lists and 3.5 px in the contact header.
 - **Photos.** A real photo shows with no grey disc behind it. The drawn fallback avatar keeps the disc, because its corners are transparent.
 
-The contact's colour (**Change colour**) is now only the accent on that contact's page. The component is `ScoreRingAvatar`. The old name, `HealthRingAvatar`, stays as an alias for one release.
+One reader decides all three states, `scoreView` in `shared/scoreBand.ts`. The ring, the contact list row, the command palette, the map and Pulse all call it, so they can never disagree about who has a score.
+
+**The ring explains itself.** On the contact page a scored ring is a button named "Relationship score 72 out of 100, explain". It opens the breakdown: the five signals behind the number, each with its weight and its measurement. The map's hover card opens the same panel from its score chip.
+
+The contact's colour (**Change colour**) is now only the accent on that contact's page. The component is `ScoreRingAvatar`.
 
 ### Details: One Pattern for Every Value
 

@@ -352,6 +352,27 @@ const PulseOffice = () => {
     return map;
   }, [contacts]);
 
+  // What every row's ring needs, by contact id. The slim cache carries the
+  // flag, the score and the date, and an action item carries none of them.
+  const contactScores = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        isTracked: boolean;
+        relationshipScore: number | null;
+        lastContactedAt: string | null;
+      }
+    >();
+    for (const c of contacts) {
+      map.set(c.id, {
+        isTracked: c.isTracked,
+        relationshipScore: c.relationshipScore ?? null,
+        lastContactedAt: c.lastContactedAt ?? null,
+      });
+    }
+    return map;
+  }, [contacts]);
+
   // Compute upcoming birthdays within 14 days client-side
   const upcomingBirthdays = useMemo(() => {
     return getUpcomingBirthdays(contacts, new Date(), 14);
@@ -368,8 +389,9 @@ const PulseOffice = () => {
       upcoming: dashboard.upcoming,
       birthdays: upcomingBirthdays,
       slipping: dashboard.atRisk,
+      contactScores,
     });
-  }, [dashboard, upcomingBirthdays]);
+  }, [dashboard, upcomingBirthdays, contactScores]);
 
   // Selected index in Up Next
   const [selectedIndex, setSelectedIndex] = useState<number>(0);

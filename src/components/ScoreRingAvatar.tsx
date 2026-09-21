@@ -1,18 +1,23 @@
 /**
- * ScoreRingAvatar: a contact's picture inside a ring that shows the
- * relationship score.
+ * ScoreRingAvatar: a contact's picture, with a ring when there is a score to
+ * show.
  *
- * The ring used to be the contact's colour (`themeColor`), and people read a
- * red ring as trouble. It now says one thing, the score:
+ * The ring says one thing, and it is the relationship score. A score belongs
+ * only to a contact somebody tracks, so the ring has three states. They come
+ * from `scoreView` in `shared/scoreBand.ts`, which every surface reads:
  *
- * 1. The arc length is the score. A score of 72 draws 72 percent of the
- *    circle, clockwise from the top, over a faint full track.
- * 2. The arc colour is the band from `shared/scoreBand.ts`: Strong in the
- *    success colour, Fading in warning, At risk in error.
- * 3. A contact with no logged interaction has no score to show. The track
- *    shows with no arc, and the words say "No interactions yet".
- * 4. Colour is never the only sign. The ring is an image named by the score
- *    in words ("Score 72, strong"), and the same words are its tooltip.
+ * 1. `untracked`: nobody chose to keep up with this contact. No ring and no
+ *    track. The picture fills the whole box, so a list of untracked people
+ *    reads as a list of faces and not as a wall of empty circles.
+ * 2. `unscored`: tracked, with nothing logged yet. The faint track shows with
+ *    no arc, and the words say "No interactions yet".
+ * 3. `scored`: the arc length is the score. A score of 72 draws 72 percent of
+ *    the circle, clockwise from the top, over the track. The arc colour is
+ *    the band: Strong in the success colour, Fading in warning, At risk in
+ *    error.
+ *
+ * Colour is never the only sign. The ring is an image named by the score in
+ * words ("Score 72, strong"), and the same words are its tooltip.
  *
  * The ring is 2 px in a list and 3.5 px in the contact header. A photo shows
  * on no tint: the grey disc behind the picture is only for the drawn
@@ -25,7 +30,7 @@
  */
 import React from "react";
 
-import { contactScore, bandInfo, describeScore } from "../../shared/scoreBand";
+import { describeScore, scoreView } from "../../shared/scoreBand";
 import { fallbackAvatarUrl, isGeneratedAvatar } from "../lib/avatar";
 import { cn } from "../lib/utils";
 
@@ -36,6 +41,12 @@ export interface ScoreRingAvatarProps {
   contact: {
     name: string;
     avatarUrl?: string | null;
+    /**
+     * A person chose to keep up with this contact. False draws the picture
+     * alone. The field is required, so the compiler names every caller that
+     * has to pass the flag.
+     */
+    isTracked: boolean;
     relationshipScore?: number | null;
     lastContactedAt?: string | null;
   };
@@ -63,12 +74,14 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
   const radius = size / 2 - strokeWidth;
   const circumference = 2 * Math.PI * radius;
 
-  const score = contactScore(contact);
-  const words = describeScore(score);
-  const token = score === null ? null : bandInfo(score).token;
+  const view = scoreView(contact);
+  const tracked = view.kind !== "untracked";
+  const score = view.kind === "scored" ? view.score : null;
+  const words = tracked ? describeScore(score) : null;
 
   // The picture sits inside the ring with a gap of one and a half strokes.
-  const picture = size - strokeWidth * 4;
+  // Without a ring it takes the whole box.
+  const picture = tracked ? size - strokeWidth * 4 : size;
   const photo = !isGeneratedAvatar(contact.avatarUrl);
 
   return (
@@ -78,44 +91,46 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
         className,
       )}
       style={{ width: size, height: size }}
-      data-score-band={score === null ? "none" : bandInfo(score).band}
-      {...(decorative
+      data-score-band={view.kind === "scored" ? view.band.band : view.kind}
+      {...(decorative || !words
         ? { "aria-hidden": true }
         : { role: "img", "aria-label": words, title: words })}
     >
-      <svg
-        width={size}
-        height={size}
-        aria-hidden="true"
-        className="absolute inset-0 -rotate-90 pointer-events-none"
-      >
-        {/* The track: the whole circle, so an empty or short arc still reads
-            as a ring with room left in it. */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="var(--color-surface-container-highest)"
-          strokeWidth={strokeWidth}
-        />
-        {token && score !== null && score > 0 && (
+      {tracked && (
+        <svg
+          width={size}
+          height={size}
+          aria-hidden="true"
+          className="absolute inset-0 -rotate-90 pointer-events-none"
+        >
+          {/* The track: the whole circle, so an empty or short arc still reads
+              as a ring with room left in it. */}
           <circle
-            data-ring-arc
             cx={size / 2}
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={`var(--color-${token})`}
+            stroke="var(--color-surface-container-highest)"
             strokeWidth={strokeWidth}
-            // Butt ends, so the drawn length is the score and not the score
-            // plus two round caps.
-            strokeLinecap="butt"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - score / 100)}
           />
-        )}
-      </svg>
+          {view.kind === "scored" && view.score > 0 && (
+            <circle
+              data-ring-arc
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              stroke={`var(--color-${view.band.token})`}
+              strokeWidth={strokeWidth}
+              // Butt ends, so the drawn length is the score and not the score
+              // plus two round caps.
+              strokeLinecap="butt"
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference * (1 - view.score / 100)}
+            />
+          )}
+        </svg>
+      )}
 
       <div
         className={cn(

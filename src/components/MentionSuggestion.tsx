@@ -12,7 +12,7 @@ import React, {
   useState,
 } from "react";
 import { ScoreRingAvatar } from "./ScoreRingAvatar";
-import { contactScore, describeScore } from "../../shared/scoreBand";
+import { scoreView, scoreWords } from "../../shared/scoreBand";
 import type { ContactSlim } from "../api/contacts";
 import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../lib/styles";
 import { cn } from "../lib/utils";
@@ -59,7 +59,7 @@ export const MentionList = forwardRef<
     <div className={cn(MENU_PANEL, "z-50 flex flex-col w-64 min-w-0")}>
       {props.items.length ? (
         props.items.map((item: ContactSlim, index: number) => {
-          const score = contactScore(item);
+          const words = scoreWords(scoreView(item));
           return (
             <button
               className={cn(
@@ -76,7 +76,7 @@ export const MentionList = forwardRef<
                   the score to a pointer user. */}
               <div
                 className="w-7 h-7 shrink-0"
-                title={describeScore(score)}
+                title={words ?? undefined}
                 aria-hidden="true"
               >
                 <ScoreRingAvatar
@@ -88,10 +88,13 @@ export const MentionList = forwardRef<
               </div>
               <span className="truncate">{item.name}</span>
               {/* The ring is hidden, so the button's name says the score in
-                  words after the person's name. */}
-              <span className="sr-only">
-                , {describeScore(score, { sentence: true })}
-              </span>
+                  words after the person's name. A contact nobody tracks has
+                  no score, and the button says only the name. */}
+              {words && (
+                <span className="sr-only">
+                  , {scoreWords(scoreView(item), { sentence: true })}
+                </span>
+              )}
               {item.isGhost && (
                 <span className="ml-auto text-[11px] uppercase font-bold text-on-surface-variant">
                   Ghost

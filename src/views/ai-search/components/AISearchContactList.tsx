@@ -12,7 +12,7 @@
 import React from "react";
 import { Sparkles, CheckCheck, AlertCircle } from "lucide-react";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
-import { contactScore, describeScore } from "../../../../shared/scoreBand";
+import { scoreView, scoreWords } from "../../../../shared/scoreBand";
 import { formatDay } from "../../../lib/datetime";
 import { cn } from "../../../lib/utils";
 import type { Contact } from "../../../types";
@@ -36,7 +36,7 @@ export function ContactRow({
   hasError,
   onToggle,
 }: ContactRowProps) {
-  const scoreWords = describeScore(contactScore(contact));
+  const words = scoreWords(scoreView(contact));
   return (
     <div
       onKeyDown={activateOnKey(onToggle)}
@@ -65,7 +65,11 @@ export function ContactRow({
           here would put the score before the person's name. So the ring is
           decorative, the tooltip sits on this wrapper, and the score words
           follow the name below. */}
-      <div className="relative shrink-0" title={scoreWords} aria-hidden="true">
+      <div
+        className="relative shrink-0"
+        title={words ?? undefined}
+        aria-hidden="true"
+      >
         <ScoreRingAvatar contact={contact} size={40} ring="list" decorative />
       </div>
 
@@ -79,7 +83,7 @@ export function ContactRow({
             {[contact.role, contact.company].filter(Boolean).join(" · ")}
           </p>
         )}
-        <span className="sr-only">{scoreWords}</span>
+        {words && <span className="sr-only">{words}</span>}
       </div>
 
       {/* Status badge */}

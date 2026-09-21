@@ -11,6 +11,9 @@ export interface UpcomingBirthday {
   name: string;
   avatarUrl: string | null;
   themeColor: string;
+  /** The two fields the ring needs beside the score, carried from the row. */
+  isTracked: boolean;
+  lastContactedAt: string | null;
   relationshipScore: number | null;
   daysUntil: number;
   turningAge: number | null;
@@ -24,6 +27,7 @@ export interface ContactWithBirthday {
   birthday?: string | null;
   avatarUrl?: string | null;
   themeColor?: string;
+  isTracked?: boolean;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
 }
@@ -48,6 +52,8 @@ export function getUpcomingBirthdays(
         name: c.name,
         avatarUrl: c.avatarUrl ?? null,
         themeColor: c.themeColor ?? "#006a91",
+        isTracked: c.isTracked ?? false,
+        lastContactedAt: c.lastContactedAt ?? null,
         relationshipScore: c.relationshipScore ?? null,
         daysUntil: info.daysUntil,
         turningAge: info.turningAge,

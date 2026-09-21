@@ -16,20 +16,24 @@ import { formatDistanceToNow } from "date-fns";
 import { Clock, RefreshCw } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
 import {
-  bandFor,
   describeScore,
+  scoreView,
   type ScoreBand,
 } from "../../../shared/scoreBand";
 
 // ─── Score Dot ───────────────────────────────────────────────────────────────
 
 interface ScoreDotProps {
-  score: number | null | undefined;
   /**
-   * When the contact was last contacted. Null means never: the score is then
-   * the column default and not a judgement, so no dot shows.
+   * The contact the dot stands for. `scoreView` reads the three fields and
+   * decides whether there is a score at all, so the palette and the ring
+   * can never disagree.
    */
-  lastContactedAt?: string | null;
+  contact: {
+    isTracked: boolean;
+    relationshipScore?: number | null;
+    lastContactedAt?: string | null;
+  };
 }
 
 /**
@@ -43,19 +47,20 @@ const SCORE_DOT_COLOR: Record<ScoreBand, string> = {
 };
 
 /**
- * A 6px colored circle indicating relationship health.
- * Renders inline after the contact name.
+ * A 6 px coloured circle after the contact's name, for the band.
  *
- * Hidden for contacts that have never been interacted with (score 0 or null)
- * to avoid alarming users on fresh imports with hundreds of uncontacted contacts.
+ * The dot shows for a tracked contact with a score. It is absent for a
+ * contact nobody tracks and for one with nothing logged yet, so a fresh
+ * import of hundreds of people shows no wall of red.
  */
-export const ScoreDot = ({ score, lastContactedAt }: ScoreDotProps) => {
-  if (score == null || score === 0 || lastContactedAt === null) return null;
+export const ScoreDot = ({ contact }: ScoreDotProps) => {
+  const view = scoreView(contact);
+  if (view.kind !== "scored" || view.score === 0) return null;
 
   return (
     <span
-      title={describeScore(score)}
-      className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${SCORE_DOT_COLOR[bandFor(score)]}`}
+      title={describeScore(view.score)}
+      className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${SCORE_DOT_COLOR[view.band.band]}`}
     />
   );
 };

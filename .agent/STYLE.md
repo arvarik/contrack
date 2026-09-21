@@ -564,3 +564,37 @@ without a reason a person could state.
 - ❌ No bird on a crash, a destructive confirmation or an error, except the
   head shake at a wrong password, which is the bird saying no rather than
   the bird being cheerful.
+
+## 7. The ring means tracked
+
+The relationship score belongs to the people a person chose to keep up with.
+Nothing on screen shows a score for anybody else, and no surface asks the
+question on its own: they all call `scoreView` in `shared/scoreBand.ts`.
+
+`scoreView(contact)` answers in one of three states. A surface that shows a
+score handles all three:
+
+| State       | What it means                    | What the surface shows                                   |
+| ----------- | -------------------------------- | -------------------------------------------------------- |
+| `untracked` | Nobody tracks this contact       | No ring, no chip, no words. The picture at its full size |
+| `unscored`  | Tracked, with nothing logged yet | The empty track, and "No interactions yet"               |
+| `scored`    | Tracked, with a score and a band | The arc in the band colour, and "Score 72, strong"       |
+
+Rules that follow from it:
+
+- **An untracked contact is never At risk.** The band needs a score. The map
+  health layer paints its pin `ring-outline-variant`, the cluster arc leaves
+  it out, and the stats strip counts it in neither At risk nor the average.
+  Both it and a never-met contact used to be painted red.
+- **Say nothing rather than say unknown.** A row that names a contact
+  ("Betty Clark, Global Dynamics, score 72, strong") calls `scoreWords`,
+  which is null for an untracked contact, and leaves the part out.
+- **A scored ring explains itself.** On the contact page the ring is the
+  `ScoreBreakdown` trigger, named "Relationship score 72 out of 100,
+  explain". The ring inside it is then `decorative`, so the score is said
+  once.
+- **The words.** Track, Tracked, Untrack, Not tracked, cadence. The band
+  words, Strong, Fading and At risk, keep their own meaning and are never
+  used for the flag.
+- ❌ No surface reads `contact.relationshipScore` directly. A raw column
+  read is how "Score 50" reached the map for a person nobody had ever met.

@@ -26,6 +26,7 @@ const ContactRow = ({
     name: string;
     avatarUrl?: string | null;
     relationshipScore?: number | null;
+    lastContactedAt?: string | null;
     company?: string | null;
   };
   badge: React.ReactNode;
@@ -51,7 +52,10 @@ const ContactRow = ({
           contact={{
             name: contact.name,
             avatarUrl: contact.avatarUrl,
+            // Every card on Pulse names a contact somebody tracks.
+            isTracked: true,
             relationshipScore: contact.relationshipScore,
+            lastContactedAt: contact.lastContactedAt ?? null,
           }}
           size={28}
           ring="list"

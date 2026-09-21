@@ -48,6 +48,8 @@ export interface DashboardPayload {
     avatarUrl: string | null;
     themeColor: string;
     relationshipScore: number;
+    /** The ring needs it: a score with no date is not a score. */
+    lastContactedAt: string | null;
     daysSinceContact: number;
     lastInteractionTitle: string | null;
   }[];
