@@ -293,16 +293,41 @@ The mini map is `ContactMap` with `interactive={false}`, one pin, no hover
 card, and `label="Location map"`. It is a still picture: it answers "is this
 pin in the right place?" and hands every other question to the map page.
 
-Two rules keep it cheap and quiet:
+Four rules keep it cheap and quiet. A contact page is built fresh for each
+person, so without them a reader moving down the list pays for a new WebGL
+canvas, a new style to parse and a new set of tiles, for every person they
+pass and throw away:
 
 - **The map arrives only when there is a pin to draw.** `LocationMiniMap`
   loads `ContactMap` with `React.lazy`, from the chunk the map page uses. A
   contact with no coordinates loads no map code.
+- **It waits for the pin to hold still.** The map is built only once the same
+  place has been on screen for `SETTLE_MS` (250 ms). Step through the list
+  with the arrow keys and no map is built for anybody passed through. Editing
+  an address moves the pin, which starts the wait again.
+- **It arrives once.** The frame holds a still panel in the container colour
+  from the first frame. The map is laid over it and fades up over 300 ms once
+  it reports that it has loaded, so the empty canvas and the tiles painting
+  in are never on screen. The panel does not pulse: a pulse repeated for
+  every contact is the flicker it was meant to cover.
 - **The picture stands down on the map page.** On `/map/contact/<id>` the
   map behind the panel already holds the pin, so a second canvas and a second
   pin with the same name would be waste and noise, and "Open in map" would
   lead where the reader already is. "Adjust pin" and the badge stay, because
   a wrong pin is most visible from the map.
+
+### MapLibre's own chrome
+
+Every `ContactMap` hides the attribution and the zoom buttons until the map
+has loaded, through `data-map-ready` on the wrapper and one rule in
+`index.css`. MapLibre's compact attribution control is born expanded: the
+moment a style's attributions arrive it lays the full credit strip across the
+map, and it stays until something collapses it. `ContactMap` collapses it,
+but only on load, so the strip flashed over every map that opened. The class
+the strip carries cannot tell that state from the one a reader opens with the
+"i" button, so CSS covers the one moment it is wrong. The credit the
+basemap's terms require is behind the "i" from the first frame anybody sees,
+which is where MapLibre itself leaves it after a drag.
 
 ---
 

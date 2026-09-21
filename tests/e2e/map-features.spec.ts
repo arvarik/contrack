@@ -284,6 +284,24 @@ test.describe("map features - filters and place search", () => {
     // Press Escape to clear selection
     await page.keyboard.press("Escape");
     await expect(page.getByText("2 selected")).toHaveCount(0);
+
+    // Take the two follow-ups back off the instance. The worker's instance
+    // is shared with every other spec, and two of them count what is due:
+    // Pulse reads the second row of "Up next" by name, and the phone
+    // metrics scan measures whatever is on that screen. A follow-up left
+    // here lands in both, so this journey passed or failed by the order
+    // Playwright happened to choose.
+    for (const contactId of [graceId, katherineId]) {
+      const items = await instance.api<{ id: string; title: string }[]>(
+        "GET",
+        `/contacts/${contactId}/action-items`,
+      );
+      for (const item of items) {
+        if (item.title === "Virginia catch up") {
+          await instance.api("DELETE", `/action-items/${item.id}`);
+        }
+      }
+    }
   });
 
   test("Tab to a pin shows hover card, Space pins it focusing first button, Escape returns focus", async ({
@@ -441,7 +459,11 @@ test.describe("map features - filters and place search", () => {
 
     // Open Saved views menu and select Virginia
     await page.getByRole("button", { name: "Saved views" }).click();
-    const virginiaItem = page.getByRole("menuitem", { name: "Virginia" });
+    // Exact: "Rename Virginia" and "Delete Virginia" are items too.
+    const virginiaItem = page.getByRole("menuitem", {
+      name: "Virginia",
+      exact: true,
+    });
     await expect(virginiaItem).toBeVisible();
     await virginiaItem.click();
 

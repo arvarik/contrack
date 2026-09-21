@@ -757,9 +757,12 @@ export const ContactList = () => {
               </button>
             )}
           </div>
-          {/* Sort ActionMenu */}
+          {/* Sort ActionMenu. The trigger shows the order, and its name says
+              what the control is: "A to Z" alone does not. */}
           <ActionMenu
-            label={currentSort.label}
+            label={`Sort: ${currentSort.label}`}
+            title="Sort the list"
+            heading="Sort by"
             triggerClassName="hit-area px-2.5 py-1.5 rounded-xl transition-all shrink-0 flex items-center justify-center gap-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
             triggerContent={
               <span className="flex items-center gap-1 text-xs md:text-sm font-medium">

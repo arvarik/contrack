@@ -145,3 +145,39 @@ test("the command palette opens on the shortcut with its combobox focused", asyn
   await page.keyboard.press("Escape");
   await expect(palette).toHaveCount(0);
 });
+
+test("Escape in a list inside a dialog closes the list and keeps the dialog", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByText("Ada Lovelace")).toBeVisible();
+  await page.getByRole("button", { name: "Select", exact: true }).click();
+  await page.getByRole("button", { name: "Select all" }).click();
+  await page
+    .getByRole("toolbar", { name: "Bulk actions" })
+    .getByRole("button", { name: "Field", exact: true })
+    .click();
+
+  const dialog = page.getByRole("dialog", { name: "Edit Field" });
+  await expect(dialog).toBeVisible();
+  const combo = page.getByRole("combobox", { name: "Field to edit" });
+  await combo.click();
+
+  // The list is in the top layer, and the dialog's focus trap still lets
+  // its rows take focus.
+  const listbox = page.getByRole("listbox", { name: "Field to edit" });
+  await expect(listbox).toBeVisible();
+  await expect(listbox).toHaveAttribute("popover", "manual");
+  await page.keyboard.press("ArrowDown");
+  await expect(listbox.getByRole("option", { name: "Company" })).toBeFocused();
+
+  // Escape is the list's to take. The dialog listens for it on the document
+  // in the capture phase, and used to close as well.
+  await page.keyboard.press("Escape");
+  await expect(listbox).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await expect(combo).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});

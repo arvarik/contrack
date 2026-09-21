@@ -105,7 +105,6 @@ export const NetworkPage = () => {
             options={[
               { value: "name", label: "Name" },
               { value: "recent", label: "Recent" },
-              { value: "score", label: "Score" },
             ]}
           />
         </SettingRow>

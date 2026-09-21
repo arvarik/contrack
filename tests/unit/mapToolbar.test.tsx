@@ -351,7 +351,7 @@ describe("MapToolbar and useMapFilter", () => {
     const viewsButton = screen.getByRole("button", { name: "Saved views" });
     fireEvent.click(viewsButton);
 
-    const londonItem = screen.getByRole("menuitem", { name: /London Hub/ });
+    const londonItem = screen.getByRole("menuitem", { name: "London Hub" });
     expect(londonItem).toBeTruthy();
     fireEvent.click(londonItem);
     expect(handleSelectView).toHaveBeenCalledWith(mockViews[0]);

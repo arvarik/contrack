@@ -118,16 +118,19 @@ test.describe("Settings — Desktop", () => {
     const darkRadio = themeRow.getByRole("radio", { name: "Dark" });
     await darkRadio.click();
 
-    // Reset button and modified dot indicator should now be visible
+    // Reset button and the changed mark after the title should now be visible
+    const mark = themeRow.getByRole("img", {
+      name: "Changed from the default",
+    });
     await expect(resetBtn).toBeVisible();
-    await expect(themeRow.getByText("Changed from the default")).toBeVisible();
+    await expect(mark).toBeVisible();
 
     // Click Reset to default
     await resetBtn.click();
 
-    // Preference is reset: reset button and modified dot disappear
+    // Preference is reset: reset button and the mark disappear
     await expect(resetBtn).toBeHidden();
-    await expect(themeRow.getByText("Changed from the default")).toBeHidden();
+    await expect(mark).toBeHidden();
   });
 
   test("old URLs redirect to their new paths", async ({ page }) => {

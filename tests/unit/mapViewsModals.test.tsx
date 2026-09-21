@@ -214,7 +214,9 @@ describe("ViewsMenu actions", () => {
     fireEvent.click(trigger);
 
     // Click Rename button
-    const renameBtn = screen.getByRole("button", { name: "Rename Alpha View" });
+    const renameBtn = screen.getByRole("menuitem", {
+      name: "Rename Alpha View",
+    });
     fireEvent.click(renameBtn);
     expect(handleStartRename).toHaveBeenCalledWith(mockViews[0]);
 
@@ -222,7 +224,9 @@ describe("ViewsMenu actions", () => {
     fireEvent.click(trigger);
 
     // Click Delete button
-    const deleteBtn = screen.getByRole("button", { name: "Delete Alpha View" });
+    const deleteBtn = screen.getByRole("menuitem", {
+      name: "Delete Alpha View",
+    });
     fireEvent.click(deleteBtn);
     expect(handleDeleteView).toHaveBeenCalledWith(mockViews[0]);
 
@@ -253,13 +257,20 @@ describe("ViewsMenu actions", () => {
     trigger.focus();
     fireEvent.click(trigger);
     const alpha = screen.getByRole("menuitem", { name: "Alpha View" });
+    const rename = screen.getByRole("menuitem", { name: "Rename Alpha View" });
+    const remove = screen.getByRole("menuitem", { name: "Delete Alpha View" });
     const save = screen.getByRole("menuitem", { name: "Save current view…" });
 
     // From the trigger, ArrowDown starts at the first item.
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     expect(document.activeElement).toBe(alpha);
 
+    // A view's Rename and Delete are items too, so the arrows reach them.
     fireEvent.keyDown(alpha, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(rename);
+    fireEvent.keyDown(rename, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(remove);
+    fireEvent.keyDown(remove, { key: "ArrowDown" });
     expect(document.activeElement).toBe(save);
 
     // Past the last item, ArrowDown wraps to the first.

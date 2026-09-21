@@ -12,9 +12,22 @@
  * the caption alone and loads nothing. The dialog that moves the pin is
  * loaded the same way, the first time it opens.
  *
+ * Two rules keep it calm while a reader moves down the list.
+ *
+ * 1. **It waits.** A contact page is built fresh for each person, so a map
+ *    here is a new WebGL canvas, a new style to parse and a new set of tiles
+ *    to fetch, every time. Somebody stepping through the list with the arrow
+ *    keys was paying all of that for each person they passed, and throwing
+ *    it away a keystroke later. So the map is created only once the same pin
+ *    has been on screen for {@link SETTLE_MS}. Pass through a person and no
+ *    map is ever built.
+ * 2. **It arrives once.** The placeholder holds until the map reports that
+ *    it has loaded, and then the map fades up through it. Nothing in between
+ *    is shown: not the empty canvas, not the tiles painting in.
+ *
  * @module views/map/LocationMiniMap
  */
-import { Suspense, lazy, useCallback, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Hand } from "lucide-react";
@@ -25,6 +38,7 @@ import {
 } from "../../../shared/geo";
 import { Badge } from "../../components/ui/Badge";
 import { InfoTip } from "../../components/ui/InfoTip";
+import { cn } from "../../lib/utils";
 import { CONTACT_ZOOM } from "./mapMath";
 
 const ContactMap = lazy(() =>
@@ -62,11 +76,24 @@ const CAPTION_ROW = "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs";
 const CAPTION_ACTION =
   "inline-flex items-center min-h-[44px] sm:min-h-0 font-bold text-primary underline hover:text-on-surface transition-colors";
 
+/**
+ * How long one pin must hold still before its map is built, in ms.
+ *
+ * Long enough that arrowing down the list builds nothing, short enough that
+ * a reader who stops on somebody does not notice the wait. The placeholder
+ * is on screen throughout either way.
+ */
+export const SETTLE_MS = 250;
+
+/**
+ * What fills the frame until the map has loaded, and under it after that.
+ *
+ * It does not pulse. A pulse says "this is coming", which is true for about
+ * a second and then says it again on the next contact, and the eye follows
+ * every one. A still panel says the same thing once.
+ */
 const MapSkeleton = () => (
-  <div
-    aria-hidden="true"
-    className="w-full h-full bg-surface-container-low animate-pulse"
-  />
+  <div aria-hidden="true" className="w-full h-full bg-surface-container-low" />
 );
 
 export const LocationMiniMap = ({
@@ -81,21 +108,22 @@ export const LocationMiniMap = ({
   const openAdjust = useCallback(() => setAdjusting(true), []);
   const closeAdjust = useCallback(() => setAdjusting(false), []);
 
-  /**
-   * Close the attribution strip.
-   *
-   * MapLibre's compact attribution control opens itself when the map is
-   * created. On a map this small the open strip covers the picture and the
-   * pin. Closing it leaves the "i" button that opens it again, which is
-   * what the compact control was built to do, and the credit OpenFreeMap
-   * and OpenStreetMap ask for stays one tap away.
-   */
-  const collapseAttribution = useCallback((map: MapLibreMap) => {
-    map
-      .getContainer()
-      .querySelector(".maplibregl-ctrl-attrib")
-      ?.classList.remove("maplibregl-compact-show");
-  }, []);
+  // Whether the pin has held still long enough to be worth a map, and
+  // whether that map has finished loading. The place is the key: a reader
+  // who steps to the next person restarts the wait, and one who edits this
+  // contact's address moves the pin and starts it again.
+  const place = placed ? `${contact.lat},${contact.lng}` : null;
+  const [settled, setSettled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!place) return;
+    setSettled(false);
+    setLoaded(false);
+    const timer = window.setTimeout(() => setSettled(true), SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [place]);
+
+  const onMapReady = useCallback((_map: MapLibreMap) => setLoaded(true), []);
   // This same contact, open over the map page. The map behind the panel
   // already holds the pin, at a size a reader can use, so a second map of
   // the same place is a second WebGL canvas and a second pin with the same
@@ -142,23 +170,39 @@ export const LocationMiniMap = ({
   return (
     <div className="flex flex-col gap-2">
       {!overTheMap && (
-        <div className="h-40 w-full overflow-hidden rounded-2xl border border-surface-container-highest">
-          <Suspense fallback={<MapSkeleton />}>
-            <ContactMap
-              contacts={[pin]}
-              onSelect={openInMap}
-              label="Location map"
-              onMapReady={collapseAttribution}
-              interactive={false}
-              hoverCard={false}
-              minZoomFromViewport={false}
-              initialView={{
-                longitude: pin.lng,
-                latitude: pin.lat,
-                zoom: CONTACT_ZOOM,
-              }}
-            />
-          </Suspense>
+        <div className="relative h-40 w-full overflow-hidden rounded-2xl border border-surface-container-highest">
+          {/*
+            The placeholder is the floor of this box, not a stand-in that is
+            swapped out. The map is laid over it and fades up once it has
+            loaded, so the frame holds one steady colour from the first
+            frame to the last and never blinks between two of them.
+          */}
+          <MapSkeleton />
+          {settled && (
+            <div
+              className={cn(
+                "absolute inset-0 transition-opacity duration-300 motion-reduce:transition-none",
+                loaded ? "opacity-100" : "opacity-0",
+              )}
+            >
+              <Suspense fallback={null}>
+                <ContactMap
+                  contacts={[pin]}
+                  onSelect={openInMap}
+                  label="Location map"
+                  onMapReady={onMapReady}
+                  interactive={false}
+                  hoverCard={false}
+                  minZoomFromViewport={false}
+                  initialView={{
+                    longitude: pin.lng,
+                    latitude: pin.lat,
+                    zoom: CONTACT_ZOOM,
+                  }}
+                />
+              </Suspense>
+            </div>
+          )}
         </div>
       )}
       <div className={CAPTION_ROW}>

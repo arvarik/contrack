@@ -186,24 +186,54 @@ test.describe("the Network header and start panel", () => {
     const firstRow = page.locator("#contact-list [data-roving-index]").first();
     await expect(firstRow).toContainText("Ada Lovelace");
 
-    const sortButton = page.getByRole("button", { name: "Name A to Z" });
+    const sortButton = page.getByRole("button", { name: "Sort: A to Z" });
     await sortButton.click();
 
-    const zToA = page.getByRole("menuitemcheckbox", { name: "Name Z to A" });
+    const zToA = page.getByRole("menuitemcheckbox", { name: "Z to A" });
     await expect(zToA).toBeVisible();
     await zToA.click();
 
     await expect(
-      page.getByRole("button", { name: "Name Z to A" }),
+      page.getByRole("button", { name: "Sort: Z to A" }),
     ).toBeVisible();
     await expect(firstRow).not.toContainText("Ada Lovelace");
 
-    await page.getByRole("button", { name: "Name Z to A" }).click();
-    await page.getByRole("menuitemcheckbox", { name: "Name A to Z" }).click();
+    await page.getByRole("button", { name: "Sort: Z to A" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "A to Z" }).click();
     await expect(
-      page.getByRole("button", { name: "Name A to Z" }),
+      page.getByRole("button", { name: "Sort: A to Z" }),
     ).toBeVisible();
     await expect(firstRow).toContainText("Ada Lovelace");
+  });
+
+  test("the sort menu opens above the selected row", async ({ page }) => {
+    await page.goto("/");
+    const rows = page.locator("#contact-list [data-roving-index]");
+    await expect(rows.first()).toContainText("Ada Lovelace");
+
+    // The selected row is `z-10` and comes after the `sticky z-10` header,
+    // so a menu drawn inside the header used to open under it.
+    await rows.nth(1).click();
+    await expect(
+      page.getByRole("button", { name: "Contact actions" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Sort: A to Z" }).click();
+
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect(menu).toHaveAttribute("popover", "manual");
+    const item = page.getByRole("menuitemcheckbox", { name: "Newest" });
+    const onTop = await item.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        r.left + r.width / 2,
+        r.top + r.height / 2,
+      );
+      return hit !== null && el.contains(hit);
+    });
+    expect(onTop).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
   });
 
   test("Select mode shows N selected, Select all, Done, and the bulk toolbar", async ({

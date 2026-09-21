@@ -172,9 +172,17 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                       <span className="truncate">{view.name}</span>
                     </button>
 
+                    {/*
+                      Rename and Delete are items of the menu too, so the
+                      arrows reach them and a screen reader is not told of
+                      a menu with a button it does not know. Each is a 24 px
+                      target with a 44 px tap box.
+                    */}
                     <div className="flex items-center gap-0.5 pr-1 opacity-80 group-hover:opacity-100 shrink-0">
                       <button
                         type="button"
+                        role="menuitem"
+                        tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
                           setIsOpen(false);
@@ -182,12 +190,14 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         }}
                         aria-label={`Rename ${view.name}`}
                         title="Rename view"
-                        className="hit-area p-1 text-on-surface-variant hover:text-primary rounded-lg cursor-pointer"
+                        className="hit-area w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-primary focus-visible:text-primary rounded-lg cursor-pointer"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
+                        role="menuitem"
+                        tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
                           setIsOpen(false);
@@ -195,7 +205,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         }}
                         aria-label={`Delete ${view.name}`}
                         title="Delete view"
-                        className="hit-area p-1 text-on-surface-variant hover:text-error rounded-lg cursor-pointer"
+                        className="hit-area w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-error focus-visible:text-error rounded-lg cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

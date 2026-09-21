@@ -269,6 +269,25 @@ export const ContactMap = ({
   const [map, setMap] = useState<MapLibreMap | null>(null);
   useKeepWorldCovering(map, wrapperRef, minZoomFromViewport);
 
+  /**
+   * MapLibre's own chrome is hidden until the map has loaded.
+   *
+   * The attribution control is born expanded: the moment the style's
+   * attributions arrive, MapLibre puts the full "OpenFreeMap,
+   * OpenStreetMap contributors" strip across the map and leaves it there
+   * until something collapses it. This map collapses it on load, so the
+   * strip used to flash over the picture on every map that opened, which
+   * on the contact page meant every time a reader moved to another person.
+   *
+   * A class cannot tell the two states apart: the strip a reader opens
+   * carries the same one MapLibre opens it with. So the chrome is hidden by
+   * CSS for the one moment it is wrong, from creation until load, and the
+   * collapse below decides what it looks like when it appears. The credit
+   * the basemap's terms require is then where MapLibre puts it, behind the
+   * "i" button, from the first frame anybody sees.
+   */
+  const [ready, setReady] = useState(false);
+
   // The style that failed, not a flag: a theme switch asks for the other
   // style, which deserves its own attempt.
   const [failedStyle, setFailedStyle] = useState<string | null>(null);
@@ -466,6 +485,7 @@ export const ContactMap = ({
       ref={wrapperRef}
       role="region"
       aria-label={label}
+      data-map-ready={ready ? "true" : "false"}
       className={cn(
         "contact-map relative w-full h-full overflow-hidden bg-surface-container-low",
         className,
@@ -524,11 +544,18 @@ export const ContactMap = ({
           dragRotate={false}
           touchPitch={false}
           pitchWithRotate={false}
+          onStyleData={(event) => {
+            // The style's attributions are what opens the strip, and this
+            // is the event that carries them. Collapsing here means the
+            // chrome is already right when `onLoad` reveals it.
+            collapseAttribution(event.target.getContainer());
+          }}
           onLoad={(event) => {
             const loaded = event.target;
             collapseAttribution(loaded.getContainer());
             if (interactive) disableRotation(loaded);
             setMap(loaded);
+            setReady(true);
             onMapReady?.(loaded);
           }}
           onMove={(event) => setCurrentZoom(event.viewState.zoom)}

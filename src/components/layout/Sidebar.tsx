@@ -132,9 +132,15 @@ const CorvidPerch = () => {
         wash: while the bird is away this button is empty, and a filled grey
         box where the mark used to be reads as something still loading.
       */
+      /*
+        The mark is the brand, so it is the one stop in the rail that is
+        bigger than a nav glyph: 40 px against their 24. The padding drops
+        from `p-3` to `p-2` to pay for it, so the button stays the 56 px box
+        it was and the rail's spacing does not move.
+      */
       className={navLink(
         false,
-        "mb-1 text-primary hover:text-primary hover:bg-transparent",
+        "mb-1 p-2 text-primary hover:text-primary hover:bg-transparent",
       )}
       aria-label="Contrack"
       title="Let the corvid fly"
@@ -145,7 +151,7 @@ const CorvidPerch = () => {
         button's own box alone, so the sidebar does not shift by a pixel.
       */}
       <span ref={markRef} {...perchProps} className="flex">
-        <CorvidMark size={32} idPrefix="corvid" idle={level !== "off"} />
+        <CorvidMark size={40} idPrefix="corvid" idle={level !== "off"} />
       </span>
     </button>
   );

@@ -288,14 +288,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       {
         id: "list-sort",
         label: "Default sort",
-        keywords: [
-          "default sort",
-          "list sort",
-          "sort order",
-          "name",
-          "recent",
-          "score",
-        ],
+        keywords: ["default sort", "list sort", "sort order", "name", "recent"],
       },
       {
         id: "recent-contacts",

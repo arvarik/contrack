@@ -124,7 +124,7 @@ export const preferenceSchemas = {
   mapPaneOpen: z.boolean(),
   mapLayer: z.enum(["pins", "heat", "health"]),
   startPage: z.enum(["network", "pulse"]),
-  listSort: z.enum(["name", "recent", "score"]),
+  listSort: z.enum(["name", "recent"]),
   defaultCadenceDays: z.union([
     z.literal(30),
     z.literal(60),

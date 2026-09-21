@@ -29,6 +29,7 @@ import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatDay, formatWhen } from "../../../lib/datetime";
 import { cn } from "../../../lib/utils";
+import { Switch } from "../../../components/ui/Switch";
 import {
   AdminButton,
   AdminCell,
@@ -193,35 +194,12 @@ const NewInvitationModal = ({
               >
                 Send it by email
               </label>
-              <button
+              <Switch
                 id="invite-send-email"
-                type="button"
-                role="switch"
-                aria-checked={sendByEmail}
-                aria-label="Send it by email"
-                onClick={() => setSendByEmail(!sendByEmail)}
-                className={cn(
-                  "shrink-0 inline-flex items-center justify-center",
-                  "min-w-[44px] min-h-[44px] rounded-full",
-                  "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "relative block w-14 h-8 rounded-full transition-colors",
-                    sendByEmail ? "bg-primary" : "bg-surface-container-high",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "absolute top-1 w-6 h-6 rounded-full bg-surface-container-lowest shadow-sm",
-                      "transition-transform",
-                      sendByEmail ? "translate-x-7" : "translate-x-1",
-                    )}
-                  />
-                </span>
-              </button>
+                checked={sendByEmail}
+                label="Send it by email"
+                onChange={() => setSendByEmail(!sendByEmail)}
+              />
             </div>
           )}
 
