@@ -180,7 +180,7 @@ export const ScoreBreakdown = ({
         ref={triggerRef}
         type="button"
         aria-expanded={open}
-        aria-label={`Relationship score ${score} out of 100 — explain`}
+        aria-label={`Relationship score ${score} out of 100, explain`}
         onClick={() => {
           // Measured at the moment of opening — the row may have scrolled
           // since mount, so anything computed earlier is already stale.

@@ -37,7 +37,7 @@ import { ScoreBreakdown } from "../../components/ScoreBreakdown";
 import { IconButton } from "../../components/ui/IconButton";
 import { timeZoneAt } from "../../components/LocalTimeWeather";
 import { TAG_PILL } from "../../lib/styles";
-import { bandFor } from "../../../shared/scoreBand";
+import { NOT_TRACKED_TEXT, scoreView } from "../../../shared/scoreBand";
 import { cn } from "../../lib/utils";
 
 /** Half the 48 px pin plus clearance so the card clears the ring. */
@@ -138,17 +138,19 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
 
   const tags = (contact.tags || []).slice(0, 3);
   const lists = contact.lists || [];
-  const score = contact.relationshipScore;
-  const scoreBand = score != null ? bandFor(score) : null;
+  // The card used to print the stored column, so a contact nobody had met
+  // showed "Score 50". It reads the same view as the ring now.
+  const view = scoreView(contact);
+  const score = view.kind === "scored" ? view.score : null;
 
   const scoreBadgeBg =
-    scoreBand === "strong"
-      ? "bg-emerald-500/10 text-success border-emerald-500/20"
-      : scoreBand === "fading"
-        ? "bg-amber-500/10 text-warning border-amber-500/20"
-        : scoreBand === "at-risk"
-          ? "bg-rose-500/10 text-error border-rose-500/20"
-          : "bg-surface-container-high text-on-surface-variant border-outline-variant/30";
+    view.kind !== "scored"
+      ? "bg-surface-container-high text-on-surface-variant border-outline-variant/30"
+      : view.band.band === "strong"
+        ? "bg-emerald-500/10 text-success border-emerald-500/20"
+        : view.band.band === "fading"
+          ? "bg-amber-500/10 text-warning border-amber-500/20"
+          : "bg-rose-500/10 text-error border-rose-500/20";
 
   const anchor = useMemo(() => {
     if (!map) return undefined;
@@ -219,7 +221,17 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
 
         {/* Facts row: Score chip, Last contact, Local time */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs border-t border-outline-variant/20">
-          {score != null && (
+          {view.kind === "untracked" && (
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-md font-bold border text-[11px]",
+                scoreBadgeBg,
+              )}
+            >
+              {NOT_TRACKED_TEXT}
+            </span>
+          )}
+          {score !== null && (
             <div className="shrink-0">
               {pinned ? (
                 <ScoreBreakdown contactId={contact.id} score={score}>

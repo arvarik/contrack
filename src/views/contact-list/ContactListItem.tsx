@@ -19,7 +19,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
-import { contactScore, describeScore } from "../../../shared/scoreBand";
+import { scoreView, scoreWords } from "../../../shared/scoreBand";
 import { useCompanyLogo } from "../../hooks/useCompanyLogo";
 import { formatDay } from "../../lib/datetime";
 import { listRow } from "../../lib/styles";
@@ -166,12 +166,13 @@ const ContactListItemInner = ({
   // The row's name says the score in words, so the ring's colour is never the
   // only sign of it: "Betty Clark, Global Dynamics, score 72, strong". The
   // middle part is the line printed under the name, the company or else the
-  // role, and it is left out when the row prints neither.
-  const score = contactScore(contact);
+  // role, and it is left out when the row prints neither. A contact nobody
+  // tracks has no ring and no score words: "Betty Clark, Global Dynamics".
+  const view = scoreView(contact);
   const rowName = [
     contact.name,
     contact.company || contact.role,
-    describeScore(score, { sentence: true }),
+    scoreWords(view, { sentence: true }),
   ]
     .filter(Boolean)
     .join(", ");
@@ -229,7 +230,7 @@ const ContactListItemInner = ({
           accessibility tree. */}
       <span
         className="shrink-0 flex"
-        title={describeScore(score)}
+        title={scoreWords(view) ?? undefined}
         aria-hidden="true"
       >
         <ScoreRingAvatar

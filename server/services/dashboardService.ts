@@ -132,6 +132,7 @@ export const dashboardService = {
       .prepare(
         `
       SELECT c.id, c.name, c.company, c.avatarUrl, c.themeColor, c.relationshipScore,
+             c.lastContactedAt,
              CAST(julianday('now') - julianday(c.lastContactedAt) AS INTEGER) as daysSinceContact,
              (SELECT title FROM interactions WHERE contactId = c.id AND ownerId = c.ownerId ORDER BY date DESC LIMIT 1) as lastInteractionTitle
       FROM contacts c
@@ -146,6 +147,8 @@ export const dashboardService = {
       )
       .all(scope.ownerId) as (ContactCardRow & {
       relationshipScore: number;
+      /** Never null: the query asks for a contact that has one. */
+      lastContactedAt: string;
       daysSinceContact: number;
       lastInteractionTitle: string | null;
     })[];

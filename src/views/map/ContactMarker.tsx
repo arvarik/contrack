@@ -19,7 +19,7 @@
 import { memo, useRef, useState } from "react";
 import { Marker } from "react-map-gl/maplibre";
 import type { MapContact } from "../../../shared/geo";
-import { bandFor, contactScore } from "../../../shared/scoreBand";
+import { scoreView } from "../../../shared/scoreBand";
 import type { MapLayer } from "../../api/mapViews";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { cn } from "../../lib/utils";
@@ -80,14 +80,19 @@ export const ContactMarker = memo(function ContactMarker({
 
   const isHighlighted = selected || multiSelected;
 
-  const score = contactScore(contact);
-  const band = score !== null ? bandFor(score) : "at-risk";
+  // The health layer paints the band. A contact with no score takes the
+  // neutral outline: a pin nobody tracks, and a pin for somebody never met,
+  // both used to be painted red, which said a relationship was failing when
+  // there was no relationship to measure.
+  const view = scoreView(contact);
   const healthRing =
-    band === "strong"
-      ? "ring-success"
-      : band === "fading"
-        ? "ring-warning"
-        : "ring-error";
+    view.kind !== "scored"
+      ? "ring-outline-variant"
+      : view.band.band === "strong"
+        ? "ring-success"
+        : view.band.band === "fading"
+          ? "ring-warning"
+          : "ring-error";
 
   const ringClass = isHighlighted
     ? "ring-4 ring-primary -translate-y-1 shadow-lg"

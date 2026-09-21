@@ -33,6 +33,7 @@ describe("MapHoverCard", () => {
     role: "Lead Mathematician",
     location: "London, UK",
     avatarUrl: null,
+    isTracked: true,
     lat: 51.5074,
     lng: -0.1278,
     relationshipScore: 85,

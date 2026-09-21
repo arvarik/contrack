@@ -76,6 +76,7 @@ const ADA = {
   company: "Babbage & Co",
   avatarUrl: null,
   location: "London, UK",
+  isTracked: false,
   lat: 51.5074,
   lng: -0.1278,
   geoSource: null as "geocoder" | "manual" | null,

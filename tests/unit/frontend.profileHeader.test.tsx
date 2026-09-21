@@ -560,8 +560,25 @@ describe("the narrow header", () => {
     expect(weatherRequests()).toHaveLength(0);
   });
 
-  it("draws the avatar in a 56 px score ring", () => {
+  it("draws the avatar in a 56 px box, with no ring for an untracked contact", () => {
     mount(<ProfileHeader {...makeProps({ layout: "narrow" })} />);
+    expect(
+      screen.queryByRole("img", { name: /score|interactions/i }),
+    ).toBeNull();
+    const box = document.querySelector("[data-score-band]") as HTMLElement;
+    expect(box.getAttribute("data-score-band")).toBe("untracked");
+    expect(box.style.width).toBe("56px");
+  });
+
+  it("draws the 56 px ring once somebody tracks the contact", () => {
+    mount(
+      <ProfileHeader
+        {...makeProps({
+          layout: "narrow",
+          contact: makeContact({ isTracked: true }),
+        })}
+      />,
+    );
     const ring = screen.getByRole("img", { name: "No interactions yet" });
     expect(ring.style.width).toBe("56px");
   });

@@ -8,7 +8,7 @@
  */
 import tzlookup from "tz-lookup";
 import { type MapContact, isValidLatLng } from "../../../shared/geo";
-import { bandFor } from "../../../shared/scoreBand";
+import { scoreView } from "../../../shared/scoreBand";
 import { boundsContain } from "./mapMath";
 
 export interface TopBucket {
@@ -30,13 +30,16 @@ export interface MapStats {
   matching: number;
   /** Total contacts in dataset before filtering. */
   total: number;
-  /** In-view contacts in the 'at-risk' health score band (score < 40). */
+  /**
+   * In-view contacts in the At risk band (a score under 40). Only a tracked
+   * contact has a score, so an untracked pin counts for nobody.
+   */
   atRisk: number;
   /** In-view contacts whose next follow-up date is before now. */
   overdue: number;
   /** In-view contacts who have never been contacted. */
   neverContacted: number;
-  /** Rounded average score for in-view contacts with scores, or null if empty / no scores. */
+  /** The mean score of the in-view contacts that have one, or null for none. */
   avgScore: number | null;
   /** Top 5 industries in view, sorted by count descending then name ascending. */
   topIndustries: TopBucket[];
@@ -141,18 +144,17 @@ export function computeMapStats(
   >();
 
   for (const c of inViewContacts) {
-    // Score & at-risk
-    const score =
-      c.relationshipScore != null ? Math.round(c.relationshipScore) : null;
-    if (score !== null) {
-      scoreSum += score;
+    // The score and the band. A contact nobody tracks has no score, and one
+    // nobody has met yet has none either. Neither counts as At risk and
+    // neither moves the average: the pane used to count both, so a fresh
+    // import read as an address book in trouble.
+    const view = scoreView(c);
+    if (view.kind === "scored") {
+      scoreSum += view.score;
       scoredCount++;
-      if (bandFor(score) === "at-risk") {
+      if (view.band.band === "at-risk") {
         atRisk++;
       }
-    } else {
-      // Score defaults to at-risk if null/missing (bandFor null is at-risk)
-      atRisk++;
     }
 
     // Overdue

@@ -14,6 +14,11 @@
  * | `fading`  | 40 to 69  | "Fading"  | `warning` |
  * | `at-risk` | 0 to 39   | "At risk" | `error`   |
  *
+ * A score exists only for a contact somebody tracks. `scoreView` is the one
+ * reader every surface asks, and it answers in three states: `untracked`,
+ * `unscored` and `scored`. Nothing on the client reads
+ * `contacts.relationshipScore` without going through it.
+ *
  * The band words mean one thing each. "Slipping" (a contact past its
  * follow-up cadence) and "rising" and "cooling" (score movement) are other
  * facts, and Pulse names them itself.
@@ -116,27 +121,49 @@ export function scoreView(contact: {
   lastContactedAt?: string | null;
 }): ScoreView {
   if (!contact.isTracked) return { kind: "untracked" };
-  const score = contactScore({ ...contact, isTracked: true });
+  const score = contactScore(contact);
   if (score === null) return { kind: "unscored" };
   return { kind: "scored", score, band: bandInfo(score) };
 }
 
 /**
+ * The score in words for a view, or null when there is nothing to say.
+ *
+ * A surface that names a contact ("Betty Clark, Global Dynamics, score 72,
+ * strong") calls this and leaves the part out when it is null. Nobody tracks
+ * an untracked contact, so the surface says nothing about its score rather
+ * than calling it unknown.
+ */
+export function scoreWords(
+  view: ScoreView,
+  { sentence = false }: { sentence?: boolean } = {},
+): string | null {
+  if (view.kind === "untracked") return null;
+  return describeScore(view.kind === "scored" ? view.score : null, {
+    sentence,
+  });
+}
+
+/**
  * The score to show for a contact, or null when there is none to show.
  *
- * Every contact row carries a score, because the column defaults to 50. A
- * contact with no logged interaction has never been scored against anything,
- * so its 50 is a placeholder and not a judgement. That contact shows no arc
- * and "No interactions yet". A contact that is not tracked has no score
- * either, whatever the column holds: `scoreView` is the reader that asks
- * about the flag, and every surface moves to it in its own step. This
- * function keeps answering the way it always has until then.
+ * Two facts make a stored number mean nothing:
+ *
+ * 1. Nobody tracks this contact. The score is only computed for a contact a
+ *    person chose to keep up with, so the column holds whatever it held
+ *    before, or the default.
+ * 2. Nothing is logged yet. The column defaults to 50, and 50 against no
+ *    interaction is a placeholder, not a judgement.
+ *
+ * Most callers want `scoreView`, which names the two cases apart. This
+ * function answers the number alone.
  */
 export function contactScore(contact: {
-  isTracked?: boolean;
+  isTracked: boolean;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
 }): number | null {
+  if (!contact.isTracked) return null;
   if (!contact.lastContactedAt) return null;
   const score = contact.relationshipScore;
   if (score === null || score === undefined || !Number.isFinite(score)) {

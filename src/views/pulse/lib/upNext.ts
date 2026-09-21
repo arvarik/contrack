@@ -23,8 +23,23 @@ export interface SlippingContactInput {
   avatarUrl?: string | null;
   themeColor?: string;
   relationshipScore: number;
+  lastContactedAt?: string | null;
   daysSinceContact: number;
   lastInteractionTitle?: string | null;
+}
+
+/**
+ * What a row's ring needs, for a contact the row itself does not carry.
+ *
+ * An action item names a contact and holds no score, so the ring used to
+ * draw an empty track for every one of them. The queue takes a lookup from
+ * the slim contact cache, which the Pulse page already holds, and a row
+ * whose contact is missing from it shows the picture alone.
+ */
+export interface UpNextContactScore {
+  isTracked: boolean;
+  relationshipScore?: number | null;
+  lastContactedAt?: string | null;
 }
 
 export interface UpNextItem {
@@ -35,7 +50,10 @@ export interface UpNextItem {
   contactName: string;
   contactAvatarUrl: string | null;
   contactThemeColor: string;
+  /** A person tracks this contact, so its ring means something. */
+  isTracked: boolean;
   relationshipScore: number | null;
+  lastContactedAt: string | null;
   title: string;
   dueAt: string | null;
   hasCheckAction: boolean;
@@ -74,6 +92,8 @@ export interface BuildUpNextOptions {
   upcoming?: ActionItem[];
   birthdays?: UpcomingBirthday[];
   slipping?: SlippingContactInput[];
+  /** The score fields for every contact, by contact id. See the type above. */
+  contactScores?: ReadonlyMap<string, UpNextContactScore>;
   now?: Date;
 }
 
@@ -95,8 +115,19 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     upcoming = [],
     birthdays = [],
     slipping = [],
+    contactScores,
     now = new Date(),
   } = options;
+
+  /** The ring fields for a contact, or an untracked stand-in. */
+  const ringOf = (contactId: string) => {
+    const found = contactScores?.get(contactId);
+    return {
+      isTracked: found?.isTracked ?? false,
+      relationshipScore: found?.relationshipScore ?? null,
+      lastContactedAt: found?.lastContactedAt ?? null,
+    };
+  };
 
   const overdueItems: UpNextItem[] = [...overdue]
     .sort((a, b) => {
@@ -122,7 +153,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
         contactName: item.contactName ?? "",
         contactAvatarUrl: item.contactAvatarUrl ?? null,
         contactThemeColor: item.contactThemeColor ?? "#006a91",
-        relationshipScore: null,
+        ...ringOf(item.contactId),
         title: item.title,
         dueAt: item.dueAt,
         hasCheckAction: true,
@@ -142,7 +173,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     contactName: item.contactName ?? "",
     contactAvatarUrl: item.contactAvatarUrl ?? null,
     contactThemeColor: item.contactThemeColor ?? "#006a91",
-    relationshipScore: null,
+    ...ringOf(item.contactId),
     title: item.title,
     dueAt: item.dueAt,
     hasCheckAction: true,
@@ -177,7 +208,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
         contactName: item.contactName ?? "",
         contactAvatarUrl: item.contactAvatarUrl ?? null,
         contactThemeColor: item.contactThemeColor ?? "#006a91",
-        relationshipScore: null,
+        ...ringOf(item.contactId),
         title: item.title,
         dueAt: item.dueAt,
         hasCheckAction: true,
@@ -201,7 +232,9 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       contactName: b.name,
       contactAvatarUrl: b.avatarUrl,
       contactThemeColor: b.themeColor,
+      isTracked: b.isTracked,
       relationshipScore: b.relationshipScore,
+      lastContactedAt: b.lastContactedAt,
       title: `Wish ${b.name} a happy birthday`,
       dueAt: null,
       hasCheckAction: false, // birthday rows have no check action
@@ -226,7 +259,10 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     contactName: contact.name,
     contactAvatarUrl: contact.avatarUrl ?? null,
     contactThemeColor: contact.themeColor ?? "#006a91",
+    // Every contact on this list is tracked: the server scores nobody else.
+    isTracked: true,
     relationshipScore: contact.relationshipScore,
+    lastContactedAt: contact.lastContactedAt ?? null,
     title: contact.lastInteractionTitle
       ? `Follow up on "${contact.lastInteractionTitle}"`
       : `Check in with ${contact.name}`,

@@ -17,6 +17,7 @@ import {
   NOT_TRACKED_TEXT,
   SCORE_BANDS,
   scoreView,
+  scoreWords,
   STRONG_MIN,
 } from "../../shared/scoreBand";
 
@@ -77,25 +78,91 @@ describe("the band names", () => {
 });
 
 describe("contactScore", () => {
+  const at = "2026-09-10T05:33:50.000Z";
+
+  it("is null for a contact nobody tracks, whatever the column holds", () => {
+    // The score is computed only for a tracked contact, so the column holds
+    // a number that means nothing for anybody else.
+    expect(
+      contactScore({
+        isTracked: false,
+        relationshipScore: 72,
+        lastContactedAt: at,
+      }),
+    ).toBeNull();
+  });
+
   it("is null for a contact with no logged interaction, whatever the column holds", () => {
     // The column defaults to 50, which is a placeholder and not a judgement.
     expect(
-      contactScore({ relationshipScore: 50, lastContactedAt: null }),
+      contactScore({
+        isTracked: true,
+        relationshipScore: 50,
+        lastContactedAt: null,
+      }),
     ).toBeNull();
-    expect(contactScore({ relationshipScore: 50 })).toBeNull();
+    expect(contactScore({ isTracked: true, relationshipScore: 50 })).toBeNull();
   });
 
-  it("is the rounded, clamped score once there is an interaction", () => {
-    const at = "2026-09-10T05:33:50.000Z";
-    expect(contactScore({ relationshipScore: 72, lastContactedAt: at })).toBe(
-      72,
-    );
+  it("is the rounded, clamped score for a tracked contact with an interaction", () => {
     expect(
-      contactScore({ relationshipScore: 101.4, lastContactedAt: at }),
+      contactScore({
+        isTracked: true,
+        relationshipScore: 72,
+        lastContactedAt: at,
+      }),
+    ).toBe(72);
+    expect(
+      contactScore({
+        isTracked: true,
+        relationshipScore: 101.4,
+        lastContactedAt: at,
+      }),
     ).toBe(100);
     expect(
-      contactScore({ relationshipScore: null, lastContactedAt: at }),
+      contactScore({
+        isTracked: true,
+        relationshipScore: null,
+        lastContactedAt: at,
+      }),
     ).toBeNull();
+  });
+});
+
+describe("scoreWords", () => {
+  const at = "2026-09-10T05:33:50.000Z";
+
+  it("says nothing at all for a contact nobody tracks", () => {
+    // A row that names a contact leaves the part out, rather than calling
+    // the score unknown.
+    expect(
+      scoreWords(scoreView({ isTracked: false, relationshipScore: 72 })),
+    ).toBeNull();
+  });
+
+  it("says the score, or says there is nothing logged yet", () => {
+    expect(
+      scoreWords(
+        scoreView({
+          isTracked: true,
+          relationshipScore: 72,
+          lastContactedAt: at,
+        }),
+      ),
+    ).toBe("Score 72, strong");
+    expect(
+      scoreWords(scoreView({ isTracked: true, relationshipScore: 50 })),
+    ).toBe(NO_SCORE_TEXT);
+    expect(
+      scoreWords(
+        scoreView({
+          isTracked: true,
+          relationshipScore: 72,
+          lastContactedAt: at,
+        }),
+        { sentence: true },
+      ),
+    ).toBe("score 72, strong");
   });
 });
 

@@ -11,7 +11,7 @@
  * @module shared/geo
  */
 
-import { bandFor } from "./scoreBand";
+import { scoreView } from "./scoreBand";
 
 /**
  * The basemap style URL for each palette, as `GET /api/auth/status` reports
@@ -43,8 +43,12 @@ export interface MapContact {
   lng: number;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
-  /** A person chose to keep up with this contact. Only then is it scored. */
-  isTracked?: boolean;
+  /**
+   * A person chose to keep up with this contact. Only a tracked contact has
+   * a score, so the health layer and the stats both ask this first. The
+   * field is required, so the compiler names every builder of a map row.
+   */
+  isTracked: boolean;
   nextFollowUpAt?: string | null;
   cadenceDays?: number | null;
   interactionCount?: number;
@@ -66,7 +70,9 @@ export interface ContactPointProperties {
   company?: string;
   avatarUrl?: string;
   location?: string;
-  score: number;
+  /** The score, left out for a contact with none: untracked, or never met. */
+  score?: number;
+  /** 1 for a scored contact in the At risk band, and 0 for anybody else. */
   atRisk: number;
   overdue: number;
   weight: number;
@@ -136,11 +142,11 @@ export function toFeatureCollection(
   const features: ContactPointFeature[] = [];
   for (const contact of contacts) {
     if (!isValidLatLng(contact.lat, contact.lng)) continue;
-    const score =
-      contact.relationshipScore != null
-        ? Math.round(contact.relationshipScore)
-        : 0;
-    const atRisk = bandFor(score) === "at-risk" ? 1 : 0;
+    // An untracked contact has no score, and a contact nobody has met yet
+    // has none either. Neither one is At risk: the band needs a score.
+    const view = scoreView(contact);
+    const atRisk =
+      view.kind === "scored" && view.band.band === "at-risk" ? 1 : 0;
     const overdue =
       contact.nextFollowUpAt &&
       new Date(contact.nextFollowUpAt).getTime() < nowTime
@@ -151,11 +157,11 @@ export function toFeatureCollection(
     const properties: ContactPointProperties = {
       id: contact.id,
       name: contact.name,
-      score,
       atRisk,
       overdue,
       weight,
     };
+    if (view.kind === "scored") properties.score = view.score;
     if (contact.company) properties.company = contact.company;
     if (contact.avatarUrl) properties.avatarUrl = contact.avatarUrl;
     if (contact.location) properties.location = contact.location;

@@ -26,7 +26,7 @@ import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { Modal } from "../../components/ui/Modal";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { cn } from "../../lib/utils";
-import { bandInfo, describeScore } from "../../../shared/scoreBand";
+import { describeScore, scoreView } from "../../../shared/scoreBand";
 
 export interface MapInsightsPaneProps {
   isOpen: boolean;
@@ -234,11 +234,10 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const contact = inViewContacts[virtualRow.index];
               if (!contact) return null;
-              const score =
-                contact.relationshipScore != null
-                  ? Math.round(contact.relationshipScore)
-                  : null;
-              const band = score != null ? bandInfo(score) : null;
+              // The chip used to print the stored column, so a contact
+              // nobody had met showed "50". It reads the same view as the
+              // ring now, and shows nothing for a contact with no score.
+              const view = scoreView(contact);
 
               return (
                 <div
@@ -271,19 +270,20 @@ export const MapInsightsPane: React.FC<MapInsightsPaneProps> = ({
                           "No details"}
                       </div>
                     </div>
-                    {band && (
+                    {view.kind === "scored" && (
                       <span
                         className={cn(
                           "px-2 py-0.5 rounded-md text-[11px] font-bold tabular-nums shrink-0",
-                          band.token === "success" &&
+                          view.band.token === "success" &&
                             "bg-success/15 text-success",
-                          band.token === "warning" &&
+                          view.band.token === "warning" &&
                             "bg-warning/15 text-warning",
-                          band.token === "error" && "bg-error/15 text-error",
+                          view.band.token === "error" &&
+                            "bg-error/15 text-error",
                         )}
-                        title={describeScore(score)}
+                        title={describeScore(view.score)}
                       >
-                        {score}
+                        {view.score}
                       </span>
                     )}
                   </button>

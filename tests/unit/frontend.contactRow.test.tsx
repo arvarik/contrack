@@ -127,6 +127,13 @@ describe("the row's accessible name", () => {
       "Betty Clark, Global Dynamics, no interactions yet",
     );
   });
+
+  it("says nothing about the score for a contact nobody tracks", () => {
+    // The column still holds 72. Nobody asked to keep up with this person,
+    // so the row says who they are and stops there.
+    const row = mount(makeContact({ isTracked: false }));
+    expect(row.getAttribute("aria-label")).toBe("Betty Clark, Global Dynamics");
+  });
 });
 
 describe("the ring in the row", () => {
@@ -144,10 +151,18 @@ describe("the ring in the row", () => {
   it("gives the tooltip the no-score words too", () => {
     const row = mount(makeContact({ lastContactedAt: null }));
     const ring = row.querySelector("[data-score-band]")!;
-    expect(ring.getAttribute("data-score-band")).toBe("none");
+    expect(ring.getAttribute("data-score-band")).toBe("unscored");
     expect(ring.closest("[title]")!.getAttribute("title")).toBe(
       "No interactions yet",
     );
+  });
+
+  it("is a picture with no ring and no tooltip when nobody tracks the contact", () => {
+    const row = mount(makeContact({ isTracked: false }));
+    const ring = row.querySelector("[data-score-band]")!;
+    expect(ring.getAttribute("data-score-band")).toBe("untracked");
+    expect(ring.querySelector("svg")).toBeNull();
+    expect(ring.closest("[title]")).toBeNull();
   });
 });
 

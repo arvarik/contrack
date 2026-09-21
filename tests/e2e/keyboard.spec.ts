@@ -211,9 +211,14 @@ test("on a contact page the skip link lands on the contact's name", async ({
  * Both budgets went up by exactly one when the corvid mark became a button.
  * It is the seventh sidebar stop, and it stands in front of the content on
  * every page, so a keyboard user pays for it once per page.
+ *
+ * The contact budget went up by one again when a scored avatar ring became
+ * the button that explains the score. Ada is tracked and scored, so her page
+ * carries it. It is the one way to the breakdown from the page the score is
+ * about, and it costs the stop that used to buy nothing.
  */
 test.describe("Tab budget", () => {
-  test("a contact's name is within 17 Tabs of the top of the page", async ({
+  test("a contact's name is within 18 Tabs of the top of the page", async ({
     page,
     seed,
   }) => {
@@ -223,8 +228,8 @@ test.describe("Tab budget", () => {
     ).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, "#contact-heading", 17);
-    expect(presses).toBeLessThanOrEqual(17);
+    const presses = await tabsToReach(page, "#contact-heading", 18);
+    expect(presses).toBeLessThanOrEqual(18);
   });
 
   test("the first row on Network is within 15 Tabs, and the list is one stop", async ({

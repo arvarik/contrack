@@ -65,6 +65,8 @@ import {
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
+import { ScoreBreakdown } from "../../../components/ScoreBreakdown";
+import { scoreView } from "../../../../shared/scoreBand";
 
 import { EditableField } from "./EditableField";
 import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
@@ -489,6 +491,11 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 
   const avatarSize = narrow ? 56 : 96;
 
+  // The score the ring draws, or null when there is none: nobody tracks this
+  // contact, or nothing is logged yet. Only a scored ring explains itself.
+  const view = scoreView(contact);
+  const headerScore = view.kind === "scored" ? view.score : null;
+
   return (
     <>
       {/*
@@ -539,13 +546,30 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
           )}
         >
           {/* Avatar in the score ring. "Change avatar" is in the contact
-              actions menu. */}
+              actions menu.
+
+              A scored ring is the button that explains the score. The
+              breakdown used to be reachable only from the map's hover card,
+              which is the one place a person is not reading about this
+              contact. The ring is then decorative, because the button around
+              it carries the name. */}
           <div className="relative shrink-0">
-            <ScoreRingAvatar
-              contact={contact}
-              size={avatarSize}
-              ring="header"
-            />
+            {headerScore === null ? (
+              <ScoreRingAvatar
+                contact={contact}
+                size={avatarSize}
+                ring="header"
+              />
+            ) : (
+              <ScoreBreakdown contactId={contact.id} score={headerScore}>
+                <ScoreRingAvatar
+                  contact={contact}
+                  size={avatarSize}
+                  ring="header"
+                  decorative
+                />
+              </ScoreBreakdown>
+            )}
             {!!contact.isArchived && (
               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm whitespace-nowrap z-20">
                 <Archive aria-hidden="true" className="w-2.5 h-2.5" />

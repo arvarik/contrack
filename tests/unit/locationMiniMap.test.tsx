@@ -40,6 +40,7 @@ const ADA: MiniMapContact = {
   company: "Babbage & Co",
   avatarUrl: null,
   location: "London",
+  isTracked: false,
   lat: 51.5072,
   lng: -0.1276,
 };

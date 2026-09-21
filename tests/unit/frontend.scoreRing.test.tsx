@@ -5,8 +5,12 @@
 // The ring used to be the contact's theme colour, and people read a red ring
 // as trouble. It now says one thing. The arc length is the score, the colour
 // is the band from shared/scoreBand, and the words say the same so colour is
-// never the only sign. A contact with no logged interaction has no score, so
-// the ring draws no arc and says "No interactions yet".
+// never the only sign.
+//
+// A score belongs to a contact somebody tracks. So the ring has three states,
+// and `scoreView` decides between them: no ring at all for a contact nobody
+// tracks, the empty track for a tracked contact with nothing logged, and the
+// arc for a tracked contact with a score.
 // =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -29,6 +33,7 @@ function person(
   return {
     name: "Betty Clark",
     avatarUrl: null,
+    isTracked: true,
     relationshipScore: 72,
     lastContactedAt: "2026-09-10T05:33:50.000Z",
     ...overrides,
@@ -44,6 +49,7 @@ function mount(props: Partial<ScoreRingAvatarProps> = {}) {
     root,
     arc: container.querySelector<SVGCircleElement>("[data-ring-arc]"),
     circles: Array.from(container.querySelectorAll("circle")),
+    svg: container.querySelector("svg"),
     picture: container.querySelector("img")!.parentElement as HTMLElement,
   };
 }
@@ -90,7 +96,7 @@ describe("the arc", () => {
     expect(arc).toBeNull();
     // The track still shows, so the ring reads as empty and not missing.
     expect(circles).toHaveLength(1);
-    expect(root.getAttribute("data-score-band")).toBe("none");
+    expect(root.getAttribute("data-score-band")).toBe("unscored");
     const ring = screen.getByRole("img", { name: "No interactions yet" });
     expect(ring.getAttribute("title")).toBe("No interactions yet");
   });
@@ -99,6 +105,39 @@ describe("the arc", () => {
     const { arc } = mount({ contact: person({ relationshipScore: 0 }) });
     expect(arc).toBeNull();
     expect(screen.getByRole("img", { name: "Score 0, at risk" })).toBeDefined();
+  });
+});
+
+describe("a contact nobody tracks", () => {
+  it("draws no ring at all, not even the track", () => {
+    // An empty ring reads as a bad score. A person who never asked to keep
+    // up with this contact is told nothing, and sees the picture.
+    const { arc, circles, svg } = mount({
+      contact: person({ isTracked: false }),
+    });
+    expect(arc).toBeNull();
+    expect(circles).toHaveLength(0);
+    expect(svg).toBeNull();
+  });
+
+  it("says nothing, and is hidden from a screen reader", () => {
+    const { root } = mount({ contact: person({ isTracked: false }) });
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(root.getAttribute("aria-hidden")).toBe("true");
+    expect(root.hasAttribute("title")).toBe(false);
+    expect(root.getAttribute("data-score-band")).toBe("untracked");
+  });
+
+  it("gives the whole box to the picture", () => {
+    // With a ring the picture is inset by two strokes on each side. Without
+    // one it fills the box, so a list of faces stays a list of faces.
+    const withRing = mount().picture;
+    expect(withRing.style.width).toBe(`${48 - RING_WIDTH.list * 4}px`);
+    cleanup();
+
+    const plain = mount({ contact: person({ isTracked: false }) }).picture;
+    expect(plain.style.width).toBe("48px");
+    expect(plain.style.height).toBe("48px");
   });
 });
 

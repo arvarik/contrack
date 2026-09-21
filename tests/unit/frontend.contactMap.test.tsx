@@ -68,6 +68,7 @@ const person = (id: string, name: string, company: string): MapContact => ({
   name,
   company,
   avatarUrl: null,
+  isTracked: true,
   location: "London, UK",
   lat: 51.5,
   lng: -0.12,

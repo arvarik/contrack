@@ -18,9 +18,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Activity, Tag, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
-  bandFor,
-  contactScore,
-  SCORE_BANDS,
+  NOT_TRACKED_TEXT,
+  scoreView,
   type ScoreBand,
 } from "../../../shared/scoreBand";
 import { fallbackAvatarUrl } from "../../lib/avatar";
@@ -33,6 +32,7 @@ export interface PeekContact {
   avatarUrl?: string | null;
   role?: string | null;
   company?: string | null;
+  isTracked: boolean;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
   tags?: Array<{ tag: string }>;
@@ -59,9 +59,10 @@ const SCORE_BAR_COLOR: Record<ScoreBand, string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
-  // A contact with no logged interaction has no score to show, the same as
-  // on the ring. Its stored 50 is only the column's default.
-  const score = contact ? contactScore(contact) : null;
+  // The same reader as the ring, so the peek and the ring always agree. A
+  // contact nobody tracks has no bar, and neither has one with nothing
+  // logged yet.
+  const view = contact ? scoreView(contact) : null;
   return (
     <AnimatePresence>
       {visible && contact && (
@@ -97,7 +98,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
             </div>
 
             {/* Score Bar */}
-            {score !== null && (
+            {view?.kind === "scored" && (
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-on-surface-variant flex items-center gap-1">
@@ -105,15 +106,24 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
                     Relationship
                   </span>
                   <span className="font-bold text-on-surface">
-                    {score}, {SCORE_BANDS[bandFor(score)].label}
+                    {view.score}, {view.band.label}
                   </span>
                 </div>
                 <div className="h-1.5 bg-surface-container rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${SCORE_BAR_COLOR[bandFor(score)]}`}
-                    style={{ width: `${score}%` }}
+                    className={`h-full rounded-full transition-all ${SCORE_BAR_COLOR[view.band.band]}`}
+                    style={{ width: `${view.score}%` }}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* No bar for a contact nobody tracks. The peek says why, so the
+                reader does not read the missing bar as a bad score. */}
+            {view?.kind === "untracked" && (
+              <div className="flex items-center gap-1 text-[11px] text-on-surface-variant">
+                <Activity className="w-3 h-3" />
+                {NOT_TRACKED_TEXT}
               </div>
             )}
 

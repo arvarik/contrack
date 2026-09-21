@@ -64,7 +64,7 @@ MapLibre groups nearby contacts into clusters. The map's GeoJSON source sets
 - Large clusters break into smaller groups
 - Individual pins appear at high zoom levels
 - Cluster badges show the number of contacts in each group
-- An outer SVG ring renders a proportional red error arc when the cluster contains at-risk contacts (health score < 40)
+- An outer SVG ring renders a proportional red error arc for the share of the cluster that is At risk. Only a tracked, scored contact counts toward it.
 
 A cluster is a button named `"<n> contacts, <m> at risk, zoom in"`. A click zooms to the
 level where that cluster splits.
@@ -80,9 +80,9 @@ reachable this way.
 Floating at the bottom-left corner of the map, the **Stats Strip** aggregates live metrics for contacts currently in the viewport (debounced 150ms on camera movement):
 
 - **In view**: Count of contacts placed within the visible bounding box.
-- **At risk**: Count of contacts with health scores < 40. Clicking this chip appends `score:<40` to the active search filter.
+- **At risk**: Count of tracked in-view contacts whose score is under 40. A contact nobody tracks has no score, and neither has one nobody has met yet, so neither is counted. Clicking this chip appends `score:<40` to the active search filter.
 - **Overdue**: Count of contacts past their follow-up cadence. Clicking this chip filters by overdue contacts.
-- **Average score**: Mean relationship health score of in-view contacts.
+- **Average score**: Mean score of the in-view contacts that have one.
 - **Time zones**: Number of distinct time zones spanned by in-view contacts.
 
 When no contacts fall within the visible bounds, the strip displays a compact empty state ("No contacts in this area") with a **Fit all** button. Updates to the strip are announced to screen readers via an accessible live status region (`role="status"`).
@@ -149,7 +149,7 @@ A segmented toggle control (`aria-label="Map layer"`) lets users switch between 
 
 - **Pins**: The standard view showing contact avatars and cluster markers.
 - **Heat**: Renders a client-side MapLibre heatmap layer with radius 30 and zoom-based weight calculated from each contact's interaction count. Pin markers are hidden above zoom level 9 while the heat layer is active.
-- **Health**: Pin markers display ring borders tinted by relationship health score bands using theme color tokens: `ring-success` for Strong (scores >= 70), `ring-warning` for Fading (scores 40 to 69), and `ring-error` for At risk (scores < 40). A floating legend chip in the bottom-right corner displays text labels alongside colored dots to ensure color is never the only signal.
+- **Health**: Pin markers display ring borders tinted by relationship score bands using theme color tokens: `ring-success` for Strong (scores 70 and up), `ring-warning` for Fading (scores 40 to 69), and `ring-error` for At risk (scores under 40). A pin with no score takes `ring-outline-variant`: a contact nobody tracks, and one nobody has met yet. Both used to be painted red. A floating legend chip in the bottom-right corner names all four, with a text label beside each coloured dot, so colour is never the only signal.
 
 Changing the layer updates the `?layer=` URL parameter and persists to the user's `mapLayer` account preference.
 
