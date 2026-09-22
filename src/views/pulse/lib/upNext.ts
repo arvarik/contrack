@@ -6,27 +6,21 @@
  * 2. Due today
  * 3. This week (upcoming follow-ups within 7 days)
  * 4. Birthdays this week (pseudo-items)
- * 5. Slipping (top 3 at-risk contacts)
+ * 5. Catch up: tracked contacts past their cadence, the furthest first
+ *
+ * A catch-up ranks after a birthday. It is a soft reminder, and a due
+ * follow-up is a promise with a date. The server sends ten at most and the
+ * group takes every one; the heading says "10 of 14" when there are more.
  */
 import type { ActionItem } from "../../../types";
+import type { CatchUpCard } from "../../../../shared/pulse";
+import { describePastDue } from "../../../../shared/pastDue";
 import type { UpcomingBirthday } from "./birthdays";
 
 export type UpNextGroup =
-  "overdue" | "today" | "thisWeek" | "birthdays" | "slipping";
+  "overdue" | "today" | "thisWeek" | "birthdays" | "catch-up";
 
-export type UpNextItemKind = "action_item" | "birthday" | "slipping";
-
-export interface SlippingContactInput {
-  id: string;
-  name: string;
-  company?: string | null;
-  avatarUrl?: string | null;
-  themeColor?: string;
-  relationshipScore: number;
-  lastContactedAt?: string | null;
-  daysSinceContact: number;
-  lastInteractionTitle?: string | null;
-}
+export type UpNextItemKind = "action_item" | "birthday" | "catch-up";
 
 /**
  * What a row's ring needs, for a contact the row itself does not carry.
@@ -71,6 +65,12 @@ export interface UpNextGroupMeta {
   label: string;
   items: UpNextItem[];
   count: number;
+  /**
+   * How many there are in all, when more than the rows shown. The Catch up
+   * group carries the server's ten rows and the count past them, so the
+   * heading can read "10 of 14".
+   */
+  of?: number;
 }
 
 export interface UpNextResult {
@@ -81,7 +81,7 @@ export interface UpNextResult {
     today: number;
     thisWeek: number;
     birthdays: number;
-    slipping: number;
+    catchUp: number;
     total: number;
   };
 }
@@ -91,7 +91,10 @@ export interface BuildUpNextOptions {
   dueToday?: ActionItem[];
   upcoming?: ActionItem[];
   birthdays?: UpcomingBirthday[];
-  slipping?: SlippingContactInput[];
+  /** The server's Catch up list, ten at most, the furthest past due first. */
+  catchUp?: CatchUpCard[];
+  /** How many catch-ups there are in all, past the ten. */
+  catchUpCount?: number;
   /** The score fields for every contact, by contact id. See the type above. */
   contactScores?: ReadonlyMap<string, UpNextContactScore>;
   now?: Date;
@@ -102,7 +105,7 @@ export const GROUP_LABELS: Record<UpNextGroup, string> = {
   today: "Today",
   thisWeek: "This week",
   birthdays: "Birthdays",
-  slipping: "Slipping",
+  "catch-up": "Catch up",
 };
 
 /**
@@ -114,7 +117,8 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     dueToday = [],
     upcoming = [],
     birthdays = [],
-    slipping = [],
+    catchUp = [],
+    catchUpCount,
     contactScores,
     now = new Date(),
   } = options;
@@ -250,29 +254,27 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       turningAge: b.turningAge,
     }));
 
-  // Limit slipping to top 3 contacts
-  const slippingItems: UpNextItem[] = slipping.slice(0, 3).map((contact) => ({
-    id: `slip-${contact.id}`,
-    kind: "slipping",
-    group: "slipping",
+  // Every row the server sent, in its order: the furthest past due first.
+  const catchUpItems: UpNextItem[] = catchUp.map((contact) => ({
+    id: `catch-${contact.id}`,
+    kind: "catch-up",
+    group: "catch-up",
     contactId: contact.id,
     contactName: contact.name,
     contactAvatarUrl: contact.avatarUrl ?? null,
     contactThemeColor: contact.themeColor ?? "#006a91",
-    // Every contact on this list is tracked: the server scores nobody else.
+    // Every contact on this list is tracked: that is the rule that put it here.
     isTracked: true,
     relationshipScore: contact.relationshipScore,
     lastContactedAt: contact.lastContactedAt ?? null,
-    title: contact.lastInteractionTitle
-      ? `Follow up on "${contact.lastInteractionTitle}"`
-      : `Check in with ${contact.name}`,
+    title: `Check in with ${contact.name}`,
     dueAt: null,
-    hasCheckAction: false, // slipping rows have no check action (Log button instead)
+    hasCheckAction: false, // a catch-up has a Log button, not a check
     dueChip: {
-      text: `${contact.daysSinceContact}d since contact`,
+      text: describePastDue(contact.overshootDays),
       variant: "neutral",
     },
-    daysSinceContact: contact.daysSinceContact,
+    daysSinceContact: contact.daysSince,
   }));
 
   const allItems = [
@@ -280,7 +282,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     ...todayItems,
     ...thisWeekItems,
     ...birthdayItems,
-    ...slippingItems,
+    ...catchUpItems,
   ];
 
   const groupOrder: UpNextGroup[] = [
@@ -288,23 +290,34 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     "today",
     "thisWeek",
     "birthdays",
-    "slipping",
+    "catch-up",
   ];
   const groupItemsMap: Record<UpNextGroup, UpNextItem[]> = {
     overdue: overdueItems,
     today: todayItems,
     thisWeek: thisWeekItems,
     birthdays: birthdayItems,
-    slipping: slippingItems,
+    "catch-up": catchUpItems,
   };
 
   const groups: UpNextGroupMeta[] = groupOrder
-    .map((group) => ({
-      group,
-      label: GROUP_LABELS[group],
-      items: groupItemsMap[group],
-      count: groupItemsMap[group].length,
-    }))
+    .map((group): UpNextGroupMeta => {
+      const items = groupItemsMap[group];
+      const meta: UpNextGroupMeta = {
+        group,
+        label: GROUP_LABELS[group],
+        items,
+        count: items.length,
+      };
+      if (
+        group === "catch-up" &&
+        catchUpCount !== undefined &&
+        catchUpCount > items.length
+      ) {
+        meta.of = catchUpCount;
+      }
+      return meta;
+    })
     .filter((g) => g.count > 0);
 
   return {
@@ -315,7 +328,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       today: todayItems.length,
       thisWeek: thisWeekItems.length,
       birthdays: birthdayItems.length,
-      slipping: slippingItems.length,
+      catchUp: catchUpItems.length,
       total: allItems.length,
     },
   };

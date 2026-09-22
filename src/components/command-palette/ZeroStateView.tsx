@@ -17,7 +17,7 @@ import {
   Sparkles,
   Zap,
   ClipboardList,
-  AlertTriangle,
+  Radar,
   Ghost,
   LayoutDashboard,
   Activity,
@@ -73,8 +73,8 @@ const insightIcon = (type: string) => {
   switch (type) {
     case "action_items":
       return <ClipboardList className="w-3.5 h-3.5 text-warning" />;
-    case "at_risk":
-      return <AlertTriangle className="w-3.5 h-3.5 text-error" />;
+    case "catch_up":
+      return <Radar className="w-3.5 h-3.5 text-error" />;
     case "ghost":
       return <Ghost className="w-3.5 h-3.5 text-info" />;
     case "stale_data":
@@ -90,7 +90,7 @@ const insightBg = (type: string) => {
   switch (type) {
     case "action_items":
       return "bg-amber-500/10 aria-selected:bg-amber-500/15";
-    case "at_risk":
+    case "catch_up":
       return "bg-rose-500/8 aria-selected:bg-rose-500/12";
     case "ghost":
       return "bg-purple-500/8 aria-selected:bg-purple-500/12";

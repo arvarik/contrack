@@ -270,7 +270,7 @@ describe("pulse layout", () => {
         hidden: ["up-next", "inbox"],
         order: {
           focus: ["completed", "activity"],
-          network: ["momentum", "composition"],
+          network: ["keeping-up", "composition"],
           intel: ["insight", "coming-up", "new-people"],
         },
       },
@@ -280,7 +280,7 @@ describe("pulse layout", () => {
       hidden: ["up-next", "inbox"],
       order: {
         focus: ["completed", "activity"],
-        network: ["momentum", "composition"],
+        network: ["keeping-up", "composition"],
         intel: ["insight", "coming-up", "new-people"],
       },
     });

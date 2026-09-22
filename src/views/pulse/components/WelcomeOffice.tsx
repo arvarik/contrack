@@ -38,7 +38,7 @@ export const WelcomeOffice = () => {
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">
             Get your network into Contrack to start seeing follow-ups,
-            intelligence, and momentum.
+            intelligence, and the people you keep up with.
           </p>
         </div>
 

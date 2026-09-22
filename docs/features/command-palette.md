@@ -64,13 +64,13 @@ No need to navigate to the contact's profile — log interactions from anywhere.
 
 Before you type anything, the palette displays **CRM intelligence signals**:
 
-| Signal              | Description                                                 |
-| ------------------- | ----------------------------------------------------------- |
-| 🔴 Action Items     | Tasks due today or overdue                                  |
-| ⚠️ At-Risk Contacts | Contacts you haven't interacted with beyond their cadence   |
-| 👻 Ghost Contacts   | Names mentioned multiple times but not yet in your contacts |
-| 📊 Stale Data       | Contacts with outdated information                          |
-| 🔗 Dedupe           | Pending duplicate suggestions to review                     |
+| Signal            | Description                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| 🔴 Action Items   | Tasks due today or overdue                                                             |
+| ◎ Catch-ups       | The two tracked contacts furthest past their cadence, "Ada Lovelace, 3 weeks past due" |
+| 👻 Ghost Contacts | Names mentioned multiple times but not yet in your contacts                            |
+| 📊 Stale Data     | Contacts with outdated information                                                     |
+| 🔗 Dedupe         | Pending duplicate suggestions to review                                                |
 
 These signals are fetched from `GET /api/command-palette/zero-state` and provide proactive intelligence without requiring a search.
 

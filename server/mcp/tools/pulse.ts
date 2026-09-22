@@ -32,7 +32,7 @@ export function registerPulseTools(
         content: [
           {
             type: "text" as const,
-            text: `Pulse dashboard: ${pulse.metrics.totalActive} active contacts, ${pulse.metrics.atRiskCount} at risk, ${pulse.overdue.length} overdue follow-ups`,
+            text: `Pulse dashboard: ${pulse.metrics.totalActive} active contacts, ${pulse.tracking.count} tracked, ${pulse.tracking.catchUpCount} to catch up, ${pulse.overdue.length} overdue follow-ups`,
           },
         ],
         structuredContent: pulse,

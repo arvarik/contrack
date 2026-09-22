@@ -717,12 +717,6 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   },
   {
     method: "GET",
-    path: "/api/dashboard/momentum",
-    class: "scoped",
-    isolated: true,
-  },
-  {
-    method: "GET",
     path: "/api/debug/cache-stats",
     class: "admin",
     isolated: false,

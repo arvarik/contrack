@@ -90,3 +90,10 @@ export const NAMES = {
 } as const satisfies Record<string, DestinationName>;
 
 export type DestinationKey = keyof typeof NAMES;
+
+/**
+ * The sentence under the Tracked contacts heading, and the body of the
+ * Keeping up card's empty state. One sentence, said the same in both places.
+ */
+export const TRACKED_INTRO =
+  "Track the people you want to keep up with. Their score, their catch-ups and the map's health layer follow.";

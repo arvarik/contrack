@@ -4,22 +4,22 @@ import { STALE_TIMES } from "../lib/queryConfig";
 import type { ActionItem, ZeroStatePayload } from "../types";
 import type {
   ActivityDay,
+  CatchUpCard,
   DashboardActivityResponse,
-  DashboardMomentumResponse,
   ContactCard,
   MomentumCard,
-  SilentCard,
   StreakResult,
+  TrackingSummary,
 } from "../../shared/pulse";
 
 export type {
   ActivityDay,
+  CatchUpCard,
   DashboardActivityResponse,
-  DashboardMomentumResponse,
   ContactCard,
   MomentumCard,
-  SilentCard,
   StreakResult,
+  TrackingSummary,
 };
 
 export interface DashboardPayload {
@@ -36,23 +36,12 @@ export interface DashboardPayload {
   }[];
   metrics: {
     totalActive: number;
-    avgDaysSinceInteraction: number;
-    atRiskCount: number;
-    totalInteractions30d: number;
     newContacts30d: number;
   };
-  atRisk: {
-    id: string;
-    name: string;
-    company: string | null;
-    avatarUrl: string | null;
-    themeColor: string;
-    relationshipScore: number;
-    /** The ring needs it: a score with no date is not a score. */
-    lastContactedAt: string | null;
-    daysSinceContact: number;
-    lastInteractionTitle: string | null;
-  }[];
+  /** Tracked contacts past their cadence, the furthest first, ten at most. */
+  catchUp: CatchUpCard[];
+  /** The state of the people this account tracks: the Keeping up card. */
+  tracking: TrackingSummary;
   recentlyAdded: {
     id: string;
     name: string;
@@ -130,18 +119,6 @@ export const useDashboardActivity = () => {
   });
 };
 
-export const useDashboardMomentum = () => {
-  return useQuery({
-    queryKey: ["dashboard", "momentum"],
-    queryFn: async ({ signal }): Promise<DashboardMomentumResponse> => {
-      const res = await apiFetch(`/dashboard/momentum`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch dashboard momentum");
-      return res.json();
-    },
-    staleTime: STALE_TIMES.dashboard,
-  });
-};
-
 export const useDailyInsight = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ["dashboard", "insight"],
@@ -158,7 +135,7 @@ export const useDailyInsight = (options?: { enabled?: boolean }) => {
 /**
  * Fetch CRM intelligence signals for the Cmd+K command palette zero-state.
  *
- * Returns action items due, at-risk contacts, and ghost alerts — all computed
+ * Returns action items due, catch-ups, and ghost alerts — all computed
  * from deterministic SQLite queries (no AI calls). Stale time is 2 minutes so
  * rapid Cmd+K opens don't re-fetch, but the data stays fresh enough to be useful.
  */

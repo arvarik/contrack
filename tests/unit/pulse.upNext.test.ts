@@ -5,7 +5,27 @@ import {
 } from "../../src/views/pulse/lib/upNext";
 import type { ActionItem } from "../../src/types";
 import type { UpcomingBirthday } from "../../src/views/pulse/lib/birthdays";
-import type { SlippingContactInput } from "../../src/views/pulse/lib/upNext";
+import type { CatchUpCard } from "../../shared/pulse";
+
+/** A tracked contact past its cadence, as the server sends it. */
+const catchUpCard = (
+  id: string,
+  name: string,
+  overshootDays: number,
+  extra: Partial<CatchUpCard> = {},
+): CatchUpCard => ({
+  id,
+  name,
+  company: null,
+  avatarUrl: null,
+  themeColor: "#006a91",
+  relationshipScore: 35,
+  lastContactedAt: "2026-08-01T10:00:00.000Z",
+  cadenceDays: 30,
+  daysSince: 30 + overshootDays,
+  overshootDays,
+  ...extra,
+});
 
 describe("pulse.upNext", () => {
   const mockActionItem = (
@@ -25,7 +45,7 @@ describe("pulse.upNext", () => {
     updatedAt: "2026-09-01T00:00:00.000Z",
   });
 
-  it("ranks items strictly in order: overdue (oldest first) -> today -> this week -> birthdays -> slipping", () => {
+  it("ranks items strictly in order: overdue (oldest first) -> today -> this week -> birthdays -> catch up", () => {
     const overdueOlder = mockActionItem(
       "ov-1",
       "Older Overdue",
@@ -61,20 +81,14 @@ describe("pulse.upNext", () => {
       rawBirthday: "1990-09-19",
     };
 
-    const slip: SlippingContactInput = {
-      id: "c-slip",
-      name: "Bob Stone",
-      relationshipScore: 35,
-      daysSinceContact: 45,
-      lastInteractionTitle: "Coffee catch up",
-    };
+    const catchUp = catchUpCard("c-catch", "Bob Stone", 15);
 
     const res = buildUpNextQueue({
       overdue: [overdueNewer, overdueOlder], // intentionally out of order
       dueToday: [todayItem],
       upcoming: [thisWeekItem],
       birthdays: [bday],
-      slipping: [slip],
+      catchUp: [catchUp],
       now: new Date("2026-09-17T12:00:00.000Z"),
     });
 
@@ -84,7 +98,7 @@ describe("pulse.upNext", () => {
       "td-1",
       "tw-1",
       "bday-c-bday",
-      "slip-c-slip",
+      "catch-c-catch",
     ]);
 
     expect(res.groups.map((g) => g.group)).toEqual([
@@ -92,8 +106,38 @@ describe("pulse.upNext", () => {
       "today",
       "thisWeek",
       "birthdays",
-      "slipping",
+      "catch-up",
     ]);
+  });
+
+  it("gives a catch-up row the Log action, the ring fields, and the past-due words", () => {
+    const res = buildUpNextQueue({
+      catchUp: [
+        catchUpCard("c1", "Ada Lovelace", 1),
+        catchUpCard("c2", "Grace Hopper", 12),
+        catchUpCard("c3", "Edsger Dijkstra", 21),
+        catchUpCard("c4", "Linus Torvalds", 70),
+      ],
+    });
+    const rows = res.items;
+    expect(rows.map((r) => r.dueChip.text)).toEqual([
+      "1 day past due",
+      "12 days past due",
+      "3 weeks past due",
+      "2 months past due",
+    ]);
+    expect(rows[0]).toMatchObject({
+      kind: "catch-up",
+      group: "catch-up",
+      hasCheckAction: false,
+      title: "Check in with Ada Lovelace",
+      isTracked: true,
+      relationshipScore: 35,
+      lastContactedAt: "2026-08-01T10:00:00.000Z",
+      daysSinceContact: 31,
+    });
+    expect(rows[0].dueChip.variant).toBe("neutral");
+    expect(res.groups[0].label).toBe("Catch up");
   });
 
   it("ensures a birthday row has no check action", () => {
@@ -122,22 +166,27 @@ describe("pulse.upNext", () => {
     expect(row.title).toBe("Wish Grace Hopper a happy birthday");
   });
 
-  it("caps slipping rows at at most three", () => {
-    const slippingContacts: SlippingContactInput[] = [
-      { id: "s1", name: "One", relationshipScore: 20, daysSinceContact: 50 },
-      { id: "s2", name: "Two", relationshipScore: 25, daysSinceContact: 45 },
-      { id: "s3", name: "Three", relationshipScore: 30, daysSinceContact: 40 },
-      { id: "s4", name: "Four", relationshipScore: 32, daysSinceContact: 35 },
-      { id: "s5", name: "Five", relationshipScore: 38, daysSinceContact: 32 },
-    ];
+  it("takes every catch-up row the server sends, in its order, and says how many wait", () => {
+    // The server sends ten at most, the furthest past due first. The group
+    // takes them all and the heading reads "10 of 14".
+    const ten = Array.from({ length: 10 }, (_, i) =>
+      catchUpCard(`s${i}`, `Person ${i}`, 40 - i),
+    );
 
-    const res = buildUpNextQueue({
-      slipping: slippingContacts,
+    const res = buildUpNextQueue({ catchUp: ten, catchUpCount: 14 });
+
+    expect(res.items).toHaveLength(10);
+    expect(res.counts.catchUp).toBe(10);
+    expect(res.items.map((i) => i.contactId)).toEqual(ten.map((c) => c.id));
+    expect(res.groups[0]).toMatchObject({
+      group: "catch-up",
+      count: 10,
+      of: 14,
     });
 
-    expect(res.items).toHaveLength(3);
-    expect(res.counts.slipping).toBe(3);
-    expect(res.items.map((i) => i.contactId)).toEqual(["s1", "s2", "s3"]);
+    // With no more waiting, the heading is the count alone.
+    const all = buildUpNextQueue({ catchUp: ten, catchUpCount: 10 });
+    expect(all.groups[0].of).toBeUndefined();
   });
 
   it("calculates accurate group and total counts", () => {
@@ -163,9 +212,7 @@ describe("pulse.upNext", () => {
           rawBirthday: "10-10",
         },
       ],
-      slipping: [
-        { id: "s1", name: "S", relationshipScore: 10, daysSinceContact: 60 },
-      ],
+      catchUp: [catchUpCard("s1", "S", 30)],
     });
 
     expect(res.counts).toEqual({
@@ -173,7 +220,7 @@ describe("pulse.upNext", () => {
       today: 2,
       thisWeek: 1,
       birthdays: 1,
-      slipping: 1,
+      catchUp: 1,
       total: 6,
     });
   });

@@ -14,7 +14,7 @@ import { CompletedCard } from "../../src/views/pulse/cards/CompletedCard";
 import { NewPeopleCard } from "../../src/views/pulse/cards/NewPeopleCard";
 import { InboxCard } from "../../src/views/pulse/cards/InboxCard";
 import { ActivityCard } from "../../src/views/pulse/cards/ActivityCard";
-import { MomentumCard } from "../../src/views/pulse/cards/MomentumCard";
+import { KeepingUpCard } from "../../src/views/pulse/cards/KeepingUpCard";
 import { CompositionCard } from "../../src/views/pulse/cards/CompositionCard";
 import type { DashboardPayload } from "../../src/api";
 
@@ -27,9 +27,6 @@ vi.mock("../../src/views/dedupe/components", () => ({
 vi.mock("../../src/views/pulse/NetworkGrowthModal", () => ({
   NetworkGrowthModal: () => <div data-testid="growth-modal" />,
 }));
-vi.mock("../../src/views/pulse/InteractionVelocityModal", () => ({
-  InteractionVelocityModal: () => <div data-testid="velocity-modal" />,
-}));
 vi.mock("../../src/views/pulse/NetworkCompositionModal", () => ({
   NetworkCompositionModal: () => <div data-testid="composition-modal" />,
 }));
@@ -38,17 +35,6 @@ const mockCompleteMutate = vi.fn();
 const mockUpdateMutate = vi.fn();
 const mockSetPreference = vi.fn();
 let mockDashboardData: DashboardPayload | null = null;
-let mockMomentumData: {
-  snapshotWeeks: number;
-  rising: unknown[];
-  cooling: unknown[];
-  silent: unknown[];
-} = {
-  snapshotWeeks: 0,
-  rising: [],
-  cooling: [],
-  silent: [],
-};
 let mockPreferences: {
   pulseLayout: { hidden: string[]; order: Record<string, string[]> };
   singleKeyShortcuts: boolean;
@@ -76,9 +62,6 @@ vi.mock("../../src/api", () => ({
       today: { logged: 1, completed: 2, due: 1 },
       thisWeek: { logged: 5, byType: {} },
     },
-  }),
-  useDashboardMomentum: () => ({
-    data: mockMomentumData,
   }),
   useContacts: () => ({
     data: [
@@ -186,12 +169,9 @@ function createSampleDashboard(
     ghosts: [],
     metrics: {
       totalActive: 42,
-      avgDaysSinceInteraction: 12,
-      atRiskCount: 1,
-      totalInteractions30d: 15,
       newContacts30d: 4,
     },
-    atRisk: [
+    catchUp: [
       {
         id: "c-3",
         name: "Alan Turing",
@@ -200,10 +180,20 @@ function createSampleDashboard(
         themeColor: "#8b5cf6",
         relationshipScore: 35,
         lastContactedAt: "2026-08-12T10:00:00.000Z",
-        daysSinceContact: 40,
-        lastInteractionTitle: "Quarterly review",
+        cadenceDays: 30,
+        daysSince: 40,
+        overshootDays: 10,
       },
     ],
+    tracking: {
+      count: 3,
+      bands: { strong: 1, fading: 1, atRisk: 1, unscored: 0 },
+      catchUpCount: 1,
+      startedLast30d: 1,
+      snapshotWeeks: 0,
+      rising: [],
+      cooling: [],
+    },
     recentlyAdded: [],
     industryComposition: [],
     locationComposition: [],
@@ -228,12 +218,6 @@ describe("frontend.pulse", () => {
     mockUpdateMutate.mockClear();
     mockSetPreference.mockClear();
     mockDashboardData = createSampleDashboard();
-    mockMomentumData = {
-      snapshotWeeks: 0,
-      rising: [],
-      cooling: [],
-      silent: [],
-    };
     mockPreferences = {
       pulseLayout: { hidden: [], order: {} },
       singleKeyShortcuts: true,
@@ -272,8 +256,8 @@ describe("frontend.pulse", () => {
       "inbox",
       "coming-up",
       "new-people",
+      "keeping-up",
       "activity",
-      "momentum",
       "composition",
     ];
     const renderedCardIds = Array.from(cards).map((el) =>
@@ -284,7 +268,7 @@ describe("frontend.pulse", () => {
 
   it("ensures a hidden card from the preference is absent", () => {
     mockPreferences = {
-      pulseLayout: { hidden: ["momentum"], order: {} },
+      pulseLayout: { hidden: ["keeping-up"], order: {} },
       singleKeyShortcuts: true,
     };
 
@@ -296,7 +280,7 @@ describe("frontend.pulse", () => {
 
     const cards = container.querySelectorAll("[data-card-id]");
     expect(cards.length).toBe(8);
-    expect(container.querySelector('[data-card-id="momentum"]')).toBeNull();
+    expect(container.querySelector('[data-card-id="keeping-up"]')).toBeNull();
     expect(container.querySelector('[data-card-id="up-next"]')).not.toBeNull();
   });
 
@@ -341,14 +325,39 @@ describe("frontend.pulse", () => {
     expect(screen.getByText("Inbox zero. Nothing to clean up.")).toBeDefined();
   });
 
-  it("shows the four-week message on Momentum card when snapshotWeeks < 4", () => {
-    mockMomentumData = {
-      snapshotWeeks: 2,
-      rising: [],
-      cooling: [],
-      silent: [],
-    };
+  it("puts the Catch up group after the birthdays, with the words and the Log button", () => {
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
 
+    expect(screen.getByText("Catch up")).toBeDefined();
+    expect(screen.getByText("10 days past due")).toBeDefined();
+    expect(screen.getByText("Check in with Alan Turing")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Log note for Alan Turing" }),
+    ).toBeDefined();
+    // Nothing on Pulse says "Slipping" any more.
+    expect(screen.queryByText("Slipping")).toBeNull();
+  });
+
+  it("says how many catch-ups wait past the ten the server sent", () => {
+    mockDashboardData = createSampleDashboard({
+      tracking: {
+        ...createSampleDashboard().tracking,
+        catchUpCount: 14,
+      },
+    });
+    render(
+      <MemoryRouter initialEntries={["/pulse"]}>
+        <PulseView />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("1 of 14")).toBeDefined();
+  });
+
+  it("shows the Keeping up card on Pulse with the four-week line before four snapshot weeks", () => {
     render(
       <MemoryRouter initialEntries={["/pulse"]}>
         <PulseView />
@@ -356,17 +365,26 @@ describe("frontend.pulse", () => {
     );
 
     expect(
-      screen.getByText("Momentum needs four weeks of history."),
+      screen.getByRole("img", {
+        name: "3 tracked: 1 strong, 1 fading, 1 at risk, 0 with no interactions yet",
+      }),
     ).toBeDefined();
+    expect(
+      screen.getByText("2 of 3 within cadence, 1 to catch up"),
+    ).toBeDefined();
+    expect(
+      screen.getByText("Rising and cooling show after four weeks of tracking."),
+    ).toBeDefined();
+    expect(screen.getByText("1 tracked in the last 30 days")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Manage" }).getAttribute("href"),
+    ).toBe("/tracked");
   });
 
   it("renders WelcomeOffice when totalActive is zero", () => {
     mockDashboardData = createSampleDashboard({
       metrics: {
         totalActive: 0,
-        avgDaysSinceInteraction: 0,
-        atRiskCount: 0,
-        totalInteractions30d: 0,
         newContacts30d: 0,
       },
     });
@@ -577,9 +595,13 @@ describe("frontend.pulse", () => {
     expect(screen.getByText(/4 calls/)).toBeDefined();
   });
 
-  it("renders MomentumCard with rising, cooling, and silent columns when snapshotWeeks >= 4", () => {
-    const dummyMomentum = {
-      snapshotWeeks: 4,
+  describe("KeepingUpCard", () => {
+    const tracking = {
+      count: 42,
+      bands: { strong: 30, fading: 8, atRisk: 4, unscored: 0 },
+      catchUpCount: 11,
+      startedLast30d: 5,
+      snapshotWeeks: 6,
       rising: [
         {
           id: "m-1",
@@ -606,39 +628,105 @@ describe("frontend.pulse", () => {
           delta: -8,
         },
       ],
-      silent: [
-        {
-          id: "m-3",
-          name: "Grace Hopper",
-          company: "US Navy",
-          avatarUrl: null,
-          themeColor: "#bf1b1b",
-          relationshipScore: 45,
-          lastContactedAt: "2026-07-28T10:00:00.000Z",
-          cadenceDays: 30,
-          daysSinceContact: 55,
-          overshootDays: 25,
-        },
-      ],
     };
 
-    render(
-      <MemoryRouter>
-        <MomentumCard momentum={dummyMomentum} />
-      </MemoryRouter>,
-    );
+    it("names the bar, links the legend to the groups, and says the two lines", () => {
+      render(
+        <MemoryRouter>
+          <KeepingUpCard tracking={tracking} />
+        </MemoryRouter>,
+      );
 
-    expect(screen.getByText("Rising")).toBeDefined();
-    expect(screen.getByText("+12")).toBeDefined();
-    expect(screen.getByText("Ada Lovelace")).toBeDefined();
+      expect(
+        screen.getByRole("img", {
+          name: "42 tracked: 30 strong, 8 fading, 4 at risk, 0 with no interactions yet",
+        }),
+      ).toBeDefined();
+      const legend = [
+        ["30 Strong", "/tracked#strong"],
+        ["8 Fading", "/tracked#fading"],
+        ["4 At risk", "/tracked#at-risk"],
+      ] as const;
+      for (const [name, href] of legend) {
+        expect(screen.getByRole("link", { name }).getAttribute("href")).toBe(
+          href,
+        );
+      }
+      // A state with nobody in it has no legend entry.
+      expect(
+        screen.queryByRole("link", { name: /No interactions yet/ }),
+      ).toBeNull();
+      expect(
+        screen.getByText("31 of 42 within cadence, 11 to catch up"),
+      ).toBeDefined();
+      expect(screen.getByText("5 tracked in the last 30 days")).toBeDefined();
+    });
 
-    expect(screen.getByText("Cooling")).toBeDefined();
-    expect(screen.getByText("-8")).toBeDefined();
-    expect(screen.getByText("Charles Babbage")).toBeDefined();
+    it("shows rising and cooling rows with their deltas, and rings that draw an arc", () => {
+      const { container } = render(
+        <MemoryRouter>
+          <KeepingUpCard tracking={tracking} />
+        </MemoryRouter>,
+      );
 
-    expect(screen.getByText("Silent")).toBeDefined();
-    expect(screen.getByText("25 d over")).toBeDefined();
-    expect(screen.getByText("Grace Hopper")).toBeDefined();
+      expect(
+        screen.getByRole("heading", { level: 3, name: "Rising" }),
+      ).toBeDefined();
+      expect(screen.getByText("+12")).toBeDefined();
+      expect(
+        screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href"),
+      ).toBe("/contact/m-1");
+      expect(
+        screen.getByRole("heading", { level: 3, name: "Cooling" }),
+      ).toBeDefined();
+      expect(screen.getByText("−8")).toBeDefined();
+      expect(
+        screen.getByRole("link", { name: "Charles Babbage" }),
+      ).toBeDefined();
+      // The rows carry the flag, the score and the date, so the ring draws.
+      const bands = Array.from(
+        container.querySelectorAll("[data-score-band]"),
+      ).map((el) => el.getAttribute("data-score-band"));
+      expect(bands).toEqual(["strong", "fading"]);
+      expect(screen.queryByText(/four weeks/)).toBeNull();
+    });
+
+    it("says None this month for an empty column", () => {
+      render(
+        <MemoryRouter>
+          <KeepingUpCard tracking={{ ...tracking, cooling: [] }} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText("None this month")).toBeDefined();
+    });
+
+    it("shows the empty state with one button when nobody is tracked", () => {
+      render(
+        <MemoryRouter>
+          <KeepingUpCard
+            tracking={{
+              ...tracking,
+              count: 0,
+              bands: { strong: 0, fading: 0, atRisk: 0, unscored: 0 },
+              catchUpCount: 0,
+              startedLast30d: 0,
+              rising: [],
+              cooling: [],
+            }}
+          />
+        </MemoryRouter>,
+      );
+      expect(
+        screen.getByRole("heading", {
+          level: 3,
+          name: "Nobody is tracked yet",
+        }),
+      ).toBeDefined();
+      expect(
+        screen.getByRole("button", { name: "Choose people" }),
+      ).toBeDefined();
+      expect(screen.queryByRole("img")).toBeNull();
+    });
   });
 
   it("renders CompositionCard with donut legend filterPill links and opens modal", async () => {
@@ -759,24 +847,24 @@ describe("frontend.pulse", () => {
     // Enter customize mode
     fireEvent.click(screen.getByRole("button", { name: "Customize" }));
 
-    // Find eye toggle for Momentum card
-    const hideMomentumBtn = screen.getByRole("button", {
-      name: "Hide Momentum",
+    // Find eye toggle for the Keeping up card
+    const hideKeepingUpBtn = screen.getByRole("button", {
+      name: "Hide Keeping up",
     });
-    fireEvent.click(hideMomentumBtn);
+    fireEvent.click(hideKeepingUpBtn);
 
     // Verify setPreference was called with hide action result
     expect(mockSetPreference).toHaveBeenCalledWith(
       "pulseLayout",
       expect.objectContaining({
-        hidden: ["momentum"],
+        hidden: ["keeping-up"],
       }),
     );
   });
 
   it("resets layout when Reset layout button is clicked", () => {
     mockPreferences.pulseLayout = {
-      hidden: ["momentum", "insight"],
+      hidden: ["keeping-up", "insight"],
       order: { focus: ["up-next"], network: [], intel: [] },
     };
 
@@ -798,7 +886,7 @@ describe("frontend.pulse", () => {
         hidden: [],
         order: expect.objectContaining({
           focus: ["up-next", "completed"],
-          network: ["activity", "momentum", "composition"],
+          network: ["keeping-up", "activity", "composition"],
           intel: ["insight", "inbox", "coming-up", "new-people"],
         }),
       }),
@@ -815,8 +903,8 @@ describe("frontend.pulse", () => {
     // Enter customize mode
     fireEvent.click(screen.getByRole("button", { name: "Customize" }));
 
-    // Open ActionMenu on Momentum card
-    const moveMenuBtn = screen.getByRole("button", { name: "Move Momentum" });
+    // Open ActionMenu on the Keeping up card
+    const moveMenuBtn = screen.getByRole("button", { name: "Move Keeping up" });
     fireEvent.click(moveMenuBtn);
 
     // Choose "Move to Focus"
@@ -829,7 +917,7 @@ describe("frontend.pulse", () => {
       "pulseLayout",
       expect.objectContaining({
         order: expect.objectContaining({
-          focus: expect.arrayContaining(["momentum"]),
+          focus: expect.arrayContaining(["keeping-up"]),
         }),
       }),
     );
@@ -845,15 +933,15 @@ describe("frontend.pulse", () => {
     // Enter customize mode
     fireEvent.click(screen.getByRole("button", { name: "Customize" }));
 
-    // Move Momentum up (since in network column: activity, momentum, composition)
-    const moveUpBtn = screen.getByRole("button", { name: "Move Momentum up" });
+    // Move Activity up (the network column is keeping-up, activity, composition)
+    const moveUpBtn = screen.getByRole("button", { name: "Move Activity up" });
     fireEvent.click(moveUpBtn);
 
     expect(mockSetPreference).toHaveBeenCalledWith(
       "pulseLayout",
       expect.objectContaining({
         order: expect.objectContaining({
-          network: ["momentum", "activity", "composition"],
+          network: ["activity", "keeping-up", "composition"],
         }),
       }),
     );

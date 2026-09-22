@@ -127,8 +127,11 @@ export const UpNextCard = ({
                 {/* Group sticky header */}
                 <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-xs py-1 flex items-center justify-between border-b border-outline/10">
                   <span className={SECTION_HEADING}>{group.label}</span>
+                  {/* "10 of 14" when the server sent its ten and more wait. */}
                   <span className="text-xs text-on-surface-variant font-bold tabular-nums">
-                    {group.count}
+                    {group.of !== undefined
+                      ? `${group.count} of ${group.of}`
+                      : group.count}
                   </span>
                 </div>
 
