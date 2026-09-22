@@ -18,6 +18,13 @@
 import React from "react";
 import { cn } from "../../lib/utils";
 import { CARD, PAGE_TITLE, SECTION_BG } from "../../lib/styles";
+// A file of class strings and a type import, so it adds no code the entry
+// bundle does not already have. The page and its skeleton read the same
+// constants, which is what keeps the three silhouettes one.
+import {
+  COLUMN_CLASSES,
+  GRID_CLASSES,
+} from "../../views/pulse/lib/pulseStyles";
 
 /** Neutral pulsing block. */
 const Bar = ({ className }: { className?: string }) => (
@@ -66,36 +73,41 @@ export const RouteFallback = ({
   }
 
   if (variant === "pulse") {
-    // Mirrors PulseSkeleton: header bar and 3-column grid (Focus, Network, Intelligence)
+    // Mirrors PulseSkeleton: the masthead (label, date, sentence, actions)
+    // and the three columns from the same class constants as the page.
     return (
       <div className="w-full h-full overflow-hidden bg-surface">
-        <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6">
-          <div className="flex flex-col gap-3 pb-2 border-b border-outline/10">
-            <div className="flex items-center justify-between gap-4">
-              <Bar className="h-8 w-32" />
-              <div className="flex items-center gap-2">
-                <Block className="w-24 h-8 rounded-xl" />
-                <Block className="w-28 h-8 rounded-xl" />
-              </div>
+        <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col gap-2">
+              <Bar className="h-3 w-12" />
+              <Bar className="h-7 sm:h-9 w-64" />
+              <Bar className="h-4 w-80 mt-1" />
             </div>
             <div className="flex items-center gap-3">
-              <Bar className="h-4 w-28" />
-              <Block className="w-16 h-5 rounded-md" />
-              <Block className="w-20 h-5 rounded-md" />
+              <Block className="w-10 h-10 rounded-full" />
+              <Block className="w-28 h-10 rounded-xl" />
+              <Block className="w-10 h-10 rounded-xl" />
             </div>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="order-1 lg:col-span-5 2xl:col-span-4 flex flex-col gap-6">
+          <div className={GRID_CLASSES}>
+            <div
+              className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.focus)}
+            >
               <Block className="h-[400px]" />
               <Block className="h-[60px]" />
             </div>
-            <div className="order-3 lg:col-span-12 2xl:order-2 2xl:col-span-4 flex flex-col gap-6">
+            <div
+              className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.intel)}
+            >
               <Block className="h-[140px] bg-primary/5" />
               <Block className="h-[160px]" />
               <Block className="h-[140px]" />
               <Block className="h-[100px]" />
             </div>
-            <div className="order-2 lg:col-span-7 2xl:order-3 2xl:col-span-4 flex flex-col gap-6">
+            <div
+              className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.network)}
+            >
               <Block className="h-[130px]" />
               <Block className="h-[130px]" />
               <Block className="h-[130px]" />

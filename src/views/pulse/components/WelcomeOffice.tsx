@@ -34,11 +34,10 @@ export const WelcomeOffice = () => {
             <span>Welcome to Pulse</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold font-headline text-on-surface">
-            Set up your office
+            Bring your people in
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">
-            Get your network into Contrack to start seeing follow-ups,
-            intelligence, and the people you keep up with.
+            Import contacts and log a note. Pulse fills itself from there.
           </p>
         </div>
 

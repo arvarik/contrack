@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Inbox,
   CheckCircle2,
   Copy,
   Ghost,
@@ -60,7 +59,7 @@ export const InboxCard = ({
   const isZero = totalItems === 0;
 
   return (
-    <CardFrame cardId="inbox" title="Inbox" icon={Inbox} count={totalItems}>
+    <CardFrame cardId="inbox" title="Inbox" count={totalItems}>
       {isZero ? (
         <div className="flex items-center gap-3 py-4 text-success">
           <CheckCircle2 className="w-5 h-5 shrink-0" />

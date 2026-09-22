@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { CheckSquare, PartyPopper, PenLine } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { PartyPopper, PenLine } from "lucide-react";
 import confetti from "canvas-confetti";
 import { CardFrame } from "../components/CardFrame";
 import { ActionRow } from "./ActionRow";
@@ -29,6 +29,12 @@ export const UpNextCard = ({
   onOpenContact,
 }: UpNextCardProps) => {
   const prevItemCountRef = useRef<number | null>(null);
+  /**
+   * Whether focus is inside the list. A row that becomes highlighted while
+   * this is true takes focus, so the arrows walk the rows. A bare J or K
+   * pressed with focus elsewhere only scrolls the row into view.
+   */
+  const [focusWithin, setFocusWithin] = useState(false);
 
   useEffect(() => {
     if (
@@ -56,11 +62,16 @@ export const UpNextCard = ({
     };
   }, [items.length]);
 
+  /** Step the highlight from a row, within the list's bounds. */
+  const moveFrom = (globalIdx: number, direction: -1 | 1) => {
+    const next = globalIdx + direction;
+    if (next >= 0 && next < items.length) onSelectIndex(next);
+  };
+
   return (
     <CardFrame
       cardId="up-next"
       title="Up next"
-      icon={CheckSquare}
       count={items.length}
       headerAction={
         <>
@@ -120,7 +131,19 @@ export const UpNextCard = ({
           />
         </div>
       ) : (
-        <div role="list" aria-label="Up next items" className="space-y-6">
+        <div
+          role="list"
+          aria-label="Up next items"
+          className="space-y-6"
+          onFocus={() => setFocusWithin(true)}
+          onBlur={(e) => {
+            // Focus moving from one row to another, or to a control inside
+            // a row, stays inside the list.
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              setFocusWithin(false);
+            }
+          }}
+        >
           {groups.map((group) => {
             return (
               <div key={group.group} className="space-y-2">
@@ -150,6 +173,8 @@ export const UpNextCard = ({
                         onComplete={onComplete}
                         onLog={onLog}
                         onOpenContact={onOpenContact}
+                        onMove={(direction) => moveFrom(globalIdx, direction)}
+                        focusOnSelect={focusWithin}
                       />
                     );
                   })}

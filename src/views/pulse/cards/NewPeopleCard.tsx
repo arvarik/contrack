@@ -1,5 +1,5 @@
 import React, { useState, Suspense } from "react";
-import { UserPlus, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import type { DashboardPayload } from "../../../api";
@@ -28,7 +28,6 @@ export const NewPeopleCard = ({
       <CardFrame
         cardId="new-people"
         title="New people"
-        icon={UserPlus}
         count={newContacts30d}
         headerAction={
           <button

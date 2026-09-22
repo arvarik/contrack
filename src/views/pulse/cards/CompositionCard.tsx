@@ -1,6 +1,5 @@
 import React, { useState, useMemo, Suspense } from "react";
 import { Link } from "react-router-dom";
-import { PieChart } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import {
   Segmented,
@@ -101,7 +100,6 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
       <CardFrame
         cardId="composition"
         title="Composition"
-        icon={PieChart}
         headerAction={seeAllButton}
         compact
       >

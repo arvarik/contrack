@@ -8,13 +8,17 @@ Access Pulse via the navigation bar or `Cmd+Shift+P`.
 
 ## Layout Overview
 
-On wide screens (1280 px and wider), Pulse organizes work into three parallel columns:
+The page opens with a masthead. The `h1` "Pulse" is a small page label over the date, which is the largest text on the page (32 px, 24 px on a phone). Under the date, one sentence says what the day holds: "2 overdue, 2 due today, 3 birthdays this week. 12 days in a row." Each count above zero is a button that jumps to its card on wide screens, and plain text on a phone. Beside the sentence a 40 px progress mark reads "4 to do", "1 of 4 done", "All done" or "Nothing due". **Log a note** is the one primary action. **More** opens a menu with **New contact** and **Customize layout**.
 
-1. **Focus**: The ranked Up next queue and completed task history.
-2. **Network**: The people you track and their trend, interaction habits, and network composition charts.
-3. **Intelligence**: Proactive AI insights, cleanup inbox, upcoming events, and new connections.
+On wide screens (1280 px and wider), Pulse organizes work into three columns, five, three and four twelfths wide:
 
-On phones and narrower viewports, Pulse stacks the columns in priority order (Focus, Intelligence, Network) with horizontal scrolling for today status chips and the activity heatmap.
+1. **Focus** (five columns): The ranked Up next queue and completed task history.
+2. **Intelligence** (three columns): Proactive AI insights, cleanup inbox, upcoming events, and new connections.
+3. **Network** (four columns): The people you track and their trend, interaction habits, and network composition charts.
+
+Between 1024 and 1279 px, Focus and Network share the first row, and the Intelligence cards run two across underneath. On phones and narrower viewports, Pulse stacks the cards in one column in the order Focus, Network, Intelligence. The masthead stays under 180 px before the first card, and nothing on the page scrolls sideways.
+
+Every card is a title and a body: no line between them, no icon, and the count in muted text after the title. A card with nothing to show can render as one line on the page surface instead of a framed box.
 
 ---
 
@@ -30,25 +34,34 @@ The Up next card aggregates and ranks everything requesting attention into one c
 - **Birthdays**: Contacts celebrating birthdays this week, with a one-click action to log a birthday note.
 - **Catch up**: Tracked contacts past their cadence, the furthest past due first, ten at most. The clock is the last interaction, or the moment of tracking when nothing is logged yet, so a person tracked today at "every month" comes up in a month even with an empty timeline. Each row's chip says how far: "3 weeks past due". The row has a Log button and no check. When more than ten wait, the heading says "Catch up, 10 of 14". A catch-up ranks after a birthday: it is a soft reminder, and a due follow-up is a promise with a date.
 
-In the card header, an SVG progress ring visualizes completion rate for today's tasks.
+The progress mark in the masthead shows how many of today's follow-ups are done.
 
 When all tasks are cleared, the queue displays an empty state celebrating the milestone with party popper confetti.
 
 ### Keyboard Navigation
 
-Up next provides high-speed, single-key keyboard operations when typing targets do not have focus:
+Up next provides single-key keyboard operations when typing targets do not have focus:
 
-| Key     | Action                                                          |
-| ------- | --------------------------------------------------------------- |
-| `J`     | Advance highlight to next queue item                            |
-| `K`     | Move highlight to previous queue item                           |
-| `D`     | Mark highlighted action item as completed                       |
-| `S`     | Snooze highlighted action item by one day                       |
-| `L`     | Open quick note composer pre-filled for the highlighted contact |
-| `Enter` | Open contact profile                                            |
-| `C`     | Toggle layout customize mode                                    |
+| Key | Action                                                          |
+| --- | --------------------------------------------------------------- |
+| `J` | Advance highlight to next queue item                            |
+| `K` | Move highlight to previous queue item                           |
+| `D` | Mark highlighted action item as completed                       |
+| `S` | Snooze highlighted action item by one day                       |
+| `L` | Open quick note composer pre-filled for the highlighted contact |
+| `C` | Toggle layout customize mode                                    |
 
 These single-key shortcuts can be toggled in Settings under Keyboard shortcuts.
+
+The highlighted row is the list's one tab stop. Tab reaches it, and from a focused row:
+
+| Key       | Action                                                           |
+| --------- | ---------------------------------------------------------------- |
+| `Enter`   | Open the contact                                                 |
+| `Space`   | Complete the follow-up, or log a note for a birthday or catch-up |
+| `↓` / `↑` | Move the highlight to the next or previous row                   |
+
+Enter belongs to the control that has focus. On a button, a link or a menu item it does what that control does, and never opens the highlighted contact. The highlighted row scrolls into view when a key moves it.
 
 ### Completed Card
 
@@ -124,15 +137,15 @@ Shows recently added contact avatars with a count of new relationships formed th
 
 You can rearrange, hide, or restore any card on the Pulse page:
 
-1. Click **Customize** in the header or press `C`.
+1. Open **More** in the masthead and choose **Customize layout**, or press `C`.
 2. Screen readers announce "Layout editing on".
 3. Every card header displays:
    - A `GripVertical` drag handle on desktop.
    - An eye toggle button (`EyeOff`) to hide the card.
    - An ActionMenu offering "Move to Focus", "Move to Network", or "Move to Intelligence".
    - Move up and Move down buttons on phone viewports.
-4. Hidden cards appear in a **Hidden cards** tray at the top, where they can be restored with the `Eye` button.
-5. A floating bottom bar provides **Reset layout** to restore defaults and **Done** to exit.
+4. Hidden cards appear in a **Hidden cards** tray at the top, where they can be restored with the `Eye` button. The tray appears only once a card is hidden.
+5. A floating bottom bar says what to do at that width ("Drag a card to move it. Use the eye to hide one." on desktop, "Use the arrows to move a card and the eye to hide one." on a phone) and provides **Reset layout** to restore defaults and **Done** to exit.
 6. Layouts persist to your account via the `pulseLayout` preference, keeping your setup synchronized across devices.
 
 ---

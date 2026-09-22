@@ -11,13 +11,7 @@ export const CompletedCard = () => {
 
   if (completedItems.length === 0) {
     return (
-      <CardFrame
-        cardId="completed"
-        title="Completed"
-        icon={CheckCircle2}
-        count={0}
-        compact
-      >
+      <CardFrame cardId="completed" title="Completed" count={0} compact>
         <p className="text-xs text-on-surface-variant italic">
           No completed follow-ups yet.
         </p>
@@ -29,7 +23,6 @@ export const CompletedCard = () => {
     <CardFrame
       cardId="completed"
       title="Completed"
-      icon={CheckCircle2}
       count={completedItems.length}
       compact
       headerAction={
