@@ -271,7 +271,7 @@ describe("pulse layout", () => {
         order: {
           focus: ["completed", "activity"],
           network: ["keeping-up", "composition"],
-          intel: ["insight", "coming-up", "new-people"],
+          intel: ["insight", "coming-up"],
         },
       },
     });
@@ -281,7 +281,7 @@ describe("pulse layout", () => {
       order: {
         focus: ["completed", "activity"],
         network: ["keeping-up", "composition"],
-        intel: ["insight", "coming-up", "new-people"],
+        intel: ["insight", "coming-up"],
       },
     });
     expect(res.body.stored).toContain("pulseLayout");

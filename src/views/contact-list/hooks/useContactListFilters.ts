@@ -23,6 +23,8 @@ import {
 import { useSearchParams } from "react-router-dom";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { scoreContactMatch } from "../../../lib/contactMatch";
+import { parseFacetTokens } from "../../../hooks/useQueryTokenizer";
+import { matchesFacet } from "../../../../shared/searchFacets";
 import type { Contact } from "../../../types";
 
 export type SortField = "name" | "date";
@@ -242,12 +244,23 @@ export function useContactListFilters(contacts: Contact[]) {
       );
     }
 
-    // 2. Apply Smart Search (scored ranking)
-    if (searchQuery.trim()) {
+    // 2. Apply the facets, then the free text. A link to the list carries
+    //    a facet, `/?q=tracked:no` or `/?q=missing:company`, and the list
+    //    used to score "missing:company" as a name, which matched nobody. The
+    //    facets are the palette's, from `shared/searchFacets`. `near:` needs
+    //    a geocoder the list does not have, so it is left to the palette.
+    const { filters, freeText } = parseFacetTokens(searchQuery);
+    const facets = filters.filter((f) => f.field !== "near");
+    if (facets.length > 0) {
+      result = result.filter((contact) =>
+        facets.every((f) => matchesFacet(contact, f)),
+      );
+    }
+    if (freeText.trim()) {
       result = result
         .map((contact) => ({
           contact,
-          score: scoreContactMatch(contact, searchQuery),
+          score: scoreContactMatch(contact, freeText),
         }))
         .filter((c) => c.score > 0)
         .sort((a, b) => b.score - a.score)
@@ -255,7 +268,7 @@ export function useContactListFilters(contacts: Contact[]) {
     }
 
     // 3. Apply Sort (only when not actively searching — search has its own score sort)
-    if (!searchQuery.trim()) {
+    if (!freeText.trim()) {
       result.sort((a, b) => {
         let cmp = 0;
         if (sortBy === "name") {

@@ -1,3 +1,11 @@
+/**
+ * CompositionCard: who the network is made of, by industry, role or place.
+ *
+ * Last in the Intelligence column and compact: a 96 px donut in one hue and
+ * a text legend beside it, each entry a link to the list filtered to that
+ * group. "Other" opens the full breakdown, as does See all. No other page
+ * has a home for this chart yet, and customize mode can hide it.
+ */
 import React, { useState, useMemo, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { CardFrame } from "../components/CardFrame";
@@ -6,8 +14,9 @@ import {
   type SegmentedOption,
 } from "../../../components/ui/Segmented";
 import { Donut, type DonutSlice } from "./Donut";
-import { filterPill } from "../../../lib/styles";
+import { BTN_QUIET } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { COMPOSITION_RAMP, PULSE_TYPE } from "../lib/pulseStyles";
 import type { DashboardPayload } from "../../../api";
 
 const NetworkCompositionModal = React.lazy(() =>
@@ -24,25 +33,21 @@ const TAB_OPTIONS: readonly SegmentedOption<CompositionTab>[] = [
   { value: "location", label: "Location" },
 ];
 
-const SLICE_COLORS = [
-  "var(--color-primary)",
-  "var(--color-info)",
-  "var(--color-ai)",
-  "var(--color-success)",
-  "var(--color-warning)",
-  "var(--color-secondary)",
-  "var(--color-on-surface-variant)", // for Other
-];
+/** The six largest groups get a slice each. The rest are "Other". */
+const TOP_SLICES = COMPOSITION_RAMP.opacities.length;
 
 export interface CompositionCardProps {
   dashboard?: DashboardPayload;
 }
 
+/** The legend's dot, in the slice's own fill and opacity. */
+const LEGEND_ROW =
+  "hit-area flex items-center gap-2 min-w-0 w-full rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-surface-container-low transition-colors text-left";
+
 export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
   const [tab, setTab] = useState<CompositionTab>("industry");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Extract raw entries based on selected tab
   const rawEntries = useMemo(() => {
     if (!dashboard) return [];
     if (tab === "industry") return dashboard.industryComposition || [];
@@ -50,7 +55,6 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
     return dashboard.locationComposition || [];
   }, [dashboard, tab]);
 
-  // Aggregate top 6 + Other
   const { slices, totalCount } = useMemo(() => {
     const valid = rawEntries
       .map((entry) => {
@@ -63,115 +67,121 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
       .sort((a, b) => b.count - a.count);
 
     const total = valid.reduce((sum, item) => sum + item.count, 0);
+    const top = valid.slice(0, TOP_SLICES);
+    const otherCount = valid
+      .slice(TOP_SLICES)
+      .reduce((sum, item) => sum + item.count, 0);
 
-    const top6 = valid.slice(0, 6);
-    const remainder = valid.slice(6);
-    const otherCount = remainder.reduce((sum, item) => sum + item.count, 0);
-
-    const topSlices: DonutSlice[] = top6.map((item, idx) => ({
+    const topSlices: DonutSlice[] = top.map((item, idx) => ({
       label: item.label,
       count: item.count,
-      color: SLICE_COLORS[idx % (SLICE_COLORS.length - 1)],
+      color: COMPOSITION_RAMP.color,
+      opacity: COMPOSITION_RAMP.opacities[idx],
     }));
-
     if (otherCount > 0) {
       topSlices.push({
         label: "Other",
         count: otherCount,
-        color: SLICE_COLORS[SLICE_COLORS.length - 1],
+        color: COMPOSITION_RAMP.other,
       });
     }
-
     return { slices: topSlices, totalCount: total };
   }, [rawEntries]);
-
-  const seeAllButton = (
-    <button
-      type="button"
-      onClick={() => setIsModalOpen(true)}
-      className="hit-area text-xs font-semibold text-primary hover:underline transition-all cursor-pointer"
-    >
-      See all
-    </button>
-  );
 
   return (
     <>
       <CardFrame
         cardId="composition"
         title="Composition"
-        headerAction={seeAllButton}
         compact
+        headerAction={
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className={cn(BTN_QUIET, "cursor-pointer")}
+          >
+            See all
+          </button>
+        }
       >
         <div className="flex flex-col gap-4">
-          {/* Segmented dimension switch */}
-          <div className="w-full">
-            <Segmented
-              label="Composition dimension"
-              options={TAB_OPTIONS}
-              value={tab}
-              onChange={setTab}
-            />
-          </div>
+          <Segmented
+            label="Composition dimension"
+            options={TAB_OPTIONS}
+            value={tab}
+            onChange={setTab}
+          />
 
           {totalCount === 0 ? (
-            <div className="p-6 text-center text-xs text-on-surface-variant italic">
-              No {tab} data recorded yet
-            </div>
+            <p className={cn(PULSE_TYPE.meta, "py-2")}>
+              No {tab} recorded yet.
+            </p>
           ) : (
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-              {/* Donut Chart */}
-              <Donut slices={slices} total={totalCount} size={120} />
+            // The donut over the legend, not beside it: the Intelligence
+            // column is three of twelve at xl, and a legend squeezed beside
+            // a 96 px ring cut "Music Streaming" to "Music Stream…".
+            <div className="flex flex-col items-center gap-4 min-w-0">
+              <Donut
+                slices={slices}
+                total={totalCount}
+                label={`${totalCount} contacts by ${tab}, ${slices.length} ${
+                  slices.length === 1 ? "group" : "groups"
+                }`}
+              />
 
-              {/* Legend with filterPill links */}
-              <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+              {/* The legend: one line per group, the count at the right.
+                  A list of words wraps and never scrolls sideways. */}
+              <ul
+                className={cn(PULSE_TYPE.meta, "w-full min-w-0 flex flex-col")}
+              >
                 {slices.map((slice) => {
+                  const dot = (
+                    <span
+                      aria-hidden="true"
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: slice.color,
+                        opacity: slice.opacity ?? 1,
+                      }}
+                    />
+                  );
+                  const words = (
+                    <>
+                      <span className="truncate text-on-surface">
+                        {slice.label}
+                      </span>{" "}
+                      <span className="ml-auto tabular-nums shrink-0">
+                        {slice.count}
+                      </span>
+                    </>
+                  );
                   if (slice.label === "Other") {
                     return (
-                      <button
-                        key="other"
-                        type="button"
-                        onClick={() => setIsModalOpen(true)}
-                        className={cn(
-                          filterPill(false),
-                          "hit-area cursor-pointer",
-                        )}
-                        title="View full network composition"
-                      >
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: slice.color }}
-                        />
-                        <span>Other</span>
-                        <span className="text-[11px] font-normal">
-                          ({slice.count})
-                        </span>
-                      </button>
+                      <li key="other">
+                        <button
+                          type="button"
+                          onClick={() => setIsModalOpen(true)}
+                          className={cn(LEGEND_ROW, "cursor-pointer")}
+                        >
+                          {dot}
+                          {words}
+                        </button>
+                      </li>
                     );
                   }
-
-                  const query = `${tab}:${encodeURIComponent(slice.label)}`;
-
                   return (
-                    <Link
-                      key={slice.label}
-                      to={`/?q=${query}`}
-                      className={cn(filterPill(false), "hit-area")}
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: slice.color }}
-                      />
-                      <span className="truncate max-w-[120px]">
-                        {slice.label}
-                      </span>
-                      <span className="text-[11px] font-normal">
-                        ({slice.count})
-                      </span>
-                    </Link>
+                    <li key={slice.label}>
+                      <Link
+                        to={`/?q=${tab}:${encodeURIComponent(slice.label)}`}
+                        className={LEGEND_ROW}
+                      >
+                        {dot}
+                        {words}
+                      </Link>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             </div>
           )}
         </div>

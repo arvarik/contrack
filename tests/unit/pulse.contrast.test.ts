@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { PALETTES, type Palette } from "../../src/lib/theme";
+import { PALETTES } from "../../src/lib/theme";
 import { contrast, hexToRgb, over } from "../../src/lib/color";
 import { HEATMAP_ALPHA_STEPS } from "../../src/views/pulse/lib/heatmapScale";
+import { COMPOSITION_RAMP } from "../../src/views/pulse/lib/pulseStyles";
 
 /**
  * Non-text contrast ratio floor per WCAG 2.1 SC 1.4.11 (3:1).
@@ -101,29 +102,46 @@ describe("pulse.contrast", () => {
     }
   });
 
-  it("ensures composition donut chart slice tokens meet non-text contrast (3:1) against card surface in both palettes", () => {
-    const donutTokens: (keyof Palette)[] = [
-      "primary",
-      "info",
-      "ai",
-      "success",
-      "warning",
-      "secondary",
-      "on-surface-variant",
-    ];
+  it("draws the composition donut in one hue, with no AI colour, and keeps its steps apart", () => {
+    // The ramp is the primary at six steps of opacity, largest slice
+    // darkest. The AI colour marks AI-derived data and a count of people by
+    // industry is not that, so it is not in the chart.
+    expect(COMPOSITION_RAMP.color).toBe("var(--color-primary)");
+    expect(COMPOSITION_RAMP.other).not.toContain("--color-ai");
+    expect(JSON.stringify(COMPOSITION_RAMP)).not.toContain("--color-ai");
+    expect(COMPOSITION_RAMP.opacities).toHaveLength(6);
+    for (let i = 1; i < COMPOSITION_RAMP.opacities.length; i++) {
+      expect(COMPOSITION_RAMP.opacities[i]).toBeLessThan(
+        COMPOSITION_RAMP.opacities[i - 1],
+      );
+    }
 
     for (const [mode, palette] of Object.entries(PALETTES)) {
       const surface = hexToRgb(palette["surface-container-lowest"]);
+      const primary = hexToRgb(palette.primary);
+      const track = hexToRgb(palette["surface-container-highest"]);
 
-      for (const token of donutTokens) {
-        const fg = hexToRgb(palette[token]);
-        const ratio = contrast(fg, surface);
-
+      // The two largest slices meet the non-text floor on their own.
+      for (const alpha of COMPOSITION_RAMP.opacities.slice(0, 2)) {
         expect(
-          ratio,
-          `Donut slice token "${token}" in ${mode} mode must be >= ${NON_TEXT_RATIO}:1`,
+          contrast(over(primary, alpha, surface), surface),
+          `Donut step ${alpha} in ${mode} mode`,
         ).toBeGreaterThanOrEqual(NON_TEXT_RATIO);
       }
+      // Each step is visibly lighter than the one before it.
+      const ratios = COMPOSITION_RAMP.opacities.map((alpha) =>
+        contrast(over(primary, alpha, surface), surface),
+      );
+      for (let i = 1; i < ratios.length; i++) {
+        expect(ratios[i], `Step ${i} in ${mode} mode`).toBeLessThan(
+          ratios[i - 1],
+        );
+      }
+      // Other is the neutral track, and it differs from the card.
+      expect(
+        contrast(track, surface),
+        `The Other slice in ${mode} mode must differ from the card`,
+      ).toBeGreaterThan(1.1);
     }
   });
 });

@@ -69,6 +69,55 @@ describe("useContactListFilters", () => {
     ]);
   });
 
+  // A link to the list carries a facet. The Inbox links to
+  // `/?q=tracked:no` and `/?q=missing:company`, and the Composition legend
+  // to `/?q=industry:Technology`. The list used to score the facet as a
+  // name and match nobody.
+  it("applies a facet from the query, and scores the free text that is left", () => {
+    mockPreferences = { listSort: "name" };
+    const people = [
+      {
+        ...sampleContacts[0],
+        isTracked: true,
+        company: "Acme",
+        industry: "Technology",
+      },
+      {
+        ...sampleContacts[1],
+        isTracked: false,
+        company: null,
+        industry: "Technology",
+      },
+      {
+        ...sampleContacts[2],
+        isTracked: false,
+        company: "Bobcorp",
+        industry: "Farming",
+      },
+    ];
+    const { result } = renderHook(() =>
+      useContactListFilters(people as Contact[]),
+    );
+    const names = () => result.current.filteredContacts.map((c) => c.name);
+
+    act(() => result.current.setSearchQuery("tracked:no"));
+    expect(names()).toEqual(["Alice", "Bob"]);
+
+    act(() => result.current.setSearchQuery("missing:company"));
+    expect(names()).toEqual(["Alice"]);
+
+    act(() => result.current.setSearchQuery("industry:Technology"));
+    expect(names()).toEqual(["Alice", "Charlie"]);
+
+    // The facet narrows, the words rank.
+    act(() => result.current.setSearchQuery("tracked:no bob"));
+    expect(names()).toEqual(["Bob"]);
+
+    // A facet with a value the parser rejects is words, and matches nobody.
+    act(() => result.current.setSearchQuery("score:abc"));
+    expect(names()).toEqual([]);
+  });
+
   it("initializes sortBy with 'name' when listSort preference is 'name'", () => {
     mockPreferences = { listSort: "name" };
     const { result } = renderHook(() =>

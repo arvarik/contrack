@@ -11,6 +11,7 @@ import { cn } from "../../../lib/utils";
 import { openQuickNote } from "../../../lib/appEvents";
 import { flyCorvid } from "../../../lib/corvid";
 import { PULSE_TYPE } from "../lib/pulseStyles";
+import { groupHeadingId } from "../lib/jumpToGroup";
 import type { UpNextGroup, UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
 export interface UpNextCardProps {
@@ -23,8 +24,8 @@ export interface UpNextCardProps {
   onOpenContact: (contactId: string) => void;
 }
 
-/** The id of a group's heading. The masthead's counts jump to these. */
-export const groupHeadingId = (group: UpNextGroup) => `up-next-${group}`;
+/** The id of a group's heading, from `lib/jumpToGroup`. Re-exported for the tests. */
+export { groupHeadingId };
 
 /**
  * A 6 px dot before each group's name, in the tone of its chips, so the eye

@@ -1,89 +1,86 @@
-import React, { useMemo } from "react";
-import {
-  Flame,
-  Phone,
-  Calendar,
-  Mail,
-  FileText,
-  ActivitySquare,
-  type LucideIcon,
-} from "lucide-react";
+/**
+ * Sparkline: twelve weekly totals as one line, at the width it is drawn.
+ *
+ * The line used to be drawn in a 220-unit box and stretched to the card with
+ * `preserveAspectRatio="none"`, which stretched the stroke too: a 2-unit
+ * line became 4 px wide on the flat parts and 2 px on the steep ones. The
+ * container is measured and the SVG is drawn at that width, so the stroke
+ * is even everywhere. A dot marks the last week, this one.
+ *
+ * Under the line, two facts: the last four weeks against the four before,
+ * and what this week holds by type. The streak is the masthead's.
+ */
+import React, { useMemo, useState } from "react";
+import { useElementWidth } from "../../../hooks/useElementWidth";
 import { cn } from "../../../lib/utils";
-
-const TYPE_ICONS: Record<string, LucideIcon> = {
-  call: Phone,
-  meeting: Calendar,
-  email: Mail,
-  note: FileText,
-  default: ActivitySquare,
-};
+import { PULSE_TYPE } from "../lib/pulseStyles";
 
 export interface SparklineProps {
   weekTotals: number[];
-  streak: {
-    current: number;
-    best: number;
-  };
   thisWeek: {
     logged: number;
     byType: Record<string, number>;
   };
 }
 
-export const Sparkline = ({ weekTotals, streak, thisWeek }: SparklineProps) => {
-  // Month comparison: Last 4 weeks vs previous 4 weeks
-  const { thisMonthTotal, comparisonText, toneClass } = useMemo(() => {
-    const thisMonth = weekTotals.slice(-4).reduce((sum, w) => sum + w, 0);
-    const lastMonth = weekTotals.slice(-8, -4).reduce((sum, w) => sum + w, 0);
+const HEIGHT = 40;
+const PAD_Y = 4;
 
-    if (lastMonth === 0) {
-      if (thisMonth === 0) {
-        return {
-          thisMonthTotal: 0,
-          comparisonText: "0% vs last month",
-          toneClass: "text-on-surface-variant",
-        };
-      }
-      return {
-        thisMonthTotal: thisMonth,
-        comparisonText: `+${thisMonth} vs last month`,
-        toneClass: "text-success",
-      };
+/** "1 note, 3 meetings", in the order the server sent the types. */
+export function describeWeekByType(byType: Record<string, number>): string {
+  const parts = Object.entries(byType || {})
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => {
+      const plural =
+        count === 1 ? type : type.endsWith("s") ? type : `${type}s`;
+      return `${count} ${plural}`;
+    });
+  return parts.length > 0 ? parts.join(", ") : "nothing logged yet";
+}
+
+/** The last four weeks against the four before, as words and a tone. */
+export function compareFourWeeks(weekTotals: number[]): {
+  recent: number;
+  words: string;
+  tone: "up" | "down" | "flat";
+} {
+  const recent = weekTotals.slice(-4).reduce((sum, w) => sum + w, 0);
+  const before = weekTotals.slice(-8, -4).reduce((sum, w) => sum + w, 0);
+  if (before === 0) {
+    if (recent === 0)
+      return { recent, words: "same as the four before", tone: "flat" };
+    return { recent, words: `+${recent} on the four before`, tone: "up" };
+  }
+  const pct = Math.round(((recent - before) / before) * 100);
+  if (pct > 0)
+    return { recent, words: `+${pct}% on the four before`, tone: "up" };
+  if (pct < 0)
+    return { recent, words: `${pct}% on the four before`, tone: "down" };
+  return { recent, words: "same as the four before", tone: "flat" };
+}
+
+const TONE_CLASS = {
+  up: "text-success",
+  down: "text-warning",
+  flat: "text-on-surface-variant",
+} as const;
+
+export const Sparkline = ({ weekTotals, thisWeek }: SparklineProps) => {
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  // Whole pixels: the SVG is drawn at this width and a fractional viewBox
+  // would put the line half a pixel off the grid.
+  const width = Math.round(useElementWidth(box) ?? 0);
+
+  const comparison = useMemo(() => compareFourWeeks(weekTotals), [weekTotals]);
+
+  const { pointsStr, areaStr, last } = useMemo(() => {
+    if (!weekTotals || weekTotals.length === 0 || width <= 0) {
+      return { pointsStr: "", areaStr: "", last: null };
     }
-
-    const diffPct = Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
-    if (diffPct > 0) {
-      return {
-        thisMonthTotal: thisMonth,
-        comparisonText: `+${diffPct}% vs last month`,
-        toneClass: "text-success",
-      };
-    }
-    if (diffPct < 0) {
-      return {
-        thisMonthTotal: thisMonth,
-        comparisonText: `${diffPct}% vs last month`,
-        toneClass: "text-warning",
-      };
-    }
-    return {
-      thisMonthTotal: thisMonth,
-      comparisonText: "0% vs last month",
-      toneClass: "text-on-surface-variant",
-    };
-  }, [weekTotals]);
-
-  // 40 px tall SVG polyline
-  const { pointsStr, areaStr } = useMemo(() => {
-    if (!weekTotals || weekTotals.length === 0) {
-      return { pointsStr: "", areaStr: "" };
-    }
-
-    const width = 220;
-    const height = 40;
-    const paddingY = 4;
-    const effectiveHeight = height - paddingY * 2;
-
+    // The dot at the end needs room, so the line stops short of the edge.
+    const inset = 3;
+    const innerWidth = Math.max(1, width - inset * 2);
+    const drawHeight = HEIGHT - PAD_Y * 2;
     const maxVal = Math.max(...weekTotals, 1);
     const minVal = Math.min(...weekTotals, 0);
     const range = maxVal - minVal || 1;
@@ -92,125 +89,87 @@ export const Sparkline = ({ weekTotals, streak, thisWeek }: SparklineProps) => {
       weekTotals.length === 1
         ? [
             [
-              0,
-              height -
-                paddingY -
-                ((weekTotals[0] - minVal) / range) * effectiveHeight,
+              inset,
+              HEIGHT - PAD_Y - ((weekTotals[0] - minVal) / range) * drawHeight,
             ],
             [
-              width,
-              height -
-                paddingY -
-                ((weekTotals[0] - minVal) / range) * effectiveHeight,
+              inset + innerWidth,
+              HEIGHT - PAD_Y - ((weekTotals[0] - minVal) / range) * drawHeight,
             ],
           ]
         : weekTotals.map((val, idx) => {
-            const x = (idx / (weekTotals.length - 1)) * width;
-            const y =
-              height - paddingY - ((val - minVal) / range) * effectiveHeight;
+            const x = inset + (idx / (weekTotals.length - 1)) * innerWidth;
+            const y = HEIGHT - PAD_Y - ((val - minVal) / range) * drawHeight;
             return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
           });
 
     const pts = coords.map(([x, y]) => `${x},${y}`).join(" ");
-    const area = `${pts} ${width},${height} 0,${height}`;
-
-    return { pointsStr: pts, areaStr: area };
-  }, [weekTotals]);
-
-  const activeTypeEntries = useMemo(() => {
-    return Object.entries(thisWeek.byType || {}).filter(
-      ([_, count]) => count > 0,
-    );
-  }, [thisWeek.byType]);
+    const area = `${pts} ${coords[coords.length - 1][0]},${HEIGHT} ${coords[0][0]},${HEIGHT}`;
+    return { pointsStr: pts, areaStr: area, last: coords[coords.length - 1] };
+  }, [weekTotals, width]);
 
   return (
-    <div className="flex flex-col gap-3 pt-2 border-t border-outline/10">
-      {/* Polyline chart (40px tall) */}
-      <div className="w-full h-10 relative overflow-hidden">
-        <svg
-          viewBox="0 0 220 40"
-          className="w-full h-10 overflow-visible"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="sparkline-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="0%"
-                stopColor="var(--color-primary)"
-                stopOpacity="0.25"
+    <div className="flex flex-col gap-2">
+      <div ref={setBox} className="w-full h-10" aria-hidden="true">
+        {width > 0 && (
+          <svg
+            data-sparkline=""
+            width={width}
+            height={HEIGHT}
+            viewBox={`0 0 ${width} ${HEIGHT}`}
+            className="block overflow-visible"
+          >
+            <defs>
+              <linearGradient id="sparkline-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="0%"
+                  stopColor="var(--color-primary)"
+                  stopOpacity="0.22"
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--color-primary)"
+                  stopOpacity="0"
+                />
+              </linearGradient>
+            </defs>
+            {areaStr && (
+              <polygon points={areaStr} fill="url(#sparkline-grad)" />
+            )}
+            {pointsStr && (
+              <polyline
+                points={pointsStr}
+                fill="none"
+                stroke="var(--color-primary)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
-              <stop
-                offset="100%"
-                stopColor="var(--color-primary)"
-                stopOpacity="0.0"
+            )}
+            {last && (
+              <circle
+                cx={last[0]}
+                cy={last[1]}
+                r={3}
+                fill="var(--color-primary)"
               />
-            </linearGradient>
-          </defs>
-          {areaStr && <polygon points={areaStr} fill="url(#sparkline-grad)" />}
-          {pointsStr && (
-            <polyline
-              points={pointsStr}
-              fill="none"
-              stroke="var(--color-primary)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-        </svg>
-      </div>
-
-      {/* Month comparison */}
-      <div className="text-xs text-on-surface-variant font-medium flex items-center justify-between">
-        <span>
-          <strong className="text-on-surface font-semibold">
-            {thisMonthTotal}
-          </strong>{" "}
-          this month ·{" "}
-          <span className={cn("font-semibold", toneClass)}>
-            {comparisonText}
-          </span>
-        </span>
-
-        {/* Streak with required tooltip */}
-        <div
-          title="Days you logged something"
-          className="cursor-help inline-flex items-center gap-1 text-xs text-on-surface font-semibold"
-        >
-          <Flame className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-          <span>
-            {streak.current} {streak.current === 1 ? "day" : "days"} · best{" "}
-            {streak.best}
-          </span>
-        </div>
-      </div>
-
-      {/* This week counts by type as small pills */}
-      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-        {activeTypeEntries.length > 0 ? (
-          activeTypeEntries.map(([type, count]) => {
-            const Icon = TYPE_ICONS[type.toLowerCase()] || TYPE_ICONS.default;
-            const pluralLabel =
-              count === 1 ? type : type.endsWith("s") ? type : `${type}s`;
-            return (
-              <span
-                key={type}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-surface-container text-on-surface-variant"
-              >
-                <Icon className="w-3 h-3 text-primary opacity-85" />
-                <span>
-                  {count} {pluralLabel}
-                </span>
-              </span>
-            );
-          })
-        ) : (
-          <span className="text-[11px] text-on-surface-variant">
-            0 logged this week
-          </span>
+            )}
+          </svg>
         )}
       </div>
+
+      <p className={cn(PULSE_TYPE.meta, "tabular-nums")}>
+        <span className="font-semibold text-on-surface">
+          {comparison.recent}
+        </span>{" "}
+        in the last four weeks ·{" "}
+        <span className={cn("font-semibold", TONE_CLASS[comparison.tone])}>
+          {comparison.words}
+        </span>
+      </p>
+      <p className={PULSE_TYPE.meta}>
+        This week: {describeWeekByType(thisWeek?.byType ?? {})}
+      </p>
     </div>
   );
 };

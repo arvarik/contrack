@@ -1,9 +1,26 @@
-import React from "react";
+/**
+ * ComingUpCard: what the next two weeks hold, in the order it arrives.
+ *
+ * One dated list. A birthday in days eight to fourteen and a meeting from a
+ * connected calendar are both "coming up", so they sit in one list ordered
+ * by date, each row with a chip that says when: "Tomorrow", "Thursday", "In
+ * 10 days". A birthday in the next seven days is in Up next already, and a
+ * fact appears once on this page, so the card starts where the queue ends.
+ *
+ * With nothing in two weeks the card is one line, and the line offers the
+ * one thing that would fill it: a calendar.
+ */
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Cake, Video } from "lucide-react";
+import { differenceInCalendarDays } from "date-fns";
 import { CardFrame } from "../components/CardFrame";
+import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { SETTINGS_PAGES } from "../../settings/registry";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { cn } from "../../../lib/utils";
+import { PULSE_CHIP_NEUTRAL, PULSE_ROW, PULSE_TYPE } from "../lib/pulseStyles";
+import { describeDueChip } from "../lib/upNext";
 import type { UpcomingBirthday } from "../lib/birthdays";
 
 export interface MeetingItem {
@@ -22,6 +39,26 @@ export interface ComingUpCardProps {
   >;
 }
 
+/** Up next owns birthdays through day seven. This card starts at day eight. */
+export const COMING_UP_FROM_DAY = 8;
+
+type Entry =
+  | { kind: "birthday"; key: string; when: Date; birthday: UpcomingBirthday }
+  | { kind: "meeting"; key: string; when: Date; meeting: MeetingItem };
+
+/** "Thu 2 Oct, 3:00 PM" in the person's own locale. */
+function formatMeetingTime(startsAt: string): string {
+  const date = new Date(startsAt);
+  if (Number.isNaN(date.getTime())) return startsAt;
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export const ComingUpCard = ({
   birthdays = [],
   meetings = [],
@@ -31,137 +68,158 @@ export const ComingUpCard = ({
     (p) => p.id === "connectors" || p.path === "/settings/connectors",
   );
 
-  const totalCount = birthdays.length + meetings.length;
-  const isEmpty = totalCount === 0;
+  const entries = useMemo<Entry[]>(() => {
+    const list: Entry[] = [];
+    for (const b of birthdays) {
+      if (b.daysUntil < COMING_UP_FROM_DAY) continue;
+      list.push({
+        kind: "birthday",
+        key: `b-${b.contactId}`,
+        when: b.nextDate,
+        birthday: b,
+      });
+    }
+    meetings.forEach((m, index) => {
+      const when = new Date(m.startsAt);
+      list.push({
+        kind: "meeting",
+        key: `m-${index}-${m.startsAt}`,
+        when: Number.isNaN(when.getTime()) ? new Date(8640000000000000) : when,
+        meeting: m,
+      });
+    });
+    return list.sort((a, b) => a.when.getTime() - b.when.getTime());
+  }, [birthdays, meetings]);
+
+  if (entries.length === 0) {
+    return (
+      <CardFrame cardId="coming-up" title="Coming up" count={0} variant="line">
+        Nothing in the next two weeks.
+        {hasConnectorsPage && (
+          <>
+            {" "}
+            <Link
+              to="/settings/connectors"
+              className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
+            >
+              Connect a calendar
+            </Link>
+          </>
+        )}
+      </CardFrame>
+    );
+  }
+
+  const now = new Date();
 
   return (
-    <CardFrame cardId="coming-up" title="Coming up" count={totalCount}>
-      {isEmpty ? (
-        <div className="py-3 text-xs text-on-surface-variant">
-          {hasConnectorsPage ? (
-            <p>
-              <Link
-                to="/settings/connectors"
-                className="text-primary hover:underline font-medium hit-area inline-block"
-              >
-                Connect a calendar
-              </Link>{" "}
-              to see upcoming meetings here.
-            </p>
-          ) : (
-            <p className="italic">Nothing scheduled in the next 14 days.</p>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Birthdays Section */}
-          {birthdays.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-                <Cake className="w-3 h-3 text-amber-500" />
-                <span>Birthdays</span>
-              </div>
-              <div className="space-y-1.5">
-                {birthdays.map((b) => (
-                  <Link
-                    key={b.contactId}
-                    to={`/contact/${b.contactId}`}
-                    className="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors group text-xs"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                      <img
-                        src={b.avatarUrl || fallbackAvatarUrl(b.name)}
-                        alt={b.name}
-                        className="w-6 h-6 rounded-full object-cover shrink-0"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-semibold text-on-surface group-hover:text-primary transition-colors truncate">
-                          {b.name}
-                        </span>
-                        {b.turningAge !== null && (
-                          <span className="text-[11px] text-on-surface-variant">
-                            Turning {b.turningAge}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 shrink-0 tabular-nums">
-                      {b.daysUntil === 0
-                        ? "Today"
-                        : b.daysUntil === 1
-                          ? "Tomorrow"
-                          : `in ${b.daysUntil} days`}
+    <CardFrame cardId="coming-up" title="Coming up" count={entries.length}>
+      <ul className="flex flex-col gap-1.5">
+        {entries.map((entry) => {
+          const days = differenceInCalendarDays(entry.when, now);
+          const chip = (
+            <span className={PULSE_CHIP_NEUTRAL}>
+              {describeDueChip(days, entry.when)}
+            </span>
+          );
+
+          if (entry.kind === "birthday") {
+            const b = entry.birthday;
+            return (
+              <li key={entry.key}>
+                <Link to={`/contact/${b.contactId}`} className={PULSE_ROW}>
+                  <ScoreRingAvatar
+                    contact={{
+                      name: b.name,
+                      avatarUrl: b.avatarUrl,
+                      isTracked: b.isTracked,
+                      relationshipScore: b.relationshipScore,
+                      lastContactedAt: b.lastContactedAt,
+                    }}
+                    size={32}
+                    ring="list"
+                    decorative
+                  />
+                  <span className="flex flex-col min-w-0 flex-1">
+                    <span className={cn(PULSE_TYPE.name, "truncate")}>
+                      {b.name}
                     </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Meetings Section */}
-          {meetings.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-                <Video className="w-3 h-3 text-primary" />
-                <span>Meetings</span>
-              </div>
-              <div className="space-y-1.5">
-                {meetings.map((m, idx) => {
-                  let formattedTime = m.startsAt;
-                  try {
-                    const d = new Date(m.startsAt);
-                    formattedTime = d.toLocaleDateString(undefined, {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    });
-                  } catch {}
-
-                  return (
-                    <div
-                      key={idx}
-                      className="p-2 rounded-xl bg-surface-container-lowest border border-outline/10 text-xs flex flex-col gap-1.5"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-on-surface truncate">
-                          {m.title}
-                        </span>
-                        <span className="text-[11px] text-on-surface-variant shrink-0 tabular-nums">
-                          {formattedTime}
-                        </span>
-                      </div>
-                      {m.contactIds.length > 0 && (
-                        <div className="flex items-center gap-1 overflow-hidden">
-                          {m.contactIds.map((cid) => {
-                            const c = contactsMap.get(cid);
-                            if (!c) return null;
-                            return (
-                              <Link
-                                key={cid}
-                                to={`/contact/${cid}`}
-                                title={c.name}
-                                className="hit-area shrink-0"
-                              >
-                                <img
-                                  src={c.avatarUrl || fallbackAvatarUrl(c.name)}
-                                  alt={c.name}
-                                  className="w-5 h-5 rounded-full object-cover ring-1 ring-surface"
-                                />
-                              </Link>
-                            );
-                          })}
-                        </div>
+                    <span
+                      className={cn(
+                        PULSE_TYPE.meta,
+                        "inline-flex items-center gap-1",
                       )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+                    >
+                      <Cake
+                        className="w-3.5 h-3.5 shrink-0 text-warning"
+                        aria-hidden="true"
+                      />
+                      {b.turningAge !== null
+                        ? `Turns ${b.turningAge}`
+                        : "Birthday"}
+                    </span>
+                  </span>
+                  {chip}
+                </Link>
+              </li>
+            );
+          }
+
+          const m = entry.meeting;
+          const people = m.contactIds
+            .map((cid) => ({ cid, contact: contactsMap.get(cid) }))
+            .filter((p) => p.contact);
+          return (
+            <li
+              key={entry.key}
+              className={cn(
+                PULSE_ROW,
+                // Not a link, so no hover step.
+                "items-start hover:bg-surface-container-low/70",
+              )}
+            >
+              <span
+                className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0"
+                aria-hidden="true"
+              >
+                <Video className="w-4 h-4" />
+              </span>
+              <span className="flex flex-col min-w-0 flex-1 gap-1">
+                <span
+                  className={cn(PULSE_TYPE.rowTitle, "font-semibold truncate")}
+                >
+                  {m.title}
+                </span>
+                <span className={cn(PULSE_TYPE.meta, "tabular-nums")}>
+                  {formatMeetingTime(m.startsAt)}
+                </span>
+                {people.length > 0 && (
+                  <span className="flex items-center gap-1 pt-0.5">
+                    {people.map(({ cid, contact }) => (
+                      <Link
+                        key={cid}
+                        to={`/contact/${cid}`}
+                        aria-label={contact!.name}
+                        className="hit-area shrink-0"
+                      >
+                        <img
+                          src={
+                            contact!.avatarUrl ||
+                            fallbackAvatarUrl(contact!.name)
+                          }
+                          alt=""
+                          className="w-5 h-5 rounded-full object-cover ring-1 ring-surface"
+                        />
+                      </Link>
+                    ))}
+                  </span>
+                )}
+              </span>
+              {chip}
+            </li>
+          );
+        })}
+      </ul>
     </CardFrame>
   );
 };

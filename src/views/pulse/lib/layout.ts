@@ -24,7 +24,6 @@ export const PULSE_CARD_IDS = [
   "insight",
   "inbox",
   "coming-up",
-  "new-people",
 ] as const;
 
 export type PulseCardId = (typeof PULSE_CARD_IDS)[number];
@@ -38,11 +37,13 @@ export const MAX_CARDS_PER_COL = 20;
 export const DEFAULT_COLUMN_CARDS: Record<PulseColumn, PulseCardId[]> = {
   focus: ["up-next", "completed"],
   // Keeping up first: the state of the people you track is the Network
-  // column's headline. A stored layout that still names "momentum" drops it
-  // in resolveLayout, and one that does not name "keeping-up" gets the card
-  // back here.
-  network: ["keeping-up", "activity", "composition"],
-  intel: ["insight", "inbox", "coming-up", "new-people"],
+  // column's headline. A stored layout that still names "momentum" or
+  // "new-people" drops the id in resolveLayout, and one that does not name
+  // "keeping-up" gets the card back here. Composition is last in
+  // Intelligence: no other page has a home for it yet, and customize mode
+  // can hide it.
+  network: ["keeping-up", "activity"],
+  intel: ["insight", "inbox", "coming-up", "composition"],
 };
 
 export const DEFAULT_PULSE_LAYOUT: PulseLayout = {
@@ -69,7 +70,6 @@ export const CARD_TITLES: Record<PulseCardId, string> = {
   insight: "Daily insight",
   inbox: "Inbox",
   "coming-up": "Coming up",
-  "new-people": "New people",
 };
 
 export function getDefaultColumnForCard(cardId: string): PulseColumn {
@@ -139,13 +139,16 @@ export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
     }
   }
 
-  // 3. Any known card not yet in hidden or visible gets restored to default column
-  for (const cardId of PULSE_CARD_IDS) {
-    if (!seen.has(cardId)) {
-      const defaultCol = getDefaultColumnForCard(cardId);
-      if (visible[defaultCol].length < MAX_CARDS_PER_COL) {
+  // 3. Any known card not yet in hidden or visible gets restored to its
+  //    default column, in the default order of that column. The order used
+  //    to follow PULSE_CARD_IDS, so an account whose stored order was empty
+  //    (the server's default preference) got Composition first in
+  //    Intelligence, ahead of the insight.
+  for (const col of PULSE_COLUMNS) {
+    for (const cardId of DEFAULT_COLUMN_CARDS[col]) {
+      if (!seen.has(cardId) && visible[col].length < MAX_CARDS_PER_COL) {
         seen.add(cardId);
-        visible[defaultCol].push(cardId);
+        visible[col].push(cardId);
       }
     }
   }

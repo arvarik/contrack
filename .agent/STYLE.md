@@ -735,6 +735,35 @@ padding.
 - ❌ A hover-only control on a phone. Below `sm` every action is visible at
   rest and 44 px.
 
+### The other cards: one row shape, one line when empty
+
+Every list row on a Pulse card that is not the queue (Inbox, Coming up) is
+`PULSE_ROW` from `lib/pulseStyles.ts`: `rounded-xl px-3 py-2.5` on
+`bg-surface-container-low/70`, 44 px tall at least, no border, one surface
+step up on hover, and the whole row is the link. The count in a row's
+sentence is bold (`4 without a company`). A fact at the right edge is
+`PULSE_CHIP_NEUTRAL`, "In 10 days". Two more type roles: `figure` for the
+one large number on a card (Keeping up's "31") and `insight` for the
+insight's paragraph at 15 px.
+
+- ✅ Inbox with nothing to do, Coming up with nothing in two weeks, Daily
+  insight without a key: `variant="line"`, one sentence, at most one link.
+- ✅ Each fact once. Up next owns birthdays through day seven, Coming up
+  starts at day eight, the masthead owns the streak.
+- ✅ A chart fills its card. The heatmap's squares are one SVG at
+  `width="100%"`; its month labels and weekday letters are HTML, so they
+  stay 12 px while the squares scale. The sparkline is drawn at the width
+  `useElementWidth` measures, never stretched with
+  `preserveAspectRatio="none"`.
+- ✅ One hue for a part-of-whole chart: `COMPOSITION_RAMP`, the primary at
+  six steps of opacity, Other in the neutral track tone.
+- ❌ `--color-ai` on a chart of people. It marks AI-derived data only, and
+  the insight's badge is the one place on Pulse that is.
+- ❌ A native `title` as the one way to read a value. The heatmap's tooltip
+  opens on hover and on a tap, and its words are in a hidden list too.
+- ❌ A line that promises a feature ("shows after four weeks"). Say the
+  fact or say nothing.
+
 ### Enter belongs to the control that has focus
 
 No window-level Enter on Pulse. Each Up next row is a `listitem` with a

@@ -13,27 +13,50 @@ describe("pulse.layout", () => {
   it("provides sensible defaults for all 3 columns", () => {
     const layout = resolveLayout(DEFAULT_PULSE_LAYOUT);
     expect(PULSE_COLUMNS).toEqual(["focus", "network", "intel"]);
-    expect(PULSE_CARD_IDS).toHaveLength(9);
+    expect(PULSE_CARD_IDS).toHaveLength(8);
     expect(MAX_CARDS_PER_COL).toBe(20);
     expect(layout.visible.focus).toEqual(["up-next", "completed"]);
-    expect(layout.visible.network).toEqual([
-      "keeping-up",
-      "activity",
-      "composition",
-    ]);
+    // The Network column is the people you track and their habits.
+    expect(layout.visible.network).toEqual(["keeping-up", "activity"]);
+    // Composition is last in Intelligence, and New people is gone.
     expect(layout.visible.intel).toEqual([
       "insight",
       "inbox",
       "coming-up",
-      "new-people",
+      "composition",
     ]);
     expect(layout.hidden).toEqual([]);
+    expect(PULSE_CARD_IDS).not.toContain("new-people");
   });
 
   it("handles null or undefined layout gracefully", () => {
     const layout = resolveLayout(null);
     expect(layout.visible.focus).toContain("up-next");
     expect(layout.hidden).toEqual([]);
+  });
+
+  // The server's default preference is an empty order, not a missing one.
+  // Every card is restored, and in the default order of its column.
+  it("restores an empty stored order to the default order, column by column", () => {
+    const layout = resolveLayout({ hidden: [], order: {} });
+    expect(layout).toEqual(resolveLayout(null));
+    expect(layout.visible.intel).toEqual([
+      "insight",
+      "inbox",
+      "coming-up",
+      "composition",
+    ]);
+    // A column with one card named keeps it first, then the rest in order.
+    const partial = resolveLayout({
+      hidden: [],
+      order: { intel: ["coming-up"] },
+    });
+    expect(partial.visible.intel).toEqual([
+      "coming-up",
+      "insight",
+      "inbox",
+      "composition",
+    ]);
   });
 
   it("hides a visible card", () => {
@@ -46,7 +69,6 @@ describe("pulse.layout", () => {
     expect(resolved.hidden).toContain("keeping-up");
     expect(resolved.visible.network).not.toContain("keeping-up");
     expect(resolved.visible.network).toContain("activity");
-    expect(resolved.visible.network).toContain("composition");
   });
 
   it("shows a previously hidden card", () => {
@@ -54,8 +76,8 @@ describe("pulse.layout", () => {
       hidden: ["insight"],
       order: {
         focus: ["up-next", "completed"],
-        network: ["keeping-up", "activity", "composition"],
-        intel: ["inbox", "coming-up", "new-people"],
+        network: ["keeping-up", "activity"],
+        intel: ["inbox", "coming-up", "composition"],
       },
     };
     const next = pulseLayoutReducer(hiddenState, {
@@ -85,11 +107,11 @@ describe("pulse.layout", () => {
     const next = pulseLayoutReducer(state, {
       type: "reorder",
       column: "intel",
-      cardIds: ["new-people", "coming-up", "inbox", "insight"],
+      cardIds: ["composition", "coming-up", "inbox", "insight"],
     });
     const resolved = resolveLayout(next);
     expect(resolved.visible.intel).toEqual([
-      "new-people",
+      "composition",
       "coming-up",
       "inbox",
       "insight",
@@ -109,9 +131,11 @@ describe("pulse.layout", () => {
     const resolved = resolveLayout(reset);
     expect(resolved.hidden).toEqual([]);
     expect(resolved.visible.focus).toEqual(["up-next", "completed"]);
-    expect(resolved.visible.network).toEqual([
-      "keeping-up",
-      "activity",
+    expect(resolved.visible.network).toEqual(["keeping-up", "activity"]);
+    expect(resolved.visible.intel).toEqual([
+      "insight",
+      "inbox",
+      "coming-up",
       "composition",
     ]);
   });
@@ -227,7 +251,7 @@ describe("pulse.layout", () => {
       order: {
         focus: ["up-next", "completed"],
         network: ["activity", "momentum", "composition"],
-        intel: ["insight", "inbox", "coming-up", "new-people"],
+        intel: ["insight", "inbox", "coming-up"],
       },
     };
     const resolved = resolveLayout(stored);
@@ -240,13 +264,36 @@ describe("pulse.layout", () => {
     expect(Object.values(resolved.visible).flat()).not.toContain("momentum");
   });
 
+  // A layout stored before New people folded into Inbox. The id is unknown
+  // now and drops out of the order and the hidden list alike. Composition
+  // keeps the place the person gave it.
+  it("drops a stored new-people id from the order and from the hidden list", () => {
+    const stored: PulseLayout = {
+      hidden: ["new-people"],
+      order: {
+        focus: ["up-next", "completed"],
+        network: ["keeping-up", "activity", "composition"],
+        intel: ["insight", "inbox", "coming-up", "new-people"],
+      },
+    };
+    const resolved = resolveLayout(stored);
+    expect(resolved.hidden).toEqual([]);
+    expect(resolved.visible.intel).toEqual(["insight", "inbox", "coming-up"]);
+    expect(resolved.visible.network).toEqual([
+      "keeping-up",
+      "activity",
+      "composition",
+    ]);
+    expect(Object.values(resolved.visible).flat()).not.toContain("new-people");
+  });
+
   it("shows Keeping up in the Network column when a stored order does not name it", () => {
     const stored: PulseLayout = {
       hidden: [],
       order: {
         focus: ["up-next", "completed"],
         network: ["composition", "activity"],
-        intel: ["insight", "inbox", "coming-up", "new-people"],
+        intel: ["insight", "inbox", "coming-up"],
       },
     };
     const resolved = resolveLayout(stored);

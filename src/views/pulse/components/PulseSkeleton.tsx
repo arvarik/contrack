@@ -86,8 +86,9 @@ export const PulseSkeleton = () => {
             ))}
           </div>
 
-          <div className={cn(CARD, "p-4 min-h-[60px]")}>
-            <SkeletonLine width="w-32" className="h-4" />
+          {/* Completed is a line on the page surface, not a card. */}
+          <div className="px-2 py-2 min-h-[44px] flex items-center">
+            <SkeletonLine width="w-48" className="h-4" />
           </div>
         </div>
 
@@ -116,9 +117,9 @@ export const PulseSkeleton = () => {
           </div>
         </div>
 
-        {/* Column 3: Network */}
+        {/* Column 3: Network (Keeping up, Activity) */}
         <div className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.network)}>
-          {[1, 2, 3].map((i) => (
+          {[1, 2].map((i) => (
             <div
               key={i}
               className={cn(

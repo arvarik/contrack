@@ -58,6 +58,43 @@ const COMPLETED_FACET_REGEX =
 const ACTIVE_PREFIX_REGEX =
   /\b(role|company|location|industry|tag|score|updated|missing|list|near|tracked):(\S*)$/i;
 
+/**
+ * Split a query into its facet filters and its free text, as pure data.
+ *
+ * The hook above treats a facet at the end of the input with no space after
+ * it as one still being typed, so the autocomplete can open. A query that
+ * arrives whole, from a link like `/?q=tracked:no` or from the Inbox's
+ * `/?q=missing:company`, has no typist, so here a trailing facet is a facet.
+ * A field the value parser rejects (`score:abc`) stays in the free text.
+ */
+export function parseFacetTokens(rawInput: string): {
+  filters: FacetFilter[];
+  freeText: string;
+} {
+  const filters: FacetFilter[] = [];
+  const words = rawInput.split(/\s+/).filter(Boolean);
+  const rest: string[] = [];
+  for (const word of words) {
+    const match = word.match(/^([a-z]+):(.+)$/i);
+    const field = match?.[1].toLowerCase();
+    if (match && field && FACET_FIELDS.has(field)) {
+      const filter = parseFilterValue(field as FacetField, match[2]);
+      if (filter) {
+        if (
+          !filters.some(
+            (f) => f.field === filter.field && f.value === filter.value,
+          )
+        ) {
+          filters.push(filter);
+        }
+        continue;
+      }
+    }
+    rest.push(word);
+  }
+  return { filters, freeText: rest.join(" ") };
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
