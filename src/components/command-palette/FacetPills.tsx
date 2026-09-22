@@ -24,6 +24,7 @@ const FIELD_COLORS: Record<string, string> = {
   list: "bg-indigo-500/15 text-indigo-600 ring-indigo-500/20",
   near: "bg-cyan-500/15 text-cyan-600 ring-cyan-500/20",
   missing: "bg-rose-500/15 text-error ring-rose-500/20",
+  tracked: "bg-primary/15 text-on-primary-wash ring-primary/20",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

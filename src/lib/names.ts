@@ -82,6 +82,11 @@ export const NAMES = {
     title: "Correspondents",
     description: "People you talk to who are not in Contrack yet.",
   },
+  tracked: {
+    label: "Tracked contacts",
+    title: "Tracked contacts",
+    description: "Who you keep up with, and who you don't.",
+  },
 } as const satisfies Record<string, DestinationName>;
 
 export type DestinationKey = keyof typeof NAMES;

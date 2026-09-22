@@ -45,6 +45,28 @@ const sampleContacts: Partial<Contact>[] = [
 describe("useContactListFilters", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    mockSearchParams.delete("list");
+  });
+
+  // The Tracked chip is `?list=tracked`. It is not a list: it keeps the
+  // contacts a person tracks, whatever lists they are in.
+  it("keeps only the tracked contacts under the Tracked chip", () => {
+    mockPreferences = { listSort: "name" };
+    mockSearchParams.set("list", "tracked");
+    const people = [
+      { ...sampleContacts[0], isTracked: true, lists: [] },
+      { ...sampleContacts[1], isTracked: false, lists: [{ id: "l1" }] },
+      { ...sampleContacts[2], isTracked: true, lists: [{ id: "l1" }] },
+    ];
+    const { result } = renderHook(() =>
+      useContactListFilters(people as Contact[]),
+    );
+
+    expect(result.current.filterMode).toBe("tracked");
+    expect(result.current.filteredContacts.map((c) => c.name)).toEqual([
+      "Bob",
+      "Charlie",
+    ]);
   });
 
   it("initializes sortBy with 'name' when listSort preference is 'name'", () => {

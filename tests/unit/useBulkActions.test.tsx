@@ -6,6 +6,11 @@ import React from "react";
 import { useBulkActions } from "../../src/components/bulk/useBulkActions";
 import * as clipboard from "../../src/lib/clipboard";
 
+const toastMock = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+);
+vi.mock("sonner", () => ({ toast: toastMock }));
+
 const mockBulkDeleteMutate = vi.fn();
 const mockBulkUpdateMutate = vi.fn();
 const mockBulkAddToListMutate = vi.fn();
@@ -193,6 +198,162 @@ describe("useBulkActions", () => {
       { ids: ["c1", "c2"], data: { role: "VP Engineering" } },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  describe("tracking", () => {
+    const people = [
+      { id: "c1", name: "Ada Lovelace", isTracked: true },
+      { id: "c2", name: "Grace Hopper", isTracked: false },
+      { id: "c3", name: "Linus Torvalds", isTracked: false },
+    ];
+
+    /** The Undo action of the last success toast. */
+    const lastUndo = () =>
+      (
+        toastMock.success.mock.calls.at(-1)?.[1] as {
+          action: { onClick: () => void };
+        }
+      ).action.onClick;
+
+    it("says whether the selection is tracked: all, none or mixed", () => {
+      const tracked = (ids: string[]) =>
+        renderHook(
+          () => useBulkActions({ selectedIds: new Set(ids), contacts: people }),
+          { wrapper },
+        ).result.current.selectionTracked;
+      expect(tracked(["c1"])).toBe("all");
+      expect(tracked(["c2", "c3"])).toBe("none");
+      expect(tracked(["c1", "c2"])).toBe("mixed");
+    });
+
+    it("reads the rows on screen while nothing is selected", () => {
+      const { result } = renderHook(
+        () =>
+          useBulkActions({
+            selectedIds: new Set(),
+            contacts: people.filter((p) => p.isTracked),
+          }),
+        { wrapper },
+      );
+      expect(result.current.selectionTracked).toBe("all");
+    });
+
+    it("tracks only the untracked ids, and Undo untracks the same ones", () => {
+      const onComplete = vi.fn();
+      const { result } = renderHook(
+        () =>
+          useBulkActions({
+            selectedIds: new Set(["c1", "c2", "c3"]),
+            contacts: people,
+            onComplete,
+          }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.handleBulkTrack(true);
+      });
+      expect(mockBulkUpdateMutate).toHaveBeenCalledWith(
+        { ids: ["c2", "c3"], data: { isTracked: true } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+
+      act(() => {
+        mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 2 });
+      });
+      expect(toastMock.success).toHaveBeenCalledWith(
+        "Tracking 2 contacts",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Undo" }),
+        }),
+      );
+      expect(onComplete).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        lastUndo()();
+      });
+      expect(mockBulkUpdateMutate).toHaveBeenLastCalledWith(
+        { ids: ["c2", "c3"], data: { isTracked: false } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+    });
+
+    it("untracks only the tracked ids, and an undone untrack says the cadence is the default", () => {
+      const { result } = renderHook(
+        () =>
+          useBulkActions({
+            selectedIds: new Set(["c1", "c2"]),
+            contacts: people,
+          }),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current.handleBulkTrack(false);
+      });
+      expect(mockBulkUpdateMutate).toHaveBeenCalledWith(
+        { ids: ["c1"], data: { isTracked: false } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+
+      act(() => {
+        mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 1 });
+      });
+      expect(toastMock.success.mock.calls[0][0]).toBe(
+        "Stopped tracking 1 contact",
+      );
+
+      act(() => {
+        lastUndo()();
+      });
+      expect(mockBulkUpdateMutate).toHaveBeenLastCalledWith(
+        { ids: ["c1"], data: { isTracked: true } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+      act(() => {
+        mockBulkUpdateMutate.mock.calls.at(-1)![1].onSuccess({ count: 1 });
+      });
+      expect(toastMock.success).toHaveBeenLastCalledWith(
+        "Tracking 1 contact again, at the default cadence.",
+      );
+    });
+
+    it("sends nothing when no selected id would change", () => {
+      const { result } = renderHook(
+        () =>
+          useBulkActions({ selectedIds: new Set(["c1"]), contacts: people }),
+        { wrapper },
+      );
+      act(() => {
+        result.current.handleBulkTrack(true);
+      });
+      expect(mockBulkUpdateMutate).not.toHaveBeenCalled();
+    });
+
+    it("sets one cadence for the selection and says it in words", () => {
+      const onComplete = vi.fn();
+      const { result } = renderHook(
+        () =>
+          useBulkActions({
+            selectedIds: new Set(["c1", "c2", "c3"]),
+            contacts: people,
+            onComplete,
+          }),
+        { wrapper },
+      );
+      act(() => {
+        result.current.handleBulkCadence(30);
+      });
+      expect(mockBulkUpdateMutate).toHaveBeenCalledWith(
+        { ids: ["c1", "c2", "c3"], data: { cadenceDays: 30 } },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+      act(() => {
+        mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 3 });
+      });
+      expect(toastMock.success).toHaveBeenCalledWith("3 contacts, every month");
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("exports selected contacts as CSV to clipboard", async () => {

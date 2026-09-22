@@ -1,5 +1,9 @@
 import { toast } from "sonner";
-import { invalidateContactViews, writeContactInOrder } from "./contactCache";
+import {
+  invalidateContactViews,
+  patchContactCaches,
+  writeContactInOrder,
+} from "./contactCache";
 /**
  * Contact API Hooks — React Query hooks for all contact CRUD operations.
  *
@@ -313,6 +317,100 @@ export const useSetContactLocation = () => {
       });
     },
     onError: (error) => toast.error(`Could not move the pin: ${error.message}`),
+  });
+};
+
+/** The body of `PATCH /api/contacts/:id` when a person tracks or untracks. */
+export interface SetTrackedInput {
+  id: string;
+  isTracked: boolean;
+  /**
+   * The cadence to keep. An Undo of an untrack sends the one the contact
+   * had. Left out, a flip to tracked takes the account's default cadence.
+   */
+  cadenceDays?: number;
+}
+
+/**
+ * Track or untrack one contact.
+ *
+ * The flag lands in both caches before the server answers, so the ring
+ * appears or goes as the button is pressed, and the answer then replaces
+ * it: a flip to tracked comes back with the cadence the server chose and a
+ * fresh score. A failed write puts both caches back.
+ */
+export const useSetTracked = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      isTracked,
+      cadenceDays,
+    }: SetTrackedInput): Promise<Contact> =>
+      writeContactInOrder(id, async () => {
+        const res = await apiFetch(`/contacts/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            cadenceDays === undefined
+              ? { isTracked }
+              : { isTracked, cadenceDays },
+          ),
+        });
+        return res.json();
+      }),
+    onMutate: ({ id, isTracked, cadenceDays }) =>
+      patchContactCaches(queryClient, id, {
+        isTracked,
+        trackedAt: isTracked ? new Date().toISOString() : null,
+        ...(cadenceDays === undefined ? {} : { cadenceDays }),
+      }),
+    onSuccess: (contact) => {
+      queryClient.setQueryData(["contacts", contact.id], contact);
+      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
+        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
+      );
+    },
+    onError: (error, _input, rollback) => {
+      rollback?.();
+      toast.error(`Could not change tracking: ${error.message}`);
+    },
+    onSettled: () => invalidateContactViews(queryClient),
+  });
+};
+
+/** Change how often a person wants to keep up with one tracked contact. */
+export const useSetCadence = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      cadenceDays,
+    }: {
+      id: string;
+      cadenceDays: number;
+    }): Promise<Contact> =>
+      writeContactInOrder(id, async () => {
+        const res = await apiFetch(`/contacts/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cadenceDays }),
+        });
+        return res.json();
+      }),
+    onMutate: ({ id, cadenceDays }) =>
+      patchContactCaches(queryClient, id, { cadenceDays }),
+    onSuccess: (contact) => {
+      queryClient.setQueryData(["contacts", contact.id], contact);
+      queryClient.setQueryData<Contact[]>(["contacts"], (old) =>
+        old?.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)),
+      );
+    },
+    onError: (error, _input, rollback) => {
+      rollback?.();
+      toast.error(`Could not change the cadence: ${error.message}`);
+    },
+    onSettled: () => invalidateContactViews(queryClient),
   });
 };
 

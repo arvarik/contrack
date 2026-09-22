@@ -56,6 +56,7 @@ import {
 import { useElementWidth } from "../../../hooks/useElementWidth";
 import { useFitsHeight } from "../../../hooks/useFitsHeight";
 import { ContactIntro, ProfileHeader } from "./ProfileHeader";
+import { useTrackShortcut } from "./useTrackShortcut";
 import { ContactTags } from "./ContactTags";
 import { DetailsCard } from "./DetailsCard";
 /**
@@ -136,6 +137,9 @@ export const ContactProfile = ({
 
   // Dynamic page title — updates as contact data loads
   usePageTitle(contact?.name ?? null);
+
+  // `t` tracks or untracks this contact, as the header button does.
+  useTrackShortcut(contact);
 
   // ── Mutations ─────────────────────────────────────────────────────────
   const updateContact = useUpdateContact();

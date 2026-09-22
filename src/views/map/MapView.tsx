@@ -686,6 +686,8 @@ export const MapView = () => {
 
           <BulkActionToolbar
             isPending={bulkActions.isPending}
+            onTrack={bulkActions.handleBulkTrack}
+            selectionTracked={bulkActions.selectionTracked}
             onArchive={bulkActions.handleBulkArchive}
             onAddToList={bulkActions.openAddToList}
             onEditField={bulkActions.openBulkEdit}

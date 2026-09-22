@@ -467,25 +467,25 @@ SMTP passwords and other sensitive integration secrets stored in the database ar
 
 Every personal preference can be changed in Settings and is stored in user preferences:
 
-| Preference             | Type                                               | Default         | Description                                                                           |
-| ---------------------- | -------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------- |
-| `theme`                | `"system"` \| `"light"` \| `"dark"`                | `"system"`      | Visual theme (system follows device `prefers-color-scheme`)                           |
-| `accent`               | string hex                                         | `"#d97706"`     | Accent color tuned for WCAG AA contrast                                               |
-| `textScale`            | `"default"` \| `"large"`                           | `"default"`     | Interface text scaling (`large` sets root font to 17px)                               |
-| `motion`               | `"system"` \| `"reduced"`                          | `"system"`      | Motion preference (`reduced` disables non-essential animations)                       |
-| `density`              | `"comfortable"` \| `"compact"`                     | `"comfortable"` | Contact list row density                                                              |
-| `startPage`            | `"network"` \| `"pulse"`                           | `"network"`     | Initial destination for first navigation of a session                                 |
-| `listSort`             | `"name"` \| `"recent"` \| `"score"`                | `"name"`        | Initial sort order for contact list                                                   |
-| `recentContactsLimit`  | number                                             | `10`            | Number of recent contacts to display                                                  |
-| `defaultCadenceDays`   | `30` \| `60` \| `90` \| `180` \| `365`             | `90`            | The cadence a contact takes at the moment it is tracked, unless the request names one |
-| `trackNewContacts`     | boolean                                            | `false`         | Contacts added by hand start tracked. Imports and connectors never do                 |
-| `weekStart`            | `"monday"` \| `"sunday"`                           | `"monday"`      | Week starting day for timeline groupings and calendar views                           |
-| `showWeather`          | boolean                                            | `false`         | Show weather forecast next to contact local time                                      |
-| `temperatureUnit`      | `"celsius"` \| `"fahrenheit"`                      | `"celsius"`     | Temperature unit for weather displays                                                 |
-| `singleKeyShortcuts`   | boolean                                            | `true`          | Enable single-key keyboard shortcuts                                                  |
-| `aiAssist`             | boolean                                            | `true`          | Enable AI-assisted features for this account                                          |
-| `autoMergeSensitivity` | `"conservative"` \| `"balanced"` \| `"aggressive"` | `"balanced"`    | Duplicate auto-merge threshold                                                        |
-| `searchHistory`        | boolean                                            | `true`          | Record recent search queries                                                          |
+| Preference             | Type                                               | Default         | Description                                                                                                                                  |
+| ---------------------- | -------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `theme`                | `"system"` \| `"light"` \| `"dark"`                | `"system"`      | Visual theme (system follows device `prefers-color-scheme`)                                                                                  |
+| `accent`               | string hex                                         | `"#d97706"`     | Accent color tuned for WCAG AA contrast                                                                                                      |
+| `textScale`            | `"default"` \| `"large"`                           | `"default"`     | Interface text scaling (`large` sets root font to 17px)                                                                                      |
+| `motion`               | `"system"` \| `"reduced"`                          | `"system"`      | Motion preference (`reduced` disables non-essential animations)                                                                              |
+| `density`              | `"comfortable"` \| `"compact"`                     | `"comfortable"` | Contact list row density                                                                                                                     |
+| `startPage`            | `"network"` \| `"pulse"`                           | `"network"`     | Initial destination for first navigation of a session                                                                                        |
+| `listSort`             | `"name"` \| `"recent"` \| `"score"`                | `"name"`        | Initial sort order for contact list                                                                                                          |
+| `recentContactsLimit`  | number                                             | `10`            | Number of recent contacts to display                                                                                                         |
+| `defaultCadenceDays`   | `30` \| `60` \| `90` \| `180` \| `365`             | `90`            | The cadence a contact takes at the moment it is tracked, unless the request names one. **Settings → Network and contacts → Default cadence** |
+| `trackNewContacts`     | boolean                                            | `false`         | Contacts added by hand start tracked. Imports and connectors never do. **Settings → Network and contacts → Track new contacts**              |
+| `weekStart`            | `"monday"` \| `"sunday"`                           | `"monday"`      | Week starting day for timeline groupings and calendar views                                                                                  |
+| `showWeather`          | boolean                                            | `false`         | Show weather forecast next to contact local time                                                                                             |
+| `temperatureUnit`      | `"celsius"` \| `"fahrenheit"`                      | `"celsius"`     | Temperature unit for weather displays                                                                                                        |
+| `singleKeyShortcuts`   | boolean                                            | `true`          | Enable single-key keyboard shortcuts                                                                                                         |
+| `aiAssist`             | boolean                                            | `true`          | Enable AI-assisted features for this account                                                                                                 |
+| `autoMergeSensitivity` | `"conservative"` \| `"balanced"` \| `"aggressive"` | `"balanced"`    | Duplicate auto-merge threshold                                                                                                               |
+| `searchHistory`        | boolean                                            | `true`          | Record recent search queries                                                                                                                 |
 
 ### Instance Settings
 

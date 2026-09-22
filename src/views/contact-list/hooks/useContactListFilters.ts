@@ -6,7 +6,8 @@
  *
  * 1. **Search** — Debounced text input synced to URL `?q=` for permalink persistence.
  *    Uses `useDeferredValue` so the expensive scoring pass never blocks the input.
- * 2. **List filter** — URL-persisted via `?list=` param.
+ * 2. **List filter** — URL-persisted via `?list=` param. The value `tracked`
+ *    is not a list: it keeps the contacts a person tracks (the Tracked chip).
  * 3. **Sort** — Client-only state cycling through name↑ → name↓ → date↓ → date↑.
  *
  * @returns Filtered, sorted contacts + all state setters for the UI to wire up.
@@ -61,6 +62,9 @@ export function getSortChoice(sortBy: SortField, sortDir: SortDir): SortChoice {
 }
 
 export const SESSION_SORT_KEY = "contrack.network_sort";
+
+/** The `filterMode` of the Tracked chip: the people a person keeps up with. */
+export const TRACKED_FILTER = "tracked";
 
 function getSessionSort(): SortOption | null {
   try {
@@ -229,8 +233,10 @@ export function useContactListFilters(contacts: Contact[]) {
       (contact) => !contact.isArchived && !contact.isGhost,
     );
 
-    // 1. Apply List Filter
-    if (filterMode !== "all") {
+    // 1. Apply the Tracked chip, or a list filter
+    if (filterMode === TRACKED_FILTER) {
+      result = result.filter((contact) => contact.isTracked);
+    } else if (filterMode !== "all") {
       result = result.filter((contact) =>
         contact.lists?.some((l) => l.id === filterMode),
       );

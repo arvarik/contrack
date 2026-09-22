@@ -26,6 +26,7 @@ Use GitHub-style prefix operators to narrow results:
 | `tag:`        | `tag:investor`   | Filter by tag                    |
 | `score:>N`    | `score:>80`      | Filter by relationship score     |
 | `updated:>Nm` | `updated:>3m`    | Filter by last update (N months) |
+| `tracked:`    | `tracked:yes`    | The people you track, or `no`    |
 
 Active filters display as **color-coded pills** below the search input. Press `Backspace` on an empty input to remove the last pill.
 
@@ -35,13 +36,14 @@ Typing a prefix (e.g., `role:`) triggers **autocomplete** sourced from the conta
 
 Press `→` on any search result (or tap `>>` on mobile) to drill into a keyboard-first action panel:
 
-| Key       | Action       | Description                            |
-| --------- | ------------ | -------------------------------------- |
-| `↵` Enter | View Profile | Navigate to the contact's full profile |
-| `N`       | Log Note     | Opens inline note composer             |
-| `C`       | Log Call     | Opens inline call composer             |
-| `B`       | Catch Me Up  | Generates AI briefing for the contact  |
-| `L`       | Add to List  | Opens inline list picker               |
+| Key       | Action       | Description                                                                                                    |
+| --------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `↵` Enter | View Profile | Navigate to the contact's full profile                                                                         |
+| `N`       | Log Note     | Opens inline note composer                                                                                     |
+| `C`       | Log Call     | Opens inline call composer                                                                                     |
+| `B`       | Catch Me Up  | Generates AI briefing for the contact                                                                          |
+| `L`       | Add to List  | Opens inline list picker                                                                                       |
+| `T`       | Track        | Tracks or untracks, with Undo, and closes the palette. Reads Untrack for a tracked contact. A ghost has no row |
 
 Press `←` or `Escape` to go back to the search results.
 

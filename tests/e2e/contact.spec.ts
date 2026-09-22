@@ -266,26 +266,55 @@ test.describe("the Network header and start panel", () => {
     ).toBeHidden();
   });
 
-  test("the list filter row is absent with no lists and present after one is created", async ({
+  test("the filter row holds All and Tracked with no lists, and a list's chip once one exists", async ({
     page,
     instance,
   }) => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
-    await expect(page.locator("#filter-pills-row")).toBeHidden();
+    // The row shows with no lists at all: the Tracked chip is the way in.
+    await expect(page.locator("#filter-pills-row")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Filter: All/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Filter: Tracked/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Filter: Favorites/ }),
+    ).toBeHidden();
 
     await ownList(instance, "Favorites", "star");
 
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
-    await expect(page.locator("#filter-pills-row")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /Filter: All/ }),
-    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Filter: Favorites/ }),
+    ).toBeVisible();
+  });
+
+  test("the Tracked chip keeps the list to tracked people, and Manage opens the page", async ({
+    page,
+    seed,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByText("Ada Lovelace")).toBeVisible();
+
+    // Four of the six seeded people are tracked.
+    const chip = page.getByRole("button", { name: "Filter: Tracked (4)" });
+    await expect(chip).toHaveAttribute("aria-pressed", "false");
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(listRow(page, seed, "Ada Lovelace")).toBeVisible();
+    await expect(listRow(page, seed, "Linus Torvalds")).toBeHidden();
+    await expect(listRow(page, seed, "Margaret Hamilton")).toBeHidden();
+
+    await page.getByRole("link", { name: "Manage" }).click();
+    await expect(page).toHaveURL(/\/tracked$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
     ).toBeVisible();
   });
 
@@ -434,6 +463,161 @@ test.describe("the contact header", () => {
 /**
  * The timeline: one column, in groups, with its actions out of the way.
  */
+test.describe("tracking", () => {
+  /** The header's avatar ring, which says the ring state on its root. */
+  const headerRing = (page: Page, name: string) =>
+    page
+      .locator("section", { has: contactHeading(page, name) })
+      .locator("[data-score-band]")
+      .first();
+
+  /** The toast that says `text`, so its Undo is the right one. */
+  const toastWith = (page: Page, text: string) =>
+    page.locator("[data-sonner-toast]", { hasText: text });
+
+  test("the header button tracks with an Undo, the ring follows, and the cadence chip changes the cadence", async ({
+    page,
+    instance,
+  }) => {
+    const id = await ownContact(instance, "Zara Tracked");
+    await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zara Tracked")).toBeVisible();
+
+    const track = page.getByRole("button", { name: "Track", exact: true });
+    await expect(track).toHaveAttribute("aria-pressed", "false");
+    await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
+      "data-score-band",
+      "untracked",
+    );
+    await expect(page.getByRole("button", { name: /^Cadence:/ })).toBeHidden();
+
+    await track.click();
+    const tracked = page.getByRole("button", { name: "Tracked", exact: true });
+    await expect(tracked).toHaveAttribute("aria-pressed", "true");
+    // Tracked with nothing logged: the empty track.
+    await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
+      "data-score-band",
+      "unscored",
+    );
+    await expect(
+      toastWith(page, "Tracking Zara Tracked, every 3 months"),
+    ).toBeVisible();
+    await expect(
+      toastWith(page, "Tracking Zara Tracked").getByRole("button", {
+        name: "Undo",
+      }),
+    ).toBeVisible();
+
+    // The cadence chip, and its menu.
+    const chip = page.getByRole("button", { name: "Cadence: every 3 months" });
+    await expect(chip).toHaveText(/Every 3 months/);
+    await chip.click();
+    const menu = page.getByRole("menu", { name: "Cadence: every 3 months" });
+    await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
+      "Every month",
+      "Every 2 months",
+      "Every 3 months",
+      "Every 6 months",
+      "Every year",
+    ]);
+    await expect(
+      menu.getByRole("menuitemcheckbox", { name: "Every 3 months" }),
+    ).toHaveAttribute("aria-checked", "true");
+    await menu.getByRole("menuitemcheckbox", { name: "Every month" }).click();
+    await expect(
+      page.getByRole("button", { name: "Cadence: every month" }),
+    ).toBeVisible();
+    await expect(toastWith(page, "Zara Tracked, every month")).toBeVisible();
+
+    // Untrack, then Undo: the contact comes back with the cadence it had.
+    await tracked.click();
+    await expect(track).toHaveAttribute("aria-pressed", "false");
+    await expect(headerRing(page, "Zara Tracked")).toHaveAttribute(
+      "data-score-band",
+      "untracked",
+    );
+    await toastWith(page, "Stopped tracking Zara Tracked")
+      .getByRole("button", { name: "Undo" })
+      .click();
+    await expect(tracked).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("button", { name: "Cadence: every month" }),
+    ).toBeVisible();
+  });
+
+  test("t tracks and untracks the open contact", async ({ page, instance }) => {
+    const id = await ownContact(instance, "Zed Keyed");
+    await page.goto(`/contact/${id}`);
+    await expect(contactHeading(page, "Zed Keyed")).toBeVisible();
+
+    await page.keyboard.press("t");
+    await expect(
+      page.getByRole("button", { name: "Tracked", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      toastWith(page, "Tracking Zed Keyed, every 3 months"),
+    ).toBeVisible();
+
+    await page.keyboard.press("t");
+    await expect(
+      page.getByRole("button", { name: "Track", exact: true }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await expect(toastWith(page, "Stopped tracking Zed Keyed")).toBeVisible();
+
+    // Not while typing: the name field keeps its letters.
+    await contactHeading(page, "Zed Keyed").getByRole("button").click();
+    await page.keyboard.type("t");
+    await expect(
+      page.getByRole("button", { name: "Track", exact: true }),
+    ).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("Escape");
+  });
+
+  // A taller window: the three people of this test sort last, and in a
+  // 720 px window the floating bar sits over the last rows.
+  test.describe("with room under the bar", () => {
+    test.use({ viewport: { width: 1280, height: 1100 } });
+
+    test("the bulk bar tracks three, the Tracked chip counts them, and Undo takes them back", async ({
+      page,
+      instance,
+    }) => {
+      const ids: string[] = [];
+      for (const name of ["Zeta One", "Zeta Two", "Zeta Three"]) {
+        ids.push(await ownContact(instance, name));
+      }
+      await page.goto("/");
+      await expect(page.getByText("Zeta Three")).toBeVisible();
+
+      const chip = page.getByRole("button", { name: /^Filter: Tracked/ });
+      await expect(chip).toHaveAccessibleName("Filter: Tracked (4)");
+
+      await page.getByRole("button", { name: "Select", exact: true }).click();
+      for (const id of ids) await page.locator(`#contact-row-${id}`).click();
+      await expect(page.getByText("3 selected")).toBeVisible();
+
+      const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+      // Untracked people are selected, so the bar offers Track, and first.
+      const track = bar.getByRole("button", { name: "Track", exact: true });
+      await expect(bar.getByRole("button").first()).toHaveAccessibleName(
+        "Track",
+      );
+      await track.click();
+      await expect(toastWith(page, "Tracking 3 contacts")).toBeVisible();
+      await expect(chip).toHaveAccessibleName("Filter: Tracked (7)");
+      await expect(bar).toBeHidden();
+
+      await toastWith(page, "Tracking 3 contacts")
+        .getByRole("button", { name: "Undo" })
+        .click();
+      await expect(
+        toastWith(page, "Stopped tracking 3 contacts"),
+      ).toBeVisible();
+      await expect(chip).toHaveAccessibleName("Filter: Tracked (4)");
+    });
+  });
+});
+
 test.describe("the timeline", () => {
   test("Details sits beside one column of groups, and an entry's menu shows on focus", async ({
     page,
@@ -776,6 +960,22 @@ test.describe("phone", () => {
         `phone-contact-details-${scheme}`,
       );
     }
+  });
+
+  test("the narrow header keeps Track as the glyph alone, with the short cadence", async ({
+    page,
+    seed,
+  }) => {
+    await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+    await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
+
+    const tracked = page.getByRole("button", { name: "Tracked", exact: true });
+    await expect(tracked).toHaveAttribute("aria-pressed", "true");
+    await expect(tracked).toHaveText("");
+    await expect(tracked).toHaveAttribute("title", "Tracked");
+    await expect(
+      page.getByRole("button", { name: "Cadence: every 3 months" }),
+    ).toHaveText(/3 mo/);
   });
 
   test("the browser's Back button returns focus to the row too", async ({

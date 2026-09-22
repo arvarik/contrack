@@ -6,11 +6,13 @@ import {
   Pencil,
   Download,
   Palette,
+  Radar,
   Trash2,
 } from "lucide-react";
 import { VIBES, vibeTokens } from "../../lib/theme";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { cn } from "../../lib/utils";
+import type { SelectionTracked } from "../../components/bulk/useBulkActions";
 
 const BulkActionBtn = ({
   icon,
@@ -45,6 +47,12 @@ const BulkActionBtn = ({
 
 interface BulkActionToolbarProps {
   isPending: boolean;
+  /**
+   * Track the selection, or untrack it. The bar reads Untrack when every
+   * selected contact is tracked and Track otherwise, and sends the answer.
+   */
+  onTrack: (next: boolean) => void;
+  selectionTracked: SelectionTracked;
   onArchive: () => void;
   onAddToList: () => void;
   onEditField: () => void;
@@ -55,6 +63,8 @@ interface BulkActionToolbarProps {
 
 export const BulkActionToolbar = ({
   isPending,
+  onTrack,
+  selectionTracked,
   onArchive,
   onAddToList,
   onEditField,
@@ -107,7 +117,15 @@ export const BulkActionToolbar = ({
         aria-label="Bulk actions"
         className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide"
       >
-        {/* Action buttons */}
+        {/* Action buttons. Track first: it is the one that decides who the
+            score, Pulse and the map's health layer are about. */}
+        <BulkActionBtn
+          icon={<Radar className="w-4 h-4" />}
+          label={selectionTracked === "all" ? "Untrack" : "Track"}
+          onClick={() => onTrack(selectionTracked !== "all")}
+          disabled={isPending}
+          className="text-primary hover:bg-primary/10"
+        />
         <BulkActionBtn
           icon={<Archive className="w-4 h-4" />}
           label="Archive"

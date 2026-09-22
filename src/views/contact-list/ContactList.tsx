@@ -18,7 +18,7 @@ import React, {
   useMemo,
   useEffect,
 } from "react";
-import { useMatch, useNavigate, useLocation } from "react-router-dom";
+import { Link, useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
   Search,
   Users,
@@ -33,6 +33,8 @@ import {
   Archive,
   Copy,
   ChevronDown,
+  ArrowRight,
+  Radar,
 } from "lucide-react";
 import {
   useContacts,
@@ -52,6 +54,7 @@ import { toast } from "sonner";
 import {
   SEARCH_INPUT,
   filterPill,
+  BTN_QUIET,
   ICON_BTN,
   PAGE_TITLE,
 } from "../../lib/styles";
@@ -75,6 +78,7 @@ import { ContactListModals } from "./ContactListModals";
 import {
   useContactListFilters,
   SORT_CHOICES,
+  TRACKED_FILTER,
 } from "./hooks/useContactListFilters";
 import { useMultiSelect } from "./hooks/useMultiSelect";
 import { useContactListKeyboard } from "./hooks/useContactListKeyboard";
@@ -478,6 +482,12 @@ export const ContactList = () => {
     () => contacts.filter((c) => !c.isArchived).length,
     [contacts],
   );
+  /** The Tracked chip's count: tracked, and in the list. */
+  const trackedContactCount = useMemo(
+    () =>
+      contacts.filter((c) => c.isTracked && !c.isArchived && !c.isGhost).length,
+    [contacts],
+  );
 
   const recentContacts = useMemo(
     () =>
@@ -780,8 +790,10 @@ export const ContactList = () => {
           />
         </div>
 
-        {/* Filter tabs — horizontal scroll row, hidden in select mode, only when at least one list exists */}
-        {!isSelectMode && lists.length > 0 && (
+        {/* Filter chips: All, Tracked, then one per list. A horizontal
+            scroll row, hidden in select mode. It shows with no lists too,
+            because the Tracked chip is the way into tracking. */}
+        {!isSelectMode && (
           <div className="relative">
             <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
             <div
@@ -797,6 +809,17 @@ export const ContactList = () => {
                 count={activeContactCount}
                 active={filterMode === "all"}
                 onClick={() => setFilterMode("all")}
+              />
+              <FilterButton
+                label="Tracked"
+                icon={<Radar className="w-3.5 h-3.5" />}
+                count={trackedContactCount}
+                active={filterMode === TRACKED_FILTER}
+                onClick={() =>
+                  setFilterMode(
+                    filterMode === TRACKED_FILTER ? "all" : TRACKED_FILTER,
+                  )
+                }
               />
               {lists.map((list, idx) => (
                 <div
@@ -825,6 +848,14 @@ export const ContactList = () => {
                   />
                 </div>
               ))}
+              {/* Under the Tracked chip, the door to the page that groups
+                  everyone by their ring state and tracks in bulk. */}
+              {filterMode === TRACKED_FILTER && (
+                <Link to="/tracked" className={cn(BTN_QUIET, "shrink-0")}>
+                  Manage
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                </Link>
+              )}
               <div className="shrink-0 w-6" aria-hidden />
             </div>
           </div>
@@ -929,6 +960,17 @@ export const ContactList = () => {
                   action={{
                     label: "Clear search",
                     onClick: () => setSearchQuery(""),
+                  }}
+                  level={id ? 3 : 2}
+                />
+              ) : filterMode === TRACKED_FILTER ? (
+                <EmptyState
+                  icon={Radar}
+                  title="Nobody is tracked yet"
+                  body="Track the people you want to keep up with. Their score, their catch-ups and the map's health layer follow."
+                  action={{
+                    label: "Choose people",
+                    onClick: () => navigate("/tracked"),
                   }}
                   level={id ? 3 : 2}
                 />
@@ -1045,6 +1087,8 @@ export const ContactList = () => {
         {isSelectMode && (
           <BulkActionToolbar
             isPending={isPending}
+            onTrack={multiSelect.handleBulkTrack}
+            selectionTracked={multiSelect.selectionTracked}
             onArchive={multiSelect.handleBulkArchive}
             onAddToList={() => setIsAddToListOpen(true)}
             onEditField={() => setIsBulkEditOpen(true)}

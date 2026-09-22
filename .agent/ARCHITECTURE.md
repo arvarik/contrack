@@ -281,14 +281,14 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
 ### Frontend (`src/`)
 
 - `src/api/` — Domain-separated React Query hooks: `contacts.ts`, `interactions.ts`, `search.ts`, `aiSearch.ts`, `dedupe.ts`, `lists.ts`, `actionItems.ts`, `dashboard.ts`, `enrichment.ts`, `suggestions.ts`, `imports.ts`, `tags.ts`, `connectors.ts`, `index.ts`
-- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`, `useCorvidIdle.ts` (the mark's blink and head tilt, and `playCorvidBeat` for one-off beats), `useCorvidLevel.ts` (the one place a surface asks how much the bird may move)
+- `src/hooks/` — Custom hooks: `useInstantSearch.ts`, `useQueryTokenizer.ts`, `useGlobalNavShortcuts.ts`, `useSearchHistory.ts`, `useRecentContacts.ts`, `useDebounce.ts`, `useDedupeSettings.ts`, `useFocusTrap.ts`, `useClickOutside.ts`, `useLongPress.ts`, `usePullToRefresh.ts`, `useScrollRestoration.ts`, `usePageTitle.ts`, `useCompanyLogo.ts`, `useCorvidIdle.ts` (the mark's blink and head tilt, and `playCorvidBeat` for one-off beats), `useCorvidLevel.ts` (the one place a surface asks how much the bird may move), `useTrackToggle.ts` (track or untrack one contact, with the toast and the Undo every control shares)
 - `src/components/command-palette/` — Core `cmdk` Cmd+K system (14 files): `CommandPalette.tsx`, `ActionSubMenu.tsx`, `FacetAutocomplete.tsx`, `FacetPills.tsx`, `ListPicker.tsx`, `ResultPeek.tsx`, `SynthesisBar.tsx`, `ZeroStateView.tsx`, `AiComponents.tsx`, `ContactMetaBadges.tsx`, `DataAgeHalo.tsx`, `InlineNoteComposer.tsx`, `utils.ts`, `index.ts`
 - `src/components/layout/` — Shell components: `Sidebar.tsx`, `EmptyState.tsx`, `ErrorBoundary.tsx`, `RouteErrorBoundary.tsx`
 - `src/components/ui/` — Reusable primitives: `Modal.tsx`, `ContextMenu.tsx`, `Combobox.tsx`, `CustomSelect.tsx`, `AnimatedSkeleton.tsx`, `PullIndicator.tsx`
 - `src/components/` — Feature components: `ImportModal.tsx`, `ImportPanel.tsx` (inline dropzone, upload, and progress panel), `QuickInteractionModal.tsx` (the dialog around the compact composer), `InteractionComposer.tsx` (the one composer, contact page and dialog), `AvatarPickerModal.tsx`, `KeyboardShortcutsModal.tsx`, `BulkEditFieldModal.tsx`, `MentionSuggestion.tsx`, `LinkPreviewExtension.tsx`, `LocalTimeWeather.tsx`, `ScoreRingAvatar.tsx` (the avatar in its score ring, and no ring at all for a contact nobody tracks), `FloatingContactCard.tsx`
 - `src/views/` — Route-driven page components:
   - `src/views/contact-list/` — Network list (left panel)
-  - `src/views/contact-detail/` — Contact profile (right panel)
+  - `src/views/contact-detail/` — Contact profile (right panel). `components/TrackButton.tsx` and `components/CadenceMenu.tsx` are the two tracking controls in the header, and `components/useTrackShortcut.ts` is the `t` key
   - `src/views/dedupe/` — Deduplication management (Tinder-style swipe UI)
   - `src/views/search/` — Search result cards
   - `src/views/lists/` — List management (create, detail, members)
@@ -296,7 +296,7 @@ Failure to do this creates orphaned embedding vectors that corrupt KNN search re
   - `src/views/ai-search/` — AI-powered semantic search view
   - `src/views/dev/` — Component showcase (dev-only, lazy-loaded)
   - `src/views/map/` — The map at `/map` and `/map/contact/:id`: `MapView.tsx` (the page), `ContactMap.tsx` (the reusable MapLibre map, its clustered GeoJSON source, the markers, the hover card and the zoom control), `ContactMarker.tsx`, `ClusterMarker.tsx`, `ContactPopup.tsx`, `useClusterFeatures.ts`, `mapMath.ts`, `mapStyles.ts`, `maplibreWorker.ts`
-  - `SearchView.tsx`, `DashboardView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`)
+  - `SearchView.tsx`, `DashboardView.tsx`, `SettingsView.tsx`, `ArchivedContactsView.tsx`, `TrashView.tsx` (restore / delete-forever UI at `/settings/trash`), `TrackedContactsView.tsx` (the people you keep up with, grouped by their ring state, at `/tracked`)
   - `src/views/settings/` — Settings revamp:
     - `registry.ts`: Declarative registry of settings pages, navigation groups, redirect aliases, and row-level search.
     - `SettingsShell.tsx`: Two-pane layout with 240px navigation rail on wide screens (`lg`), single-pane on phone.

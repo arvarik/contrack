@@ -53,6 +53,11 @@ const SearchView = React.lazy(() =>
 const PulseView = React.lazy(() =>
   import("./views/pulse").then((m) => ({ default: m.PulseView || m.default })),
 );
+const TrackedContactsView = React.lazy(() =>
+  import("./views/TrackedContactsView").then((m) => ({
+    default: m.TrackedContactsView,
+  })),
+);
 
 import { Sidebar } from "./components/layout/Sidebar";
 import { SkipLink, MAIN_CONTENT_ID } from "./components/layout/SkipLink";
@@ -225,16 +230,21 @@ const ResponsiveLayout = () => {
   );
 
   const isDev = import.meta.env.DEV && location.pathname.startsWith("/dev");
+  // The Tracked contacts page is a Network sub-page with the whole main
+  // area, the way Pulse's duplicates page is. Network stays lit for it.
+  const isTrackedPage = location.pathname.startsWith("/tracked");
 
-  // Full-page views (cleanup, search, pulse, dev) take the full main area
-  if (isCleanup || isSearch || isPulse || isDev) {
+  // Full-page views (cleanup, search, pulse, tracked, dev) take the full main area
+  if (isCleanup || isSearch || isPulse || isTrackedPage || isDev) {
     const pageName = isCleanup
       ? NAMES.settings.label
       : isSearch
         ? NAMES.ask.label
         : isPulse
           ? NAMES.pulse.label
-          : "Component showcase";
+          : isTrackedPage
+            ? NAMES.tracked.label
+            : "Component showcase";
     return (
       <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
         <SkipLink />
@@ -275,6 +285,16 @@ const ResponsiveLayout = () => {
                   <RouteErrorBoundary viewName="Dashboard">
                     <Suspense fallback={<RouteFallback variant="pulse" />}>
                       <PulseView />
+                    </Suspense>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/tracked"
+                element={
+                  <RouteErrorBoundary viewName="TrackedContacts">
+                    <Suspense fallback={<RouteFallback variant="settings" />}>
+                      <TrackedContactsView />
                     </Suspense>
                   </RouteErrorBoundary>
                 }

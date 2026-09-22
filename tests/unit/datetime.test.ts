@@ -6,7 +6,12 @@
  * shapes the database holds must land on the right calendar day.
  */
 import { describe, expect, it } from "vitest";
-import { formatDay, formatWhen, parseServerTime } from "../../src/lib/datetime";
+import {
+  describePastDue,
+  formatDay,
+  formatWhen,
+  parseServerTime,
+} from "../../src/lib/datetime";
 
 describe("parseServerTime", () => {
   it("reads a JavaScript timestamp and a SQLite timestamp as the same instant", () => {
@@ -42,5 +47,19 @@ describe("formatDay and formatWhen", () => {
   it("fall back to the given text when there is no date", () => {
     expect(formatDay(null, "No date")).toBe("No date");
     expect(formatWhen("garbage")).toBe("Unknown");
+  });
+});
+
+describe("describePastDue", () => {
+  it("counts days for two weeks, then weeks, then months", () => {
+    expect(describePastDue(1)).toBe("1 day past due");
+    expect(describePastDue(12)).toBe("12 days past due");
+    expect(describePastDue(21)).toBe("3 weeks past due");
+    expect(describePastDue(70)).toBe("2 months past due");
+  });
+
+  it("never says less than a day", () => {
+    expect(describePastDue(0)).toBe("1 day past due");
+    expect(describePastDue(0.4)).toBe("1 day past due");
   });
 });

@@ -12,8 +12,9 @@
  */
 import { devices } from "@playwright/test";
 import { test, gatedTest, expect } from "./fixtures/test";
-import { expectPageAccessible } from "./fixtures/a11y";
+import { expectPageAccessible, expectPageStructured } from "./fixtures/a11y";
 import { completeSetup, ADMIN } from "./fixtures/accounts";
+import type { ContrackInstance } from "./fixtures/instance";
 
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
@@ -394,6 +395,162 @@ test.describe("Settings — Tools and Data", () => {
       name: "Enrich new contacts automatically",
     });
     await expect(autoEnrichSwitch).toHaveAttribute("aria-checked", "false");
+  });
+});
+
+test.describe("Tracked contacts", () => {
+  /** The contacts and the preferences this test wrote, put back when it ends. */
+  const created: { instance: ContrackInstance; id: string }[] = [];
+  const touched: { instance: ContrackInstance; key: string }[] = [];
+
+  test.afterEach(async () => {
+    while (created.length > 0) {
+      const { instance, id } = created.pop()!;
+      await instance.api("DELETE", `/contacts/${id}`);
+    }
+    while (touched.length > 0) {
+      const { instance, key } = touched.pop()!;
+      await instance.api("DELETE", `/auth/preferences/${key}`);
+    }
+  });
+
+  test("Settings, Your data lists the page and steps over to it, and the old path does too", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    const rail = page.getByRole("navigation", { name: "Settings" });
+    await rail.getByRole("link", { name: "Tracked contacts" }).click();
+    await expect(page).toHaveURL(/\/tracked$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
+    ).toBeVisible();
+
+    await page.goto("/settings/tracked");
+    await expect(page).toHaveURL(/\/tracked$/);
+  });
+
+  test("the page groups people by their ring, a row toggle tracks, and Network stays lit", async ({
+    page,
+    instance,
+    seed,
+  }, testInfo) => {
+    const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+      name: "Zuri Untracked",
+      company: "Journey Ltd",
+    });
+    created.push({ instance, id });
+
+    await page.goto("/tracked");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Tracked contacts" }),
+    ).toBeVisible();
+
+    // Edsger has been quiet for 400 days: At risk, and long past his cadence.
+    const atRisk = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: /^At risk/ }),
+    });
+    await expect(
+      atRisk.getByRole("link", { name: "Edsger Dijkstra" }),
+    ).toBeVisible();
+    await expect(
+      page.locator("[data-contact-id]", { hasText: "Edsger Dijkstra" }),
+    ).toContainText(/every 3 months.*past due/);
+    // Linus and Margaret are not tracked, and neither is the new person.
+    const notTracked = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: /^Not tracked/ }),
+    });
+    for (const name of [
+      "Linus Torvalds",
+      "Margaret Hamilton",
+      "Zuri Untracked",
+    ]) {
+      await expect(notTracked.getByRole("link", { name })).toBeVisible();
+    }
+    await expect(
+      page.locator("[data-contact-id]", { hasText: "Linus Torvalds" }),
+    ).not.toContainText("every");
+    // The sidebar keeps Network lit: this is a Network sub-page.
+    await expect(
+      page.locator("aside").getByRole("link", { name: "Network" }),
+    ).toHaveClass(/bg-primary\/15/);
+    await expect(
+      page.getByRole("link", { name: "Ada Lovelace" }),
+    ).toHaveAttribute("href", `/contact/${seed.byName("Ada Lovelace").id}`);
+
+    // The 44 px and 11 px floors are a phone's concern: metrics.spec.ts
+    // scans this page at that width.
+    await expectPageAccessible(page, testInfo, "tracked");
+    await expectPageStructured(page, testInfo, "tracked");
+
+    // A row toggle tracks, and the person moves to No interactions yet.
+    await page.getByRole("button", { name: "Track Zuri Untracked" }).click();
+    await expect(
+      page.getByText("Tracking Zuri Untracked, every 3 months"),
+    ).toBeVisible();
+    const unscored = page.locator("section", {
+      has: page.getByRole("heading", {
+        level: 2,
+        name: /^No interactions yet/,
+      }),
+    });
+    await expect(
+      unscored.getByRole("link", { name: "Zuri Untracked" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Untrack Zuri Untracked" }),
+    ).toBeVisible();
+
+    // Select mode: the bar, and one group at a time.
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    const bar = page.getByRole("toolbar", { name: "Bulk actions" });
+    await expect(bar).toContainText("0 selected");
+    await unscored.getByRole("button", { name: "Select all" }).click();
+    await expect(bar).toContainText("1 selected");
+    await bar.getByRole("button", { name: "Cadence" }).click();
+    await page.getByRole("menuitem", { name: "Every year" }).click();
+    await expect(page.getByText("1 contact, every year")).toBeVisible();
+    await expect(
+      page.locator("[data-contact-id]", { hasText: "Zuri Untracked" }),
+    ).toContainText("every year");
+    await expectPageAccessible(page, testInfo, "tracked-select");
+  });
+
+  test("the Network page has the Default cadence select and the Track new contacts switch", async ({
+    page,
+    instance,
+  }) => {
+    await page.goto("/settings/network");
+
+    const cadence = page.getByRole("combobox", { name: "Default cadence" });
+    await expect(cadence).toHaveText(/Every 3 months/);
+    await cadence.click();
+    await expect(page.getByRole("option")).toHaveText([
+      "Every month",
+      "Every 2 months",
+      "Every 3 months",
+      "Every 6 months",
+      "Every year",
+    ]);
+    await page.getByRole("option", { name: "Every year" }).click();
+    touched.push({ instance, key: "defaultCadenceDays" });
+    await expect(cadence).toHaveText(/Every year/);
+    // Off its default: the dot and the Reset beside the control.
+    await page
+      .locator("#cadence")
+      .getByRole("button", { name: /^Reset/ })
+      .click();
+    await expect(cadence).toHaveText(/Every 3 months/);
+
+    const trackNew = page.getByRole("switch", { name: "Track new contacts" });
+    await expect(trackNew).toHaveAttribute("aria-checked", "false");
+    await trackNew.click();
+    touched.push({ instance, key: "trackNewContacts" });
+    await expect(trackNew).toHaveAttribute("aria-checked", "true");
+    await page
+      .locator("#track-new")
+      .getByRole("button", { name: /^Reset/ })
+      .click();
+    await expect(trackNew).toHaveAttribute("aria-checked", "false");
   });
 });
 

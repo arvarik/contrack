@@ -199,6 +199,36 @@ test("on a contact page the skip link lands on the contact's name", async ({
   await expectVisibleFocus(heading.getByRole("button"));
 });
 
+test("the shortcuts dialog lists t under Contact", async ({ page, seed }) => {
+  await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
+  ).toBeVisible();
+  await startFromBody(page);
+
+  await page.keyboard.press("?");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  const list = dialog.getByRole("region", { name: "Shortcut list" });
+  // The rows are a description list: the words, then the keys.
+  const row = list.locator("dt", { hasText: "Track or untrack this contact" });
+  await expect(row).toBeVisible();
+  await expect(
+    row.locator("xpath=following-sibling::dd[1]").getByText("T", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  // Under the Contact heading: the words sit inside that group's list.
+  const contactGroup = list.locator("dl", {
+    has: page.getByText("Edit the value that has focus"),
+  });
+  await expect(
+    contactGroup.getByText("Track or untrack this contact"),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
 /**
  * The Tab budget.
  *
@@ -216,6 +246,11 @@ test("on a contact page the skip link lands on the contact's name", async ({
  * the button that explains the score. Ada is tracked and scored, so her page
  * carries it. It is the one way to the breakdown from the page the score is
  * about, and it costs the stop that used to buy nothing.
+ *
+ * The Network budget went up by two when the filter row started showing
+ * with no lists: the All chip and the Tracked chip stand in front of the
+ * list. The Tracked chip is the way into tracking, and a row that shows
+ * only once a list exists would hide it from the people it is for.
  */
 test.describe("Tab budget", () => {
   test("a contact's name is within 18 Tabs of the top of the page", async ({
@@ -232,15 +267,15 @@ test.describe("Tab budget", () => {
     expect(presses).toBeLessThanOrEqual(18);
   });
 
-  test("the first row on Network is within 15 Tabs, and the list is one stop", async ({
+  test("the first row on Network is within 17 Tabs, and the list is one stop", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, LIST_ROW, 15);
-    expect(presses).toBeLessThanOrEqual(15);
+    const presses = await tabsToReach(page, LIST_ROW, 17);
+    expect(presses).toBeLessThanOrEqual(17);
     await expect(
       page
         .locator("#contact-list")
