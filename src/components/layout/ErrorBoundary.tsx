@@ -1,5 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { TONE_WASH } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 import { CorvidMark } from "../brand/CorvidMark";
 
 interface Props {
@@ -30,11 +32,16 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen bg-surface flex items-center justify-center p-6 text-on-surface">
           <div className="max-w-md w-full bg-surface-container-low rounded-3xl p-8 shadow-xl text-center">
-            <div className="w-16 h-16 bg-red-500/10 text-error rounded-full flex items-center justify-center mx-auto mb-6">
+            <div
+              className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6",
+                TONE_WASH.error,
+              )}
+            >
               <AlertCircle className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-extrabold font-headline mb-3">
-              System Crash
+              System crash
             </h1>
             <p className="text-on-surface-variant mb-6 text-sm">
               The application encountered an unexpected error. This has been
@@ -50,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
               className="btn-primary w-full"
             >
               <RefreshCw className="w-4 h-4" />
-              Reload Application
+              Reload application
             </button>
             {/*
               The red circle above stays: a mascot on a crash reads as a joke

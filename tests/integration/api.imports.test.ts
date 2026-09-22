@@ -3,7 +3,7 @@
 // =============================================================================
 // A bulk import used to exist only for the life of its request. Two things
 // followed. A stream that ended without its `done` frame left the browser
-// showing "Import Complete" over an import it knew nothing about, and a
+// showing "Import complete" over an import it knew nothing about, and a
 // second attempt created every contact again under fresh ids.
 //
 // Every import now has an id the caller chooses and a record the server

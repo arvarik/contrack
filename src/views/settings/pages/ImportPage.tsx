@@ -26,37 +26,27 @@ import {
   type ImportStatus,
 } from "../../../api/imports";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
-import { CARD, SECTION_HEADING } from "../../../lib/styles";
+import {
+  CARD,
+  SECTION_HEADING,
+  TONE_WASH,
+  type Tone,
+} from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { SETTINGS_PAGE } from "../layout";
 
 const statusBadges: Record<
   ImportStatus,
   {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
-    tone: string;
+    tone: Tone;
   }
 > = {
-  complete: {
-    label: "Complete",
-    icon: CheckCircle2,
-    tone: "bg-emerald-500/10 text-success border-emerald-500/20",
-  },
-  failed: {
-    label: "Failed",
-    icon: AlertCircle,
-    tone: "bg-red-500/10 text-error border-red-500/20",
-  },
-  running: {
-    label: "Running",
-    icon: Loader2,
-    tone: "bg-primary/10 text-primary border-primary/20",
-  },
-  imported: {
-    label: "Checking",
-    icon: Clock,
-    tone: "bg-amber-500/10 text-warning border-amber-500/20",
-  },
+  complete: { label: "Complete", icon: CheckCircle2, tone: "success" },
+  failed: { label: "Failed", icon: AlertCircle, tone: "error" },
+  running: { label: "Running", icon: Loader2, tone: "primary" },
+  imported: { label: "Checking", icon: Clock, tone: "warning" },
 };
 
 export const ImportPage = () => {
@@ -84,7 +74,7 @@ export const ImportPage = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <div className="space-y-1">
         <p className="text-sm text-on-surface-variant">
           Bring in contacts from vCard, CSV, Google, LinkedIn or Apple.
@@ -129,8 +119,8 @@ export const ImportPage = () => {
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold border",
-                          badge.tone,
+                          "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold",
+                          TONE_WASH[badge.tone],
                         )}
                       >
                         <Icon
@@ -181,7 +171,7 @@ export const ImportPage = () => {
                         type="button"
                         onClick={() => handleRetry(item.id)}
                         disabled={isRetrying}
-                        className="btn-secondary text-xs px-3 py-1.5 min-h-[36px]"
+                        className="btn-secondary btn-sm"
                       >
                         <RotateCw
                           className={cn(

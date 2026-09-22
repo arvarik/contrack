@@ -83,7 +83,6 @@ export const InfoTip = ({
           // tap box to the 44px floor without moving the text around it.
           "hit-area inline-flex items-center justify-center rounded-full min-w-6 min-h-6",
           "text-on-surface-variant hover:text-on-surface transition-colors",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         )}
       >
         <HelpCircle className="w-3.5 h-3.5" />

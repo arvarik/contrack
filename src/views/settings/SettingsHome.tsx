@@ -12,7 +12,13 @@ import { SettingsIdentityRow } from "../../components/auth/AccountIdentity";
 import { SettingsSearch } from "./SettingsSearch";
 import { NeedsAttention } from "./NeedsAttention";
 import { SETTINGS_GROUPS, SETTINGS_PAGES } from "./registry";
-import { CARD, SECTION_HEADING } from "../../lib/styles";
+import { SETTINGS_PAGE } from "./layout";
+import {
+  CARD_INTERACTIVE,
+  SECTION_HEADING,
+  TONE_WASH,
+  type Tone,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
 import { CorvidMark } from "../../components/brand/CorvidMark";
@@ -25,6 +31,10 @@ const GroupHeading = ({ children }: { children: React.ReactNode }) => (
   <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
 );
 
+/**
+ * One destination: a card that is itself the link. It rises on hover
+ * (`CARD_INTERACTIVE`), and that lift is its only hover.
+ */
 const SettingsLink = ({
   to,
   icon: Icon,
@@ -36,44 +46,29 @@ const SettingsLink = ({
   icon: LucideIcon;
   title: string;
   description: string;
-  tone?: "primary" | "amber" | "danger";
-}) => {
-  const tones = {
-    primary: "bg-primary/10 text-primary",
-    amber: "bg-amber-500/10 text-warning",
-    danger: "bg-red-500/10 text-error",
-  } as const;
-
-  return (
-    <Link
-      to={to}
+  tone?: Tone;
+}) => (
+  <Link
+    to={to}
+    className={cn(CARD_INTERACTIVE, "flex items-start gap-3.5 p-4 sm:p-5")}
+  >
+    <span
       className={cn(
-        CARD,
-        "flex items-start gap-3.5 p-4 sm:p-5 group",
-        "hover:bg-surface-container-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        "transition-colors",
+        "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+        TONE_WASH[tone],
       )}
     >
-      <span
-        className={cn(
-          "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
-          tones[tone],
-        )}
-      >
-        <Icon className="w-[18px] h-[18px]" />
+      <Icon className="w-[18px] h-[18px]" />
+    </span>
+    <span className="flex-1 min-w-0">
+      <span className="block font-bold text-sm text-on-surface">{title}</span>
+      <span className="block text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
+        {description}
       </span>
-      <span className="flex-1 min-w-0">
-        <span className="block font-bold text-sm text-on-surface group-hover:text-primary transition-colors">
-          {title}
-        </span>
-        <span className="block text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
-          {description}
-        </span>
-      </span>
-      <ChevronRight className="w-4 h-4 text-on-surface-variant shrink-0 mt-1 group-hover:text-primary group-hover:translate-x-0.5 transition-[color,transform]" />
-    </Link>
-  );
-};
+    </span>
+    <ChevronRight className="w-4 h-4 text-on-surface-variant shrink-0 mt-1" />
+  </Link>
+);
 
 /**
  * The corvid's perch on a phone.
@@ -105,7 +100,7 @@ const PhonePerch = () => {
       onClick={onClick}
       // `hit-area` rather than padding: the line is 12 px tall and a 44 px
       // box drawn in the layout would push the sentence off its baseline.
-      className="hit-area md:hidden ml-auto shrink-0 rounded-lg text-primary transition-opacity hover:opacity-70"
+      className="hit-area state-layer md:hidden ml-auto shrink-0 rounded-lg text-primary transition-colors"
       aria-label="Contrack"
       title="Let the corvid fly"
     >
@@ -123,7 +118,7 @@ export const SettingsHome = () => {
   const isSearching = query.trim().length > 0;
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <SettingsIdentityRow />
 
       <div className="lg:hidden">

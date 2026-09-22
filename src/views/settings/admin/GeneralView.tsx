@@ -33,20 +33,54 @@ import {
   useIntegrations,
   useUpdateIntegrations,
 } from "../../../api/admin";
-import { SECTION_HEADING } from "../../../lib/styles";
+import {
+  CARD,
+  SECTION_HEADING,
+  SELECTED_TINT,
+  TONE_WASH,
+} from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { Switch } from "../../../components/ui/Switch";
+import { RadioDot } from "../../../components/ui/RadioDot";
 import { tileDelay } from "../../../lib/motion";
+import { SETTINGS_PAGE } from "../layout";
 
 const GroupHeading = ({ children }: { children: React.ReactNode }) => (
   <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>{children}</h2>
 );
 
-const CARD = "bg-surface-container-lowest rounded-2xl shadow-sm p-4 sm:p-6";
+/** The card each setting sits on, with this page's padding. */
+const PANEL = cn(CARD, "p-4 sm:p-6");
+
+/**
+ * One preset in a radio group: the selected tint on the current value, the
+ * hover layer on the others, and a `RadioDot` on each, which says "chosen"
+ * by shape as well as by hue. `locked` is a value the environment sets.
+ */
+const presetClass = (active: boolean, locked = false) =>
+  cn(
+    "flex items-start gap-3 text-left px-4 py-3 rounded-xl transition-colors disabled:cursor-not-allowed",
+    locked && "opacity-75 cursor-not-allowed",
+    active ? SELECTED_TINT : "state-layer bg-surface-container-highest",
+  );
+
+/** A preset's name. On the current value it keeps the selected ink. */
+const presetLabel = (active: boolean) =>
+  cn("block text-sm font-bold", !active && "text-on-surface");
+
+/** A key or a URL in the Integrations card. */
+const KEY_INPUT =
+  "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl bg-surface-container-highest text-sm font-mono";
+
+/** The "Configured" chip beside an integration's name. */
+const CONFIGURED_CHIP = cn(
+  "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
+  TONE_WASH.success,
+);
 
 /** Shown in place of a card whose value could not be read. */
 const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
-  <div className={cn(CARD, "space-y-3")}>
+  <div className={cn(PANEL, "space-y-3")}>
     <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
       <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
       This setting did not load, so its current value is unknown. Nothing has
@@ -79,7 +113,7 @@ export const InstanceNameCard = () => {
   return (
     <form
       id="name"
-      className={cn(CARD, "space-y-4 scroll-mt-20")}
+      className={cn(PANEL, "space-y-4 scroll-mt-20")}
       onSubmit={(event) => {
         event.preventDefault();
         if (!dirty) return;
@@ -124,7 +158,6 @@ export const InstanceNameCard = () => {
         className={cn(
           "w-full px-4 rounded-xl min-h-[44px]",
           "bg-surface-container-high text-on-surface text-base sm:text-sm",
-          "outline-none focus-visible:ring-2 focus-visible:ring-primary",
           "disabled:opacity-50",
         )}
       />
@@ -164,7 +197,7 @@ export const RegistrationCard = () => {
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="registration" className={cn(CARD, "space-y-6 scroll-mt-20")}>
+    <div id="registration" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
       {/* Open registration switch */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
@@ -198,7 +231,7 @@ export const RegistrationCard = () => {
       </div>
 
       {open && (
-        <p className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-3 text-xs text-on-surface text-pretty">
+        <p className="flex items-start gap-2 rounded-xl bg-warning/10 p-3 text-xs text-on-surface text-pretty">
           <DoorOpen className="w-4 h-4 text-warning shrink-0 mt-0.5" />
           While this is on, anybody who can reach this instance can make an
           account on it. On something exposed to the internet, invitations do
@@ -268,7 +301,7 @@ export const SessionLengthCard = () => {
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="session-length" className={cn(CARD, "space-y-4 scroll-mt-20")}>
+    <div id="session-length" className={cn(PANEL, "space-y-4 scroll-mt-20")}>
       <p className="text-sm text-on-surface-variant text-pretty">
         How long a sign-in lasts on this instance before Contrack asks for a
         password again. It applies to every account.
@@ -309,24 +342,14 @@ export const SessionLengthCard = () => {
                     },
                   )
                 }
-                className={cn(
-                  "text-left px-4 py-3 rounded-xl transition-colors",
-                  "disabled:cursor-not-allowed",
-                  active
-                    ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                    : "bg-surface-container-highest hover:bg-surface-container-high",
-                )}
+                className={presetClass(active)}
               >
-                <span
-                  className={cn(
-                    "block text-sm font-bold",
-                    active ? "text-primary" : "text-on-surface",
-                  )}
-                >
-                  {preset.label}
-                </span>
-                <span className="block text-xs text-on-surface-variant mt-0.5">
-                  {preset.hint}
+                <RadioDot checked={active} className="mt-0.5" />
+                <span className="min-w-0">
+                  <span className={presetLabel(active)}>{preset.label}</span>
+                  <span className="block text-xs text-on-surface-variant mt-0.5">
+                    {preset.hint}
+                  </span>
                 </span>
               </button>
             );
@@ -369,7 +392,7 @@ export const TrashCard = () => {
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="trash" className={cn(CARD, "space-y-4 scroll-mt-20")}>
+    <div id="trash" className={cn(PANEL, "space-y-4 scroll-mt-20")}>
       <p className="text-sm text-on-surface-variant text-pretty">
         How long deleted contacts stay restorable in Trash before permanent
         purge.
@@ -413,25 +436,14 @@ export const TrashCard = () => {
                     },
                   )
                 }
-                className={cn(
-                  "text-left px-4 py-3 rounded-xl transition-colors",
-                  isEnv && "opacity-75 cursor-not-allowed",
-                  "disabled:cursor-not-allowed",
-                  active
-                    ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                    : "bg-surface-container-highest hover:bg-surface-container-high",
-                )}
+                className={presetClass(active, isEnv)}
               >
-                <span
-                  className={cn(
-                    "block text-sm font-bold",
-                    active ? "text-primary" : "text-on-surface",
-                  )}
-                >
-                  {preset.label}
-                </span>
-                <span className="block text-xs text-on-surface-variant mt-0.5">
-                  {preset.hint}
+                <RadioDot checked={active} className="mt-0.5" />
+                <span className="min-w-0">
+                  <span className={presetLabel(active)}>{preset.label}</span>
+                  <span className="block text-xs text-on-surface-variant mt-0.5">
+                    {preset.hint}
+                  </span>
                 </span>
               </button>
             );
@@ -483,7 +495,7 @@ export const BackupScheduleCard = () => {
   if (isError) return <ReadFailed onRetry={() => void refetch()} />;
 
   return (
-    <div id="backups" className={cn(CARD, "space-y-6 scroll-mt-20")}>
+    <div id="backups" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
       {/* Interval section */}
       <div className="space-y-3">
         <h3 className="text-sm font-bold text-on-surface">Snapshot interval</h3>
@@ -531,25 +543,14 @@ export const BackupScheduleCard = () => {
                       },
                     )
                   }
-                  className={cn(
-                    "text-left px-4 py-3 rounded-xl transition-colors",
-                    isIntervalEnv && "opacity-75 cursor-not-allowed",
-                    "disabled:cursor-not-allowed",
-                    active
-                      ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                      : "bg-surface-container-highest hover:bg-surface-container-high",
-                  )}
+                  className={presetClass(active, isIntervalEnv)}
                 >
-                  <span
-                    className={cn(
-                      "block text-sm font-bold",
-                      active ? "text-primary" : "text-on-surface",
-                    )}
-                  >
-                    {preset.label}
-                  </span>
-                  <span className="block text-xs text-on-surface-variant mt-0.5">
-                    {preset.hint}
+                  <RadioDot checked={active} className="mt-0.5" />
+                  <span className="min-w-0">
+                    <span className={presetLabel(active)}>{preset.label}</span>
+                    <span className="block text-xs text-on-surface-variant mt-0.5">
+                      {preset.hint}
+                    </span>
                   </span>
                 </button>
               );
@@ -603,25 +604,14 @@ export const BackupScheduleCard = () => {
                       },
                     )
                   }
-                  className={cn(
-                    "text-left px-4 py-3 rounded-xl transition-colors",
-                    isKeepEnv && "opacity-75 cursor-not-allowed",
-                    "disabled:cursor-not-allowed",
-                    active
-                      ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                      : "bg-surface-container-highest hover:bg-surface-container-high",
-                  )}
+                  className={presetClass(active, isKeepEnv)}
                 >
-                  <span
-                    className={cn(
-                      "block text-sm font-bold",
-                      active ? "text-primary" : "text-on-surface",
-                    )}
-                  >
-                    {preset.label}
-                  </span>
-                  <span className="block text-xs text-on-surface-variant mt-0.5">
-                    {preset.hint}
+                  <RadioDot checked={active} className="mt-0.5" />
+                  <span className="min-w-0">
+                    <span className={presetLabel(active)}>{preset.label}</span>
+                    <span className="block text-xs text-on-surface-variant mt-0.5">
+                      {preset.hint}
+                    </span>
                   </span>
                 </button>
               );
@@ -663,7 +653,7 @@ export const IntegrationsCard = () => {
   const redirectUri = `${typeof window !== "undefined" ? window.location.origin : ""}/api/connectors/google/callback`;
 
   return (
-    <div id="integrations" className={cn(CARD, "space-y-6 scroll-mt-20")}>
+    <div id="integrations" className={cn(PANEL, "space-y-6 scroll-mt-20")}>
       {/* Mapbox */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
@@ -674,7 +664,7 @@ export const IntegrationsCard = () => {
             </h3>
           </div>
           {isMapboxConfigured && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <span className={CONFIGURED_CHIP}>
               <Check className="w-3.5 h-3.5" />
               Configured
             </span>
@@ -707,11 +697,7 @@ export const IntegrationsCard = () => {
                       ? "Enter new key to replace…"
                       : "pk.eyJ1..."
                   }
-                  className={cn(
-                    "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl",
-                    "bg-surface-container-highest text-sm font-mono outline-none",
-                    "focus:ring-2 focus:ring-primary/40",
-                  )}
+                  className={KEY_INPUT}
                 />
               </label>
 
@@ -751,7 +737,7 @@ export const IntegrationsCard = () => {
                       },
                     )
                   }
-                  className="btn-secondary shrink-0 text-danger hover:bg-danger/10"
+                  className="btn-secondary shrink-0 text-error"
                 >
                   Remove
                 </button>
@@ -793,11 +779,7 @@ export const IntegrationsCard = () => {
                   disabled={isLoading || update.isPending}
                   onChange={(e) => setSearxngInput(e.target.value)}
                   placeholder="http://searxng.local:8080"
-                  className={cn(
-                    "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl",
-                    "bg-surface-container-highest text-sm font-mono outline-none",
-                    "focus:ring-2 focus:ring-primary/40",
-                  )}
+                  className={KEY_INPUT}
                 />
               </label>
 
@@ -837,7 +819,7 @@ export const IntegrationsCard = () => {
                       },
                     )
                   }
-                  className="btn-secondary shrink-0 text-danger hover:bg-danger/10"
+                  className="btn-secondary shrink-0 text-error"
                 >
                   Remove
                 </button>
@@ -857,7 +839,7 @@ export const IntegrationsCard = () => {
             </h3>
           </div>
           {isGoogleConfigured && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <span className={CONFIGURED_CHIP}>
               <Check className="w-3.5 h-3.5" />
               Configured
             </span>
@@ -884,12 +866,12 @@ export const IntegrationsCard = () => {
                 toast.success("Redirect URI copied to clipboard");
                 setTimeout(() => setCopiedRedirect(false), 2000);
               }}
-              className="hit-area p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors shrink-0"
+              className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
               title="Copy redirect URI"
               aria-label="Copy redirect URI"
             >
               {copiedRedirect ? (
-                <Check className="w-4 h-4 text-emerald-500" />
+                <Check className="w-4 h-4 text-success" />
               ) : (
                 <Copy className="w-4 h-4" />
               )}
@@ -917,7 +899,7 @@ export const IntegrationsCard = () => {
                   </span>
                 </p>
                 <p>
-                  <strong>Client Secret:</strong>{" "}
+                  <strong>Client secret:</strong>{" "}
                   <span className="font-mono text-on-surface">
                     {googleOAuth?.clientSecretPreview}
                   </span>
@@ -936,7 +918,7 @@ export const IntegrationsCard = () => {
                 <input
                   id="google-client-id"
                   type="text"
-                  aria-label="Google OAuth Client ID"
+                  aria-label="Google OAuth client ID"
                   value={googleClientId}
                   disabled={isLoading || update.isPending}
                   onChange={(e) => setGoogleClientId(e.target.value)}
@@ -945,11 +927,7 @@ export const IntegrationsCard = () => {
                       ? "Enter new client ID to replace…"
                       : "123456789-...apps.googleusercontent.com"
                   }
-                  className={cn(
-                    "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 rounded-xl",
-                    "bg-surface-container-highest text-sm font-mono outline-none",
-                    "focus:ring-2 focus:ring-primary/40",
-                  )}
+                  className={KEY_INPUT}
                 />
               </div>
 
@@ -958,13 +936,13 @@ export const IntegrationsCard = () => {
                   htmlFor="google-client-secret"
                   className="block text-xs font-semibold text-on-surface mb-1"
                 >
-                  Client Secret
+                  Client secret
                 </label>
                 <div className="relative">
                   <input
                     id="google-client-secret"
                     type={showGoogleSecret ? "text" : "password"}
-                    aria-label="Google OAuth Client Secret"
+                    aria-label="Google OAuth client secret"
                     value={googleClientSecret}
                     disabled={isLoading || update.isPending}
                     onChange={(e) => setGoogleClientSecret(e.target.value)}
@@ -973,16 +951,12 @@ export const IntegrationsCard = () => {
                         ? "Enter new client secret to replace…"
                         : "GOCSPX-..."
                     }
-                    className={cn(
-                      "w-full min-h-[44px] sm:min-h-0 px-3 py-2.5 pr-10 rounded-xl",
-                      "bg-surface-container-highest text-sm font-mono outline-none",
-                      "focus:ring-2 focus:ring-primary/40",
-                    )}
+                    className={cn(KEY_INPUT, "pr-10")}
                   />
                   <button
                     type="button"
                     onClick={() => setShowGoogleSecret(!showGoogleSecret)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-1"
+                    className="state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
                     title={showGoogleSecret ? "Hide secret" : "Show secret"}
                     aria-label={
                       showGoogleSecret ? "Hide secret" : "Show secret"
@@ -1045,7 +1019,7 @@ export const IntegrationsCard = () => {
                         },
                       )
                     }
-                    className="btn-secondary shrink-0 text-danger hover:bg-danger/10"
+                    className="btn-secondary shrink-0 text-error"
                   >
                     Remove
                   </button>
@@ -1078,7 +1052,7 @@ export const IntegrationsCard = () => {
 // ─── Main View ───────────────────────────────────────────────────────────────
 
 export const GeneralView = () => (
-  <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+  <div className={cn(SETTINGS_PAGE, "space-y-8")}>
     <section className="tile-enter" style={{ animationDelay: tileDelay(0) }}>
       <GroupHeading>
         <span className="inline-flex items-center gap-1.5">

@@ -23,6 +23,7 @@ import {
 import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { navLink, SECTION_BG } from "../../lib/styles";
+import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
@@ -75,7 +76,7 @@ const SidebarTooltip = ({
             initial={{ opacity: 0, x: -6, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -4, scale: 0.95 }}
-            transition={{ duration: 0.12 }}
+            transition={{ duration: DURATION.fast, ease: EASE }}
             className="absolute left-full ml-3 z-50 pointer-events-none"
           >
             <div className="bg-surface-container-highest text-on-surface text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ring-1 ring-black/5">
@@ -127,21 +128,18 @@ const CorvidPerch = () => {
       type="button"
       onClick={onClick}
       /*
-        The nav link's padding, so the hit box is 48 px like every other stop,
-        and the focus ring every control gets from `index.css`. Not its hover
-        wash: while the bird is away this button is empty, and a filled grey
-        box where the mark used to be reads as something still loading.
+        The nav link's shape and the focus ring every control gets from
+        `index.css`, but not its hover layer: while the bird is away this
+        button is empty, and a grey box where the mark used to be reads as
+        something still loading.
       */
       /*
         The mark is the brand, so it is the one stop in the rail that is
-        bigger than a nav glyph: 40 px against their 24. The padding drops
-        from `p-3` to `p-2` to pay for it, so the button stays the 56 px box
-        it was and the rail's spacing does not move.
+        bigger than a nav glyph: 40 px against their 24. The padding is `p-2`
+        where a nav link's is `p-3`, to pay for it, so the button stays the
+        56 px box it was and the rail's spacing does not move.
       */
-      className={navLink(
-        false,
-        "mb-1 p-2 text-primary hover:text-primary hover:bg-transparent",
-      )}
+      className="mb-1 p-2 rounded-xl text-primary"
       aria-label="Contrack"
       title="Let the corvid fly"
     >
@@ -285,7 +283,9 @@ export const Sidebar = () => {
               "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 z-10",
               "flex items-center justify-center rounded-full",
               "bg-primary text-on-primary text-[11px] font-bold leading-none",
-              "tabular-nums ring-2 ring-surface-container hover:scale-110 transition-transform",
+              // The hover layer, not a scale: the badge holds a number, and
+              // scaled text blurs.
+              "tabular-nums ring-2 ring-surface-container state-layer",
             )}
             aria-label={`${pendingSuggestions} duplicate suggestions`}
           >

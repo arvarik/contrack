@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { Pencil } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { Select } from "./ui/Select";
-import { cn } from "../lib/utils";
-import { LABEL } from "../lib/styles";
+import { FORM_INPUT, FORM_LABEL } from "../lib/styles";
 
 // ---------------------------------------------------------------------------
 // BulkEditFieldModal — pick a field + value to apply to many selected contacts.
@@ -28,7 +27,7 @@ interface Field {
 const EDITABLE_FIELDS: Field[] = [
   {
     key: "role",
-    label: "Role / Title",
+    label: "Role / title",
     placeholder: "e.g. Senior Engineer",
     type: "text",
   },
@@ -93,7 +92,7 @@ export const BulkEditFieldModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Edit Field">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Edit field">
       <div className="space-y-5 pt-2">
         <p className="text-sm sm:text-xs text-on-surface-variant">
           Apply a value to{" "}
@@ -104,8 +103,8 @@ export const BulkEditFieldModal = ({
         {/* Field selector */}
         <div>
           {/* The visible caption. The Select carries its own name. */}
-          <span id="bulk-edit-field-label" className={cn(LABEL, "block mb-2")}>
-            Field to Edit
+          <span id="bulk-edit-field-label" className={FORM_LABEL}>
+            Field to edit
           </span>
           <Select
             variant="field"
@@ -121,8 +120,8 @@ export const BulkEditFieldModal = ({
 
         {/* Value input */}
         <div>
-          <label htmlFor="bulk-edit-value" className={cn(LABEL, "block mb-2")}>
-            New Value
+          <label htmlFor="bulk-edit-value" className={FORM_LABEL}>
+            New value
           </label>
           <input
             id="bulk-edit-value"
@@ -139,8 +138,9 @@ export const BulkEditFieldModal = ({
               if (e.key === "Enter" && value.trim()) handleApply();
             }}
             placeholder={selectedField.placeholder}
-            // text-base on mobile suppresses iOS auto-zoom on focus.
-            className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-base sm:text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none"
+            // The shared field is text-base on mobile, which suppresses iOS
+            // auto-zoom on focus.
+            className={FORM_INPUT}
           />
         </div>
 
@@ -171,7 +171,7 @@ export const BulkEditFieldModal = ({
             className="btn-primary flex-1"
           >
             <Pencil className="w-4 h-4" />
-            {isPending ? "Applying…" : "Apply to All"}
+            {isPending ? "Applying…" : "Apply to all"}
           </button>
         </div>
       </div>

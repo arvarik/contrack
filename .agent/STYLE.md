@@ -17,19 +17,26 @@ _This document enforces the visual identity and coding patterns of the project. 
 | Token               | Value     | Usage                                                  |
 | ------------------- | --------- | ------------------------------------------------------ |
 | `primary`           | `#006a91` | Primary actions, active states, interactive highlights |
-| `primary-dim`       | `#00628a` | Signature gradient dark end, dimmed primary states     |
-| `primary-container` | `#47befd` | Signature gradient light end, primary containers       |
+| `primary-dim`       | `#00628a` | Dimmed primary states                                  |
+| `primary-container` | `#47befd` | Pale primary fills only, never text                    |
 | `on-primary`        | `#ffffff` | Text/icons on primary-colored backgrounds              |
 
 #### Surface Hierarchy (Paper Stack — "No-Line" Rule)
 
+Warm paper. The light greys lean warm (hue 85 in OKLCH, chroma 0.005 to
+0.010) at the lightness the cool greys were measured at, so every text colour
+clears AA by the same margin as before. The ink stays a cool slate. The dark
+palette is unchanged.
+
 | Level             | Token                       | Hex       | Use                                    |
 | ----------------- | --------------------------- | --------- | -------------------------------------- |
-| Base Layer        | `surface`                   | `#f5f6f9` | Page background                        |
-| Sectional Layer   | `surface-container-low`     | `#eff1f4` | Section backgrounds, input backgrounds |
+| Base Layer        | `surface`                   | `#f8f6f2` | Page background                        |
+| Sectional Layer   | `surface-container-low`     | `#f2f1ed` | Section backgrounds, input backgrounds |
 | Interactive/Card  | `surface-container-lowest`  | `#ffffff` | Cards, elevated inputs                 |
-| Elevated/Emphasis | `surface-container-high`    | `#e0e3e6` | Hovered states, kbd tags, dividers     |
-| Maximum Emphasis  | `surface-container-highest` | `#d9e4e8` | Strong emphasis backgrounds            |
+| Container         | `surface-container`         | `#f1eeea` | Form fields, chips                     |
+| Elevated/Emphasis | `surface-container-high`    | `#e7e5e1` | Kbd tags, disabled buttons, dividers   |
+| Maximum Emphasis  | `surface-container-highest` | `#e5e2db` | Strong emphasis backgrounds            |
+| Hairline          | `outline-variant`           | `#d4d1cb` | Menu edges, the secondary button edge  |
 
 #### Text Colors
 
@@ -40,12 +47,38 @@ _This document enforces the visual identity and coding patterns of the project. 
 
 #### Semantic Accent Colors (Allowed)
 
-| Color         | Semantic Meaning                               |
-| ------------- | ---------------------------------------------- |
-| `emerald-500` | Success, healthy, active, merge approval       |
-| `amber-500`   | Warning, nearing due, caution                  |
-| `rose-500`    | Error, overdue, destructive actions, rejection |
-| `blue-500`    | Informational (phone match badge)              |
+| Token     | Semantic Meaning                               |
+| --------- | ---------------------------------------------- |
+| `success` | Success, healthy, active, merge approval       |
+| `warning` | Warning, nearing due, caution                  |
+| `error`   | Error, overdue, destructive actions, rejection |
+| `info`    | Informational (phone match badge)              |
+
+#### Tones: colour that means something (`src/lib/styles.ts`)
+
+A category colour comes from one map, so a colour means the same thing on
+every card. `TONE_DOT` is the 6 px dot before a group's name, `TONE_WASH` a
+chip or an icon tile (the tone's 10 percent wash with its own ink), and
+`TONE_TEXT` the ink alone.
+
+| Tone      | Means                                    | Where                         |
+| --------- | ---------------------------------------- | ----------------------------- |
+| `error`   | Overdue, at risk                         | Up next overdue, Keeping up   |
+| `primary` | Today, an action to take                 | Up next today, catch up       |
+| `warning` | A birthday, a possible duplicate, fading | Up next birthdays, Inbox      |
+| `success` | New people, strong                       | Inbox new people, Keeping up  |
+| `neutral` | Everything else                          | This week, Inbox hygiene rows |
+
+- ✅ A group's dot, its rows' leading glyph and its chips read from the same
+  tone.
+- ❌ A raw palette colour (`amber-500`, `text-amber-800`) for a category.
+- ❌ The AI colour as a tone. It marks what a model wrote.
+
+#### The highlighter (`--color-highlight`)
+
+The words a search matched are a plain `<mark>`. The base layer paints it: a
+warm wash (`#fce7a6`, dark `#5a4116`) with the ink colour on it whatever the
+text around it is. Never a second blue, and never classes on the `mark`.
 
 #### AI-derived data (`--color-ai`)
 
@@ -65,8 +98,12 @@ timeline (`bg-ai/10 text-ai`).
 - ❌ Not for a selection. The composer's selected type is a selection, so it
   uses `primary`.
 - The token is not part of an accent. A contact's colour replaces `primary` on
-  its page and leaves `ai` alone, so a violet contact never makes its own notes
-  read as AI.
+  its page and leaves `ai` alone.
+- No accent sits on its hue. The contact vibes and the accent presets keep
+  `AI_HUE_CLEARANCE` (30) degrees of OKLCH hue away from `ai`, so there is no
+  violet or indigo vibe and no violet preset: on a violet contact the Save
+  button and every link wore the colour that means "a model wrote this".
+  `tests/unit/theme.contrast.test.ts` holds it.
 - Defined in three places in `src/index.css` (`@theme` and both dark blocks)
   and in `LIGHT` and `DARK` in `src/lib/theme.ts`.
   `tests/unit/theme.contrast.test.ts` checks that they agree and clear AA.
@@ -84,10 +121,13 @@ timeline (`bg-ai/10 text-ai`).
 - ❌ **NEVER** use `border-b border-gray-200` (or any `border-*`) for visual sectioning.
 - ✅ **ALWAYS** use a different `bg-` surface level between adjacent sections.
 
-**Exceptions** — borders ARE allowed for:
+**Exceptions** — lines ARE allowed for:
 
-- Focus rings on inputs (`focus:ring-2 focus:ring-primary/30`)
-- Active selection rings (`ring-2 ring-primary`)
+- The one focus ring (the base layer's outline, see "Focus" below)
+- A pressable button's edge: the 1 px border and the solid shadow under a
+  `.btn-*` are part of the control, not a boundary between sections
+- A floating panel's hairline (`.menu-panel`), which has no neighbour to
+  shift against
 - Drag-and-drop overlay borders (`border-4 border-dashed border-primary`)
 - The timeline vertical line (decorative, not sectioning)
 
@@ -98,6 +138,21 @@ timeline (`bg-ai/10 text-ai`).
 | Headlines | `font-headline`                                                                      | Manrope | 400, 600, 700, 800 |
 | Body      | `font-body`                                                                          | Inter   | 300, 400, 500, 600 |
 | Labels    | `LABEL`: `text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant` | Inter   | —                  |
+
+#### One tracking for uppercase (REQUIRED)
+
+Every uppercase label tracks at `0.08em`: `LABEL`, `SECTION_HEADING`,
+`FORM_LABEL`, or `tracking-[0.08em]` where none of those fits. Never
+`tracking-widest`. `tests/unit/styles.floor.test.ts` fails on it.
+
+#### Sentence case (REQUIRED)
+
+Every string a person reads is sentence case: buttons, headings, labels,
+menu items, tooltips, `aria-label`s, placeholders, empty states and toasts.
+Capitalize the first word and proper nouns only. "Index missing", not "Index
+Missing". Product and destination names from `src/lib/names.ts` (Contrack,
+Ask Contrack, Pulse, Network, Map), brand names and acronyms keep their
+spelling.
 
 #### 11 px type floor (REQUIRED)
 
@@ -122,6 +177,9 @@ keyboard chips.
 | `KBD_SM`, `MICRO_BADGE`, `STATUS_BADGE_SUCCESS` | 11 px         | Keyboard chips, inline badges                               |
 | `TAG_PILL`, `SOURCE_BADGE`                      | 11 px         | Pills                                                       |
 | `ICON_BTN`                                      | 32 px visual  | Dense toolbar icon buttons, with `hit-area` (44 px target)  |
+| `PAGE_TITLE`                                    | 24 / 30 px    | A page's title, or Pulse's date (see "Page header")         |
+| `PAGE_EYEBROW`                                  | 13 px         | The small line above a title: a back link, a page name      |
+| `PAGE_DESCRIPTION`                              | 14 / 16 px    | The one line under a title                                  |
 | `SEARCH_INPUT`                                  | 44 px / 40 px | The list search box: 44 px tall on a phone, 40 px from `sm` |
 
 ### Radius System
@@ -131,48 +189,170 @@ chip is 4 px. `rounded-full` is for circles only: avatars, dots, rings and
 switch tracks. A chip, a badge, a filter pill or a `Segmented` option is
 `rounded-md`.
 
-| Token                       | Value                     | Usage                                              |
-| --------------------------- | ------------------------- | -------------------------------------------------- |
-| `sm`                        | `0.1875rem` (3px)         | Keyboard chips, the smallest badges                |
-| `md`                        | `0.25rem` (4px)           | Chips, badges, filter pills, menu items            |
-| `lg`                        | `0.375rem` (6px)          | Inner controls: tab items, "+ Add", chip tap boxes |
-| `xl`                        | `0.375rem` (6px)          | Controls: buttons, inputs, list rows, icon buttons |
-| `2xl`                       | `0.5rem` (8px)            | Cards, panels, popovers, `.menu-panel`             |
-| `3xl`                       | `0.75rem` (12px)          | Dialogs, sheets, the auth card                     |
-| Buttons (primary/secondary) | `0.375rem` (`rounded-xl`) | CSS `.btn-primary` / `.btn-secondary` class        |
-| Circles                     | `9999px`                  | Avatars, dots, rings, switch tracks. Never a label |
+| Token              | Value                     | Usage                                                 |
+| ------------------ | ------------------------- | ----------------------------------------------------- |
+| `sm`               | `0.1875rem` (3px)         | Keyboard chips, the smallest badges                   |
+| `md`               | `0.25rem` (4px)           | Chips, badges, filter pills, menu items               |
+| `lg`               | `0.375rem` (6px)          | Inner controls: tab items, "+ Add", chip tap boxes    |
+| `xl`               | `0.375rem` (6px)          | Controls: buttons, inputs, list rows, icon buttons    |
+| `2xl`              | `0.5rem` (8px)            | Cards, panels, popovers, `.menu-panel`                |
+| `3xl`              | `0.75rem` (12px)          | Dialogs, sheets, the auth card                        |
+| Buttons (`.btn-*`) | `0.375rem` (`rounded-xl`) | CSS `.btn-primary` / `.btn-secondary` / `.btn-danger` |
+| Circles            | `9999px`                  | Avatars, dots, rings, switch tracks. Never a label    |
 
 ## 2. Component CSS Classes (defined in `src/index.css`)
 
 These reusable atomic classes are the blessed patterns. Use them instead of ad-hoc utilities.
 
-| Class                | Pattern                                                                                 | Usage                                                                                                                                |
-| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `glass-panel`        | `rgba(255,255,255,0.80)` + `blur(20px)`                                                 | Modals, the Command Palette, floating nav. Not menus                                                                                 |
-| `menu-panel`         | Solid card surface, hairline ring, soft shadow                                          | Every list that opens under a control. Add `menu-enter` for the 120 ms entrance, or `menu-enter-none` when Motion animates the panel |
-| `signature-gradient` | `linear-gradient(135deg, primary-dim → primary-container)`                              | **Branding ONLY** (the tile behind the glyph). ⚠️ NEVER for buttons/CTAs                                                             |
-| `card`               | `bg-surface-container-lowest rounded-2xl p-6 shadow-sm`                                 | Standard card container                                                                                                              |
-| `card-elevated`      | `bg-surface-container-low rounded-2xl p-6 shadow-md`                                    | Elevated card with more shadow                                                                                                       |
-| `input`              | `bg-surface-container-low rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-primary/40`    | Text inputs                                                                                                                          |
-| `btn-primary`        | Solid `bg-primary text-on-primary`, `rounded-xl`, bold 14 px, 44 px tall (40 from `sm`) | Primary CTAs. One per view where possible                                                                                            |
-| `btn-secondary`      | `bg-surface-container-high text-on-surface`, same shape                                 | Secondary actions (Cancel, Back)                                                                                                     |
-| `hit-area`           | `::after` box of `max(100%, 44px)`, centred, draws nothing                              | A control that looks smaller than 44 px (see below)                                                                                  |
-| `section-divider`    | `h-px bg-surface-container-high my-4`                                                   | Visual section break (background shift, NOT a border)                                                                                |
-| `icon-container`     | `w-10 h-10 rounded-xl bg-surface-container-low` centered                                | Icon wrapper                                                                                                                         |
+| Class              | Pattern                                                                  | Usage                                                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `glass-panel`      | `rgba(255,255,255,0.80)` + `blur(20px)`                                  | Modals, the Command Palette, floating nav. Not menus                                                                                  |
+| `menu-panel`       | Solid card surface, hairline ring, soft shadow                           | Every list that opens under a control. Add `menu-enter` for the entrance, or `menu-enter-none` when Motion animates the panel         |
+| `card`             | Card surface, `rounded-2xl`, `p-6`, the soft shadow                      | A static card. `CARD` in `styles.ts`. No hover                                                                                        |
+| `card-interactive` | Rises 2 px on hover, its shadow a step up, its edge a primary tint       | Beside `card`, on a card that is itself a control. `CARD_INTERACTIVE`                                                                 |
+| `state-layer`      | A 6 percent ink layer on hover, 10 on press, over any background         | Every flat control: a row, a ghost or icon button, a pill, a nav item                                                                 |
+| `row-selected`     | A 10 percent primary tint and a 3 px bar on the leading edge             | The selected row in a list. `SELECTED_ROW`. A Tailwind `@utility`, so it takes a variant: `aria-selected:row-selected` in the palette |
+| `focus-frame`      | Draws the focus ring on a box while its field has focus                  | A composite field: an icon, an input and buttons in one box                                                                           |
+| `input`            | `bg-surface-container-low rounded-xl px-4 py-2.5`                        | Text inputs                                                                                                                           |
+| `btn-primary`      | The primary face on a darker edge, bold 14 px, 44 px tall (40 from `sm`) | The main call to action. One per view where possible                                                                                  |
+| `btn-secondary`    | The card face on the hairline edge, same shape                           | Other actions (Cancel, Back). `btn-secondary text-error` for a destructive act that is not final                                      |
+| `btn-danger`       | The error face on a darker edge, same shape                              | An irreversible destructive act: delete forever, remove an account                                                                    |
+| `btn-sm`           | 32 px face, 2 px edge, 13 px type, a built-in 44 px tap box              | With a `.btn-*`, in a toolbar, a dense row or a floating bar                                                                          |
+| `btn-icon`         | A square face for a glyph with no label                                  | With a `.btn-*`, such as the Network list's New (`ActionMenu variant="primary"`)                                                      |
+| `hit-area`         | `::after` box of `max(100%, 44px)`, centred, draws nothing               | A control that looks smaller than 44 px (see below)                                                                                   |
 
-### Buttons
+### Buttons: pressable, with an edge
 
-- ✅ `.btn-primary` for the main action, `.btn-secondary` for the others. The
-  call site adds layout only (`w-full`, `flex-1`, a margin). The class sets the
-  fill, the shape, the type, the 44 px height and the disabled look.
-- ✅ One disabled look for both: a `surface-container-high` fill with an
-  `on-surface-variant` label. No `disabled:opacity-*` at the call site, because
-  fading a filled button fades its label into its own fill.
+A call to action has depth: a darker edge under its face, the way a key sits
+on its base. The face is the button's box, the edge its 1 px border and a
+solid shadow `--btn-lift` below it (3 px, 2 px for `.btn-sm`). On hover the
+face rises 1 px and the edge grows 1 px, on press the face sinks until 1 px
+of edge is left, and the edge's bottom line never moves. Hover is gated on
+`@media (hover: hover)`, so a tap never leaves a button raised on a phone.
+The edge colour is mixed from the face, so it follows a picked accent, a
+contact's vibe and the dark palette.
+
+- ✅ `.btn-primary` for the main action, `.btn-secondary` for the others,
+  `.btn-danger` for an irreversible destructive act, `.btn-sm` for the small
+  size. The call site adds layout only (`w-full`, `flex-1`, `sm:w-auto`,
+  `shrink-0`, a margin). The class sets the face, the edge, the shape, the
+  type, the height and the disabled look.
+- ✅ One disabled look for all three: flat, with no edge, a
+  `surface-container-high` fill and an `on-surface-variant` label. A button a
+  person cannot press no longer looks pressable, and a disabled primary no
+  longer looks like a secondary.
+- ✅ Depth means "this does something". Icon buttons, text buttons, chips,
+  rows, tabs and menu items stay flat and take `state-layer`.
+- ❌ A background, text size, padding, height, shadow, ring, hover, active,
+  opacity or disabled class on a `.btn-*`. Utilities come after the class, so
+  each of them takes the edge or the face away. The scan in
+  `tests/unit/styles.floor.test.ts` fails on them.
+- ❌ An ad-hoc filled button (`bg-primary text-on-primary rounded-xl px-4`,
+  `bg-red-500 text-white`). It is a `.btn-*`.
 - ❌ `rounded-full` on a filled `bg-primary` button, and on any chip, badge,
   filter pill or `Segmented` option: those are `rounded-md`. Circles are for
   avatars, dots, rings and switch tracks. `tests/unit/styles.floor.test.ts`
   fails on a class string with a solid `bg-primary`, `rounded-full` and
   `px-2` or more outside its allow-list.
+
+### Hover: three kinds of surface
+
+| Surface                                                   | Hover                                             |
+| --------------------------------------------------------- | ------------------------------------------------- |
+| A flat control: a row, a ghost button, a pill, a nav item | `state-layer`: a 6 percent ink layer, 10 on press |
+| A card that is a control: a search result, a tile         | `CARD_INTERACTIVE`: rises 2 px, shadow a step up  |
+| A static card                                             | None                                              |
+
+The layer is a background image, so a resting wash or a selected tint stays
+under it, on any surface and in both palettes. "One surface step up" meant a
+different token on a white card, on the page and on a wash, and six hover
+recipes had grown on three pages.
+
+- ✅ `ICON_BTN`, `BTN_QUIET`, `listRow`, `filterPill`, `navLink`, `IconButton`
+  and the `ActionMenu` and `Select` triggers already carry the layer.
+- ❌ `hover:bg-*` or `active:bg-*` on a flat control, beside the layer.
+- ❌ A `shadow-*`, `ring-*`, `scale-*` or `translate-*` hover on a card. The
+  card class owns its hover.
+- ❌ Scaling anything that holds text. A swatch or an avatar may scale.
+
+### Selected: one look
+
+- ✅ A selected row in a list (a contact row, a queue row, a history entry, a
+  settings rail item) is `SELECTED_ROW`: the 10 percent primary tint with a
+  3 px bar on its leading edge. Its text that was `text-primary` is
+  `text-on-primary-wash`.
+- ✅ A selected pill, chip, toggle or nav item is `SELECTED_TINT`: the tint
+  and its ink, no bar. A menu option is `MENU_ITEM_SELECTED`, the same tint.
+- ✅ An option in a radio group (a preset tile, a role, an expiry) takes the
+  tint and a `RadioDot` (`src/components/ui/RadioDot.tsx`) beside its label:
+  a ring on every option, filled with a centre dot on the chosen one. The
+  tint alone says "chosen" by hue, about 1.1 to 1 against the other options,
+  which WCAG 1.4.1 does not accept as the only cue. The option carries
+  `role="radio"` and `aria-checked`, or `aria-pressed`.
+- ✅ A short exclusive choice with no hint is a `Segmented`, which keeps its
+  raised option in a trough, radio semantics and the arrow keys.
+- ✅ The chosen swatch in a picker of colours, icons or avatars is
+  `SWATCH_SELECTED`: a 2 px ring in the ink colour, 2 px off the swatch. A
+  swatch's fill is its content, so it cannot take the tint, and it has no
+  room for a bar or a dot. The ring is the ink, never the primary, so it
+  does not read as the focus ring. It is the one ring a selection wears.
+- ✅ A selected card in a list is `SELECTED_ROW` too: on a `.card` the tint
+  mixes with the card's own face (`--row-face`) and the card keeps its
+  shadow, so it reads as raised and chosen.
+- ❌ A ring for a selection, except a swatch's. It read as keyboard focus on
+  every visit, and a focused selected row drew two rings.
+- ❌ A filled `bg-primary` pill for a selection.
+
+### Focus: one ring
+
+The base layer's outline is the only focus indicator: 2 px of the primary,
+2 px outside a control, and inset on its own edge for a text field, where it
+reads as the field's border. A composite field (an icon, an input and
+buttons in one box, the note composer's card) puts `focus-frame` on the box,
+which draws the inset ring while its field has focus. A button inside keeps
+its own ring, so the ring always says which element Enter acts on.
+
+- ❌ `focus:ring-*`, `focus-visible:ring-*`, `focus-within:ring-*`,
+  `focus:outline-none` or a `focus:border-*` indicator. The scan fails on the
+  rings.
+- `MENU_ITEM` draws the same ring inset, because its rows touch and the
+  panel would cut an outside ring. The map's controls draw it as an inset
+  shadow for the same reason.
+- The command palette's input draws no ring. The palette is a dialog with
+  one field that has focus for as long as it is open, so a ring would never
+  go away and would say nothing.
+- A notes search keeps a spinner, not the thinking bird: no model reads the
+  notes, and the bird would say one does.
+
+### Page header: one layout
+
+Every page's top is `PageHeader` (`src/components/layout/PageHeader.tsx`):
+
+```text
+back link or eyebrow                                 actions
+Title
+One line of description
+children (a search box, filters, a form)
+```
+
+- The title is the `h1` in `PAGE_TITLE`. Pulse keeps the day as its headline:
+  its eyebrow "Pulse" is the `h1` (`eyebrowAs="h1"`) and the date is the
+  title in a `p` (`titleAs="p"`), in the same slots and sizes. The Network
+  list uses an `h2` when an open contact's name is the page's `h1`.
+- `back={{ to, label }}` draws the link to the parent page as the eyebrow.
+  Its text is the parent's name and its accessible name is "Back to …",
+  like every back control in the app, because the sidebar has a link with
+  the bare name too.
+- The title block shrinks to its longest word, so the actions stay at the
+  right and the description wraps beside them, and they drop under the
+  block only on a phone. The title's size follows the header's own width
+  (`PageHeader` is a size container), so the narrow Network pane keeps the
+  phone size on a desktop.
+- The page owns the padding: `PAGE_X` for the sides (a narrow pane keeps
+  `px-4`) and `PAGE_TOP` above the header, so every title starts at the
+  same height. A skeleton or a route fallback mirrors it.
+- ❌ A band behind the header, a border under it, or an icon tile beside the
+  title.
 
 ### Menus and dropdowns
 
@@ -247,7 +427,8 @@ This acts as an intricate state machine managing layered interactions (`cmdk`).
 - Keybinding tags (`<kbd>`) must remain `hidden sm:inline-flex`.
 - Footer navigation bars: `hidden sm:flex` on desktop-only hint bars.
 - Touch targets: `p-2 sm:p-1` for buttons, `py-3 sm:py-2.5` for list items.
-- Active states: Add `active:bg-*` and `active:scale-[0.98]` for touch feedback.
+- Touch feedback: `state-layer` draws a press on a flat control and a `.btn-*`
+  sinks onto its edge. No `active:bg-*` or `active:scale-*` beside them.
 - Responsive text: Show "Cancel" on mobile, "ESC back" on desktop.
 - Enlarged hit-areas via padded mobile rules.
 
@@ -298,7 +479,8 @@ A screen with nothing to show renders `<EmptyState>`
 />
 ```
 
-- A 48 px icon tile on a `bg-primary/10` wash, a 16 px bold title, one
+- A 48 px icon tile on its tone's wash (`tone`, `primary` by default,
+  `error` for a place that failed to load), a 16 px bold title, one
   sentence at 14 px, and at most one action drawn as `.btn-primary`. `action`
   is one object, so a second button cannot be passed.
 - The title is an `h2`. Inside a card that has its own `h2`, pass `level={3}`.
@@ -330,7 +512,21 @@ point from the thumb on the device.
   Escape and focus restoration are all in the primitive, and re-deriving them
   is how a dialog ends up trapping the page behind it.
 
-### Animation Standards
+### Motion: one curve, three durations
+
+`--ease` (`cubic-bezier(0.16, 1, 0.3, 1)`) and `--dur-fast` 120 ms (a press,
+a menu opening), `--dur-base` 160 ms (a hover, a colour change) and
+`--dur-slow` 240 ms (something arriving or expanding). Tailwind's default
+transition runs at the base duration on the curve, and `ease-out` is the same
+curve. `src/lib/motion.ts` holds the same numbers as `DURATION` and `EASE`
+for `motion/react`, and a scan checks the two files agree.
+
+- ✅ `transition-colors` and nothing else for a hover. `duration-(--dur-fast)`
+  or `duration-(--dur-slow)` for the other two.
+- ✅ `transition={{ duration: DURATION.base, ease: EASE }}` in `motion/react`.
+  A spring, a repeating spinner or a deliberate long animation keeps its
+  numbers.
+- ❌ A numeric `duration-*` class. The scan fails on it.
 
 Two rendering strategies, chosen by context:
 
@@ -410,12 +606,14 @@ Use `sonner` via the `<Toaster>` in `App.tsx`. Toasts use `glass-panel` styling 
 ## 5. Anti-Patterns (FORBIDDEN)
 
 - ❌ 1px solid borders for visual segmentation — use surface color shifts.
+- ❌ A focus ring of a component's own, a selection ring, a hover fill beside
+  `state-layer`, or a shadow on a flat control.
+- ❌ `tracking-widest`, a Title Case label, or a numeric `duration-*` class.
 - ❌ Blind nested DOM interactivity inside the Command Palette without `onMouseDown` preventions.
 - ❌ Utilizing `overflow-hidden` on parent wrappers when attempting to show `ring-2` effects without `ring-inset`.
 - ❌ Invoking native `useEffect` fetch loops instead of `@tanstack/react-query` lifecycle managers.
 - ❌ Relying on vec0 SQL cascades without explicit backend code deletion blocks.
-- ❌ Using `violet-*`, `fuchsia-*`, `purple-*`, or `indigo-*` colors anywhere.
-- ❌ Using `signature-gradient` for buttons or CTAs — gradients are for branding only.
+- ❌ Using `violet-*`, `fuchsia-*`, `purple-*`, or `indigo-*` colors anywhere, or a vibe or accent preset near the AI hue.
 - ❌ Direct `@google/genai` imports outside `server/ai/adapters/gemini.ts`.
 - ❌ Placing business logic in Express route files — delegate to services.
 - ❌ Using `any` type without explicit narrowing justification.
@@ -536,16 +734,17 @@ motionPreference)` in `src/lib/corvid.ts` is the only place that decides,
 One row per surface. A new one goes here, and nowhere else gets a bird
 without a reason a person could state.
 
-| Surface                                     | What it does                        | Component            |
-| ------------------------------------------- | ----------------------------------- | -------------------- |
-| Sidebar perch, 40 px                        | Idles, hops, flies on a click       | `Sidebar.tsx`        |
-| Settings footer on a phone, 20 px           | The same, where there is no sidebar | `SettingsHome.tsx`   |
-| Sign-in and setup card, 40 px               | Idles, shakes at a wrong password   | `AuthShell.tsx`      |
-| Synthesis bar, enrich badge, briefing card  | Tilts its head while AI works       | `CorvidThinking.tsx` |
-| Pulse, when the last follow-up clears       | One swoop, under the confetti       | `UpNextCard.tsx`     |
-| Duplicates, "All reviewed"                  | One hop when it arrives             | `DedupeView.tsx`     |
-| Empty network, Trash, Archived, start panel | Still, as the illustration          | `EmptyState` callers |
-| Crash screen footer, 20 px                  | Still                               | `ErrorBoundary.tsx`  |
+| Surface                                     | What it does                                                                  | Component            |
+| ------------------------------------------- | ----------------------------------------------------------------------------- | -------------------- |
+| Sidebar perch, 40 px                        | Idles, hops, flies on a click                                                 | `Sidebar.tsx`        |
+| Settings footer on a phone, 20 px           | The same, where there is no sidebar                                           | `SettingsHome.tsx`   |
+| Sign-in and setup card, 40 px               | Idles, shakes at a wrong password                                             | `AuthShell.tsx`      |
+| Synthesis bar, enrich badge, briefing card  | Tilts its head while AI works                                                 | `CorvidThinking.tsx` |
+| Ask Contrack while a People search runs     | Tilts its head in the search box, on "Searching…" and on "Enriching with AI…" | `CorvidThinking.tsx` |
+| Pulse, when the last follow-up clears       | One swoop, under the confetti                                                 | `UpNextCard.tsx`     |
+| Duplicates, "All reviewed"                  | One hop when it arrives                                                       | `DedupeView.tsx`     |
+| Empty network, Trash, Archived, start panel | Still, as the illustration                                                    | `EmptyState` callers |
+| Crash screen footer, 20 px                  | Still                                                                         | `ErrorBoundary.tsx`  |
 
 - **One rule, one hook.** `useCorvidLevel()` answers "how much may this bird
   move", and every surface above reads it, directly or through `CorvidMark`.
@@ -684,8 +883,9 @@ on a card, so "Hide Completed" is one locator in both shapes.
 
 ### The masthead and its sentence
 
-The `h1` stays "Pulse" for the landmark structure and the specs, and the date
-is the display line. One sentence from `buildDayLine` in
+The masthead is `PageHeader`: the eyebrow "Pulse" is the `h1` (it stays for
+the landmark structure and the specs), and the date is the title in a `p`,
+in `PAGE_TITLE`, the same size and place as every other page's title. One sentence from `buildDayLine` in
 `lib/dayLine.ts` replaces the chips: the counts above zero in the order
 overdue, due today, birthdays this week, joined by commas and closed by a
 period, then the streak from two days. From `sm` up each count is a
@@ -719,8 +919,11 @@ the row takes the phone anatomy (`compact`): the name on line one with the
 snooze at its end as a 32 px glyph with the 44 px tap box, the title on up
 to two lines, then a meta line with the chip and "Last spoke". A phone row
 has about 220 px for text, and a name, a chip and a button do not share it.
-Selected is `bg-primary/10 ring-1 ring-inset ring-primary/50`, the same
-wash as the Network list's current row. A click on the row opens the
+Selected is `SELECTED_ROW`, the tint and the 3 px bar, the same as the
+Network list's current row. Hover is `state-layer` over the resting wash.
+The group's dot, the row's leading glyph and its chip read from the group's
+tone (`TONE_*`): overdue `error`, today `primary`, this week `neutral`,
+birthdays `warning`, catch up `primary`. A click on the row opens the
 contact, and a click that starts on a control inside it belongs to that
 control.
 
@@ -739,8 +942,10 @@ padding.
 
 Every list row on a Pulse card that is not the queue (Inbox, Coming up) is
 `PULSE_ROW` from `lib/pulseStyles.ts`: `rounded-xl px-3 py-2.5` on
-`bg-surface-container-low/70`, 44 px tall at least, no border, one surface
-step up on hover, and the whole row is the link. The count in a row's
+`bg-surface-container-low/70`, 44 px tall at least, no border, the state
+layer on hover, and the whole row is the link. An Inbox row's icon sits in a
+small tile in its tone: new people `success`, possible duplicates `warning`,
+correspondents `primary`, the hygiene rows `neutral`. The count in a row's
 sentence is bold (`4 without a company`). A fact at the right edge is
 `PULSE_CHIP_NEUTRAL`, "In 10 days". Two more type roles: `figure` for the
 one large number on a card (Keeping up's "31") and `insight` for the

@@ -81,7 +81,7 @@ export const Donut: React.FC<DonutProps> = ({
                 strokeWidth={strokeWidth}
                 strokeDasharray={dasharray}
                 strokeDashoffset={dashoffset}
-                className="transition-all duration-300"
+                className="transition-all duration-(--dur-slow)"
               >
                 <title>
                   {`${slice.label}: ${slice.count} (${Math.round(fraction * 100)}%)`}

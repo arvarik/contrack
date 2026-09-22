@@ -102,7 +102,23 @@ export interface ActionMenuProps {
   title?: string;
   /** A heading over the rows, for example "Snooze until". */
   heading?: string;
+  /**
+   * The trigger's look. `ghost` (the default) is the flat icon button with
+   * the hover layer. `primary` is the page's call to action, a small
+   * pressable `.btn-primary` with its edge, such as the Network list's New.
+   */
+  variant?: "ghost" | "primary";
 }
+
+/** The trigger's base classes, by variant. `triggerClassName` adds to these. */
+const TRIGGER_VARIANT: Record<
+  NonNullable<ActionMenuProps["variant"]>,
+  string
+> = {
+  ghost:
+    "hit-area state-layer p-2 rounded-xl text-on-surface-variant hover:text-on-surface transition-colors flex items-center justify-center",
+  primary: "btn-primary btn-sm",
+};
 
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
   if (!ref) return;
@@ -123,6 +139,7 @@ export const ActionMenu = ({
   triggerContent,
   title,
   heading,
+  variant = "ghost",
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
   /** Which item takes focus when the menu opens: the first or the last. */
@@ -332,8 +349,12 @@ export const ActionMenu = ({
         onClick={() => (open ? close() : openMenu("first"))}
         onKeyDown={onTriggerKeyDown}
         className={cn(
-          "hit-area p-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors flex items-center justify-center",
-          open && "bg-surface-container-high text-on-surface",
+          TRIGGER_VARIANT[variant],
+          // A primary trigger with only its glyph is a square button.
+          variant === "primary" && !triggerContent && "btn-icon",
+          open &&
+            variant === "ghost" &&
+            "bg-surface-container-high text-on-surface",
           triggerClassName,
         )}
       >

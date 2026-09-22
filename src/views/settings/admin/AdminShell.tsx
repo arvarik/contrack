@@ -14,10 +14,14 @@
  */
 import React, { type ReactNode } from "react";
 import { Loader2, TriangleAlert } from "lucide-react";
-import { SECTION_HEADING } from "../../../lib/styles";
+import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { SETTINGS_PAGE } from "../layout";
 
-/** One administration page: a lead sentence, optional actions, and content. */
+/**
+ * One administration page: a lead sentence, optional actions, and content.
+ * The settings page box, so the list starts under the shell's title.
+ */
 export const AdminPage = ({
   lead,
   actions,
@@ -27,7 +31,7 @@ export const AdminPage = ({
   actions?: ReactNode;
   children: ReactNode;
 }) => (
-  <div className="p-4 sm:p-6 md:p-10 max-w-5xl mx-auto space-y-6 pb-28 md:pb-10">
+  <div className={cn(SETTINGS_PAGE, "space-y-6")}>
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <p className="text-sm text-on-surface-variant text-pretty max-w-prose">
         {lead}
@@ -79,8 +83,8 @@ export const AdminList = ({
   // rounded on the first and last child instead.
   <div
     className={cn(
-      "bg-surface-container-lowest rounded-2xl shadow-sm",
-      "[&>*:first-child]:rounded-t-2xl [&>*:last-child]:rounded-b-2xl",
+      CARD,
+      "p-0 [&>*:first-child]:rounded-t-2xl [&>*:last-child]:rounded-b-2xl",
     )}
   >
     {header && (
@@ -135,7 +139,8 @@ export const AdminList = ({
  * markup to keep in step.
  *
  * The alternating background is `even:` rather than a divider, again because
- * of the no-line rule.
+ * of the no-line rule. The row is not a control, so it has no hover: its
+ * buttons and menus are the controls.
  */
 export const AdminRow = ({
   columns,
@@ -151,7 +156,7 @@ export const AdminRow = ({
     className={cn(
       "flex flex-col gap-2 px-4 sm:px-6 py-4",
       "sm:grid sm:items-center sm:gap-4",
-      "even:bg-surface-container-low/40 hover:bg-surface-container-low transition-colors",
+      "even:bg-surface-container-low/40",
       columns,
       className,
     )}
@@ -179,10 +184,7 @@ export const AdminCell = ({
   <div className={cn("min-w-0 flex items-baseline gap-2 sm:block", className)}>
     {label && (
       <span
-        className={cn(
-          SECTION_HEADING,
-          "sm:hidden shrink-0 text-[11px] w-24 text-right",
-        )}
+        className={cn(SECTION_HEADING, "sm:hidden shrink-0 w-24 text-right")}
       >
         {label}
       </span>
@@ -207,10 +209,9 @@ export const AdminButton = ({
   const tones = {
     primary: "btn-primary",
     secondary: "btn-secondary",
-    // A red wash on the shared shape. The wash is a utility, so it outranks
-    // the class's disabled look, which is restated here.
-    danger:
-      "btn-secondary bg-red-500/10 text-error hover:bg-red-500/20 disabled:bg-surface-container-high disabled:text-on-surface-variant",
+    // A destructive act that is not final: the row's button opens a
+    // confirmation, and the confirmation's button is the red one.
+    danger: "btn-secondary text-error",
   } as const;
   return (
     <button type="button" {...rest} className={cn(tones[tone], rest.className)}>

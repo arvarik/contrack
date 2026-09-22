@@ -8,10 +8,28 @@ import {
   Calendar,
   ChevronRight,
 } from "lucide-react";
-import { CARD } from "../../../lib/styles";
+import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { SETTINGS_PAGES } from "../../settings/registry";
 import { openQuickNote } from "../../../lib/appEvents";
+import { PULSE_ROW } from "../lib/pulseStyles";
+
+/** One step: a row on the wash, the whole row the control. */
+const STEP = cn(
+  PULSE_ROW,
+  "w-full justify-between p-4 text-left cursor-pointer",
+);
+
+/** A step's glyph, in the primary's wash: each step is an action to take. */
+const STEP_ICON = cn("p-2 rounded-lg mt-0.5 shrink-0", TONE_WASH.primary);
+
+/** A step's name. */
+const STEP_TITLE = "text-sm font-bold text-on-surface block";
+
+/** The chevron that says the step goes somewhere. */
+const STEP_CHEVRON =
+  "w-5 h-5 text-on-surface-variant group-hover:text-on-surface shrink-0 transition-transform group-hover:translate-x-0.5";
 
 export const WelcomeOffice = () => {
   const { isAdmin } = useAuth();
@@ -29,7 +47,7 @@ export const WelcomeOffice = () => {
     <div className={CARD}>
       <div className="p-6 sm:p-8 space-y-6">
         <div>
-          <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider mb-2">
+          <div className={cn(LABEL_PRIMARY, "flex items-center gap-2 mb-2")}>
             <Sparkles className="w-4 h-4" />
             <span>Welcome to Pulse</span>
           </div>
@@ -43,39 +61,29 @@ export const WelcomeOffice = () => {
 
         <div className="space-y-3">
           {/* Step 1: Import contacts */}
-          <button
-            onClick={() => navigate("/?import=1")}
-            className="w-full flex items-center justify-between p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors text-left group cursor-pointer"
-          >
+          <button onClick={() => navigate("/?import=1")} className={STEP}>
             <div className="flex items-start gap-3.5">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary mt-0.5 shrink-0">
+              <div className={STEP_ICON}>
                 <Upload className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors block">
-                  Import contacts
-                </span>
+                <span className={STEP_TITLE}>Import contacts</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
                   Bring in contacts from a CSV or vCard file.
                 </span>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-on-surface-variant group-hover:text-primary shrink-0 transition-transform group-hover:translate-x-0.5" />
+            <ChevronRight className={STEP_CHEVRON} />
           </button>
 
           {/* Step 2: Log your first note */}
-          <button
-            onClick={() => openQuickNote()}
-            className="w-full flex items-center justify-between p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors text-left group cursor-pointer"
-          >
+          <button onClick={() => openQuickNote()} className={STEP}>
             <div className="flex items-start gap-3.5">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary mt-0.5 shrink-0">
+              <div className={STEP_ICON}>
                 <PenLine className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors block">
-                  Log your first note
-                </span>
+                <span className={STEP_TITLE}>Log your first note</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
                   Record a recent interaction or set a follow-up date (press{" "}
                   <kbd className="px-1 py-0.5 rounded bg-surface-container font-mono text-[11px]">
@@ -85,51 +93,41 @@ export const WelcomeOffice = () => {
                 </span>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-on-surface-variant group-hover:text-primary shrink-0 transition-transform group-hover:translate-x-0.5" />
+            <ChevronRight className={STEP_CHEVRON} />
           </button>
 
           {/* Step 3: Connect AI */}
-          <Link
-            to={aiSettingsPath}
-            className="flex items-center justify-between p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors text-left group cursor-pointer"
-          >
+          <Link to={aiSettingsPath} className={STEP}>
             <div className="flex items-start gap-3.5">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary mt-0.5 shrink-0">
+              <div className={STEP_ICON}>
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors block">
-                  Connect AI
-                </span>
+                <span className={STEP_TITLE}>Connect AI</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
                   Enable relationship analysis, smart parsing, and daily
                   insights.
                 </span>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-on-surface-variant group-hover:text-primary shrink-0 transition-transform group-hover:translate-x-0.5" />
+            <ChevronRight className={STEP_CHEVRON} />
           </Link>
 
           {/* Step 4: Connect a calendar (hidden without connectors page) */}
           {hasConnectorsPage && (
-            <Link
-              to="/settings/connectors"
-              className="flex items-center justify-between p-4 rounded-xl bg-surface-container-lowest hover:bg-surface-container border border-outline/10 transition-colors text-left group cursor-pointer"
-            >
+            <Link to="/settings/connectors" className={STEP}>
               <div className="flex items-start gap-3.5">
-                <div className="p-2 rounded-lg bg-primary/10 text-primary mt-0.5 shrink-0">
+                <div className={STEP_ICON}>
                   <Calendar className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors block">
-                    Connect a calendar
-                  </span>
+                  <span className={STEP_TITLE}>Connect a calendar</span>
                   <span className="text-xs text-on-surface-variant mt-0.5 block">
                     Sync meetings and automatically track upcoming interactions.
                   </span>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-on-surface-variant group-hover:text-primary shrink-0 transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className={STEP_CHEVRON} />
             </Link>
           )}
         </div>

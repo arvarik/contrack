@@ -20,6 +20,8 @@ import type {
   ConnectorDetail,
   ConnectorSummary,
 } from "../../../../shared/connectors";
+import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 interface GoogleFormModalProps {
   isOpen: boolean;
@@ -155,7 +157,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
         {formError && (
           <div
             role="alert"
-            className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-error"
+            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
           >
             {formError}
           </div>
@@ -163,16 +165,16 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
 
         {/* State 1: Instance OAuth not configured */}
         {!isLoadingKinds && !isConfiguredOnInstance && !isEditing && (
-          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 space-y-3">
+          <div className="rounded-xl bg-warning/10 p-4 space-y-3">
             <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-on-surface">
                   Google OAuth client not configured
                 </p>
                 <p className="text-xs text-on-surface-variant">
                   {isAdmin
-                    ? "Add a Google OAuth Client ID and Secret in Administration Settings before connecting Google accounts."
+                    ? "Add a Google OAuth client ID and secret in Administration settings before connecting Google accounts."
                     : "Ask your administrator to add a Google OAuth client in Settings → General."}
                 </p>
               </div>
@@ -183,9 +185,9 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 type="button"
                 onClick={() => {
                   onClose();
-                  navigate("/settings/general#integrations");
+                  navigate("/settings/admin/general#integrations");
                 }}
-                className="hit-area inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-amber-500/20 text-on-surface hover:bg-amber-500/30 transition-colors"
+                className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
               >
                 <span>Configure in Settings → General</span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -196,7 +198,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
 
         {/* State 2: Needs reauth banner */}
         {isNeedsReauth && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 space-y-2">
+          <div className="rounded-xl bg-error/10 p-4 space-y-2">
             <div className="flex items-start gap-2.5">
               <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
               <div>
@@ -212,7 +214,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
             <button
               type="button"
               onClick={handleConnectRedirect}
-              className="btn-primary text-xs shrink-0 mt-2"
+              className="btn-primary btn-sm shrink-0 mt-2"
             >
               Reconnect with Google
             </button>
@@ -244,7 +246,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               <button
                 type="button"
                 onClick={handleConnectRedirect}
-                className="hit-area w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-on-primary font-medium text-xs hover:bg-primary/90 transition-colors shadow-sm min-h-[44px]"
+                className="btn-primary w-full"
               >
                 <Globe className="w-4 h-4" />
                 <span>Connect Google Workspace</span>
@@ -268,7 +270,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                className={FORM_INPUT}
               />
             </div>
 
@@ -290,17 +292,17 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </div>
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container">
                   <span className="text-xs text-on-surface font-medium">
-                    Gmail Messages
+                    Gmail messages
                   </span>
                   <Switch
                     checked={syncEmail}
                     onChange={setSyncEmail}
-                    label="Sync Gmail Messages"
+                    label="Sync Gmail messages"
                   />
                 </div>
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-container">
                   <span className="text-xs text-on-surface font-medium">
-                    Google Calendar Events
+                    Google Calendar events
                   </span>
                   <Switch
                     checked={syncCalendar}
@@ -402,7 +404,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                       Math.max(1, Math.min(10, Number(e.target.value) || 3)),
                     )
                   }
-                  className="w-20 px-3 py-2 rounded-xl bg-surface-container-high text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px]"
+                  className={cn(FORM_INPUT, "w-20")}
                 />
                 <span className="text-xs text-on-surface-variant">
                   messages or meetings before suggesting an unknown
@@ -412,17 +414,13 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-surface-container-high/40">
-              <button
-                type="button"
-                onClick={onClose}
-                className="hit-area px-3 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors min-h-[44px]"
-              >
+              <button type="button" onClick={onClose} className="btn-secondary">
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={updateConnector.isPending}
-                className="hit-area px-4 py-2 rounded-xl text-xs font-medium bg-primary text-on-primary hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary min-h-[44px] flex items-center gap-1.5"
+                className="btn-primary"
               >
                 {updateConnector.isPending && (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

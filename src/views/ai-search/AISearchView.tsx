@@ -13,7 +13,12 @@ import { useContacts } from "../../api";
 import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
 import { AISearchConfirmModal } from "./components/AISearchConfirmModal";
-import { CARD, SECTION_HEADING, SEARCH_INPUT } from "../../lib/styles";
+import {
+  CARD,
+  SECTION_HEADING,
+  SEARCH_INPUT,
+  filterPill,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { EmptyState } from "../../components/ui/EmptyState";
 
@@ -117,19 +122,23 @@ export function AISearchView({
 
   const FILTERS: { id: DataFilter; label: string; icon: React.ReactNode }[] = [
     { id: "all", label: "All", icon: <User className="w-3 h-3" /> },
-    { id: "has_links", label: "Has Links", icon: <Link className="w-3 h-3" /> },
-    { id: "has_email", label: "Has Email", icon: <Mail className="w-3 h-3" /> },
-    { id: "no_data", label: "No Data", icon: <Search className="w-3 h-3" /> },
+    { id: "has_links", label: "Has links", icon: <Link className="w-3 h-3" /> },
+    { id: "has_email", label: "Has email", icon: <Mail className="w-3 h-3" /> },
+    { id: "no_data", label: "No data", icon: <Search className="w-3 h-3" /> },
   ];
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
+    <div className="space-y-4">
       {/*
         No title block here. This view is only ever mounted inside the
         Settings shell, which already renders the icon and "Contact
         enrichment" heading — repeating it stacked two near-identical headers
         on top of each other and pushed the actual content off a phone screen.
         Only the description that the shell does not carry survives.
+
+        No box either: the page that mounts it (EnrichmentPage) draws the
+        settings page box, and a second one here set its cards 8 to 16 px
+        off the page title.
       */}
       {!hideHeaderDescription && (
         <p className="text-sm text-on-surface-variant">
@@ -178,7 +187,10 @@ export function AISearchView({
                   />
                 </div>
 
-                {/* Data filter pills */}
+                {/*
+                  Data filter pills. The active one is the selected tint,
+                  like every filter pill, not a filled button.
+                */}
                 <div className="flex gap-1.5 flex-wrap">
                   {FILTERS.map((f) => (
                     <button
@@ -188,10 +200,8 @@ export function AISearchView({
                         setSelectedIds(new Set());
                       }}
                       className={cn(
-                        "hit-area flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all",
-                        dataFilter === f.id
-                          ? "bg-primary text-on-primary shadow-sm"
-                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
+                        "hit-area",
+                        filterPill(dataFilter === f.id),
                       )}
                     >
                       {f.icon}
@@ -212,12 +222,12 @@ export function AISearchView({
                 </span>
                 <button
                   onClick={toggleSelectAll}
-                  className="hit-area text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/15 transition-colors whitespace-nowrap"
+                  className="hit-area state-layer text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 transition-colors whitespace-nowrap"
                 >
                   {selectedIds.size === filteredContacts.length &&
                   filteredContacts.length > 0
-                    ? "Deselect All"
-                    : "Select All"}
+                    ? "Deselect all"
+                    : "Select all"}
                 </button>
               </div>
 
@@ -250,7 +260,7 @@ export function AISearchView({
             {limitMessage && (
               <div
                 role="status"
-                className="flex items-start gap-2.5 rounded-2xl bg-amber-500/10 p-3"
+                className="flex items-start gap-2.5 rounded-2xl bg-warning/10 p-3"
               >
                 <Hourglass className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                 <p className="flex-1 text-xs text-on-surface text-pretty">

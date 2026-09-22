@@ -17,7 +17,13 @@ import {
 } from "../../../components/ui/ActionMenu";
 import { useUpdateActionItem } from "../../../api";
 import { formatRelative } from "../../../lib/datetime";
-import { PULSE_TYPE } from "../lib/pulseStyles";
+import { SELECTED_ROW, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
+import {
+  DUE_TONE,
+  GROUP_TONE,
+  PULSE_CHIP,
+  PULSE_TYPE,
+} from "../lib/pulseStyles";
 import type { UpNextItem } from "../lib/upNext";
 
 export interface ActionRowProps {
@@ -48,13 +54,12 @@ export interface ActionRowProps {
   compact?: boolean;
 }
 
-/** The chip's wash and ink, by how soon the row is due. No border, no caps. */
-const CHIP: Record<UpNextItem["dueChip"]["variant"], string> = {
-  urgent: "bg-error/10 text-error",
-  today: "bg-primary/10 text-on-primary-wash",
-  upcoming: "bg-surface-container-high text-on-surface-variant",
-  neutral: "bg-surface-container-high text-on-surface-variant",
-};
+/**
+ * The leading glyph's circle: 24 px on screen with a 44 px tap box, and the
+ * hover layer rather than a fill, so the glyph keeps its group's colour.
+ */
+const GLYPH =
+  "hit-area state-layer w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer";
 
 /** The snooze choices. Each one moves the due date that many days out. */
 const SNOOZE_PRESETS = [
@@ -204,17 +209,16 @@ export const ActionRow = memo(
         ? formatRelative(item.lastContactedAt)
         : null;
 
+    // The chip's tone says how soon the row is due. The leading glyph's tone
+    // is its group's, the same as the dot beside the group's name.
     const chip = (
       <span
-        className={cn(
-          PULSE_TYPE.chip,
-          "rounded-md px-2 py-0.5 tabular-nums shrink-0",
-          CHIP[item.dueChip.variant],
-        )}
+        className={cn(PULSE_CHIP, TONE_WASH[DUE_TONE[item.dueChip.variant]])}
       >
         {item.dueChip.text}
       </span>
     );
+    const tone = GROUP_TONE[item.group];
 
     // The one action. On a phone it ends line one and is always visible.
     // From sm it floats over the row's right edge and shows on hover or
@@ -251,17 +255,17 @@ export const ActionRow = memo(
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
+          // The resting wash, or the selected row's tint and bar, with the
+          // hover layer over either one.
+          "state-layer group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
           compact ? "gap-2.5 px-2.5" : "gap-3 px-3",
-          isSelected
-            ? "bg-primary/10 ring-1 ring-inset ring-primary/50"
-            : "bg-surface-container-low/70 hover:bg-surface-container-low",
+          isSelected ? SELECTED_ROW : "bg-surface-container-low/70",
           isCompleting && "opacity-50",
         )}
       >
         {/* The primary action: the check for a follow-up, Log for a
-            birthday or a catch-up. The check is faint at rest and full on
-            hover, on focus and while it completes. */}
+            birthday or a catch-up, in the group's tone. The check is faint
+            at rest and full on hover, on focus and while it completes. */}
         {item.hasCheckAction ? (
           <button
             type="button"
@@ -269,12 +273,13 @@ export const ActionRow = memo(
             disabled={isCompleting}
             aria-label={`Mark "${item.title}" done`}
             className={cn(
-              "hit-area w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-150 cursor-pointer",
-              item.dueChip.variant === "urgent"
-                ? "border-error/40 text-error hover:bg-error hover:text-white"
-                : "border-primary/40 text-primary hover:bg-primary hover:text-on-primary",
-              isCompleting &&
-                "bg-emerald-500 border-emerald-500 text-white scale-110",
+              GLYPH,
+              "border-2 transition-all duration-(--dur-fast)",
+              // Done is the success tone: its wash and its own ink, which
+              // clear AA where white on a raw green did not.
+              isCompleting
+                ? cn(TONE_WASH.success, "border-success scale-110")
+                : cn(TONE_TEXT[tone], "border-current/40 hover:border-current"),
             )}
           >
             <Check
@@ -292,7 +297,7 @@ export const ActionRow = memo(
             onClick={handleLog}
             title="Log a birthday note"
             aria-label={`Wish ${item.contactName} a happy birthday`}
-            className="hit-area w-6 h-6 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 hover:bg-amber-500 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+            className={cn(GLYPH, TONE_WASH[tone])}
           >
             <Cake className="w-3.5 h-3.5" />
           </button>
@@ -302,7 +307,7 @@ export const ActionRow = memo(
             onClick={handleLog}
             title="Log an interaction"
             aria-label={`Log note for ${item.contactName}`}
-            className="hit-area w-6 h-6 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-on-primary flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+            className={cn(GLYPH, TONE_WASH[tone])}
           >
             <HeartPulse className="w-3.5 h-3.5" />
           </button>

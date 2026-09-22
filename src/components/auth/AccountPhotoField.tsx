@@ -125,7 +125,8 @@ export const AccountPhotoField = ({
             "aria-describedby": error ? "account-photo-error" : undefined,
             className: cn(
               "relative rounded-full overflow-hidden shrink-0 group cursor-pointer",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              // A file held over the photo, not focus: the base layer draws
+              // the focus ring.
               isDragActive && "ring-2 ring-primary",
             ),
             style: { width: size, height: size },
@@ -154,7 +155,7 @@ export const AccountPhotoField = ({
             ref={chooseBtnRef}
             type="button"
             onClick={open}
-            className="btn-secondary text-sm"
+            className="btn-secondary"
           >
             Choose photo
           </button>
@@ -162,7 +163,7 @@ export const AccountPhotoField = ({
             <button
               type="button"
               onClick={handleRemove}
-              className="btn-secondary text-sm text-error hover:bg-error/10 hover:text-error"
+              className="btn-secondary text-error"
             >
               Remove
             </button>

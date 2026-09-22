@@ -30,6 +30,7 @@ import type {
 import { cn } from "../../../lib/utils";
 import {
   CARD,
+  LABEL,
   SECTION_HEADING_SPACED,
   STATUS_BADGE_SUCCESS,
 } from "../../../lib/styles";
@@ -162,7 +163,8 @@ function BriefingCard({
           <ul className="mt-4 space-y-3">
             {points.map((point, index) => (
               <li key={index} className="flex gap-3">
-                <span aria-hidden="true" className="text-primary font-bold">
+                {/* A model wrote the points, so the bullet is the AI colour. */}
+                <span aria-hidden="true" className="text-ai font-bold">
                   •
                 </span>
                 <span className="text-sm leading-relaxed text-on-surface">
@@ -279,7 +281,7 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
       {contact.about && <AboutSection about={contact.about} />}
       {contact.aiBackground && (
         <details className={cn(CARD, "min-w-0")}>
-          <summary className="hit-area cursor-pointer font-semibold text-sm text-primary">
+          <summary className="hit-area state-layer w-fit -mx-1.5 rounded-lg px-1.5 py-0.5 cursor-pointer font-semibold text-sm text-primary transition-colors">
             Research notes and sources
           </summary>
           <div className="mt-3 max-h-80 overflow-y-auto prose prose-sm max-w-none break-words text-on-surface-variant">
@@ -310,7 +312,8 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
         </details>
       )}
 
-      {/* AI Custom Attributes */}
+      {/* AI custom attributes. Enrichment writes them, so each name wears
+          the AI colour. */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {contact.attributes.map(
@@ -320,11 +323,8 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
                 .replace(/[_-]/g, " ")
                 .replace(/\b\w/g, (c) => c.toUpperCase());
               return (
-                <div
-                  key={attr.id}
-                  className="bg-surface-container-lowest rounded-xl p-4 shadow-sm"
-                >
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-primary block mb-1">
+                <div key={attr.id} className={cn(CARD, "p-4")}>
+                  <span className={cn(LABEL, "text-ai block mb-1")}>
                     {displayName}
                   </span>
                   <span className="text-sm text-on-surface leading-relaxed font-medium block">
@@ -340,16 +340,16 @@ const DossierContent = ({ contact }: { contact: Contact }) => {
       {/* Experience & Education */}
       {((contact.experience?.length ?? 0) > 0 ||
         (contact.education?.length ?? 0) > 0) && (
-        <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden">
+        <div className={cn(CARD, "p-0 overflow-hidden")}>
           {contact.experience && contact.experience.length > 0 && (
-            <div className="p-6 last:border-0 bg-surface-container-lowest">
+            <div className="p-6">
               <h3 className={cn(SECTION_HEADING_SPACED, "mb-5")}>
-                <Briefcase className="w-4 h-4" /> Experience Overview
+                <Briefcase className="w-4 h-4" /> Experience overview
               </h3>
               <div className="space-y-5">
                 {contact.experience.map((exp: ContactExperience) => (
                   <div key={exp.id} className="flex gap-4">
-                    <div className="icon-container">
+                    <div className="w-10 h-10 rounded-xl bg-surface-container-low flex items-center justify-center shrink-0 shadow-xs">
                       <Briefcase className="w-4 h-4 text-primary" />
                     </div>
                     <div>
@@ -479,13 +479,13 @@ function AboutSection({ about }: { about: string }) {
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((open) => !open)}
-          className="hit-area mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary"
+          className="hit-area state-layer mt-3 -mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-sm font-semibold text-primary transition-colors"
         >
           {expanded ? "Show less" : "Show more"}
           <ChevronDown
             aria-hidden="true"
             className={cn(
-              "w-4 h-4 transition-transform duration-300",
+              "w-4 h-4 transition-transform duration-(--dur-slow)",
               expanded && "rotate-180",
             )}
           />

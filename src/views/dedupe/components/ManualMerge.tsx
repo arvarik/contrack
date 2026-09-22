@@ -4,6 +4,7 @@ import type { Contact } from "../../../types";
 import { useMergeContacts } from "../../../api";
 import { toast } from "sonner";
 import { cn } from "../../../lib/utils";
+import { SELECTED_TINT } from "../../../lib/styles";
 import { SelectStage } from "./manual/SelectStage";
 import { CompareStage } from "./manual/CompareStage";
 import { PreviewStage } from "./manual/PreviewStage";
@@ -79,7 +80,9 @@ export const ManualMerge = () => {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto w-full">
+    // The page's column sets the width, so this tab starts on the same left
+    // edge as the settings card above it.
+    <div className="flex flex-col h-full w-full">
       {/* Stage indicator */}
       <div className="flex items-center gap-2 mb-6 px-1">
         {(["select", "compare", "preview"] as Stage[]).map((s, i) => (
@@ -101,17 +104,17 @@ export const ManualMerge = () => {
                 }
               }}
               className={cn(
-                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap",
                 stage === s
-                  ? "bg-primary/10 text-primary"
-                  : "text-on-surface-variant hover:text-on-surface",
+                  ? SELECTED_TINT
+                  : "state-layer text-on-surface-variant hover:text-on-surface",
               )}
             >
               <span
                 className={cn(
                   "w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold",
                   stage === s
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-on-primary"
                     : "bg-surface-container-high text-on-surface-variant",
                 )}
               >

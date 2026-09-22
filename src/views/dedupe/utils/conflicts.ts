@@ -22,7 +22,7 @@ export function detectMergeConflicts(
   if (!primary || !duplicates || duplicates.length === 0) return [];
 
   const fields: { key: keyof Contact; label: string }[] = [
-    { key: "name", label: "Full Name" },
+    { key: "name", label: "Full name" },
     { key: "company", label: "Company" },
     { key: "role", label: "Role" },
     { key: "location", label: "Location" },

@@ -33,7 +33,13 @@ import { X, Search, PenLine } from "lucide-react";
 import { useContactNames } from "../api";
 import type { ContactSlim } from "../api/contacts";
 import { fallbackAvatarUrl } from "../lib/avatar";
-import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../lib/styles";
+import {
+  FORM_LABEL,
+  MENU_ITEM,
+  MENU_ITEM_SELECTED,
+  MENU_PANEL,
+} from "../lib/styles";
+import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
 import { Modal } from "./ui/Modal";
 import { IconButton } from "./ui/IconButton";
@@ -63,10 +69,6 @@ interface QuickInteractionModalProps {
    */
   initialContactId?: string;
 }
-
-/** The small caps label above the picker. */
-const FIELD_CAPTION =
-  "text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-1.5 block";
 
 export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
   isOpen,
@@ -244,7 +246,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
           </p>
         ) : (
           <>
-            <span className={FIELD_CAPTION}>Who?</span>
+            <span className={FORM_LABEL}>Who?</span>
             {selectedContact ? (
               <div className="flex items-center gap-2 bg-surface-container-low rounded-xl px-3 py-2.5">
                 <img
@@ -269,7 +271,8 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
               </div>
             ) : (
               <div className="relative">
-                <div className="flex items-center gap-2 bg-surface-container-low rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+                {/* A composite field: the box draws the ring for its input. */}
+                <div className="focus-frame flex items-center gap-2 bg-surface-container-low rounded-xl px-3 py-2.5">
                   <Search
                     aria-hidden="true"
                     className="w-4 h-4 text-on-surface-variant shrink-0"
@@ -283,7 +286,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                     placeholder="Search for a contact…"
                     // text-base on mobile prevents iOS Safari's auto-zoom on
                     // focus (which would otherwise rescale the bottom sheet).
-                    className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant"
+                    className="flex-1 bg-transparent border-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant"
                     autoComplete="off"
                     inputMode="search"
                   />
@@ -297,7 +300,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.12 }}
+                      transition={{ duration: DURATION.fast, ease: EASE }}
                       // Motion draws the entrance, so the panel's own CSS
                       // entrance is taken off.
                       className={cn(

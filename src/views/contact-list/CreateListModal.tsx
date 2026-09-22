@@ -25,6 +25,13 @@ import {
   Sun,
 } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
+import {
+  FORM_INPUT,
+  FORM_LABEL,
+  LABEL,
+  SELECTED_TINT,
+  SWATCH_SELECTED,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -88,14 +95,11 @@ export const CreateListModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create List">
+    <Modal isOpen={isOpen} onClose={onClose} title="Create list">
       <form onSubmit={handleSubmit} className="space-y-6 pt-2">
         <div>
-          <span
-            id="new-list-icon-label"
-            className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-3"
-          >
-            Choose an Icon
+          <span id="new-list-icon-label" className={cn(LABEL, "block mb-3")}>
+            Choose an icon
           </span>
           <div
             role="group"
@@ -109,11 +113,14 @@ export const CreateListModal = ({
                   key={key}
                   type="button"
                   onClick={() => setIcon(key)}
+                  aria-pressed={active}
                   className={cn(
-                    "hit-area p-2.5 rounded-xl transition-all flex items-center justify-center",
+                    "hit-area state-layer p-2.5 rounded-xl transition-colors flex items-center justify-center",
+                    // The tint says "chosen" by hue alone, so the swatch
+                    // ring is the second cue.
                     active
-                      ? "bg-primary/15 text-on-primary-wash ring-2 ring-primary/30 shadow-sm scale-110"
-                      : "text-on-surface-variant hover:text-primary hover:bg-surface-container-low",
+                      ? cn(SELECTED_TINT, SWATCH_SELECTED)
+                      : "text-on-surface-variant hover:text-on-surface",
                   )}
                   title={key}
                 >
@@ -124,11 +131,8 @@ export const CreateListModal = ({
           </div>
         </div>
         <div>
-          <label
-            htmlFor="new-list-name"
-            className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-1.5"
-          >
-            List Name
+          <label htmlFor="new-list-name" className={FORM_LABEL}>
+            List name
           </label>
           <input
             id="new-list-name"
@@ -138,8 +142,8 @@ export const CreateListModal = ({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. VIP Clients, Investors, Friends"
-            className="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/30 focus:outline-none"
+            placeholder="e.g. VIP clients, Investors, Friends"
+            className={FORM_INPUT}
           />
         </div>
         <div className="flex items-center justify-between pt-2">
@@ -156,9 +160,9 @@ export const CreateListModal = ({
           <button
             type="submit"
             disabled={!name.trim() || isPending}
-            className="btn-primary ml-auto px-6"
+            className="btn-primary ml-auto"
           >
-            {isPending ? "Creating..." : "Create List"}
+            {isPending ? "Creating..." : "Create list"}
           </button>
         </div>
       </form>

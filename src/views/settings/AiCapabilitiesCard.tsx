@@ -14,7 +14,7 @@
  */
 import { Brain, Check, Minus } from "lucide-react";
 import { useAISettings, type AICapability } from "../../api/aiSettings";
-import { SECTION_HEADING } from "../../lib/styles";
+import { CARD, SECTION_HEADING, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 const CAPABILITIES: { key: AICapability; label: string; does: string }[] = [
@@ -36,9 +36,14 @@ export const AiCapabilitiesCard = () => {
   const { data: settings, isLoading } = useAISettings();
 
   return (
-    <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-4 sm:p-5 space-y-3">
+    <div className={cn(CARD, "p-4 sm:p-5 space-y-3")}>
       <div className="flex items-start gap-3">
-        <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+        <span
+          className={cn(
+            "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+            TONE_WASH.primary,
+          )}
+        >
           <Brain className="w-[18px] h-[18px]" />
         </span>
         <div className="min-w-0">

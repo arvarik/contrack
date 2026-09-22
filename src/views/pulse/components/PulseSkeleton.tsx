@@ -1,6 +1,7 @@
 import React from "react";
 import { cn } from "../../../lib/utils";
-import { CARD } from "../../../lib/styles";
+import { CARD, PAGE_TOP, PAGE_X } from "../../../lib/styles";
+import { PulseHeaderSkeleton } from "../../../components/layout/RouteFallback";
 import { COLUMN_CLASSES, GRID_CLASSES } from "../lib/pulseStyles";
 
 const SkeletonBox = ({
@@ -37,30 +38,25 @@ const SkeletonLine = ({
 );
 
 /**
- * The page's silhouette while the dashboard loads. It reads the same grid
- * and column classes as the page and the route fallback, so the columns
- * land once at every width.
+ * The page's silhouette while the dashboard loads. It reads the same padding,
+ * grid and column classes as the page and the route fallback, and draws the
+ * route fallback's masthead, so the header and the columns land once at
+ * every width.
+ *
+ * @param ask whether the masthead will hold the Ask form: AI is allowed.
  */
-export const PulseSkeleton = () => {
+export const PulseSkeleton = ({ ask = true }: { ask?: boolean }) => {
   return (
     <div
       aria-busy="true"
       aria-label="Loading Pulse"
-      className="w-full max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32"
+      className={cn(
+        "w-full max-w-[1600px] mx-auto flex flex-col gap-6 sm:gap-8 pb-32",
+        PAGE_X,
+        PAGE_TOP,
+      )}
     >
-      {/* Masthead skeleton: the label, the date, the sentence, the actions */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-        <div className="flex flex-col gap-2">
-          <SkeletonLine width="w-12" className="h-3" />
-          <SkeletonLine width="w-64" className="h-7 sm:h-9" />
-          <SkeletonLine width="w-80" className="h-4 mt-1" />
-        </div>
-        <div className="flex items-center gap-3">
-          <SkeletonBox className="w-10 h-10 rounded-full" />
-          <SkeletonBox className="w-28 h-10 rounded-xl" />
-          <SkeletonBox className="w-10 h-10 rounded-xl" />
-        </div>
-      </div>
+      <PulseHeaderSkeleton ask={ask} />
 
       {/* 3-Column Grid Skeleton */}
       <div className={GRID_CLASSES}>

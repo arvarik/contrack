@@ -15,8 +15,10 @@ import type { Contact } from "../../../../types";
 import {
   CARD_COMPACT,
   SECTION_HEADING,
+  SELECTED_TINT,
   SOURCE_BADGE,
   TAG_PILL,
+  TONE_WASH,
 } from "../../../../lib/styles";
 import { cn } from "../../../../lib/utils";
 import { FieldRow } from "./FieldRow";
@@ -67,13 +69,11 @@ export const ContactCard = ({
   const primaryEmail = contact.emails?.[0]?.email;
   const primaryPhone = contact.phones?.[0]?.phone;
 
+  // The keeper is marked by its label, not by a ring: a ring read as keyboard
+  // focus.
   return (
     <div
-      className={cn(
-        CARD_COMPACT,
-        "space-y-3 relative transition-all overflow-hidden min-w-0",
-        isPrimary && "ring-2 ring-inset ring-emerald-500/50 shadow-md",
-      )}
+      className={cn(CARD_COMPACT, "space-y-3 relative overflow-hidden min-w-0")}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -102,19 +102,19 @@ export const ContactCard = ({
         <button
           onClick={onSetPrimary}
           className={cn(
-            "w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 rounded-xl text-xs font-bold transition-all",
+            "w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 rounded-xl text-xs font-bold transition-colors",
             isPrimary
-              ? "bg-emerald-500/10 text-success"
-              : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
+              ? SELECTED_TINT
+              : "state-layer bg-surface-container-low text-on-surface-variant hover:text-on-surface",
           )}
         >
           {isPrimary ? (
             <>
               <Shield className="w-3.5 h-3.5" />
-              Primary Contact
+              Primary contact
             </>
           ) : (
-            "Set as Primary"
+            "Set as primary"
           )}
         </button>
       )}
@@ -135,11 +135,10 @@ export const ContactCard = ({
             </span>
             {isConflict("name") && (
               <span
-                className={`text-[11px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                  isPrimary
-                    ? "bg-emerald-500/20 text-success"
-                    : "bg-amber-500/20 text-warning"
-                }`}
+                className={cn(
+                  "text-[11px] uppercase tracking-[0.08em] font-bold px-1.5 py-0.5 rounded",
+                  isPrimary ? TONE_WASH.success : TONE_WASH.warning,
+                )}
               >
                 {isPrimary ? "Kept" : "Discarded"}
               </span>

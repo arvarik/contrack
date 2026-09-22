@@ -171,7 +171,7 @@ describe("a scan booked behind another account's", () => {
 
   it("keeps waiting through a run of failed polls", async () => {
     // The server still holds the place in line, so dropping the wait shows a
-    // Begin Scan button the server answers "a scan is already running for
+    // Begin scan button the server answers "a scan is already running for
     // your account" — with no way back to the waiting state.
     stubEventSource();
     const fetchMock = vi

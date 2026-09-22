@@ -162,6 +162,8 @@ const ContactListItemInner = ({
 
   const compact = density === "compact";
   const metrics = DENSITY_METRICS[density];
+  // One selected look: the open contact, or a row picked in select mode.
+  const selected = isSelectMode ? isSelected : active;
 
   // The row's name says the score in words, so the ring's colour is never the
   // only sign of it: "Betty Clark, Global Dynamics, score 72, strong". The
@@ -191,14 +193,11 @@ const ContactListItemInner = ({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       className={cn(
-        listRow(active && !isSelectMode),
+        listRow(selected),
         // Compact trims the padding, not the information: the same name and
         // company are shown, just in less vertical space.
         compact && "gap-2.5 p-2",
         isSelectMode && "cursor-pointer select-none",
-        isSelectMode &&
-          isSelected &&
-          "bg-primary/8 outline-2 outline-primary -outline-offset-2",
       )}
     >
       {/* Checkbox overlay in select mode */}
@@ -212,13 +211,13 @@ const ContactListItemInner = ({
           >
             <div
               className={cn(
-                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all",
+                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
                 isSelected
                   ? "bg-primary border-primary"
                   : "border-on-surface-variant/40 bg-surface-container-low",
               )}
             >
-              {isSelected && <CheckCheck className="w-3 h-3 text-white" />}
+              {isSelected && <CheckCheck className="w-3 h-3 text-on-primary" />}
             </div>
           </motion.div>
         )}
@@ -251,12 +250,15 @@ const ContactListItemInner = ({
               The row is a link, and its name is already the link's name.
             */}
             <span
-              className={`block text-sm font-semibold truncate ${(active && !isSelectMode) || (isSelectMode && isSelected) ? "text-primary" : "text-on-surface"}`}
+              className={cn(
+                "block text-sm font-semibold truncate",
+                selected ? "text-on-primary-wash" : "text-on-surface",
+              )}
             >
               {contact.name}
             </span>
             {contact.isGhost ? (
-              <span title="Ghost Contact" className="shrink-0 flex">
+              <span title="Ghost contact" className="shrink-0 flex">
                 <Sparkles className="w-3.5 h-3.5 text-primary opacity-80" />
               </span>
             ) : null}

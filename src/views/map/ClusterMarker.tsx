@@ -45,11 +45,15 @@ export const ClusterMarker = memo(function ClusterMarker({
       latitude={cluster.latitude}
       anchor="center"
     >
+      {/*
+        The count is text, and scaling text blurs it, so a hover lifts the
+        cluster the way it lifts a pin instead of growing it.
+      */}
       <button
         type="button"
         aria-label={clusterLabel(cluster.count, atRisk, selectedCount)}
         onClick={() => onExpand(cluster)}
-        className={`relative flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-transform duration-200 hover:scale-105 ${
+        className={`relative flex items-center justify-center w-12 h-12 rounded-full cursor-pointer bg-surface-container-lowest text-primary text-lg font-extrabold shadow-md transition-transform hover:-translate-y-1 ${
           hasSelected ? "ring-2 ring-primary" : ""
         }`}
       >

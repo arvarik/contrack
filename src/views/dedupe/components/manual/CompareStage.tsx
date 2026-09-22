@@ -4,6 +4,7 @@ import { ArrowRight, ChevronLeft, Shield, AlertTriangle } from "lucide-react";
 import { ContactCard } from "../shared/ContactCard";
 import type { Contact } from "../../../../types";
 import { cn } from "../../../../lib/utils";
+import { TONE_WASH } from "../../../../lib/styles";
 
 interface CompareStageProps {
   selected: Contact[];
@@ -55,12 +56,10 @@ export const CompareStage = ({
             key={contact.id}
             contact={contact}
             label={
-              contact.id === primaryId ? "Primary (Keeper)" : "Will Merge In"
+              contact.id === primaryId ? "Primary (keeper)" : "Will merge in"
             }
             labelColor={
-              contact.id === primaryId
-                ? "text-success bg-emerald-500/10"
-                : "text-warning bg-amber-500/10"
+              contact.id === primaryId ? TONE_WASH.success : TONE_WASH.warning
             }
             other={selected.find((c) => c.id !== contact.id)}
             isPrimary={contact.id === primaryId}
@@ -75,7 +74,7 @@ export const CompareStage = ({
           <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
           <div>
             <div className="text-sm font-bold text-warning mb-1">
-              3-Way Merge
+              3-way merge
             </div>
             <p className="text-xs text-on-surface-variant">
               Two contacts will be merged sequentially into the primary. All
@@ -91,7 +90,7 @@ export const CompareStage = ({
         className="btn-primary w-full"
       >
         <Shield className="w-5 h-5" />
-        Preview Merge Result
+        Preview merge result
         <ArrowRight className="w-4 h-4" />
       </button>
     </motion.div>

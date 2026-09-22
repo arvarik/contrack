@@ -16,7 +16,7 @@ import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useDedupeCount } from "../../../api";
-import { CARD } from "../../../lib/styles";
+import { CARD, PAGE_X, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 const DEDUPE_PRESET_COPY = {
@@ -27,6 +27,14 @@ const DEDUPE_PRESET_COPY = {
     "Auto-merges pairs at 88%+ confidence. Fewer to review; more misfires to undo.",
 } as const;
 
+/**
+ * The page's one column: the cards' width, starting on the title's line. The
+ * shell's header spans the column (this page owns its scrolling), so the
+ * column does not centre. The settings card and the dedupe tool both sit in
+ * it, so the page has one left edge and one width at every size.
+ */
+const COLUMN = "max-w-4xl w-full";
+
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
   const { preferences, setPreference } = usePreferences();
@@ -36,17 +44,25 @@ export const DuplicatesPage = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-4 sm:p-6 pb-4 shrink-0 max-w-4xl w-full mx-auto overflow-y-auto max-h-[50vh] sm:max-h-none">
+      <div
+        className={cn(
+          PAGE_X,
+          COLUMN,
+          "pt-4 pb-4 shrink-0 overflow-y-auto max-h-[50vh] sm:max-h-none",
+        )}
+      >
         {/* Review strip */}
         {dedupeCount > 0 && (
           <div
             className={cn(
               CARD,
-              "p-4 mb-4 flex items-center justify-between gap-4 bg-primary/10 border-primary/20",
+              "p-4 mb-4 flex items-center justify-between gap-4 bg-primary/10",
             )}
           >
             <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+              <span
+                className={cn("p-2 rounded-lg shrink-0", TONE_WASH.primary)}
+              >
                 <Copy className="w-5 h-5" />
               </span>
               <div>
@@ -61,7 +77,7 @@ export const DuplicatesPage = () => {
             </div>
             <Link
               to="/pulse/duplicates"
-              className="btn-primary text-xs px-3 py-2 shrink-0 flex items-center gap-1.5"
+              className="btn-primary btn-sm shrink-0"
             >
               Review them
               <ArrowRight className="w-3.5 h-3.5" />
@@ -129,8 +145,9 @@ export const DuplicatesPage = () => {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 relative">
-        <DedupeView embedded hideBackLink />
+      {/* The same column. The tool's rows carry their own gutters. */}
+      <div className={cn(COLUMN, "flex-1 min-h-0 relative")}>
+        <DedupeView />
       </div>
     </div>
   );

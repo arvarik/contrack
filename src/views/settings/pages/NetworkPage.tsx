@@ -16,6 +16,7 @@ import { Segmented } from "../../../components/ui/Segmented";
 import { Select } from "../../../components/ui/Select";
 import { Switch } from "../../../components/ui/Switch";
 import { SettingRow } from "../SettingRow";
+import { SETTINGS_PAGE } from "../layout";
 import { CARD } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
@@ -33,7 +34,7 @@ export const Stepper = ({
   label: string;
 }) => {
   const button =
-    "hit-area w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold transition-colors bg-surface-container hover:bg-surface-container-high disabled:text-on-surface-variant disabled:cursor-not-allowed";
+    "hit-area state-layer w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold transition-colors bg-surface-container disabled:text-on-surface-variant disabled:cursor-not-allowed";
   return (
     <div className="flex items-center gap-2">
       <button
@@ -70,7 +71,7 @@ export const NetworkPage = () => {
     useRecentContactsLimit();
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       <div className="space-y-1">
         <p className="text-sm text-on-surface-variant">
           Where Contrack opens, contacts list defaults, and weather.

@@ -101,12 +101,16 @@ export interface SelectProps<T extends string = string> {
   title?: string;
 }
 
+/**
+ * The three triggers hover with the one state layer. The `field` form draws
+ * its focus ring inset, like the text fields it sits among in a form.
+ */
 const TRIGGER: Record<SelectVariant, string> = {
   field:
-    "w-full min-h-[44px] sm:min-h-[40px] justify-between gap-2 px-3.5 rounded-xl bg-surface-container-low text-sm font-medium text-on-surface hover:bg-surface-container-high",
-  chip: "hit-area min-h-8 gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold uppercase tracking-widest bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
+    "state-layer w-full min-h-[44px] sm:min-h-[40px] justify-between gap-2 px-3.5 rounded-xl bg-surface-container-low text-sm font-medium text-on-surface focus-visible:-outline-offset-2",
+  chip: "hit-area state-layer min-h-8 gap-1 rounded-lg px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] bg-surface-container text-on-surface-variant",
   ghost:
-    "hit-area gap-1 rounded-xl px-2.5 py-1.5 text-sm font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high",
+    "hit-area state-layer gap-1 rounded-xl px-2.5 py-1.5 text-sm font-medium text-on-surface-variant hover:text-on-surface",
 };
 
 /**

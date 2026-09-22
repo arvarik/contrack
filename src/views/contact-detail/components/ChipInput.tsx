@@ -139,7 +139,7 @@ export const ChipInput = ({
               onRemove(chip);
             }}
             className={cn(
-              "hit-area w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors hover:text-error hover:bg-error/10",
+              "hit-area state-layer w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors hover:text-error",
               chip.ai ? "text-on-ai-wash" : "text-on-surface-variant",
             )}
           >
@@ -175,7 +175,7 @@ export const ChipInput = ({
           }}
           // A field draws no `::after`, so the 44 px floor on a phone is the
           // field's own height. 16 px text there stops iOS zooming in.
-          className="min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none"
         />
       ) : (
         <button

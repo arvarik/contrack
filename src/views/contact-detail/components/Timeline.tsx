@@ -39,6 +39,7 @@ import {
   Phone,
   Sparkles,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import DOMPurify from "dompurify";
 import { usePreferences } from "../../../contexts/PreferencesContext";
@@ -47,7 +48,12 @@ import { connectorViaLabel } from "../../../../shared/connectors";
 
 import type { Interaction } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
-import { SECTION_HEADING, TIMELINE_CARD } from "../../../lib/styles";
+import {
+  LABEL,
+  SECTION_HEADING,
+  TIMELINE_CARD,
+  TONE_WASH,
+} from "../../../lib/styles";
 import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { formatDay, parseServerTime } from "../../../lib/datetime";
 import {
@@ -107,54 +113,40 @@ export interface TimelineProps {
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Returns the icon component and color classes for a given interaction type. */
-function getInteractionStyle(type: string) {
-  let Icon = FileText;
-  let bgClass = "bg-surface-container";
-  let textClass = "text-on-surface";
+/**
+ * The info colour on its own 10 percent wash: a call or a social message.
+ * Info is not one of the shared tones, so it keeps this pair.
+ */
+const INFO_WASH = "bg-info/10 text-info";
 
-  if (type === "call") {
-    Icon = Phone;
-    bgClass = "bg-blue-500/10";
-    textClass = "text-info";
+/**
+ * The glyph for an interaction type, on its colour's wash. Every other type
+ * reads from the shared tones (`TONE_WASH`), which
+ * `tests/unit/theme.contrast.test.ts` measures.
+ */
+function getInteractionStyle(type: string): { Icon: LucideIcon; tone: string } {
+  switch (type) {
+    case "call":
+      return { Icon: Phone, tone: INFO_WASH };
+    case "meeting":
+      return { Icon: Handshake, tone: TONE_WASH.success };
+    case "email":
+      return { Icon: Mail, tone: TONE_WASH.success };
+    case "note":
+      // The AI colour, as a glyph on its own 10 percent wash.
+      return { Icon: FileText, tone: "bg-ai/10 text-ai" };
+    case "message":
+    case "sms":
+      return { Icon: MessageSquare, tone: TONE_WASH.success };
+    case "linkedin":
+      return { Icon: Linkedin, tone: INFO_WASH };
+    case "facebook":
+      return { Icon: Facebook, tone: INFO_WASH };
+    case "import":
+      return { Icon: ExternalLink, tone: TONE_WASH.warning };
+    default:
+      return { Icon: FileText, tone: TONE_WASH.neutral };
   }
-  if (type === "meeting") {
-    Icon = Handshake;
-    bgClass = "bg-emerald-500/10";
-    textClass = "text-success";
-  }
-  if (type === "email") {
-    Icon = Mail;
-    bgClass = "bg-green-500/10";
-    textClass = "text-success";
-  }
-  if (type === "note") {
-    // The AI colour, as a glyph on its own 10 percent wash.
-    bgClass = "bg-ai/10";
-    textClass = "text-ai";
-  }
-  if (type === "message" || type === "sms") {
-    Icon = MessageSquare;
-    bgClass = "bg-teal-500/10";
-    textClass = "text-success";
-  }
-  if (type === "linkedin") {
-    Icon = Linkedin;
-    bgClass = "bg-blue-600/10";
-    textClass = "text-info";
-  }
-  if (type === "facebook") {
-    Icon = Facebook;
-    bgClass = "bg-blue-500/10";
-    textClass = "text-info";
-  }
-  if (type === "import") {
-    Icon = ExternalLink;
-    bgClass = "bg-amber-500/10";
-    textClass = "text-warning";
-  }
-
-  return { Icon, bgClass, textClass };
 }
 
 interface ParsedMention {
@@ -315,7 +307,7 @@ const TimelineEntry = React.memo(
     // context. An open menu lifts its entry above the next one.
     const [menuOpen, setMenuOpen] = useState(false);
     const { item, date } = entry;
-    const { Icon, bgClass, textClass } = getInteractionStyle(item.type);
+    const { Icon, tone } = getInteractionStyle(item.type);
     const mentions = parseMentions(item.mentions);
 
     return (
@@ -350,8 +342,7 @@ const TimelineEntry = React.memo(
           <div
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-              bgClass,
-              textClass,
+              tone,
             )}
           >
             <Icon aria-hidden="true" className="h-4 w-4" />
@@ -403,9 +394,9 @@ const TimelineEntry = React.memo(
             {item.isViaName && (
               <button
                 type="button"
-                className="hit-area mt-1 mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-surface-container-highest/20 opacity-70 hover:opacity-100 transition-opacity text-[11px] uppercase tracking-wide text-on-surface-variant font-bold"
+                className="hit-area state-layer mt-1 mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-surface-container-highest/20 transition-colors text-[11px] uppercase tracking-[0.08em] text-on-surface-variant hover:text-on-surface font-bold"
                 onClick={() => navigate(`/contact/${item.isViaId}`)}
-                title="Navigate to Original Interaction"
+                title="Navigate to original interaction"
               >
                 <ExternalLink
                   aria-hidden="true"
@@ -424,7 +415,7 @@ const TimelineEntry = React.memo(
             {/* Ghost Mentions */}
             {mentions && (
               <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
-                <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
+                <span className={cn(LABEL, "mr-2 flex items-center gap-1")}>
                   <Sparkles
                     aria-hidden="true"
                     className="w-3 h-3 text-primary opacity-60"
@@ -442,8 +433,8 @@ const TimelineEntry = React.memo(
                             navigate(`/contact/${mention.contactId}`),
                         })
                       }
-                      title={`Promote ${mention.name} to Contact`}
-                      className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-low border border-dashed border-primary hover:bg-surface-container transition-all group/ghost"
+                      title={`Promote ${mention.name} to contact`}
+                      className="hit-area state-layer flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-low border border-dashed border-primary transition-colors group/ghost"
                     >
                       <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
                         {mention.name.charAt(0)}
@@ -456,7 +447,7 @@ const TimelineEntry = React.memo(
                     <Link
                       key={idx}
                       to={`/contact/${mention.contactId}`}
-                      className="hit-area flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-lowest shadow-sm hover:shadow transition-shadow border border-transparent"
+                      className="hit-area state-layer flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-low transition-colors"
                     >
                       <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[11px] font-bold text-on-primary-wash">
                         {mention.name.charAt(0)}
@@ -483,7 +474,7 @@ const TimelineEntry = React.memo(
                   <a
                     href={safeHref(item.fileUrl)}
                     download
-                    className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high transition-colors w-fit max-w-full overflow-hidden"
+                    className="state-layer flex items-center gap-3 p-3 rounded-xl bg-surface-container-low transition-colors w-fit max-w-full overflow-hidden"
                   >
                     <File
                       aria-hidden="true"
@@ -493,7 +484,7 @@ const TimelineEntry = React.memo(
                       <p className="text-sm font-semibold text-on-surface truncate">
                         {item.fileName}
                       </p>
-                      <p className="text-xs text-on-surface-variant uppercase tracking-widest font-bold mt-0.5">
+                      <p className="text-xs text-on-surface-variant uppercase tracking-[0.08em] font-bold mt-0.5">
                         {item.fileType?.split("/")[1] || "FILE"}
                       </p>
                     </div>
@@ -505,17 +496,17 @@ const TimelineEntry = React.memo(
             {/* Follow-up */}
             {item.actionItems && item.actionItems.length > 0 && (
               <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center border-t border-surface-container/50">
-                <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mr-2 flex items-center gap-1">
-                  Follow Up:
+                <span className={cn(LABEL, "mr-2 flex items-center gap-1")}>
+                  Follow-up:
                 </span>
                 {item.actionItems.map((action) => (
                   <div
                     key={action.id}
                     className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-all text-xs font-semibold select-none",
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors text-xs font-semibold select-none",
                       action.completedAt
                         ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60"
-                        : "bg-surface-container-lowest text-on-surface border-surface-container-high shadow-sm",
+                        : "bg-surface-container-lowest text-on-surface border-surface-container-high",
                     )}
                   >
                     {action.completedAt && (

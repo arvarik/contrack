@@ -15,6 +15,7 @@ import {
   isCombination,
   type Shortcut,
 } from "../../../lib/shortcuts";
+import { SETTINGS_PAGE } from "../layout";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
@@ -30,7 +31,7 @@ export const KeyboardPage = () => {
   const groups = groupedShortcuts();
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       <div className="space-y-1">
         <p className="text-sm text-on-surface-variant">
           Single-key shortcuts and keyboard reference table.
@@ -67,7 +68,7 @@ export const KeyboardPage = () => {
             aria-label={group.group}
             className="space-y-3"
           >
-            <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+            <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
               {group.group}
             </h3>
             <div className="divide-y divide-surface-container/60">

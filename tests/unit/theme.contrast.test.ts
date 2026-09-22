@@ -101,6 +101,11 @@ const ENFORCED_WASH_ALPHAS: Partial<
   ai: [0.1],
   error: [0.1],
   warning: [0.1],
+  // The tones (`TONE_WASH` in src/lib/styles.ts): new people on Pulse wear
+  // the success ink on its own wash.
+  success: [0.1],
+  // The timeline's call and social glyphs sit on the info wash.
+  info: [0.1],
 };
 
 /** Every alpha `bg-primary/*` is written at in the app. */
@@ -246,6 +251,8 @@ describe("the dark palette is not the sloppier of the two", () => {
       primary: ALL_PRIMARY_ALPHAS,
       error: [0.1],
       warning: [0.1],
+      success: [0.1],
+      info: [0.1],
     };
     const light = casesFor(LIGHT, alphas);
     const dark = casesFor(DARK, alphas);
@@ -537,5 +544,77 @@ describe("the heavier primary washes", () => {
     // `applyTheme` skips the derivation entirely for this value, so the five
     // audited tokens are what the app paints.
     expect(DEFAULT_ACCENT).toBe(LIGHT.primary);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The highlighter and the AI hue
+// ---------------------------------------------------------------------------
+
+describe("the highlighter", () => {
+  it.each(["light", "dark"] as const)(
+    "carries the ink and the variant text in the %s palette",
+    (mode) => {
+      // `mark` paints `on-surface`, and a match inside muted text would
+      // otherwise sit in `on-surface-variant`: both must read on it.
+      const palette = PALETTES[mode];
+      for (const text of ["on-surface", "on-surface-variant"] as const) {
+        expect(
+          contrast(hexToRgb(palette[text]), hexToRgb(palette.highlight)),
+          `${mode} ${text} on highlight`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    },
+  );
+
+  it("is a warm wash, not a second blue", () => {
+    for (const palette of [LIGHT, DARK]) {
+      const { h, c } = rgbToOklch(hexToRgb(palette.highlight));
+      expect(c).toBeGreaterThan(0.04);
+      expect(h).toBeGreaterThan(60);
+      expect(h).toBeLessThan(110);
+    }
+  });
+});
+
+describe("the AI colour keeps its hue to itself", () => {
+  const hueGap = (a: number, b: number) => {
+    const d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  };
+
+  it("keeps every contact vibe and every preset accent away from it", async () => {
+    // A vibe or an accent replaces the primary on buttons and links. One on
+    // the AI hue makes a Save button look like a model's chip, and the AI
+    // chips beside it stop saying anything.
+    const { VIBES, AI_HUE_CLEARANCE } = await import("../../src/lib/theme");
+    const { ACCENT_PRESETS } =
+      await import("../../src/components/ui/AccentPicker");
+    // The colour on screen is the derived primary, in each palette, and it
+    // must clear that palette's own AI colour: a preset that passed in light
+    // came within 26 degrees of the dark AI colour.
+    const offenders: string[] = [];
+    const check = (name: string, hex: string) => {
+      if (rgbToOklch(hexToRgb(hex)).c < 0.05) return; // a grey has no hue
+      for (const mode of ["light", "dark"] as const) {
+        const painted = deriveAccent(hex, mode).primary;
+        const { h, c } = rgbToOklch(hexToRgb(painted));
+        if (c < 0.05) continue;
+        const aiHue = rgbToOklch(hexToRgb(PALETTES[mode].ai)).h;
+        const gap = hueGap(h, aiHue);
+        if (gap < AI_HUE_CLEARANCE)
+          offenders.push(`${name} ${hex} in ${mode}: ${gap.toFixed(0)}°`);
+      }
+    };
+    for (const vibe of VIBES) check(`vibe ${vibe.id}`, vibe.base);
+    for (const preset of ACCENT_PRESETS)
+      check(`preset ${preset.label}`, preset.value);
+    expect(offenders).toEqual([]);
+  });
+
+  it("offers no violet or indigo vibe", async () => {
+    const { VIBES } = await import("../../src/lib/theme");
+    expect(VIBES.map((v) => v.id)).not.toContain("violet");
+    expect(VIBES.map((v) => v.id)).not.toContain("indigo");
   });
 });

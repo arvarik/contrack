@@ -16,6 +16,14 @@ import type { DedupeCluster } from "../../../types";
 import { ContactCard } from "./shared/ContactCard";
 import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
+import {
+  CARD,
+  LABEL,
+  SELECTED_ROW,
+  SELECTED_TINT,
+  TONE_WASH,
+} from "../../../lib/styles";
+import { DURATION, EASE } from "../../../lib/motion";
 import { toast } from "sonner";
 import { useMergeCluster, useMergeClusters } from "../../../api";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
@@ -158,23 +166,23 @@ export const ClusterList = ({
               allSelected ? "Deselect all clusters" : "Select all clusters"
             }
             className={cn(
-              "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+              "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
               allSelected
-                ? "bg-primary/15 text-on-primary-wash"
-                : "bg-surface-container-low text-on-surface-variant hover:text-on-surface",
+                ? SELECTED_TINT
+                : "state-layer bg-surface-container-low text-on-surface-variant hover:text-on-surface",
             )}
           >
             <div
               className={cn(
-                "w-4 h-4 rounded flex items-center justify-center transition-all",
+                "w-4 h-4 rounded flex items-center justify-center transition-colors",
                 allSelected
-                  ? "bg-primary text-white"
+                  ? "bg-primary text-on-primary"
                   : "bg-surface-container-high",
               )}
             >
               {allSelected && <CheckCircle2 className="w-3 h-3" />}
             </div>
-            {allSelected ? "Deselect All" : "Select All"}
+            {allSelected ? "Deselect all" : "Select all"}
           </button>
           <span className="text-xs text-on-surface-variant">
             {clusters.length} cluster{clusters.length !== 1 ? "s" : ""}
@@ -199,7 +207,7 @@ export const ClusterList = ({
             ) : (
               <MergeIcon className="w-4 h-4" />
             )}
-            Merge {selected.size} Cluster{selected.size !== 1 ? "s" : ""}
+            Merge {selected.size} cluster{selected.size !== 1 ? "s" : ""}
           </button>
         )}
       </div>
@@ -220,20 +228,19 @@ export const ClusterList = ({
               key={cluster.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i * 0.03, 0.3) }}
+              transition={{
+                duration: DURATION.slow,
+                ease: EASE,
+                delay: Math.min(i * 0.03, 0.3),
+              }}
             >
-              <div
-                className={cn(
-                  "bg-surface-container-lowest rounded-2xl shadow-sm transition-all",
-                  isSelected && "ring-2 ring-primary/40",
-                )}
-              >
+              <div className={cn(CARD, "p-0", isSelected && SELECTED_ROW)}>
                 {/* Summary row */}
                 <div
                   onKeyDown={activateOnKey(() => toggleExpand(cluster.id))}
                   tabIndex={0}
                   role="button"
-                  className="flex items-center gap-3 px-5 py-4 cursor-pointer group"
+                  className="state-layer flex items-center gap-3 px-5 py-4 rounded-2xl cursor-pointer"
                   onClick={() => toggleExpand(cluster.id)}
                 >
                   {/* Checkbox */}
@@ -249,10 +256,10 @@ export const ClusterList = ({
                     }
                     aria-pressed={isSelected}
                     className={cn(
-                      "hit-area w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all",
+                      "hit-area w-5 h-5 rounded flex items-center justify-center shrink-0 transition-colors",
                       isSelected
-                        ? "bg-primary text-white"
-                        : "bg-surface-container-high group-hover:bg-surface-container-highest",
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-high",
                     )}
                   >
                     {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -295,18 +302,25 @@ export const ClusterList = ({
                       {cluster.size}
                     </span>
                     {cluster.hasWeakLink && (
-                      <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-md">
+                      <span
+                        className={cn(
+                          "text-xs font-bold px-2.5 py-1 rounded-md",
+                          TONE_WASH.warning,
+                        )}
+                      >
                         Weak
                       </span>
                     )}
                     <span
                       className={cn(
                         "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
-                        cluster.aggregateConfidence >= 0.9
-                          ? "text-success bg-emerald-500/10"
-                          : cluster.aggregateConfidence >= 0.7
-                            ? "text-primary bg-primary/10"
-                            : "text-warning bg-amber-500/10",
+                        TONE_WASH[
+                          cluster.aggregateConfidence >= 0.9
+                            ? "success"
+                            : cluster.aggregateConfidence >= 0.7
+                              ? "primary"
+                              : "warning"
+                        ],
                       )}
                     >
                       {Math.round(cluster.aggregateConfidence * 100)}%
@@ -325,7 +339,7 @@ export const ClusterList = ({
                       });
                     }}
                     aria-label={`Skip cluster ${primary.name}`}
-                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-rose-500/8 hover:text-error rounded-lg transition-colors"
+                    className="btn-secondary btn-sm shrink-0"
                   >
                     Skip
                   </button>
@@ -338,7 +352,7 @@ export const ClusterList = ({
                     }}
                     disabled={mergeCluster.isPending}
                     aria-label={`Merge ${cluster.size} contacts in this cluster`}
-                    className="hit-area shrink-0 px-3 py-1.5 text-xs font-bold text-on-primary-wash bg-primary/10 hover:bg-primary/15 rounded-lg transition-colors disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:shadow-none disabled:cursor-not-allowed"
+                    className="btn-primary btn-sm shrink-0"
                   >
                     Merge
                   </button>
@@ -360,14 +374,14 @@ export const ClusterList = ({
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: "easeInOut" }}
+                      transition={{ duration: DURATION.slow, ease: EASE }}
                       className="overflow-hidden"
                     >
                       <div className="px-5 pb-5 space-y-4">
                         {/* Large cluster warning */}
                         {cluster.size > 5 && (
                           <div
-                            className="flex items-start gap-3 bg-amber-500/8 rounded-xl p-3"
+                            className="flex items-start gap-3 bg-warning/10 rounded-xl p-3"
                             role="alert"
                           >
                             <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
@@ -401,9 +415,7 @@ export const ClusterList = ({
                           role="radiogroup"
                           aria-label="Select primary contact"
                         >
-                          <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-                            Select Primary
-                          </div>
+                          <div className={LABEL}>Select primary</div>
                           <div className="flex gap-2 overflow-x-auto pb-1 nice-scrollbar">
                             {cluster.contacts.map((contact) => (
                               <button
@@ -415,10 +427,10 @@ export const ClusterList = ({
                                 aria-checked={contact.id === primaryId}
                                 aria-label={`Set ${contact.name} as primary`}
                                 className={cn(
-                                  "shrink-0 flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl transition-all text-xs",
+                                  "shrink-0 flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl transition-colors text-xs",
                                   contact.id === primaryId
-                                    ? "bg-emerald-500/10 ring-2 ring-emerald-500/50 font-bold"
-                                    : "bg-surface-container-low hover:bg-surface-container-high",
+                                    ? cn(SELECTED_TINT, "font-bold")
+                                    : "state-layer bg-surface-container-low",
                                 )}
                               >
                                 <img
@@ -444,8 +456,8 @@ export const ClusterList = ({
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                           <ContactCard
                             contact={primary}
-                            label="Primary (Keeper)"
-                            labelColor="text-success bg-emerald-500/10"
+                            label="Primary (keeper)"
+                            labelColor={TONE_WASH.success}
                             isPrimary
                           />
                           <div className="space-y-3">
@@ -453,8 +465,8 @@ export const ClusterList = ({
                               <ContactCard
                                 key={dup.id}
                                 contact={dup}
-                                label="Merges In"
-                                labelColor="text-warning bg-amber-500/10"
+                                label="Merges in"
+                                labelColor={TONE_WASH.warning}
                                 other={primary}
                                 onSetPrimary={() =>
                                   handleSetPrimary(cluster.id, dup.id)
@@ -467,7 +479,9 @@ export const ClusterList = ({
                         {/* Evidence panel */}
                         {cluster.pairs.length > 0 && (
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <div
+                              className={cn(LABEL, "flex items-center gap-2")}
+                            >
                               <Link2 className="w-3 h-3" />
                               Evidence ({cluster.pairs.length} link
                               {cluster.pairs.length !== 1 ? "s" : ""})

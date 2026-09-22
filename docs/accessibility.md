@@ -121,10 +121,16 @@ not an empty container.
 ### Focus
 
 One `:focus-visible` rule in `src/index.css` draws the ring for every
-control, in the primary colour, outside the control so it survives a filled
-button. A handful of fields draw a ring of their own. The suite asserts an
-indicator is present after a real Tab press, in both palettes, and never
-asserts one after a click, because a pointer user is not meant to see it.
+control: 2 px in the primary colour, outside a control so it survives a
+filled button, and inset on a text field, where it reads as the field's
+border. No component draws a ring of its own, and
+`tests/unit/styles.floor.test.ts` fails on a `focus:ring-*` class. A
+composite field, such as the Ask search box with its icon and buttons, draws
+the same ring on its box with `.focus-frame`, while a button inside the box
+keeps its own. The suite asserts an indicator is present after a real Tab
+press, in both palettes, and never asserts one after a click, because a
+pointer user is not meant to see it. A text field is the exception browsers
+make: it shows its ring on any focus.
 
 The first Tab stop on every page is "Skip to main content" (WCAG 2.4.1). Its
 target follows the route: the contact's name on a contact page, the list's

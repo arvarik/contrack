@@ -26,7 +26,7 @@ export const ImportModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Import Contacts">
+    <Modal isOpen={isOpen} onClose={onClose} title="Import contacts">
       <ImportPanel onComplete={handleComplete} onClose={onClose} />
     </Modal>
   );

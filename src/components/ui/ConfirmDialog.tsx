@@ -19,7 +19,6 @@
 import { type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Modal } from "./Modal";
-import { cn } from "../../lib/utils";
 
 export const ConfirmDialog = ({
   isOpen,
@@ -67,14 +66,7 @@ export const ConfirmDialog = ({
           type="button"
           onClick={onConfirm}
           disabled={busy || disabled}
-          className={cn(
-            "btn-primary",
-            // The danger fill is a utility, so it outranks the class's
-            // disabled look. Restate that look, and drop the primary-tinted
-            // hover shadow for a red button.
-            tone === "danger" &&
-              "bg-error text-on-error hover:shadow-none hover:opacity-90 disabled:bg-surface-container-high disabled:text-on-surface-variant disabled:hover:opacity-100",
-          )}
+          className={tone === "danger" ? "btn-danger" : "btn-primary"}
         >
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
           {confirmLabel}

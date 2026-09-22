@@ -8,6 +8,7 @@ import { cn } from "../../../lib/utils";
 import { motion } from "motion/react";
 import type { AIStatsFeedItem } from "../../../api";
 import { formatDay } from "../../../lib/datetime";
+import { DURATION, EASE } from "../../../lib/motion";
 
 interface FeedItemProps {
   key?: React.Key;
@@ -29,16 +30,16 @@ const OP_LABELS: Record<string, string> = {
   mentions: "Mentions",
   synthesis: "Synthesis",
   parse: "Parse",
-  searchExpansion: "Search Expansion",
-  dailyInsight: "Daily Insight",
-  emlSummary: "Email Summary",
-  connectorSummary: "Connector Summary",
-  bulkParse: "Bulk Parse",
-  queryParse: "Query Parse",
-  hyde: "Query Expansion",
-  aiSearchGrounding: "Web Research",
-  aiSearchExtraction: "Research Extraction",
-  aiSearchSinglePass: "Research (Single Pass)",
+  searchExpansion: "Search expansion",
+  dailyInsight: "Daily insight",
+  emlSummary: "Email summary",
+  connectorSummary: "Connector summary",
+  bulkParse: "Bulk parse",
+  queryParse: "Query parse",
+  hyde: "Query expansion",
+  aiSearchGrounding: "Web research",
+  aiSearchExtraction: "Research extraction",
+  aiSearchSinglePass: "Research (single pass)",
 };
 
 function formatRelativeTime(iso: string): string {
@@ -72,13 +73,13 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.03, ease: "easeOut" }}
+      transition={{ duration: DURATION.slow, delay: index * 0.03, ease: EASE }}
       className={cn(
         // A contained row rather than a ruled one: the bottom-only border read
         // as an unfinished table, and the app separates things by surface
-        // elsewhere (see the sidebar utility group).
-        "flex items-start gap-3 px-3 py-2.5 rounded-xl transition-colors",
-        "bg-surface-container-lowest hover:bg-surface-container-low",
+        // elsewhere (see the sidebar utility group). A row that is not a
+        // control, so it has no hover.
+        "flex items-start gap-3 px-3 py-2.5 rounded-xl bg-surface-container-lowest",
       )}
     >
       {/* Cache dot */}
@@ -100,7 +101,7 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
 
           {/* Model badge or CACHED pill */}
           {item.cached ? (
-            <span className="text-[11px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/10 text-success ring-1 ring-emerald-500/20">
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded bg-emerald-500/10 text-success ring-1 ring-emerald-500/20">
               Cached
             </span>
           ) : item.model ? (

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import type { Contact } from "../../../types";
 import { useContacts } from "../../../api";
 import { ContactMiniCard } from "./shared/ContactMiniCard";
-import { SEARCH_INPUT } from "../../../lib/styles";
+import { LABEL, SEARCH_INPUT, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 
@@ -79,21 +79,23 @@ export const ContactPicker = ({
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
                 layout
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-md"
+                className={cn(
+                  "inline-flex items-center gap-2 px-3 py-1.5 rounded-md",
+                  SELECTED_TINT,
+                )}
               >
                 <img
                   src={c.avatarUrl || fallbackAvatarUrl(c.name)}
                   alt={c.name}
                   className="w-5 h-5 rounded-full object-cover"
                 />
-                <span className="text-xs font-bold text-primary">{c.name}</span>
+                <span className="text-xs font-bold">{c.name}</span>
                 <button
                   onClick={() => removeContact(c.id)}
                   aria-label={`Remove ${c.name}`}
-                  className="hit-area p-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                  className="hit-area state-layer p-0.5 rounded-full"
                 >
-                  {/* On a primary/20 wash while hovered, so the wash token. */}
-                  <X className="w-3 h-3 text-on-primary-wash" />
+                  <X className="w-3 h-3" />
                 </button>
               </motion.div>
             ))}
@@ -110,7 +112,7 @@ export const ContactPicker = ({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search contacts by name, email, company..."
-          className={cn(SEARCH_INPUT)}
+          className={SEARCH_INPUT}
           // Search field in a picker the user just opened.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
@@ -119,7 +121,7 @@ export const ContactPicker = ({
           <button
             onClick={() => setQuery("")}
             aria-label="Clear search"
-            className="hit-area absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-surface-container-high transition-colors"
+            className="hit-area state-layer absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full"
           >
             <X className="w-3.5 h-3.5 text-on-surface-variant" />
           </button>
@@ -128,16 +130,11 @@ export const ContactPicker = ({
 
       {/* Selection status */}
       <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant flex items-center gap-1.5">
+        <span className={cn(LABEL, "flex items-center gap-1.5")}>
           <Users className="w-3.5 h-3.5" />
           {filteredContacts.length} contacts
         </span>
-        <span
-          className={cn(
-            "text-[11px] font-bold uppercase tracking-widest",
-            atMax ? "text-warning" : "text-on-surface-variant",
-          )}
-        >
+        <span className={cn(LABEL, atMax && "text-warning")}>
           {selected.length} / {maxSelection} selected
         </span>
       </div>

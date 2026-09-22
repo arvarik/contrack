@@ -214,12 +214,13 @@ test.describe("Pulse Office", () => {
       masthead.getByRole("heading", { level: 1, name: "Pulse" }),
     ).toBeVisible();
 
-    // The date is the display line and the largest text on the page.
+    // The date is the display line and the largest text on the page: the
+    // page header's title, 30 px from sm.
     const dateSize = await masthead
       .locator("p")
       .first()
       .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-    expect(dateSize).toBe(32);
+    expect(dateSize).toBe(30);
     const largest = await page.evaluate(() => {
       let max = 0;
       for (const el of Array.from(document.body.querySelectorAll("*"))) {
@@ -230,7 +231,7 @@ test.describe("Pulse Office", () => {
       }
       return max;
     });
-    expect(largest).toBe(32);
+    expect(largest).toBe(30);
 
     await expect(masthead).toContainText(
       "1 overdue, 1 due today, 1 birthday this week.",
@@ -423,7 +424,7 @@ test.describe("Pulse Office", () => {
     );
     const backLink = page
       .getByRole("main")
-      .getByRole("link", { name: "Pulse" });
+      .getByRole("link", { name: "Back to Pulse" });
     await expect(backLink).toBeVisible();
 
     // Click back link to return to Pulse

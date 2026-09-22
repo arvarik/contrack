@@ -3,7 +3,8 @@
  *
  * Fixed at 240px wide. Contains the search box at top, group headings in
  * SECTION_HEADING, and rows with icon, label and optional count pill.
- * The active row has aria-current="page".
+ * The active row has aria-current="page" and wears the selected row: the
+ * tint and the bar on its leading edge.
  */
 import React, { useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -12,7 +13,7 @@ import { SettingsSearch } from "./SettingsSearch";
 import { useAuth } from "../../components/auth/AuthGate";
 import { useDedupeCount, useContacts } from "../../api";
 import { useImports } from "../../api/imports";
-import { SECTION_HEADING } from "../../lib/styles";
+import { SECTION_HEADING, SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 export const SettingsRail = () => {
@@ -88,7 +89,7 @@ export const SettingsRail = () => {
             return (
               <div key={group.id} className="space-y-1">
                 <h2 className={cn(SECTION_HEADING, "px-2 py-1")}>
-                  {group.railHeading}
+                  {group.title}
                 </h2>
                 <div className="space-y-0.5">
                   {pages.map((page: SettingsPage) => {
@@ -112,19 +113,16 @@ export const SettingsRail = () => {
                             : page.title
                         }
                         className={cn(
-                          "flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors",
-                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          "state-layer flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors",
                           isActive
-                            ? "bg-primary/15 text-on-primary-wash font-bold"
-                            : "text-on-surface hover:bg-surface-container-high",
+                            ? cn(SELECTED_ROW, "text-on-primary-wash font-bold")
+                            : "text-on-surface",
                         )}
                       >
                         <Icon
                           className={cn(
                             "w-4 h-4 shrink-0",
-                            isActive
-                              ? "text-primary"
-                              : "text-on-surface-variant",
+                            !isActive && "text-on-surface-variant",
                           )}
                         />
                         <span className="truncate flex-1">{page.title}</span>

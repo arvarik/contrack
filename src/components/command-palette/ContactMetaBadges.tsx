@@ -15,6 +15,8 @@ import React from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Clock, RefreshCw } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
+import { TONE_WASH } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 import {
   describeScore,
   scoreView,
@@ -162,7 +164,12 @@ export const StaleChip = ({
   };
 
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-warning bg-amber-500/10 px-1.5 py-0.5 rounded-md font-medium">
+    <span
+      className={cn(
+        TONE_WASH.warning,
+        "inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md font-medium",
+      )}
+    >
       {ageLabel}
       {onRefresh && (
         <button
@@ -170,11 +177,12 @@ export const StaleChip = ({
           title={tooltip}
           onClick={handleClick}
           disabled={disabled}
-          className={`hit-area inline-flex items-center justify-center w-4 h-4 rounded transition-colors ${
+          className={cn(
+            "hit-area state-layer inline-flex items-center justify-center w-4 h-4 rounded transition-colors",
             disabled
               ? "text-on-surface-variant/30 cursor-not-allowed"
-              : "text-warning hover:text-warning hover:bg-amber-500/20 cursor-pointer"
-          }`}
+              : "text-warning cursor-pointer",
+          )}
         >
           {/*
             The bird thinks while this contact refreshes. Decorative, because

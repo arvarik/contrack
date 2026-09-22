@@ -27,6 +27,7 @@ import { CommandPalette } from "./components/command-palette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { QuickInteractionModal } from "./components/QuickInteractionModal";
 import { cn } from "./lib/utils";
+import { SELECTED_TINT } from "./lib/styles";
 import {
   OPEN_SHORTCUTS_EVENT,
   OPEN_QUICK_NOTE_EVENT,
@@ -197,17 +198,17 @@ const ResponsiveLayout = () => {
           className={cn(
             "relative flex flex-1 flex-col items-center justify-center gap-0.5",
             "min-h-[3rem] px-0.5 py-1 rounded-xl transition-colors",
-            active
-              ? "text-primary"
-              : "text-on-surface-variant active:bg-surface-container",
+            // A press on another tab draws the hover layer's press step.
+            active ? "text-primary" : "state-layer text-on-surface-variant",
           )}
         >
           {/* Active pill sits behind the icon rather than recolouring the
-              whole tab, so the current tab is legible at a glance. */}
+              whole tab, so the current tab is legible at a glance. It is the
+              selected tint, the same as the sidebar's current link. */}
           <span
             className={cn(
               "flex items-center justify-center w-10 h-6 rounded-lg transition-colors",
-              active && "bg-primary/15",
+              active && SELECTED_TINT,
             )}
           >
             <Icon className="w-5 h-5" />
@@ -293,7 +294,7 @@ const ResponsiveLayout = () => {
                 path="/tracked"
                 element={
                   <RouteErrorBoundary viewName="TrackedContacts">
-                    <Suspense fallback={<RouteFallback variant="settings" />}>
+                    <Suspense fallback={<RouteFallback variant="tracked" />}>
                       <TrackedContactsView />
                     </Suspense>
                   </RouteErrorBoundary>

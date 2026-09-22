@@ -56,9 +56,11 @@ import {
   filterPill,
   BTN_QUIET,
   ICON_BTN,
-  PAGE_TITLE,
+  LABEL,
+  PAGE_TOP,
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
@@ -119,8 +121,11 @@ const FilterButton = ({
   >
     {icon}
     {label}
+    {/* On the selected pill the count takes the pill's own ink, which is
+        the one that reads on the tint. On the others it is the variant ink
+        at full strength: at half opacity it measured 2.2 to 1. */}
     <span
-      className={`ml-0.5 text-[11px] ${active ? "text-primary" : "opacity-50"}`}
+      className={cn("ml-0.5 text-[11px]", !active && "text-on-surface-variant")}
     >
       {count}
     </span>
@@ -173,13 +178,13 @@ const ContactRowWrapper = React.memo(
       () => [
         {
           id: "view",
-          label: "View Contact",
+          label: "View contact",
           icon: <UserPlus className="w-3.5 h-3.5" />,
           onClick: () => navigate(`/contact/${contact.id}`),
         },
         {
           id: "copy-email",
-          label: contact.emails?.[0]?.email ? `Copy Email` : "No email",
+          label: contact.emails?.[0]?.email ? "Copy email" : "No email",
           icon: <Copy className="w-3.5 h-3.5" />,
           disabled: !contact.emails?.[0]?.email,
           onClick: () => {
@@ -216,7 +221,8 @@ const ContactRowWrapper = React.memo(
         onClick={() => recordVisit(contact.id)}
         {...longPress}
         className={cn(
-          "rounded-xl transition-all duration-300",
+          // The flash arrives and leaves at the slow duration.
+          "rounded-xl transition-all duration-(--dur-slow)",
           isFlashing &&
             "ring-2 ring-primary/40 shadow-[0_0_12px_rgba(0,113,156,0.2)]",
         )}
@@ -251,8 +257,9 @@ export const ContactList = () => {
    *
    * The list is mounted on the catch-all route (`path="*"`), so `useParams`
    * had no `:id` to give it and this was always undefined. That meant no row
-   * was ever marked current — no ring, no `aria-current` — and the j/k keys,
-   * which step from the current row, went to the first contact every time.
+   * was ever marked current — no selected look, no `aria-current` — and the
+   * j/k keys, which step from the current row, went to the first contact
+   * every time.
    */
   const id = useMatch("/contact/:id")?.params.id;
   const navigate = useNavigate();
@@ -662,79 +669,85 @@ export const ContactList = () => {
     if (index >= 0) focusIndex(recentCount + index);
   }, [id, lastContactId, filteredContacts, recentCount, focusIndex]);
 
-  // One h1 per page: the list's title is the page heading on the Network
-  // page, and a section heading beside an open contact, whose name is the h1.
-  const TitleTag = id ? "h2" : "h1";
-
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {" "}
-      <div className="p-4 bg-surface-container-lowest sticky top-0 z-10 space-y-3">
-        <div className="flex justify-between items-center">
-          {isSelectMode ? (
+      {/*
+        The pane is narrow, so it keeps `px-4` where a page has `PAGE_X`, and
+        its title starts at the same height as every other page's.
+
+        One h1 per page: the list's title is the page heading on the Network
+        page, and a section heading beside an open contact, whose name is the
+        h1.
+      */}
+      <PageHeader
+        title={isSelectMode ? `${selectedCount} selected` : NAMES.network.label}
+        titleAs={id ? "h2" : "h1"}
+        className={cn(
+          "px-4 pb-4 bg-surface-container-lowest sticky top-0 z-10",
+          PAGE_TOP,
+        )}
+        actions={
+          isSelectMode ? (
             <>
-              <TitleTag className={PAGE_TITLE}>
-                {selectedCount} selected
-              </TitleTag>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={
-                    selectedCount === filteredContacts.length
-                      ? clearSelection
-                      : selectAll
-                  }
-                  className="hit-area text-xs md:text-sm font-bold text-on-primary-wash px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors whitespace-nowrap"
-                >
-                  {selectedCount === filteredContacts.length
-                    ? "Deselect all"
-                    : "Select all"}
-                </button>
-                <button
-                  onClick={exitSelectMode}
-                  className="hit-area text-xs md:text-sm font-medium text-on-surface px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest transition-colors whitespace-nowrap"
-                >
-                  Done
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={
+                  selectedCount === filteredContacts.length
+                    ? clearSelection
+                    : selectAll
+                }
+                className="btn-secondary btn-sm"
+              >
+                {selectedCount === filteredContacts.length
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+              <button
+                type="button"
+                onClick={exitSelectMode}
+                className="btn-secondary btn-sm"
+              >
+                Done
+              </button>
             </>
           ) : (
             <>
-              <TitleTag className={PAGE_TITLE}>{NAMES.network.label}</TitleTag>
               {/*
-                Three icon buttons at every width. Each is named for a screen
-                reader and titled for a pointer, so the row costs one word of
-                space per action and still says what it does. The gap keeps
-                the three 44 px tap boxes apart.
+                Select and Import are icon buttons, and New is the page's
+                call to action. Each is named for a screen reader and titled
+                for a pointer, so the row costs one word of space per action
+                and still says what it does. The gap keeps the three 44 px
+                tap boxes apart.
               */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={enterSelectMode}
-                  className={ICON_BTN}
-                  aria-label="Select"
-                  title="Select"
-                >
-                  <Square className="w-5 h-5" aria-hidden="true" />
-                </button>
-                <button
-                  onClick={() => setIsImportOpen(true)}
-                  className={ICON_BTN}
-                  aria-label="Import"
-                  title="Import"
-                >
-                  <Upload className="w-5 h-5" aria-hidden="true" />
-                </button>
-                <ActionMenu
-                  label="New"
-                  title="New"
-                  icon={Plus}
-                  triggerClassName="hit-area p-2 bg-primary/10 text-on-primary-wash hover:bg-primary/20 rounded-xl transition-colors"
-                  items={newMenuItems}
-                />
-              </div>
+              <button
+                type="button"
+                onClick={enterSelectMode}
+                className={ICON_BTN}
+                aria-label="Select"
+                title="Select"
+              >
+                <Square className="w-5 h-5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsImportOpen(true)}
+                className={ICON_BTN}
+                aria-label="Import"
+                title="Import"
+              >
+                <Upload className="w-5 h-5" aria-hidden="true" />
+              </button>
+              <ActionMenu
+                label="New"
+                title="New"
+                icon={Plus}
+                variant="primary"
+                items={newMenuItems}
+              />
             </>
-          )}
-        </div>
-
+          )
+        }
+      >
         <div className="flex gap-1.5 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
@@ -773,7 +786,7 @@ export const ContactList = () => {
             label={`Sort: ${currentSort.label}`}
             title="Sort the list"
             heading="Sort by"
-            triggerClassName="hit-area px-2.5 py-1.5 rounded-xl transition-all shrink-0 flex items-center justify-center gap-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+            triggerClassName="px-2.5 py-1.5 shrink-0 gap-1"
             triggerContent={
               <span className="flex items-center gap-1 text-xs md:text-sm font-medium">
                 <span className="truncate max-w-[120px] sm:max-w-[160px]">
@@ -799,9 +812,10 @@ export const ContactList = () => {
             <div
               id="filter-pills-row"
               // A scroller clips what sits outside its padding box, so the
-              // 8 px above and below give each pill's 44 px tap box room.
-              // The negative margins keep the row where it was.
-              className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5"
+              // 8 px above and below give each pill's 44 px tap box room,
+              // and 4 px at each side give its focus ring room. The negative
+              // margins keep the row where it was.
+              className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5 -mx-1 px-1"
             >
               <FilterButton
                 label="All"
@@ -860,7 +874,7 @@ export const ContactList = () => {
             </div>
           </div>
         )}
-      </div>
+      </PageHeader>
       {/*
         Contact list.
 
@@ -879,8 +893,8 @@ export const ContactList = () => {
           flips. The `dir="ltr"` child puts every row back the way it reads.
 
           With the rail on screen the scroller keeps a 2 rem gutter on the
-          right. Rows end before it, so a selected row's ring and a hover tint
-          stop short of the letters instead of running under them.
+          right. Rows end before it, so a selected row's tint and the hover
+          layer stop short of the letters instead of running under them.
         */}
         <div
           ref={listScrollRef}
@@ -991,9 +1005,7 @@ export const ContactList = () => {
                 <div className="mb-3">
                   <div className="flex items-center gap-1.5 px-1 mb-1.5">
                     <Clock className="w-3 h-3 text-on-surface-variant" />
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-                      Recent
-                    </span>
+                    <span className={LABEL}>Recent</span>
                   </div>
                   <div className="space-y-1">
                     {recentContacts.map((contact, index) => {

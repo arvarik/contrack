@@ -257,7 +257,7 @@ describe("the groups", () => {
     expect(aug.getByRole("link", { name: /deck\.pdf/ })).toBeTruthy();
     expect(within(entry("sqlite")!).getByAltText("photo.png")).toBeTruthy();
 
-    fireEvent.click(aug.getByTitle("Promote Grace to Contact"));
+    fireEvent.click(aug.getByTitle("Promote Grace to contact"));
     expect(props.promoteGhost.mutate).toHaveBeenCalledWith(
       "g1",
       expect.any(Object),

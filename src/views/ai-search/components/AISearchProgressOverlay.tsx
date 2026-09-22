@@ -18,7 +18,8 @@ import {
 import { motion } from "motion/react";
 import type { AISearchBatch, AISearchJob } from "../../../types";
 import { cn } from "../../../lib/utils";
-import { CARD } from "../../../lib/styles";
+import { BTN_QUIET, CARD, ICON_BTN } from "../../../lib/styles";
+import { DURATION, EASE } from "../../../lib/motion";
 import { NAMES } from "../../../lib/names";
 
 interface Props {
@@ -86,10 +87,12 @@ export function AISearchProgressOverlay({
       >
         <button
           onClick={() => setIsMinimized(false)}
+          // It floats over the page, so it keeps its shadow and hairline,
+          // and hovers with the one layer like any flat control.
           className={cn(
-            "hit-area flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl",
+            "hit-area state-layer flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl",
             "bg-surface-container-lowest ring-1 ring-surface-container-highest/30",
-            "hover:shadow-2xl transition-all cursor-pointer",
+            "transition-colors cursor-pointer",
             "text-sm font-semibold",
           )}
         >
@@ -137,7 +140,7 @@ export function AISearchProgressOverlay({
           <button
             aria-label="Minimize research progress"
             onClick={() => setIsMinimized(true)}
-            className="hit-area p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"
+            className={cn(ICON_BTN, "p-1")}
           >
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
@@ -148,7 +151,7 @@ export function AISearchProgressOverlay({
                 : "Minimize research progress"
             }
             onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
-            className="hit-area p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-rose-500/10 transition-colors"
+            className={cn(ICON_BTN, "p-1 hover:text-error")}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -160,7 +163,7 @@ export function AISearchProgressOverlay({
             className="h-full bg-gradient-to-r from-primary-dim to-primary-container"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+            transition={{ duration: DURATION.slow, ease: EASE }}
           />
         </div>
 
@@ -174,7 +177,7 @@ export function AISearchProgressOverlay({
             <button
               onClick={onCancel}
               disabled={isCancelling}
-              className="hit-area shrink-0 px-2 py-1 rounded text-error hover:bg-error/10 disabled:opacity-50"
+              className="hit-area state-layer shrink-0 px-2 py-1 rounded text-error disabled:opacity-50"
             >
               {isCancelling ? "Stopping…" : "Stop research"}
             </button>
@@ -218,7 +221,7 @@ export function AISearchProgressOverlay({
                   : "Minimize research progress"
               }
               onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
-              className="hit-area text-xs font-bold text-on-surface-variant hover:text-on-surface px-2 py-1 rounded-lg hover:bg-surface-container-high transition-colors"
+              className={BTN_QUIET}
             >
               Dismiss
             </button>

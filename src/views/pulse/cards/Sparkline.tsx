@@ -12,6 +12,7 @@
  */
 import React, { useMemo, useState } from "react";
 import { useElementWidth } from "../../../hooks/useElementWidth";
+import { TONE_TEXT, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 
@@ -59,11 +60,12 @@ export function compareFourWeeks(weekTotals: number[]): {
   return { recent, words: "same as the four before", tone: "flat" };
 }
 
-const TONE_CLASS = {
-  up: "text-success",
-  down: "text-warning",
-  flat: "text-on-surface-variant",
-} as const;
+/** The comparison's tone: more is good news, less is a warning. */
+const TREND_TONE: Record<ReturnType<typeof compareFourWeeks>["tone"], Tone> = {
+  up: "success",
+  down: "warning",
+  flat: "neutral",
+};
 
 export const Sparkline = ({ weekTotals, thisWeek }: SparklineProps) => {
   const [box, setBox] = useState<HTMLDivElement | null>(null);
@@ -163,7 +165,12 @@ export const Sparkline = ({ weekTotals, thisWeek }: SparklineProps) => {
           {comparison.recent}
         </span>{" "}
         in the last four weeks ·{" "}
-        <span className={cn("font-semibold", TONE_CLASS[comparison.tone])}>
+        <span
+          className={cn(
+            "font-semibold",
+            TONE_TEXT[TREND_TONE[comparison.tone]],
+          )}
+        >
           {comparison.words}
         </span>
       </p>

@@ -18,8 +18,14 @@ import { CardFrame } from "../components/CardFrame";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { SETTINGS_PAGES } from "../../settings/registry";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
+import { TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { PULSE_CHIP_NEUTRAL, PULSE_ROW, PULSE_TYPE } from "../lib/pulseStyles";
+import {
+  PULSE_CHIP,
+  PULSE_ROW,
+  PULSE_ROW_STATIC,
+  PULSE_TYPE,
+} from "../lib/pulseStyles";
 import { describeDueChip } from "../lib/upNext";
 import type { UpcomingBirthday } from "../lib/birthdays";
 
@@ -118,7 +124,7 @@ export const ComingUpCard = ({
         {entries.map((entry) => {
           const days = differenceInCalendarDays(entry.when, now);
           const chip = (
-            <span className={PULSE_CHIP_NEUTRAL}>
+            <span className={cn(PULSE_CHIP, TONE_WASH.neutral)}>
               {describeDueChip(days, entry.when)}
             </span>
           );
@@ -151,7 +157,10 @@ export const ComingUpCard = ({
                       )}
                     >
                       <Cake
-                        className="w-3.5 h-3.5 shrink-0 text-warning"
+                        className={cn(
+                          "w-3.5 h-3.5 shrink-0",
+                          TONE_TEXT.warning,
+                        )}
                         aria-hidden="true"
                       />
                       {b.turningAge !== null
@@ -170,16 +179,13 @@ export const ComingUpCard = ({
             .map((cid) => ({ cid, contact: contactsMap.get(cid) }))
             .filter((p) => p.contact);
           return (
-            <li
-              key={entry.key}
-              className={cn(
-                PULSE_ROW,
-                // Not a link, so no hover step.
-                "items-start hover:bg-surface-container-low/70",
-              )}
-            >
+            // Not a link, so the row has no hover layer. Its people are links.
+            <li key={entry.key} className={cn(PULSE_ROW_STATIC, "items-start")}>
               <span
-                className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0"
+                className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                  TONE_WASH.primary,
+                )}
                 aria-hidden="true"
               >
                 <Video className="w-4 h-4" />

@@ -4,7 +4,8 @@ import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { DashboardPayload } from "../../api";
 
-import { SECTION_HEADING } from "../../lib/styles";
+import { ICON_BTN, SECTION_HEADING } from "../../lib/styles";
+import { DURATION, EASE } from "../../lib/motion";
 import { Modal } from "../../components/ui/Modal";
 
 interface NetworkCompositionModalProps {
@@ -55,9 +56,9 @@ const CompositionColumn = ({
             initial={{ width: 0 }}
             animate={{ width: `${widthPercentage}%` }}
             transition={{
-              duration: 0.8,
+              duration: DURATION.slow,
               delay: 0.1 + index * 0.05,
-              ease: "easeOut",
+              ease: EASE,
             }}
             className="h-full bg-primary rounded-full origin-left"
           />
@@ -93,14 +94,10 @@ export const NetworkCompositionModal = ({
             <PieChart className="w-5 h-5 text-primary" />
           </div>
           <h2 className="text-xl font-bold text-on-surface">
-            Network Composition
+            Network composition
           </h2>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          className="hit-area p-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
-        >
+        <button onClick={onClose} aria-label="Close" className={ICON_BTN}>
           <X className="w-5 h-5" />
         </button>
       </div>

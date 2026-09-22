@@ -6,13 +6,13 @@ import { ActionRow } from "./ActionRow";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { InfoTip } from "../../../components/ui/InfoTip";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
-import { KBD_SM } from "../../../lib/styles";
+import { KBD_SM, TONE_DOT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { openQuickNote } from "../../../lib/appEvents";
 import { flyCorvid } from "../../../lib/corvid";
-import { PULSE_TYPE } from "../lib/pulseStyles";
+import { GROUP_TONE, PULSE_TYPE } from "../lib/pulseStyles";
 import { groupHeadingId } from "../lib/jumpToGroup";
-import type { UpNextGroup, UpNextGroupMeta, UpNextItem } from "../lib/upNext";
+import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
 export interface UpNextCardProps {
   items: UpNextItem[];
@@ -26,18 +26,6 @@ export interface UpNextCardProps {
 
 /** The id of a group's heading, from `lib/jumpToGroup`. Re-exported for the tests. */
 export { groupHeadingId };
-
-/**
- * A 6 px dot before each group's name, in the tone of its chips, so the eye
- * finds a group before it reads the word. Decoration: the word is there.
- */
-const GROUP_DOT: Record<UpNextGroup, string> = {
-  overdue: "bg-error",
-  today: "bg-primary",
-  thisWeek: "bg-outline-variant",
-  birthdays: "bg-warning",
-  "catch-up": "bg-outline-variant",
-};
 
 /** A theme colour for the confetti, read at the moment it fires. */
 const themeColor = (name: string, fallback: string) => {
@@ -149,7 +137,7 @@ export const UpNextCard = ({
         <div
           role="group"
           aria-label="Up next items"
-          className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 nice-scrollbar"
+          className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 lg:-ml-1 lg:pl-1 nice-scrollbar"
           onFocus={() => setFocusWithin(true)}
           onBlur={(e) => {
             // Focus moving from one row to another, or to a control inside
@@ -168,11 +156,14 @@ export const UpNextCard = ({
                   "flex items-center gap-2 py-1.5 lg:sticky lg:top-0 z-10 bg-surface-container-lowest",
                 )}
               >
+                {/* A 6 px dot in the group's tone, the same tone as its rows'
+                    leading glyphs, so the eye finds a group before it reads
+                    the word. Decoration: the word is there. */}
                 <span
                   aria-hidden="true"
                   className={cn(
                     "h-1.5 w-1.5 rounded-full shrink-0",
-                    GROUP_DOT[group.group],
+                    TONE_DOT[GROUP_TONE[group.group]],
                   )}
                 />
                 {group.label}

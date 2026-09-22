@@ -37,13 +37,7 @@ export const InstanceUsageTable = ({
 
   return (
     <div className="space-y-1">
-      <div
-        className={cn(
-          SECTION_HEADING,
-          "grid gap-2 px-3 py-1.5 text-[11px]",
-          COLUMNS,
-        )}
-      >
+      <div className={cn(SECTION_HEADING, "grid gap-2 px-3 py-1.5", COLUMNS)}>
         <span>Account</span>
         <span className="text-right">Calls</span>
         <span className="text-right">Tokens</span>

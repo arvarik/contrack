@@ -23,6 +23,8 @@ import {
 } from "../../../api";
 import { ContactCard } from "../../dedupe/components/shared/ContactCard";
 import { detectMergeConflicts } from "../../dedupe/utils/conflicts";
+import { DURATION, EASE } from "../../../lib/motion";
+import { TONE_WASH } from "../../../lib/styles";
 
 // =============================================================================
 // Props
@@ -97,8 +99,8 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
     <div className="max-w-6xl mx-auto w-full px-6 md:px-8 lg:px-10 mt-2 mb-4">
       {/* Collapsed banner */}
       {/*
-        Wraps on a phone: two 44 px buttons beside the sentence would leave it
-        a word per line, so they drop under it.
+        Wraps on a phone: two buttons beside the sentence would leave it a
+        word per line, so they drop under it.
       */}
       <div className="flex flex-wrap items-center gap-3 bg-primary/5 rounded-xl px-4 py-3">
         <span className="text-primary text-base">✨</span>
@@ -108,14 +110,14 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
         </p>
         <button
           onClick={() => setShowReview((v) => !v)}
-          className="btn-primary shrink-0 px-3"
+          className="btn-primary btn-sm shrink-0"
         >
-          {showReview ? "Hide" : "Review Match"}
+          {showReview ? "Hide" : "Review match"}
         </button>
         <button
           onClick={handleDismiss}
           disabled={dismiss.isPending}
-          className="btn-secondary shrink-0 px-3"
+          className="btn-secondary btn-sm shrink-0"
         >
           Not the same
         </button>
@@ -128,14 +130,14 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
+            transition={{ duration: DURATION.slow, ease: EASE }}
             className="overflow-hidden"
           >
             <div className="pt-4 space-y-4">
-              {/* AI Reasoning */}
+              {/* The model's reasoning, in the AI colour. */}
               {suggestion.reasoning && (
-                <div className="flex items-start gap-2.5 bg-primary/5 rounded-xl p-3">
-                  <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2.5 bg-ai/5 rounded-xl p-3">
+                  <Sparkles className="w-4 h-4 text-ai shrink-0 mt-0.5" />
                   <p className="text-sm text-on-surface leading-relaxed">
                     {suggestion.reasoning}
                   </p>
@@ -147,24 +149,24 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                 <div className="min-w-0">
                   <ContactCard
                     contact={primary}
-                    label="Primary (Keeper)"
-                    labelColor="text-success bg-emerald-500/10"
+                    label="Primary (keeper)"
+                    labelColor={TONE_WASH.success}
                     other={duplicate}
                     isPrimary
                   />
                 </div>
                 <button
                   onClick={() => setSwapped((s) => !s)}
-                  className="hit-area absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all hidden lg:flex items-center justify-center"
+                  className="hit-area state-layer absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 p-2 bg-surface rounded-full hidden lg:flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
                   title="Swap primary / duplicate"
                 >
-                  <ArrowLeftRight className="w-3.5 h-3.5 text-on-surface-variant hover:text-primary transition-colors" />
+                  <ArrowLeftRight className="w-3.5 h-3.5" />
                 </button>
                 <div className="min-w-0">
                   <ContactCard
                     contact={duplicate}
-                    label="Duplicate (Merges In)"
-                    labelColor="text-warning bg-amber-500/10"
+                    label="Duplicate (merges in)"
+                    labelColor={TONE_WASH.warning}
                     other={primary}
                     onSetPrimary={() => setSwapped((s) => !s)}
                   />
@@ -177,12 +179,12 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                 className="btn-secondary w-full lg:hidden"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
-                Swap Primary / Duplicate
+                Swap primary / duplicate
               </button>
 
               {/* Conflicting field values banner */}
               {conflicts.length > 0 && (
-                <div className="flex items-start gap-2.5 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-on-surface">
+                <div className="flex items-start gap-2.5 p-3 bg-warning/10 border border-warning/20 rounded-xl text-xs text-on-surface">
                   <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold text-warning">
@@ -210,7 +212,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                   className="btn-secondary"
                 >
                   <X className="w-4 h-4" />
-                  Keep Separate
+                  Keep separate
                 </button>
                 <button
                   onClick={handleMerge}
@@ -222,7 +224,7 @@ export const DupeBanner = ({ contactId }: DupeBannerProps) => {
                   ) : (
                     <CheckCircle2 className="w-4 h-4" />
                   )}
-                  Merge Contacts
+                  Merge contacts
                 </button>
               </div>
             </div>

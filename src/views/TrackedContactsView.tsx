@@ -56,6 +56,7 @@ import { useContacts } from "../api";
 import { ActionMenu } from "../components/ui/ActionMenu";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Segmented } from "../components/ui/Segmented";
+import { PageHeader } from "../components/layout/PageHeader";
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { useBulkActions } from "../components/bulk/useBulkActions";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -63,12 +64,17 @@ import { useTrackToggle, type TrackableContact } from "../hooks/useTrackToggle";
 import { describePastDue, parseServerTime } from "../lib/datetime";
 import { NAMES, TRACKED_INTRO } from "../lib/names";
 import {
+  BAR_BUTTON,
+  BAR_LABEL,
   BTN_QUIET,
   CARD,
   ICON_BTN,
-  PAGE_TITLE,
+  PAGE_TOP,
+  PAGE_X,
   SEARCH_INPUT,
   SECTION_HEADING,
+  SELECTED_ROW,
+  SELECTED_TINT,
 } from "../lib/styles";
 import { cn } from "../lib/utils";
 import type { Contact } from "../types";
@@ -224,11 +230,8 @@ const TrackedRow = React.memo(function TrackedRow({
     <div
       data-contact-id={contact.id}
       className={cn(
-        "flex items-center gap-3 px-3 py-2 rounded-xl transition-colors",
-        selectMode &&
-          selected &&
-          "bg-primary/8 ring-inset ring-1 ring-primary/30",
-        "hover:bg-surface-container-low",
+        "state-layer flex items-center gap-3 px-3 py-2 rounded-xl transition-colors",
+        selectMode && selected && SELECTED_ROW,
       )}
     >
       {selectMode && (
@@ -250,7 +253,7 @@ const TrackedRow = React.memo(function TrackedRow({
       <div className="flex-1 min-w-0">
         <Link
           to={`/contact/${contact.id}`}
-          className="hit-area font-semibold text-sm text-on-surface hover:text-primary rounded transition-colors truncate block w-fit max-w-full"
+          className="hit-area font-semibold text-sm text-on-surface hover:underline rounded truncate block w-fit max-w-full"
         >
           {contact.name}
         </Link>
@@ -276,7 +279,9 @@ const TrackedRow = React.memo(function TrackedRow({
           className={cn(
             ICON_BTN,
             "shrink-0 disabled:opacity-50",
-            tracked && "bg-primary/10 text-on-primary-wash hover:bg-primary/20",
+            // A toggle that is on wears the selected tint, and keeps its ink
+            // on hover so it does not read as off.
+            tracked && cn(SELECTED_TINT, "hover:text-on-primary-wash"),
           )}
         >
           <Radar className="w-4 h-4" aria-hidden="true" />
@@ -307,7 +312,8 @@ const GroupHeading = ({
       className={cn(SECTION_HEADING, "flex items-center gap-2 scroll-mt-4")}
     >
       {group.title}
-      <span className="tabular-nums opacity-70">{group.contacts.length}</span>
+      {/* The heading's own ink: at 70 percent it measured 3.0 to 1. */}
+      <span className="tabular-nums">{group.contacts.length}</span>
     </h2>
     {selectMode && (
       <button
@@ -340,12 +346,10 @@ const BarButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex flex-col items-center gap-0.5 min-w-[44px] px-3 py-1.5 rounded-xl text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 shrink-0"
+    className={cn(BAR_BUTTON, "text-primary disabled:opacity-40")}
   >
     {icon}
-    <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
-      {label}
-    </span>
+    <span className={BAR_LABEL}>{label}</span>
   </button>
 );
 
@@ -499,13 +503,14 @@ export const TrackedContactsView = () => {
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto nice-scrollbar">
-      <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto pb-32 md:pb-28 space-y-5">
-        <div className="space-y-1">
-          <h1 className={PAGE_TITLE}>{NAMES.tracked.title}</h1>
-          <p className="text-sm text-on-surface-variant text-pretty">
-            {TRACKED_INTRO}
-          </p>
-        </div>
+      <div
+        className={cn(
+          PAGE_X,
+          PAGE_TOP,
+          "max-w-4xl mx-auto pb-32 md:pb-28 space-y-5",
+        )}
+      >
+        <PageHeader title={NAMES.tracked.title} description={TRACKED_INTRO} />
 
         {/* Search, the order, and Select */}
         <div className="flex flex-wrap items-center gap-2">
@@ -537,7 +542,7 @@ export const TrackedContactsView = () => {
             <button
               type="button"
               onClick={exitSelectMode}
-              className="hit-area text-xs md:text-sm font-medium text-on-surface px-3 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest transition-colors whitespace-nowrap"
+              className="btn-secondary btn-sm"
             >
               Done
             </button>
@@ -693,13 +698,16 @@ export const TrackedContactsView = () => {
                 title="One cadence for the selection"
                 heading="Keep up"
                 items={cadenceItems}
-                triggerClassName="flex flex-col items-center gap-0.5 min-w-[44px] px-3 py-1.5 rounded-xl text-primary hover:bg-primary/10 transition-colors shrink-0"
+                // The bar button's look and the primary ink, at rest and on
+                // hover, so the three buttons in the bar look alike.
+                triggerClassName={cn(
+                  BAR_BUTTON,
+                  "text-primary hover:text-primary",
+                )}
                 triggerContent={
                   <span className="flex flex-col items-center gap-0.5">
                     <CalendarClock className="w-4 h-4" aria-hidden="true" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
-                      Cadence
-                    </span>
+                    <span className={BAR_LABEL}>Cadence</span>
                   </span>
                 }
               />

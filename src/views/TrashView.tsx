@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useTrash, useRestoreContact, usePurgeTrashedContact } from "../api";
 import { Modal } from "../components/ui/Modal";
-import { CARD, ICON_BTN } from "../lib/styles";
+import { CARD, ICON_BTN, TONE_WASH } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import type { TrashedContact } from "../types";
+import { SETTINGS_PAGE } from "./settings/layout";
 
 // ---------------------------------------------------------------------------
 // TrashView — recently deleted contacts with restore + permanent delete
@@ -64,7 +65,9 @@ export const TrashView = () => {
 
   if (isLoading) {
     return (
-      <div className="p-6 text-sm text-on-surface-variant">Loading trash…</div>
+      <div className={cn(SETTINGS_PAGE, "text-sm text-on-surface-variant")}>
+        Loading trash…
+      </div>
     );
   }
 
@@ -83,7 +86,7 @@ export const TrashView = () => {
   }
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl mx-auto">
+    <div className={cn(SETTINGS_PAGE, "space-y-4")}>
       <div className="flex items-center justify-between">
         <p className="text-sm text-on-surface-variant">
           {items.length} contact{items.length !== 1 ? "s" : ""} in the trash.
@@ -150,7 +153,12 @@ export const TrashView = () => {
       >
         <div className="space-y-5">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 shrink-0 bg-red-500/10 text-error rounded-full flex items-center justify-center">
+            <div
+              className={cn(
+                "w-10 h-10 shrink-0 rounded-full flex items-center justify-center",
+                TONE_WASH.error,
+              )}
+            >
               <AlertTriangle className="w-5 h-5" />
             </div>
             <p className="text-sm text-on-surface-variant">
@@ -169,7 +177,7 @@ export const TrashView = () => {
             <button
               onClick={handlePurge}
               disabled={purge.isPending}
-              className="px-4 py-2 min-h-[44px] sm:min-h-[40px] rounded-xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+              className="btn-danger"
             >
               {purge.isPending ? "Deleting…" : "Delete forever"}
             </button>

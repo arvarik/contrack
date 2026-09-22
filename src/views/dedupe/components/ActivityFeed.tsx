@@ -12,6 +12,8 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useMergeLog, useUndoMerge } from "../../../api";
 import { cn } from "../../../lib/utils";
+import { LABEL, TONE_WASH } from "../../../lib/styles";
+import { DURATION, EASE } from "../../../lib/motion";
 import type { MergeLogEntry } from "../../../types";
 import { EmptyState } from "../../../components/ui/EmptyState";
 
@@ -22,7 +24,7 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 /**
  * "3 hours ago" for the row, the full local timestamp for the tooltip.
  *
- * The feed already groups by Today / Yesterday / This Week, which answers
+ * The feed already groups by Today / Yesterday / This week, which answers
  * "roughly when" — but inside a group every entry looked simultaneous, and
  * for an audit log of destructive operations the order and spacing of events
  * is most of the value. date-fns is already a dependency and is what the rest
@@ -59,7 +61,7 @@ function groupByDate(
     let label: string;
     if (date >= today) label = "Today";
     else if (date >= yesterday) label = "Yesterday";
-    else if (date >= thisWeek) label = "This Week";
+    else if (date >= thisWeek) label = "This week";
     else label = "Older";
 
     const existing = groups.get(label) ?? [];
@@ -68,7 +70,7 @@ function groupByDate(
   }
 
   // Preserve chronological group ordering
-  const order = ["Today", "Yesterday", "This Week", "Older"];
+  const order = ["Today", "Yesterday", "This week", "Older"];
   return order
     .filter((label) => groups.has(label))
     .map((label) => ({ label, items: groups.get(label)! }));
@@ -106,7 +108,7 @@ export const ActivityFeed = () => {
   }
 
   if (entries.length === 0) {
-    // Level 3: the feed sits under the "Merge Activity" panel's h2.
+    // Level 3: the feed sits under the "Merge activity" panel's h2.
     return (
       <EmptyState
         level={3}
@@ -121,9 +123,7 @@ export const ActivityFeed = () => {
     <div className="space-y-6">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant px-1 mb-2">
-            {group.label}
-          </div>
+          <div className={cn(LABEL, "px-1 mb-2")}>{group.label}</div>
           <div className="space-y-1.5">
             {group.items.map((entry, i) => {
               const isAuto = entry.mergedBy === "auto";
@@ -135,7 +135,11 @@ export const ActivityFeed = () => {
                   key={entry.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(i * 0.02, 0.2) }}
+                  transition={{
+                    duration: DURATION.slow,
+                    ease: EASE,
+                    delay: Math.min(i * 0.02, 0.2),
+                  }}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-xl transition-colors",
                     isUndone
@@ -147,19 +151,17 @@ export const ActivityFeed = () => {
                   <div
                     className={cn(
                       "p-1.5 rounded-lg shrink-0",
-                      isUndone
-                        ? "bg-surface-container-high"
-                        : isAuto
-                          ? "bg-primary/10"
-                          : "bg-emerald-500/10",
+                      TONE_WASH[
+                        isUndone ? "neutral" : isAuto ? "primary" : "success"
+                      ],
                     )}
                   >
                     {isUndone ? (
-                      <Undo2 className="w-3.5 h-3.5 text-on-surface-variant" />
+                      <Undo2 className="w-3.5 h-3.5" />
                     ) : isAuto ? (
-                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      <Sparkles className="w-3.5 h-3.5" />
                     ) : (
-                      <User className="w-3.5 h-3.5 text-success" />
+                      <User className="w-3.5 h-3.5" />
                     )}
                   </div>
 
@@ -214,7 +216,7 @@ export const ActivityFeed = () => {
                     <button
                       onClick={() => handleUndo(entry.id, entry.duplicateName)}
                       disabled={undoMerge.isPending}
-                      className="hit-area shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high rounded-lg transition-colors disabled:text-on-surface-variant disabled:cursor-not-allowed"
+                      className="hit-area state-layer shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-surface-variant bg-surface-container-low rounded-lg transition-colors disabled:cursor-not-allowed"
                     >
                       <Undo2 className="w-3 h-3" />
                       Undo

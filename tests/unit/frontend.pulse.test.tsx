@@ -748,18 +748,31 @@ describe("frontend.pulse", () => {
       expect(screen.getAllByText(/^Last spoke /)).toHaveLength(1);
     });
 
-    it("wears the wash and the inset ring when selected, with no offset or scale", () => {
-      render(
+    it("wears the selected row's tint and bar when selected, with no ring, offset or scale", () => {
+      const { rerender } = render(
         <MemoryRouter>
           <ActionRow item={followUp} isSelected />
         </MemoryRouter>,
       );
       const row = screen.getByRole("listitem");
-      expect(row.className).toContain("ring-inset");
-      expect(row.className).toContain("bg-primary/10");
+      expect(row.className).toContain("row-selected");
+      // The resting wash would paint over the tint, so it steps aside.
+      expect(row.className).not.toContain("bg-surface-container-low");
+      expect(row.className).not.toMatch(/(?<![-\w])ring-/);
       expect(row.className).not.toContain("ring-offset");
       expect(row.className).not.toContain("scale-");
       expect(row.className).not.toContain("border-outline");
+
+      // Unselected, the row keeps its wash, and the hover is the state layer.
+      rerender(
+        <MemoryRouter>
+          <ActionRow item={followUp} />
+        </MemoryRouter>,
+      );
+      expect(row.className).not.toContain("row-selected");
+      expect(row.className).toContain("bg-surface-container-low/70");
+      expect(row.className).toContain("state-layer");
+      expect(row.className).not.toMatch(/hover:bg-/);
     });
 
     it("snoozes from the menu", () => {

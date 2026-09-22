@@ -12,6 +12,8 @@
  */
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertCircle, CloudOff, RotateCcw } from "lucide-react";
+import { TONE_WASH } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 
 interface Props {
   children: ReactNode;
@@ -85,11 +87,10 @@ export class RouteErrorBoundary extends Component<Props, State> {
         <div className="flex items-center justify-center h-full p-8 text-on-surface">
           <div className="max-w-sm w-full text-center space-y-4">
             <div
-              className={
-                isChunk
-                  ? "w-12 h-12 bg-warning/10 text-warning rounded-full flex items-center justify-center mx-auto"
-                  : "w-12 h-12 bg-error/10 text-error rounded-full flex items-center justify-center mx-auto"
-              }
+              className={cn(
+                "w-12 h-12 rounded-full flex items-center justify-center mx-auto",
+                TONE_WASH[isChunk ? "warning" : "error"],
+              )}
             >
               {isChunk ? (
                 <CloudOff className="w-6 h-6" />

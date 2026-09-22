@@ -33,7 +33,7 @@ export const ComposerPlaceholder = ({
     className={
       compact
         ? "flex flex-col"
-        : cn(COMPOSER, "p-0 overflow-hidden flex flex-col shadow-md")
+        : cn(COMPOSER, "p-0 overflow-hidden flex flex-col")
     }
     aria-busy="true"
     aria-label="Loading the note composer"

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { VIBES, vibeTokens } from "../../lib/theme";
 import { usePreferences } from "../../contexts/PreferencesContext";
+import { BAR_BUTTON, BAR_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import type { SelectionTracked } from "../../components/bulk/useBulkActions";
 
@@ -33,15 +34,10 @@ const BulkActionBtn = ({
     disabled={disabled}
     title={label}
     aria-label={label}
-    className={cn(
-      "flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors disabled:opacity-40 shrink-0 cursor-pointer",
-      className,
-    )}
+    className={cn(BAR_BUTTON, "disabled:opacity-40 cursor-pointer", className)}
   >
     {icon}
-    <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
-      {label}
-    </span>
+    <span className={BAR_LABEL}>{label}</span>
   </button>
 );
 
@@ -111,11 +107,15 @@ export const BulkActionToolbar = ({
         The blur stays for depth, but at 98% the panel is effectively solid,
         and a ring plus a stronger shadow separate it from the list rather than
         relying on transparency to imply layering.
+
+        The buttons wrap onto a second row when the pane is narrow. They used
+        to scroll sideways behind a hidden scrollbar, and at the Network
+        pane's width CSV and Delete sat past the edge where nobody saw them.
       */}
       <div
         role="toolbar"
         aria-label="Bulk actions"
-        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-hide"
+        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex flex-wrap items-center justify-center gap-1 min-w-0"
       >
         {/* Action buttons. Track first: it is the one that decides who the
             score, Pulse and the map's health layer are about. */}
@@ -124,46 +124,42 @@ export const BulkActionToolbar = ({
           label={selectionTracked === "all" ? "Untrack" : "Track"}
           onClick={() => onTrack(selectionTracked !== "all")}
           disabled={isPending}
-          className="text-primary hover:bg-primary/10"
+          className="text-primary"
         />
         <BulkActionBtn
           icon={<Archive className="w-4 h-4" />}
           label="Archive"
           onClick={onArchive}
           disabled={isPending}
-          className="text-warning hover:bg-amber-500/10"
+          className="text-warning"
         />
         <BulkActionBtn
           icon={<AddToListIcon className="w-4 h-4" />}
           label="List"
           onClick={onAddToList}
           disabled={false}
-          className="text-primary hover:bg-primary/10"
+          className="text-primary"
         />
         <BulkActionBtn
           icon={<Pencil className="w-4 h-4" />}
           label="Field"
           onClick={onEditField}
           disabled={false}
-          className="text-primary hover:bg-primary/10"
+          className="text-primary"
         />
 
         {/* Bulk Color Picker */}
         <div className="relative shrink-0" ref={bulkColorPickerRef}>
           <button
             onClick={() => setShowBulkColorPicker((v) => !v)}
-            title="Change Color"
+            title="Change color"
             className={cn(
-              "flex flex-col items-center gap-0.5 min-w-[44px] px-2 py-1.5 rounded-xl transition-colors shrink-0",
-              showBulkColorPicker
-                ? "text-primary bg-primary/10"
-                : "text-on-surface-variant hover:bg-surface-container-high",
+              BAR_BUTTON,
+              showBulkColorPicker ? SELECTED_TINT : "text-on-surface-variant",
             )}
           >
             <Palette className="w-4 h-4" />
-            <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
-              Color
-            </span>
+            <span className={BAR_LABEL}>Color</span>
           </button>
 
           <AnimatePresence>
@@ -200,7 +196,7 @@ export const BulkActionToolbar = ({
           label="CSV"
           onClick={onExportCSV}
           disabled={false}
-          className="text-on-surface-variant hover:bg-surface-container-high"
+          className="text-on-surface-variant"
         />
 
         {/* Divider */}
@@ -211,7 +207,7 @@ export const BulkActionToolbar = ({
           label="Delete"
           onClick={onDelete}
           disabled={isPending}
-          className="text-error hover:bg-rose-500/10"
+          className="text-error"
         />
       </div>
     </motion.div>

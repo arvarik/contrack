@@ -1,4 +1,6 @@
 import React from "react";
+import { LABEL, TONE_WASH } from "../../../../lib/styles";
+import { cn } from "../../../../lib/utils";
 
 // =============================================================================
 // FieldRow — A single labeled field row with optional diff highlight
@@ -31,17 +33,16 @@ export const FieldRow = ({
     }`}
   >
     <span className="text-on-surface-variant shrink-0">{icon}</span>
-    <span className="text-on-surface-variant text-xs font-bold uppercase tracking-wider w-16 shrink-0">
-      {label}
-    </span>
+    <span className={cn(LABEL, "w-16 shrink-0")}>{label}</span>
     <span className="text-on-surface flex-1 min-w-0">{children}</span>
     {conflictLabel && (
       <span
-        className={`shrink-0 text-[11px] uppercase font-bold px-1.5 py-0.5 rounded ${
+        className={cn(
+          "shrink-0 text-[11px] uppercase tracking-[0.08em] font-bold px-1.5 py-0.5 rounded",
           conflictLabel.toLowerCase().includes("kept")
-            ? "bg-emerald-500/20 text-success"
-            : "bg-amber-500/20 text-warning"
-        }`}
+            ? TONE_WASH.success
+            : TONE_WASH.warning,
+        )}
       >
         {conflictLabel}
       </span>

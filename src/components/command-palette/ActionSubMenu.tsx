@@ -3,8 +3,8 @@
  *
  * Activated by pressing `→` on a focused search result.
  * Provides quick actions without leaving the command palette:
- *   👤 View Profile (Enter), 📝 Log Note (N), 📞 Log Call (C),
- *   ✨ Catch Me Up (B), 📋 Add to List (L), ◎ Track or Untrack (T)
+ *   👤 View profile (Enter), 📝 Log note (N), 📞 Log call (C),
+ *   ✨ Catch me up (B), 📋 Add to list (L), ◎ Track or Untrack (T)
  *
  * Track reads the contact's flag from the contact cache, flips it with the
  * same toast and Undo as the header button, and closes the palette. A
@@ -29,8 +29,10 @@ import {
   ArrowLeft,
   Radar,
 } from "lucide-react";
-import { KBD_SM } from "../../lib/styles";
+import { ICON_BTN, KBD_SM, SELECTED_ROW } from "../../lib/styles";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { DURATION, EASE } from "../../lib/motion";
+import { cn } from "../../lib/utils";
 import { useContacts } from "../../api/contacts";
 import { useTrackToggle } from "../../hooks/useTrackToggle";
 import { InlineNoteComposer } from "./InlineNoteComposer";
@@ -107,35 +109,35 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     () => [
       {
         id: "view",
-        label: "View Profile",
+        label: "View profile",
         icon: <User className="w-4 h-4" />,
         shortcut: "↵",
         handler: onViewProfile,
       },
       {
         id: "note",
-        label: "Log Note",
+        label: "Log note",
         icon: <FileText className="w-4 h-4" />,
         shortcut: "N",
         handler: () => setMode("note"),
       },
       {
         id: "call",
-        label: "Log Call",
+        label: "Log call",
         icon: <Phone className="w-4 h-4" />,
         shortcut: "C",
         handler: () => setMode("call"),
       },
       {
         id: "brief",
-        label: "Catch Me Up",
+        label: "Catch me up",
         icon: <Sparkles className="w-4 h-4" />,
         shortcut: "B",
         handler: onCatchMeUp,
       },
       {
         id: "list",
-        label: "Add to List",
+        label: "Add to list",
         icon: <ListPlus className="w-4 h-4" />,
         shortcut: "L",
         handler: () => setMode("list"),
@@ -270,7 +272,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
       ref={actionsRef}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
+      transition={{ duration: DURATION.fast, ease: EASE }}
       className="p-2"
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -279,7 +281,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className="hit-area p-2 sm:p-1 -ml-1 rounded-lg hover:bg-surface-container-high active:bg-surface-container-highest transition-colors text-on-surface-variant hover:text-on-surface"
+          className={cn(ICON_BTN, "sm:p-1 -ml-1")}
           aria-label="Back to results"
         >
           <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -293,27 +295,25 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           <p className="text-sm font-bold text-on-surface truncate">
             {contactName}
           </p>
-          <p className="text-[11px] text-on-surface-variant uppercase tracking-widest">
+          <p className="text-[11px] text-on-surface-variant uppercase tracking-[0.08em]">
             Actions
           </p>
         </div>
       </div>
 
-      {/* Action items */}
+      {/* Action items. The one the arrow keys are on is the selected row. */}
       <div className="space-y-0.5">
         {actions.map((action, i) => (
           <button
             key={action.id}
             onClick={action.handler}
             onMouseDown={(e) => e.preventDefault()}
-            className={`
-              w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-xl text-sm transition-all active:scale-[0.98]
-              ${
-                i === selectedIndex
-                  ? "bg-primary/10 text-primary"
-                  : "text-on-surface hover:bg-surface-container-low active:bg-surface-container-low"
-              }
-            `}
+            className={cn(
+              "state-layer w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-xl text-sm transition-colors",
+              i === selectedIndex
+                ? cn(SELECTED_ROW, "text-on-primary-wash")
+                : "text-on-surface",
+            )}
           >
             <span
               className={`

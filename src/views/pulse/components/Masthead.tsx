@@ -2,20 +2,22 @@
  * Masthead: the top of the morning page.
  *
  * The page should answer "what day is it and how am I doing" before
- * anything else, so the day is the headline. The `h1` stays "Pulse", because
- * six specs and the landmark structure need it, and it becomes a 13 px page
- * label over a 32 px date in the headline face. One sentence replaces the
- * old row of chips: "2 overdue, 2 due today, 3 birthdays this week. 12 days
- * in a row." From `sm` up each count is a button that jumps to its card.
- * Below `sm` the counts are plain text, because the queue starts one flick
- * down and inline 44 px tap boxes would overlap across two wrapped lines.
- * The sentence is text, so it wraps and nothing scrolls sideways.
+ * anything else, so the day is the headline. It is the shared `PageHeader`
+ * with two slots turned: the eyebrow "Pulse" is the `h1`, because six specs
+ * and the landmark structure need it, and the date is the title, in a `p`.
+ * So the date sits where every other page puts its name, at the same size.
+ * One sentence replaces the old row of chips: "2 overdue, 2 due today, 3
+ * birthdays this week. 12 days in a row." From `sm` up each count is a
+ * button that jumps to its card. Below `sm` the counts are plain text,
+ * because the queue starts one flick down and inline 44 px tap boxes would
+ * overlap across two wrapped lines. The sentence is text, so it wraps and
+ * nothing scrolls sideways.
  *
  * Log a note is the one primary action. New contact and Customize layout
  * sit in a "More" menu: customize is a once-a-year action and does not
  * belong beside the page's main verb. The `c` key still toggles it.
  *
- * `children` renders under the sentence. Prompt 3 puts the Ask form there.
+ * `children` renders under the sentence: the page puts the Ask form there.
  * `quiet` is the welcome state: the sentence and the progress mark are left
  * out, and the date, the label and the actions stay.
  */
@@ -23,6 +25,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Ellipsis, PenLine, SlidersHorizontal, UserPlus } from "lucide-react";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
+import { PageHeader } from "../../../components/layout/PageHeader";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { NAMES } from "../../../lib/names";
 import { openQuickNote } from "../../../lib/appEvents";
@@ -42,7 +45,7 @@ export interface MastheadProps {
   isEditing: boolean;
   onToggleCustomize: () => void;
   onJumpTo: (target: JumpTarget) => void;
-  /** Rendered under the sentence. Prompt 3 puts the Ask form here. */
+  /** Rendered under the sentence. The page puts the Ask form here. */
   children?: React.ReactNode;
   /** The welcome state: the sentence and the progress mark are left out. */
   quiet?: boolean;
@@ -93,7 +96,7 @@ export const ProgressMark = ({
           cy="20"
           r={RING_RADIUS}
           fill="none"
-          className="stroke-primary transition-all duration-500 ease-out"
+          className="stroke-primary transition-[stroke-dashoffset] duration-(--dur-slow)"
           strokeWidth="3"
           strokeDasharray={RING_CIRCUMFERENCE}
           strokeDashoffset={offset}
@@ -124,37 +127,31 @@ export const Masthead = ({
     month: "long",
   }).format(new Date());
 
-  const parts = buildDayLine(counts);
+  const sentence = buildDayLine(counts).map((part, index) =>
+    part.target && wide ? (
+      <button
+        key={index}
+        type="button"
+        onClick={() => onJumpTo(part.target!)}
+        className="hit-area underline decoration-outline-variant underline-offset-4 hover:decoration-primary hover:text-on-surface transition-colors"
+      >
+        {part.text}
+      </button>
+    ) : (
+      <React.Fragment key={index}>{part.text}</React.Fragment>
+    ),
+  );
 
   return (
-    <header aria-label="Today summary" className="flex flex-col gap-4">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-        <div className="min-w-0">
-          <h1 className={cn(PULSE_TYPE.label, "leading-tight")}>
-            {NAMES.pulse.label}
-          </h1>
-          <p className={PULSE_TYPE.date}>{date}</p>
-          {!quiet && (
-            <p className={cn(PULSE_TYPE.line, "mt-1")}>
-              {parts.map((part, index) =>
-                part.target && wide ? (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => onJumpTo(part.target!)}
-                    className="hit-area underline decoration-outline-variant underline-offset-4 hover:decoration-primary hover:text-on-surface transition-colors"
-                  >
-                    {part.text}
-                  </button>
-                ) : (
-                  <React.Fragment key={index}>{part.text}</React.Fragment>
-                ),
-              )}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 sm:shrink-0">
+    <PageHeader
+      label="Today summary"
+      eyebrow={NAMES.pulse.label}
+      eyebrowAs="h1"
+      title={date}
+      titleAs="p"
+      description={quiet ? undefined : sentence}
+      actions={
+        <>
           {!quiet && (
             <ProgressMark
               completed={counts.completedToday}
@@ -187,9 +184,10 @@ export const Masthead = ({
               },
             ]}
           />
-        </div>
-      </div>
+        </>
+      }
+    >
       {children}
-    </header>
+    </PageHeader>
   );
 };

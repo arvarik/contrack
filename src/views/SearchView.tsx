@@ -5,7 +5,6 @@ import {
   Sparkles,
   Search,
   X,
-  Loader2,
   AlertTriangle,
   Clock,
   RefreshCw,
@@ -17,11 +16,19 @@ import { useRecordSearch } from "../api/searchHistory";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
-import { PAGE_TITLE, SECTION_BG } from "../lib/styles";
+import {
+  CARD,
+  CARD_INTERACTIVE,
+  ICON_BTN,
+  PAGE_TOP,
+  TONE_WASH,
+} from "../lib/styles";
 import { cn } from "../lib/utils";
 import { tileDelay } from "../lib/motion";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
+import { CorvidThinking } from "../components/brand/CorvidThinking";
+import { PageHeader } from "../components/layout/PageHeader";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { NAMES } from "../lib/names";
 import { ResultCard, ShimmerCard } from "./search/SearchResultCards";
@@ -131,7 +138,7 @@ export const SearchView = () => {
     [setSearchParams],
   );
 
-  usePageTitle(mode === "notes" ? "Search Notes" : NAMES.ask.title);
+  usePageTitle(mode === "notes" ? "Search notes" : NAMES.ask.title);
 
   // Focus input on mount
   useEffect(() => {
@@ -300,9 +307,10 @@ export const SearchView = () => {
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
 
   /**
-   * The one sentence a screen reader hears about this search. The spinner,
-   * the "Searching..." line and the count pill below are what a sighted
-   * person sees; none of them is announced. See lib/searchAnnouncements.
+   * The one sentence a screen reader hears about this search. The thinking
+   * bird, the "Searching..." line and the count pill below are what a
+   * sighted person sees; none of them is announced. See
+   * lib/searchAnnouncements.
    */
   const status = peopleSearchStatus({
     isLoading,
@@ -316,118 +324,143 @@ export const SearchView = () => {
 
   return (
     <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-surface">
-      {/* Primary column (Header + scrolling body) */}
+      {/* Primary column: the header, then the body that scrolls under it */}
       <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
-        {/* Header */}
-        <header
-          className={cn(
-            SECTION_BG,
-            "px-4 sm:px-6 py-5 sm:py-6 shrink-0 flex flex-wrap items-center justify-between gap-4",
-          )}
-        >
-          <div>
-            <h1 className={cn(PAGE_TITLE, "flex items-center gap-3")}>
-              <div className="p-2 bg-primary/10 rounded-xl shrink-0">
-                <Sparkles className="w-6 h-6 text-primary" />
-              </div>
-              {NAMES.ask.label}
-            </h1>
-            <p className="text-sm text-on-surface-variant mt-0.5">
-              {mode === "notes"
-                ? "Find what was said, and when"
-                : NAMES.ask.description}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Segmented
-              options={MODES}
-              value={mode}
-              onChange={setMode}
-              label="What to search"
-            />
-            {mode === "people" && <SearchCoverageBar compact />}
-            <IconButton
-              ref={historyToggleRef}
-              aria-label="Search history"
-              aria-pressed={isWide ? askHistoryOpen : undefined}
-              aria-expanded={isWide ? undefined : mobileHistoryOpen}
-              aria-haspopup={isWide ? undefined : "dialog"}
-              aria-controls={
-                isWide && askHistoryOpen ? "search-history-aside" : undefined
+        {/*
+          The page scrolls as one column: the header, then the search and its
+          results, in one box with one pair of gutters, so the title's left
+          edge is the search box's left edge with any scrollbar. The header
+          scrolls away with the page, as it does on Pulse. The scroll padding
+          keeps a card that Tab brings into view clear of the edge, so its
+          focus ring is never cut.
+        */}
+        <div className="flex-1 overflow-y-auto scroll-py-2">
+          <div
+            className={cn(
+              "max-w-3xl mx-auto px-4 sm:px-6 space-y-6 sm:space-y-8 pb-28 md:pb-8",
+              PAGE_TOP,
+            )}
+          >
+            <PageHeader
+              title={NAMES.ask.label}
+              description={
+                mode === "notes"
+                  ? "Find what was said, and when"
+                  : NAMES.ask.description
               }
-              onClick={handleToggleHistory}
-              tone={
-                isWide
-                  ? askHistoryOpen
-                    ? "primary"
-                    : "ghost"
-                  : mobileHistoryOpen
-                    ? "primary"
-                    : "ghost"
+              // The controls are the same two in both modes, so the switch stays
+              // where the person clicked it. On a phone they fill the row under
+              // the title, the switch growing beside the history button.
+              actionsClassName="max-sm:w-full"
+              actions={
+                <>
+                  <Segmented
+                    options={MODES}
+                    value={mode}
+                    onChange={setMode}
+                    label="What to search"
+                    className="max-sm:w-auto max-sm:flex-1"
+                  />
+                  <IconButton
+                    ref={historyToggleRef}
+                    aria-label="Search history"
+                    aria-pressed={isWide ? askHistoryOpen : undefined}
+                    aria-expanded={isWide ? undefined : mobileHistoryOpen}
+                    aria-haspopup={isWide ? undefined : "dialog"}
+                    aria-controls={
+                      isWide && askHistoryOpen
+                        ? "search-history-aside"
+                        : undefined
+                    }
+                    onClick={handleToggleHistory}
+                    tone={
+                      isWide
+                        ? askHistoryOpen
+                          ? "primary"
+                          : "ghost"
+                        : mobileHistoryOpen
+                          ? "primary"
+                          : "ghost"
+                    }
+                  >
+                    <Clock className="w-5 h-5" />
+                  </IconButton>
+                </>
               }
             >
-              <Clock className="w-5 h-5" />
-            </IconButton>
-          </div>
-        </header>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8 pb-28 md:pb-8">
+              {/* How much of the network People search can read yet. People
+                  only, under the title, so it never pushes the controls around. */}
+              {mode === "people" && <SearchCoverageBar compact />}
+            </PageHeader>
             {mode === "notes" ? (
               <InteractionSearchPanel />
             ) : (
               <>
                 <LiveStatus message={status} label="Search status" />
 
-                {/* Search Input — the button drops below the field on phones */}
-                <div className="relative">
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-2 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
-                    ) : (
-                      <Sparkles className="w-5 h-5 text-primary shrink-0" />
-                    )}
-                    <input
-                      ref={inputRef}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      // Short enough to survive a 390px viewport without the
-                      // placeholder being clipped mid-word.
-                      placeholder="Ask about your network…"
-                      aria-label="Ask anything about your network"
-                      // 44px tall on a phone, the touch floor; the row's
-                      // padding shrinks there to make up for it.
-                      className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+                {/*
+                  The search box is one field: the glyph, the input, Clear
+                  and Search in one card. The card draws the focus ring while
+                  the input has focus (`focus-frame`). The button drops below
+                  the field on phones.
+                */}
+                <div
+                  className={cn(
+                    CARD,
+                    "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-5 py-2 sm:py-4",
+                  )}
+                >
+                  {isLoading ? (
+                    // Decorative: the "Searching..." line under the box says
+                    // the same thing in words, and the status region reads it.
+                    <CorvidThinking
+                      decorative
+                      size={20}
+                      className="text-primary shrink-0"
                     />
-                    {/*
-                Reserved slot, not an AnimatePresence exit. Mounting and
-                unmounting the clear button changed the row's width mid-typing
-                and nudged the caret; now the space is always there and only
-                the button's opacity changes.
-              */}
-                    <button
-                      onClick={handleClear}
-                      tabIndex={query.length > 0 ? 0 : -1}
-                      aria-hidden={query.length === 0}
-                      className={cn(
-                        "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
-                        query.length === 0 && "opacity-0 pointer-events-none",
-                      )}
-                      aria-label="Clear search"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleSearch()}
-                      disabled={query.trim().length < 3 || isLoading}
-                      className="btn-primary w-full sm:w-auto shrink-0"
-                    >
-                      <Search className="w-4 h-4" />
-                      Search
-                    </button>
-                  </div>
+                  ) : (
+                    <Sparkles className="w-5 h-5 text-primary shrink-0" />
+                  )}
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    // Short enough to survive a 390px viewport without the
+                    // placeholder being clipped mid-word.
+                    placeholder="Ask about your network…"
+                    aria-label="Ask anything about your network"
+                    // 44px tall on a phone, the touch floor; the row's
+                    // padding shrinks there to make up for it.
+                    className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+                  />
+                  {/*
+                    Reserved slot, not an AnimatePresence exit. Mounting and
+                    unmounting the clear button changed the row's width
+                    mid-typing and nudged the caret; now the space is always
+                    there and only the button's opacity changes.
+                  */}
+                  <button
+                    onClick={handleClear}
+                    tabIndex={query.length > 0 ? 0 : -1}
+                    aria-hidden={query.length === 0}
+                    className={cn(
+                      ICON_BTN,
+                      "p-1.5 shrink-0 transition-opacity",
+                      query.length === 0 && "opacity-0 pointer-events-none",
+                    )}
+                    aria-label="Clear search"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => handleSearch()}
+                    disabled={query.trim().length < 3 || isLoading}
+                    className="btn-primary w-full sm:w-auto shrink-0"
+                  >
+                    <Search className="w-4 h-4" />
+                    Search
+                  </button>
                 </div>
 
                 {/* Example queries — only shown before first search */}
@@ -452,22 +485,32 @@ export const SearchView = () => {
                           </div>
                         )}
                     </EmptyState>
-                    <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                    <p className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
                       Try asking...
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {EXAMPLE_QUERIES.map((q, i) => (
-                        <button
+                        // The entrance runs on a wrapper. `tile-enter` holds
+                        // its last `transform` after it ends, which would
+                        // cancel the card's hover lift.
+                        <div
                           key={q}
+                          className="tile-enter"
                           style={{ animationDelay: tileDelay(i) }}
-                          onClick={() => handleExampleClick(q)}
-                          className="tile-enter text-left px-4 py-3 rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md hover:bg-primary/5 text-sm text-on-surface-variant hover:text-primary transition-[background-color,box-shadow,color] duration-200 group"
                         >
-                          <span className="text-primary group-hover:text-primary mr-1.5 font-bold">
-                            ?
-                          </span>
-                          {q}
-                        </button>
+                          <button
+                            onClick={() => handleExampleClick(q)}
+                            className={cn(
+                              CARD_INTERACTIVE,
+                              "w-full h-full text-left px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:text-on-surface",
+                            )}
+                          >
+                            <span className="text-primary mr-1.5 font-bold">
+                              ?
+                            </span>
+                            {q}
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -485,8 +528,9 @@ export const SearchView = () => {
           */}
                 {isLoading ? (
                   <div key="shimmer" className="fade-enter space-y-3">
-                    <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-widest mb-4">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
+                      {/* Decorative: the word beside it says the same thing. */}
+                      <CorvidThinking decorative size={16} />
                       Searching...
                     </div>
                     <ShimmerCard delay={0} />
@@ -498,7 +542,7 @@ export const SearchView = () => {
                     {/* Results header — wraps rather than crushes on narrow screens */}
                     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-widest text-primary">
+                        <span className="text-xs font-bold uppercase tracking-[0.08em] text-primary">
                           {isFallback
                             ? isEnriching
                               ? "Keyword candidates"
@@ -513,7 +557,8 @@ export const SearchView = () => {
                       <div className="flex items-center gap-3">
                         {isEnriching && (
                           <div className="flex items-center gap-1.5 text-xs text-primary">
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                            {/* Decorative: the words beside it say it. */}
+                            <CorvidThinking decorative size={16} />
                             <span>Enriching with AI…</span>
                           </div>
                         )}
@@ -594,8 +639,10 @@ export const SearchView = () => {
                     role="alert"
                     className="tile-enter flex flex-col items-center justify-center py-16 text-center"
                   >
-                    <div className="p-4 bg-rose-500/10 rounded-2xl mb-4">
-                      <AlertTriangle className="w-10 h-10 text-error" />
+                    <div
+                      className={cn(TONE_WASH.error, "p-4 rounded-2xl mb-4")}
+                    >
+                      <AlertTriangle className="w-10 h-10" />
                     </div>
                     <p className="font-bold text-on-surface mb-1">
                       Search failed
@@ -633,7 +680,9 @@ export const SearchView = () => {
           aria-label="Search history"
           className="hidden lg:flex flex-col w-[320px] shrink-0 bg-surface-container-low overflow-y-auto"
         >
+          {/* `PAGE_TOP` above the pane's title, so it starts level with the page's. */}
           <HistoryPane
+            className={cn("flex flex-col h-full px-4 pb-4 space-y-4", PAGE_TOP)}
             currentQuery={
               mode === "notes"
                 ? (searchParams.get("q") ?? "")

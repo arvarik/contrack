@@ -7,7 +7,8 @@ import {
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import React, { useEffect } from "react";
 import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
-import { safeHref } from "../lib/utils";
+import { cn, safeHref } from "../lib/utils";
+import { CARD_INTERACTIVE, LABEL, LABEL_PRIMARY } from "../lib/styles";
 import { apiJson } from "../api/client";
 
 const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
@@ -47,14 +48,19 @@ const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
         href={safeHref(url)}
         target="_blank"
         rel="noopener noreferrer"
-        className="block rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col sm:flex-row group"
+        // A card that is a link: the card rises on hover, and nothing inside
+        // it moves on its own.
+        className={cn(
+          CARD_INTERACTIVE,
+          "p-0 overflow-hidden flex flex-col sm:flex-row",
+        )}
       >
         {image ? (
           <div className="sm:w-48 h-32 sm:h-auto shrink-0 overflow-hidden relative">
             <img
               src={image}
               alt={title || "Link preview"}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              className="w-full h-full object-cover"
             />
           </div>
         ) : (
@@ -78,7 +84,7 @@ const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
           )}
           <div className="flex items-center gap-1 mt-auto">
             <ExternalLink className="w-3 h-3 text-primary" />
-            <span className="text-[11px] text-primary font-bold uppercase tracking-wide truncate">
+            <span className={cn(LABEL_PRIMARY, "truncate")}>
               {new URL(url).hostname}
             </span>
           </div>
@@ -118,8 +124,10 @@ export const LinkPreviewExtension = Node.create({
           href: HTMLAttributes.url,
           target: "_blank",
           rel: "noopener noreferrer",
-          class:
-            "not-prose block rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col sm:flex-row group my-4",
+          class: cn(
+            CARD_INTERACTIVE,
+            "not-prose p-0 overflow-hidden flex flex-col sm:flex-row my-4",
+          ),
         },
         [
           "div",
@@ -135,14 +143,7 @@ export const LinkPreviewExtension = Node.create({
                   class: "w-full h-full object-cover",
                 },
               ]
-            : [
-                "span",
-                {
-                  class:
-                    "text-[11px] uppercase font-bold text-on-surface-variant",
-                },
-                "LINK",
-              ],
+            : ["span", { class: LABEL }, "LINK"],
         ],
         [
           "div",
@@ -162,10 +163,7 @@ export const LinkPreviewExtension = Node.create({
           ],
           [
             "div",
-            {
-              class:
-                "text-[11px] text-primary font-bold uppercase tracking-wide truncate mt-auto",
-            },
+            { class: cn(LABEL_PRIMARY, "truncate mt-auto") },
             (HTMLAttributes.url || "").split("/")[2] || HTMLAttributes.url,
           ],
         ],

@@ -17,6 +17,7 @@ import {
   MENU_PANEL,
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { DURATION, EASE } from "../../lib/motion";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
         initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.1 }}
+        transition={{ duration: DURATION.fast, ease: EASE }}
         // Motion draws the entrance, so the panel's own CSS entrance is
         // taken off.
         className={cn(MENU_PANEL, "menu-enter-none mx-4 mb-1 min-w-0")}
@@ -250,7 +251,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
                 i === selectedIndex && MENU_ITEM_SELECTED,
               )}
             >
-              <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant w-16 shrink-0">
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant w-16 shrink-0">
                 {field}:
               </span>
               <span className="truncate">{s.label}</span>

@@ -48,8 +48,9 @@ export interface CardFrameProps {
   variant?: CardFrameVariant;
 }
 
+/** A customize control: a flat icon button with the hover layer. */
 const CONTROL_BTN =
-  "hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  "hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors";
 
 /**
  * The customize controls: the phone arrows, the drag handle, the eye and
@@ -208,7 +209,7 @@ export const CardFrame = ({
         aria-labelledby={headingId}
         data-card-id={cardId}
         className={cn(
-          "flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 rounded-2xl transition-all duration-200",
+          "flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-2 rounded-2xl transition-all",
           isCustomizing && "ring-1 ring-primary/20",
           className,
         )}
@@ -238,7 +239,7 @@ export const CardFrame = ({
         // set the inset (16 px on a phone, 20 px from sm). With both, a
         // phone card lost 80 of its 350 px to padding.
         compact ? CARD_COMPACT : CARD,
-        "p-0 flex flex-col relative overflow-hidden transition-all duration-200",
+        "p-0 flex flex-col relative overflow-hidden transition-all",
         isCustomizing && "ring-1 ring-primary/20",
         className,
       )}

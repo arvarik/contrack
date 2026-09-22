@@ -224,6 +224,10 @@ describe("Highlighted", () => {
     );
     expect(marks).toEqual(["hire", "hiring"]);
     expect(container.textContent).toBe("hire the hiring team");
+    // A plain mark: the base layer paints the highlighter and the ink.
+    for (const mark of container.querySelectorAll("mark")) {
+      expect(mark.hasAttribute("class")).toBe(false);
+    }
   });
 
   it("ignores a range that runs backwards or off the end", () => {

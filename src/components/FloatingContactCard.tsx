@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
 import { ContactProfile } from "../views/contact-detail/components/ContactProfile";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { DURATION, EASE } from "../lib/motion";
 
 interface FloatingContactCardProps {
   contactId: string | null;
@@ -82,7 +83,7 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: DURATION.fast, ease: EASE }}
             onClick={onClose}
             aria-hidden="true"
             className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
@@ -109,9 +110,9 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
               type="button"
               onClick={onClose}
               aria-label="Close contact details"
-              className="absolute top-4 right-4 z-50 inline-flex items-center justify-center min-w-[44px] min-h-[44px] bg-surface-container-low hover:bg-surface-container-high rounded-full transition-colors shadow-sm"
+              className="state-layer absolute top-4 right-4 z-50 inline-flex items-center justify-center min-w-[44px] min-h-[44px] bg-surface-container-low rounded-full text-on-surface-variant hover:text-on-surface transition-colors"
             >
-              <X className="w-5 h-5 text-on-surface-variant" />
+              <X className="w-5 h-5" />
             </button>
 
             <div className="flex-1 min-h-0 overflow-hidden">

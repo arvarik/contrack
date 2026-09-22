@@ -44,7 +44,7 @@ export const PreviewStage = ({
       <div className="flex items-center gap-3 mt-8">
         <button onClick={onBack} className="btn-secondary flex-1">
           <ChevronLeft className="w-4 h-4" />
-          Back to Compare
+          Back to compare
         </button>
         <button
           onClick={onMerge}
@@ -59,7 +59,7 @@ export const PreviewStage = ({
           ) : (
             <>
               <Merge className="w-5 h-5" />
-              Confirm Merge
+              Confirm merge
             </>
           )}
         </button>

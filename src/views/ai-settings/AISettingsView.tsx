@@ -20,8 +20,13 @@ import {
 import { Modal } from "../../components/ui/Modal";
 import { CapabilitiesCard } from "./CapabilitiesCard";
 import { SearchCoverageBar } from "../search";
-import { CARD, SECTION_HEADING, ICON_BTN } from "../../lib/styles";
+import { CARD, SECTION_HEADING, ICON_BTN, LABEL } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { SETTINGS_PAGE } from "../settings/layout";
+
+/** "Add a key" and "Add an endpoint": a dashed row that is a button. */
+const ADD_ROW =
+  "state-layer w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 transition-colors text-left";
 
 // ---------------------------------------------------------------------------
 // AISettingsView — capability-based AI configuration
@@ -43,8 +48,8 @@ export const AISettingsView = ({
    * From 2.0 this is an instance setting, so it appears twice: at its own
    * route, which is where a single-operator install has always found it, and
    * inside the administration Instance page beside the other instance-wide
-   * settings. `embedded` drops this component's own page padding and width
-   * cap, which would otherwise be applied twice.
+   * settings. `embedded` drops this component's own page box
+   * (`SETTINGS_PAGE`), which the host page already draws.
    */
   embedded?: boolean;
 } = {}) => {
@@ -70,7 +75,12 @@ export const AISettingsView = ({
 
   if (isLoading || !settings) {
     return (
-      <div className="p-6 text-sm text-on-surface-variant">
+      <div
+        className={cn(
+          !embedded && SETTINGS_PAGE,
+          "text-sm text-on-surface-variant",
+        )}
+      >
         Loading AI settings…
       </div>
     );
@@ -125,12 +135,9 @@ export const AISettingsView = ({
   };
 
   return (
-    <div
-      className={cn(
-        "space-y-4 sm:space-y-6",
-        embedded ? "" : "p-4 sm:p-6 max-w-3xl mx-auto pb-28 md:pb-10",
-      )}
-    >
+    // The settings page box, the one the shell's header takes, so the first
+    // card starts under the page title and not to its right.
+    <div className={cn("space-y-4 sm:space-y-6", !embedded && SETTINGS_PAGE)}>
       {/* ── Providers ─────────────────────────────────────────────────── */}
       <section className={cn(CARD, "space-y-4 p-4 sm:p-6")}>
         <div>
@@ -154,7 +161,7 @@ export const AISettingsView = ({
                 <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
                   {provider.label}
                   {provider.source === "env" && (
-                    <span className="text-[11px] uppercase tracking-wider bg-surface-container-highest px-1.5 py-0.5 rounded font-bold text-on-surface-variant">
+                    <span className="text-[11px] uppercase tracking-[0.08em] bg-surface-container-highest px-1.5 py-0.5 rounded font-bold text-on-surface-variant">
                       from .env
                     </span>
                   )}
@@ -162,7 +169,7 @@ export const AISettingsView = ({
                       providers, and it decides whether this one can appear in
                       the web-research list at all. */}
                   {provider.supportsGrounding && (
-                    <span className="text-[11px] uppercase tracking-wider bg-sky-500/10 text-info px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                    <span className="text-[11px] uppercase tracking-[0.08em] bg-info/10 text-info px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                       <Globe className="w-2.5 h-2.5" />
                       web search
                     </span>
@@ -236,7 +243,7 @@ export const AISettingsView = ({
                 setKeyModalProvider(provider);
                 setKeyInput("");
               }}
-              className="w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
+              className={ADD_ROW}
             >
               <Plus className="w-4 h-4 text-on-surface-variant shrink-0" />
               <span className="text-sm text-on-surface-variant">
@@ -248,7 +255,7 @@ export const AISettingsView = ({
 
         {/* Custom endpoints */}
         <div className="pt-2 space-y-2">
-          <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <div className={LABEL}>
             Custom endpoints (Ollama, vLLM, LM Studio, xAI…)
           </div>
           {settings.customEndpoints.map((endpoint) => {
@@ -324,7 +331,7 @@ export const AISettingsView = ({
           })}
           <button
             onClick={() => setEndpointModalOpen(true)}
-            className="w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl border border-dashed border-on-surface-variant/25 hover:bg-surface-container-low transition-colors text-left"
+            className={ADD_ROW}
           >
             <Plus className="w-4 h-4 text-on-surface-variant shrink-0" />
             <span className="text-sm text-on-surface-variant">
@@ -360,7 +367,7 @@ export const AISettingsView = ({
             // Capturing this one value is the modal's entire purpose.
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
-            className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
+            className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-sm font-mono"
           />
           <div className="flex justify-end gap-3">
             <button
@@ -438,7 +445,7 @@ export const AISettingsView = ({
                   }))
                 }
                 placeholder={field.placeholder}
-                className="w-full mt-1 min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full mt-1 min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono"
               />
             </label>
           ))}

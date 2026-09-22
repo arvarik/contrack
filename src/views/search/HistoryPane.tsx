@@ -27,7 +27,8 @@ import {
   startPendingDelete,
   useHiddenPendingIds,
 } from "../../lib/pendingDeletes";
-import { SECTION_HEADING } from "../../lib/styles";
+import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 import { HistoryEntryRow } from "./HistoryEntryRow";
 import { groupHistoryEntries } from "./historyGroups";
 
@@ -158,7 +159,7 @@ export const HistoryPane = ({
           <button
             type="button"
             onClick={() => setClearDialogOpen(true)}
-            className="text-xs font-medium text-on-surface-variant hover:text-error transition-colors px-2 py-1 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className={cn(BTN_QUIET, "hover:text-error cursor-pointer")}
           >
             Clear
           </button>
@@ -176,7 +177,7 @@ export const HistoryPane = ({
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Filter questions"
             aria-label="Filter history"
-            className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none focus:outline-none focus:ring-2 focus:ring-primary/40 text-on-surface placeholder:text-on-surface-variant"
+            className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none text-on-surface placeholder:text-on-surface-variant"
           />
           {filterText.length > 0 && (
             <button
@@ -186,7 +187,7 @@ export const HistoryPane = ({
                 filterInputRef.current?.focus();
               }}
               aria-label="Clear filter text"
-              className="absolute right-2 p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className={cn(ICON_BTN, "absolute right-2 p-1 cursor-pointer")}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -235,7 +236,7 @@ export const HistoryPane = ({
               type="button"
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
-              className="w-full py-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-xl transition-colors cursor-pointer disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="state-layer w-full py-2 text-xs font-semibold text-primary rounded-xl transition-colors cursor-pointer disabled:opacity-50"
             >
               {isFetchingNextPage ? "Loading…" : "Load more"}
             </button>

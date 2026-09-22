@@ -131,7 +131,7 @@ describe("Import source memory", () => {
     it("persists tab switch to localStorage", () => {
       renderPanel();
 
-      const linkedinTab = screen.getByRole("tab", { name: "Linkedin" });
+      const linkedinTab = screen.getByRole("tab", { name: "LinkedIn" });
       fireEvent.click(linkedinTab);
 
       expect(localStorage.getItem(IMPORT_LAST_SOURCE_KEY)).toBe("linkedin");

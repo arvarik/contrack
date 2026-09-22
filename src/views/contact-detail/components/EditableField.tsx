@@ -184,7 +184,7 @@ export function EditableField({
       className={cn(
         // hit-area: a role or company in 20 px type is 28 px tall, and the
         // tap box is 44.
-        "group/edit hit-area relative cursor-text text-left inline-flex items-center gap-1.5 rounded hover:bg-surface-container-high transition-colors",
+        "group/edit hit-area state-layer relative cursor-text text-left inline-flex items-center gap-1.5 rounded transition-colors",
         !value && "text-on-surface-variant italic",
         className,
       )}

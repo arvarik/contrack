@@ -36,21 +36,21 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { NAMES } from "../../lib/names";
+import type { Tone } from "../../lib/styles";
 
 export type SettingsGroup = "you" | "tools" | "data" | "connect" | "admin";
 
 export interface SettingsGroupMeta {
   id: SettingsGroup;
   title: string;
-  railHeading: string;
 }
 
 export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
-  { id: "you", title: "You", railHeading: "YOU" },
-  { id: "tools", title: "Tools", railHeading: "TOOLS" },
-  { id: "data", title: "Your data", railHeading: "YOUR DATA" },
-  { id: "connect", title: "Connect", railHeading: "CONNECT" },
-  { id: "admin", title: "Administration", railHeading: "ADMINISTRATION" },
+  { id: "you", title: "You" },
+  { id: "tools", title: "Tools" },
+  { id: "data", title: "Your data" },
+  { id: "connect", title: "Connect" },
+  { id: "admin", title: "Administration" },
 ];
 
 export interface SettingsRow {
@@ -66,7 +66,8 @@ export interface SettingsPage {
   description: string;
   icon: LucideIcon;
   group: SettingsGroup;
-  tone?: "primary" | "amber" | "danger";
+  /** The colour of the page's tile on the landing list. Primary by default. */
+  tone?: Tone;
   admin?: boolean;
   needsAccount?: boolean;
   keywords: string[];
@@ -437,7 +438,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   {
     id: "ai-usage",
     path: "/settings/ai-usage",
-    title: "AI Usage",
+    title: "AI usage",
     description:
       "Invocations, token spend, cache hit rate, and approximate cost.",
     icon: Gauge,
@@ -656,10 +657,10 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   {
     id: "archived",
     path: "/settings/archived",
-    title: "Archived Contacts",
+    title: "Archived contacts",
     description: "Hidden from your Network and Map. Restore them at any time.",
     icon: Archive,
-    tone: "amber",
+    tone: "warning",
     group: "data",
     keywords: ["archived contacts", "archive", "hidden"],
     load: () =>
@@ -673,7 +674,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     title: "Trash",
     description: "Recently deleted contacts. Empties itself after 30 days.",
     icon: Trash2,
-    tone: "danger",
+    tone: "error",
     group: "data",
     keywords: ["trash", "deleted", "restore", "bin", "recycle"],
     load: () => import("../TrashView").then((m) => ({ default: m.TrashView })),
@@ -950,7 +951,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   {
     id: "admin-ai-usage",
     path: "/settings/admin/ai-usage",
-    title: "AI Usage",
+    title: "AI usage",
     description:
       "Invocations, token spend, cache hit rate, and approximate cost.",
     icon: Gauge,

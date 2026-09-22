@@ -46,7 +46,8 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { openQuickNote } from "../../lib/appEvents";
-import { EMPTY_STATE } from "../../lib/styles";
+import { PAGE_TOP, PAGE_X } from "../../lib/styles";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { cn } from "../../lib/utils";
 import {
   resolveLayout,
@@ -121,7 +122,7 @@ const DroppableColumn = ({
       <SortableContext items={cards} strategy={rectSortingStrategy}>
         {cards.map((cardId, index) => renderCard(cardId, index, cards.length))}
         {cards.length === 0 && isEditing && (
-          <div className="p-8 rounded-2xl border-2 border-dashed border-outline/20 text-center text-xs text-on-surface-variant font-medium">
+          <div className="p-8 rounded-2xl border-2 border-dashed border-outline-variant text-center text-xs text-on-surface-variant font-medium">
             Drop cards here
           </div>
         )}
@@ -599,19 +600,18 @@ const PulseOffice = () => {
   if (isError) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
-        <div className={EMPTY_STATE}>
-          <HeartPulse className="w-12 h-12 text-error mx-auto mb-4 opacity-50" />
-          <h2 className="text-xl font-bold text-on-surface mb-2">
-            System Disconnected
-          </h2>
-          <p>Failed to load the relationship pulse dashboard.</p>
-        </div>
+        <EmptyState
+          icon={HeartPulse}
+          tone="error"
+          title="System disconnected"
+          body="Failed to load the relationship pulse dashboard."
+        />
       </div>
     );
   }
 
   if (isDashboardLoading || !dashboard) {
-    return <PulseSkeleton />;
+    return <PulseSkeleton ask={aiAllowed} />;
   }
 
   const isZeroContacts = dashboard.metrics.totalActive === 0;
@@ -626,7 +626,13 @@ const PulseOffice = () => {
         {announcement}
       </div>
 
-      <div className="max-w-[1600px] mx-auto p-4 sm:p-6 md:p-10 flex flex-col gap-6 sm:gap-8 pb-32">
+      <div
+        className={cn(
+          "max-w-[1600px] mx-auto flex flex-col gap-6 sm:gap-8 pb-32",
+          PAGE_X,
+          PAGE_TOP,
+        )}
+      >
         {/* The masthead: the day, the sentence, the progress mark, the actions */}
         <Masthead
           counts={{
@@ -672,7 +678,7 @@ const PulseOffice = () => {
                     <div
                       key={cardId}
                       data-card-id={cardId}
-                      className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high border border-outline/15 text-xs sm:text-sm font-medium text-on-surface shadow-xs"
+                      className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high text-xs sm:text-sm font-medium text-on-surface"
                     >
                       <span>{title}</span>
                       <button
@@ -680,7 +686,7 @@ const PulseOffice = () => {
                         onClick={() => handleShowCard(cardId)}
                         aria-label={`Show ${title}`}
                         title={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
-                        className="hit-area p-1 rounded-lg hover:bg-surface-container-highest text-primary cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        className="hit-area state-layer p-1 rounded-lg text-primary cursor-pointer"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -740,7 +746,7 @@ const PulseOffice = () => {
           <div
             role="region"
             aria-label="Layout customize actions"
-            className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-4 right-4 mx-auto z-[60] w-fit px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline/20 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 animate-in fade-in slide-in-from-bottom-4 duration-200"
+            className="tile-enter fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-4 right-4 mx-auto z-[60] w-fit px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline-variant flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
           >
             {/* Anchored on both sides and centred with auto margins, so the
                 bar sizes itself against the whole width. At left 50% a fixed
@@ -765,14 +771,14 @@ const PulseOffice = () => {
               <button
                 type="button"
                 onClick={handleResetLayout}
-                className="btn-secondary hit-area text-xs sm:text-sm px-3 py-1.5 cursor-pointer"
+                className="btn-secondary btn-sm"
               >
                 Reset layout
               </button>
               <button
                 type="button"
                 onClick={handleDone}
-                className="btn-primary hit-area text-xs sm:text-sm px-4 py-1.5 cursor-pointer"
+                className="btn-primary btn-sm"
               >
                 Done
               </button>

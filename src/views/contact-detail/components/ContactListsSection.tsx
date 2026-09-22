@@ -94,7 +94,7 @@ export const ContactListsSection = ({
       {contactLists.map((list) => (
         <span
           key={list.id}
-          className="flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-on-primary-wash px-2.5 py-1 rounded-md group/listpill transition-colors hover:bg-primary/20"
+          className="state-layer flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-on-primary-wash px-2.5 py-1 rounded-md group/listpill transition-colors"
         >
           <DetailListIcon icon={list.icon} className="w-3 h-3" />
           {list.name}
@@ -105,7 +105,7 @@ export const ContactListsSection = ({
             // A phone has no hover, so below `sm` the X shows at rest with a
             // 44 px tap box. From `sm` it slides in on hover or focus, and
             // its overflow clip (which would clip the tap box) comes back.
-            className="hit-area w-3 ml-0.5 opacity-100 sm:w-0 sm:ml-0 sm:overflow-hidden sm:opacity-0 sm:group-hover/listpill:w-3 sm:group-hover/listpill:ml-0.5 sm:group-hover/listpill:opacity-100 sm:focus-visible:w-3 sm:focus-visible:opacity-100 hover:text-error transition-all duration-300 flex items-center"
+            className="hit-area w-3 ml-0.5 opacity-100 sm:w-0 sm:ml-0 sm:overflow-hidden sm:opacity-0 sm:group-hover/listpill:w-3 sm:group-hover/listpill:ml-0.5 sm:group-hover/listpill:opacity-100 sm:focus-visible:w-3 sm:focus-visible:opacity-100 hover:text-error transition-all duration-(--dur-slow) flex items-center"
             title="Remove from list"
             aria-label={`Remove from ${list.name}`}
           >
@@ -123,7 +123,7 @@ export const ContactListsSection = ({
           iconClassName="w-3.5 h-3.5"
           align="start"
           items={addItems}
-          triggerClassName="hit-area flex items-center gap-1 text-xs font-bold text-on-surface-variant hover:text-primary px-2 py-1 rounded-md hover:bg-primary/10 transition-colors"
+          triggerClassName="gap-1 text-xs font-bold px-2 py-1 rounded-md"
         />
       )}
     </div>

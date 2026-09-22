@@ -25,6 +25,11 @@ import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { NAMES } from "../../../lib/names";
+import { SETTINGS_PAGE } from "../layout";
+
+/** A field in the SMTP form. */
+const FIELD =
+  "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm";
 
 /** Shown in place of the form when reading mail configuration failed. */
 const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
@@ -69,7 +74,7 @@ export const MailView = () => {
 
   if (isError) {
     return (
-      <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+      <div className={cn(SETTINGS_PAGE, "space-y-8")}>
         <ReadFailed onRetry={() => void refetch()} />
       </div>
     );
@@ -146,12 +151,12 @@ export const MailView = () => {
       : "Not configured";
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-8 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <section className="space-y-4">
         <h2 className={cn(SECTION_HEADING, "px-1 mb-2")}>
           <span className="inline-flex items-center gap-1.5">
             <Server className="w-3.5 h-3.5" />
-            SMTP Server
+            SMTP server
           </span>
         </h2>
 
@@ -188,7 +193,7 @@ export const MailView = () => {
                   onChange={(e) => setHost(e.target.value)}
                   placeholder="smtp.example.com"
                   className={cn(
-                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    FIELD,
                     isEnv && "opacity-60 cursor-not-allowed",
                   )}
                 />
@@ -210,7 +215,7 @@ export const MailView = () => {
                   onChange={(e) => setPort(e.target.value)}
                   placeholder="587"
                   className={cn(
-                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    FIELD,
                     isEnv && "opacity-60 cursor-not-allowed",
                   )}
                 />
@@ -225,7 +230,7 @@ export const MailView = () => {
                 checked={secure}
                 onChange={(e) => setSecure(e.target.checked)}
                 className={cn(
-                  "w-4 h-4 rounded text-primary focus:ring-primary",
+                  "w-4 h-4 rounded text-primary",
                   isEnv && "opacity-60 cursor-not-allowed",
                 )}
               />
@@ -256,7 +261,7 @@ export const MailView = () => {
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="off"
                   className={cn(
-                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    FIELD,
                     isEnv && "opacity-60 cursor-not-allowed",
                   )}
                 />
@@ -282,7 +287,7 @@ export const MailView = () => {
                   }
                   autoComplete="new-password"
                   className={cn(
-                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    FIELD,
                     isEnv && "opacity-60 cursor-not-allowed",
                   )}
                 />
@@ -306,7 +311,7 @@ export const MailView = () => {
                   onChange={(e) => setFromAddress(e.target.value)}
                   placeholder="noreply@example.com"
                   className={cn(
-                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    FIELD,
                     isEnv && "opacity-60 cursor-not-allowed",
                   )}
                 />
@@ -327,7 +332,7 @@ export const MailView = () => {
                   onChange={(e) => setReplyTo(e.target.value)}
                   placeholder="support@example.com"
                   className={cn(
-                    "w-full px-3 py-2 rounded-xl min-h-[44px] bg-surface-container-high text-on-surface text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    FIELD,
                     isEnv && "opacity-60 cursor-not-allowed",
                   )}
                 />
@@ -369,7 +374,7 @@ export const MailView = () => {
                   type="button"
                   onClick={() => setShowClearConfirm(true)}
                   disabled={deleteMail.isPending}
-                  className="btn-secondary text-error hover:text-error ml-auto"
+                  className="btn-secondary text-error ml-auto"
                 >
                   <Trash2 className="w-4 h-4" />
                   Clear configuration

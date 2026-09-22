@@ -221,7 +221,9 @@ export const AlphabetRail = ({
           // 24 px on screen. The tap box is 44 px on each side, so letters
           // closer than that share the gap. A thumb drag reads the nearest
           // letter anyway (jumpToPointer), so an overlap costs nothing.
-          className="hit-area flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full"
+          // The focus ring is drawn inside the letter: the rail sits flush
+          // against the pane's clipped edge, which would cut an outside one.
+          className="hit-area flex-1 min-h-0 max-h-6 w-6 flex items-center justify-center rounded-full focus-visible:-outline-offset-2"
         >
           {/*
             The active letter wears a filled circle.

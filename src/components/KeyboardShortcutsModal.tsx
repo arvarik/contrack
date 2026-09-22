@@ -14,6 +14,8 @@
  */
 import React from "react";
 import { groupedShortcuts, isCombination } from "../lib/shortcuts";
+import { LABEL } from "../lib/styles";
+import { cn } from "../lib/utils";
 import { Modal } from "./ui/Modal";
 
 const Kbd = ({ children }: { children: React.ReactNode }) => (
@@ -28,29 +30,28 @@ interface Props {
 }
 
 export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => (
-  <Modal isOpen={isOpen} onClose={onClose} title="Keyboard Shortcuts" size="sm">
+  <Modal isOpen={isOpen} onClose={onClose} title="Keyboard shortcuts" size="sm">
     {/*
       A tab stop of its own. The list is longer than a short viewport and
       holds nothing interactive, so without one the scrolling region would
       be reachable by pointer only (WCAG 2.1.1). Focus here, and the arrow
-      keys scroll it.
+      keys scroll it. The base layer draws its focus ring.
     */}
     <div
       role="region"
       aria-label="Shortcut list"
       tabIndex={0}
-      className="space-y-5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="space-y-5 rounded-xl"
     >
       {groupedShortcuts().map((group) => (
         <section key={group.group} aria-label={group.group}>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mb-2.5">
-            {group.group}
-          </p>
+          <p className={cn(LABEL, "mb-2.5")}>{group.group}</p>
           <dl className="space-y-1">
+            {/* A row is a fact, not a control, so it has no hover. */}
             {group.shortcuts.map((s) => (
               <div
                 key={s.keys.join("+")}
-                className="flex items-center justify-between gap-3 py-1.5 px-3 rounded-xl hover:bg-surface-container-low transition-colors"
+                className="flex items-center justify-between gap-3 py-1.5 px-3 rounded-xl"
               >
                 <dt className="text-sm text-on-surface">{s.description}</dt>
                 <dd className="flex items-center gap-1">

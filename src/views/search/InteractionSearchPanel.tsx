@@ -43,11 +43,17 @@ import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { isTypingTarget } from "../../lib/keyboard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
-import { CARD, filterPill } from "../../lib/styles";
+import {
+  CARD,
+  CARD_INTERACTIVE,
+  TONE_WASH,
+  filterPill,
+} from "../../lib/styles";
 import { noteSearchStatus } from "../../lib/searchAnnouncements";
 import { cn } from "../../lib/utils";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { IconButton } from "../../components/ui/IconButton";
 import { Select } from "../../components/ui/Select";
 import type { HighlightRange, InteractionSearchHit } from "../../types";
 
@@ -159,7 +165,11 @@ function describeRange(from: string | null, to: string | null): string {
 
 // ─── Highlighted text ─────────────────────────────────────────────────────────
 
-/** Text with the matched terms marked. Ranges come from the server, sorted. */
+/**
+ * Text with the matched terms marked. Ranges come from the server, sorted.
+ * Each match is a plain `mark`: the base layer paints the highlighter and
+ * the ink.
+ */
 export const Highlighted = ({
   text,
   ranges,
@@ -178,14 +188,7 @@ export const Highlighted = ({
           {text.slice(cursor, start)}
         </React.Fragment>,
       );
-    parts.push(
-      <mark
-        key={`m${i}`}
-        className="bg-primary/15 text-on-surface rounded-sm px-0.5 font-semibold"
-      >
-        {text.slice(start, end)}
-      </mark>,
-    );
+    parts.push(<mark key={`m${i}`}>{text.slice(start, end)}</mark>);
     cursor = end;
   });
   if (cursor < text.length)
@@ -216,9 +219,8 @@ const HitCard = ({
         type="button"
         onClick={() => onOpen(hit)}
         className={cn(
-          CARD,
-          "w-full text-left flex items-start gap-4 group",
-          "hover:shadow-md hover:ring-2 hover:ring-primary/20 transition-[box-shadow] duration-200 cursor-pointer",
+          CARD_INTERACTIVE,
+          "w-full text-left flex items-start gap-4",
         )}
       >
         <img
@@ -253,7 +255,7 @@ const HitCard = ({
           <time
             dateTime={parseServerTime(hit.date)?.toISOString()}
             title={formatDay(hit.date)}
-            className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mt-0.5"
+            className="text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant mt-0.5"
           >
             {formatDay(hit.date)} · {formatRelative(hit.date)}
           </time>
@@ -437,8 +439,20 @@ export const InteractionSearchPanel = () => {
     <div className="space-y-6">
       <LiveStatus message={status} label="Search status" />
 
-      {/* Question */}
-      <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 bg-surface-container-lowest rounded-2xl shadow-sm px-4 sm:px-5 py-3.5 sm:py-4 focus-within:ring-2 focus-within:ring-primary/30 focus-within:shadow-md transition-[box-shadow] duration-200">
+      {/*
+        Question. One field: the glyph, the input and Clear in one card,
+        which draws the focus ring while the input has focus.
+      */}
+      <div
+        className={cn(
+          CARD,
+          "focus-frame flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 sm:px-5 py-3.5 sm:py-4",
+        )}
+      >
+        {/*
+          A spinner, not the thinking bird: no model reads the notes. The
+          server matches words, so nothing is thinking.
+        */}
         {search.isFetching ? (
           <Loader2 className="w-5 h-5 text-primary animate-spin shrink-0" />
         ) : (
@@ -456,21 +470,21 @@ export const InteractionSearchPanel = () => {
           }}
           placeholder="Search your notes…"
           aria-label="Search your notes"
-          className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
+          className="flex-1 min-w-0 h-11 sm:h-auto bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
         />
-        <button
-          type="button"
+        <IconButton
+          aria-label="Clear search"
+          tone="subtle"
           onClick={clear}
           tabIndex={hasSearch ? 0 : -1}
           aria-hidden={!hasSearch}
           className={cn(
-            "inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-opacity duration-150 shrink-0",
+            "shrink-0 transition-opacity",
             !hasSearch && "opacity-0 pointer-events-none",
           )}
-          aria-label="Clear search"
         >
           <X className="w-5 h-5" />
-        </button>
+        </IconButton>
       </div>
 
       {/* Period and kind */}
@@ -526,7 +540,7 @@ export const InteractionSearchPanel = () => {
               value={from}
               max={to || undefined}
               onChange={(e) => update({ from: e.target.value })}
-              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[44px] sm:min-h-[36px]"
+              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
             />
           </label>
           <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
@@ -536,7 +550,7 @@ export const InteractionSearchPanel = () => {
               value={to}
               min={from || undefined}
               onChange={(e) => update({ to: e.target.value })}
-              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface focus:ring-2 focus:ring-primary/40 focus:outline-none min-h-[44px] sm:min-h-[36px]"
+              className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
             />
           </label>
         </div>
@@ -545,23 +559,30 @@ export const InteractionSearchPanel = () => {
       {/* Before the first search */}
       {!hasSearch && (
         <div className="space-y-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
             Try asking...
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {EXAMPLE_QUESTIONS.map((question) => (
-              <button
-                key={question}
-                type="button"
-                onClick={() => {
-                  setText(question);
-                  update({ q: question });
-                }}
-                className="tile-enter text-left px-4 py-3 rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md hover:bg-primary/5 text-sm text-on-surface-variant hover:text-primary transition-[background-color,box-shadow,color] duration-200 group"
-              >
-                <span className="text-primary mr-1.5 font-bold">?</span>
-                {question}
-              </button>
+              // The entrance runs on a wrapper. `tile-enter` holds its last
+              // `transform` after it ends, which would cancel the card's
+              // hover lift.
+              <div key={question} className="tile-enter">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setText(question);
+                    update({ q: question });
+                  }}
+                  className={cn(
+                    CARD_INTERACTIVE,
+                    "w-full h-full text-left px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:text-on-surface",
+                  )}
+                >
+                  <span className="text-primary mr-1.5 font-bold">?</span>
+                  {question}
+                </button>
+              </div>
             ))}
           </div>
           <p className="text-xs text-on-surface-variant">
@@ -575,7 +596,7 @@ export const InteractionSearchPanel = () => {
       {/* What the server understood */}
       {hasSearch && result && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-          <span className="font-bold uppercase tracking-widest text-primary">
+          <span className="font-bold uppercase tracking-[0.08em] text-primary">
             {total} note{total === 1 ? "" : "s"}
           </span>
           {result.query.range && (
@@ -681,24 +702,22 @@ export const InteractionSearchPanel = () => {
             Showing {first}–{last} of {total}
           </span>
           <div className="flex items-center gap-1">
-            <button
-              type="button"
+            <IconButton
+              aria-label="Previous page"
+              tone="subtle"
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               disabled={offset === 0}
-              className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Previous page"
             >
               <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
+              aria-label="Next page"
+              tone="subtle"
               onClick={() => setOffset(offset + PAGE_SIZE)}
               disabled={offset + PAGE_SIZE >= total}
-              className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-full hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed"
-              aria-label="Next page"
             >
               <ChevronRight className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
         </div>
       )}
@@ -726,8 +745,8 @@ export const InteractionSearchPanel = () => {
           role="alert"
           className="tile-enter flex flex-col items-center justify-center py-12 text-center"
         >
-          <div className="p-4 bg-rose-500/10 rounded-2xl mb-3">
-            <AlertTriangle className="w-10 h-10 text-error" />
+          <div className={cn(TONE_WASH.error, "p-4 rounded-2xl mb-3")}>
+            <AlertTriangle className="w-10 h-10" />
           </div>
           <p className="font-bold text-on-surface mb-1">Search failed</p>
           <p className="text-sm text-on-surface-variant">

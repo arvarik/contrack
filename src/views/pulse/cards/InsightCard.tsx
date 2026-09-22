@@ -14,6 +14,7 @@ import { Link } from "react-router-dom";
 import { MessageCircleQuestion, Sparkles } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { useAuth } from "../../../components/auth/AuthGate";
+import { TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 import { firstSentence } from "../lib/insight";
@@ -104,9 +105,14 @@ export const InsightCard = ({
         <p className={cn(PULSE_TYPE.insight, "text-pretty")}>{insight.text}</p>
         {question && (
           <div>
+            {/* An action, so the primary's wash, and a chip that is a
+                control, so the hover layer over it. */}
             <Link
               to={`/search?q=${encodeURIComponent(question)}`}
-              className="hit-area inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-primary/10 text-on-primary-wash hover:bg-primary/15 transition-colors"
+              className={cn(
+                "hit-area state-layer inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold",
+                TONE_WASH.primary,
+              )}
             >
               <MessageCircleQuestion
                 className="w-3.5 h-3.5 shrink-0"

@@ -28,6 +28,8 @@ import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatDay, formatWhen } from "../../../lib/datetime";
+import { SELECTED_TINT } from "../../../lib/styles";
+import { RadioDot } from "../../../components/ui/RadioDot";
 import { cn } from "../../../lib/utils";
 import { Switch } from "../../../components/ui/Switch";
 import {
@@ -49,6 +51,18 @@ const STATE_TONES: Record<
   revoked: { tone: "danger", label: "Revoked" },
   expired: { tone: "neutral", label: "Expired" },
 };
+
+/**
+ * One option in a radio group: the selected tint, or the hover layer, with a
+ * `RadioDot` before its label so "chosen" is a shape as well as a hue.
+ */
+const choiceClass = (active: boolean) =>
+  cn(
+    "flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-colors",
+    active
+      ? SELECTED_TINT
+      : "state-layer bg-surface-container-highest text-on-surface",
+  );
 
 const EXPIRY_PRESETS = [
   { days: 3, label: "3 days" },
@@ -105,12 +119,12 @@ const NewInvitationModal = ({
           </p>
           <SecretReveal value={createdResult.link} label="Invitation link" />
           {createdResult.sent && createdResult.email && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+            <p className="text-xs text-success font-medium">
               Also sent to {createdResult.email}
             </p>
           )}
           {createdResult.sendAttempted && !createdResult.sent && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+            <p className="text-xs text-warning font-medium">
               Sending failed. Copy the link instead.
             </p>
           )}
@@ -159,11 +173,7 @@ const NewInvitationModal = ({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               aria-describedby="invite-email-hint"
-              className={cn(
-                "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
-                "text-base sm:text-sm",
-                "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              )}
+              className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-base sm:text-sm"
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
@@ -216,12 +226,11 @@ const NewInvitationModal = ({
                   aria-checked={role === option}
                   onClick={() => setRole(option)}
                   className={cn(
-                    "flex-1 px-4 py-3 rounded-xl text-sm font-bold capitalize transition-colors",
-                    role === option
-                      ? "bg-primary/10 text-primary ring-2 ring-inset ring-primary"
-                      : "bg-surface-container-highest text-on-surface hover:bg-surface-container-high",
+                    "flex-1 px-4 capitalize",
+                    choiceClass(role === option),
                   )}
                 >
+                  <RadioDot checked={role === option} />
                   {option}
                 </button>
               ))}
@@ -245,12 +254,11 @@ const NewInvitationModal = ({
                   aria-checked={expiresInDays === preset.days}
                   onClick={() => setExpiresInDays(preset.days)}
                   className={cn(
-                    "px-3 py-3 rounded-xl text-sm font-bold transition-colors",
-                    expiresInDays === preset.days
-                      ? "bg-primary/10 text-primary ring-2 ring-inset ring-primary"
-                      : "bg-surface-container-highest text-on-surface hover:bg-surface-container-high",
+                    "px-3",
+                    choiceClass(expiresInDays === preset.days),
                   )}
                 >
+                  <RadioDot checked={expiresInDays === preset.days} />
                   {preset.label}
                 </button>
               ))}

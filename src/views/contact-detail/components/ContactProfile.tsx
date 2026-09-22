@@ -30,6 +30,7 @@ import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { toastUndoableDelete } from "../../../lib/undoToast";
 import { cn } from "../../../lib/utils";
+import { CARD } from "../../../lib/styles";
 
 import { usePageTitle } from "../../../hooks/usePageTitle";
 
@@ -67,10 +68,7 @@ import { DetailsCard } from "./DetailsCard";
 const DossierFallback = () => (
   <div className="space-y-6" aria-busy="true">
     {[0, 1].map((i) => (
-      <div
-        key={i}
-        className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm space-y-3"
-      >
+      <div key={i} className={cn(CARD, "space-y-3")}>
         <div className="h-3 w-28 bg-surface-container-high/60 rounded-full animate-pulse" />
         <div className="h-4 w-3/4 bg-surface-container/50 rounded-full animate-pulse" />
         <div className="h-4 w-1/2 bg-surface-container/50 rounded-full animate-pulse" />
@@ -282,15 +280,15 @@ export const ContactProfile = ({
   // ── Theme ─────────────────────────────────────────────────────────────
   // The vibe replaces the primary palette for this page only, so it has to be
   // derived for the palette on screen: the light values on a dark page put the
-  // brand blue at 2.84:1 against the background.
-  const vibe = vibeTokens(contact.themeColor, mode);
-  const themeStyles = {
-    "--color-primary": vibe.primary,
-    "--color-primary-dim": vibe["primary-dim"],
-    "--color-primary-container": vibe["primary-container"],
-    "--color-on-primary": vibe["on-primary"],
-    "--color-on-primary-container": vibe["on-primary-container"],
-  } as React.CSSProperties;
+  // brand blue at 2.84:1 against the background. Every accent token follows,
+  // the wash ink too: the selected tint and the list chips carry
+  // `text-on-primary-wash`, and the app accent's ink on a vibe's wash was the
+  // wrong colour.
+  const themeStyles = Object.fromEntries(
+    Object.entries(vibeTokens(contact.themeColor, mode)).map(
+      ([token, value]) => [`--color-${token}`, value],
+    ),
+  ) as React.CSSProperties;
 
   // ═══════════════════════════════════════════════════════════════════════
   // Render

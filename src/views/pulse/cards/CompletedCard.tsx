@@ -4,7 +4,7 @@ import { CheckCircle2 } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
 import { useCompletedActionItems } from "../../../api";
 import { formatWhen } from "../../../lib/datetime";
-import { BTN_QUIET } from "../../../lib/styles";
+import { BTN_QUIET, TONE_TEXT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 
@@ -61,7 +61,7 @@ export const CompletedCard = () => {
               <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle2
                   aria-hidden="true"
-                  className="w-4 h-4 text-success shrink-0"
+                  className={cn("w-4 h-4 shrink-0", TONE_TEXT.success)}
                 />
                 <span
                   className={cn(

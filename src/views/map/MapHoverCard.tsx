@@ -36,7 +36,7 @@ import { ScoreRingAvatar } from "../../components/ScoreRingAvatar";
 import { ScoreBreakdown } from "../../components/ScoreBreakdown";
 import { IconButton } from "../../components/ui/IconButton";
 import { timeZoneAt } from "../../components/LocalTimeWeather";
-import { TAG_PILL } from "../../lib/styles";
+import { TAG_PILL, TONE_WASH } from "../../lib/styles";
 import { NOT_TRACKED_TEXT, scoreView } from "../../../shared/scoreBand";
 import { cn } from "../../lib/utils";
 
@@ -143,14 +143,12 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
   const view = scoreView(contact);
   const score = view.kind === "scored" ? view.score : null;
 
-  const scoreBadgeBg =
-    view.kind !== "scored"
-      ? "bg-surface-container-high text-on-surface-variant border-outline-variant/30"
-      : view.band.band === "strong"
-        ? "bg-emerald-500/10 text-success border-emerald-500/20"
-        : view.band.band === "fading"
-          ? "bg-amber-500/10 text-warning border-amber-500/20"
-          : "bg-rose-500/10 text-error border-rose-500/20";
+  // The chip wears the band's tone. A contact with no score wears the neutral
+  // one.
+  const scoreChip = cn(
+    "inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px]",
+    TONE_WASH[view.kind === "scored" ? view.band.token : "neutral"],
+  );
 
   const anchor = useMemo(() => {
     if (!map) return undefined;
@@ -193,7 +191,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
                     e.preventDefault();
                     onOpen?.(contact.id);
                   }}
-                  className="hover:text-primary hover:underline transition-colors"
+                  className="hover:underline"
                 >
                   {contact.name}
                 </a>
@@ -222,37 +220,18 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
         {/* Facts row: Score chip, Last contact, Local time */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs border-t border-outline-variant/20">
           {view.kind === "untracked" && (
-            <span
-              className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-md font-bold border text-[11px]",
-                scoreBadgeBg,
-              )}
-            >
-              {NOT_TRACKED_TEXT}
-            </span>
+            <span className={scoreChip}>{NOT_TRACKED_TEXT}</span>
           )}
           {score !== null && (
             <div className="shrink-0">
               {pinned ? (
                 <ScoreBreakdown contactId={contact.id} score={score}>
-                  <span
-                    className={cn(
-                      "inline-flex items-center px-2 py-0.5 rounded-md font-bold border text-[11px] cursor-pointer hit-area",
-                      scoreBadgeBg,
-                    )}
-                  >
+                  <span className={cn(scoreChip, "cursor-pointer hit-area")}>
                     Score {score}
                   </span>
                 </ScoreBreakdown>
               ) : (
-                <span
-                  className={cn(
-                    "inline-flex items-center px-2 py-0.5 rounded-md font-bold border text-[11px]",
-                    scoreBadgeBg,
-                  )}
-                >
-                  Score {score}
-                </span>
+                <span className={scoreChip}>Score {score}</span>
               )}
             </div>
           )}
@@ -297,7 +276,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
               aria-label="Open contact"
               title="Open contact details"
               onClick={() => onOpen?.(contact.id)}
-              tone="primary"
+              tone="subtle"
               size="sm"
             >
               <ExternalLink className="w-4 h-4" />
@@ -306,7 +285,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
               aria-label="Log interaction"
               title="Log interaction"
               onClick={() => onLogNote?.(contact.id)}
-              tone="primary"
+              tone="subtle"
               size="sm"
             >
               <PenLine className="w-4 h-4" />
@@ -315,7 +294,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
               aria-label="Add to list"
               title="Add to list"
               onClick={() => onAddToList?.(contact.id)}
-              tone="primary"
+              tone="subtle"
               size="sm"
             >
               <ListPlus className="w-4 h-4" />
@@ -324,7 +303,7 @@ export const MapHoverCard: React.FC<MapHoverCardProps> = ({
               aria-label="Add follow-up"
               title="Add follow-up task"
               onClick={() => onFollowUp?.(contact.id)}
-              tone="primary"
+              tone="subtle"
               size="sm"
             >
               <CalendarPlus className="w-4 h-4" />

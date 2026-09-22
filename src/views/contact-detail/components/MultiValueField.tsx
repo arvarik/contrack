@@ -254,7 +254,7 @@ const SortableRow = ({
             aria-label={`Drag ${name} to reorder`}
             onPointerDownCapture={() => setGrabbed(true)}
             {...listeners}
-            className="hit-area p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high cursor-grab active:cursor-grabbing touch-none"
+            className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant cursor-grab active:cursor-grabbing touch-none"
           >
             <GripVertical aria-hidden="true" className="w-4 h-4" />
           </button>
@@ -596,7 +596,7 @@ export const MultiValueField = ({
             }}
             placeholder={inputPlaceholder}
             // 16 px on a phone, so iOS does not zoom in on focus.
-            className="flex-1 min-w-[10rem] min-h-[44px] sm:min-h-0 text-base sm:text-sm bg-surface-container-high rounded px-2 py-1 border-none focus:ring-2 focus:ring-primary/30 focus:outline-none"
+            className="flex-1 min-w-[10rem] min-h-[44px] sm:min-h-0 text-base sm:text-sm bg-surface-container-high rounded px-2 py-1 border-none"
           />
         </div>
       ) : (

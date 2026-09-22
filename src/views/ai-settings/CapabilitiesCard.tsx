@@ -263,7 +263,7 @@ const CapabilityRow = ({
           </>
         )}
         {saved.mode === "auto" && (
-          <span className="ml-1.5 align-[1px] text-[11px] font-bold uppercase tracking-widest bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded whitespace-nowrap">
+          <span className="ml-1.5 align-[1px] text-[11px] font-bold uppercase tracking-[0.08em] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded whitespace-nowrap">
             Automatic
           </span>
         )}
@@ -291,7 +291,7 @@ const CapabilityRow = ({
               {meta.label}
             </span>
             {isDirty && (
-              <span className="text-[11px] font-bold uppercase tracking-widest bg-amber-500/15 text-warning px-1.5 py-0.5 rounded">
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] bg-amber-500/15 text-warning px-1.5 py-0.5 rounded">
                 Unsaved
               </span>
             )}

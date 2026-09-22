@@ -23,6 +23,7 @@ import {
   type ScoreBand,
 } from "../../../shared/scoreBand";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { DURATION, EASE } from "../../lib/motion";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
           initial={{ opacity: 0, x: -8, scale: 0.97 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: -4, scale: 0.97 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: DURATION.fast, ease: EASE }}
           className="fixed top-1/2 -translate-y-1/2 z-[200] pointer-events-none"
           style={{ left: "calc(50% + 280px)" }}
         >
@@ -150,7 +151,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
             {/* Tags */}
             {contact.tags && contact.tags.length > 0 && (
               <div className="flex flex-col gap-1">
-                <span className="text-[11px] uppercase tracking-wider text-on-surface-variant font-bold flex items-center gap-1">
+                <span className="text-[11px] uppercase tracking-[0.08em] text-on-surface-variant font-bold flex items-center gap-1">
                   <Tag className="w-2.5 h-2.5" />
                   Tags
                 </span>

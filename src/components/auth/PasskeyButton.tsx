@@ -5,7 +5,6 @@
  */
 import React from "react";
 import { KeyRound, Loader2 } from "lucide-react";
-import { cn } from "../../lib/utils";
 
 export const PasskeyButton = ({
   onClick,
@@ -20,12 +19,7 @@ export const PasskeyButton = ({
     type="button"
     onClick={onClick}
     disabled={disabled || busy}
-    className={cn(
-      "w-full bg-surface-container-high text-on-surface font-bold py-3 rounded-xl",
-      "flex items-center justify-center gap-2 transition-opacity hover:opacity-90",
-      "disabled:bg-surface-container-high/50 disabled:text-on-surface-variant/50",
-      "disabled:cursor-not-allowed disabled:hover:opacity-100",
-    )}
+    className="btn-secondary w-full"
   >
     {busy ? (
       <>

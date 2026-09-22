@@ -10,6 +10,7 @@
 
 import React from "react";
 import { cn } from "./utils";
+import { TONE_DOT, TONE_TEXT, type Tone } from "./styles";
 
 export const WORST_PASSWORDS = [
   "password",
@@ -94,34 +95,21 @@ export function passwordStrength(password: string): number {
   return 1;
 }
 
+/** Each score's tone, from short to strong. An empty password has none. */
+const STRENGTH_TONES: Record<number, Tone | undefined> = {
+  1: "error",
+  2: "warning",
+  3: "primary",
+  4: "success",
+};
+
 function getSegmentColor(strength: number): string {
-  switch (strength) {
-    case 1:
-      return "bg-error";
-    case 2:
-      return "bg-amber-500";
-    case 3:
-      return "bg-primary";
-    case 4:
-      return "bg-emerald-500";
-    default:
-      return "bg-surface-container-highest";
-  }
+  const tone = STRENGTH_TONES[strength];
+  return tone ? TONE_DOT[tone] : "bg-surface-container-highest";
 }
 
 function getWordColor(strength: number): string {
-  switch (strength) {
-    case 1:
-      return "text-error";
-    case 2:
-      return "text-warning";
-    case 3:
-      return "text-primary";
-    case 4:
-      return "text-success dark:text-emerald-400";
-    default:
-      return "text-on-surface-variant";
-  }
+  return TONE_TEXT[STRENGTH_TONES[strength] ?? "neutral"];
 }
 
 /**
@@ -153,7 +141,8 @@ export const PasswordStrengthMeter = ({ password }: { password?: string }) => {
           React.createElement("div", {
             key: step,
             className: cn(
-              "h-full rounded-full transition-colors duration-200",
+              // A segment filling in: the slow duration.
+              "h-full rounded-full transition-colors duration-(--dur-slow)",
               step <= score ? segmentClass : "bg-surface-container-highest",
             ),
           }),

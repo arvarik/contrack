@@ -11,6 +11,7 @@
 import React from "react";
 import type { MapStats } from "./mapStats";
 import { cn } from "../../lib/utils";
+import { TONE_WASH } from "../../lib/styles";
 
 export interface StatsStripProps {
   stats: MapStats;
@@ -84,7 +85,10 @@ export const StatsStrip: React.FC<StatsStripProps> = ({
             type="button"
             onClick={() => onApplyFacet("score:<40")}
             aria-label={`${stats.atRisk} at risk, filter contacts`}
-            className="hit-area px-2.5 py-1 rounded-xl font-medium bg-error/15 text-error hover:bg-error/25 transition-colors cursor-pointer border border-error/20"
+            className={cn(
+              "hit-area state-layer px-2.5 py-1 rounded-xl font-medium cursor-pointer",
+              TONE_WASH.error,
+            )}
           >
             {stats.atRisk} at risk
           </button>
@@ -94,9 +98,14 @@ export const StatsStrip: React.FC<StatsStripProps> = ({
           </span>
         )}
 
-        {/* Overdue chip */}
+        {/* Overdue chip: the overdue tone, red, as on Pulse */}
         {stats.overdue > 0 ? (
-          <span className="px-2.5 py-1 rounded-xl font-medium bg-warning/15 text-warning border border-warning/20">
+          <span
+            className={cn(
+              "px-2.5 py-1 rounded-xl font-medium",
+              TONE_WASH.error,
+            )}
+          >
             {stats.overdue} overdue
           </span>
         ) : (

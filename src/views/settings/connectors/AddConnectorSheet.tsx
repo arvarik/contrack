@@ -19,6 +19,8 @@ import {
 import { Modal } from "../../../components/ui/Modal";
 import { useConnectorKinds } from "../../../api/connectors";
 import type { ConnectorKind, KindInfo } from "../../../../shared/connectors";
+import { TONE_WASH } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 interface AddConnectorSheetProps {
   isOpen: boolean;
@@ -44,7 +46,7 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add a Connector" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title="Add a connector" size="md">
       <div className="space-y-4 pt-2">
         <p className="text-xs text-on-surface-variant leading-relaxed">
           Choose a service to sync your interactions. Contrack connects directly
@@ -67,9 +69,14 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
                   key={k.kind}
                   type="button"
                   onClick={() => handleChoose(k)}
-                  className="hit-area w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-all bg-surface-container hover:bg-surface-container-high border-surface-container-high cursor-pointer"
+                  className="hit-area state-layer w-full text-left flex items-start gap-3 p-3 rounded-xl border transition-colors bg-surface-container border-surface-container-high cursor-pointer"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <div
+                    className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                      TONE_WASH.primary,
+                    )}
+                  >
                     <Icon className="w-5 h-5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -93,11 +100,7 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
         )}
 
         <div className="flex justify-end pt-3 border-t border-surface-container-high/40">
-          <button
-            type="button"
-            onClick={onClose}
-            className="hit-area px-4 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors min-h-[44px]"
-          >
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
         </div>

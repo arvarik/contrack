@@ -48,7 +48,7 @@ export const SelectStage = ({
           className="btn-primary w-full"
         >
           <Merge className="w-5 h-5" />
-          Compare {selected.length > 0 ? `${selected.length} Contacts` : ""}
+          Compare {selected.length > 0 ? `${selected.length} contacts` : ""}
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

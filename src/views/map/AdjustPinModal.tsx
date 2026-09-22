@@ -22,7 +22,6 @@ import { toast } from "sonner";
 import { isValidLatLng } from "../../../shared/geo";
 import { useSetContactLocation } from "../../api";
 import { Modal } from "../../components/ui/Modal";
-import { cn } from "../../lib/utils";
 import { ContactMap } from "./ContactMap";
 import { contactPinLabel, pinAvatarSrc } from "./ContactMarker";
 import type { MiniMapContact } from "./LocationMiniMap";
@@ -197,11 +196,7 @@ export const AdjustPinModal = ({
                   onPointerDown={(event) =>
                     event.currentTarget.focus({ preventScroll: true })
                   }
-                  className={cn(
-                    "block w-12 h-12 rounded-full overflow-hidden cursor-grab active:cursor-grabbing",
-                    "bg-surface-container-lowest shadow-md ring-[3px] ring-primary",
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                  )}
+                  className="block w-12 h-12 rounded-full overflow-hidden cursor-grab active:cursor-grabbing bg-surface-container-lowest shadow-md ring-[3px] ring-primary"
                 >
                   <img
                     src={pinAvatarSrc(contact)}

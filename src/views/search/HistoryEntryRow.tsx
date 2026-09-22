@@ -12,6 +12,7 @@ import { FileText, Pin, PinOff, Search, Sparkles, Trash2 } from "lucide-react";
 import type { HistoryEntry } from "../../../shared/searchHistory";
 import { IconButton } from "../../components/ui/IconButton";
 import { formatRelative } from "../../lib/datetime";
+import { SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 export interface HistoryEntryRowProps {
@@ -71,12 +72,13 @@ export const HistoryEntryRow = React.memo(
     };
 
     return (
+      // The hover layer sits on the whole row, so it holds while the pointer
+      // is over Pin or Delete. The question the page is showing is the
+      // selected row.
       <div
         className={cn(
-          "group relative flex items-center justify-between rounded-xl transition-colors",
-          isCurrent
-            ? "bg-primary/10"
-            : "hover:bg-surface-container-high focus-within:bg-surface-container-high",
+          "state-layer group relative flex items-center justify-between rounded-xl transition-colors",
+          isCurrent && SELECTED_ROW,
         )}
       >
         <button
@@ -84,7 +86,7 @@ export const HistoryEntryRow = React.memo(
           onClick={() => onSelect(entry)}
           aria-label={`Run again: ${entry.query}`}
           aria-current={isCurrent ? "true" : undefined}
-          className="w-full text-left p-2.5 pr-24 flex items-start gap-2.5 rounded-xl cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="w-full text-left p-2.5 pr-24 flex items-start gap-2.5 rounded-xl cursor-pointer"
         >
           <div className="p-1 rounded-lg bg-surface-container-highest shrink-0 mt-0.5">
             <Icon className="w-3.5 h-3.5 text-primary" />

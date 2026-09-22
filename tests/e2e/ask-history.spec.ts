@@ -220,11 +220,11 @@ test.describe("desktop", () => {
       }),
     ).toBeVisible();
 
-    // 2. Open command palette and verify page question appears in Recent Searches
+    // 2. Open command palette and verify page question appears in Recent searches
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog");
     await expect(palette).toHaveAttribute("data-state", "open");
-    await expect(palette.getByText("Recent Searches")).toBeVisible();
+    await expect(palette.getByText("Recent searches")).toBeVisible();
     await expect(palette.getByText("who knows python")).toBeVisible();
 
     // 3. Ask a ? question in the palette

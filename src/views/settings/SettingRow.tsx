@@ -75,7 +75,10 @@ export const SettingRow = ({
       ref={rowRef}
       tabIndex={-1}
       className={cn(
-        "scroll-mt-20 outline-none rounded-xl transition-colors duration-300",
+        // No outline: the row is a scroll target that takes focus for a
+        // screen reader, not a control, and the flash below is its
+        // highlight.
+        "scroll-mt-20 outline-none rounded-xl transition-colors duration-(--dur-slow)",
         "py-4 first:pt-0 last:pb-0",
         flashing && "flash ring-2 ring-primary/40 bg-primary/10",
         className,

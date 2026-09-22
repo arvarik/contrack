@@ -6,6 +6,13 @@ import { Modal } from "./ui/Modal";
 import { useUploadAvatar, useSetDicebearAvatar } from "../api";
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
+import {
+  BTN_QUIET,
+  SWATCH_SELECTED,
+  TAB_CONTAINER,
+  tabItem,
+} from "../lib/styles";
+import { Segmented } from "./ui/Segmented";
 import { usePreferences } from "../contexts/PreferencesContext";
 
 // ---------------------------------------------------------------------------
@@ -13,12 +20,12 @@ import { usePreferences } from "../contexts/PreferencesContext";
 // ---------------------------------------------------------------------------
 
 const STYLES = [
-  { id: "avataaars", label: "Cartoon" },
-  { id: "lorelei", label: "Illustrated" },
-  { id: "bottts", label: "Bot" },
+  { value: "avataaars", label: "Cartoon" },
+  { value: "lorelei", label: "Illustrated" },
+  { value: "bottts", label: "Bot" },
 ] as const;
 
-type AvatarStyle = (typeof STYLES)[number]["id"];
+type AvatarStyle = (typeof STYLES)[number]["value"];
 
 const SEEDS = [
   "Felix",
@@ -166,22 +173,20 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
     (tab === "upload" && !!uploadPreview);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Edit Avatar">
+    <Modal isOpen={isOpen} onClose={handleClose} title="Edit avatar">
       <div className="space-y-4 pt-1">
         {/* Tab switcher */}
-        <div className="flex bg-surface-container rounded-xl p-1 gap-1">
+        <div className={TAB_CONTAINER}>
           {(["avatar", "upload"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                "flex-1 min-h-[44px] sm:min-h-0 py-1.5 rounded-lg text-sm font-bold transition-all capitalize",
-                tab === t
-                  ? "bg-surface-container-high text-on-surface shadow-sm"
-                  : "text-on-surface-variant hover:text-on-surface",
+                tabItem(tab === t),
+                "flex-1 min-h-[44px] sm:min-h-0",
               )}
             >
-              {t === "avatar" ? "🎭 Choose Avatar" : "📷 Upload Image"}
+              {t === "avatar" ? "🎭 Choose avatar" : "📷 Upload image"}
             </button>
           ))}
         </div>
@@ -196,29 +201,22 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
               exit={{ opacity: 0, x: 8 }}
               className="space-y-3"
             >
-              {/* Style selector */}
-              <div className="flex gap-2">
-                {STYLES.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setStyle(s.id);
-                      setSelectedUrl(null);
-                    }}
-                    className={cn(
-                      "flex-1 min-h-[44px] sm:min-h-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all",
-                      style === s.id
-                        ? "bg-primary text-on-primary"
-                        : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
-                    )}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+              {/* Style selector. A radio group, so the chosen style has a
+                  raised face and a checked state, not a tint alone. */}
+              <Segmented
+                label="Avatar style"
+                value={style}
+                onChange={(next) => {
+                  setStyle(next);
+                  setSelectedUrl(null);
+                }}
+                options={STYLES}
+                className="sm:w-fit"
+              />
 
-              {/* Avatar grid */}
-              <div className="grid grid-cols-6 gap-2 max-h-[280px] overflow-y-auto scrollbar-hide pr-1">
+              {/* Avatar grid. The padding leaves room for the chosen avatar's
+                  ring, which the scrolling box would cut at its edges. */}
+              <div className="grid grid-cols-6 gap-2 max-h-[280px] overflow-y-auto scrollbar-hide p-1">
                 {SEEDS.map((seed) => {
                   const url = avatarUrl(style, seed);
                   const isSelected = selectedUrl === url;
@@ -226,12 +224,12 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                   return (
                     <button
                       key={seed}
+                      type="button"
                       onClick={() => setSelectedUrl(url)}
+                      aria-pressed={isSelected}
                       className={cn(
-                        "relative aspect-square rounded-2xl overflow-hidden transition-all border-2",
-                        isSelected
-                          ? "border-primary scale-105 shadow-lg shadow-primary/30"
-                          : "border-transparent hover:border-primary/30 hover:scale-105",
+                        "relative aspect-square rounded-2xl overflow-hidden transition-transform",
+                        isSelected ? SWATCH_SELECTED : "hover:scale-105",
                       )}
                       title={seed}
                     >
@@ -241,12 +239,16 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                         className="w-full h-full object-cover bg-surface-container-low"
                         loading="lazy"
                       />
+                      {/* The image is the swatch's fill, so the chosen one
+                          takes a ring and a check, never a wash over the
+                          face. */}
                       {isSelected && (
-                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                          <div className="bg-primary rounded-full p-0.5">
-                            <Check className="w-3 h-3 text-white" />
-                          </div>
-                        </div>
+                        <span className="absolute bottom-1 right-1 bg-primary rounded-full p-0.5">
+                          <Check
+                            aria-hidden="true"
+                            className="w-3 h-3 text-on-primary"
+                          />
+                        </span>
                       )}
                     </button>
                   );
@@ -287,7 +289,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                       URL.revokeObjectURL(uploadPreview.url);
                       setUploadPreview(null);
                     }}
-                    className="hit-area flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-on-surface transition-colors"
+                    className={BTN_QUIET}
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Choose different image
@@ -298,10 +300,10 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                 <div
                   {...getRootProps()}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 cursor-pointer transition-all",
+                    "state-layer flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-10 cursor-pointer transition-colors",
                     isDragActive
-                      ? "border-primary bg-primary/5 scale-[1.02]"
-                      : "border-surface-container-high hover:border-primary/40 hover:bg-surface-container-low",
+                      ? "border-primary bg-primary/5"
+                      : "border-surface-container-high",
                   )}
                 >
                   <input
@@ -312,7 +314,7 @@ export const AvatarPickerModal = ({ isOpen, onClose, contactId }: Props) => {
                     className={cn(
                       "p-4 rounded-2xl transition-colors",
                       isDragActive
-                        ? "bg-primary/10 text-primary"
+                        ? "bg-primary/10 text-on-primary-wash"
                         : "bg-surface-container text-on-surface-variant",
                     )}
                   >

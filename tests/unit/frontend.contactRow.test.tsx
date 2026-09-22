@@ -67,7 +67,14 @@ function makeContact(overrides: Partial<Contact> = {}): Contact {
   };
 }
 
-function mount(contact: Contact) {
+function mount(
+  contact: Contact,
+  state: {
+    active?: boolean;
+    isSelectMode?: boolean;
+    isSelected?: boolean;
+  } = {},
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -77,9 +84,9 @@ function mount(contact: Contact) {
         <ContactListItem
           contact={contact}
           density="comfortable"
-          active={false}
-          isSelectMode={false}
-          isSelected={false}
+          active={state.active ?? false}
+          isSelectMode={state.isSelectMode ?? false}
+          isSelected={state.isSelected ?? false}
           onToggleSelect={vi.fn()}
         />
       </MemoryRouter>
@@ -163,6 +170,33 @@ describe("the ring in the row", () => {
     expect(ring.getAttribute("data-score-band")).toBe("untracked");
     expect(ring.querySelector("svg")).toBeNull();
     expect(ring.closest("[title]")).toBeNull();
+  });
+});
+
+describe("the selected look", () => {
+  // One look for a selected row: the tint and the bar (`row-selected`), and
+  // the name in the ink that reads on the tint. The open contact wore a ring
+  // and a picked row an outline, and both read as keyboard focus.
+  const name = (row: HTMLElement) => within(row).getByText("Betty Clark");
+
+  it("marks the open contact with the tint and the bar", () => {
+    const row = mount(makeContact(), { active: true });
+    expect(row.classList.contains("row-selected")).toBe(true);
+    expect(row.className).not.toMatch(/\b(ring|outline)-/);
+    expect(name(row).classList.contains("text-on-primary-wash")).toBe(true);
+  });
+
+  it("marks a row picked in select mode the same way", () => {
+    const row = mount(makeContact(), { isSelectMode: true, isSelected: true });
+    expect(row.classList.contains("row-selected")).toBe(true);
+    expect(row.className).not.toMatch(/\b(ring|outline)-/);
+    expect(name(row).classList.contains("text-on-primary-wash")).toBe(true);
+  });
+
+  it("leaves the open contact unmarked in select mode until it is picked", () => {
+    const row = mount(makeContact(), { active: true, isSelectMode: true });
+    expect(row.classList.contains("row-selected")).toBe(false);
+    expect(name(row).classList.contains("text-on-surface")).toBe(true);
   });
 });
 

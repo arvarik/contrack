@@ -89,7 +89,6 @@ export const SettingsSearch = ({
             isRail
               ? "bg-surface-container-highest text-on-surface text-sm placeholder:text-on-surface-variant"
               : "bg-surface-container-highest text-on-surface text-base sm:text-sm placeholder:text-on-surface-variant",
-            "outline-none focus-visible:ring-2 focus-visible:ring-primary",
           )}
         />
         {query && (
@@ -97,7 +96,7 @@ export const SettingsSearch = ({
             type="button"
             onClick={handleClear}
             aria-label="Clear search"
-            className="hit-area absolute right-2 top-1/2 -translate-y-1/2 p-1 text-on-surface-variant hover:text-on-surface"
+            className="hit-area state-layer absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -119,7 +118,7 @@ export const SettingsSearch = ({
               const Icon = page.icon;
               return (
                 <div key={page.id} className="space-y-1">
-                  <div className="px-2 py-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                  <div className="px-2 py-1 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
                     <Icon className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">{page.title}</span>
                   </div>
@@ -132,12 +131,7 @@ export const SettingsSearch = ({
                           setQuery("");
                           onSelect?.();
                         }}
-                        className={cn(
-                          "flex items-center justify-between px-3 py-2 rounded-xl",
-                          "text-on-surface hover:bg-surface-container-high hover:text-primary transition-colors",
-                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                          "min-h-[44px] sm:min-h-0",
-                        )}
+                        className="state-layer flex items-center justify-between px-3 py-2 rounded-xl text-on-surface transition-colors min-h-[44px] sm:min-h-0"
                       >
                         <span className="font-semibold truncate">
                           {hit.label}

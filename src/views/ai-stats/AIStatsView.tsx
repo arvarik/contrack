@@ -11,6 +11,7 @@ import { Activity, Coins, Gauge, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { tileDelay } from "../../lib/motion";
 import { CARD, SECTION_HEADING } from "../../lib/styles";
+import { SETTINGS_PAGE } from "../settings/layout";
 import { MetricCard } from "../pulse/MetricCard";
 import { FEED_PAGE_SIZE, useAIStatsSummary, useAIStatsFeed } from "../../api";
 import type { FeedQueryParams } from "../../api";
@@ -125,7 +126,7 @@ export const AIStatsView = () => {
   // ── Loading state ─────────────────────────────────────────────────────
   if (summaryLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
+      <div className={cn(SETTINGS_PAGE, "space-y-4")}>
         {scopeControl}
         <AIStatsSkeleton />
       </div>
@@ -157,7 +158,7 @@ export const AIStatsView = () => {
         : undefined;
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 pb-20">
+    <div className={cn(SETTINGS_PAGE, "space-y-4")}>
       {scopeControl}
 
       {/* Zone 1: Summary Bar */}
@@ -173,14 +174,14 @@ export const AIStatsView = () => {
           delay={tileDelay(0)}
         />
         <MetricCard
-          label="Tokens Used"
+          label="Tokens used"
           value={formatCompact(tokens)}
           subValue={tokenSub}
           icon={Coins}
           delay={tileDelay(1)}
         />
         <MetricCard
-          label="Cache Hit Rate"
+          label="Cache hit rate"
           value={invocations > 0 ? `${(cacheHitRate * 100).toFixed(0)}%` : "—"}
           subValue={
             invocations > 0 ? `${session!.cachedCalls} hits` : undefined
@@ -211,7 +212,7 @@ export const AIStatsView = () => {
         className={cn(CARD, "tile-enter space-y-3")}
       >
         <div className="flex items-center gap-2 mb-1">
-          <span className={cn(SECTION_HEADING, "mb-0")}>Activity Feed</span>
+          <span className={cn(SECTION_HEADING, "mb-0")}>Activity feed</span>
           {feedFetching && !feedLoading && (
             <Loader2 className="w-3 h-3 animate-spin text-primary" />
           )}

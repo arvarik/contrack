@@ -345,7 +345,7 @@ describe("Frontend Connectors Components", () => {
       const nameInput = screen.getByLabelText("Connector name");
       fireEvent.change(nameInput, { target: { value: "My Work Calendar" } });
 
-      const urlInput = screen.getByLabelText("Private ICS Calendar URL");
+      const urlInput = screen.getByLabelText("Private ICS calendar URL");
       fireEvent.change(urlInput, {
         target: { value: "https://calendar.google.com/feed.ics" },
       });
@@ -449,7 +449,7 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
 
-      const urlInput = screen.getByLabelText("Private ICS Calendar URL");
+      const urlInput = screen.getByLabelText("Private ICS calendar URL");
       fireEvent.change(urlInput, {
         target: { value: "https://calendar.google.com/feed.ics" },
       });
@@ -466,7 +466,7 @@ describe("Frontend Connectors Components", () => {
 
     it("toggles URL visibility between password and text", () => {
       renderWithClient(<CalendarFormModal isOpen={true} onClose={vi.fn()} />);
-      const urlInput = screen.getByLabelText("Private ICS Calendar URL");
+      const urlInput = screen.getByLabelText("Private ICS calendar URL");
       expect(urlInput.getAttribute("type")).toBe("password");
 
       const toggleBtn = screen.getByRole("button", { name: "Show URL" });
@@ -490,7 +490,7 @@ describe("Frontend Connectors Components", () => {
       );
 
       fireEvent.change(nameInput, { target: { value: "Valid Name" } });
-      const urlInput = screen.getByLabelText("Private ICS Calendar URL");
+      const urlInput = screen.getByLabelText("Private ICS calendar URL");
       fireEvent.change(urlInput, { target: { value: "   " } });
       fireEvent.submit(form);
 
@@ -511,7 +511,7 @@ describe("Frontend Connectors Components", () => {
       const nameInput = screen.getByLabelText("Connector name");
       fireEvent.change(nameInput, { target: { value: "Custom Config" } });
 
-      const urlInput = screen.getByLabelText("Private ICS Calendar URL");
+      const urlInput = screen.getByLabelText("Private ICS calendar URL");
       fireEvent.change(urlInput, {
         target: { value: "https://custom.com/cal.ics" },
       });
@@ -613,7 +613,7 @@ describe("Frontend Connectors Components", () => {
           onShowRuns={vi.fn()}
         />,
       );
-      expect(screen.getByText("Needs Reauth")).toBeTruthy();
+      expect(screen.getByText("Needs reauth")).toBeTruthy();
       expect(screen.getByText("Authentication expired")).toBeTruthy();
       expect(screen.getByText("Session expired")).toBeTruthy();
     });
@@ -963,7 +963,7 @@ describe("Frontend Connectors Components", () => {
         />,
       );
 
-      expect(screen.getByText("Needs Reauth")).toBeTruthy();
+      expect(screen.getByText("Needs reauth")).toBeTruthy();
       expect(screen.getByText("Authentication expired")).toBeTruthy();
       expect(
         screen.getByText("Invalid credentials or feed token revoked"),
@@ -1122,7 +1122,7 @@ describe("Frontend Connectors Components", () => {
       );
 
       // Verify modal title
-      expect(screen.getByText("History Cal — Run History")).toBeTruthy();
+      expect(screen.getByText("History Cal — Run history")).toBeTruthy();
 
       // Verify statuses
       expect(screen.getByText("ok")).toBeTruthy();
@@ -1299,7 +1299,7 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      expect(screen.getByText("Get started with Connectors")).toBeTruthy();
+      expect(screen.getByText("Get started with connectors")).toBeTruthy();
       expect(
         screen.getByText(/Contrack learns who you talk to from your calendar/i),
       ).toBeTruthy();
@@ -1326,7 +1326,7 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(connectBtns[0]);
 
       expect(
-        screen.getByRole("heading", { name: "Connect Calendar" }),
+        screen.getByRole("heading", { name: "Connect calendar" }),
       ).toBeTruthy();
     });
 
@@ -1374,7 +1374,7 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(addBtn);
 
       expect(
-        screen.getByRole("heading", { name: "Add a Connector" }),
+        screen.getByRole("heading", { name: "Add a connector" }),
       ).toBeTruthy();
     });
 
@@ -1395,7 +1395,7 @@ describe("Frontend Connectors Components", () => {
       // Open sheet
       fireEvent.click(screen.getByRole("button", { name: /Add connector/i }));
       expect(
-        screen.getByRole("heading", { name: "Add a Connector" }),
+        screen.getByRole("heading", { name: "Add a connector" }),
       ).toBeTruthy();
 
       // Click Calendar inside sheet
@@ -1404,7 +1404,7 @@ describe("Frontend Connectors Components", () => {
 
       // Sheet closes and CalendarFormModal opens
       expect(
-        screen.getByRole("heading", { name: "Connect Calendar" }),
+        screen.getByRole("heading", { name: "Connect calendar" }),
       ).toBeTruthy();
     });
 
@@ -1465,7 +1465,7 @@ describe("Frontend Connectors Components", () => {
 
       expect(
         screen.getByRole("heading", {
-          name: "Personal iCloud — Run History",
+          name: "Personal iCloud — Run history",
         }),
       ).toBeTruthy();
     });
@@ -1502,11 +1502,11 @@ describe("Frontend Connectors Components", () => {
       // Open and close AddConnectorSheet
       fireEvent.click(screen.getByRole("button", { name: /Add connector/i }));
       expect(
-        screen.getByRole("heading", { name: "Add a Connector" }),
+        screen.getByRole("heading", { name: "Add a connector" }),
       ).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
       expect(
-        screen.queryByRole("heading", { name: "Add a Connector" }),
+        screen.queryByRole("heading", { name: "Add a connector" }),
       ).toBeNull();
 
       // Open and close CalendarFormModal via card edit
@@ -1523,11 +1523,11 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(menuTrigger);
       fireEvent.click(screen.getByRole("menuitem", { name: "Run history" }));
       expect(
-        screen.getByRole("heading", { name: "Cal 1 — Run History" }),
+        screen.getByRole("heading", { name: "Cal 1 — Run history" }),
       ).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Close" }));
       expect(
-        screen.queryByRole("heading", { name: "Cal 1 — Run History" }),
+        screen.queryByRole("heading", { name: "Cal 1 — Run history" }),
       ).toBeNull();
     });
   });

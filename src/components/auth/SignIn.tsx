@@ -309,7 +309,7 @@ export const SignIn = ({
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="rounded border-outline text-primary focus:ring-primary w-4 h-4"
+            className="rounded border-outline-variant text-primary w-4 h-4"
           />
           Keep me signed in on this device
         </label>
@@ -426,7 +426,7 @@ const MagicLinkRequest = ({
           <button
             type="button"
             onClick={onBack}
-            className="w-full py-2.5 px-4 rounded-xl bg-surface-container text-on-surface font-medium hover:bg-surface-container-high transition-colors text-sm"
+            className="btn-secondary w-full"
           >
             Back to sign in
           </button>

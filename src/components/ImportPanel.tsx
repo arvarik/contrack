@@ -53,7 +53,8 @@ import {
   type ImportStreamResult,
 } from "../lib/importRun";
 import { useAuth } from "./auth/AuthGate";
-import { TAB_CONTAINER, tabItem } from "../lib/styles";
+import { TAB_CONTAINER, TONE_WASH, tabItem } from "../lib/styles";
+import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -76,6 +77,28 @@ export type ImportPhaseState =
   | "lost";
 
 const STREAM_PHASES = ["importing", "embedding", "scanning"] as const;
+
+/** The source tabs' names. Brand names, so LinkedIn keeps its capital I. */
+const SOURCE_LABELS: Record<ImportTab, string> = {
+  apple: "Apple",
+  linkedin: "LinkedIn",
+  google: "Google",
+  facebook: "Facebook",
+};
+
+/** Each phase's panel arrives the same way, on the slow duration. */
+const PHASE_MOTION = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 },
+  transition: { duration: DURATION.slow, ease: EASE },
+};
+
+/** The line that says what went wrong, in the error tone. */
+const ERROR_BANNER = cn(
+  "p-4 rounded-xl flex items-center gap-3 text-sm font-medium",
+  TONE_WASH.error,
+);
 
 export const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
 const VALID_SOURCES: readonly ImportTab[] = [
@@ -568,7 +591,7 @@ export const ImportPanel = ({
                 "min-h-[44px] sm:min-h-0",
               )}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {SOURCE_LABELS[tab]}
             </button>
           ))}
         </div>
@@ -577,20 +600,13 @@ export const ImportPanel = ({
       {/* Main content area */}
       <AnimatePresence mode="wait" initial={false}>
         {phase === "complete" && summary ? (
-          <motion.div
-            key="summary"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
-            className="space-y-5"
-          >
+          <motion.div key="summary" {...PHASE_MOTION} className="space-y-5">
             <div className="flex flex-col items-center text-center">
-              <div className="bg-emerald-500/10 p-3 rounded-full mb-3">
-                <CheckCircle2 className="w-8 h-8 text-success" />
+              <div className={cn("p-3 rounded-full mb-3", TONE_WASH.success)}>
+                <CheckCircle2 className="w-8 h-8" />
               </div>
               <h3 className="font-headline font-bold text-lg text-on-surface">
-                Import Complete
+                Import complete
               </h3>
               <p className="text-sm text-on-surface-variant mt-1">
                 {summary.imported} contacts processed
@@ -600,8 +616,8 @@ export const ImportPanel = ({
             <div className="bg-surface-container-low rounded-2xl divide-y divide-surface-container-high">
               {summary.autoMerged > 0 && (
                 <div className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="bg-emerald-500/10 p-2 rounded-lg">
-                    <GitMerge className="w-4 h-4 text-success" />
+                  <div className={cn("p-2 rounded-lg", TONE_WASH.success)}>
+                    <GitMerge className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
@@ -616,8 +632,8 @@ export const ImportPanel = ({
 
               {summary.needsReview > 0 && (
                 <div className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="bg-amber-500/10 p-2 rounded-lg">
-                    <Search className="w-4 h-4 text-warning" />
+                  <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                    <Search className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
@@ -631,8 +647,8 @@ export const ImportPanel = ({
               )}
 
               <div className="flex items-center gap-3 px-5 py-3.5">
-                <div className="bg-primary/10 p-2 rounded-lg">
-                  <UserPlus className="w-4 h-4 text-primary" />
+                <div className={cn("p-2 rounded-lg", TONE_WASH.primary)}>
+                  <UserPlus className="w-4 h-4" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-bold text-on-surface">
@@ -647,8 +663,8 @@ export const ImportPanel = ({
               {summary.failed > 0 && (
                 <div className="px-5 py-3.5">
                   <div className="flex items-center gap-3">
-                    <div className="bg-amber-500/10 p-2 rounded-lg">
-                      <AlertCircle className="w-4 h-4 text-warning" />
+                    <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                      <AlertCircle className="w-4 h-4" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-bold text-on-surface">
@@ -685,7 +701,7 @@ export const ImportPanel = ({
             </div>
 
             {error && (
-              <div className="p-4 bg-red-500/10 text-error rounded-xl flex items-center gap-3 text-sm font-medium">
+              <div className={ERROR_BANNER}>
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 {error}
               </div>
@@ -714,7 +730,7 @@ export const ImportPanel = ({
                     summary.failed > 0 ? "btn-secondary" : "btn-primary",
                   )}
                 >
-                  Review {summary.needsReview} Suggestions
+                  Review {summary.needsReview} suggestions
                   <ArrowRight className="w-4 h-4" />
                 </button>
               )}
@@ -734,10 +750,7 @@ export const ImportPanel = ({
         ) : isProcessing ? (
           <motion.div
             key="processing"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
+            {...PHASE_MOTION}
             className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
           >
             <div className="flex items-center gap-2 mb-6">
@@ -745,24 +758,24 @@ export const ImportPanel = ({
                 <div key={p} className="flex items-center gap-2">
                   <div
                     className={cn(
-                      "w-2 h-2 rounded-full transition-colors duration-300",
+                      "w-2 h-2 rounded-full transition-colors duration-(--dur-slow)",
                       phase === p
                         ? "bg-primary scale-125"
                         : STREAM_PHASES.indexOf(
                               phase as (typeof STREAM_PHASES)[number],
                             ) > i
-                          ? "bg-emerald-500"
+                          ? "bg-success"
                           : "bg-surface-container-high",
                     )}
                   />
                   {i < 2 && (
                     <div
                       className={cn(
-                        "w-8 h-0.5 rounded-full transition-colors duration-300",
+                        "w-8 h-0.5 rounded-full transition-colors duration-(--dur-slow)",
                         STREAM_PHASES.indexOf(
                           phase as (typeof STREAM_PHASES)[number],
                         ) > i
-                          ? "bg-emerald-500"
+                          ? "bg-success"
                           : "bg-surface-container-high",
                       )}
                     />
@@ -789,7 +802,7 @@ export const ImportPanel = ({
                   <motion.div
                     className="h-full bg-primary rounded-full"
                     animate={{ width: `${progressPct}%` }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    transition={{ duration: DURATION.slow, ease: EASE }}
                   />
                 </div>
               </div>
@@ -816,10 +829,7 @@ export const ImportPanel = ({
         ) : phase === "reconnecting" ? (
           <motion.div
             key="reconnecting"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
+            {...PHASE_MOTION}
             className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
           >
             <div className="relative mb-4">
@@ -843,17 +853,10 @@ export const ImportPanel = ({
             )}
           </motion.div>
         ) : phase === "failed" ? (
-          <motion.div
-            key="failed"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
-            className="space-y-5"
-          >
+          <motion.div key="failed" {...PHASE_MOTION} className="space-y-5">
             <div className="flex flex-col items-center text-center">
-              <div className="bg-red-500/10 p-3 rounded-full mb-3">
-                <AlertCircle className="w-8 h-8 text-error" />
+              <div className={cn("p-3 rounded-full mb-3", TONE_WASH.error)}>
+                <AlertCircle className="w-8 h-8" />
               </div>
               <h3 className="font-headline font-bold text-lg text-on-surface">
                 Import did not finish
@@ -862,7 +865,7 @@ export const ImportPanel = ({
                 {fileName ? `Nothing from ${fileName} was saved.` : ""}
               </p>
             </div>
-            <div className="p-4 bg-red-500/10 text-error rounded-xl flex items-center gap-3 text-sm font-medium">
+            <div className={ERROR_BANNER}>
               <AlertCircle className="w-5 h-5 shrink-0" />
               {error ?? "The import did not finish."}
             </div>
@@ -887,17 +890,10 @@ export const ImportPanel = ({
             </div>
           </motion.div>
         ) : phase === "lost" ? (
-          <motion.div
-            key="lost"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
-            className="space-y-5"
-          >
+          <motion.div key="lost" {...PHASE_MOTION} className="space-y-5">
             <div className="flex flex-col items-center text-center">
-              <div className="bg-amber-500/10 p-3 rounded-full mb-3">
-                <WifiOff className="w-8 h-8 text-warning" />
+              <div className={cn("p-3 rounded-full mb-3", TONE_WASH.warning)}>
+                <WifiOff className="w-8 h-8" />
               </div>
               <h3 className="font-headline font-bold text-lg text-on-surface">
                 Lost contact with the server
@@ -937,8 +933,8 @@ export const ImportPanel = ({
               }
             }}
             className={cn(
-              "bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors",
-              "hover:bg-surface-container-high cursor-pointer border-2 border-dashed focus-visible:ring-2 focus-visible:ring-primary outline-none",
+              "state-layer bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors",
+              "cursor-pointer border-2 border-dashed",
               isDragging ? "border-primary bg-primary/5" : "border-transparent",
             )}
             onClick={() => fileInputRef.current?.click()}
@@ -1010,8 +1006,8 @@ export const ImportPanel = ({
                   <strong>Connections.csv</strong> file above.
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
-                  Fields imported: Name, Company, Position, Email, Profile URL,
-                  Connection Date
+                  Fields imported: name, company, position, email, profile URL,
+                  connection date
                 </li>
               </ol>
             )}
@@ -1031,8 +1027,8 @@ export const ImportPanel = ({
                   Upload the downloaded <strong>.csv</strong> file above.
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
-                  Fields imported: Name, multiple Emails & Phones, Company,
-                  Role, Address, Birthday, Notes, Website
+                  Fields imported: name, multiple emails & phones, company,
+                  role, address, birthday, notes, website
                 </li>
               </ol>
             )}
@@ -1068,7 +1064,7 @@ export const ImportPanel = ({
       )}
 
       {error && phase === "idle" && (
-        <div className="p-4 bg-red-500/10 text-error rounded-xl flex items-center gap-3 text-sm font-medium">
+        <div className={ERROR_BANNER}>
           <AlertCircle className="w-5 h-5 shrink-0" />
           {error}
         </div>

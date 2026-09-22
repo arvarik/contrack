@@ -62,6 +62,8 @@ import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
+import { SELECTED_TINT } from "../../../lib/styles";
+import { RadioDot } from "../../../components/ui/RadioDot";
 import { cn } from "../../../lib/utils";
 import {
   AdminButton,
@@ -194,22 +196,25 @@ const RolePicker = ({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "text-left px-4 py-3 rounded-xl transition-colors",
+              "flex items-start gap-3 text-left px-4 py-3 rounded-xl transition-colors",
               active
-                ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                : "bg-surface-container-highest hover:bg-surface-container-high",
+                ? SELECTED_TINT
+                : "state-layer bg-surface-container-highest",
             )}
           >
-            <span
-              className={cn(
-                "block text-sm font-bold",
-                active ? "text-primary" : "text-on-surface",
-              )}
-            >
-              {option.label}
-            </span>
-            <span className="block text-xs text-on-surface-variant mt-0.5">
-              {option.hint}
+            <RadioDot checked={active} className="mt-0.5" />
+            <span className="min-w-0">
+              <span
+                className={cn(
+                  "block text-sm font-bold",
+                  !active && "text-on-surface",
+                )}
+              >
+                {option.label}
+              </span>
+              <span className="block text-xs text-on-surface-variant mt-0.5">
+                {option.hint}
+              </span>
             </span>
           </button>
         );
@@ -235,11 +240,7 @@ const AdminField = ({
     <input
       id={id}
       aria-describedby={hint ? `${id}-hint` : undefined}
-      className={cn(
-        "w-full px-4 py-3 rounded-xl bg-surface-container-highest",
-        "text-base sm:text-sm",
-        "outline-none focus-visible:ring-2 focus-visible:ring-primary",
-      )}
+      className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-base sm:text-sm"
       {...props}
     />
     {hint && (
@@ -833,7 +834,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
             </p>
 
             <div className="space-y-2">
-              <div className="flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 hover:bg-surface-container-high/40 cursor-pointer transition-colors">
+              <div className="state-layer flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 cursor-pointer transition-colors">
                 <input
                   id="reset-method-email"
                   type="radio"
@@ -857,7 +858,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                 </label>
               </div>
 
-              <div className="flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 hover:bg-surface-container-high/40 cursor-pointer transition-colors">
+              <div className="state-layer flex items-start gap-3 p-3 rounded-xl border border-outline-variant/30 cursor-pointer transition-colors">
                 <input
                   id="reset-method-temporary"
                   type="radio"

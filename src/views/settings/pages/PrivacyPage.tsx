@@ -19,7 +19,8 @@ import {
   useClearHistory,
 } from "../../../api/searchHistory";
 import { AiCapabilitiesCard } from "../AiCapabilitiesCard";
-import { CARD, SECTION_HEADING } from "../../../lib/styles";
+import { SETTINGS_PAGE } from "../layout";
+import { CARD, SECTION_HEADING, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 export const PrivacyPage = () => {
@@ -45,7 +46,7 @@ export const PrivacyPage = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-10 max-w-4xl mx-auto space-y-6 pb-28 md:pb-10">
+    <div className={cn(SETTINGS_PAGE, "space-y-6")}>
       <div className="space-y-1">
         <p className="text-sm text-on-surface-variant">
           AI opt-out, data handling, and available capabilities.
@@ -79,7 +80,7 @@ export const PrivacyPage = () => {
               type="button"
               disabled={count === 0 || clearMutation.isPending}
               onClick={() => setClearDialogOpen(true)}
-              className="btn-secondary shrink-0 text-xs font-semibold disabled:opacity-50"
+              className="btn-secondary btn-sm shrink-0 text-error"
             >
               Clear history
             </button>
@@ -90,7 +91,12 @@ export const PrivacyPage = () => {
       {/* What stays local */}
       <div className={cn(CARD, "p-4 sm:p-6 space-y-4")}>
         <div className="flex items-start gap-3">
-          <span className="shrink-0 w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+          <span
+            className={cn(
+              "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+              TONE_WASH.success,
+            )}
+          >
             <HardDrive className="w-[18px] h-[18px]" />
           </span>
           <div className="min-w-0">
@@ -151,7 +157,7 @@ export const PrivacyPage = () => {
           </div>
           <Link
             to="/settings/ai-usage"
-            className="btn-secondary shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold"
+            className="btn-secondary btn-sm shrink-0"
           >
             <span>View usage</span>
             <ArrowRight className="w-3.5 h-3.5" />

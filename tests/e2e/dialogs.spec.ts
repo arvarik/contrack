@@ -21,7 +21,7 @@ test("the keyboard shortcuts dialog traps focus and returns it on Escape", async
   await trigger.focus();
   await page.keyboard.press("Enter");
 
-  const dialog = page.getByRole("dialog", { name: "Keyboard Shortcuts" });
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await expect(dialog).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "Close dialog" }),
@@ -46,7 +46,7 @@ test("? opens the shortcuts dialog from anywhere that is not a field", async ({
   await expect(page.getByRole("heading", { name: "Pulse" })).toBeVisible();
   await page.keyboard.press("?");
   await expect(
-    page.getByRole("dialog", { name: "Keyboard Shortcuts" }),
+    page.getByRole("dialog", { name: "Keyboard shortcuts" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -62,14 +62,14 @@ test("the new contact form opens on N, names its fields, and closes on Escape", 
   );
 
   await page.keyboard.press("n");
-  const dialog = page.getByRole("dialog", { name: "New Contact" });
+  const dialog = page.getByRole("dialog", { name: "New contact" });
   await expect(dialog).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "Close dialog" }),
   ).toBeFocused();
 
   await page.keyboard.press("Tab");
-  await expect(dialog.getByLabel("Full Name")).toBeFocused();
+  await expect(dialog.getByLabel("Full name")).toBeFocused();
   for (const label of ["Role", "Company", "Email", "Phone", "Location"]) {
     await expect(dialog.getByLabel(label)).toBeVisible();
   }
@@ -135,7 +135,7 @@ test("the command palette opens on the shortcut with its combobox focused", asyn
   // the name is read from the element and visibility from what it holds.
   const palette = page.getByRole("dialog");
   await expect(palette).toHaveAttribute("data-state", "open");
-  await expect(palette).toHaveAccessibleName("Global Command Palette");
+  await expect(palette).toHaveAccessibleName("Global command palette");
   await expect(palette.getByRole("combobox")).toBeVisible();
   await expect(palette.getByRole("combobox")).toBeFocused();
 
@@ -158,7 +158,7 @@ test("Escape in a list inside a dialog closes the list and keeps the dialog", as
     .getByRole("button", { name: "Field", exact: true })
     .click();
 
-  const dialog = page.getByRole("dialog", { name: "Edit Field" });
+  const dialog = page.getByRole("dialog", { name: "Edit field" });
   await expect(dialog).toBeVisible();
   const combo = page.getByRole("combobox", { name: "Field to edit" });
   await combo.click();

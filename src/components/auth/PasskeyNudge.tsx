@@ -74,7 +74,7 @@ export const PasskeyNudge = ({ onDone }: { onDone: () => void }) => {
           type="button"
           onClick={handleNotNow}
           disabled={busy}
-          className="w-full bg-surface-container-high text-on-surface font-bold py-3 rounded-xl flex items-center justify-center transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="btn-secondary w-full"
         >
           Not now
         </button>

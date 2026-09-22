@@ -15,9 +15,10 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { SemanticMatch } from "../../types";
-import { CARD, TAG_PILL } from "../../lib/styles";
+import { CARD, CARD_INTERACTIVE, TAG_PILL, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { MATCH_BADGE } from "../../components/command-palette/utils";
 
 // =============================================================================
 // ResultCard
@@ -44,10 +45,8 @@ export const ResultCard = ({
     <button
       onClick={onClick}
       className={cn(
-        CARD,
+        CARD_INTERACTIVE,
         "w-full text-left flex items-start gap-4 group",
-        "hover:shadow-md hover:scale-[1.005] transition-[shadow,transform] duration-200 cursor-pointer",
-        "hover:ring-2 hover:ring-primary/20",
       )}
     >
       <img
@@ -62,13 +61,11 @@ export const ResultCard = ({
             {match.name}
           </span>
           {match.approximate ? (
-            <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+            <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
               Approximate
             </span>
           ) : isFallback ? (
-            <span className="text-[11px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
-              Keyword
-            </span>
+            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>Keyword</span>
           ) : null}
         </div>
 
@@ -100,11 +97,14 @@ export const ResultCard = ({
           )}
         </div>
 
-        {/* AI Reason — plain render, no nested motion element */}
+        {/*
+          AI reason: a model wrote this line, so it wears the AI colour.
+          Plain render, no nested motion element.
+        */}
         {match.aiReason && (
           <div className="flex items-start gap-1.5 mt-1">
-            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-            <span className="text-sm text-primary italic leading-snug">
+            <Sparkles className="w-3.5 h-3.5 text-ai shrink-0 mt-0.5" />
+            <span className="text-sm text-ai italic leading-snug">
               {match.aiReason}
             </span>
           </div>

@@ -15,7 +15,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, Copy, Sparkles, UploadCloud } from "lucide-react";
 import { useDedupeCount, useContacts } from "../../api";
 import { useImports } from "../../api/imports";
-import { SECTION_HEADING } from "../../lib/styles";
+import { SECTION_HEADING, TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 export const NeedsAttention = () => {
@@ -85,12 +85,11 @@ export const NeedsAttention = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={cn(
-                "flex items-center gap-3 p-3.5 rounded-xl bg-primary/10 hover:bg-primary/15 text-on-surface transition-colors",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-[44px]",
-              )}
+              className="state-layer flex items-center gap-3 p-3.5 rounded-xl bg-primary/10 text-on-surface transition-colors min-h-[44px]"
             >
-              <span className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+              <span
+                className={cn("p-2 rounded-lg shrink-0", TONE_WASH.primary)}
+              >
                 <Icon className="w-4 h-4" />
               </span>
               <span className="font-semibold text-sm truncate flex-1">

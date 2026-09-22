@@ -142,7 +142,8 @@ export const ContactMarker = memo(function ContactMarker({
           "block w-12 h-12 rounded-full overflow-hidden cursor-pointer",
           "bg-surface-container-lowest shadow-md",
           ringClass,
-          "transition-transform duration-200 hover:-translate-y-1",
+          // The lift on hover and on selection runs at the base duration.
+          "transition-transform hover:-translate-y-1",
         )}
       >
         <img

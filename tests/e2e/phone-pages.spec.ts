@@ -84,13 +84,13 @@ test.describe("phone pages (390 px)", () => {
 
     // Merge activity slide-out opens
     await expect(
-      page.getByRole("heading", { name: "Merge Activity", exact: true }),
+      page.getByRole("heading", { name: "Merge activity", exact: true }),
     ).toBeVisible();
 
     // Close merge activity slide-out
     await page.getByRole("button", { name: "Close merge activity" }).click();
     await expect(
-      page.getByRole("heading", { name: "Merge Activity", exact: true }),
+      page.getByRole("heading", { name: "Merge activity", exact: true }),
     ).not.toBeVisible();
 
     // Accessibility and floor checks
@@ -148,7 +148,7 @@ test.describe("phone pages (390 px)", () => {
 
     // Full coverage bar is visible inside the empty state
     await expect(
-      page.getByRole("heading", { name: "Semantic Search Coverage" }),
+      page.getByRole("heading", { name: "Semantic search coverage" }),
     ).toBeVisible();
 
     // Compact bar in the header is also present
@@ -203,7 +203,7 @@ test.describe("phone pages (390 px)", () => {
     expect(dropZoneBox!.y).toBeLessThan(disclosureBox!.y);
 
     // Switch to LinkedIn and verify persistence in localStorage
-    const linkedinTab = page.getByRole("tab", { name: "Linkedin" });
+    const linkedinTab = page.getByRole("tab", { name: "LinkedIn" });
     await linkedinTab.click();
     await expect(linkedinTab).toHaveAttribute("aria-selected", "true");
 
@@ -217,7 +217,7 @@ test.describe("phone pages (390 px)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Import" }),
     ).toBeVisible();
-    const reloadedLinkedinTab = page.getByRole("tab", { name: "Linkedin" });
+    const reloadedLinkedinTab = page.getByRole("tab", { name: "LinkedIn" });
     await expect(reloadedLinkedinTab).toHaveAttribute("aria-selected", "true");
 
     // Capture screenshots in light and dark

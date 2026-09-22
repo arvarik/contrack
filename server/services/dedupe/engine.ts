@@ -630,7 +630,7 @@ export const dedupeService = {
       "Robert A. Johnson",
       "Acme Corp",
       "Vice President of Sales",
-      "indigo",
+      "pink",
       owner,
     );
     insertEmail.run(crypto.randomUUID(), ids[1], "bob.johnson@gmail.com");
@@ -640,7 +640,7 @@ export const dedupeService = {
       "Robert Johnson",
       "Acme Corporation",
       "VP Sales",
-      "violet",
+      "emerald",
       owner,
     );
     insertEmail.run(crypto.randomUUID(), ids[2], "bob.johnson@gmail.com");

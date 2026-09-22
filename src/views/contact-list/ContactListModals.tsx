@@ -173,12 +173,12 @@ export const ContactListModals = ({
           onCloseModal();
           setParsedData(null);
         }}
-        title="New Contact"
+        title="New contact"
       >
         <form onSubmit={handleCreateContact} className="space-y-4 pt-2">
           <div>
             <label htmlFor="new-contact-name" className={FORM_LABEL}>
-              Full Name *
+              Full name *
             </label>
             <input
               id="new-contact-name"
@@ -277,9 +277,9 @@ export const ContactListModals = ({
             <button
               type="submit"
               disabled={createContact.isPending}
-              className="btn-primary w-full py-3"
+              className="btn-primary w-full"
             >
-              {createContact.isPending ? "Saving..." : "Save Contact"}
+              {createContact.isPending ? "Saving..." : "Save contact"}
             </button>
           </div>
         </form>
@@ -289,7 +289,7 @@ export const ContactListModals = ({
       <Modal
         isOpen={isSmartPasteOpen}
         onClose={onCloseSmartPaste}
-        title="Add from Text"
+        title="Add from text"
       >
         <div className="space-y-4 pt-2">
           {parseContactText.isPending ? (
@@ -331,7 +331,7 @@ export const ContactListModals = ({
                 value={smartPasteText}
                 onChange={(e) => setSmartPasteText(e.target.value)}
                 rows={5}
-                className="w-full bg-surface-container border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary font-mono text-on-surface resize-none focus:outline-none"
+                className="w-full bg-surface-container border-none rounded-xl p-4 text-sm font-mono text-on-surface resize-none"
                 placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• A forwarded email signature`}
               />
             </>
@@ -354,10 +354,10 @@ export const ContactListModals = ({
                 }
               }}
               disabled={!smartPasteText.trim() || parseContactText.isPending}
-              className="btn-primary px-6"
+              className="btn-primary"
             >
               <FileText className="w-4 h-4" />
-              {parseContactText.isPending ? "Extracting…" : "Extract Contact"}
+              {parseContactText.isPending ? "Extracting…" : "Extract contact"}
             </button>
           </div>
         </div>

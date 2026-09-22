@@ -85,7 +85,7 @@ export function Modal({
               </Dialog.Title>
               <Dialog.Close
                 ref={closeButton}
-                className="-mr-2 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg hover:bg-surface-container-high transition-colors"
+                className="state-layer -mr-2 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors"
                 aria-label="Close dialog"
               >
                 <X className="w-5 h-5" />

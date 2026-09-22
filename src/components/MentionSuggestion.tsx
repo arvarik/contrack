@@ -14,7 +14,12 @@ import React, {
 import { ScoreRingAvatar } from "./ScoreRingAvatar";
 import { scoreView, scoreWords } from "../../shared/scoreBand";
 import type { ContactSlim } from "../api/contacts";
-import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../lib/styles";
+import {
+  LABEL,
+  MENU_ITEM,
+  MENU_ITEM_SELECTED,
+  MENU_PANEL,
+} from "../lib/styles";
 import { cn } from "../lib/utils";
 
 interface MentionListProps {
@@ -96,9 +101,7 @@ export const MentionList = forwardRef<
                 </span>
               )}
               {item.isGhost && (
-                <span className="ml-auto text-[11px] uppercase font-bold text-on-surface-variant">
-                  Ghost
-                </span>
+                <span className={cn(LABEL, "ml-auto")}>Ghost</span>
               )}
             </button>
           );

@@ -14,7 +14,12 @@ import {
   type FailedIndexItem,
 } from "../../api";
 import { Modal } from "../../components/ui/Modal";
+import { TONE_DOT, TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+
+/** The compact status: a chip on its tone's wash, a button when it acts. */
+const STATUS_CHIP =
+  "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium";
 
 interface SearchCoverageBarProps {
   /** If true, renders a compact badge/pill suitable for headers */
@@ -38,6 +43,12 @@ export function SearchCoverageBar({
     coverage.coverage === 100 &&
     coverage.pending === 0 &&
     coverage.failed === 0;
+  /** The banner's tone, on its icon tile and its bar: done, failing, or still to do. */
+  const tone: Tone = isComplete
+    ? "success"
+    : coverage.failed > 0
+      ? "error"
+      : "primary";
 
   const handleRefreshClick = () => {
     if (coverage.provider.isPaid) {
@@ -72,7 +83,11 @@ export function SearchCoverageBar({
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending}
             title={`${coverage.pending} contact(s) pending indexing`}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary hover:opacity-80 transition-opacity"
+            className={cn(
+              "hit-area state-layer transition-colors",
+              STATUS_CHIP,
+              TONE_WASH.primary,
+            )}
           >
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             <span>
@@ -82,26 +97,34 @@ export function SearchCoverageBar({
         ) : coverage.failed > 0 ? (
           <button
             onClick={() => setShowInspectModal(true)}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-rose-500/10 text-error hover:bg-rose-500/20 transition-colors"
+            className={cn(
+              "hit-area state-layer transition-colors",
+              STATUS_CHIP,
+              TONE_WASH.error,
+            )}
             title={`${coverage.failed} contact(s) failed indexing — click to inspect`}
           >
-            <AlertCircle className="w-3.5 h-3.5 text-error" />
+            <AlertCircle className="w-3.5 h-3.5" />
             <span>{coverage.failed} failed</span>
           </button>
         ) : coverage.missing > 0 ? (
           <button
             onClick={handleRefreshClick}
             disabled={refreshIndex.isPending}
-            className="hit-area flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/10 text-warning hover:bg-amber-500/20 transition-colors"
+            className={cn(
+              "hit-area state-layer transition-colors",
+              STATUS_CHIP,
+              TONE_WASH.warning,
+            )}
             title={`${coverage.missing} contact(s) missing search vectors — click to index`}
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+            <AlertTriangle className="w-3.5 h-3.5" />
             <span>{coverage.coverage}% indexed</span>
           </button>
         ) : (
           <div
             title={`Semantic search coverage: 100% (${coverage.indexed}/${coverage.total} contacts)`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            className={cn(STATUS_CHIP, "gap-1", TONE_WASH.success)}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>100% indexed</span>
@@ -135,11 +158,11 @@ export function SearchCoverageBar({
   return (
     <div
       className={cn(
-        "rounded-2xl p-4 border transition-all duration-200",
+        "rounded-2xl p-4 border transition-colors",
         isComplete
           ? "bg-surface-container-lowest border-outline-variant/30"
           : coverage.failed > 0
-            ? "bg-rose-500/5 border-rose-500/20"
+            ? "bg-error/5 border-error/20"
             : "bg-surface-container-low border-primary/20",
         className,
       )}
@@ -149,11 +172,7 @@ export function SearchCoverageBar({
           <div
             className={cn(
               "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-              isComplete
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : coverage.failed > 0
-                  ? "bg-rose-500/10 text-error"
-                  : "bg-primary/10 text-primary",
+              TONE_WASH[tone],
             )}
           >
             {coverage.isIndexing ? (
@@ -170,14 +189,12 @@ export function SearchCoverageBar({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-on-surface">
-                Semantic Search Coverage
+                Semantic search coverage
               </h2>
               <span
                 className={cn(
                   "text-xs font-semibold px-2 py-0.5 rounded-md",
-                  isComplete
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                    : "bg-primary/10 text-primary",
+                  TONE_WASH[isComplete ? "success" : "primary"],
                 )}
               >
                 {coverage.coverage}%
@@ -200,7 +217,7 @@ export function SearchCoverageBar({
               onClick={() => setShowInspectModal(true)}
               className="btn-secondary"
             >
-              Inspect {coverage.failed} Failed
+              Inspect {coverage.failed} failed
             </button>
           )}
 
@@ -218,22 +235,18 @@ export function SearchCoverageBar({
               )}
             />
             <span>
-              {coverage.missing > 0 ? "Index Missing" : "Refresh Index"}
+              {coverage.missing > 0 ? "Index missing" : "Refresh index"}
             </span>
           </button>
         </div>
       </div>
 
-      {/* Progress Bar */}
+      {/* Progress bar. It fills, so it takes the slow duration. */}
       <div className="w-full bg-surface-container-highest rounded-full h-1.5 mt-3 overflow-hidden">
         <div
           className={cn(
-            "h-full rounded-full transition-all duration-300",
-            isComplete
-              ? "bg-emerald-500"
-              : coverage.failed > 0
-                ? "bg-amber-500"
-                : "bg-primary",
+            "h-full rounded-full transition-all duration-(--dur-slow)",
+            TONE_DOT[tone],
           )}
           style={{ width: `${coverage.coverage}%` }}
         />
@@ -283,14 +296,19 @@ function ProviderConfirmModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Confirm Provider Embeddings Refresh"
+      title="Confirm provider embeddings refresh"
       size="md"
     >
       <div className="space-y-4 pt-2">
-        <div className="p-3 bg-amber-500/10 text-warning rounded-xl flex items-start gap-2.5">
+        <div
+          className={cn(
+            TONE_WASH.warning,
+            "p-3 rounded-xl flex items-start gap-2.5",
+          )}
+        >
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <p className="font-bold">Paid Provider Embeddings</p>
+            <p className="font-bold">Paid provider embeddings</p>
             <p>
               Your instance is configured to use{" "}
               <strong className="underline">
@@ -328,7 +346,7 @@ function ProviderConfirmModal({
             className="btn-primary"
           >
             {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            <span>Confirm & Refresh</span>
+            <span>Confirm & refresh</span>
           </button>
         </div>
       </div>
@@ -353,7 +371,7 @@ function FailedInspectModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Failed Search Indexing Tasks"
+      title="Failed search indexing tasks"
       size="lg"
     >
       <div className="space-y-4 pt-2">
@@ -376,7 +394,12 @@ function FailedInspectModal({
               >
                 <div className="flex items-center justify-between font-bold text-on-surface">
                   <span>{item.name}</span>
-                  <span className="text-[11px] text-rose-500 font-mono bg-rose-500/10 px-2 py-0.5 rounded-md">
+                  <span
+                    className={cn(
+                      TONE_WASH.error,
+                      "text-[11px] font-mono px-2 py-0.5 rounded-md",
+                    )}
+                  >
                     {item.attempts} attempts
                   </span>
                 </div>
@@ -406,7 +429,7 @@ function FailedInspectModal({
               className="btn-primary"
             >
               {isRetrying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Retry All Failed</span>
+              <span>Retry all failed</span>
             </button>
           </div>
         </div>

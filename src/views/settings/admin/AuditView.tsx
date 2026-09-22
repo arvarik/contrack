@@ -33,8 +33,18 @@ import {
 import { AUDIT_GROUPS, useAuditLog, type AuditEntry } from "../../../api/admin";
 import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
+import { SELECTED_TINT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { AdminButton, AdminList, AdminPage } from "./AdminShell";
+
+/** One filter: the selected tint when it is on, the hover layer when not. */
+const filterClass = (active: boolean) =>
+  cn(
+    "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
+    active
+      ? SELECTED_TINT
+      : "state-layer text-on-surface-variant hover:text-on-surface",
+  );
 
 /**
  * What each action looks like at a glance.
@@ -162,19 +172,11 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
       : "");
 
   return (
-    <div className="flex items-start gap-3 px-4 sm:px-6 py-3.5 even:bg-surface-container-low/40 hover:bg-surface-container-low transition-colors">
+    <div className="flex items-start gap-3 px-4 sm:px-6 py-3.5 even:bg-surface-container-low/40">
       <span
         className={cn(
           "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
-          look.tone === "danger"
-            ? "bg-red-500/10 text-error"
-            : look.tone === "warning"
-              ? "bg-amber-500/10 text-warning"
-              : look.tone === "success"
-                ? "bg-emerald-500/10 text-success"
-                : look.tone === "primary"
-                  ? "bg-primary/10 text-primary"
-                  : "bg-surface-container-high text-on-surface-variant",
+          TONE_WASH[look.tone === "danger" ? "error" : look.tone],
         )}
       >
         <Icon className="w-[18px] h-[18px]" />
@@ -240,12 +242,7 @@ export const AuditView = () => {
           type="button"
           aria-pressed={group === null}
           onClick={() => setGroup(null)}
-          className={cn(
-            "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
-            group === null
-              ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
-              : "text-on-surface-variant hover:bg-surface-container-high",
-          )}
+          className={filterClass(group === null)}
         >
           Everything
         </button>
@@ -255,12 +252,7 @@ export const AuditView = () => {
             type="button"
             aria-pressed={group === option.key}
             onClick={() => setGroup(option.key)}
-            className={cn(
-              "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
-              group === option.key
-                ? "bg-primary/15 text-on-primary-wash ring-1 ring-inset ring-primary/30"
-                : "text-on-surface-variant hover:bg-surface-container-high",
-            )}
+            className={filterClass(group === option.key)}
           >
             {option.label}
           </button>

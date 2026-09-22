@@ -4,14 +4,18 @@ import { motion } from "motion/react";
 import { Briefcase, Building, Sparkles } from "lucide-react";
 import type { SemanticMatch } from "../../types";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { DURATION, EASE } from "../../lib/motion";
+import { TONE_WASH } from "../../lib/styles";
+import { cn } from "../../lib/utils";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
 import { DataAgeHalo } from "./DataAgeHalo";
+import { ITEM_CURRENT, MATCH_BADGE } from "./utils";
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
-    transition={{ delay, duration: 0.2 }}
+    transition={{ delay, duration: DURATION.slow, ease: EASE }}
     className="flex items-center gap-3 px-3 py-3 rounded-xl"
   >
     <div className="w-8 h-8 rounded-full bg-primary/10 animate-pulse shrink-0" />
@@ -50,12 +54,19 @@ export const AIResultCard = ({
     key={match.id}
     value={`ai_${match.id}_${match.name}`}
     onSelect={onSelect}
-    className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:bg-primary/8 aria-selected:ring-1 aria-selected:ring-primary/20 transition-all text-on-surface group"
+    className={cn(
+      "flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none transition-colors text-on-surface group",
+      ITEM_CURRENT,
+    )}
   >
     <motion.div
       initial={{ opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.2 }}
+      transition={{
+        delay: index * 0.06,
+        duration: DURATION.slow,
+        ease: EASE,
+      }}
       className="contents"
     >
       {/* Avatar with Data Age Halo */}
@@ -73,13 +84,11 @@ export const AIResultCard = ({
           <span className="font-bold text-sm truncate">{match.name}</span>
           <ScoreDot contact={match} />
           {match.approximate ? (
-            <span className="text-[11px] font-bold uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+            <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
               Approximate
             </span>
           ) : isFallback ? (
-            <span className="text-[11px] font-bold uppercase tracking-widest bg-amber-500/10 text-warning px-1.5 py-0.5 rounded shrink-0">
-              Fallback
-            </span>
+            <span className={cn(TONE_WASH.warning, MATCH_BADGE)}>Fallback</span>
           ) : null}
         </div>
 
@@ -114,15 +123,19 @@ export const AIResultCard = ({
           onRefresh={onRefresh}
         />
 
-        {/* AI Reason */}
+        {/* AI reason: a model wrote this line, so it wears the AI colour. */}
         {match.aiReason && (
           <motion.span
             initial={{ opacity: 0, y: 2 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.06 + 0.1 }}
-            className="text-xs text-primary italic flex items-center gap-1 mt-0.5"
+            transition={{
+              delay: index * 0.06 + 0.1,
+              duration: DURATION.slow,
+              ease: EASE,
+            }}
+            className="text-xs text-ai italic flex items-center gap-1 mt-0.5"
           >
-            <Sparkles className="w-3 h-3 text-primary shrink-0" />
+            <Sparkles className="w-3 h-3 text-ai shrink-0" />
             {match.aiReason}
           </motion.span>
         )}

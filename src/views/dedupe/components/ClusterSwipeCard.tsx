@@ -23,8 +23,13 @@ import type { Contact, DedupeCluster, ClusterPair } from "../../../types";
 import { ContactCard } from "./shared/ContactCard";
 import { MatchBadge } from "./shared/MatchBadge";
 import { cn } from "../../../lib/utils";
+import { CARD, LABEL, SELECTED_TINT, TONE_WASH } from "../../../lib/styles";
+import { DURATION, EASE } from "../../../lib/motion";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { detectMergeConflicts } from "../utils/conflicts";
+
+/** The card leaving the screen after a swipe or a button: an exit, so slow. */
+const FLY_OFF = { duration: DURATION.slow, ease: EASE };
 
 // =============================================================================
 // ClusterSwipeCard — N-contact cluster review card with draggable gestures
@@ -97,7 +102,7 @@ export const ClusterSwipeCard = ({
             x: 600,
             opacity: 0,
             rotate: 15,
-            transition: { duration: 0.4, ease: "easeOut" },
+            transition: FLY_OFF,
           })
           .then(() => onMerge(selectedPrimaryId, duplicateIds));
       } else if (
@@ -109,7 +114,7 @@ export const ClusterSwipeCard = ({
             x: -600,
             opacity: 0,
             rotate: -15,
-            transition: { duration: 0.4, ease: "easeOut" },
+            transition: FLY_OFF,
           })
           .then(() => onDismiss());
       } else {
@@ -142,7 +147,7 @@ export const ClusterSwipeCard = ({
       x: 600,
       opacity: 0,
       rotate: 15,
-      transition: { duration: 0.35, ease: "easeOut" },
+      transition: FLY_OFF,
     });
     onMerge(selectedPrimaryId, duplicateIds);
   }, [
@@ -160,7 +165,7 @@ export const ClusterSwipeCard = ({
       x: -600,
       opacity: 0,
       rotate: -15,
-      transition: { duration: 0.35, ease: "easeOut" },
+      transition: FLY_OFF,
     });
     onDismiss();
   }, [controls, onDismiss]);
@@ -169,7 +174,7 @@ export const ClusterSwipeCard = ({
     <div className="relative">
       {/* Background card peek */}
       {hasNext && (
-        <div className="absolute inset-0 card-stack-behind rounded-2xl bg-surface-container-lowest shadow-sm" />
+        <div className={cn(CARD, "absolute inset-0 card-stack-behind")} />
       )}
 
       {/* Main draggable card */}
@@ -205,7 +210,7 @@ export const ClusterSwipeCard = ({
         </motion.div>
 
         {/* Card content */}
-        <div className="bg-surface-container-lowest rounded-2xl shadow-sm p-5 space-y-4 relative z-0">
+        <div className={cn(CARD, "p-5 space-y-4 relative z-0")}>
           {/* Cluster summary header */}
           <div className="bg-surface-container-low rounded-xl p-3 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -215,11 +220,21 @@ export const ClusterSwipeCard = ({
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-md tabular-nums">
+              <span
+                className={cn(
+                  "text-xs font-bold px-2.5 py-1 rounded-md tabular-nums",
+                  TONE_WASH.neutral,
+                )}
+              >
                 {cluster.size} contacts
               </span>
               {cluster.hasWeakLink && (
-                <span className="text-xs font-bold text-warning bg-amber-500/10 px-2.5 py-1 rounded-md">
+                <span
+                  className={cn(
+                    "text-xs font-bold px-2.5 py-1 rounded-md",
+                    TONE_WASH.warning,
+                  )}
+                >
                   Weak link
                 </span>
               )}
@@ -264,9 +279,7 @@ export const ClusterSwipeCard = ({
             role="radiogroup"
             aria-label="Select primary contact"
           >
-            <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant px-1">
-              Select Primary Contact
-            </div>
+            <div className={cn(LABEL, "px-1")}>Select primary contact</div>
             <div className="flex gap-2 overflow-x-auto p-1 nice-scrollbar">
               {cluster.contacts.map((contact) => {
                 const isSelectedPrimary = contact.id === selectedPrimaryId;
@@ -278,10 +291,10 @@ export const ClusterSwipeCard = ({
                     aria-checked={isSelectedPrimary}
                     aria-label={`Set ${contact.name} as primary contact`}
                     className={cn(
-                      "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all min-w-0",
+                      "shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors min-w-0",
                       isSelectedPrimary
-                        ? "bg-emerald-500/10 ring-2 ring-emerald-500/50 shadow-sm"
-                        : "bg-surface-container-low hover:bg-surface-container-high",
+                        ? SELECTED_TINT
+                        : "state-layer bg-surface-container-low",
                     )}
                   >
                     <img
@@ -312,8 +325,8 @@ export const ClusterSwipeCard = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <ContactCard
               contact={primary}
-              label="Primary (Keeper)"
-              labelColor="text-success bg-emerald-500/10"
+              label="Primary (keeper)"
+              labelColor={TONE_WASH.success}
               isPrimary
             />
             <div className="space-y-3">
@@ -321,8 +334,8 @@ export const ClusterSwipeCard = ({
                 <ContactCard
                   key={dup.id}
                   contact={dup}
-                  label="Merges In"
-                  labelColor="text-warning bg-amber-500/10"
+                  label="Merges in"
+                  labelColor={TONE_WASH.warning}
                   other={primary}
                   onSetPrimary={() => setSelectedPrimaryId(dup.id)}
                 />
@@ -335,10 +348,10 @@ export const ClusterSwipeCard = ({
             onClick={() => setShowEvidence((s) => !s)}
             aria-expanded={showEvidence}
             aria-controls="cluster-evidence"
-            className="w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low hover:bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant transition-colors"
+            className="state-layer w-full flex items-center justify-center gap-2 py-2 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl text-xs font-bold text-on-surface-variant transition-colors"
           >
             <Link2 className="w-3.5 h-3.5" />
-            {showEvidence ? "Hide" : "Show"} Evidence ({cluster.pairs.length}{" "}
+            {showEvidence ? "Hide" : "Show"} evidence ({cluster.pairs.length}{" "}
             link{cluster.pairs.length !== 1 ? "s" : ""})
             {showEvidence ? (
               <ChevronUp className="w-3.5 h-3.5" />
@@ -385,12 +398,12 @@ export const ClusterSwipeCard = ({
             <button
               onClick={handleButtonDismiss}
               aria-label="Keep contacts separate"
-              className="group btn-secondary w-full sm:w-auto px-6"
+              className="group btn-secondary w-full sm:w-auto"
             >
               <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               <div className="text-left">
-                <div className="text-sm font-bold">Keep Separate</div>
-                <div className="text-[11px] uppercase tracking-wider opacity-60">
+                <div className="text-sm font-bold">Keep separate</div>
+                <div className="text-[11px] uppercase tracking-[0.08em] opacity-60">
                   Swipe left
                 </div>
               </div>
@@ -434,13 +447,13 @@ export const ClusterSwipeCard = ({
                 (cluster.requiresConfirmation && !largeClusterConfirmed)
               }
               aria-label={`Merge ${cluster.size} contacts into one`}
-              className="group btn-primary w-full sm:w-auto px-6"
+              className="group btn-primary w-full sm:w-auto"
             >
               <div className="text-right">
                 <div className="text-sm font-bold">
                   {isMerging ? "Merging..." : "Merge"}
                 </div>
-                <div className="text-[11px] uppercase tracking-wider opacity-70">
+                <div className="text-[11px] uppercase tracking-[0.08em] opacity-70">
                   Swipe right →
                 </div>
               </div>

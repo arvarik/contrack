@@ -9,6 +9,7 @@ import { DatabaseZap, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { AIStatsCacheTier } from "../../../api";
 import { InfoTip } from "../../../components/ui/InfoTip";
+import { DURATION, EASE } from "../../../lib/motion";
 
 interface CacheTiersAccordionProps {
   cacheTiers: Record<string, AIStatsCacheTier>;
@@ -20,9 +21,9 @@ const TIER_LABELS: Record<string, string> = {
   rerank: "Rerank",
   synthesis: "Synthesis",
   mentions: "Mentions",
-  dailyInsight: "Daily Insight",
-  queryParse: "Query Parse",
-  hyde: "Query Expansion",
+  dailyInsight: "Daily insight",
+  queryParse: "Query parse",
+  hyde: "Query expansion",
 };
 
 /**
@@ -34,7 +35,7 @@ const TIER_LABELS: Record<string, string> = {
  */
 const TIER_DESCRIPTIONS: Record<string, string> = {
   briefing:
-    "Catch Me Up summaries written for a single contact. A hit means the summary was reused instead of asking the model for it again.",
+    "Catch me up summaries written for a single contact. A hit means the summary was reused instead of asking the model for it again.",
   rerank:
     "AI reordering of search results by relevance. A hit means this query was ranked before, so no model call was needed.",
   synthesis:
@@ -75,13 +76,13 @@ export const CacheTiersAccordion = ({
         className="hit-area w-full flex items-center gap-2 group"
       >
         <DatabaseZap className="w-4 h-4 text-primary" />
-        <span className={cn(SECTION_HEADING, "mb-0")}>Cache Tiers</span>
+        <span className={cn(SECTION_HEADING, "mb-0")}>Cache tiers</span>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: DURATION.slow, ease: EASE }}
           className="ml-auto"
         >
-          <ChevronDown className="w-4 h-4 text-on-surface-variant group-hover:text-on-surface-variant transition-colors" />
+          <ChevronDown className="w-4 h-4 text-on-surface-variant group-hover:text-on-surface transition-colors" />
         </motion.div>
       </button>
 
@@ -92,7 +93,7 @@ export const CacheTiersAccordion = ({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
+            transition={{ duration: DURATION.slow, ease: EASE }}
             className="overflow-hidden"
           >
             {/*
@@ -103,7 +104,7 @@ export const CacheTiersAccordion = ({
             */}
             <div className="mt-4 space-y-0 overflow-x-auto -mx-2 px-2">
               {/* Header row */}
-              <div className="grid grid-cols-[minmax(120px,1fr)_56px_56px_56px_56px_56px_56px] gap-2 px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant min-w-[504px]">
+              <div className="grid grid-cols-[minmax(120px,1fr)_56px_56px_56px_56px_56px_56px] gap-2 px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant min-w-[504px]">
                 <span>Tier</span>
                 <span className="text-right">Entries</span>
                 <span className="text-right">Hits</span>

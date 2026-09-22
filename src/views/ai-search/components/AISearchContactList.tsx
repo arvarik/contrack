@@ -6,7 +6,7 @@
  *
  * Status badge logic:
  * - ✨ + date: previously searched (aiHydratedAt is non-null)
- * - NEW: never searched (gray pill)
+ * - New: never searched (gray pill)
  * - 🔴 Error: last batch errored for this contact
  */
 import React from "react";
@@ -14,6 +14,7 @@ import { Sparkles, CheckCheck, AlertCircle } from "lucide-react";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { scoreView, scoreWords } from "../../../../shared/scoreBand";
 import { formatDay } from "../../../lib/datetime";
+import { SELECTED_ROW, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import type { Contact } from "../../../types";
 import { activateOnKey } from "../../../lib/a11y";
@@ -43,22 +44,22 @@ export function ContactRow({
       tabIndex={0}
       role="button"
       onClick={onToggle}
+      // A checked row is a selected row: the tint and the bar.
       className={cn(
-        "flex items-center gap-4 px-6 py-3.5 cursor-pointer transition-colors group",
-        isSelected && "bg-primary/8",
-        !isSelected && "hover:bg-surface-container-low",
+        "state-layer flex items-center gap-4 px-6 py-3.5 cursor-pointer transition-colors",
+        isSelected && SELECTED_ROW,
       )}
     >
       {/* Checkbox */}
       <div
         className={cn(
-          "w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0",
+          "w-5 h-5 rounded-md flex items-center justify-center transition-colors shrink-0",
           isSelected
-            ? "bg-primary shadow-sm"
+            ? "bg-primary"
             : "bg-surface-container-low ring-1 ring-inset ring-on-surface-variant/20",
         )}
       >
-        {isSelected && <CheckCheck className="w-3 h-3 text-white" />}
+        {isSelected && <CheckCheck className="w-3 h-3 text-on-primary" />}
       </div>
 
       {/* Avatar. The row is a button named by its text, and a named ring
@@ -75,7 +76,7 @@ export function ContactRow({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <span className="font-semibold text-sm text-on-surface group-hover:text-primary transition-colors truncate block text-left">
+        <span className="font-semibold text-sm text-on-surface truncate block text-left">
           {contact.name}
         </span>
         {(contact.role || contact.company) && (
@@ -96,6 +97,9 @@ export function ContactRow({
 // Status Badge
 // ---------------------------------------------------------------------------
 
+/** The badge at the end of a row, on its tone's wash. */
+const BADGE = "text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0";
+
 interface StatusBadgeProps {
   contact: Contact;
   hasError: boolean;
@@ -104,7 +108,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   if (hasError) {
     return (
-      <span className="flex items-center gap-1 text-[11px] font-bold text-error bg-rose-500/10 px-2 py-0.5 rounded-md shrink-0">
+      <span className={cn(TONE_WASH.error, BADGE, "flex items-center gap-1")}>
         <AlertCircle className="w-3 h-3" />
         Error
       </span>
@@ -114,7 +118,7 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   if (contact.aiHydratedAt) {
     const label = formatDay(contact.aiHydratedAt);
     return (
-      <span className="flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md shrink-0">
+      <span className={cn(TONE_WASH.primary, BADGE, "flex items-center gap-1")}>
         <Sparkles className="w-3 h-3" />
         {label}
       </span>
@@ -122,8 +126,10 @@ export function StatusBadge({ contact, hasError }: StatusBadgeProps) {
   }
 
   return (
-    <span className="text-[11px] font-bold text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-md shrink-0">
-      NEW
+    <span
+      className={cn(TONE_WASH.neutral, BADGE, "uppercase tracking-[0.08em]")}
+    >
+      New
     </span>
   );
 }

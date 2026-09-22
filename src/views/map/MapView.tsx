@@ -606,7 +606,7 @@ export const MapView = () => {
           onClick={() => toggleInsightsPane(true)}
           aria-label="Map insights"
           aria-expanded={false}
-          className="hidden lg:flex items-center gap-2 absolute top-4 right-4 z-10 glass-panel shadow-lg rounded-2xl px-3 py-2 text-sm font-medium text-on-surface hover:text-primary transition-colors cursor-pointer border border-outline-variant/30 hit-area"
+          className="state-layer hidden lg:flex items-center gap-2 absolute top-4 right-4 z-10 glass-panel shadow-lg rounded-2xl px-3 py-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30 hit-area"
         >
           <BarChart3 className="w-4 h-4 text-primary" />
           <span>Insights</span>
@@ -659,7 +659,7 @@ export const MapView = () => {
                 setSingleFollowUpContactId(null);
                 setIsFollowUpOpen(true);
               }}
-              className="hit-area flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0"
+              className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary cursor-pointer shrink-0"
             >
               <CalendarPlus className="w-3.5 h-3.5" />
               <span>Add follow-up</span>
@@ -667,7 +667,7 @@ export const MapView = () => {
             <button
               type="button"
               onClick={handleZoomToSelection}
-              className="hit-area flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer shrink-0"
+              className="hit-area state-layer flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface cursor-pointer shrink-0"
             >
               <ZoomIn className="w-3.5 h-3.5" />
               <span>Zoom to selection</span>
@@ -678,7 +678,7 @@ export const MapView = () => {
               onClick={selection.clear}
               aria-label="Clear selection"
               title="Clear selection (Escape)"
-              className="hit-area p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
+              className="hit-area state-layer p-1 text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>

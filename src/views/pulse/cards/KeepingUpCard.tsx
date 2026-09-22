@@ -24,9 +24,9 @@ import { CardFrame } from "../components/CardFrame";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { TRACKED_INTRO } from "../../../lib/names";
-import { BTN_QUIET } from "../../../lib/styles";
+import { BTN_QUIET, TONE_DOT, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { PULSE_TYPE } from "../lib/pulseStyles";
+import { PULSE_CHIP, PULSE_TYPE } from "../lib/pulseStyles";
 import { jumpToGroup } from "../lib/jumpToGroup";
 import type { MomentumCard, TrackingSummary } from "../../../../shared/pulse";
 
@@ -34,15 +34,19 @@ export interface KeepingUpCardProps {
   tracking: TrackingSummary | undefined;
 }
 
-/** The four segments of the bar, in order, with the group each links to. */
+/**
+ * The four segments of the bar, in order, with the group each links to.
+ * Strong, fading and at risk are tones. "No interactions yet" is not a
+ * state of a relationship, so it is the bar's neutral track colour.
+ */
 const SEGMENTS = [
-  { key: "strong", label: "Strong", tone: "bg-success", hash: "strong" },
-  { key: "fading", label: "Fading", tone: "bg-warning", hash: "fading" },
-  { key: "atRisk", label: "At risk", tone: "bg-error", hash: "at-risk" },
+  { key: "strong", label: "Strong", fill: TONE_DOT.success, hash: "strong" },
+  { key: "fading", label: "Fading", fill: TONE_DOT.warning, hash: "fading" },
+  { key: "atRisk", label: "At risk", fill: TONE_DOT.error, hash: "at-risk" },
   {
     key: "unscored",
     label: "No interactions yet",
-    tone: "bg-surface-container-highest",
+    fill: "bg-surface-container-highest",
     hash: "unscored",
   },
 ] as const;
@@ -85,15 +89,7 @@ const TrendRow = ({
         {contact.name}
       </Link>
     </div>
-    <span
-      className={cn(
-        PULSE_TYPE.chip,
-        "shrink-0 px-2 py-0.5 rounded-md tabular-nums",
-        tone === "success"
-          ? "bg-success/10 text-success"
-          : "bg-error/10 text-error",
-      )}
-    >
+    <span className={cn(PULSE_CHIP, TONE_WASH[tone])}>
       {contact.delta > 0 ? `+${contact.delta}` : `−${Math.abs(contact.delta)}`}
     </span>
   </li>
@@ -162,7 +158,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
               bands[s.key] > 0 ? (
                 <span
                   key={s.key}
-                  className={cn("h-full", s.tone)}
+                  className={cn("h-full", s.fill)}
                   style={{ width: `${(bands[s.key] / count) * 100}%` }}
                 />
               ) : null,
@@ -178,7 +174,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
                   >
                     <span
                       aria-hidden="true"
-                      className={cn("w-2 h-2 rounded-full", s.tone)}
+                      className={cn("w-2 h-2 rounded-full", s.fill)}
                     />
                     <span className="tabular-nums">{bands[s.key]}</span>{" "}
                     {s.label}
@@ -216,13 +212,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
               ] as const
             ).map(([title, rows, tone]) => (
               <div key={title} className="flex flex-col gap-1.5 min-w-0">
-                <h3
-                  className={cn(
-                    PULSE_TYPE.group,
-                    "px-0.5",
-                    tone === "success" ? "text-success" : "text-error",
-                  )}
-                >
+                <h3 className={cn(PULSE_TYPE.group, "px-0.5", TONE_TEXT[tone])}>
                   {title}
                 </h3>
                 {rows.length > 0 ? (

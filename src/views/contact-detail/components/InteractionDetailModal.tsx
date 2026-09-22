@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Interaction } from "../../../types";
 import type { LucideIcon } from "lucide-react";
-import { SECTION_HEADING } from "../../../lib/styles";
+import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
 import { formatDay, formatWhen } from "../../../lib/datetime";
@@ -110,8 +110,8 @@ export const InteractionDetailModal = ({
                         aria-label="Interaction title"
                         value={editingTitle}
                         onChange={(e) => setEditingTitle(e.target.value)}
-                        className="min-h-[44px] sm:min-h-0 text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded outline-none focus:ring-2 focus:ring-primary/20"
-                        placeholder="Interaction Title"
+                        className="min-h-[44px] sm:min-h-0 text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded"
+                        placeholder="Interaction title"
                       />
                     ) : (
                       <h2 className="text-lg font-bold text-on-surface line-clamp-1">
@@ -134,15 +134,16 @@ export const InteractionDetailModal = ({
                         });
                         setIsEditing(false);
                       }}
-                      className="btn-primary px-3"
+                      className="btn-primary btn-sm"
                     >
                       <Save className="w-4 h-4" /> Save
                     </button>
                   ) : (
                     <>
                       <button
+                        type="button"
                         onClick={() => setIsEditing(true)}
-                        className="hit-area p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+                        className={BTN_QUIET}
                       >
                         <Edit2 className="w-4 h-4" /> Edit
                       </button>
@@ -155,7 +156,7 @@ export const InteractionDetailModal = ({
                             onClose();
                             onDelete();
                           }}
-                          className="hit-area p-2 flex items-center gap-1.5 text-xs font-bold rounded-xl hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface"
+                          className={BTN_QUIET}
                         >
                           <Trash2 aria-hidden="true" className="w-4 h-4" />{" "}
                           Delete
@@ -164,9 +165,10 @@ export const InteractionDetailModal = ({
                     </>
                   )}
                   <button
+                    type="button"
                     onClick={onClose}
                     aria-label="Close"
-                    className="hit-area p-2 rounded-lg hover:bg-surface-container transition-colors text-on-surface-variant hover:text-on-surface ml-2"
+                    className={cn(ICON_BTN, "ml-2")}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -178,14 +180,14 @@ export const InteractionDetailModal = ({
                 {/* Content */}
                 <div>
                   <span className={cn(SECTION_HEADING, "mb-3 block")}>
-                    Transcript & Notes
+                    Transcript & notes
                   </span>
                   {isEditing ? (
                     <textarea
                       aria-label="Interaction content"
                       value={editingContent}
                       onChange={(e) => setEditingContent(e.target.value)}
-                      className="w-full min-h-[200px] p-3 text-sm rounded-xl bg-surface-container-low border border-primary/50 text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 resize-y"
+                      className="w-full min-h-[200px] p-3 text-sm rounded-xl bg-surface-container-low border border-primary/50 text-on-surface resize-y"
                       placeholder="Enter transcript or notes..."
                     />
                   ) : interaction.content &&
@@ -208,7 +210,7 @@ export const InteractionDetailModal = ({
                   interaction.actionItems.length > 0 && (
                     <div>
                       <span className={cn(SECTION_HEADING, "mb-3 block")}>
-                        Follow Up
+                        Follow-up
                       </span>
                       <div className="flex flex-col gap-2">
                         {interaction.actionItems.map((action) => (
@@ -232,11 +234,13 @@ export const InteractionDetailModal = ({
                                 onCompleteActionItem(action.id);
                               }
                             })}
+                            // A row in a list of follow-ups: flat, with the
+                            // one hover layer while it can still be completed.
                             className={cn(
-                              "flex flex-col gap-1.5 p-3 rounded-xl border bg-surface-container transition-all",
+                              "flex flex-col gap-1.5 p-3 rounded-xl bg-surface-container transition-colors",
                               action.completedAt
-                                ? "opacity-60 saturate-50 border-surface-container-high cursor-default"
-                                : "border-surface-container hover:shadow-sm cursor-pointer hover:border-primary/30 group",
+                                ? "opacity-60 saturate-50 cursor-default"
+                                : "state-layer cursor-pointer group",
                             )}
                           >
                             <div className="flex items-start gap-3">
@@ -244,7 +248,7 @@ export const InteractionDetailModal = ({
                                 className={cn(
                                   "hit-area mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
                                   action.completedAt
-                                    ? "bg-primary border-primary text-white"
+                                    ? "bg-primary border-primary text-on-primary"
                                     : "border-on-surface-variant/40 bg-surface-container-low group-hover:border-primary/50",
                                 )}
                               >
@@ -266,7 +270,7 @@ export const InteractionDetailModal = ({
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span
                                     className={cn(
-                                      "text-[11px] uppercase font-bold tracking-wider",
+                                      "text-[11px] uppercase font-bold tracking-[0.08em]",
                                       action.completedAt
                                         ? "text-on-surface-variant"
                                         : "text-error opacity-80",

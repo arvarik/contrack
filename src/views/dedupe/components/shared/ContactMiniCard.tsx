@@ -1,6 +1,7 @@
 import React from "react";
 import type { Contact } from "../../../../types";
 import { cn } from "../../../../lib/utils";
+import { SELECTED_ROW } from "../../../../lib/styles";
 import { fallbackAvatarUrl } from "../../../../lib/avatar";
 
 // =============================================================================
@@ -25,17 +26,14 @@ export const ContactMiniCard = ({
     onClick={onToggle}
     disabled={disabled && !selected}
     className={cn(
-      "w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left",
-      selected
-        ? "bg-primary/8 ring-2 ring-primary"
-        : disabled
-          ? "opacity-40 cursor-not-allowed"
-          : "hover:bg-surface-container-low",
+      "state-layer w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left",
+      selected && SELECTED_ROW,
+      disabled && !selected && "opacity-40 cursor-not-allowed",
     )}
   >
     <div
       className={cn(
-        "w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all",
+        "w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors",
         selected
           ? "border-primary bg-primary"
           : "border-surface-container-high",
@@ -43,7 +41,7 @@ export const ContactMiniCard = ({
     >
       {selected && (
         <svg
-          className="w-3 h-3 text-white"
+          className="w-3 h-3 text-on-primary"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

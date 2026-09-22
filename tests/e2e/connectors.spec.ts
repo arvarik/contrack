@@ -146,7 +146,7 @@ END:VCALENDAR`;
       // Form closes and card appears
       await expect(formDialog).toBeHidden();
       const card = page
-        .locator(".rounded-2xl")
+        .locator(".card")
         .filter({ hasText: "Personal Calendar" });
       await expect(card).toBeVisible();
       await expect(card.getByText("Active")).toBeVisible();
@@ -205,7 +205,7 @@ END:VCALENDAR`;
       // 7. Back to Connectors view and inspect Run History Drawer
       await page.goto("/settings/connectors");
       const cardAgain = page
-        .locator(".rounded-2xl")
+        .locator(".card")
         .filter({ hasText: "Personal Calendar" });
       await cardAgain
         .getByRole("button", { name: /actions for personal calendar/i })
@@ -239,7 +239,7 @@ END:VCALENDAR`;
         .click();
       await expect(confirmDialog).toBeHidden();
       await expect(
-        page.locator(".rounded-2xl").filter({ hasText: "Personal Calendar" }),
+        page.locator(".card").filter({ hasText: "Personal Calendar" }),
       ).toBeHidden();
 
       // 9. Navigate back to Ada Lovelace: imported meeting is gone

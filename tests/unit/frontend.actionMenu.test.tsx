@@ -196,4 +196,26 @@ describe("choosing an item", () => {
       screen.getAllByRole("menuitem").map((row) => row.textContent),
     ).toEqual(["Copy", "Archive", "Delete"]);
   });
+
+  it("draws a flat trigger with the hover layer by default", () => {
+    const { trigger } = mount([item("Copy")]);
+    expect(trigger.className).toContain("state-layer");
+    expect(trigger.className).not.toContain("btn-primary");
+  });
+
+  it("draws the page's call to action as a small pressable primary button", () => {
+    render(
+      <MemoryRouter>
+        <ActionMenu label="New" variant="primary" items={[item("Contact")]} />
+      </MemoryRouter>,
+    );
+    const trigger = screen.getByRole("button", { name: "New" });
+    expect(trigger.className).toContain("btn-primary");
+    expect(trigger.className).toContain("btn-sm");
+    expect(trigger.className).not.toContain("state-layer");
+    fireEvent.click(trigger);
+    // Open, the primary trigger keeps its face: no ghost fill on top of it.
+    expect(trigger.className).not.toContain("bg-surface-container-high");
+    expect(screen.getByRole("menuitem", { name: "Contact" })).toBeTruthy();
+  });
 });

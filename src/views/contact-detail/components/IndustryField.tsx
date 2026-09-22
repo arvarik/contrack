@@ -92,7 +92,7 @@ export const IndustryField = ({
           setTempVal(value || "");
         }}
         className={cn(
-          "group/edit hit-area inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-pointer transition-colors hover:bg-surface-container-high",
+          "group/edit hit-area state-layer inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-pointer transition-colors",
           // Italic and the muted token, NOT opacity. Half-opacity text is half
           // the contrast: this placeholder measured 2.86:1 on a white card, and
           // a prompt somebody is meant to read and click is content rather than

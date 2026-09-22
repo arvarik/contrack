@@ -3,7 +3,7 @@
 // The import modal shows success when the server says so, and not before
 // =============================================================================
 // The modal read the import stream to its end and showed whatever it had as
-// the result. A connection that dropped part way showed "Import Complete"
+// the result. A connection that dropped part way showed "Import complete"
 // over an import the server was still writing, or had never received. And
 // the natural response, choosing the file again, made a second copy of every
 // contact, because nothing tied the two requests together.
@@ -294,7 +294,7 @@ describe("a stream that ends without a done frame", () => {
       expect(screen.getByText(/reconnecting to your import/i)).toBeTruthy(),
     );
     await waitFor(() => expect(server.statusPolls().length).toBeGreaterThan(1));
-    expect(screen.queryByText("Import Complete")).toBeNull();
+    expect(screen.queryByText("Import complete")).toBeNull();
     expect(server.statusPolls()[0].url).toBe(`/api/imports/${importId}`);
 
     // The server finishes. Only now is the import complete.
@@ -309,7 +309,7 @@ describe("a stream that ends without a done frame", () => {
       }),
     });
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
     expect(screen.getByText("2 new unique contacts")).toBeTruthy();
     // The remembered import is kept until the person dismisses it.
@@ -350,7 +350,7 @@ describe("a stream that ends without a done frame", () => {
     body.end();
 
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
     expect(screen.getByText("1 new unique contacts")).toBeTruthy();
     expect(server.statusPolls()).toHaveLength(1);
@@ -376,7 +376,7 @@ describe("the same import id on every attempt", () => {
     await waitFor(() =>
       expect(screen.getByText(/never received this import/i)).toBeTruthy(),
     );
-    expect(screen.queryByText("Import Complete")).toBeNull();
+    expect(screen.queryByText("Import complete")).toBeNull();
     const firstId = server.posts()[0].headers["X-Import-Id"];
     expect(firstId).toMatch(/^[0-9a-f-]{36}$/);
 
@@ -399,7 +399,7 @@ describe("the same import id on every attempt", () => {
     });
     second.end();
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
   });
 
@@ -428,7 +428,7 @@ describe("the same import id on every attempt", () => {
     chooseFile();
 
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
     expect(server.statusPolls().length).toBeGreaterThanOrEqual(2);
   });
@@ -463,7 +463,7 @@ describe("a failed import", () => {
       ).toBeTruthy(),
     );
     expect(screen.getByText("Import did not finish")).toBeTruthy();
-    expect(screen.queryByText("Import Complete")).toBeNull();
+    expect(screen.queryByText("Import complete")).toBeNull();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
@@ -489,7 +489,7 @@ describe("a failed import", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Check again" }));
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
   });
 });
@@ -536,7 +536,7 @@ describe("rows the server could not write", () => {
     body.end();
 
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
     expect(screen.getByText("1 row could not be imported")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("Cal Twin")).toBeTruthy());
@@ -602,7 +602,7 @@ describe("reopening the modal", () => {
     expect(screen.getByText(/everyone\.vcf/)).toBeTruthy();
     expect(server.statusPolls()[0].url).toBe("/api/imports/remembered-1");
     await waitFor(() =>
-      expect(screen.getByText("Import Complete")).toBeTruthy(),
+      expect(screen.getByText("Import complete")).toBeTruthy(),
     );
     expect(server.posts()).toHaveLength(0);
   });
